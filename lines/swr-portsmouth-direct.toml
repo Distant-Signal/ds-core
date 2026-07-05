@@ -1,0 +1,77 @@
+id = "swr-portsmouth-direct"
+name = "Portsmouth Direct Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SW"]
+
+destination_crs_filter = ["PMH", "PMS", "HAV", "PTR", "HSL", "GLD"]
+sample_stations = ["GLD", "HSL", "PMS"]  # GLD is first station on the exclusive segment
+match_keywords = ["Portsmouth Direct", "Portsmouth line"]
+
+# Shares Waterloo->Woking trunk with SWML and Alton.
+# Diverges at Woking; everything south of Guildford is exclusive.
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+tiploc = "CLPHMJC"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+tiploc = "WIMBLDN"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+tiploc = "SURBITN"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WOK"
+tiploc = "WOKING"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "GLD"
+tiploc = "GUILDFD"
+role = "major"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "HSL"
+tiploc = "HSLEMRE"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "PTR"
+tiploc = "PETRSFD"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "HAV"
+tiploc = "HAVANT"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "PMS"
+tiploc = "PMSEA"
+role = "major"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "PMH"
+tiploc = "PMSHRBR"
+role = "terminus"
+segment = "swr-portsmouth-direct"

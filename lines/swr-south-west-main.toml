@@ -1,0 +1,88 @@
+id = "swr-south-west-main"
+name = "South West Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SW"]
+
+# When sampling at trunk stations, only count services destined for stations on this line.
+destination_crs_filter = ["WEY", "POO", "BMH", "SOU", "WIN", "BSK"]
+
+# exclusive segment — gives a clean read of SWML-only services
+sample_stations = ["WIN", "SOU", "BMH"]
+
+match_keywords = [
+  "South West Main Line",
+  "SWML",
+  "Bournemouth line",
+  "Weymouth line",
+]
+
+# Trunk segments (swr-trunk-waterloo) appear in multiple SWR line definitions
+# and the matcher treats incidents there as "shared trunk" events affecting all
+# lines that use them. Stations south of Basingstoke are exclusive to this line
+# (the Bournemouth/Weymouth corridor).
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+tiploc = "CLPHMJC"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+tiploc = "WIMBLDN"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+tiploc = "SURBITN"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WOK"
+tiploc = "WOKING"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "BSK"
+tiploc = "BSNGSTK"
+role = "junction"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "WIN"
+tiploc = "WNCHSTR"
+role = "major"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "SOU"
+tiploc = "SOTON"
+role = "major"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "BMH"
+tiploc = "BMTH"
+role = "major"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "POO"
+tiploc = "POOLE"
+role = "minor"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "WEY"
+tiploc = "WEYMTH"
+role = "terminus"
+segment = "swr-swml-south"

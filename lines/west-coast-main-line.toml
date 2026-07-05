@@ -1,0 +1,128 @@
+id = "wcml"
+name = "West Coast Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "AW",  # Avanti West Coast
+  "LM",  # London Northwestern Railway
+  "LN",  # West Midlands Trains (London Northwestern services)
+  "CS",  # Caledonian Sleeper
+]
+
+# South, midpoint(s), north.
+sample_stations = ["EUS", "MKC", "CRE", "PRE", "CAR"]
+match_keywords = ["West Coast Main Line", "WCML"]
+# XC services share track but aren't WCML proper.
+excluded_keywords = ["Cross Country"]
+
+# Ordered south to north. Branches (e.g. Birmingham via Trent Valley)
+# are not included here — they belong in their own line definitions
+# that share operators with this one.
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "wcml-london"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "wcml-london"
+
+[[stations]]
+crs = "HMP"
+tiploc = "HMPSTDH"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "NUN"
+tiploc = "NUNEATN"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "TAM"
+tiploc = "TAMWRTH"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "LTV"
+tiploc = "LCHTNJ"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "junction"
+segment = "wcml-northwest"
+
+[[stations]]
+crs = "WBQ"
+tiploc = "WARRBQ"
+role = "minor"
+segment = "wcml-northwest"
+
+[[stations]]
+crs = "WGN"
+tiploc = "WIGANNW"
+role = "major"
+segment = "wcml-northwest"
+
+[[stations]]
+crs = "PRE"
+tiploc = "PRSTON"
+role = "major"
+segment = "wcml-northwest"
+
+[[stations]]
+crs = "LAN"
+tiploc = "LANCSTR"
+role = "minor"
+segment = "wcml-north"
+
+[[stations]]
+crs = "OXN"
+tiploc = "OXENHLM"
+role = "minor"
+segment = "wcml-north"
+
+[[stations]]
+crs = "PNR"
+tiploc = "PENRITH"
+role = "minor"
+segment = "wcml-north"
+
+[[stations]]
+crs = "CAR"
+tiploc = "CARLILE"
+role = "junction"
+segment = "wcml-north"
+# Continues to Glasgow Central (GLC) via Lockerbie

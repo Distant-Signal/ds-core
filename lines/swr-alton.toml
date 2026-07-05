@@ -1,0 +1,70 @@
+id = "swr-alton"
+name = "Alton Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+
+destination_crs_filter = ["AON", "BTL", "FRM", "AHT"]
+sample_stations = ["AHT", "FRM", "AON"]
+match_keywords = ["Alton line", "Alton branch"]
+
+# Shares Waterloo->Woking trunk; diverges at Woking via Aldershot.
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+tiploc = "CLPHMJC"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+tiploc = "WIMBLDN"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+tiploc = "SURBITN"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WOK"
+tiploc = "WOKING"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "BCE"
+tiploc = "BRKMERE"
+role = "minor"
+segment = "swr-alton-branch"
+
+[[stations]]
+crs = "AHT"
+tiploc = "ALDRSHT"
+role = "major"
+segment = "swr-alton-branch"
+
+[[stations]]
+crs = "FRM"
+tiploc = "FARNHAM"
+role = "minor"
+segment = "swr-alton-branch"
+
+[[stations]]
+crs = "BTL"
+tiploc = "BENTLEY"
+role = "minor"
+segment = "swr-alton-branch"
+
+[[stations]]
+crs = "AON"
+tiploc = "ALTON"
+role = "terminus"
+segment = "swr-alton-branch"
