@@ -205,7 +205,7 @@ pub struct LineDefinition {
     #[serde(default)]
     pub excluded_keywords: Vec<String>,
     #[serde(default)]
-    pub severity_overrides: HashMap<String, Severity>,
+    pub severity_overrides: HashMap<String, f64>,
     /// Segments this line considers exclusive (not shared with other lines).
     /// If empty, the matcher derives exclusivity by comparing segment usage
     /// across all loaded lines.
