@@ -310,6 +310,7 @@ dependencies = [
  "glob",
  "reqwest",
  "serde",
+ "serde-inline-default",
  "serde_json",
  "serde_repr",
  "toml",

@@ -5,6 +5,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use glob::glob;
 use serde::{Deserialize, Serialize};
+use serde_inline_default::serde_inline_default;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub mod ingest;
@@ -310,4 +311,120 @@ pub struct TocReference {
     pub legal_name: String,
     pub atoc_member: Option<bool>,
     pub station_operator: Option<bool>,
+}
+
+// --- Aggregator thresholds (ported from Python config.py DEFAULTS) ---
+
+/// Default thresholds for status derivation. Lines override any subset via
+/// `LineDefinition.severity_overrides`. Field names match the keys used in
+/// `severity_overrides` TOML tables (e.g. `minor_delays_pct = 0.20`).
+#[serde_inline_default]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
+pub struct Defaults {
+    /// A service is "delayed" once its delay exceeds this many minutes.
+    #[serde_inline_default(5)]
+    pub delay_threshold_minutes: i64,
+    /// >25% of sampled services delayed -> Minor Delays.
+    #[serde_inline_default(0.25)]
+    pub minor_delays_pct: f64,
+    /// >50% of sampled services delayed -> Severe Delays.
+    #[serde_inline_default(0.50)]
+    pub severe_delays_pct: f64,
+    /// >25% of sampled services cancelled -> Reduced Service.
+    #[serde_inline_default(0.25)]
+    pub reduced_service_pct: f64,
+    /// >60% of sampled services cancelled -> Part Suspended.
+    #[serde_inline_default(0.60)]
+    pub part_suspended_pct: f64,
+    /// Unused by the current keyword-only severity classifier; kept for
+    /// parity with the Python prototype's `DEFAULTS` dict and any future
+    /// use once `IncidentMessage.priority`'s meaning is confirmed.
+    #[serde_inline_default(0)]
+    pub knowledgebase_severity_floor: i8,
+    /// Below this many sampled services, don't infer a status from LDBWS
+    /// samples alone.
+    #[serde_inline_default(3)]
+    pub min_sample_size: i64,
+}
+
+impl Default for Defaults {
+    fn default() -> Self {
+        toml::from_str("").expect("Defaults must deserialize from an empty TOML table via serde_inline_default")
+    }
+}
+
+/// Merges a line's `severity_overrides` on top of shared `Defaults`,
+/// returning a new `Defaults` with any recognized keys overridden. Unknown
+/// keys are ignored (there's no field for them to override). Ported from
+/// Python's `config.thresholds_for`.
+pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> Defaults {
+    let mut merged = defaults.clone();
+    for (key, value) in overrides {
+        match key.as_str() {
+            "delay_threshold_minutes" => merged.delay_threshold_minutes = *value as i64,
+            "minor_delays_pct" => merged.minor_delays_pct = *value,
+            "severe_delays_pct" => merged.severe_delays_pct = *value,
+            "reduced_service_pct" => merged.reduced_service_pct = *value,
+            "part_suspended_pct" => merged.part_suspended_pct = *value,
+            "knowledgebase_severity_floor" => merged.knowledgebase_severity_floor = *value as i8,
+            "min_sample_size" => merged.min_sample_size = *value as i64,
+            _ => {}
+        }
+    }
+    merged
+}
+
+#[cfg(test)]
+mod defaults_tests {
+    use super::*;
+
+    #[test]
+    fn no_overrides_returns_defaults_unchanged() {
+        let defaults = Defaults::default();
+        let merged = thresholds_for(&defaults, &HashMap::new());
+        assert_eq!(merged, defaults);
+    }
+
+    #[test]
+    fn partial_override_changes_only_named_fields() {
+        let defaults = Defaults::default();
+        let mut overrides = HashMap::new();
+        overrides.insert("minor_delays_pct".to_string(), 0.20);
+        overrides.insert("delay_threshold_minutes".to_string(), 4.0);
+        let merged = thresholds_for(&defaults, &overrides);
+        assert_eq!(merged.minor_delays_pct, 0.20);
+        assert_eq!(merged.delay_threshold_minutes, 4);
+        assert_eq!(merged.severe_delays_pct, defaults.severe_delays_pct);
+        assert_eq!(merged.min_sample_size, defaults.min_sample_size);
+    }
+
+    #[test]
+    fn every_field_can_be_overridden() {
+        let defaults = Defaults::default();
+        let mut overrides = HashMap::new();
+        overrides.insert("delay_threshold_minutes".to_string(), 10.0);
+        overrides.insert("minor_delays_pct".to_string(), 0.30);
+        overrides.insert("severe_delays_pct".to_string(), 0.60);
+        overrides.insert("reduced_service_pct".to_string(), 0.40);
+        overrides.insert("part_suspended_pct".to_string(), 0.70);
+        overrides.insert("knowledgebase_severity_floor".to_string(), 1.0);
+        overrides.insert("min_sample_size".to_string(), 5.0);
+        let merged = thresholds_for(&defaults, &overrides);
+        assert_eq!(merged.delay_threshold_minutes, 10);
+        assert_eq!(merged.minor_delays_pct, 0.30);
+        assert_eq!(merged.severe_delays_pct, 0.60);
+        assert_eq!(merged.reduced_service_pct, 0.40);
+        assert_eq!(merged.part_suspended_pct, 0.70);
+        assert_eq!(merged.knowledgebase_severity_floor, 1);
+        assert_eq!(merged.min_sample_size, 5);
+    }
+
+    #[test]
+    fn unknown_key_is_ignored() {
+        let defaults = Defaults::default();
+        let mut overrides = HashMap::new();
+        overrides.insert("not_a_real_field".to_string(), 42.0);
+        let merged = thresholds_for(&defaults, &overrides);
+        assert_eq!(merged, defaults);
+    }
 }
