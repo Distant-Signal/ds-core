@@ -1,0 +1,11 @@
+target
+.git
+
+# Local secrets/config for docker-compose (see .env.example for the
+# documented, placeholder-only template). All four Dockerfiles COPY the
+# whole build context into the builder stage, so without this exclusion a
+# real, populated .env would land in that stage's layer history even though
+# the final runtime image (built via COPY --from=builder) never sees it.
+.env
+.env.*
+!.env.example

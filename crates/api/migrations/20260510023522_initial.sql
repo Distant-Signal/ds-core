@@ -5,8 +5,12 @@
 -- -------------------------------------------------------------------------
 -- Incidents
 -- Raw Knowledgebase incident messages, written by the KB poller.
--- Rows are upserted on incident_id; the poller deletes rows whose
--- valid_to has passed and that are no longer in the feed.
+-- Rows are upserted on incident_id; there is no delete behavior — an
+-- incident that leaves the feed simply stops being refreshed. Whether an
+-- incident is still active is read from `is_cleared` (see the later
+-- reference-data migration, which replaces the columns below with
+-- `priority`, `validity_periods`, and `is_cleared` to match the real
+-- Knowledgebase schema).
 -- -------------------------------------------------------------------------
 
 CREATE TABLE incidents (
@@ -26,8 +30,15 @@ CREATE TABLE incidents (
 CREATE INDEX incidents_affected_stations_gin ON incidents USING GIN (affected_stations);
 CREATE INDEX incidents_operators_gin         ON incidents USING GIN (operators);
 -- Partial index over currently-active incidents for the common query path.
+-- NOTE: the predicate here is intentionally just `valid_to IS NULL`, not
+-- `valid_to IS NULL OR valid_to > NOW()` — Postgres requires partial-index
+-- predicates to be IMMUTABLE, and NOW() is only STABLE, so the NOW()
+-- variant is rejected outright at CREATE INDEX time ("functions in index
+-- predicate must be marked IMMUTABLE"). This index is superseded by a
+-- rebuilt `incidents_active` in a later migration once the table gains an
+-- `is_cleared` column to key off instead.
 CREATE INDEX incidents_active ON incidents (valid_from)
-    WHERE valid_to IS NULL OR valid_to > NOW();
+    WHERE valid_to IS NULL;
 
 
 -- -------------------------------------------------------------------------
@@ -88,8 +99,9 @@ CREATE INDEX line_status_history_line_time ON line_status_history (line_id, comp
 -- -------------------------------------------------------------------------
 -- Incident history
 -- Snapshot of an incident each time the poller sees it change (summary,
--- description, valid_to, or stations differ from the stored row). Lets
--- us reconstruct how an incident evolved.
+-- description, or validity_periods differ from the stored row — see the
+-- reference-data migration, which also updates this table's columns to
+-- match). Lets us reconstruct how an incident evolved.
 -- -------------------------------------------------------------------------
 
 CREATE TABLE incident_history (
