@@ -115,6 +115,8 @@ pub struct LineStatus {
     pub disruption: Option<Disruption>,
     #[serde(default)]
     pub data_quality: DataQuality,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_stats: Option<SampleStats>,
 }
 
 /// Top-level object returned by the API for one line.
@@ -313,6 +315,68 @@ pub struct TocReference {
     pub station_operator: Option<bool>,
 }
 
+/// Sample-derived delay/cancellation stats for a line, computed from LDBWS
+/// `StationSample`s independently of whether the line also has an
+/// incident-derived status. Informational only — never used to change a
+/// `LineStatus.severity` that came from an incident. `avg_delay_minutes`
+/// is averaged over non-cancelled ("running") sampled departures only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SampleStats {
+    pub total: usize,
+    pub delayed: usize,
+    pub cancelled: usize,
+    pub avg_delay_minutes: f64,
+}
+
+/// A user-defined line (see the `custom_lines` table in the `api` crate).
+/// Deliberately a much smaller shape than `LineDefinition` — no segments,
+/// match keywords, or severity overrides; those encode official-line route
+/// topology and threshold tuning that doesn't apply to an arbitrary
+/// user-picked station set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomLine {
+    pub id: String,
+    pub name: String,
+    pub operators: Vec<String>,
+    /// Ordered CRS codes. Every station here is also used as an LDBWS
+    /// sample station — a custom line has no separate concept of "route
+    /// station" vs "station to poll for delay data."
+    pub stations: Vec<String>,
+    #[serde(default)]
+    pub headcode_prefixes: Vec<String>,
+    #[serde(default)]
+    pub destination_crs_filter: Vec<String>,
+}
+
+impl From<CustomLine> for LineDefinition {
+    fn from(c: CustomLine) -> Self {
+        LineDefinition {
+            id: c.id,
+            name: c.name,
+            mode: "national-rail".to_string(),
+            category: "custom".to_string(),
+            operators: c.operators,
+            stations: c
+                .stations
+                .iter()
+                .map(|crs| Station {
+                    crs: crs.clone(),
+                    tiploc: None,
+                    role: Station::default_role(),
+                    segment: None,
+                })
+                .collect(),
+            sample_stations: c.stations,
+            match_keywords: vec![],
+            excluded_keywords: vec![],
+            severity_overrides: HashMap::new(),
+            exclusive_segments: vec![],
+            destination_crs_filter: c.destination_crs_filter,
+            headcode_prefixes: c.headcode_prefixes,
+        }
+    }
+}
+
 // --- Aggregator thresholds (ported from Python config.py DEFAULTS) ---
 
 /// Default thresholds for status derivation. Lines override any subset via
@@ -426,5 +490,36 @@ mod defaults_tests {
         overrides.insert("not_a_real_field".to_string(), 42.0);
         let merged = thresholds_for(&defaults, &overrides);
         assert_eq!(merged, defaults);
+    }
+}
+
+#[cfg(test)]
+mod custom_line_tests {
+    use super::*;
+
+    #[test]
+    fn custom_line_converts_to_line_definition_with_no_segments_or_keywords() {
+        let custom = CustomLine {
+            id: "custom-my-commute".to_string(),
+            name: "My Commute".to_string(),
+            operators: vec!["SW".to_string()],
+            stations: vec!["WOK".to_string(), "AON".to_string()],
+            headcode_prefixes: vec!["1P".to_string()],
+            destination_crs_filter: vec!["AON".to_string()],
+        };
+        let line: LineDefinition = custom.into();
+        assert_eq!(line.id, "custom-my-commute");
+        assert_eq!(line.name, "My Commute");
+        assert_eq!(line.mode, "national-rail");
+        assert_eq!(line.category, "custom");
+        assert_eq!(line.operators, vec!["SW".to_string()]);
+        assert_eq!(line.stations.len(), 2);
+        assert_eq!(line.stations[0].crs, "WOK");
+        assert!(line.stations[0].segment.is_none());
+        assert_eq!(line.sample_stations, vec!["WOK".to_string(), "AON".to_string()]);
+        assert!(line.match_keywords.is_empty());
+        assert!(line.severity_overrides.is_empty());
+        assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
+        assert_eq!(line.destination_crs_filter, vec!["AON".to_string()]);
     }
 }
