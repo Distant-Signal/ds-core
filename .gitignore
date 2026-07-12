@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 /.claude/
+/.superpowers/
 
 # Local secrets/config for docker-compose (see .env.example for the
 # documented, placeholder-only template that IS committed).
