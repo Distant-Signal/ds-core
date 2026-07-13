@@ -321,8 +321,8 @@ pub struct TocReference {
     pub station_operator: Option<bool>,
 }
 
-/// Sample-derived delay/cancellation stats for a line, computed from LDBWS
-/// `StationSample`s independently of whether the line also has an
+/// Sample-derived delay/cancellation/skipped-stop stats for a line, computed
+/// from LDBWS `StationSample`s independently of whether the line also has an
 /// incident-derived status. Informational only — never used to change a
 /// `LineStatus.severity` that came from an incident. `avg_delay_minutes`
 /// is averaged over non-cancelled ("running") sampled departures only.
