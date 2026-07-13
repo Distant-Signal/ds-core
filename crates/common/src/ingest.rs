@@ -54,10 +54,17 @@ pub async fn post_batch<T: Serialize>(
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct LastFetchedResponse {
-    #[serde(rename = "fetchedAt")]
-    fetched_at: Option<DateTime<Utc>>,
+/// Wire contract for the GET side of each `/private/*` ingest route (see
+/// `crates/api/src/routes/ingest.rs`) — shared, not redefined per-side, so
+/// a future rename can't silently drift out of sync between the `api`
+/// crate (which `Serialize`s it) and this module (which `Deserialize`s
+/// it). A drift would fail closed anyway (`serde` treats a missing key as
+/// `None` → "poll now", the safe direction) but there's no reason to rely
+/// on that when a shared type makes it impossible in the first place.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFetchedResponse {
+    pub fetched_at: Option<DateTime<Utc>>,
 }
 
 /// How long to wait before this process's first poll, so a restart doesn't
@@ -107,6 +114,14 @@ async fn fetch_last_fetched(
 /// negative (a `fetched_at` in the future — clock skew between hosts —
 /// never underflows or panics); a poll_interval already exceeded by that
 /// elapsed time means "poll now", otherwise the remainder is returned.
+/// Return value is always `<= poll_interval` — this only ever delays the
+/// *first* tick of a fresh process, so it can't compound across restarts.
+///
+/// Assumes restarts aren't pathologically frequent: if something else
+/// were also wrong (e.g. a bug writing `fetched_at` persistently in the
+/// future) *and* the process were crash-looping, every restart would
+/// re-arm a full-interval delay before ever reaching a real poll. Two
+/// simultaneous faults, not a risk from this function in isolation.
 fn duration_until_next_poll(fetched_at: Option<DateTime<Utc>>, now: DateTime<Utc>, poll_interval: Duration) -> Duration {
     let Some(fetched_at) = fetched_at else {
         return Duration::ZERO;
