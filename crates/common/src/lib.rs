@@ -161,6 +161,12 @@ pub struct StationDeparture {
     /// e.g. `"1P23"`, from Darwin's `trainid`/`rid`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headcode: Option<String>,
+    /// CRS codes of scheduled calling points this specific service is
+    /// skipping today (Darwin's per-calling-point `isCancelled`, not the
+    /// same signal as the whole-service `is_cancelled`). Empty when the
+    /// service reports no skipped calls.
+    #[serde(default)]
+    pub skipped_stations: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
