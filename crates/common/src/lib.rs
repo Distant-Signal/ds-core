@@ -331,6 +331,7 @@ pub struct SampleStats {
     pub total: usize,
     pub delayed: usize,
     pub cancelled: usize,
+    pub skipped: usize,
     pub avg_delay_minutes: f64,
 }
 
@@ -406,6 +407,14 @@ pub struct Defaults {
     /// >60% of sampled services cancelled -> Part Suspended.
     #[serde_inline_default(0.60)]
     pub part_suspended_pct: f64,
+    /// >25% of sampled services skipping a scheduled stop -> Minor Delays.
+    /// Independent of `minor_delays_pct` (which only looks at lateness).
+    #[serde_inline_default(0.25)]
+    pub minor_delays_skip_pct: f64,
+    /// >50% of sampled services skipping a scheduled stop -> Severe Delays.
+    /// Independent of `severe_delays_pct` (which only looks at lateness).
+    #[serde_inline_default(0.50)]
+    pub severe_delays_skip_pct: f64,
     /// Unused by the current keyword-only severity classifier; kept for
     /// parity with the Python prototype's `DEFAULTS` dict and any future
     /// use once `IncidentMessage.priority`'s meaning is confirmed.
@@ -434,6 +443,8 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
             "delay_threshold_minutes" => merged.delay_threshold_minutes = *value as i64,
             "minor_delays_pct" => merged.minor_delays_pct = *value,
             "severe_delays_pct" => merged.severe_delays_pct = *value,
+            "minor_delays_skip_pct" => merged.minor_delays_skip_pct = *value,
+            "severe_delays_skip_pct" => merged.severe_delays_skip_pct = *value,
             "reduced_service_pct" => merged.reduced_service_pct = *value,
             "part_suspended_pct" => merged.part_suspended_pct = *value,
             "knowledgebase_severity_floor" => merged.knowledgebase_severity_floor = *value as i8,
@@ -475,6 +486,8 @@ mod defaults_tests {
         overrides.insert("delay_threshold_minutes".to_string(), 10.0);
         overrides.insert("minor_delays_pct".to_string(), 0.30);
         overrides.insert("severe_delays_pct".to_string(), 0.60);
+        overrides.insert("minor_delays_skip_pct".to_string(), 0.35);
+        overrides.insert("severe_delays_skip_pct".to_string(), 0.65);
         overrides.insert("reduced_service_pct".to_string(), 0.40);
         overrides.insert("part_suspended_pct".to_string(), 0.70);
         overrides.insert("knowledgebase_severity_floor".to_string(), 1.0);
@@ -483,6 +496,8 @@ mod defaults_tests {
         assert_eq!(merged.delay_threshold_minutes, 10);
         assert_eq!(merged.minor_delays_pct, 0.30);
         assert_eq!(merged.severe_delays_pct, 0.60);
+        assert_eq!(merged.minor_delays_skip_pct, 0.35);
+        assert_eq!(merged.severe_delays_skip_pct, 0.65);
         assert_eq!(merged.reduced_service_pct, 0.40);
         assert_eq!(merged.part_suspended_pct, 0.70);
         assert_eq!(merged.knowledgebase_severity_floor, 1);
