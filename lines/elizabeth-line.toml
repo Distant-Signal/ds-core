@@ -1,0 +1,122 @@
+id = "elizabeth-line"
+name = "Elizabeth line"
+mode = "national-rail"
+category = "commuter"
+operators = ["XR"]
+
+destination_crs_filter = ["ABW", "PAD", "RDG", "MAI", "HXX", "HWV", "SNF", "SRA"]
+sample_stations = ["RDG", "PAD", "LST", "ABW"]
+match_keywords = ["Elizabeth line", "Crossrail"]
+
+# Metro frequencies through the core (up to 24 tph): a 4-minute delay on a
+# service every 2-3 minutes is already a degraded railway, so the thresholds
+# match Thameslink's rather than the main-line defaults.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# Reading to Abbey Wood, ordered west to east. The two other arms are separate
+# line definitions sharing the XR operator code: the Heathrow branch
+# (diverges at Hayes & Harlington for HXX/HAF/HWV) and the Shenfield branch
+# (diverges east of Whitechapel via Stratford, Ilford and Romford).
+#
+# TIPLOCs are given only where verified. The central-section stations have
+# their own TIPLOCs distinct from the National Rail surface stations of the
+# same name (Paddington, Liverpool Street), so they are left unset rather than
+# risk correlating against the wrong platforms.
+[[stations]]
+crs = "RDG"
+tiploc = "READING"
+role = "terminus"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "TWY"
+role = "minor"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "MAI"
+role = "minor"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "SLO"
+tiploc = "SLOUGH"
+role = "major"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "WDT"
+role = "minor"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "HAY"
+role = "junction"
+segment = "elizabeth-west"
+# Heathrow branch diverges here
+
+[[stations]]
+crs = "STL"
+role = "minor"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "EAL"
+role = "major"
+segment = "elizabeth-west"
+
+[[stations]]
+crs = "PAD"
+role = "major"
+segment = "elizabeth-central"
+# Trains enter the tunnels west of Paddington; everything below is the core
+
+[[stations]]
+crs = "BDS"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "TCR"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZFD"
+role = "major"
+segment = "elizabeth-central"
+# Interchange with the Thameslink core, but separate tracks: deliberately not
+# on the `thameslink-core` segment, so incidents don't cross-propagate.
+
+[[stations]]
+crs = "LST"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZLW"
+role = "junction"
+segment = "elizabeth-central"
+# Shenfield branch diverges east of here
+
+[[stations]]
+crs = "ZCW"
+role = "major"
+segment = "elizabeth-south-east"
+
+[[stations]]
+crs = "CUS"
+role = "minor"
+segment = "elizabeth-south-east"
+
+[[stations]]
+crs = "WWA"
+role = "major"
+segment = "elizabeth-south-east"
+
+[[stations]]
+crs = "ABW"
+role = "terminus"
+segment = "elizabeth-south-east"

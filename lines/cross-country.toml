@@ -1,0 +1,130 @@
+id = "cross-country"
+name = "CrossCountry"
+mode = "national-rail"
+category = "main-line"
+operators = ["XC"]
+
+# North, midpoint(s), south.
+sample_stations = ["NCL", "YRK", "BHM", "BRI", "EXD"]
+match_keywords = ["CrossCountry", "Cross Country"]
+# No excluded_keywords: "Cross Country Route" (the Birmingham-Bristol
+# infrastructure name) shows up in messages that genuinely do affect XC, so
+# vetoing on it would cost more matches than it saves.
+
+# Long-distance, roughly hourly: the same 5-minute delay matters less than it
+# does on a metro-frequency line, and a single cancellation is a bigger share
+# of the service.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# The Aberdeen/Edinburgh - Penzance spine, ordered north to south, covering the
+# section XC runs end to end. Branches are separate line definitions sharing
+# the XC operator code: Manchester Piccadilly (via Stockport/Wilmslow),
+# Cardiff Central (via Gloucester), Reading - Bournemouth/Southampton (via
+# Banbury/Oxford), and Stansted Airport (via Leicester/Peterborough).
+#
+# TIPLOCs are given only where verified; the field is optional and absent
+# values simply mean no TRUST/SCHEDULE correlation hint for that station.
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "junction"
+segment = "xc-north-east"
+# Continues north to Edinburgh (EDB), Glasgow Central (GLC) and Aberdeen (ABD)
+
+[[stations]]
+crs = "DHM"
+role = "minor"
+segment = "xc-north-east"
+
+[[stations]]
+crs = "DAR"
+role = "minor"
+segment = "xc-north-east"
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "major"
+segment = "xc-north-east"
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "xc-yorkshire"
+
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"
+role = "major"
+segment = "xc-yorkshire"
+
+[[stations]]
+crs = "CHD"
+role = "minor"
+segment = "xc-yorkshire"
+
+[[stations]]
+crs = "DBY"
+tiploc = "DERBY"
+role = "junction"
+segment = "xc-midlands"
+
+[[stations]]
+crs = "BUT"
+role = "minor"
+segment = "xc-midlands"
+
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "major"
+segment = "xc-midlands"
+# Birmingham New Street is the network's hub: most XC services call here and
+# the Manchester, Cardiff, Reading and Stansted branches all diverge from it.
+
+[[stations]]
+crs = "UNI"
+role = "minor"
+segment = "xc-west"
+
+[[stations]]
+crs = "CNM"
+role = "minor"
+segment = "xc-west"
+# Some services call at Gloucester (GCR) instead of running via Standish Jn
+
+[[stations]]
+crs = "BPW"
+role = "major"
+segment = "xc-west"
+
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "junction"
+segment = "xc-west"
+
+[[stations]]
+crs = "TAU"
+tiploc = "TAUNTON"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "EXD"
+role = "major"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "NTA"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "PLY"
+role = "junction"
+segment = "xc-south-west"
+# Continues to Penzance (PNZ) via Truro on a handful of daily services

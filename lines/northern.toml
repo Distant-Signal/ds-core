@@ -1,0 +1,70 @@
+id = "northern"
+name = "Northern"
+mode = "national-rail"
+category = "operator"
+operators = ["NT"]
+
+destination_crs_filter = ["LIV", "MCV", "MAN", "LDS", "YRK", "HUD"]
+sample_stations = ["LIV", "MCV", "HUD", "LDS", "YRK"]
+# "Northern" alone is far too loose — it matches "northern section",
+# "northbound" and the Underground's Northern line.
+match_keywords = ["Northern Rail", "Northern Trains", "Northern services"]
+excluded_keywords = ["Northern line", "Northern City Line"]
+
+# Northern is a network rather than a single route. This definition covers the
+# operator's principal trans-Pennine corridor, ordered west to east; the other
+# arms are separate line definitions sharing the NT operator code (Blackpool,
+# Windermere and Barrow in the north west; Sheffield via the Hope Valley;
+# Newcastle via Carlisle and the Tyne Valley; the Yorkshire coast to Scarborough).
+#
+# TIPLOCs are given only where verified; the field is optional and absent
+# values simply mean no TRUST/SCHEDULE correlation hint for that station.
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "northern-merseyside"
+
+[[stations]]
+crs = "HUY"
+role = "minor"
+segment = "northern-merseyside"
+
+[[stations]]
+crs = "NLW"
+role = "junction"
+segment = "northern-merseyside"
+
+[[stations]]
+crs = "MCV"
+role = "major"
+segment = "northern-manchester"
+# Manchester Piccadilly (MAN) services to Leeds run via a different route and
+# belong to their own definition
+
+[[stations]]
+crs = "SYB"
+role = "junction"
+segment = "northern-transpennine"
+
+[[stations]]
+crs = "HUD"
+role = "major"
+segment = "northern-transpennine"
+
+[[stations]]
+crs = "DEW"
+role = "minor"
+segment = "northern-transpennine"
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "junction"
+segment = "northern-yorkshire"
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "terminus"
+segment = "northern-yorkshire"
+# Continues to Scarborough (SCA) and, via Darlington, to Newcastle (NCL)
