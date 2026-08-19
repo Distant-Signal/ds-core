@@ -1,0 +1,42 @@
+id = "northern-furness"
+name = "Furness Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["BIF", "LAN", "ULV"]
+sample_stations = ["BIF", "ULV", "LAN"]
+match_keywords = ["Furness Line"]
+
+# Hourly coastal route: same rationale as the Lakes Line.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Lancaster to Barrow-in-Furness, ordered south-east to north-west. Joins the
+# WCML at Lancaster; no segment is shared with `wcml`. The Cumbrian Coast
+# route continues beyond Barrow to Whitehaven and Carlisle and belongs in its
+# own definition.
+#
+# Minor intermediate calls are omitted; only principal stations are listed.
+[[stations]]
+crs = "LAN"
+tiploc = "LANCSTR"
+role = "junction"
+segment = "northern-furness"
+
+[[stations]]
+crs = "CNF"
+role = "junction"
+segment = "northern-furness"
+
+[[stations]]
+crs = "ULV"
+role = "minor"
+segment = "northern-furness"
+
+[[stations]]
+crs = "BIF"
+role = "terminus"
+segment = "northern-furness"

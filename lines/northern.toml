@@ -13,9 +13,11 @@ excluded_keywords = ["Northern line", "Northern City Line"]
 
 # Northern is a network rather than a single route. This definition covers the
 # operator's principal trans-Pennine corridor, ordered west to east; the other
-# arms are separate line definitions sharing the NT operator code (Blackpool,
-# Windermere and Barrow in the north west; Sheffield via the Hope Valley;
-# Newcastle via Carlisle and the Tyne Valley; the Yorkshire coast to Scarborough).
+# arms are separate definitions sharing the NT operator code:
+# `northern-blackpool` (shares the `northern-manchester` hub),
+# `northern-yorkshire-coast` (shares the `northern-yorkshire` trunk from
+# Leeds), `northern-lakes`, `northern-furness`, `northern-hope-valley` and
+# `northern-tyne-valley`.
 #
 # TIPLOCs are given only where verified; the field is optional and absent
 # values simply mean no TRUST/SCHEDULE correlation hint for that station.
@@ -38,8 +40,8 @@ segment = "northern-merseyside"
 crs = "MCV"
 role = "major"
 segment = "northern-manchester"
-# Manchester Piccadilly (MAN) services to Leeds run via a different route and
-# belong to their own definition
+# Manchester Piccadilly (MAN) is not on this corridor: its eastbound Northern
+# services run via the Hope Valley — see `northern-hope-valley`
 
 [[stations]]
 crs = "SYB"

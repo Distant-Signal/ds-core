@@ -1,0 +1,78 @@
+id = "xc-south-coast"
+name = "CrossCountry South Coast Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["XC"]
+
+destination_crs_filter = ["BMH", "SOU", "RDG", "OXF", "BAN"]
+sample_stations = ["BAN", "OXF", "RDG", "SOU"]
+# No match_keywords: no route name the Knowledgebase uses consistently, and
+# "south coast" would pull in unrelated southern operators.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Birmingham New Street to Bournemouth via Banbury, Oxford and Reading,
+# ordered north to south. Shares the spine's `xc-birmingham` hub only — this
+# arm leaves Birmingham eastwards via Coventry, not via University.
+#
+# Runs over SWML metals from Basingstoke to Bournemouth and over the Elizabeth
+# line's western approach at Reading, but claims neither line's segments: both
+# extend well beyond the shared stretch (`swr-swml-south` runs on to Weymouth,
+# `elizabeth-west` on to Paddington). Incidents on the shared track still
+# match both lines by station.
+#
+# Minor intermediate calls are omitted; only principal stations are listed.
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "junction"
+segment = "xc-birmingham"
+
+[[stations]]
+crs = "COV"
+role = "major"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "LMS"
+role = "minor"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "BAN"
+role = "minor"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "OXF"
+role = "major"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "RDG"
+tiploc = "READING"
+role = "junction"
+segment = "xc-south-coast"
+# Some services terminate here; the rest continue to Southampton/Bournemouth
+
+[[stations]]
+crs = "BSK"
+role = "junction"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "WIN"
+role = "minor"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "SOU"
+role = "major"
+segment = "xc-south-coast"
+
+[[stations]]
+crs = "BMH"
+role = "terminus"
+segment = "xc-south-coast"

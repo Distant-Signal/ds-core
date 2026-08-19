@@ -1,0 +1,82 @@
+id = "elizabeth-heathrow"
+name = "Elizabeth line Heathrow Branch"
+mode = "national-rail"
+category = "commuter"
+operators = ["XR"]
+
+# Only Heathrow-bound services count at the shared trunk stations — Reading
+# and Shenfield services call at the same platforms.
+destination_crs_filter = ["HWV", "HXX", "HAF"]
+sample_stations = ["HWV", "HXX", "HAY"]
+match_keywords = ["Heathrow branch"]
+# Heathrow Express and the Piccadilly line serve the same terminals and turn
+# up constantly in Heathrow messages; neither is this line.
+excluded_keywords = ["Heathrow Express", "Piccadilly line"]
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# Heathrow to the central section, ordered west to east. Diverges from the
+# Reading arm at Hayes & Harlington, so it shares `elizabeth-trunk-west` and
+# `elizabeth-central` with `elizabeth-line`. Terminal 4 (HAF) is a spur off
+# Terminal 2 & 3 rather than a through station, so it isn't in the ordered
+# list; Terminal 5 stands as the western terminus.
+#
+# Most services continue east of Whitechapel to Abbey Wood over
+# `elizabeth-south-east`; that section is listed on `elizabeth-line`.
+[[stations]]
+crs = "HWV"
+role = "terminus"
+segment = "elizabeth-heathrow"
+
+[[stations]]
+crs = "HXX"
+role = "major"
+segment = "elizabeth-heathrow"
+# Terminal 4 (HAF) branches here
+
+[[stations]]
+crs = "HAY"
+role = "junction"
+segment = "elizabeth-trunk-west"
+
+[[stations]]
+crs = "STL"
+role = "minor"
+segment = "elizabeth-trunk-west"
+
+[[stations]]
+crs = "EAL"
+role = "major"
+segment = "elizabeth-trunk-west"
+
+[[stations]]
+crs = "PAD"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "BDS"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "TCR"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZFD"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "LST"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZLW"
+role = "junction"
+segment = "elizabeth-central"

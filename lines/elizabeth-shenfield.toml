@@ -1,0 +1,113 @@
+id = "elizabeth-shenfield"
+name = "Elizabeth line Shenfield Branch"
+mode = "national-rail"
+category = "commuter"
+operators = ["XR"]
+
+# Only Shenfield-bound services count at the shared central-section stations.
+destination_crs_filter = ["SNF", "BRE", "GDP", "RMF"]
+sample_stations = ["SNF", "RMF", "SRA"]
+match_keywords = ["Shenfield branch", "Shenfield line"]
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# The central section out to Shenfield, ordered west to east. Shares
+# `elizabeth-central` with `elizabeth-line` and `elizabeth-heathrow`;
+# the exclusive branch starts at Stratford, east of the Whitechapel junction.
+# Services run to Paddington rather than continuing to Reading or Heathrow.
+[[stations]]
+crs = "PAD"
+role = "terminus"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "BDS"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "TCR"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZFD"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "LST"
+role = "major"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "ZLW"
+role = "junction"
+segment = "elizabeth-central"
+
+[[stations]]
+crs = "SRA"
+role = "major"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "MYL"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "FST"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "MNP"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "IFD"
+role = "major"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "SVK"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "GMY"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "CTH"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "RMF"
+role = "major"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "GDP"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "HRO"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "BRE"
+role = "minor"
+segment = "elizabeth-shenfield"
+
+[[stations]]
+crs = "SNF"
+role = "terminus"
+segment = "elizabeth-shenfield"

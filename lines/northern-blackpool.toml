@@ -1,0 +1,52 @@
+id = "northern-blackpool"
+name = "Blackpool Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["BPN", "PRE", "BON"]
+sample_stations = ["BPN", "PFY", "PRE"]
+match_keywords = ["Blackpool line", "Blackpool North"]
+
+# Manchester Victoria to Blackpool North via Bolton and Preston, ordered
+# south-east to north-west. Shares the `northern-manchester` hub with the
+# `northern` trunk. Preston is also a WCML station, but the two routes only
+# meet there — no segment is shared with `wcml`.
+#
+# Minor intermediate calls are omitted; only principal stations are listed.
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "northern-manchester"
+
+[[stations]]
+crs = "SLD"
+role = "junction"
+segment = "northern-blackpool"
+
+[[stations]]
+crs = "BON"
+role = "major"
+segment = "northern-blackpool"
+
+[[stations]]
+crs = "PRE"
+tiploc = "PRSTON"
+role = "junction"
+segment = "northern-blackpool"
+
+[[stations]]
+crs = "KKM"
+role = "minor"
+segment = "northern-blackpool"
+
+[[stations]]
+crs = "PFY"
+role = "junction"
+segment = "northern-blackpool"
+# Blackpool South services diverge here
+
+[[stations]]
+crs = "BPN"
+role = "terminus"
+segment = "northern-blackpool"

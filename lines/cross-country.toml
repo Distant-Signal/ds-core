@@ -19,10 +19,10 @@ minor_delays_pct = 0.30
 delay_threshold_minutes = 10
 
 # The Aberdeen/Edinburgh - Penzance spine, ordered north to south, covering the
-# section XC runs end to end. Branches are separate line definitions sharing
-# the XC operator code: Manchester Piccadilly (via Stockport/Wilmslow),
-# Cardiff Central (via Gloucester), Reading - Bournemouth/Southampton (via
-# Banbury/Oxford), and Stansted Airport (via Leicester/Peterborough).
+# section XC runs end to end. The four arms are separate definitions sharing
+# the XC operator code and the `xc-birmingham` hub segment: `xc-manchester`,
+# `xc-cardiff` (which also shares `xc-west` as far as Cheltenham Spa),
+# `xc-south-coast` and `xc-stansted`.
 #
 # TIPLOCs are given only where verified; the field is optional and absent
 # values simply mean no TRUST/SCHEDULE correlation hint for that station.
@@ -80,8 +80,8 @@ segment = "xc-midlands"
 [[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
-role = "major"
-segment = "xc-midlands"
+role = "junction"
+segment = "xc-birmingham"
 # Birmingham New Street is the network's hub: most XC services call here and
 # the Manchester, Cardiff, Reading and Stansted branches all diverge from it.
 
@@ -92,20 +92,20 @@ segment = "xc-west"
 
 [[stations]]
 crs = "CNM"
-role = "minor"
+role = "junction"
 segment = "xc-west"
-# Some services call at Gloucester (GCR) instead of running via Standish Jn
+# Cardiff arm diverges here for Gloucester; Bristol services run via Standish Jn
 
 [[stations]]
 crs = "BPW"
 role = "major"
-segment = "xc-west"
+segment = "xc-bristol"
 
 [[stations]]
 crs = "BRI"
 tiploc = "BRSTLTM"
 role = "junction"
-segment = "xc-west"
+segment = "xc-bristol"
 
 [[stations]]
 crs = "TAU"

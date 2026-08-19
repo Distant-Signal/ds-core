@@ -16,9 +16,10 @@ minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
 # Reading to Abbey Wood, ordered west to east. The two other arms are separate
-# line definitions sharing the XR operator code: the Heathrow branch
-# (diverges at Hayes & Harlington for HXX/HAF/HWV) and the Shenfield branch
-# (diverges east of Whitechapel via Stratford, Ilford and Romford).
+# definitions sharing the XR operator code: `elizabeth-heathrow` (diverges at
+# Hayes & Harlington, so it shares `elizabeth-trunk-west` and
+# `elizabeth-central`) and `elizabeth-shenfield` (diverges east of
+# Whitechapel, so it shares `elizabeth-central` only).
 #
 # TIPLOCs are given only where verified. The central-section stations have
 # their own TIPLOCs distinct from the National Rail surface stations of the
@@ -54,18 +55,19 @@ segment = "elizabeth-west"
 [[stations]]
 crs = "HAY"
 role = "junction"
-segment = "elizabeth-west"
-# Heathrow branch diverges here
+segment = "elizabeth-trunk-west"
+# Heathrow branch diverges here; Reading services carry on west, which is why
+# the trunk starts at this junction rather than after it
 
 [[stations]]
 crs = "STL"
 role = "minor"
-segment = "elizabeth-west"
+segment = "elizabeth-trunk-west"
 
 [[stations]]
 crs = "EAL"
 role = "major"
-segment = "elizabeth-west"
+segment = "elizabeth-trunk-west"
 
 [[stations]]
 crs = "PAD"

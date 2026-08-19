@@ -1,0 +1,46 @@
+id = "northern-yorkshire-coast"
+name = "Yorkshire Coast Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["SCA", "YRK", "MLT"]
+sample_stations = ["SCA", "SEM", "MLT"]
+match_keywords = ["Yorkshire Coast", "Scarborough line"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Leeds to Scarborough via York, ordered south-west to north-east. Services
+# run through from Leeds, so it shares the `northern-yorkshire` trunk with the
+# `northern` corridor; the exclusive section starts east of York.
+#
+# Minor intermediate calls are omitted; only principal stations are listed.
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-yorkshire"
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "junction"
+segment = "northern-yorkshire"
+
+[[stations]]
+crs = "MLT"
+role = "minor"
+segment = "northern-yorkshire-coast"
+
+[[stations]]
+crs = "SEM"
+role = "junction"
+segment = "northern-yorkshire-coast"
+# Hull services diverge here
+
+[[stations]]
+crs = "SCA"
+role = "terminus"
+segment = "northern-yorkshire-coast"

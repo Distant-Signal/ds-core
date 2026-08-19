@@ -1,0 +1,39 @@
+id = "northern-lakes"
+name = "Lakes Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["WNE", "OXN"]
+sample_stations = ["WNE", "KEN", "OXN"]
+match_keywords = ["Lakes Line", "Windermere branch"]
+
+# Hourly single-track branch: one cancellation is most of the hour's service,
+# so reduced-service bites sooner than the 0.50 default, and a 5-minute delay
+# on a 20-minute journey isn't yet a story.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Oxenholme Lake District to Windermere, ordered south to north. Connects with
+# the WCML at Oxenholme; the branch itself is exclusively Northern's, and no
+# segment is shared with `wcml`.
+#
+# Minor intermediate calls (Burneside, Staveley) are omitted pending CRS
+# verification.
+[[stations]]
+crs = "OXN"
+tiploc = "OXENHLM"
+role = "junction"
+segment = "northern-lakes"
+
+[[stations]]
+crs = "KEN"
+role = "major"
+segment = "northern-lakes"
+
+[[stations]]
+crs = "WNE"
+role = "terminus"
+segment = "northern-lakes"

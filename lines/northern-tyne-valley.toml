@@ -1,0 +1,44 @@
+id = "northern-tyne-valley"
+name = "Tyne Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["NCL", "CAR", "HEX", "MCE"]
+sample_stations = ["HEX", "MCE", "CAR"]
+match_keywords = ["Tyne Valley"]
+
+# Roughly hourly, and the route has no parallel: a cancellation here leaves no
+# alternative rail service between Hexham and Carlisle.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Carlisle to Newcastle, ordered west to east. Meets the WCML at Carlisle and
+# the CrossCountry spine at Newcastle, but shares no segment with either — the
+# route between them is its own.
+#
+# Minor intermediate calls (Haltwhistle, Prudhoe and the Northumberland
+# stops) are omitted pending CRS verification.
+[[stations]]
+crs = "CAR"
+tiploc = "CARLILE"
+role = "junction"
+segment = "northern-tyne-valley"
+
+[[stations]]
+crs = "HEX"
+role = "major"
+segment = "northern-tyne-valley"
+
+[[stations]]
+crs = "MCE"
+role = "minor"
+segment = "northern-tyne-valley"
+
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "terminus"
+segment = "northern-tyne-valley"

@@ -1,0 +1,53 @@
+id = "northern-hope-valley"
+name = "Hope Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["SHF", "MAN", "SPT"]
+sample_stations = ["EDL", "HOP", "DOR"]
+match_keywords = ["Hope Valley"]
+
+# Roughly hourly stopping service across the Peak District.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Manchester Piccadilly to Sheffield across the Peak District, ordered west to
+# east. Nothing is shared with the `northern` trunk: that corridor runs from
+# Manchester Victoria over the Standedge route, while this one leaves from
+# Piccadilly. Sheffield is also a CrossCountry station, but only the station
+# is common.
+#
+# Minor intermediate calls (Chinley, Hathersage, Grindleford) are omitted
+# pending CRS verification.
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-hope-valley"
+
+[[stations]]
+crs = "SPT"
+role = "junction"
+segment = "northern-hope-valley"
+
+[[stations]]
+crs = "EDL"
+role = "minor"
+segment = "northern-hope-valley"
+
+[[stations]]
+crs = "HOP"
+role = "minor"
+segment = "northern-hope-valley"
+
+[[stations]]
+crs = "DOR"
+role = "minor"
+segment = "northern-hope-valley"
+
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"
+role = "terminus"
+segment = "northern-hope-valley"

@@ -1,0 +1,63 @@
+id = "xc-manchester"
+name = "CrossCountry Manchester Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["XC"]
+
+destination_crs_filter = ["MAN", "SPT", "WML"]
+sample_stations = ["MAN", "SPT", "WVH"]
+# No match_keywords: this arm has no route name the Knowledgebase actually
+# uses, and "Manchester" on its own would match half the north west. Station
+# and operator evidence carries it.
+
+# Same long-distance thresholds as the spine.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Manchester Piccadilly to Birmingham New Street, ordered north to south,
+# where it joins the `cross-country` spine. Runs over WCML metals between
+# Crewe and Wolverhampton; no segment is shared with `wcml` because that
+# line's segments are far coarser than the shared section, and an incident on
+# the shared stretch matches both lines by station anyway.
+#
+# Minor intermediate calls are omitted; only principal stations are listed.
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "SPT"
+role = "major"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "WML"
+role = "minor"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "junction"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "WVH"
+role = "major"
+segment = "xc-manchester"
+
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "junction"
+segment = "xc-birmingham"
+# Services continue south over the spine towards Bristol, or onto the
+# `xc-south-coast` arm towards Reading
