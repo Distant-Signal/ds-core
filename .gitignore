@@ -4,6 +4,12 @@ __pycache__/
 /.claude/
 /.superpowers/
 
-# Local secrets/config for docker-compose (see .env.example for the
-# documented, placeholder-only template that IS committed).
-.env
+# Local secrets/config for docker-compose. Blanket rule: every `*.env` file
+# is ignored (`*` matches a leading dot in gitignore, so this covers a bare
+# `.env` as well as `local.env` / `dev.env`, at any depth — including
+# `frontend/.env`), and only the committed, placeholder-only templates
+# escape it. See `local.env.example` / `dev.env.example` for the documented
+# templates that ARE committed, and docker-compose.yml's header for which
+# file is passed to `--env-file` in which mode.
+*.env
+!*.env.example

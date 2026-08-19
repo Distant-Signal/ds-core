@@ -1,11 +1,32 @@
 target
 .git
 
-# Local secrets/config for docker-compose (see .env.example for the
-# documented, placeholder-only template). All four Dockerfiles COPY the
-# whole build context into the builder stage, so without this exclusion a
-# real, populated .env would land in that stage's layer history even though
-# the final runtime image (built via COPY --from=builder) never sees it.
-.env
-.env.*
-!.env.example
+# Local secrets/config for docker-compose (see `local.env.example` /
+# `dev.env.example` for the documented, placeholder-only templates). All six
+# Rust Dockerfiles COPY the whole build context into the builder stage, so
+# without this exclusion a real, populated env file would land in that
+# stage's layer history even though the final runtime image (built via COPY
+# --from=builder) never sees it. The negation keeps the committed templates
+# in the context.
+*.env
+!*.env.example
+
+# The frontend's host-side build output must NOT enter the build context.
+#
+# Every service builds with `context: .` (the repo root), so this root file
+# is the ONLY ignore file that applies — BuildKit reads a per-Dockerfile
+# ignore file only when it is named `<dockerfile>.dockerignore`
+# (i.e. `frontend/Dockerfile.dockerignore`), which is why the old
+# `frontend/.dockerignore` was inert config and has been deleted.
+#
+# Without these two entries, `frontend/Dockerfile`'s builder-base does:
+#     COPY frontend/package.json frontend/package-lock.json ./
+#     RUN npm ci          # node 22 / Debian modules
+#     COPY frontend/ .    # ← host node_modules copied straight over them
+# so the host's `frontend/node_modules` (built by node v25 on Fedora) would
+# clobber the image's own `npm ci` output. The dev stack's anonymous
+# `/app/node_modules` volume is seeded from the image, so container-native
+# modules there are load-bearing, not just tidiness. Excluding them also
+# shrinks the build context substantially.
+frontend/node_modules
+frontend/.next
