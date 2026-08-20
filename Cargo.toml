@@ -8,4 +8,5 @@ members = [
     "crates/poller-tocs",
     "crates/poller-ldbws",
     "crates/aggregator",
+    "crates/enricher",
 ]
