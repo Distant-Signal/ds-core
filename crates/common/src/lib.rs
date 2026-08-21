@@ -65,6 +65,87 @@ impl Severity {
     }
 }
 
+/// True severity rank for a `Severity`. **Higher is worse**, the opposite
+/// direction from the discriminant.
+///
+/// `Severity`'s derived `Ord` sorts by declaration order / discriminant
+/// value, and TfL's `statusSeverity` codes are **not** monotonic with actual
+/// severity: `Diverted = 21` and `PartClosed = 11` are numerically high (so
+/// they compare as "mild") but are genuinely severe, while `GoodService = 10`
+/// sits in the middle of the numeric range. Anywhere the real question is
+/// "which of these is worse", rank through this function rather than
+/// comparing discriminants.
+///
+/// The groups are the exact mirror of `frontend/lib/severity.ts`'s
+/// `SEVERITY_TABLE` + `GROUP_RANK` (good=0, informational=1, planned=2,
+/// mild=3, severe=4), so the two ends of the stack agree on ordering. The
+/// `match` is exhaustive on purpose: a new `Severity` variant must not
+/// silently acquire a default rank.
+pub fn severity_rank(severity: Severity) -> u8 {
+    match severity {
+        Severity::GoodService => 0,
+        Severity::SpecialService | Severity::ExitOnly | Severity::NoStepFree => 1,
+        Severity::PlannedClosure | Severity::PartClosure => 2,
+        Severity::ReducedService
+        | Severity::MinorDelays
+        | Severity::ChangeOfFrequency
+        | Severity::Recovering => 3,
+        Severity::Closed
+        | Severity::Suspended
+        | Severity::PartSuspended
+        | Severity::SevereDelays
+        | Severity::BusService
+        | Severity::PartClosed
+        | Severity::Diverted => 4,
+    }
+}
+
+#[cfg(test)]
+mod severity_rank_tests {
+    use super::*;
+
+    #[test]
+    fn rank_matches_the_frontends_group_table() {
+        // One assertion per row of frontend/lib/severity.ts's SEVERITY_TABLE,
+        // in its numeric order, so drift between the two is a test failure
+        // rather than a silently divergent passenger-facing ordering.
+        for (severity, expected) in [
+            (Severity::SpecialService, 1),
+            (Severity::Closed, 4),
+            (Severity::Suspended, 4),
+            (Severity::PartSuspended, 4),
+            (Severity::PlannedClosure, 2),
+            (Severity::PartClosure, 2),
+            (Severity::SevereDelays, 4),
+            (Severity::ReducedService, 3),
+            (Severity::BusService, 4),
+            (Severity::MinorDelays, 3),
+            (Severity::GoodService, 0),
+            (Severity::PartClosed, 4),
+            (Severity::ExitOnly, 1),
+            (Severity::NoStepFree, 1),
+            (Severity::ChangeOfFrequency, 3),
+            (Severity::Recovering, 3),
+            (Severity::Diverted, 4),
+        ] {
+            assert_eq!(severity_rank(severity), expected, "{severity:?}");
+        }
+    }
+
+    #[test]
+    fn rank_disagrees_with_the_discriminant_where_the_codes_are_non_monotonic() {
+        // The whole reason this function exists. By discriminant, Diverted
+        // (21) and PartClosed (11) sort as milder than MinorDelays (9); by
+        // rank they are correctly more severe.
+        assert!(Severity::Diverted > Severity::MinorDelays);
+        assert!(Severity::PartClosed > Severity::MinorDelays);
+        assert!(severity_rank(Severity::Diverted) > severity_rank(Severity::MinorDelays));
+        assert!(severity_rank(Severity::PartClosed) > severity_rank(Severity::MinorDelays));
+        // GoodService is the mildest thing there is despite sitting mid-range.
+        assert_eq!(severity_rank(Severity::GoodService), 0);
+    }
+}
+
 // --- dataclasses.rs ---
 
 /// How confident are we in this status?
