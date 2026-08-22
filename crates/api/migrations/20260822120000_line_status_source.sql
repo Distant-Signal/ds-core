@@ -1,0 +1,29 @@
+-- -------------------------------------------------------------------------
+-- line_status.source — which service owns this row.
+--
+-- Until now the aggregator was the only writer of line_status, so "every
+-- row is mine" was a safe assumption and prune_removed_lines
+-- (crates/aggregator/src/queries.rs) deletes any row whose line_id is not
+-- in the aggregator's own static+custom line set. TfL line status arrives
+-- already computed — TfL publishes status directly, so there is nothing for
+-- the aggregator to infer — and is written straight into this table by the
+-- api crate's /private/tfl-line-status ingest. Without an owner column that
+-- prune would delete every TfL row on the next aggregation cycle (5s in
+-- dev, 60s in prod).
+--
+--   'aggregator' — crates/aggregator, derived from incidents + LDBWS samples
+--   'tfl'        — crates/api's /private/tfl-line-status, fed by
+--                  crates/poller-tfl from TfL's Unified API
+--
+-- Free text rather than an enum type for the same reason mode_name is: a
+-- new source is a code change, not a schema migration. The DEFAULT is what
+-- back-fills the existing rows correctly — every row that exists when this
+-- migration runs was written by the aggregator.
+--
+-- No index. This table is one row per line (tens of rows, ~20 of them TfL),
+-- and every query that filters on source either also filters on the line_id
+-- primary key or is a full scan by design; an index here would be cargo
+-- cult.
+-- -------------------------------------------------------------------------
+
+ALTER TABLE line_status ADD COLUMN source TEXT NOT NULL DEFAULT 'aggregator';
