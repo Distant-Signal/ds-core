@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 /.claude/
 /.superpowers/
+/.worktrees/
 
 # Local secrets/config for docker-compose. Blanket rule: every `*.env` file
 # is ignored (`*` matches a leading dot in gitignore, so this covers a bare
