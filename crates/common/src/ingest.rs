@@ -1,7 +1,9 @@
 //! Shared HTTP ingestion contract between the RDM pollers
 //! (`crates/poller-incidents`, `crates/poller-stations`, `crates/poller-tocs`,
-//! `crates/poller-ldbws`) and the `api` crate's `/private/*` endpoints
-//! (`crates/api/src/routes/ingest.rs`, gated by `crates/api/src/auth.rs`).
+//! `crates/poller-ldbws`), plus `crates/poller-tfl` (not an RDM feed, but a
+//! `post_batch`/`time_until_next_poll` consumer all the same), and the `api`
+//! crate's `/private/*` endpoints (`crates/api/src/routes/ingest.rs`, gated
+//! by `crates/api/src/auth.rs`).
 //!
 //! Single source of truth for the two header names both sides must agree
 //! on, plus the POST-batch-and-log pattern every poller repeats once per
