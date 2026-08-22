@@ -232,6 +232,36 @@ pub const TFL_OPERATOR: &str = "TfL";
 /// over one row. Applied once, in `crates/poller-tfl`.
 pub const TFL_LINE_ID_PREFIX: &str = "tfl-";
 
+/// Maps a TfL line id (already `TFL_LINE_ID_PREFIX`-namespaced) to the NR
+/// catalogue line id covering the same railway, for the small set of lines
+/// where a TfL-sourced `line_status` row and an NR/Darwin-sourced one exist
+/// independently for what is, to a passenger, one railway. See
+/// `docs/superpowers/specs/2026-08-22-tfl-service-metrics-v2-design.md`
+/// Area 1. Elizabeth line is the only entry today; Overground will add six
+/// more once NR line definitions exist for it (that spec's Area 2, not yet
+/// done) -- `nr_line_id_for_tfl`/`tfl_line_id_for_nr` are written generically
+/// over this table so extending it needs no code change beyond a new row.
+const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[("tfl-elizabeth", "elizabeth-line")];
+
+/// The NR catalogue line id a TfL line's status should be merged into for
+/// display, or `None` if this TfL line has no NR counterpart (true for
+/// every TfL line except the ones in `TFL_TO_NR_LINE_ID`).
+pub fn nr_line_id_for_tfl(tfl_line_id: &str) -> Option<&'static str> {
+    TFL_TO_NR_LINE_ID
+        .iter()
+        .find(|(tfl, _)| *tfl == tfl_line_id)
+        .map(|(_, nr)| *nr)
+}
+
+/// The TfL line id whose status should be overlaid onto this NR catalogue
+/// line id's detail view, or `None` if this NR line has no TfL counterpart.
+pub fn tfl_line_id_for_nr(nr_line_id: &str) -> Option<&'static str> {
+    TFL_TO_NR_LINE_ID
+        .iter()
+        .find(|(_, nr)| *nr == nr_line_id)
+        .map(|(tfl, _)| *tfl)
+}
+
 // --- dataclasses.rs ---
 
 /// How confident are we in this status?
@@ -808,5 +838,33 @@ mod tfl_severity_tests {
         assert_eq!(severity_rank(Severity::ServiceClosed), 1);
         assert_eq!(severity_rank(Severity::NotRunning), 4);
         assert_eq!(severity_rank(Severity::NoIssues), 0);
+    }
+}
+
+#[cfg(test)]
+mod tfl_nr_merge_tests {
+    use super::*;
+
+    #[test]
+    fn elizabeth_line_tfl_id_maps_to_its_nr_counterpart() {
+        assert_eq!(nr_line_id_for_tfl("tfl-elizabeth"), Some("elizabeth-line"));
+    }
+
+    #[test]
+    fn elizabeth_line_nr_id_maps_back_to_its_tfl_counterpart() {
+        assert_eq!(tfl_line_id_for_nr("elizabeth-line"), Some("tfl-elizabeth"));
+    }
+
+    #[test]
+    fn a_tfl_line_with_no_nr_counterpart_has_no_mapping() {
+        // The overwhelming majority of TfL lines -- e.g. the Northern line,
+        // which collides in *name* with an NR catalogue line but has no
+        // shared-infrastructure NR counterpart the way Elizabeth line does.
+        assert_eq!(nr_line_id_for_tfl("tfl-northern"), None);
+    }
+
+    #[test]
+    fn an_nr_line_with_no_tfl_counterpart_has_no_mapping() {
+        assert_eq!(tfl_line_id_for_nr("waterloo-main-line"), None);
     }
 }
