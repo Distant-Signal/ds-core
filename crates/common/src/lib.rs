@@ -39,6 +39,24 @@ pub enum Severity {
     Recovering = 20,
     /// Services running on an alternative route (NR extension).
     Diverted = 21,
+    /// TfL code 20. The line is shut for the night (or has not started for
+    /// the day) — the ordinary overnight state of the Underground, not a
+    /// fault. Deliberately NOT discriminant 20: that is already the NR
+    /// extension `Recovering`, and renumbering would change the meaning of
+    /// every `statusSeverity` already stored in `line_status.statuses` and
+    /// rendered by `frontend/lib/severity.ts`.
+    ServiceClosed = 22,
+    /// TfL code 16. Unlike `ServiceClosed`, this is a service that should
+    /// be running and is not.
+    NotRunning = 23,
+    /// TfL code 17.
+    IssuesReported = 24,
+    /// TfL code 18. TfL's own "everything is fine" wording for modes that
+    /// don't use `Good Service`.
+    NoIssues = 25,
+    /// TfL code 19, and this crate's landing place for any future TfL code
+    /// it has never heard of (see `severity_from_tfl_code`).
+    Information = 26,
 }
 
 impl Severity {
@@ -61,6 +79,11 @@ impl Severity {
             Self::ChangeOfFrequency => "Change of Frequency",
             Self::Recovering => "Recovering",
             Self::Diverted => "Diverted",
+            Self::ServiceClosed => "Service Closed",
+            Self::NotRunning => "Not Running",
+            Self::IssuesReported => "Issues Reported",
+            Self::NoIssues => "No Issues",
+            Self::Information => "Information",
         }
     }
 }
@@ -83,20 +106,26 @@ impl Severity {
 /// silently acquire a default rank.
 pub fn severity_rank(severity: Severity) -> u8 {
     match severity {
-        Severity::GoodService => 0,
-        Severity::SpecialService | Severity::ExitOnly | Severity::NoStepFree => 1,
+        Severity::GoodService | Severity::NoIssues => 0,
+        Severity::SpecialService
+        | Severity::ExitOnly
+        | Severity::NoStepFree
+        | Severity::ServiceClosed
+        | Severity::Information => 1,
         Severity::PlannedClosure | Severity::PartClosure => 2,
         Severity::ReducedService
         | Severity::MinorDelays
         | Severity::ChangeOfFrequency
-        | Severity::Recovering => 3,
+        | Severity::Recovering
+        | Severity::IssuesReported => 3,
         Severity::Closed
         | Severity::Suspended
         | Severity::PartSuspended
         | Severity::SevereDelays
         | Severity::BusService
         | Severity::PartClosed
-        | Severity::Diverted => 4,
+        | Severity::Diverted
+        | Severity::NotRunning => 4,
     }
 }
 
@@ -127,6 +156,11 @@ mod severity_rank_tests {
             (Severity::ChangeOfFrequency, 3),
             (Severity::Recovering, 3),
             (Severity::Diverted, 4),
+            (Severity::ServiceClosed, 1),
+            (Severity::NotRunning, 4),
+            (Severity::IssuesReported, 3),
+            (Severity::NoIssues, 0),
+            (Severity::Information, 1),
         ] {
             assert_eq!(severity_rank(severity), expected, "{severity:?}");
         }
@@ -146,6 +180,58 @@ mod severity_rank_tests {
     }
 }
 
+/// Maps a TfL Unified API `statusSeverity` code to this app's `Severity`.
+///
+/// Codes 0–14 are the same scale in both systems (ours was modelled on
+/// TfL's). 15–20 are not: TfL 15 is its own `Diverted` where ours is 21,
+/// and TfL 20 is `Service Closed` where our 20 is the NR extension
+/// `Recovering` — so a raw numeric passthrough would have mislabelled the
+/// ordinary overnight closure of every Underground line as "Recovering".
+///
+/// `None` means TfL has published a code this table has never seen. Callers
+/// must not drop the status (a line with no statuses renders as Good
+/// Service) and must not guess a severity: `crates/poller-tfl` records it
+/// as `Severity::Information` and carries TfL's own description through in
+/// the reason text.
+pub fn severity_from_tfl_code(code: u8) -> Option<Severity> {
+    Some(match code {
+        0 => Severity::SpecialService,
+        1 => Severity::Closed,
+        2 => Severity::Suspended,
+        3 => Severity::PartSuspended,
+        4 => Severity::PlannedClosure,
+        5 => Severity::PartClosure,
+        6 => Severity::SevereDelays,
+        7 => Severity::ReducedService,
+        8 => Severity::BusService,
+        9 => Severity::MinorDelays,
+        10 => Severity::GoodService,
+        11 => Severity::PartClosed,
+        12 => Severity::ExitOnly,
+        13 => Severity::NoStepFree,
+        14 => Severity::ChangeOfFrequency,
+        15 => Severity::Diverted,
+        16 => Severity::NotRunning,
+        17 => Severity::IssuesReported,
+        18 => Severity::NoIssues,
+        19 => Severity::Information,
+        20 => Severity::ServiceClosed,
+        _ => return None,
+    })
+}
+
+/// The `operators` entry every TfL-sourced line carries. TfL has no
+/// per-line ATOC-style operator code the way National Rail does — tube,
+/// DLR, Overground, Elizabeth line and tram are all "TfL" — so this is a
+/// constant rather than anything derived from the feed.
+pub const TFL_OPERATOR: &str = "TfL";
+
+/// Prefix on every TfL line id. `line_status.line_id` is a primary key and
+/// TfL's tube line id is `northern`, which is also the id in
+/// `lines/northern.toml`; without this prefix the two railways would fight
+/// over one row. Applied once, in `crates/poller-tfl`.
+pub const TFL_LINE_ID_PREFIX: &str = "tfl-";
+
 // --- dataclasses.rs ---
 
 /// How confident are we in this status?
@@ -157,6 +243,12 @@ pub enum DataQuality {
     LdbwsInferred,
     TrustInferred,
     Planned,
+    /// Published by TfL as line status, not inferred by this app from
+    /// incidents or departure boards. The most authoritative quality there
+    /// is for a TfL line, and deliberately not folded into
+    /// `Knowledgebase` — that name means the National Rail RDM
+    /// Knowledgebase feed specifically.
+    Tfl,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -623,5 +715,98 @@ mod custom_line_tests {
         assert!(line.severity_overrides.is_empty());
         assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
         assert_eq!(line.destination_crs_filter, vec!["AON".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod tfl_severity_tests {
+    use super::*;
+
+    /// TfL's own `GET /Line/Meta/Severity` table, transcribed verbatim from
+    /// a live fetch on 2026-08-22. The descriptions were identical for
+    /// every mode this app ingests (tube, dlr, overground, elizabeth-line,
+    /// tram) — checked all five, zero differences — which is why the
+    /// mapping is a compile-time table here instead of a per-cycle request
+    /// to that endpoint. If TfL extends or renumbers the scale, this test
+    /// is what fails.
+    const TFL_SEVERITY_TABLE: [(u8, &str); 21] = [
+        (0, "Special Service"),
+        (1, "Closed"),
+        (2, "Suspended"),
+        (3, "Part Suspended"),
+        (4, "Planned Closure"),
+        (5, "Part Closure"),
+        (6, "Severe Delays"),
+        (7, "Reduced Service"),
+        (8, "Bus Service"),
+        (9, "Minor Delays"),
+        (10, "Good Service"),
+        (11, "Part Closed"),
+        (12, "Exit Only"),
+        (13, "No Step Free Access"),
+        (14, "Change of frequency"),
+        (15, "Diverted"),
+        (16, "Not Running"),
+        (17, "Issues Reported"),
+        (18, "No Issues"),
+        (19, "Information"),
+        (20, "Service Closed"),
+    ];
+
+    #[test]
+    fn every_published_tfl_code_maps_to_a_severity() {
+        for (code, description) in TFL_SEVERITY_TABLE {
+            assert!(
+                severity_from_tfl_code(code).is_some(),
+                "TfL code {code} ({description}) has no mapping"
+            );
+        }
+    }
+
+    #[test]
+    fn our_wording_matches_tfls_except_two_deliberate_rewordings() {
+        for (code, tfl_description) in TFL_SEVERITY_TABLE {
+            let ours = severity_from_tfl_code(code).unwrap().description();
+            match code {
+                // Pre-existing NR wording, unchanged by this feature: the
+                // NR feed's equivalent is a rail replacement bus.
+                8 => assert_eq!(ours, "Rail Replacement"),
+                // Same words, our capitalisation.
+                14 => assert_eq!(ours, "Change of Frequency"),
+                _ => assert_eq!(ours, tfl_description, "code {code}"),
+            }
+        }
+    }
+
+    #[test]
+    fn tfl_codes_above_14_do_not_collide_with_the_nr_extensions() {
+        // The whole reason the new variants exist. Our 20 is the NR
+        // extension `Recovering` and our 21 is `Diverted`; TfL's 20 is
+        // "Service Closed" (which 13 of 20 lines were reporting at the time
+        // of capture) and TfL's 15 is its Diverted. Mapping by raw number
+        // would have shown "Recovering" all night, every night.
+        assert_eq!(severity_from_tfl_code(20), Some(Severity::ServiceClosed));
+        assert_ne!(severity_from_tfl_code(20), Some(Severity::Recovering));
+        assert_eq!(severity_from_tfl_code(15), Some(Severity::Diverted));
+        assert_eq!(Severity::Recovering as u8, 20);
+        assert_eq!(Severity::Diverted as u8, 21);
+    }
+
+    #[test]
+    fn an_unpublished_code_has_no_mapping() {
+        // 21 is deliberately included: it is a valid discriminant on OUR
+        // scale but not on TfL's, so a naive round-trip would "succeed".
+        assert_eq!(severity_from_tfl_code(21), None);
+        assert_eq!(severity_from_tfl_code(99), None);
+    }
+
+    #[test]
+    fn service_closed_is_informational_and_not_running_is_severe() {
+        // An overnight closure is the normal state of the Underground and
+        // must not paint the network red; a service that is unexpectedly
+        // absent must.
+        assert_eq!(severity_rank(Severity::ServiceClosed), 1);
+        assert_eq!(severity_rank(Severity::NotRunning), 4);
+        assert_eq!(severity_rank(Severity::NoIssues), 0);
     }
 }
