@@ -14,3 +14,8 @@ __pycache__/
 # file is passed to `--env-file` in which mode.
 *.env
 !*.env.example
+
+# Per-developer mise tool overrides (extra tools, local-only settings) --
+# untracked so one contributor's own additions here don't leak into
+# everyone else's `mise install`.
+mise.local.toml
