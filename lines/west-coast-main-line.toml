@@ -3,7 +3,7 @@ name = "West Coast Main Line"
 mode = "national-rail"
 category = "main-line"
 operators = [
-  "AW",  # Avanti West Coast
+  "VT",  # Avanti West Coast (formerly Virgin Trains)
   "LM",  # London Northwestern Railway
   "LN",  # West Midlands Trains (London Northwestern services)
   "CS",  # Caledonian Sleeper
