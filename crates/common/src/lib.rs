@@ -521,6 +521,34 @@ pub struct TrackPinRequest {
     pub operator: Option<String>,
 }
 
+/// Manual ticket-entry payload for `POST /Train/{trackingId}/tickets`
+/// (`crates/api/src/routes/train.rs`) -- the durable v1 backbone every
+/// ingestion tier ultimately funnels through (see
+/// docs/superpowers/plans/2026-08-29-journey-ticket-tracking.md's
+/// Architecture section). `source` defaults to "manual"; a `.pkpass`/PDF
+/// upload preview (Tasks 6-9) is turned into a saved row by the client
+/// re-submitting this same request shape with `source` set to whichever
+/// tier produced the reviewed data ("pkpass-semantics" / "pkpass-heuristic"
+/// / "pdf-heuristic") -- there is no separate "confirm upload" endpoint;
+/// this is the only write path, deliberately.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketEntryRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_crs: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_crs: Option<String>,
+    #[serde(default = "default_ticket_source")]
+    pub source: String,
+}
+
+fn default_ticket_source() -> String {
+    "manual".to_string()
+}
+
 /// One TRUST-derived event for a tracked train, as `trust-consumer` posts
 /// it to `POST /private/train-events`. Carries both the raw event (for the
 /// immutable log, `train_movement_events`) and trust-consumer's own
