@@ -16,8 +16,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use anyhow::{Context, Result};
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder};
 
-/// Every metric this app emits by hand is prefixed `nr_status_`, so it can
-/// never collide with `metrics-exporter-prometheus`'s own process-level
+/// Every metric this app emits by hand is prefixed `distant_signal_`, so it
+/// can never collide with `metrics-exporter-prometheus`'s own process-level
 /// defaults (e.g. `process_cpu_seconds_total`) or a future metric from an
 /// unrelated process sharing the same Prometheus instance. Callers build a
 /// metric's full name through this function rather than hand-writing the
@@ -25,7 +25,7 @@ use metrics_exporter_prometheus::{Matcher, PrometheusBuilder};
 /// place that changes if the prefix itself ever does is this function, not
 /// every call site.
 pub fn metric_name(suffix: &str) -> String {
-    format!("nr_status_{suffix}")
+    format!("distant_signal_{suffix}")
 }
 
 /// Default histogram bucket boundaries applied to every metric recorded
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn metric_name_adds_the_shared_prefix() {
-        assert_eq!(metric_name("poller_cycle_total"), "nr_status_poller_cycle_total");
+        assert_eq!(metric_name("poller_cycle_total"), "distant_signal_poller_cycle_total");
     }
 
     #[test]
@@ -108,10 +108,10 @@ mod tests {
         // Documents current behavior rather than testing a real
         // requirement: metric_name always prepends, it never inspects its
         // input. Callers are responsible for passing a bare suffix (e.g.
-        // "poller_cycle_total", not "nr_status_poller_cycle_total").
+        // "poller_cycle_total", not "distant_signal_poller_cycle_total").
         assert_eq!(
-            metric_name("nr_status_poller_cycle_total"),
-            "nr_status_nr_status_poller_cycle_total"
+            metric_name("distant_signal_poller_cycle_total"),
+            "distant_signal_distant_signal_poller_cycle_total"
         );
     }
 
