@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.102"
 chrono = { version = "0.4.44", features = ["serde"] }
 glob = "0.3.3"
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "gzip"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-inline-default = "1.0.1"
