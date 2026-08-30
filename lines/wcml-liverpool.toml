@@ -1,0 +1,163 @@
+id = "wcml-liverpool"
+name = "West Coast Main Line: Liverpool"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "VT",  # Avanti West Coast. Same reasoning as `wcml-birmingham.toml` and
+  # `wcml-manchester.toml`: this is Avanti's own Euston-Liverpool intercity
+  # service. Merseyrail ("ME") and Northern ("NT") both also serve Liverpool
+  # Lime Street, but neither runs Euston-originating services -- see the
+  # Merseyrail note below and `northern.toml`'s own `northern-merseyside`
+  # segment (a different Liverpool-area corridor entirely).
+]
+
+# Route research (Step 1), fetched live 2026-08-29/30 and cross-checked
+# across three independent sources:
+#   1. Wikipedia's "Avanti West Coast" article: its route/calling-pattern
+#      table lists the current Euston-Liverpool Lime Street service as two
+#      roughly-hourly patterns that both converge on the same physical
+#      route beyond Crewe -- one calling "Milton Keynes Central, Crewe,
+#      Runcorn, Liverpool South Parkway" (with a footnote that one train
+#      per day additionally calls at Hartford -- not modelled here, too
+#      infrequent to treat as a regular stop, same convention
+#      `wcml-birmingham.toml` used for omitting West Midlands Trains local
+#      calls), the other calling "Tamworth, Lichfield Trent Valley,
+#      Runcorn" (i.e. the slower-stopping pattern over the same
+#      Trent-Valley spine already modelled in `west-coast-main-line.toml`).
+#      Both patterns reach Liverpool via Crewe and Runcorn.
+#   2. Wikipedia's "West Coast Main Line" article confirms the
+#      Crewe-Liverpool leg is a genuinely distinct physical branch, not a
+#      stopping-pattern variant of the core spine: "a direct branch to
+#      Liverpool Lime Street... opened in 1869 from Weaver Junction, north
+#      of Crewe, to Ditton Junction, via the Runcorn Railway Bridge over
+#      the river Mersey."
+#   3. railwaycodes.org.uk's station-code listings independently confirm
+#      the CRS codes used below: Runcorn = RUN, Liverpool South Parkway =
+#      LPY, Liverpool Lime Street = LIV.
+# Conclusion: a single current Avanti route, Euston to Liverpool Lime
+# Street via the shared WCML spine to Crewe, then Runcorn and Liverpool
+# South Parkway -- unlike `wcml-manchester.toml` there is no second,
+# physically distinct branch to model here.
+
+# EUS covers up-direction (London-bound) services, since LIV alone can't
+# match trains terminating there.
+destination_crs_filter = ["LIV", "EUS"]
+sample_stations = ["RUN", "LIV"]
+# No match_keywords: same reasoning as `wcml-birmingham.toml` and
+# `wcml-manchester.toml` -- "Liverpool" alone is far too generic (would
+# false-positive against `northern.toml`'s own Liverpool Lime Street
+# entry on its unrelated `northern-merseyside` segment, and eventually
+# against Merseyrail's own future entries -- see the note below) and this
+# branch has no route name the Knowledgebase is confirmed to use
+# consistently. Station and operator evidence carries it instead.
+
+# Merseyrail note (per the gap analysis's "Merseyrail" section, for
+# whoever curates Merseyrail in Batch 12): Liverpool Lime Street (LIV,
+# the terminus below) is a different station and a different corridor
+# from Merseyrail's own underground Northern Line loop through Liverpool
+# Central/Moorfields. No segment collision is expected -- this file's
+# `wcml-liverpool-branch` segment only ever applies to LIV as a
+# WCML/Avanti terminus -- but it's worth double-checking there's no
+# literal station-code collision once Merseyrail's own files exist,
+# same caution the gap analysis already flagged against `northern.toml`.
+
+# London Euston to Liverpool Lime Street via Crewe and Runcorn, ordered
+# south-east to north-west. EUS through CRE reuse `west-coast-main-line.toml`'s
+# own `wcml-london`/`wcml-midlands`/`wcml-northwest` segment tags verbatim
+# (same trunk-sharing pattern `wcml-birmingham.toml` and
+# `wcml-manchester.toml` already set). Crewe is the real diverging point:
+# Avanti's Liverpool service leaves WCML metals there for the
+# Crewe-Liverpool branch via Runcorn (confirmed via source 2 above). Per
+# the shared-trunk rule of thumb in `lines/SCHEMA.md`, Crewe stays on the
+# shared `wcml-northwest` segment (same tag `wcml-manchester.toml` also
+# reuses there for its own Wilmslow branch) and the exclusive
+# `wcml-liverpool-branch` segment starts at the next station, Runcorn.
+#
+# Segment-name collision check (per the Global Constraints): grepped
+# `lines/*.toml` before naming `wcml-liverpool-branch` -- no existing file
+# uses that name. It also does not collide with `wcml-manchester.toml`'s
+# own `wcml-manchester-crewe` segment (also diverging at Crewe, onto the
+# Wilmslow route) even though both branches leave the shared spine at the
+# same junction station: they are genuinely different physical corridors
+# to different destinations, so distinct exclusive segment names are
+# correct, not an oversight.
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "wcml-london"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "wcml-london"
+
+[[stations]]
+crs = "HMP"
+tiploc = "HMPSTDH"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "NUN"
+tiploc = "NUNEATN"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "TAM"
+tiploc = "TAMWRTH"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "LTV"
+tiploc = "LCHTNJ"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "junction"
+segment = "wcml-northwest"
+
+[[stations]]
+crs = "RUN"
+role = "minor"
+segment = "wcml-liverpool-branch"
+
+[[stations]]
+crs = "LPY"
+role = "major"
+segment = "wcml-liverpool-branch"
+
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "wcml-liverpool-branch"

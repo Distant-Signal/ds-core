@@ -1,0 +1,202 @@
+id = "wcml-manchester"
+name = "West Coast Main Line: Manchester"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "VT",  # Avanti West Coast. This branch is modelled as Avanti-only, same
+  # reasoning as `wcml-birmingham.toml`: Northern and TransPennine Express
+  # run their own Manchester-area local/regional services over parts of
+  # this corridor but not Euston-Manchester intercity workings, so they
+  # aren't added here.
+]
+
+# Route research (Step 1), all fetched live 2026-08-29 and cross-checked
+# across three independent sources:
+#   1. Wikipedia's "Avanti West Coast" article: its route/calling-pattern
+#      table lists TWO distinct current Euston-Manchester Piccadilly
+#      services, each roughly hourly -- "Milton Keynes Central, Rugby,
+#      Stoke-on-Trent, Macclesfield, Stockport" (the Stoke-on-Trent route)
+#      and "Stafford, Crewe, Wilmslow, Stockport" (the Crewe/Wilmslow
+#      route). Both converge at Stockport before the final leg into
+#      Manchester Piccadilly.
+#   2. Wikipedia's "West Coast Main Line" article corroborates these as two
+#      genuinely separate physical routes, not a stopping-pattern variant
+#      of one route: the Stoke-on-Trent line is the historic North
+#      Staffordshire Railway route diverging near Stafford/Colwich
+#      Junction, while the Crewe-Manchester line via Wilmslow is a
+#      different corridor leaving the core spine at Crewe (its
+#      Crewe-Wilmslow section was resignalled/upgraded in 2006).
+#   3. Wikipedia's "Crewe-Manchester line" article independently confirms
+#      "Avanti West Coast operates West Coast Main Line services between
+#      London Euston, Crewe and Manchester" over that route via Wilmslow,
+#      and lists Wilmslow and Stockport among its stations.
+# Conclusion: both routes are genuinely current Avanti services today, not
+# a case of picking one and discarding the other. Per this task's brief
+# ("you may model both branches in one file... your call, document the
+# reasoning"), both are modelled here as two exclusive branches off the
+# shared WCML spine, converging again at Stockport -- a real Y, unlike
+# `swr-south-west-main.toml`'s Bournemouth+Weymouth handling (read for
+# precedent per the brief, but that file's Bournemouth/Weymouth stations
+# are one continuous route, not a physical fork, so its structure doesn't
+# literally apply here beyond "one file can legitimately hold more than a
+# single straight line of stations").
+
+# EUS covers up-direction (London-bound) services, since MAN alone can't
+# match trains terminating there.
+destination_crs_filter = ["MAN", "EUS"]
+# One sample station per branch plus the shared terminus.
+sample_stations = ["SOT", "WML", "MAN"]
+# No match_keywords: same reasoning as `xc-manchester.toml` and
+# `wcml-birmingham.toml` -- "Manchester" alone is far too generic (would
+# false-positive against `xc-manchester`, `northern-hope-valley`, and any
+# future Northern/TPE Manchester entries) and neither branch has a
+# distinct route name the Knowledgebase is confirmed to use consistently.
+# Station and operator evidence carries it instead.
+
+# London Euston to Manchester Piccadilly, ordered south-east to north-west
+# along the shared spine, then as two diverging branches, then the shared
+# final approach into Manchester Piccadilly. Because of the reconverging Y
+# shape, this file order is NOT strictly geographic once the branches
+# start (SOT/MAC, the Stoke-on-Trent branch, are listed before CRE/WML,
+# the Crewe/Wilmslow branch, purely as a narrative choice -- see the
+# per-branch comments below).
+#
+# Caveat for future maintainers: `common::LineDefinition::stations_between`
+# does an index-range lookup over this flat, file-ordered list (the
+# mechanism behind `SCHEMA.md`'s "if A appears before B in your station
+# list, every station between A and B is implicated" curation rule). That
+# assumes a single straight line of stations; it is NOT safe to call
+# across this file's two branches. E.g. `stations_between("SOT", "MAN")`
+# would incorrectly include CRE and WML, which sit between SOT and MAN in
+# file order but are on the *other*, physically unaffected branch.
+# `stations_between` itself has no call sites in the workspace, but
+# `routes_from_stations` in `crates/aggregator/src/aggregation.rs` makes
+# the identical flat-order assumption over this same station list, and IS
+# live -- it's called from the incident-processing path to build the
+# user-visible `affected_routes` on every incident-derived status. So this
+# hazard is real today, not theoretical: an incident naming stations on
+# both branches of this file can produce a geographically wrong
+# affected-route summary. Making `routes_from_stations` branch-aware is
+# out of scope for this plan (it's aggregator logic, not line data) --
+# flagged here as a known follow-up, not fixed.
+#
+# EUS through STA reuse `west-coast-main-line.toml`'s own `wcml-london`/
+# `wcml-midlands` segment tags verbatim (same trunk-sharing pattern
+# `wcml-birmingham.toml` and `swr-alton.toml` already set). STA (Stafford)
+# is the real-world fork point for the Stoke-on-Trent branch -- per the
+# shared-trunk rule of thumb in `lines/SCHEMA.md`, it stays on the shared
+# `wcml-midlands` segment and the exclusive `wcml-manchester-stoke`
+# segment starts at the next station on that branch, Stoke-on-Trent.
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "wcml-london"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "wcml-london"
+
+[[stations]]
+crs = "HMP"
+tiploc = "HMPSTDH"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "NUN"
+tiploc = "NUNEATN"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "TAM"
+tiploc = "TAMWRTH"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "LTV"
+tiploc = "LCHTNJ"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "wcml-midlands"
+
+# Branch 1: via Stoke-on-Trent. Diverges from the core spine near Stafford
+# (Colwich Junction, not itself a passenger station) and never touches
+# Crewe. Exclusive to this line -- `xc-manchester.toml` and
+# `northern-hope-valley.toml` also touch Manchester-area stations but not
+# these two.
+[[stations]]
+crs = "SOT"
+role = "major"
+segment = "wcml-manchester-stoke"
+
+[[stations]]
+crs = "MAC"
+role = "minor"
+segment = "wcml-manchester-stoke"
+
+# Continuing the shared spine north from Stafford to Crewe -- reuses
+# `west-coast-main-line.toml`'s own `wcml-northwest` segment tag verbatim,
+# same as that file's CRE entry (role "junction", same rationale as STA
+# above). This is the real diverging point for Branch 2.
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "junction"
+segment = "wcml-northwest"
+
+# Branch 2: via Wilmslow, using the Crewe-Manchester line (upgraded 2006).
+# Exclusive `wcml-manchester-crewe` segment starts at the next station
+# after the CRE junction, Wilmslow. Wilmslow (CRS "WML") is also a station
+# on `xc-manchester.toml`'s own arm, tagged there under its own
+# `xc-manchester` segment -- per the Global Constraints and the precedent
+# `xc-manchester.toml`/`xc-south-coast.toml` already documented, station
+# overlap between the two files is expected and fine; segment-sharing is
+# a deliberate choice this pair of routes doesn't warrant (different
+# operators, different granularity of segmentation).
+[[stations]]
+crs = "WML"
+role = "minor"
+segment = "wcml-manchester-crewe"
+
+# Both branches converge here before the terminus. Stockport (SPT) and
+# Manchester Piccadilly (MAN) are also stations on `xc-manchester.toml`
+# and `northern-hope-valley.toml`, again station-overlap-only per the same
+# precedent -- their segments there are unrelated names ("xc-manchester",
+# "northern-hope-valley" respectively).
+[[stations]]
+crs = "SPT"
+role = "major"
+segment = "wcml-manchester-piccadilly"
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "wcml-manchester-piccadilly"

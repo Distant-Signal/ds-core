@@ -1,0 +1,254 @@
+id = "wcml-north-wales"
+name = "West Coast Main Line: North Wales"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "VT",  # Avanti West Coast. Same reasoning as the other WCML branch files
+  # in this batch: this is Avanti's own Euston-North Wales intercity
+  # service. Transport for Wales ("AW") also runs local/regional services
+  # over the Chester-Holyhead corridor (the North Wales Main/Coast Line)
+  # but that's a distinct, unmodelled service group -- see the TfW-overlap
+  # comment below.
+]
+
+# Route research (Step 1), fetched live 2026-08-30 and cross-checked across
+# four independent sources:
+#   1. Wikipedia's "Avanti West Coast" article: its routes section
+#      describes "Route C -- London to Chester and North Wales" as 1tph
+#      Euston-Chester calling at Stafford and Crewe, with 6 trains/day
+#      continuing beyond Chester to Holyhead calling at "Flint, Prestatyn,
+#      Rhyl, Colwyn Bay, Llandudno Junction and Bangor". It also notes one
+#      train/day has a dividing portion serving Wrexham General (not
+#      modelled here -- too infrequent and a different physical fork, same
+#      convention `wcml-liverpool.toml` used for its own one-train/day
+#      Hartford footnote).
+#   2. Wikipedia's "North Wales Main Line" article (the Crewe-Holyhead
+#      infrastructure article; note this is the same article the "North
+#      Wales Coast Line" title redirects to) independently confirms
+#      "principal through passenger services are London Euston to
+#      Holyhead, Bangor, Chester and Wrexham General, operated by Avanti
+#      West Coast", and gives the full Crewe-Holyhead station list this
+#      file's calling points are drawn from (a subset -- only Avanti's own
+#      calling pattern from source 1, not every local stop on the line).
+#   3. Wikipedia's "West Coast Main Line" article corroborates
+#      Crewe-Chester-Holyhead as a genuinely distinct physical branch (the
+#      unelectrified "North Wales Main Line"), and that Avanti's
+#      predecessor fleet (Super Voyagers) worked "London Euston to Chester
+#      and Holyhead services" over it -- i.e. this has been a continuous
+#      through service, not a new addition.
+#   4. Wikipedia's "Holyhead railway station" article independently
+#      confirms current-day Avanti West Coast through services: "6 trains
+#      per day to London Euston, as well as 1 train per day which runs to
+#      Birmingham New Street via Crewe" (the Birmingham-via-Crewe working
+#      isn't modelled here, out of this file's researched scope), and
+#      Avanti's own website (avantiwestcoast.co.uk, fetched live) lists
+#      "Chester & North Wales Services: via Crewe, Stafford & Milton
+#      Keynes" among its route groups, corroborating the operator and
+#      general routing independently of Wikipedia.
+# CRS codes for the new stations below (Chester through Holyhead) were each
+# independently confirmed against their own Wikipedia station-article
+# infobox (CTR, FLN, PRT, RHL, CWB, LLJ, BNG, HHD) -- railwaycodes.org.uk
+# was attempted as the usual second-source cross-check for CRS codes but
+# returned HTTP 429 (rate-limited) during this research session, so the
+# station-infobox cross-check stands in for it here; every code above was
+# independently confirmed via its own article, not inferred from a single
+# source.
+# Conclusion: a single current Avanti route, Euston to Holyhead via the
+# shared WCML spine to Crewe, then Chester and the North Wales coast --
+# like `wcml-liverpool.toml`, no second physically distinct branch to
+# model here (the one-train/day Wrexham dividing portion is a real fork
+# but too infrequent to model as a full branch, same threshold judgment
+# `wcml-liverpool.toml` applied to its own Hartford footnote).
+
+# Most Avanti Euston-Chester/North Wales trains terminate at Chester
+# (1tph); only a minority (6/day) continue on to Holyhead. Both are
+# legitimately "this line" (the North Wales branch, not e.g. the Liverpool
+# or Manchester branches), so both termini are listed here to avoid
+# under-matching the majority Chester-terminating services via LDBWS
+# destination inference.
+# EUS covers up-direction (London-bound) services -- both CTR and HHD are
+# near-unmatchable on their own since services calling there are almost
+# always continuing past or originating from further down the line, not
+# terminating there in the down direction captured by a departure-board
+# destination field.
+destination_crs_filter = ["CTR", "HHD", "EUS"]
+sample_stations = ["CTR", "HHD"]
+# No match_keywords: same reasoning as the other WCML branch files in this
+# batch -- neither "North Wales Main Line" nor "North Wales Coast Line" is
+# confirmed against a live Knowledgebase incident to be the phrasing that
+# feed actually uses (the Global Constraints and `lines/SCHEMA.md` both
+# warn against padding match_keywords without that confirmation), and
+# "North Wales Coast" in particular is also the name of Transport for
+# Wales' own future line over the same physical corridor (see below) --
+# guessing a shared-sounding phrase now risks silently mis-attributing a
+# TfW-only local-service incident to this Avanti-only file. Station and
+# operator evidence carries it instead, same as
+# `wcml-birmingham.toml`/`wcml-manchester.toml`/`wcml-liverpool.toml`.
+
+# ---------------------------------------------------------------------
+# TfW future-overlap note (read this before touching segment names here):
+# The gap analysis flags this as a CONFIRMED future overlap -- Transport
+# for Wales' own North Wales Coast Line (Batch 11, a separate,
+# not-yet-written worktree) will cover this exact Chester-Holyhead
+# corridor with its own local/regional stopping service, a different
+# operator ("AW") and almost certainly a different, finer station list
+# than Avanti's own limited-stop calling pattern modelled below.
+#
+# This file's exclusive segment for that corridor is named
+# `wcml-north-wales-branch` -- deliberately WCML-prefixed (matching this
+# batch's own naming convention: `wcml-birmingham-branch`,
+# `wcml-liverpool-branch`, `wcml-manchester-crewe`/`-stoke`), not a bare
+# `north-wales-coast`/`north-wales-main-line` name TfW's own file would be
+# more likely to reach for on its own. Grepped `lines/*.toml` before
+# choosing it (per the Global Constraints) -- no existing file uses this
+# name, and no existing file's `[[stations]]` entries use any of the CRS
+# codes this file introduces (CTR, FLN, PRT, RHL, CWB, LLJ, BNG, HHD), so
+# there is no accidental collision today.
+#
+# This is a DELIBERATE non-decision, not an oversight: whoever curates
+# Batch 11's TfW file should read this comment and this file's own station
+# list, then decide on that file's own merits whether to reuse
+# `wcml-north-wales-branch` as a genuine shared trunk (if TfW's own
+# segmentation is coarse enough to match this one-segment-per-branch
+# convention) or to give TfW's line its own distinct segment name (the
+# `xc-manchester.toml`/`wcml-manchester.toml` precedent already documented
+# in the Global Constraints: "station overlap is fine, segment-sharing is
+# a deliberate choice"). Station-level overlap between the two files is
+# expected and correct either way -- it's the same physical stations
+# served by two different operators' services.
+# ---------------------------------------------------------------------
+
+# London Euston to Holyhead via Crewe and Chester, ordered south-east to
+# north-west. EUS through CRE reuse `west-coast-main-line.toml`'s own
+# `wcml-london`/`wcml-midlands`/`wcml-northwest` segment tags verbatim
+# (same trunk-sharing pattern `wcml-birmingham.toml`, `wcml-manchester.toml`,
+# and `wcml-liverpool.toml` already set). Crewe is the real diverging
+# point: Avanti's North Wales service leaves WCML metals there for the
+# North Wales Main Line via Chester (confirmed via sources 1-3 above). Per
+# the shared-trunk rule of thumb in `lines/SCHEMA.md`, Crewe stays on the
+# shared `wcml-northwest` segment (the same tag `wcml-manchester.toml` and
+# `wcml-liverpool.toml` also reuse there for their own branches) and the
+# exclusive `wcml-north-wales-branch` segment starts at the next station,
+# Chester.
+#
+# Segment-name collision check (per the Global Constraints): grepped
+# `lines/*.toml` before naming `wcml-north-wales-branch` -- no existing
+# file uses that name. It also does not collide with
+# `wcml-manchester.toml`'s `wcml-manchester-crewe` segment or
+# `wcml-liverpool.toml`'s `wcml-liverpool-branch` segment, even though all
+# three diverge from the shared spine at the same junction station,
+# Crewe: all three are genuinely different physical corridors to
+# different destinations (Wilmslow/Manchester, Runcorn/Liverpool,
+# Chester/Holyhead respectively), so three distinct exclusive segment
+# names are correct, not an oversight -- same judgment call this task's
+# brief itself calls out.
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "wcml-london"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "wcml-london"
+
+[[stations]]
+crs = "HMP"
+tiploc = "HMPSTDH"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "NUN"
+tiploc = "NUNEATN"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "TAM"
+tiploc = "TAMWRTH"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "LTV"
+tiploc = "LCHTNJ"
+role = "minor"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "junction"
+segment = "wcml-northwest"
+
+# Exclusive North Wales branch -- see the TfW future-overlap note above
+# for the segment-name reasoning. Chester is itself a real junction (a
+# one-train/day dividing portion serves Wrexham General from here, per
+# source 1 above) but that fork isn't modelled in this file, so Chester is
+# tagged "major" rather than "junction" here.
+[[stations]]
+crs = "CTR"
+role = "major"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "FLN"
+role = "minor"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "PRT"
+role = "minor"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "RHL"
+role = "minor"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "CWB"
+role = "minor"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "LLJ"
+role = "minor"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "BNG"
+role = "major"
+segment = "wcml-north-wales-branch"
+
+[[stations]]
+crs = "HHD"
+role = "terminus"
+segment = "wcml-north-wales-branch"

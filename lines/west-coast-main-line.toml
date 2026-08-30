@@ -4,8 +4,19 @@ mode = "national-rail"
 category = "main-line"
 operators = [
   "VT",  # Avanti West Coast (formerly Virgin Trains)
-  "LM",  # London Northwestern Railway
-  "LN",  # West Midlands Trains (London Northwestern services)
+  # LM = West Midlands Trains, which runs both the London Northwestern
+  # Railway and West Midlands Railway brands under this single ATOC code.
+  # Previously this file also listed "LN" as if it were a second, distinct
+  # code for London Northwestern services -- that was checked and found
+  # unsupported: Network Rail's own "References and Symbols" doc (fetched
+  # live 2026-08-29, https://www.networkrail.co.uk/wp-content/uploads/2020/02/NRT-References-and-Symbols.pdf)
+  # lists a complete ATOC code table with a single "LM" entry covering both
+  # franchises and no "LN" entry anywhere in it, independently corroborating
+  # railwaycodes.org.uk's claim (the gap analysis's only source, flagged
+  # there as unconfirmed to the same standard as the AW/VT finding) that
+  # WMR and LNWR share "LM" and "LN" is not used in GBTT/eNRT. Two
+  # independent sources now agree, so "LN" is removed as a phantom code.
+  "LM",  # West Midlands Trains (West Midlands Railway + London Northwestern Railway)
   "CS",  # Caledonian Sleeper
 ]
 

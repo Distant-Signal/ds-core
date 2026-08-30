@@ -1,0 +1,258 @@
+id = "wmr-cross-city"
+name = "West Midlands Railway: Cross-City Line"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per the
+  # resolution already recorded in `west-coast-main-line.toml`'s own
+  # `operators` comment (Task 1.0) and reused verbatim by `wmr-snow-hill.toml`
+  # (Task 1.5): "LN" was checked and found to be a phantom/unused code, "LM"
+  # is the one real code for both brands. Not re-verified again from
+  # scratch here; inherited from that fix.
+]
+
+# Route research (Step 1), fetched live 2026-08-30 and cross-checked across
+# multiple independent sources:
+#   1. Wikipedia's "Birmingham Cross-City Line" article (also reachable via
+#      the "Cross-City Line" redirect) gives the full 25-station sequence
+#      from Lichfield Trent Valley in the north to the two southern
+#      termini, Redditch (via Barnt Green and Alvechurch) and Bromsgrove
+#      (via Barnt Green directly) -- confirms "Services are operated by
+#      West Midlands Railway", the Barnt Green Y-junction, and the
+#      Bromsgrove branch's 29 July 2018 electrified reopening/extension.
+#      It also gives the off-peak service pattern: "2tph from Lichfield
+#      Trent Valley to Bromsgrove" and "2tph from Four Oaks to Redditch" --
+#      i.e. a combined 4 trains/hour on the Four Oaks-Barnt Green core,
+#      thinning to 2tph on each of the three outer tails (Lichfield,
+#      Redditch, Bromsgrove).
+#   2. Every one of the 25 stations below was independently cross-checked
+#      two ways: (a) that station's own Wikipedia article (each a
+#      separately-authored, separately-cited page, not just a re-read of
+#      the line article), and (b) nationalrail.co.uk's live station-detail
+#      page at /stations/<CRS>/details.html, which resolves a CRS code to
+#      a station name/address and so positively confirms or refutes each
+#      code. This caught one real discrepancy worth recording: a
+#      railwaycodes.org.uk fetch attempt returned "BRR" for Bromsgrove,
+#      which nationalrail.co.uk /stations/BRR/details.html then showed to
+#      actually be Barrhead (Scotland, ScotRail) -- a bad table-read, not a
+#      real second-source disagreement. Bromsgrove's real code, BMV, is
+#      confirmed by both Wikipedia's infobox and nationalrail.co.uk's own
+#      /stations/BMV/details.html page. This is the reason every station
+#      here went through the nationalrail.co.uk check individually rather
+#      than trusting a single table fetch.
+#   3. Four Oaks is *not* a physical junction -- Wikipedia's own station
+#      article is explicit that it's a same-track service-pattern
+#      turn-back point ("Four Oaks remains a terminus for some services
+#      from the south, which mostly use the bay platform... to turn
+#      back"), not a fork with a different physical branch. It stays on
+#      the single trunk segment below; only Barnt Green (the real Y-shaped
+#      physical junction, confirmed by its own Wikipedia article: "at the
+#      point of a Y-shaped junction between the main line towards
+#      Bromsgrove, Worcester and the south-east, and the branch line to
+#      Redditch") gets the shared-trunk-rule-of-thumb treatment.
+#
+# Conclusion: one WMR service group, one real physical Y-shape south of
+# Birmingham (Barnt Green), no unresolved gaps -- matches the gap
+# analysis's own naming ("West Midlands Railway / London Northwestern
+# Railway" section: "the Cross-City Line (Lichfield-Birmingham New
+# Street-Redditch)") and its "4-5 files" estimate for the WMR/LNWR group
+# alongside `wmr-snow-hill.toml`.
+
+# `category`: judgment call, per this task's brief. `wmr-snow-hill.toml`
+# (Task 1.5) picked "regional" for a shape with a frequent suburban core
+# plus a genuinely rural, hourly branch (North Warwickshire Line to
+# Stratford-upon-Avon). This line doesn't have that shape: every one of
+# its three outer tails runs at 2tph all day (see source 1 above), and the
+# whole line is a single electrified all-stations stopping service (Class
+# 730 Aventra EMUs) with no long-distance or rural-cadence component --
+# structurally much closer to `thameslink-core.toml`/`elizabeth-line.toml`
+# (both "commuter") than to `wmr-snow-hill.toml`. Going with "commuter"
+# on that basis, not for consistency with either sibling file.
+
+# One sample station per named endpoint, plus the central hub.
+sample_stations = ["LTV", "BHM", "RDC", "BMV"]
+match_keywords = ["Cross-City Line", "Cross City line"]
+
+# Commuter line, but not London-core turn-up-and-go frequency: the
+# Four Oaks-Barnt Green core runs 4tph (~15 min headway), each outer tail
+# 2tph (~30 min) -- busier than a regional/rural line but well short of
+# `thameslink-core.toml`'s cited "every 8 minutes during peak" core, so
+# using a milder version of that file's tighter-than-default commuter
+# thresholds rather than copying its exact numbers.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+
+# Lichfield Trent Valley to Birmingham New Street, ordered north to south
+# (source 1 above), then splitting at Barnt Green into two exclusive
+# branches: Redditch (via Alvechurch) and Bromsgrove. Unlike
+# `wmr-snow-hill.toml`/`wcml-birmingham.toml`/`xc-manchester.toml`'s
+# "principal stations only" convention, every station on this line is
+# listed: this is a genuine all-stations local stopping service (every
+# train calls at every station on its branch), not a long-distance line
+# skipping local-only stops, so a finer-grained list is the more accurate
+# curation choice here, per `lines/SCHEMA.md`'s ordering rule about
+# implicated intermediate stations.
+#
+# Segment-naming note (checked by grepping `lines/*.toml` for each CRS
+# code below, per the Global Constraints): this line has real
+# station-level overlap with three already-curated files, none of which
+# get a shared segment name here, following the precedent
+# `xc-manchester.toml` already set against `west-coast-main-line.toml`
+# ("no segment is shared... because that line's segments are far coarser
+# than the shared section, and an incident on the shared stretch matches
+# both lines by station anyway"):
+#   - Lichfield Trent Valley (LTV): also served by the WCML's Trent Valley
+#     Line (low-level platforms, this line uses the high-level platform) --
+#     `west-coast-main-line.toml`/`wcml-manchester.toml`/
+#     `wcml-liverpool.toml`/`wcml-north-wales.toml` all tag it
+#     `wcml-midlands`.
+#   - University (UNI): also served by CrossCountry's Birmingham-Bristol
+#     arm -- `cross-country.toml` tags it `xc-west`, but that file skips
+#     every other station this line calls at between New Street and Barnt
+#     Green (Five Ways, Selly Oak, Bournville, Kings Norton, Northfield,
+#     Longbridge), exactly the coarser-granularity situation
+#     `xc-manchester.toml` describes.
+#   - Birmingham New Street (BHM): this task's brief explicitly calls this
+#     out -- station-level overlap only with `cross-country.toml`'s
+#     `xc-birmingham` hub segment and every `xc-*`/`wcml-birmingham.toml`
+#     arm that touches it, same "station overlap is fine" pattern.
+[[stations]]
+crs = "LTV"
+role = "terminus"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "LIC"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "SEN"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "BKT"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "BUL"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "FOK"
+role = "major"
+segment = "wmr-cross-city-trunk"
+# Not a physical junction -- see the Four Oaks note above. Marked "major"
+# only because it's a real service-pattern turn-back point (bay platform
+# used by short workings from the south), still on the single trunk.
+
+[[stations]]
+crs = "SUT"
+role = "major"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "WYL"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "CRD"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "ERD"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "GVH"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "AST"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "DUD"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "major"
+segment = "wmr-cross-city-trunk"
+# Reuses the TIPLOC already established for this physical station in
+# `wcml-birmingham.toml`/`cross-country.toml`/`xc-manchester.toml` -- not
+# a junction for this line's own topology (no branch happens here), just
+# the busiest through station on it.
+
+[[stations]]
+crs = "FWY"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "UNI"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "SLY"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "BRV"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "KNN"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "NFD"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "LOB"
+role = "minor"
+segment = "wmr-cross-city-trunk"
+
+[[stations]]
+crs = "BTG"
+role = "junction"
+segment = "wmr-cross-city-trunk"
+# The real Y-shaped physical junction -- per the shared-trunk rule of
+# thumb in `lines/SCHEMA.md`, it stays on the trunk segment and each
+# exclusive branch segment starts at the next station on its own branch.
+
+# Branch 1: single-track branch to Redditch, via Alvechurch.
+[[stations]]
+crs = "ALV"
+role = "minor"
+segment = "wmr-cross-city-redditch"
+
+[[stations]]
+crs = "RDC"
+role = "terminus"
+segment = "wmr-cross-city-redditch"
+
+# Branch 2: to Bromsgrove, added as a second southern terminus once
+# electrification reached it in 2018 (source 1 above).
+[[stations]]
+crs = "BMV"
+role = "terminus"
+segment = "wmr-cross-city-bromsgrove"

@@ -1,0 +1,102 @@
+id = "wcml-birmingham"
+name = "West Coast Main Line: Birmingham"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "VT",  # Avanti West Coast. This branch is modelled as Avanti-only: the
+  # Rugby-Coventry-Birmingham stopping pattern researched for this file
+  # (Wikipedia's Avanti West Coast article, cross-checked against the
+  # Rugby-Birmingham-Stafford line article, both fetched live 2026-08-29)
+  # lists only Avanti's own intercity calls; West Midlands Trains ("LM",
+  # already on `wcml`) runs the all-stations local service over the same
+  # metals but that's a distinct, unmodelled local service, not this line.
+]
+
+# EUS covers up-direction (London-bound) services -- BHM alone can't match
+# trains terminating there, same defect class corrected for
+# `lnwr-euston-commuter.toml`'s destination_crs_filter. WVH covers the
+# through-to-Wolverhampton workings this file's own comment above already
+# documents (some Avanti Birmingham services continue past New Street).
+destination_crs_filter = ["BHM", "WVH", "EUS"]
+sample_stations = ["COV", "BHM"]
+# No match_keywords: same reasoning as `xc-manchester.toml` -- this branch
+# has no route name the Knowledgebase is confirmed to use consistently, and
+# a generic word like "Birmingham" would false-positive against
+# `xc-cardiff`, `xc-manchester`, `xc-south-coast`, `xc-stansted`, and
+# `cross-country`, all of which also touch Birmingham New Street. Station
+# and operator evidence carries it instead.
+
+# London Euston to Birmingham New Street via Rugby and Coventry, ordered
+# south-east to north-west. Shares the Euston-area and Milton
+# Keynes/Rugby-area trunk with `west-coast-main-line.toml` (stations EUS
+# through RUG below reuse that file's own `wcml-london`/`wcml-midlands`
+# segment tags verbatim, mirroring the trunk-sharing pattern
+# `swr-alton.toml` sets against `swr-south-west-main.toml`). Rugby is the
+# real diverging point: Avanti's Birmingham service calls there before
+# leaving WCML metals for the Rugby-Birmingham-Stafford line via Coventry
+# (confirmed via Wikipedia's Avanti West Coast article, cross-checked
+# against the Rugby-Birmingham-Stafford line article -- both fetched live
+# 2026-08-29). Per the shared-trunk rule of thumb in `lines/SCHEMA.md`,
+# Rugby stays on the shared segment and the exclusive `wcml-birmingham-branch`
+# segment starts at the next station, Coventry.
+#
+# Minor intermediate calls between Coventry and Birmingham New Street
+# (Canley, Tile Hill, Berkswell, Hampton-in-Arden, Marston Green, Lea Hall,
+# Stechford, Adderley Park -- all confirmed via the Rugby-Birmingham-Stafford
+# line article) are West Midlands Trains local stops that the same source
+# does not show Avanti calling at, so they're omitted; only principal
+# stations are listed, same convention as `xc-manchester.toml` and
+# `northern-furness.toml`. Some Avanti Birmingham services continue beyond
+# New Street to Wolverhampton -- not modelled here, out of this file's
+# researched scope (Euston-Birmingham only).
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "wcml-london"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "wcml-london"
+
+[[stations]]
+crs = "HMP"
+tiploc = "HMPSTDH"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "minor"
+segment = "wcml-london"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "major"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "junction"
+segment = "wcml-midlands"
+
+[[stations]]
+crs = "COV"
+role = "major"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "BHI"
+role = "major"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "wcml-birmingham-branch"

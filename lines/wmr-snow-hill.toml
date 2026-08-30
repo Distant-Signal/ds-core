@@ -1,0 +1,177 @@
+id = "wmr-snow-hill"
+name = "West Midlands Railway: Snow Hill Lines"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per the
+  # resolution already recorded in `west-coast-main-line.toml`'s own
+  # `operators` comment (Task 1.0): "LN" was checked and found to be a
+  # phantom/unused code, "LM" is the one real code for both brands. Not
+  # re-verified again from scratch here; inherited from that fix.
+]
+
+# Route research (Step 1), fetched live 2026-08-30 and cross-checked across
+# multiple independent sources:
+#   1. Wikipedia's "Snow Hill lines" article (fetched both as a summarised
+#      read and as a verbatim quote of its route diagram) describes three
+#      routes converging on Birmingham Snow Hill/Moor Street: the Chiltern
+#      Main Line towards Dorridge/Leamington Spa/Marylebone (Chiltern
+#      Railways), the Worcester line via Stourbridge Junction and
+#      Kidderminster, and the North Warwickshire ("Shakespeare") Line to
+#      Stratford-upon-Avon -- the latter two West Midlands Railway-operated.
+#   2. Wikipedia's "North Warwickshire Line" article independently confirms
+#      the WMR-operated Stratford branch's calling pattern (Snow Hill, Moor
+#      Street, Bordesley, Small Heath, Tyseley, Spring Road, Hall Green,
+#      Yardley Wood, Shirley, Whitlocks End, Wythall, Earlswood, The Lakes,
+#      Wood End, Danzey, Henley-in-Arden, Wootton Wawen, Wilmcote,
+#      Stratford-upon-Avon Parkway, Stratford-upon-Avon) and states plainly
+#      that Dorridge is NOT on this line.
+#   3. Wikipedia's "Chiltern Main Line" article independently confirms
+#      Dorridge sits on the *other* eastern route (via Bordesley, Small
+#      Heath, Tyseley, Acocks Green, Olton, Solihull, Widney Manor) and that
+#      "commuter trains operated by West Midlands Trains run between
+#      Birmingham Snow Hill, Solihull and Leamington Spa" as a distinct,
+#      shorter-working WMR local service alongside Chiltern Railways' own
+#      Marylebone services over the same metals -- consistent with the gap
+#      analysis's own framing of this route as
+#      "Stratford-upon-Avon/Dorridge-Worcester/Stourbridge" (`docs/superpowers/
+#      specs/2026-08-29-line-coverage-gap-analysis.md`, "West Midlands
+#      Railway / London Northwestern Railway" section).
+#   4. railwaycodes.org.uk's station-code pages were used to confirm CRS
+#      codes and current-open status for every station in this file
+#      individually (Birmingham Snow Hill/Moor Street, Dorridge, Droitwich
+#      Spa, Kidderminster, Solihull, Shirley, Worcester Shrub
+#      Hill/Foregate Street, Widney Manor, Tyseley, The Hawthorns; plus
+#      Wikipedia station articles for Stourbridge Junction, Stratford-upon-
+#      Avon and Henley-in-Arden), and to positively rule out several
+#      historical/closed stations that appear in the Snow Hill lines route
+#      diagram (e.g. Smethwick West, closed 1996) or that collide in name
+#      with an unrelated currently-open station elsewhere in the country
+#      (e.g. "Hockley" -- the Birmingham one on this route is long closed;
+#      the open "Hockley" today is in Essex on Greater Anglia).
+#
+# Conclusion: this is genuinely one WMR service group with two real
+# physical branches sharing a Birmingham throat, not three lines -- the
+# third route (Chiltern Main Line towards Leamington Spa/Marylebone) is
+# Chiltern Railways' own line and out of scope here; WMR's local-only
+# short working on that route terminates at Dorridge, which is the
+# boundary this file uses, matching the gap analysis's own naming. This
+# matches the batch's expectation (gap analysis "4-5 files" estimate across
+# all four WMR/LNWR services) and follows `wcml-manchester.toml`'s
+# precedent for folding a real physical Y-shape into one file rather than
+# splitting per branch.
+
+# One sample station per branch, covering all three named endpoints.
+sample_stations = ["WOS", "DDG", "SAV"]
+match_keywords = ["Snow Hill lines"]
+# No severity_overrides: the shared Birmingham throat and Worcester/
+# Stourbridge trunk run a frequent suburban service (4 trains/hour per the
+# North Warwickshire Line research above), so default thresholds fit that
+# core; the North Warwickshire branch itself is hourly, closer to
+# `northern-furness.toml`/`northern-lakes.toml` territory, but
+# `severity_overrides` applies file-wide and there's no per-segment
+# override mechanism, so it isn't safe to tune the whole file down to the
+# branch's rural cadence without misrepresenting the busier core.
+
+# Worcester/Stourbridge to Birmingham Snow Hill/Moor Street (ordered west
+# to east along the shared trunk), then splitting at Tyseley into two
+# exclusive branches: towards Solihull/Dorridge, and towards Shirley/
+# Henley-in-Arden/Stratford-upon-Avon (the North Warwickshire Line). Per
+# the shared-trunk rule of thumb in `lines/SCHEMA.md`, Tyseley -- the real
+# diverging point confirmed independently by both the North Warwickshire
+# Line and Chiltern Main Line articles listing it as the last station
+# common to both -- stays on the shared `wmr-snow-hill-trunk` segment, and
+# each exclusive segment starts at the next station on its own branch.
+#
+# No segment name here collides with any existing file (`grep`-checked
+# against `lines/*.toml`): Birmingham Snow Hill and Moor Street are
+# distinct stations from Birmingham New Street, which is what
+# `west-coast-main-line.toml`, `wcml-birmingham.toml` and the `xc-*` files
+# use for their own Birmingham-area segments -- no station-level overlap
+# either, so no segment-sharing decision is needed here, unlike
+# `wcml-birmingham.toml`/`swr-alton.toml`'s trunk-sharing pattern.
+#
+# Minor intermediate calls (Jewellery Quarter, The Hawthorns, Langley
+# Green, Rowley Regis, Old Hill, Cradley Heath, Lye, Hagley, Blakedown,
+# Fernhill Heath on the Worcester side; Bordesley, Small Heath, Spring
+# Road, Hall Green, Yardley Wood, Wythall, Earlswood, Wood End, Danzey,
+# Wootton Wawen, Wilmcote, Stratford-upon-Avon Parkway on the branches;
+# Acocks Green, Olton, Widney Manor towards Dorridge) are omitted, same
+# convention as `wcml-birmingham.toml`/`xc-manchester.toml`/
+# `northern-furness.toml`; only principal/interchange stations are listed.
+[[stations]]
+crs = "WOS"
+role = "terminus"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "WOF"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "DTW"
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "KID"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "SBJ"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "SGB"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "BSW"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "BMO"
+role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "TYS"
+role = "junction"
+segment = "wmr-snow-hill-trunk"
+
+# Branch 1: WMR's own local short working towards Dorridge, over the same
+# metals as Chiltern Railways' Leamington Spa/Marylebone services beyond
+# Tyseley -- exclusive to this file since Chiltern's own line isn't
+# modelled in this catalogue yet.
+[[stations]]
+crs = "SOL"
+role = "major"
+segment = "wmr-snow-hill-dorridge"
+
+[[stations]]
+crs = "DDG"
+role = "terminus"
+segment = "wmr-snow-hill-dorridge"
+
+# Branch 2: the North Warwickshire ("Shakespeare") Line to Stratford-upon-
+# Avon.
+[[stations]]
+crs = "SRL"
+role = "major"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "HNL"
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "SAV"
+role = "terminus"
+segment = "wmr-snow-hill-stratford"

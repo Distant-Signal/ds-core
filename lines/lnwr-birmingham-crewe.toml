@@ -1,0 +1,304 @@
+id = "lnwr-birmingham-crewe"
+name = "London Northwestern Railway: Birmingham & Crewe"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per Task
+  # 1.0's resolution (`west-coast-main-line.toml`'s own `operators`
+  # comment) and `lnwr-euston-commuter.toml`'s (Task 1.7) independent
+  # re-check of the same conclusion against railwaycodes.org.uk. Not
+  # re-verified a third time here; same fact, same source trail.
+]
+
+# Route research (Step 1), fetched live 2026-08-30, cross-checked across
+# multiple independent sources:
+#   1. Wikipedia's "London Northwestern Railway" article's Services
+#      section (the same source `lnwr-euston-commuter.toml` cites as
+#      "source 1") lists a route table with exactly four current
+#      Euston-area WCML/Northampton-Loop/Trent-Valley services and no
+#      distinct "Euston-Northampton" short working:
+#        - Euston - Tring (2tph, all-stations local, not this file or 1.7's)
+#        - Euston - Milton Keynes Central (2tph, all-stations local)
+#        - Euston - Birmingham New Street (2tph, 1tph via Watford Junction
+#          only): Watford Junction, Leighton Buzzard, Bletchley, Milton
+#          Keynes Central, Wolverton, Northampton, Long Buckby, Rugby,
+#          Coventry, Canley, Tile Hill, Berkswell, Hampton-in-Arden,
+#          Birmingham International, [Birmingham New Street]
+#        - Euston - Crewe via the Trent Valley Line (1tph): Milton Keynes
+#          Central, Rugby, Nuneaton, Atherstone, Tamworth, Lichfield Trent
+#          Valley, Rugeley Trent Valley, Stafford, [Crewe] -- explicitly the
+#          direct/fast route, not via the Northampton Loop.
+#      Critically, this table shows NO separate short working terminating
+#      at Northampton -- every Northampton-area LNWR service continues
+#      through to Birmingham New Street. This directly resolves the WOL/NMP
+#      question `lnwr-euston-commuter.toml` (Task 1.7) left open; see the
+#      dedicated note below.
+#   2. Wikipedia's "Trent Valley Line" article independently corroborates
+#      the Crewe-bound stopping pattern: "London Northwestern Railway...
+#      uses the route as part of its hourly long-distance semi-fast service
+#      between London Euston and Crewe. These call at all stations on the
+#      route [Rugby, Nuneaton, Atherstone, Polesworth, Tamworth, Lichfield
+#      Trent Valley, Rugeley Trent Valley, Stafford], except Polesworth
+#      which is served only by one daily northbound service." Polesworth
+#      is therefore omitted here (not a genuine regular calling point).
+#   3. Wikipedia's "Northampton railway station" article independently
+#      corroborates the Birmingham-bound stopping pattern beyond
+#      Northampton ("From Northampton toward Birmingham: Long Buckby ->
+#      Birmingham New Street") and states plainly that "passengers wishing
+#      to travel from Northampton to Crewe now have to change at Rugby" --
+#      confirming Rugby, not Northampton or Milton Keynes Central, is the
+#      real interchange point between the Northampton Loop and Trent Valley
+#      routes.
+#   4. Every new CRS code below not already curated in another `lines/*.toml`
+#      file was independently confirmed live via its own
+#      nationalrail.co.uk /stations/<CRS>/details.html page (2026-08-30),
+#      same per-station cross-check method Task 1.7 used: Long Buckby
+#      (LBK), Coventry (COV), Canley (CNL), Tile Hill (THL), Berkswell
+#      (BKW), Hampton-in-Arden (HIA), Birmingham International (BHI),
+#      Atherstone (ATH), Rugeley Trent Valley (RGL). None of these pages
+#      exposed a TIPLOC to the same standard Task 1.7 required, so `tiploc`
+#      is omitted for all nine rather than guessed (same reasoning as
+#      LBZ/BLY/WOL/NMP in `lnwr-euston-commuter.toml`). CRS+tiploc for
+#      MKC/RUG/NUN/TAM/LTV/STA/CRE are reused verbatim from
+#      `west-coast-main-line.toml` (already-curated facts); EUS/WFJ/LBZ/BLY
+#      are reused verbatim from `lnwr-euston-commuter.toml`; BHM's CRS+tiploc
+#      is reused verbatim from `xc-manchester.toml`.
+#
+# One file, two branches (per this batch's own precedent, `wcml-manchester.toml`
+# and `wmr-snow-hill.toml`): the Birmingham-bound and Crewe-bound workings are
+# both LNWR-branded, both fork from the same Euston-Milton Keynes Central
+# trunk, and this task's own brief already names the single combined file
+# `lnwr-birmingham-crewe.toml` -- read as this batch's own judgement call that
+# these count as one user-facing "line" rather than two, same reasoning
+# `wcml-manchester.toml`'s comment gives for its Stoke/Wilmslow fork. Unlike
+# that file's simple Y, this is a "diamond": both branches also physically
+# reconverge at Rugby (source 3 above) before forking apart *again* into the
+# Coventry direction and the Trent Valley direction -- see the
+# `stations_between()` caveat below, which is sharper here than in
+# `wcml-manchester.toml` because of that second fork.
+#
+# WOL/NMP shared-segment ruling (the question `lnwr-euston-commuter.toml`,
+# Task 1.7, deliberately left open for this file to resolve): YES, shared.
+# Source 1 above shows Task 1.7's own line ("Euston-Northampton") is not a
+# genuinely distinct real-world working -- every LNWR service calling at
+# Wolverton and Northampton is, in reality, the same Birmingham-bound
+# semi-fast this file models continuing on to Long Buckby/Rugby/Coventry/
+# Birmingham. There is no separate short-working that terminates at
+# Northampton. So WOL and NMP are physically run over by the exact same
+# trains as this file's Birmingham branch, which is a stronger case for
+# sharing than mere "genuinely shares track" -- it's the same service. This
+# file therefore reuses Task 1.7's `lnwr-northampton` segment name verbatim
+# for WOL and NMP (not a new name), making the segment genuinely shared per
+# `lines/SCHEMA.md`. Per the shared-trunk rule of thumb, NMP (the point
+# where Task 1.7's file stops modelling the working) stays on the shared
+# `lnwr-northampton` segment; this file's own exclusive segment starts at
+# the next station on the Birmingham branch, Long Buckby.
+# `lnwr-euston-commuter.toml` has been updated alongside this file (role
+# field + comment only, no segment rename) to record this resolution and
+# correct NMP's role away from "terminus", which is no longer accurate now
+# both files agree the real working continues past it.
+#
+# Rugby is the genuine physical reconvergence point between the Northampton
+# Loop (Birmingham branch) and the direct Trent Valley route (Crewe branch)
+# -- source 3 above. It is NOT shared with `west-coast-main-line.toml`'s own
+# `wcml-midlands` segment that also covers Rugby: per this task's brief and
+# `xc-manchester.toml`'s established precedent, station overlap with WCML's
+# coarser segmentation doesn't force segment-sharing on its own, and an
+# incident there still matches both files by station regardless. It's also
+# not shared with `lnwr-euston-commuter.toml`, which doesn't reach Rugby at
+# all. So Rugby gets its own segment, `lnwr-rugby`, exclusive to this file,
+# grouped with Long Buckby (the Birmingham branch's own approach to it).
+# After Rugby the two branches diverge for good: `lnwr-birmingham` (Coventry
+# through to Birmingham New Street) and `lnwr-crewe` (Nuneaton through to
+# Crewe, via the Trent Valley Line) -- both exclusive to this file, no
+# overlap with any other catalogued line's segment names.
+#
+# Caveat for future maintainers (same issue `wcml-manchester.toml` already
+# flags, sharper here): `common::LineDefinition::stations_between` does a
+# flat index-range lookup over this file's station list. That's fine within
+# a single branch, but this file's diamond shape means it is NOT safe
+# across the forks in either direction: e.g. `stations_between("MKC", "RUG")`
+# would incorrectly include Wolverton/Northampton/Long Buckby (Birmingham
+# branch only) for a Crewe-branch incident, and
+# `stations_between("LBK", "NUN")` would incorrectly span both branches'
+# exclusive segments even though no single physical train calls at both.
+# `stations_between` itself has no call sites in the workspace (same as
+# noted in `wcml-manchester.toml`), but `routes_from_stations` in
+# `crates/aggregator/src/aggregation.rs` makes the identical flat-order
+# assumption over this same station list, and IS live -- it's called from
+# the incident-processing path to build the user-visible `affected_routes`
+# on every incident-derived status. So this hazard is real today, not
+# theoretical: an incident naming stations on two different branches of
+# this diamond (e.g. one on the Birmingham branch, one on the Crewe
+# branch) can produce a geographically wrong affected-route summary.
+# Making `routes_from_stations` branch-aware is out of scope for this plan
+# (it's aggregator logic, not line data) -- flagged here as a known
+# follow-up, not fixed, same as `wcml-manchester.toml`'s own caveat.
+
+destination_crs_filter = ["BHM", "CRE"]
+# One sample station on the shared trunk, one at the internal reconvergence
+# point, and one per branch terminus.
+sample_stations = ["MKC", "RUG", "BHM", "CRE"]
+# No match_keywords: same reasoning as `lnwr-euston-commuter.toml` and
+# `xc-manchester.toml` -- no confirmed Knowledgebase-used route name for
+# either branch, and generic words like "Birmingham" or "Crewe" would be
+# far too ambiguous (would false-positive against `xc-manchester.toml`,
+# `wcml-birmingham.toml`, `wcml-liverpool.toml`, `wmr-*` files, etc.).
+# Station and operator evidence carries it instead.
+
+# Same long-distance/sparser-service reasoning and values `xc-manchester.toml`
+# already applies to its own WCML-metals branch -- unlike
+# `lnwr-euston-commuter.toml`'s dense inner-suburban stretch, both branches
+# here run well beyond the London commuter belt (Crewe is ~150 miles from
+# Euston) at 1-2tph. (`wcml-manchester.toml` models a comparable WCML-metals
+# fork but carries no `severity_overrides` of its own -- confirmed via grep
+# before citing it here -- so `xc-manchester.toml` is the correct precedent
+# for these specific values.)
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# London Euston to Milton Keynes Central: shared trunk with
+# `lnwr-euston-commuter.toml`, `lnwr-euston-trunk` reused verbatim (Task
+# 1.7's own choice; see that file's comment for the full derivation).
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "lnwr-euston-trunk"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "lnwr-euston-trunk"
+
+[[stations]]
+crs = "LBZ"
+role = "minor"
+segment = "lnwr-euston-trunk"
+
+[[stations]]
+crs = "BLY"
+role = "minor"
+segment = "lnwr-euston-trunk"
+
+[[stations]]
+crs = "MKC"
+tiploc = "MKNSCEN"
+role = "junction"
+segment = "lnwr-euston-trunk"
+
+# Northampton Loop: Birmingham branch only, shared with
+# `lnwr-euston-commuter.toml`'s `lnwr-northampton` segment (see the ruling
+# above -- these are the same real-world trains as that file's own route).
+[[stations]]
+crs = "WOL"
+role = "minor"
+segment = "lnwr-northampton"
+
+[[stations]]
+crs = "NMP"
+role = "major"
+segment = "lnwr-northampton"
+
+# Long Buckby and Rugby: Birmingham branch's own approach to the
+# reconvergence point with the Crewe branch. Exclusive to this file.
+[[stations]]
+crs = "LBK"
+role = "minor"
+segment = "lnwr-rugby"
+
+[[stations]]
+crs = "RUG"
+tiploc = "RUGBY"
+role = "junction"
+segment = "lnwr-rugby"
+
+# Branch 1: Birmingham New Street, via Coventry. Diverges from Rugby onto
+# the Coventry line; exclusive `lnwr-birmingham` segment.
+[[stations]]
+crs = "COV"
+role = "major"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "CNL"
+role = "minor"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "THL"
+role = "minor"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "BKW"
+role = "minor"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "HIA"
+role = "major"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "BHI"
+role = "major"
+segment = "lnwr-birmingham"
+
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "lnwr-birmingham"
+
+# Branch 2: Crewe, via the Trent Valley Line. Diverges from Rugby onto the
+# direct/fast WCML alignment (not the Northampton Loop); exclusive
+# `lnwr-crewe` segment. Listed after the Birmingham branch purely as a
+# narrative choice, same as `wcml-manchester.toml`'s ordering of its own
+# two branches -- not a claim that this file order is geographically
+# continuous once the branches start (see the `stations_between()` caveat
+# above). Polesworth (between Atherstone and Tamworth) is deliberately
+# omitted -- source 2 above confirms it gets only one daily northbound
+# working, not a genuine regular calling point.
+[[stations]]
+crs = "NUN"
+tiploc = "NUNEATN"
+role = "minor"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "ATH"
+role = "minor"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "TAM"
+tiploc = "TAMWRTH"
+role = "minor"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "LTV"
+tiploc = "LCHTNJ"
+role = "minor"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "RGL"
+role = "minor"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"
+role = "junction"
+segment = "lnwr-crewe"
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "terminus"
+segment = "lnwr-crewe"
