@@ -1,0 +1,147 @@
+id = "tpe-south"
+name = "TransPennine Express: South"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# TPE's own current timetable structure (valid from 17 May 2026, the same
+# structure independently confirmed live at tpexpress.co.uk/travelling-
+# with-us/timetables for `tpe-anglo-scottish.toml`) names this route
+# "South: Cleethorpes to Manchester and Liverpool" — one of TPE's four
+# current named routes (Anglo-Scottish, Borders, North being the other
+# three; each is its own line definition in this batch). The route runs
+# roughly hourly off-peak — an inter-city-style frequency over a ~140-mile
+# corridor, matching the `main-line` treatment already given to
+# `swr-south-west-main.toml` and this batch's own `tpe-anglo-scottish.toml`.
+#
+# ROUTING CORRECTION vs. the plan/gap-analysis text: both this batch's
+# planning doc and `docs/superpowers/specs/2026-08-29-line-coverage-gap-
+# analysis.md`'s TPE section describe this route as running "via Sheffield/
+# Leeds". Live-source verification does not support that. Two independent
+# sources — Wikipedia's "TransPennine Express" article (route table:
+# Liverpool Lime Street ... Manchester Piccadilly - Stockport - Sheffield -
+# Meadowhall - Doncaster - Scunthorpe - Barnetby - Habrough - Grimsby Town -
+# Cleethorpes, with the article explicitly noting the service "does not
+# pass through Leeds") and Wikipedia's "South Humberside Main Line" article
+# (Doncaster to Cleethorpes via Scunthorpe, explicitly run by TransPennine
+# Express as "Liverpool Lime Street-Doncaster-Cleethorpes", one train per
+# hour, connecting towards Doncaster/the ECML rather than Leeds) — both
+# independently agree on Sheffield -> Doncaster, with no mention of Leeds
+# anywhere and no geographic sense in which Leeds sits on this corridor.
+# This file follows the verified Sheffield/Doncaster routing.
+#
+# Manchester Airport (MIA) was in the controller's starting hypothesis but
+# is NOT included below: TPE's own site only offers indirect evidence (a
+# May-2026 timetable-change note mentioning "timing changes around
+# Manchester Airport and to Scunthorpe/Cleethorpes services" in the same
+# bullet), while the full stop-by-stop South route listing found via
+# Wikipedia's TPE route table does not include it. Left out per this
+# catalogue's "if unconfirmed, omit rather than guess" rule rather than
+# assumed from the Anglo-Scottish route's own MIA leg.
+#
+# Both Liverpool and Manchester are named as this route's western ends
+# ("Cleethorpes to Manchester and Liverpool"), the same two-city-name
+# pattern `tpe-anglo-scottish.toml` uses for its own western fork — so
+# both are marked as termini, consolidating before Stockport.
+#
+# Station-overlap-only with `xc-manchester.toml` at Stockport (SPT, role
+# reused directly from that already-curated file) and with `northern.toml`/
+# other Manchester-area files at Manchester Piccadilly — same precedent
+# `xc-manchester.toml` itself documents: no segment name is shared,
+# because an incident on a genuinely shared station still matches both
+# lines by station lookup regardless of segment naming.
+#
+# No segment here is shared with any sibling file in this batch either:
+# `tpe-anglo-scottish` and `tpe-north` only overlap this line at the
+# Liverpool Lime Street / Manchester Piccadilly termini (station-level
+# only), and `tpe-borders` has no overlap at all. This line is therefore
+# standalone for the shared-segment-propagation regression test — see the
+# matcher test file for the note on why that assertion is skipped here.
+#
+# `lines/cross-country.toml`'s `xc-yorkshire` segment also covers DON and
+# SHF (the same two stations this file reuses CRS/tiploc data from), so
+# there's real multi-station geographic overlap with CrossCountry's
+# Yorkshire hub here too — not just a shared terminus. This file
+# deliberately does NOT share that segment name: CrossCountry's exclusive
+# territory continues from these stations towards Leeds/York on
+# `xc-yorkshire`, while TPE South's continues towards Scunthorpe/
+# Cleethorpes and towards Manchester/Liverpool — the two lines' exclusive
+# territories diverge immediately in both directions from DON/SHF. Same
+# station-overlap-only reasoning as the Stockport and Manchester Piccadilly
+# overlaps documented above.
+#
+# Minor intermediate calls (Liverpool South Parkway, Warrington West/
+# Central, Birchwood, Irlam, Urmston, Manchester Oxford Road, Meadowhall,
+# Barnetby, Habrough) are omitted, following `xc-manchester.toml`'s
+# "principal stations only" convention.
+#
+# CRS sourcing: LIV/MAN reused from `tpe-anglo-scottish.toml` (itself
+# live-verified); SPT reused from `xc-manchester.toml` (already verified
+# in-repo, per this task's brief); SHF/DON reused from `cross-country.toml`
+# (tiplocs SHEFFLD/DONC also reused from that file). SCU, GMB and CLE are
+# new to this catalogue and were independently confirmed against two live
+# sources each (Wikipedia's station infoboxes and nationalrail.co.uk's own
+# station pages) — CRS SCU for Scunthorpe, GMB for Grimsby Town, CLE for
+# Cleethorpes.
+sample_stations = ["LIV", "MAN", "SHF", "DON", "CLE"]
+# No match_keywords: TPE's own name for this route is simply "South",
+# which fails the precision bar badly on its own (it would match almost
+# any incident text mentioning "south" anything) and — per the lesson from
+# this batch's `tpe-anglo-scottish.toml` review — the bare operator brand
+# name "TransPennine Express" is reserved for operator-level files, not
+# per-route ones, since this batch adds multiple sibling TP-operator files
+# that would all cross-match on it. Station and operator evidence carries
+# this file instead.
+
+# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`,
+# `xc-manchester.toml` and `tpe-anglo-scottish.toml`'s treatment of
+# comparable hourly inter-city-style services.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Liverpool & Manchester -> Stockport -> Sheffield -> Doncaster ->
+# Scunthorpe -> Grimsby Town -> Cleethorpes.
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "tpe-south"
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "tpe-south"
+
+[[stations]]
+crs = "SPT"
+role = "major"
+segment = "tpe-south"
+
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"
+role = "major"
+segment = "tpe-south"
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "tpe-south"
+
+[[stations]]
+crs = "SCU"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "GMB"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "CLE"
+role = "terminus"
+segment = "tpe-south"

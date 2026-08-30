@@ -1,0 +1,196 @@
+id = "tpe-north"
+name = "TransPennine Express: North"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# TPE's own current timetable structure (valid from 17 May 2026, the same
+# structure independently confirmed live at tpexpress.co.uk/travelling-
+# with-us/timetables for this batch's `tpe-anglo-scottish.toml`/
+# `tpe-south.toml`/`tpe-borders.toml`) names this route "Newcastle and The
+# North East to Manchester and Liverpool" — one of TPE's four current named
+# routes (Anglo-Scottish, South, Borders being the other three; each is its
+# own line definition in this batch), and historically the core
+# TransPennine corridor.
+#
+# ROUTING CORRECTION vs. the brief's starting hypothesis: the brief's
+# starting research proposed Manchester Piccadilly (MAN) and/or Manchester
+# Airport (MIA) as this route's western Manchester anchor, plus Stalybridge
+# as an intermediate call. Live-source verification does not support
+# either. Three independent sources agree the actual Liverpool-Newcastle
+# service runs via Manchester VICTORIA, not Piccadilly or the Airport:
+# Wikipedia's "TransPennine Express" article route table (wikitext row:
+# "Liverpool Lime Street to Newcastle || 1 || Newton-le-Willows|Manchester
+# Victoria|Huddersfield|Leeds|York|Darlington|Durham|Chester-le-Street"),
+# Liverpool Lime Street's own Wikipedia page ("1 tph to Newcastle, via
+# Manchester Victoria, Leeds and York"), and Manchester Victoria's own
+# Wikipedia page (confirms the Liverpool-Newcastle express calls there and
+# separately notes "4 trains per hour running via Huddersfield, Leeds and
+# York" fan out beyond York towards Newcastle/Redcar Central/Scarborough).
+# Manchester Piccadilly and Manchester Airport are each served by a
+# *different* North-route hourly service instead (Manchester
+# Piccadilly/Airport to Redcar Central, via Oxford Road/Victoria/
+# Huddersfield/Dewsbury/Leeds/York/Thirsk/Northallerton/Middlesbrough, per
+# the same Wikipedia route table) that never reaches Newcastle — out of
+# this file's scope. Stalybridge is likewise on a separate North-route
+# service (Manchester Piccadilly to York via Wakefield Kirkgate/Castleford,
+# per the same table) that also doesn't reach Newcastle. So MAN, MIA and
+# Stalybridge are all deliberately omitted below rather than transcribed
+# from the brief's unverified starting list.
+#
+# SCOPE: Wikipedia's TPE article shows the "North Route" grouping actually
+# comprises several distinct hourly services fanning out beyond York
+# (Newcastle, Redcar Central/Middlesbrough, Scarborough), plus the
+# separately-timetabled Newcastle-Edinburgh Borders route
+# (`tpe-borders.toml`). Per this task's own brief, the gap-analysis scope
+# for Task 9.4 is specifically "Newcastle-Manchester/Liverpool via
+# York/Leeds" — the narrower reading, matching the single Liverpool
+# Lime Street-Newcastle service confirmed above, not the full "North"
+# umbrella. Redcar Central/Middlesbrough, Scarborough and Hull branches are
+# therefore deliberately not modelled here; they belong in separate line
+# definitions if this catalogue ever covers them.
+#
+# The Huddersfield-Leeds section carries all of the North Route's fanned-out
+# services (4 tph combined per Manchester Victoria's own Wikipedia page),
+# consistent with the brief's note that TPE describes it as the corridor's
+# busiest section, even though only 1 tph of that continues through to
+# Newcastle specifically.
+#
+# Engineering context: the Transpennine Route Upgrade (an ongoing Network
+# Rail programme, live-confirmed via Wikipedia as covering exactly this
+# Manchester Victoria-Huddersfield-Leeds-York corridor, under construction
+# since 2015 with a currently-quoted 2036-2041 completion window) causes
+# periodic disruption along this line's western half, including a
+# Huddersfield station closure/rebuild in September 2025. This file models
+# the line's normal timetabled shape, not any temporary TRU-driven
+# service split.
+#
+# Segment/overlap decision: heavy station-level overlap, station-overlap-
+# only in every case, no segment name shared with anything else in the
+# catalogue.
+# - LIV, NLW and MCV are reused verbatim (CRS, no tiploc given there
+#   either) from `northern.toml`'s `northern-merseyside`/
+#   `northern-manchester` segments.
+# - HUD, LDS (tiploc LEEDS) and YRK (tiploc YORK) are reused verbatim from
+#   `northern.toml`'s `northern-transpennine`/`northern-yorkshire`
+#   segments. Per this batch's own convention (the `xc-manchester.toml`
+#   precedent), no segment name is shared with `northern.toml` even though
+#   the stations coincide — station-level overlap is expected and
+#   sufficient; an incident at a shared station still matches both lines
+#   by station lookup regardless of segment naming.
+# - DAR and YRK also coincide with `cross-country.toml`'s `xc-north-east`
+#   segment; DHM (Durham, reused verbatim from `cross-country.toml`, no
+#   tiploc given there either) does too. Same station-overlap-only
+#   treatment, no shared segment name.
+# - Newcastle (NCL, tiploc NWCSTLE) boundary: this file terminates at
+#   Newcastle coming from York/Leeds/Durham; `tpe-borders.toml` (Task 9.3,
+#   already curated) originates at Newcastle heading to Edinburgh, and its
+#   own comments record the pre-flight ruling that Newcastle is each
+#   route's own terminus/boundary, not a shared trunk either route's
+#   exclusive territory continues through. This file's every station uses
+#   the single `tpe-north` segment, consistent with `tpe-borders.toml`'s
+#   own single-segment treatment — so NCL is naturally tagged with this
+#   file's own segment name here too, not `tpe-borders`'s. NCL also
+#   coincides with `cross-country.toml`'s `xc-north-east` segment and
+#   `northern-tyne-valley.toml`'s own `northern-tyne-valley` segment
+#   (itself the source of the NWCSTLE tiploc, reused here) — same
+#   station-overlap-only treatment as everywhere else above.
+# - No sibling TPE line in this batch shares a segment with this one
+#   either: `tpe-anglo-scottish`/`tpe-south` only overlap at the Liverpool
+#   Lime Street terminus (station-level only — this file's Manchester
+#   anchor is Victoria, not Piccadilly/Airport, so there is no Manchester-
+#   station overlap with either sibling here), and `tpe-borders` has no
+#   overlap at all beyond the Newcastle boundary handled above. This line
+#   is therefore standalone for the shared-segment-propagation regression
+#   test, despite the unusually heavy *station*-level overlap documented
+#   above — see the matcher test file for the note on why that assertion
+#   is skipped here.
+#
+# CRS sourcing: LIV, NLW, MCV, HUD, LDS (tiploc LEEDS) and YRK (tiploc
+# YORK) reused verbatim from the already-curated `northern.toml`. DAR and
+# DHM reused verbatim from the already-curated `cross-country.toml`. NCL
+# (tiploc NWCSTLE) reused verbatim from `cross-country.toml`/
+# `northern-tyne-valley.toml`/this batch's own `tpe-borders.toml`. CLS is
+# new to this catalogue and was independently confirmed against two live
+# sources — Wikipedia's Chester-le-Street station page and
+# nationalrail.co.uk's own station page (`"crsCode"` field) — both giving
+# "CLS" for Chester-le-Street. No tiploc data was independently confirmed
+# for CLS, so `tiploc` is omitted rather than guessed.
+sample_stations = ["LIV", "MCV", "LDS", "YRK", "NCL"]
+# No match_keywords: TPE's own name for this route is simply "North",
+# an even looser word than `tpe-south`'s "South" (matches "north of
+# England", "northbound", "North West", etc. in almost any incident text),
+# and — per the lesson from this batch's earlier reviews — the bare
+# operator brand name "TransPennine Express" is reserved for
+# operator-level files, not per-route ones, since this batch adds multiple
+# sibling TP-operator files that would all cross-match on it. Station and
+# operator evidence carries this file instead.
+
+# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`,
+# `xc-manchester.toml` and this batch's `tpe-anglo-scottish.toml`/
+# `tpe-south.toml` treatment of comparable hourly inter-city-style services.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Liverpool -> Newton-le-Willows -> Manchester Victoria ->
+# Huddersfield -> Leeds -> York -> Darlington -> Durham ->
+# Chester-le-Street -> Newcastle, per the confirmed live route (see
+# ROUTING CORRECTION note above).
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "tpe-north"
+
+[[stations]]
+crs = "NLW"
+role = "minor"
+segment = "tpe-north"
+
+[[stations]]
+crs = "MCV"
+role = "major"
+segment = "tpe-north"
+
+[[stations]]
+crs = "HUD"
+role = "major"
+segment = "tpe-north"
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "junction"
+segment = "tpe-north"
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "junction"
+segment = "tpe-north"
+# North of here the wider "North Route" grouping fans out to Redcar
+# Central/Middlesbrough and Scarborough on separate TPE services not
+# modelled in this file — see SCOPE note above.
+
+[[stations]]
+crs = "DAR"
+role = "minor"
+segment = "tpe-north"
+
+[[stations]]
+crs = "DHM"
+role = "minor"
+segment = "tpe-north"
+
+[[stations]]
+crs = "CLS"
+role = "minor"
+segment = "tpe-north"
+
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "terminus"
+segment = "tpe-north"

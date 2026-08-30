@@ -1,0 +1,150 @@
+id = "tpe-anglo-scottish"
+name = "TransPennine Express: Anglo-Scottish"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# TPE's own current timetable structure (valid from 17 May 2026, confirmed
+# live at tpexpress.co.uk/travelling-with-us/timetables) names this route
+# "Anglo-Scottish: Liverpool and Manchester to Glasgow and Edinburgh" —
+# one of TPE's four current named routes (South, Borders, North being the
+# other three; each is its own line definition in this batch). Some
+# Manchester-end services additionally start/terminate at Manchester
+# Airport (MIA) rather than Manchester Piccadilly, so it's included below
+# as this route's third western terminus alongside Liverpool Lime Street
+# and Manchester Piccadilly, even though TPE's own route name only says
+# "Manchester".
+#
+# North of Carlisle the route is Y-shaped: Glasgow and Edinburgh services
+# share the same line as far as Lockerbie, then split — Glasgow-bound
+# services continue via Motherwell, Edinburgh-bound services via Haymarket.
+# Both branches are included below since they're the same named TPE route,
+# not modelled as two separate line files.
+#
+# Preston-Carlisle (and onward towards Glasgow) is run over the same WCML
+# metals as Avanti West Coast. Station-overlap-only with `wcml`, deliberately:
+# no segment name is shared with `west-coast-main-line.toml` because that
+# line's segments are far coarser than the shared section, and an incident
+# on the shared stretch matches both lines by station anyway — same
+# precedent already documented in `xc-manchester.toml`. There's also
+# station-level overlap with `xc-manchester.toml`/`northern.toml` at the
+# Manchester/Liverpool end, resolved the same way.
+#
+# No segment here is shared with any other line in this batch either:
+# `tpe-south` and `tpe-north` only overlap this line at the Liverpool Lime
+# Street / Manchester Piccadilly termini (station-level only, not a shared
+# segment), and `tpe-borders` overlaps this line only at Edinburgh Waverley
+# (EDB) — independently a terminus of both files. Same station-level-only
+# treatment as above: no shared segment name, since an incident at EDB
+# already matches both lines by station lookup regardless (see
+# `tpe-borders.toml`'s own note on this). This line is therefore treated as
+# standalone for the shared-segment-propagation regression test.
+#
+# Minor intermediate calls are omitted; only principal stations are listed,
+# following `xc-manchester.toml`'s convention.
+sample_stations = ["LIV", "MAN", "PRE", "CAR", "GLC", "EDB"]
+# Just the route-specific phrase, not the operator's own brand name — see
+# `xc-manchester.toml`'s comment on why a bare operator name doesn't
+# belong here: this batch adds sibling TP-operator files (`tpe-south`,
+# `tpe-north`, `tpe-borders`), and "TransPennine Express" alone would
+# match all of them on almost every TPE incident, defeating
+# match_keywords' purpose as a route-disambiguating signal.
+match_keywords = ["Anglo-Scottish"]
+
+# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`
+# and `xc-manchester.toml`'s treatment of comparable services.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Liverpool/Manchester/Manchester Airport -> Preston -> Carlisle,
+# then splitting to Glasgow (via Motherwell) and Edinburgh (via Haymarket)
+# beyond Lockerbie.
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "tpe-anglo-scottish-nw"
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "tpe-anglo-scottish-nw"
+
+# Manchester Airport's CRS (MIA) confirmed independently via Wikipedia's
+# infobox and nationalrail.co.uk's own station page — same two-source
+# standard as the other new-to-catalogue codes elsewhere in this file.
+[[stations]]
+crs = "MIA"
+role = "terminus"
+segment = "tpe-anglo-scottish-nw"
+
+# From here on: PRE/LAN/OXN/PNR/CAR tiplocs reused verbatim from the
+# already-curated `west-coast-main-line.toml` (PRSTON/LANCSTR/OXENHLM/
+# PENRITH/CARLILE) rather than re-derived, per this batch's convention of
+# preferring already-verified in-repo facts.
+[[stations]]
+crs = "PRE"
+tiploc = "PRSTON"
+role = "major"
+segment = "tpe-anglo-scottish-wcml"
+
+[[stations]]
+crs = "LAN"
+tiploc = "LANCSTR"
+role = "minor"
+segment = "tpe-anglo-scottish-wcml"
+
+[[stations]]
+crs = "OXN"
+tiploc = "OXENHLM"
+role = "minor"
+segment = "tpe-anglo-scottish-wcml"
+
+[[stations]]
+crs = "PNR"
+tiploc = "PENRITH"
+role = "minor"
+segment = "tpe-anglo-scottish-wcml"
+
+[[stations]]
+crs = "CAR"
+tiploc = "CARLILE"
+role = "junction"
+segment = "tpe-anglo-scottish-wcml"
+
+# Lockerbie (CRS confirmed independently: Wikipedia infobox and
+# nationalrail.co.uk's own station page both give "LOC") is the last
+# station shared by both the Glasgow and Edinburgh branches before the
+# route splits.
+[[stations]]
+crs = "LOC"
+role = "junction"
+segment = "tpe-anglo-scottish-scotland"
+
+# Glasgow branch. Motherwell's CRS (MTH) and Glasgow Central's CRS (GLC)
+# each confirmed independently via Wikipedia's infobox and
+# nationalrail.co.uk's own station page.
+[[stations]]
+crs = "MTH"
+role = "major"
+segment = "tpe-anglo-scottish-glasgow"
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "tpe-anglo-scottish-glasgow"
+
+# Edinburgh branch. Haymarket (HYM) and Waverley (EDB) CRS codes each
+# confirmed independently via Wikipedia's infobox and nationalrail.co.uk's
+# own station page.
+[[stations]]
+crs = "HYM"
+role = "major"
+segment = "tpe-anglo-scottish-edinburgh"
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "tpe-anglo-scottish-edinburgh"

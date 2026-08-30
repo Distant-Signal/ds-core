@@ -1,0 +1,172 @@
+id = "tpe-borders"
+name = "TransPennine Express: Borders"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# TPE's own current timetable structure (the same structure independently
+# confirmed live at tpexpress.co.uk/travelling-with-us/timetables for this
+# batch's `tpe-anglo-scottish.toml`/`tpe-south.toml`) names this route
+# "Borders: Newcastle to Edinburgh" — one of TPE's four current named
+# routes (Anglo-Scottish, South, North being the other three; each is its
+# own line definition in this batch). Launched December 2021, connecting
+# Northumberland/East Lothian/Scottish Borders communities that hadn't had
+# a direct rail link in decades; frequency has increased since launch.
+#
+# Frequency: confirmed via two independent live sources — Wikipedia's
+# "TransPennine Express" article route table (this Newcastle-Edinburgh
+# service listed as "1 tp2h", i.e. roughly every two hours) and Reston
+# station's own Wikipedia page ("TransPennine Express — runs approximately
+# two-hourly services daily in both directions"). This is a lower-
+# frequency, not-turn-up-and-go service, hence `category = "regional"`
+# rather than `main-line` despite the route's inter-city-scale distance —
+# same category logic this catalogue already applies to comparable
+# lower-frequency Northern branch lines (`northern-tyne-valley.toml`,
+# `northern-furness.toml`).
+#
+# Infrastructure note: north of Berwick-upon-Tweed this route runs over
+# East Coast Main Line metals (Reston's own station page states it "sits
+# on the East Coast Main Line between Edinburgh and Berwick-upon-Tweed") —
+# the same station-overlap-only relationship `tpe-anglo-scottish.toml` and
+# `tpe-south.toml` already document for their own shared-infrastructure
+# stretches with `west-coast-main-line.toml`/CrossCountry. No ECML/LNER
+# line file exists yet in this catalogue to overlap with, so there's
+# nothing to reconcile today, but this is flagged here for whenever one is
+# added.
+#
+# Segment/overlap decision: this route has essentially no overlap with
+# anything else currently in `lines/` — nothing else in the catalogue
+# reaches the Northumberland coast or the Scottish Borders (per this
+# batch's own gap-analysis note that nothing else reaches Scotland except
+# `west-coast-main-line.toml`'s Carlisle terminus, which is nowhere near
+# this route). Checked Alnmouth specifically, since preliminary research
+# found a claim it's "served by CrossCountry, Northern, LNER and
+# TransPennine Express" (confirmed true live, via Alnmouth's own Wikipedia
+# page) — but grepping `lines/*.toml` shows no existing CrossCountry file
+# (`xc-cardiff.toml`, `xc-manchester.toml`, `xc-south-coast.toml`,
+# `xc-stansted.toml`, `cross-country.toml`) actually lists Alnmouth as a
+# station. So there is no real in-catalogue overlap to document here today
+# — CrossCountry calling at Alnmouth in real life doesn't yet correspond
+# to any station this catalogue's XC files track.
+#
+# Newcastle (NCL) boundary with this batch's `tpe-north.toml`: this file
+# originates at Newcastle heading east/north to Edinburgh; `tpe-north`
+# terminates at Newcastle coming from York/Leeds. Per the controller's
+# pre-flight ruling (recorded in this task's own progress log), Newcastle
+# is each route's own terminus/boundary, not a shared trunk either route's
+# exclusive territory continues through — no segment name is shared with
+# `tpe-north` at Newcastle (mirrors how `west-coast-main-line.toml` and
+# `xc-manchester.toml` treat their own Crewe overlap). Every station below
+# uses the single `tpe-borders` segment, so NCL is naturally tagged with
+# this file's own segment name rather than any `tpe-north` name — this
+# holds regardless of whether `tpe-north.toml` exists yet when this file
+# is added. The shared-segment-propagation regression test is
+# deliberately skipped for this pair; see the matcher test file for the
+# same note.
+#
+# Edinburgh Waverley (EDB) is also this file's terminus and is
+# independently a terminus of `tpe-anglo-scottish.toml` too (its own
+# Edinburgh branch via Haymarket). Same treatment as Newcastle above:
+# station-level-only overlap, no shared segment name — an incident at EDB
+# already matches both lines by station lookup regardless of segment
+# naming, same precedent `xc-manchester.toml` set for shared termini.
+#
+# Two stations flagged for special care in the controller's preliminary
+# research, checked rather than transcribed:
+#
+# - Reston: preliminary research described it as "a new station in the
+#   Borders that opened [ca. March]" — that vague date does not hold up.
+#   Two independent live sources (Reston's own Wikipedia page and its
+#   nationalrail.co.uk station page) both confirm it is open, with
+#   Wikipedia additionally giving an actual opening date of 23 May 2022
+#   (a reopening after ~58 years of closure) — well before today
+#   (2026-08-29), not a recent/upcoming opening. CRS code RSN confirmed
+#   by both of the same two sources. Included below in its correct
+#   geographic position, between Berwick-upon-Tweed and Dunbar.
+# - Cramlington: confirmed via its own Wikipedia page to be served by only
+#   one train per day on this line (CRS CRM also confirmed, via
+#   nationalrail.co.uk) — a legitimate very-minor call, omitted below per
+#   this catalogue's "principal stations only" convention, same treatment
+#   `xc-manchester.toml` gives its own minor calls.
+# - East Linton: on the same Dunbar-Edinburgh stretch, also a very-low-
+#   frequency call on this line — omitted below for the same
+#   "principal stations only" reason as Cramlington above.
+#
+# CRS sourcing: NCL (tiploc NWCSTLE) reused verbatim from the
+# already-curated `northern-tyne-valley.toml`. EDB reused verbatim from
+# `tpe-anglo-scottish.toml` (itself live-verified there). MPT, ALM, BWK,
+# RSN and DUN are new to this catalogue and were each independently
+# confirmed against two live sources: Wikipedia's station infobox and
+# nationalrail.co.uk's own station page (`"crsCode"` field) for every one
+# of them — MPT for Morpeth, ALM for Alnmouth, BWK for Berwick-upon-Tweed,
+# RSN for Reston, DUN for Dunbar. No tiploc data was independently
+# confirmed for MPT/ALM/BWK/RSN/DUN, so `tiploc` is omitted for those
+# rather than guessed.
+sample_stations = ["NCL", "BWK", "EDB"]
+# destination_crs_filter is an inclusive whitelist consumed by LDBWS
+# sampling in `aggregation.rs` — it must list this route's two real
+# termini (Newcastle and Edinburgh Waverley), not intermediate calls,
+# same convention every other file in the catalogue follows (e.g.
+# `northern-tyne-valley.toml`'s `["NCL", "CAR", "HEX", "MCE"]`, its own
+# four real termini). Listing only intermediate stations here would drop
+# every terminus-bound departure from sampling.
+destination_crs_filter = ["NCL", "EDB"]
+# No match_keywords: TPE's own name for this route is simply "Borders",
+# which collides with ScotRail's own, separate "Borders Railway"
+# (Edinburgh-Tweedbank — noted in this batch's own gap-analysis as a
+# distinct ScotRail route, not this one) — a real precision risk, not
+# just a low-signal generic word like the "South"/operator-name issue
+# already documented in `tpe-south.toml`/`tpe-anglo-scottish.toml`.
+# Station and operator evidence carries this file instead.
+
+# Two-hourly regional service with no parallel alternative along most of
+# this corridor, similar in spirit to this catalogue's other lower-
+# frequency Northern branch lines (`northern-tyne-valley.toml`,
+# `northern-furness.toml`) — tuned slightly more sensitive than those
+# hourly lines' 0.35 reduced-service threshold, since a single cancelled
+# service on a two-hourly line removes a larger share of the day's
+# capacity in that gap.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Newcastle -> Morpeth -> Alnmouth -> Berwick-upon-Tweed -> Reston
+# -> Dunbar -> Edinburgh Waverley, per the confirmed live route diagram.
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "terminus"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "MPT"
+role = "minor"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "ALM"
+role = "minor"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "BWK"
+role = "major"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "RSN"
+role = "minor"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "DUN"
+role = "minor"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "tpe-borders"
