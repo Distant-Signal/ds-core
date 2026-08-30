@@ -57,8 +57,14 @@ crs = "MYL"
 role = "minor"
 segment = "elizabeth-shenfield"
 
+# Forest Gate. Corrected from a previous `FST` (that's London Fenchurch
+# Street, a c2c/District-line station miles away with no Elizabeth line
+# service - not this station). Discovered via lines/c2c.toml's correct use
+# of FST, which surfaced the collision. FOG confirmed via nationalrail.co.uk
+# and railwaycodes.org.uk; both agree Forest Gate sits between Maryland and
+# Manor Park, matching this file's existing station order.
 [[stations]]
-crs = "FST"
+crs = "FOG"
 role = "minor"
 segment = "elizabeth-shenfield"
 

@@ -1,0 +1,285 @@
+id = "merseyrail-northern"
+name = "Merseyrail Northern Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["ME"]
+
+destination_crs_filter = ["SOP", "OMS", "HBL", "HNX", "LVC"]
+sample_stations = ["SOP", "LVC", "OMS", "HBL", "HNX"]
+match_keywords = ["Merseyrail Northern Line"]
+# No excluded_keywords: unlike northern.toml (NT), this line's own name isn't
+# a bare ambiguous word, and legitimate Merseyrail copy plausibly mentions
+# "Northern Trains" in passing (it interchanges with them at Ormskirk,
+# Southport and Headbolt Lane) so that phrase must not veto a real match.
+
+# Collision check against lines/northern.toml (NT, "Northern Trains"):
+# that file's `northern-merseyside` segment is LIV (Liverpool Lime Street) -
+# HUY (Huyton) - NLW (Newton-le-Willows), Northern Trains' own Lime
+# Street-Wigan/Manchester main-line corridor. None of those three CRS codes
+# appear anywhere in this file (Liverpool Central here is LVC, a distinct
+# station and code from Lime Street's LIV) - confirmed by direct read of
+# northern.toml, not assumed. No collision, and no segment name below is
+# reused from that file.
+#
+# Central-Liverpool / Wirral Line decision (binding for Task 12.5's
+# merseyrail-wirral.toml, not yet drafted when this file was written):
+# researched via Wikipedia's Liverpool Central, Moorfields and Liverpool
+# James Street station articles (mutually consistent), THEN cross-checked
+# against a second, independent, non-Wikipedia source:
+# railwaycodes.org.uk's tunnels database (crs/tunnels2.shtm), which lists
+# two physically and historically distinct tunnels rather than one shared
+# structure: "Great George Street" (cross-referenced as Liverpool Central),
+# 0m 1012y, opened 1874, operator CLC (Cheshire Lines Committee), running
+# between St James and Liverpool Central - the ex-CLC route that the 1977
+# Northern Line "Link" tunnel extends north from; and the "Mersey" tunnel,
+# 1m 350y, opened 1886, operator Mersey (Mersey Railway), between James
+# Street and Birkenhead Central, with a separate "loop extension" (4m 462y)
+# dated 1892 (Hamilton Square-Birkenhead Park) and 1978 (the "Liverpool
+# Deep Level Loop") - the ancestor/extension that the Wirral Line's "Loop"
+# tunnel uses. Different pre-group operators, different opening dates,
+# different physical tunnels; they only meet at the shared station
+# buildings of Liverpool Central and Moorfields, on different platforms
+# (Wikipedia: Northern Line uses Liverpool Central platforms 1-2 and
+# Moorfields' low-level platforms; Wirral Line uses Liverpool Central
+# platform 3 and Moorfields' deep-level platform, via James Street and
+# Lime Street Low Level, neither of which the Northern Line serves - per
+# Liverpool James Street's own article the old Central-James Street link
+# track is kept only for empty-stock moves between depots, not passenger
+# service). Two independent sources agree: no shared running track for
+# revenue service in either direction.
+#
+# Verdict: STATION-OVERLAP ONLY, not a shared physical trunk, following
+# xc-south-coast.toml's precedent (see its Banbury/Leamington Spa
+# comments) rather than the SWR/Chiltern shared-segment pattern.
+# `merseyrail-wirral.toml` should therefore NOT reuse this file's
+# `merseyrail-northern-core` segment name for its own central-Liverpool
+# stations; it should tag Liverpool Central/Moorfields with its own
+# exclusive segment, exactly like chiltern-main-line.toml and
+# xc-south-coast.toml both independently tag Banbury. Station-level overlap
+# (both files listing LVC/MRF) is expected and fine - an incident naming
+# either station will still match both lines individually by station, each
+# as ExclusiveSegment.
+#
+# TIPLOCs: omitted throughout. The only source found for them
+# (railwaycodes.org.uk) produced misaligned/wrong rows for two stations in
+# this same file's CRS lookups (caught by cross-checking against National
+# Rail Enquiries and Wikipedia) and couldn't be trusted for TIPLOC columns
+# without a second independent source in the time available. Per SCHEMA.md
+# the field is optional; absent values just mean no TRUST/SCHEDULE
+# correlation hint.
+#
+# Topology (verified against Wikipedia's station articles' succession boxes,
+# station-by-station, plus railwaycodes.org.uk crs*.shtm pages for CRS
+# codes - all codes additionally cross-checked one-by-one against National
+# Rail Enquiries station pages after the railwaycodes.org.uk source proved
+# unreliable for exact code alignment): three outer branches - Southport,
+# Ormskirk and Kirkby/Headbolt Lane - converge at Sandhills (Southport vs.
+# the other two) and then Kirkdale (Ormskirk vs. Kirkby), run underground
+# through central Liverpool, and continue south to Hunts Cross.
+
+# --- Southport branch (Southport towards the Sandhills junction) ---
+[[stations]]
+crs = "SOP"
+role = "terminus"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "BDL"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "HIL"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "ANS"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "FRE"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "FBY"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "HTO"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "HLR"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "BLN"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "WLO"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "SFL"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "BNW"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "BOT"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+[[stations]]
+crs = "BAH"
+role = "minor"
+segment = "merseyrail-northern-southport"
+
+# --- Core trunk: Sandhills (Southport junction) through central Liverpool
+# to Hunts Cross. Only the Southport branch runs the full length of this
+# section: Southport services continue through to Hunts Cross, while
+# Ormskirk and Kirkby/Headbolt Lane services join it as far as central
+# Liverpool but terminate there rather than continuing south (per this
+# file's own `destination_crs_filter` above, which lists OMS and HBL as
+# destinations in their own right, distinct from the SOP<->HNX pairing). ---
+[[stations]]
+crs = "SDL"
+role = "junction"
+segment = "merseyrail-northern-core"
+# Southport branch joins/leaves here; Ormskirk and Kirkby branches continue
+# north to the second junction at Kirkdale instead of via Bank Hall.
+
+[[stations]]
+crs = "MRF"
+role = "major"
+segment = "merseyrail-northern-core"
+# Underground "Link" tunnel platforms (1-2), low level - see the
+# station-overlap-only comment above re: the Wirral Line's separate "Loop"
+# tunnel platform here.
+
+[[stations]]
+crs = "LVC"
+role = "major"
+segment = "merseyrail-northern-core"
+# Same Link/Loop separation as Moorfields above.
+
+[[stations]]
+crs = "BRU"
+role = "minor"
+segment = "merseyrail-northern-core"
+
+[[stations]]
+crs = "STM"
+role = "minor"
+segment = "merseyrail-northern-core"
+
+[[stations]]
+crs = "AIG"
+role = "minor"
+segment = "merseyrail-northern-core"
+
+[[stations]]
+crs = "CSG"
+role = "minor"
+segment = "merseyrail-northern-core"
+
+[[stations]]
+crs = "LPY"
+role = "major"
+segment = "merseyrail-northern-core"
+
+[[stations]]
+crs = "HNX"
+role = "terminus"
+segment = "merseyrail-northern-core"
+
+# --- Kirkdale junction: where the Ormskirk and Kirkby branches diverge,
+# north of Sandhills. Not served by the Southport branch. ---
+[[stations]]
+crs = "KKD"
+role = "junction"
+segment = "merseyrail-northern-kirkdale-jn"
+
+# --- Ormskirk branch (Kirkdale junction towards Ormskirk) ---
+[[stations]]
+crs = "WAO"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "OPK"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "AIN"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "ORN"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "MAG"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "MNS"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "TWN"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "AUG"
+role = "minor"
+segment = "merseyrail-northern-ormskirk"
+
+[[stations]]
+crs = "OMS"
+role = "terminus"
+segment = "merseyrail-northern-ormskirk"
+# Northern Trains services also continue beyond here towards Preston via
+# Burscough Junction; that's a different operator's line, not this file's.
+
+# --- Kirkby / Headbolt Lane branch (Kirkdale junction towards Headbolt Lane) ---
+[[stations]]
+crs = "RIL"
+role = "minor"
+segment = "merseyrail-northern-kirkby"
+
+[[stations]]
+crs = "FAZ"
+role = "minor"
+segment = "merseyrail-northern-kirkby"
+
+[[stations]]
+crs = "KIR"
+role = "major"
+segment = "merseyrail-northern-kirkby"
+
+[[stations]]
+crs = "HBL"
+role = "terminus"
+segment = "merseyrail-northern-kirkby"
+# Extended from Kirkby in 2023; Kirkby is now an intermediate stop, not the
+# branch terminus.

@@ -1,0 +1,311 @@
+id = "merseyrail-wirral"
+name = "Merseyrail Wirral Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["ME"]
+
+# Four real termini (New Brighton, West Kirby, Chester, Ellesmere Port); the
+# line never terminates mid-loop, so this is exactly the "genuine terminus"
+# set, not an approximation.
+destination_crs_filter = ["NBN", "WKI", "CTR", "ELP"]
+sample_stations = ["NBN", "WKI", "CTR", "ELP", "LVC"]
+match_keywords = ["Merseyrail Wirral Line"]
+# No excluded_keywords: "Wirral" isn't a bare ambiguous word the way
+# "Northern" is (see northern.toml / merseyrail-northern.toml's own
+# comments on that), so nothing here needs vetoing.
+
+# Central-Liverpool decision: INHERITED from merseyrail-northern.toml (Task
+# 12.4), not re-litigated here. That file researched (Wikipedia station
+# articles cross-checked against railwaycodes.org.uk's tunnels database,
+# crs/tunnels2.shtm) whether the Northern Line and Wirral Line share real
+# running track through central Liverpool and concluded NO: the Northern
+# Line uses the "Great George Street"/Link tunnel (Liverpool Central
+# platforms 1-2, Moorfields' low-level platforms), the Wirral Line uses the
+# separate "Mersey"/Loop tunnel (Liverpool Central platform 3, Moorfields'
+# deep-level platform, via James Street and Lime Street Low Level) - two
+# physically and historically distinct tunnels, different pre-Grouping
+# operators (CLC vs. Mersey Railway), different opening dates (1874 vs.
+# 1886). Verdict recorded there: STATION-OVERLAP ONLY, not a shared trunk.
+# This file honors that call: LVC and MRF appear in both files' station
+# lists (real, since both lines' trains do call at both station buildings),
+# but under this file's OWN segment ("merseyrail-wirral-loop"), never
+# reusing merseyrail-northern.toml's "merseyrail-northern-core" segment
+# name. An incident at Liverpool Central or Moorfields therefore matches
+# both lines independently by station (each ExclusiveSegment), exactly
+# like chiltern-main-line.toml/xc-south-coast.toml's Banbury precedent -
+# it does NOT propagate as a SharedSegment event. James Street (LVJ),
+# Hamilton Square (BKQ) and Liverpool Lime Street (LIV) are genuinely
+# exclusive to this file; they don't appear in merseyrail-northern.toml at
+# all (confirmed by reading that file directly).
+#
+# Liverpool Lime Street (LIV) is included below because it's a real,
+# documented stop on the Wirral Line loop (Merseyrail's own "Merseyrail
+# Wirral Line" Wikipedia navbox lists it under "Liverpool Loop", and the
+# Wirral line article's own prose - "the tunnel continued to new deep-level
+# platforms at Moorfields, Liverpool Lime Street and Liverpool Central" -
+# independently gives the same three-station loop order). LIV already
+# appears in lines/northern.toml (Northern Trains' Lime Street-Huyton-
+# Newton-le-Willows corridor, its own "northern-merseyside" segment) - this
+# is expected station-overlap between unrelated services at a huge
+# multi-operator interchange, not a shared segment, and not something to
+# omit just to dodge over-matching risk (SCHEMA.md: don't invent or omit
+# real facts). An incident naming "Liverpool Lime Street" may therefore
+# also surface against this line even when it's really about a mainline
+# operator's unrelated service there; that's an accepted, precedented
+# trade-off (see northern.toml's own LIV usage), not unique to this file.
+#
+# Collision check: grepped lines/*.toml for every segment name below before
+# adding it (2026-08-30). No other file uses "merseyrail-wirral-*" -
+# collision-free.
+#
+# TIPLOCs: omitted throughout, for the same reason merseyrail-northern.toml
+# gives - railwaycodes.org.uk produced misaligned/incomplete rows for
+# several stations in this file's own CRS lookups (see below) and there was
+# no independent second source for TIPLOC columns specifically in the time
+# available. Per SCHEMA.md the field is optional.
+#
+# CRS codes: every single one below was looked up on railwaycodes.org.uk
+# (crs*.shtm, by station-name initial letter) AND independently confirmed
+# against National Rail Enquiries' own station page
+# (nationalrail.co.uk/stations/<CRS>/details.html, which echoes the station
+# name in its heading) - not trusted from memory or a single bulk fetch.
+# Liverpool Central (LVC) and Moorfields (MRF) are taken as-is from
+# merseyrail-northern.toml, which already did this verification.
+#
+# Topology and current station list: cross-checked against THREE
+# independent sources - (1) the Wirral line route diagram
+# (Template:Wirral_Line_diagram raw wikitext), (2) individual station
+# articles' succession boxes (station-by-station, mirroring
+# merseyrail-northern.toml's method), and (3) the "Merseyrail Wirral Line"
+# navbox template (Template:Merseyrail_Wirral_Line), which groups every
+# CURRENTLY-served station by branch. Source (3) caught a real error in
+# source (1): the route diagram's icon coding lists "Upton-by-Chester" on
+# the Chester branch as though open, but that station's own dedicated
+# article states plainly it closed on 9 January 1984 (the same day Bache
+# opened as its replacement) - so it is NOT a current stop and is excluded
+# here. The navbox (3) omits it too, confirming the correction. Cross-
+# checking all three sources against each other, and against the "34
+# stations" figure quoted in the line's own infobox, the 34 stations listed
+# below are exactly that full current set - no more, no fewer. Other
+# historical stations appearing only in the route diagram's "closed" (ex-)
+# icon styling, and correctly absent from the navbox, were excluded the
+# same way: Warren (closed 1915), Seacombe & Egremont and Liscard and
+# Poulton (closed 1960, former Seacombe branch), Birkenhead Town, Monks
+# Ferry and Birkenhead Woodside (historical Birkenhead stations), Tranmere
+# (closed 1934) and Rock Lane (closed), Ledsham (closed) and Mollington
+# (closed 1968).
+
+# --- New Brighton branch (terminus towards Birkenhead North) ---
+[[stations]]
+crs = "NBN"
+role = "terminus"
+segment = "merseyrail-wirral-new-brighton"
+
+[[stations]]
+crs = "WLG"
+role = "minor"
+segment = "merseyrail-wirral-new-brighton"
+
+[[stations]]
+crs = "WLV"
+role = "minor"
+segment = "merseyrail-wirral-new-brighton"
+# Next station towards Liverpool is Birkenhead North, where this branch
+# converges with the West Kirby branch - see the shared-trunk rule of
+# thumb in SCHEMA.md (the junction station belongs to the trunk segment,
+# not this exclusive one).
+
+# --- West Kirby branch (terminus towards Birkenhead North) ---
+[[stations]]
+crs = "WKI"
+role = "terminus"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "HYK"
+role = "minor"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "MNR"
+role = "minor"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "MEO"
+role = "minor"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "MRT"
+role = "minor"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "LSW"
+role = "minor"
+segment = "merseyrail-wirral-west-kirby"
+
+[[stations]]
+crs = "BID"
+role = "major"
+segment = "merseyrail-wirral-west-kirby"
+# Also the Transport for Wales Borderlands Line's Liverpool-end terminus
+# (Bidston to Wrexham Central) - a different operator's line, not this
+# file's, exactly as merseyrail-northern.toml notes for Ormskirk's onward
+# Preston services.
+
+# --- North trunk: Birkenhead North (junction) through Conway Park, shared
+# by the New Brighton and West Kirby branches above. ---
+[[stations]]
+crs = "BKN"
+role = "junction"
+segment = "merseyrail-wirral-north-trunk"
+
+[[stations]]
+crs = "BKP"
+role = "minor"
+segment = "merseyrail-wirral-north-trunk"
+
+[[stations]]
+crs = "CNP"
+role = "major"
+segment = "merseyrail-wirral-north-trunk"
+# Next station towards Liverpool is Hamilton Square, where this trunk
+# converges with the south trunk (Birkenhead Central direction) and enters
+# the central-Liverpool loop - see central-Liverpool comment above.
+
+# --- Central Liverpool loop: Hamilton Square (junction) through James
+# Street, Moorfields, Liverpool Lime Street and Liverpool Central - shared
+# by every branch in this file. Order (Hamilton Square - James Street -
+# Moorfields - Lime Street - Liverpool Central) matches both the Wirral
+# line article's own prose ("the tunnel continued to new deep-level
+# platforms at Moorfields, Liverpool Lime Street and Liverpool Central")
+# and the Merseyrail Wirral Line navbox's "Liverpool Loop" grouping. ---
+[[stations]]
+crs = "BKQ"
+role = "junction"
+segment = "merseyrail-wirral-loop"
+
+[[stations]]
+crs = "LVJ"
+role = "major"
+segment = "merseyrail-wirral-loop"
+
+[[stations]]
+crs = "MRF"
+role = "major"
+segment = "merseyrail-wirral-loop"
+# Deep-level platform - distinct from the Northern Line's low-level
+# platform at the same station building. See central-Liverpool comment
+# above; this station also appears in merseyrail-northern.toml under its
+# own "merseyrail-northern-core" segment, deliberately not reused here.
+
+[[stations]]
+crs = "LIV"
+role = "major"
+segment = "merseyrail-wirral-loop"
+# Loop-only stop (clockwise direction through the Loop tunnel). Also
+# appears in lines/northern.toml under its own "northern-merseyside"
+# segment for Northern Trains' unrelated Lime Street-Huyton-Newton-le-
+# Willows corridor - station-overlap at a major multi-operator interchange,
+# not a shared segment. See over-matching note above.
+
+[[stations]]
+crs = "LVC"
+role = "major"
+segment = "merseyrail-wirral-loop"
+# Platform 3 - distinct from the Northern Line's platforms 1-2 at the same
+# station building. See central-Liverpool comment above; this station also
+# appears in merseyrail-northern.toml under its own
+# "merseyrail-northern-core" segment, deliberately not reused here.
+# Next station (continuing clockwise, out of the loop) is Birkenhead
+# Central, where the south trunk begins.
+
+# --- South trunk: Birkenhead Central through Green Lane, Rock Ferry and on
+# to Hooton (junction) - shared by the Chester and Ellesmere Port branches
+# below. ---
+[[stations]]
+crs = "BKC"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "GNL"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "RFY"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "BEB"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "PSL"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "SPI"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "BMR"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "BOM"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "ERA"
+role = "minor"
+segment = "merseyrail-wirral-south-trunk"
+
+[[stations]]
+crs = "HOO"
+role = "junction"
+segment = "merseyrail-wirral-south-trunk"
+# Chester and Ellesmere Port branches diverge here; the exclusive branch
+# segments below start at the next station in each direction, per
+# SCHEMA.md's shared-trunk rule of thumb.
+
+# --- Chester branch (Hooton junction towards Chester) ---
+[[stations]]
+crs = "CPU"
+role = "minor"
+segment = "merseyrail-wirral-chester"
+
+[[stations]]
+crs = "BAC"
+role = "minor"
+segment = "merseyrail-wirral-chester"
+
+[[stations]]
+crs = "CTR"
+role = "terminus"
+segment = "merseyrail-wirral-chester"
+
+# --- Ellesmere Port branch (Hooton junction towards Ellesmere Port) ---
+[[stations]]
+crs = "LTT"
+role = "minor"
+segment = "merseyrail-wirral-ellesmere-port"
+
+[[stations]]
+crs = "OVE"
+role = "minor"
+segment = "merseyrail-wirral-ellesmere-port"
+
+[[stations]]
+crs = "ELP"
+role = "terminus"
+segment = "merseyrail-wirral-ellesmere-port"

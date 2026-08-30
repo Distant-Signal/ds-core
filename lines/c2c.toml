@@ -1,0 +1,176 @@
+id = "c2c"
+name = "c2c (London, Tilbury & Southend line)"
+mode = "national-rail"
+category = "commuter"
+operators = ["CC"]
+
+sample_stations = ["FST", "BSO", "GRY"]
+match_keywords = ["c2c", "London, Tilbury and Southend line"]
+
+# High-frequency commuter route into Fenchurch Street (several trains per
+# hour at peak on both the Basildon and Ockendon/Tilbury routes), comparable
+# in intensity to Thameslink core — same tighter thresholds as
+# thameslink-core.toml.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# Standalone line: nationalised (previously franchised) c2c operates a
+# single, largely self-contained route between Fenchurch Street and
+# Shoeburyness. Per the 2026-08-29 line-coverage gap analysis, no segment
+# here is shared with any other file in the catalogue — no other line in
+# the catalogue touches Barking at all (confirmed via `grep -h 'crs = "BKG"'
+# lines/*.toml`: CRS `BKG` appears only in this file). Both segments below
+# (`c2c-main-line`, `c2c-ockendon-loop`) are therefore exclusive to this
+# file — no shared-trunk regression test is included, only the
+# exclusive-segment assertion (see the plan's Global Constraints:
+# "Skip this assertion only for a genuinely standalone line ... e.g. c2c").
+#
+# Main line, Fenchurch Street to Shoeburyness via Basildon, ordered west to
+# east. Route/order verified against Wikipedia's "London, Tilbury and
+# Southend line" and "c2c (train operating company)" articles (the
+# latter's explicit "Main Line via Basildon" calling-point list). Every CRS
+# code below was individually confirmed against nationalrail.co.uk's own
+# station-details pages (a second, independent source from Wikipedia) after
+# an initial pass sourced from railwaycodes.org.uk turned out to contain two
+# errors caught in self-review: Southend Central is `SOC`, not `SOU` (`SOU`
+# is Southampton Central, already used by swr-south-west-main.toml and
+# xc-south-coast.toml — this would have been a real cross-line collision);
+# Southend East is `SOE`, not `SED` (`SED` is Shelford, Cambs). Do not trust
+# a single large railwaycodes.org.uk fetch for these codes without a second
+# source — confirm each station individually.
+[[stations]]
+crs = "FST"
+tiploc = "FENCHRS"
+role = "terminus"
+segment = "c2c-main-line"
+# TIPLOC confirmed against railwaycodes.org.uk's crsf.shtm CRS/NLC/TIPLOC/
+# STANME/STANOX table, which lists TIPLOC=FENCHRS (distinct from the
+# STANME column's "FENCHURST").
+
+[[stations]]
+crs = "LHS"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "WEH"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "BKG"
+role = "major"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "UPM"
+tiploc = "UPMNSTR"
+role = "junction"
+segment = "c2c-main-line"
+# The Ockendon loop (see below) diverges here.
+
+[[stations]]
+crs = "WHR"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "LAI"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "BSO"
+role = "major"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "PSE"
+role = "junction"
+segment = "c2c-main-line"
+# The Ockendon loop (see below) rejoins here.
+
+[[stations]]
+crs = "BEF"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "LES"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "CHW"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "WCF"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "SOC"
+role = "major"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "SOE"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "TPB"
+role = "minor"
+segment = "c2c-main-line"
+
+[[stations]]
+crs = "SRY"
+role = "terminus"
+segment = "c2c-main-line"
+
+# Ockendon loop: a short single-track branch connecting the main line at
+# Upminster (above) to the Tilbury loop line at Grays via Ockendon, then
+# continuing via the Tilbury loop stations back to rejoin the main line at
+# Pitsea (above) — c2c's "loop line via Tilbury"/"via Ockendon" service
+# pattern. Confirmed via the LTS line Wikipedia article's route summary
+# ("a short branch line connecting the main line at Upminster with the loop
+# line at Grays via Ockendon"), the individual Ockendon/Chafford
+# Hundred/Grays/Tilbury Town/East Tilbury/Stanford-le-Hope station articles
+# (each confirms its neighbours), with every CRS code individually
+# confirmed against nationalrail.co.uk. The separate Rainham branch
+# (Barking–Dagenham Dock–Rainham–Purfleet–Grays) is a third, distinct
+# route to Grays and is out of scope for this file — omitted rather than
+# guessed at.
+[[stations]]
+crs = "OCK"
+tiploc = "OCKENDN"
+role = "minor"
+segment = "c2c-ockendon-loop"
+
+[[stations]]
+crs = "CFH"
+role = "minor"
+segment = "c2c-ockendon-loop"
+
+[[stations]]
+crs = "GRY"
+role = "major"
+segment = "c2c-ockendon-loop"
+
+[[stations]]
+crs = "TIL"
+role = "minor"
+segment = "c2c-ockendon-loop"
+
+[[stations]]
+crs = "ETL"
+role = "minor"
+segment = "c2c-ockendon-loop"
+
+[[stations]]
+crs = "SFO"
+role = "minor"
+segment = "c2c-ockendon-loop"

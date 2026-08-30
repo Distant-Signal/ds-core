@@ -1,0 +1,191 @@
+id = "chiltern-main-line"
+name = "Chiltern Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["CH"]
+
+destination_crs_filter = ["BSW", "BMO", "SAV"]
+sample_stations = ["HWY", "BAN", "SOL"]
+match_keywords = ["Chiltern Main Line", "Marylebone to Birmingham"]
+
+# Long-distance thresholds, matching the other main-line-category files
+# (xc-manchester.toml, xc-south-coast.toml) rather than the tighter commuter
+# defaults.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# London Marylebone to Birmingham Snow Hill/Moor Street, with a
+# Stratford-upon-Avon extension, per the gap analysis's "Chiltern Railways"
+# section. Sources: Wikipedia's "Chiltern Main Line" and "Leamington–
+# Stratford line" articles, cross-checked station-by-station against
+# Wikidata/railwaydata.co.uk/journeyplanner.tfwm.org.uk entries for each
+# CRS code. Only principal stations are listed; minor intermediate calls
+# (Sudbury & Harrow Road, Denham, Beaconsfield, Princes Risborough, etc.)
+# are omitted, matching the xc-manchester.toml/xc-south-coast.toml
+# convention.
+#
+# Chiltern's own gap-analysis text described the Birmingham approach as
+# "via Solihull/Dorridge" — confirmed correct by the live sources above,
+# which give the order Hatton -> Dorridge -> Lapworth -> Widney Manor ->
+# Solihull -> Olton -> Acocks Green -> Tyseley -> Small Heath -> Bordesley
+# -> Birmingham Moor Street -> Birmingham Snow Hill (minor calls omitted
+# here too).
+#
+# The Marylebone->Hatton stretch runs on to Birmingham Snow Hill via
+# Dorridge/Solihull *or* to Stratford-upon-Avon via Claverdon/Bearley/
+# Wilmcote — both are genuine physical branches diverging at Hatton, so
+# Hatton (the junction) stays on the shared "chiltern-main-line" trunk
+# segment and each branch gets its own exclusive segment starting at the
+# next station, per SCHEMA.md's shared-trunk rule of thumb.
+[[stations]]
+crs = "MYB"
+tiploc = "MARYLBN"
+role = "terminus"
+segment = "chiltern-marylebone"
+# Also the southern terminus of the Marylebone-Aylesbury stopping service
+# (lines/chiltern-aylesbury.toml, Task 12.2). The two routes share Network
+# Rail metals from Marylebone out to Neasden Junction before diverging
+# (Aylesbury trains continue north alongside the Metropolitan line via
+# Harrow-on-the-Hill; this line heads west via Northolt Junction/South
+# Ruislip towards High Wycombe) — real shared mileage, but only Marylebone
+# itself is in this file's station list, so it gets its own segment rather
+# than being folded into "chiltern-main-line". RESOLVED: this segment IS
+# shared with chiltern-aylesbury.toml, which reuses the "chiltern-
+# marylebone" segment name for its own Marylebone entry (see that file's
+# own comment for its side of this, around its Marylebone station block).
+
+[[stations]]
+crs = "HWY"
+role = "major"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "BCS"
+role = "major"
+segment = "chiltern-main-line"
+# Bicester North is also where a branch towards Oxford Parkway/Oxford
+# leaves the network (per the gap analysis, folded into
+# chiltern-aylesbury.toml, Task 12.2, not this file) — but this pass
+# couldn't confirm the exact junction geography (Bicester North itself vs.
+# a nearby curve) to two-source standard, so no "junction" role or branch
+# detail is asserted here. Left as a plain major stop; Task 12.2 should do
+# its own verification for that branch.
+# RESOLVED in chiltern-aylesbury.toml (see its Oxford-branch comment,
+# around its "IMPORTANT CORRECTION" paragraph): the Oxford branch actually
+# leaves via a purpose-built chord near Bicester Village, not through
+# Bicester North itself.
+
+[[stations]]
+crs = "BAN"
+role = "major"
+segment = "chiltern-main-line"
+# Banbury through to Leamington Spa runs over the same metals as
+# xc-south-coast.toml's Birmingham-Bournemouth arm (which also calls at
+# both), but claims neither line's segment: xc-south-coast's segment is
+# coarser and extends well beyond this stretch in both directions
+# (Coventry to the north, Oxford/Reading/Bournemouth to the south).
+# Station overlap is fine; segment-sharing is a deliberate choice neither
+# file makes, following xc-south-coast.toml's own precedent with SWR and
+# the Elizabeth line.
+
+[[stations]]
+crs = "LMS"
+role = "junction"
+segment = "chiltern-main-line"
+# Leamington Spa is also where xc-south-coast.toml's arm diverges towards
+# Coventry/Birmingham New Street — a different physical route from this
+# line's own continuation via Warwick/Hatton. Same "station overlap only"
+# reasoning as Banbury above.
+
+[[stations]]
+crs = "WRW"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "WRP"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "HTN"
+role = "junction"
+segment = "chiltern-main-line"
+# Junction: services continue south-west to Birmingham Snow Hill/Moor
+# Street (next station DDG, below) or turn south to Stratford-upon-Avon
+# (next station CLV, further below). Hatton itself stays on the shared
+# trunk segment per SCHEMA.md's rule of thumb.
+
+[[stations]]
+crs = "DDG"
+role = "major"
+segment = "chiltern-birmingham-approach"
+# Also served by West Midlands Trains for local Birmingham-area services,
+# but this pass couldn't confirm a specific branch/junction diverging here
+# to two-source standard (the Stratford-upon-Avon service is confirmed to
+# split at Hatton, above, not here) — no "junction" role asserted.
+
+[[stations]]
+crs = "SOL"
+role = "major"
+segment = "chiltern-birmingham-approach"
+
+[[stations]]
+crs = "BMO"
+tiploc = "BHAMMRS"
+role = "major"
+segment = "chiltern-birmingham-approach"
+# Birmingham Moor Street: many Chiltern services terminate here rather
+# than continuing to Snow Hill. Station-level overlap only with any future
+# WMR Snow Hill lines entry — no segment shared, per the gap analysis and
+# the xc-manchester.toml/xc-south-coast.toml "station overlap is fine"
+# precedent. CrossCountry's Birmingham hub segment (xc-birmingham) touches
+# neither Moor Street nor Snow Hill at all: XC uses New Street.
+# TIPLOC confirmed against railwaycodes.org.uk's crsb.shtm CRS/NLC/TIPLOC/
+# STANOX table, which lists TIPLOC=BHAMMRS for this station.
+
+[[stations]]
+crs = "BSW"
+role = "terminus"
+segment = "chiltern-birmingham-approach"
+
+# Stratford-upon-Avon extension, diverging from the trunk at Hatton
+# (above) via the Leamington-Stratford line. Minor unstaffed halts
+# (Claverdon, Bearley) are kept in, unlike elsewhere in this file, because
+# the branch is short and every stop matters for incident localisation —
+# same reasoning as swr-alton.toml's branch station list.
+[[stations]]
+crs = "CLV"
+role = "minor"
+segment = "chiltern-stratford-branch"
+
+[[stations]]
+crs = "BER"
+role = "minor"
+segment = "chiltern-stratford-branch"
+
+[[stations]]
+crs = "WMC"
+role = "minor"
+segment = "chiltern-stratford-branch"
+
+[[stations]]
+crs = "STY"
+role = "minor"
+segment = "chiltern-stratford-branch"
+
+[[stations]]
+crs = "SAV"
+role = "terminus"
+segment = "chiltern-stratford-branch"
+# TIPLOC omitted: a focused verification pass (railwaycodes.org.uk's
+# crss.shtm CRS/NLC/TIPLOC/STANME/STANOX table, Wikipedia, and a couple of
+# other rail-reference sites) couldn't confirm a real TIPLOC for this
+# station to a reasonable standard in the time available (the
+# railwaycodes.org.uk page content available to this pass was truncated
+# before reaching "Stratford-upon-Avon" alphabetically, and the previously
+# asserted "SOAV" wasn't corroborated anywhere else) - deleted rather than
+# guessed, per SCHEMA.md's optional-field precedent (also used by
+# merseyrail-northern.toml, which omits TIPLOCs entirely for the same
+# reason).
