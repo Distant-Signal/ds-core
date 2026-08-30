@@ -1,0 +1,198 @@
+id = "grand-central-bradford"
+name = "Grand Central Bradford Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GC"]
+# Open-access operator (outside the 2024 Act nationalisation programme —
+# pays track access charges and takes full commercial risk, per the
+# gap-analysis document's "Open access operators" section). Reporting mark
+# `GC` confirmed via railwaycodes.org.uk's own operator-code table ("Grand
+# Central Railway Company / Grand Central, 10 December 2006 to date") and
+# cross-checked against Wikipedia's "Grand Central (train operating
+# company)" article, which uses the same reporting mark throughout.
+
+sample_stations = ["HFX", "BDI"]
+# Bradford Interchange is this file's genuine terminus — using it to
+# disambiguate which branch an LDBWS service belongs to at the shared
+# King's Cross-area trunk stations it shares with `grand-central.toml`.
+destination_crs_filter = ["BDI"]
+
+match_keywords = ["Grand Central"]
+# "Grand Central" is also the name of Birmingham New Street's shopping
+# centre (reopened under that name 24 September 2015 after redevelopment
+# from "The Pallasades" — confirmed via Wikipedia's "Grand Central,
+# Birmingham" article, which explicitly disambiguates it from the railway
+# station itself: "not to be confused with Birmingham New Street railway
+# station"). Grand Central the train operator never serves Birmingham, so
+# vetoing an incident that also names the shopping centre is a safe,
+# purely defensive exclusion — the same kind of veto `elizabeth-heathrow.toml`
+# already uses for "Heathrow Express"/Piccadilly line overlap. Narrowed
+# (final review, Fix #3) from a bare "Birmingham" match to the venue's own
+# name+city phrase, so a legitimate Grand Central incident that happens to
+# mention a diversion via Birmingham isn't wrongly vetoed. Duplicated
+# identically on `grand-central.toml`, since both files keep the same
+# brand `match_keywords`.
+excluded_keywords = ["Grand Central, Birmingham"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as the LNER open-access-adjacent branch files
+# (`lner-hull.toml`, `lner-lincoln.toml`): long-distance, low-frequency
+# service (four trains per day each way to Bradford Interchange — see
+# below) where a single cancellation is a much bigger share of the day's
+# service than on a metro-frequency line.
+
+# ---------------------------------------------------------------------
+# Route research (verified against two independent sources each; see the
+# station-level comments below for the individual CRS-code citations):
+#
+# Confirmed CURRENTLY operating, not historical. This route has had a
+# suspension in its history (COVID-19: withdrawn 3 April 2020, briefly
+# restored, withdrawn again 6 November 2020, restored with limits in
+# December 2020, suspended again 9 January-1 March 2021 — Wikipedia's
+# "Grand Central (train operating company)" article), but nothing in that
+# article or in Bradford Interchange's own Wikipedia article (checked
+# specifically for any 2023-2026 disruption to the rail service, as
+# opposed to the unrelated bus-station closure of the same name discussed
+# there) indicates a current suspension. Positive evidence this route is
+# live today: the ORR granted Grand Central a further extension of its
+# operating rights in March 2025 "allowing for the continuation of their
+# existing services until December 2038" (Wikipedia, same article), and
+# Grand Central ordered nine new 5-car Hitachi trains in April 2025 — both
+# read as an operator expanding, not winding down, current service.
+#
+# King's Cross-Bradford Interchange ("West Riding" service): four trains
+# per day each way, via Doncaster, Pontefract Monkhill (select services
+# only), Wakefield Kirkgate, Mirfield, Brighouse, Halifax and Low Moor;
+# one per day (Monday-Saturday) also calls at Peterborough. Started 23
+# May 2010; a fourth daily service was added in December 2013. Confirmed
+# via Wikipedia's "Grand Central (train operating company)" article and
+# cross-checked against Wikipedia's "Halifax railway station" article
+# ("regular services to London King's Cross via Wakefield Kirkgate,
+# Pontefract and Doncaster") and Wikipedia's "Bradford Interchange
+# railway station" article (independently confirms "four trains per day"
+# and the 23 May 2010 start date).
+#
+# ===== Cross-file shared trunk (final review, Fix #1) =====
+# This route leaves King's Cross on the same East Coast Main Line tracks as
+# Grand Central's other route, King's Cross-Sunderland (modelled in
+# `grand-central.toml` — the two routes were originally, incorrectly,
+# combined into that one non-linear file; split per the final review,
+# since SCHEMA.md's linear-ordering contract and this plan's own "one line
+# per file" Global Constraint both require it), before genuinely diverging
+# at Doncaster: this route turns off onto the West Riding lines, while the
+# Sunderland route continues north on the ECML. `gc-trunk-kings-cross`
+# (King's Cross, Peterborough, Doncaster) is therefore a genuine CROSS-FILE
+# shared trunk between this file and `grand-central.toml` — the same role
+# `swr-trunk-waterloo` plays across `swr-south-west-main.toml`,
+# `swr-portsmouth-direct.toml` and `swr-alton.toml`. The KGX/PBO/DON station
+# entries below are byte-for-byte identical to `grand-central.toml`'s own
+# KGX/PBO/DON entries, which is what makes the shared segment name
+# genuinely meaningful rather than coincidental.
+#
+# Both routes leave King's Cross together and run the same East Coast Main
+# Line tracks as far as Doncaster (there is no other route north from
+# Peterborough to York, which the Sunderland service reaches, than via the
+# ECML through Doncaster — the same "physically runs over this trunk track
+# even where this line's own trains don't stop" reasoning `lner-hull.toml`
+# and `lner-leeds.toml` already apply to their own Doncaster-area
+# divergence, since neither of Grand Central's own routes is confirmed to
+# stop at Doncaster itself).
+#
+# Per SCHEMA.md's junction rule, Doncaster belongs to the shared trunk, not
+# either branch's exclusive segment; each branch's own exclusive segment
+# starts at the next station after Doncaster.
+#
+# Deliberately NOT sharing `ecml-london`/`ecml-fenland`/`ecml-doncaster`
+# with `lner-ecml.toml`/`lner-leeds.toml`/`lner-hull.toml`/
+# `lner-lincoln.toml`, and NOT reusing `xc-yorkshire`/`northern-yorkshire`
+# where this file's own King's Cross/Peterborough/Doncaster stations
+# coincide with theirs: the plan and gap-analysis document are explicit
+# that Grand Central's relationship to LNER (and to Northern/CrossCountry,
+# which also touch Doncaster) is station-overlap-only, following the same
+# `xc-south-coast.toml` precedent used throughout this catalogue —
+# station-level overlap is expected and sufficient, and forcing a shared
+# segment name isn't required or wanted here.
+# ---------------------------------------------------------------------
+
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "gc-trunk-kings-cross"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "gc-trunk-kings-cross"
+# One train per day (Monday-Saturday) on each route calls here; both
+# routes' other services run non-stop through Peterborough.
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "gc-trunk-kings-cross"
+# Bradford-bound services (see `grand-central-bradford.toml`) turn off the
+# ECML onto the West Riding lines here. Sunderland-bound services are not
+# confirmed to call at Doncaster, but physically continue north on the
+# same ECML tracks through it (the only route from Peterborough to York) —
+# see the file-level comment above for why it's still listed as this
+# file's shared-trunk boundary, matching `lner-hull.toml`/`lner-leeds.toml`'s
+# identical treatment of this exact station for their own ECML-departure
+# branches.
+
+[[stations]]
+crs = "PFM"
+role = "minor"
+segment = "gc-bradford"
+# Pontefract Monkhill — CRS confirmed via Wikipedia's "Pontefract Monkhill
+# railway station" article. Select services only (see file-level comment
+# above); listed as an ordinary station on this branch regardless, same
+# convention as Seaham on `grand-central.toml`'s own Sunderland branch.
+
+[[stations]]
+crs = "WKK"
+role = "major"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Wakefield Kirkgate railway station"
+# article and cross-checked against Wikipedia's "Halifax railway station"
+# article, which independently names Wakefield Kirkgate on this route.
+
+[[stations]]
+crs = "MIR"
+role = "minor"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Mirfield railway station" article.
+
+[[stations]]
+crs = "BGH"
+role = "minor"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Brighouse railway station" article.
+
+[[stations]]
+crs = "HFX"
+role = "major"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Halifax railway station" article, which
+# also independently corroborates this branch's route via Wakefield
+# Kirkgate/Pontefract/Doncaster against the Grand Central operator article
+# used above.
+
+[[stations]]
+crs = "LMR"
+role = "minor"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Low Moor railway station" article.
+
+[[stations]]
+crs = "BDI"
+role = "terminus"
+segment = "gc-bradford"
+# CRS confirmed via Wikipedia's "Bradford Interchange railway station"
+# article, which also independently corroborates this branch's frequency
+# (four trains per day) and 23 May 2010 start date against the Grand
+# Central operator article used above, and confirms no current suspension
+# or disruption to the rail service (the station's 2024-2025 bus-station
+# closure, also discussed there, is unrelated to the railway).

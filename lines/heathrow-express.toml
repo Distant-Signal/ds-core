@@ -1,0 +1,169 @@
+id = "heathrow-express"
+name = "Heathrow Express"
+mode = "national-rail"
+category = "regional"
+operators = ["HX"]
+# Airport express operator, wholly owned by Heathrow Airport Holdings.
+# Reporting mark `HX` confirmed via railwaycodes.org.uk's own TOC-codes
+# table ("Heathrow Express Operating Company / Heathrow Express, 24 May
+# 1998 to date") and cross-checked against Wikipedia's "Heathrow Express"
+# article infobox, which gives the same reporting mark.
+
+destination_crs_filter = ["HWV"]
+# All four trains per hour run the full route through to Heathrow Terminal
+# 5 (see route research below) -- Terminal 5 is the only genuine terminus,
+# so it's the only filter value here. Contrast `elizabeth-heathrow.toml`,
+# which lists all three Heathrow CRS codes (it also serves Terminal 4);
+# Heathrow Express itself does not (see below).
+sample_stations = ["PAD", "HXX", "HWV"]
+# Whole confirmed route is 3 stations; sampling all of them.
+
+match_keywords = ["Heathrow Express"]
+# The operator's own brand name -- already proven a safe, distinctive
+# phrase by `elizabeth-heathrow.toml`, which has vetoed it via
+# `excluded_keywords` since before this file existed. See the required
+# re-check discussion below the route research for why that veto stays in
+# place now that this file exists, and this file's own segment-naming
+# discussion for why no `excluded_keywords` entry is added here in the
+# other direction.
+#
+# Final review, Fix #4: the original required re-check only reasoned about
+# one direction (whether `elizabeth-heathrow.toml` should still exclude
+# "Heathrow Express" -- concluded yes). The mirror direction was missed: an
+# Elizabeth-line-only incident naming a Heathrow station could now
+# station-match this file too, once/if station-level matching (`has_station`
+# without a segment classification, i.e. Tier 1's `StationHit` fallback) is
+# live for these shared PAD/HXX/HWV stations. Mirroring
+# `elizabeth-heathrow.toml`'s own exclusion list closes that gap
+# symmetrically -- both risks (Elizabeth line and Piccadilly line each
+# serving the same terminals as Heathrow Express) apply in both directions.
+excluded_keywords = ["Elizabeth line", "Piccadilly line"]
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+# Same values as `elizabeth-heathrow.toml`/`elizabeth-line.toml`'s core
+# thresholds: at 4 trains per hour, a single delayed or cancelled Heathrow
+# Express service is already a substantial share of the hourly service, and
+# every one of them is timed against a flight, so the default main-line
+# thresholds (25%/5 min) undersell the impact.
+
+# ---------------------------------------------------------------------
+# Route research (verified against two independent sources -- Wikipedia's
+# "Heathrow Express" article, cross-checked against the operator's own
+# heathrowexpress.com site; the reporting-mark claim above is additionally
+# cross-checked against railwaycodes.org.uk, a third source):
+#
+# Current route is a single, non-branching calling pattern (unlike this
+# batch's other open-access files): London Paddington -> Heathrow Terminals
+# 2 & 3 -> Heathrow Terminal 5, 4 trains per hour each way (every 15 minutes
+# from Paddington, 05:10-23:25, a similar quarter-hourly pattern in the
+# return direction). All of them run the full route through to Terminal 5 --
+# Wikipedia's own service table lists exactly one route, "London Paddington
+# - Heathrow Terminal 5", at 4 tph, with Heathrow Terminals 2 & 3 as its only
+# intermediate stop, and gives a journey time of 15 minutes to Terminals 2 &
+# 3 and 21 minutes to Terminal 5. Independently corroborated by
+# heathrowexpress.com's own route description: "direct... just 15 minutes
+# between Heathrow & Paddington", Terminal 5 "an additional 6 minutes beyond
+# Terminals 2 & 3", and "four trains leaving London Paddington every hour".
+#
+# Paddington-Terminals 2&3 is genuinely non-stop (no intermediate calls at
+# all -- Wikipedia's infobox gives "Stations called at: 3" for the whole
+# service, i.e. exactly Paddington, Terminals 2&3 and Terminal 5, nothing
+# else). It's the Terminals 2&3-Terminal 5 leg that follows, not a separate
+# stopping pattern -- every train calls at Terminals 2&3 en route to
+# Terminal 5, so there's no "Paddington-Heathrow with zero Heathrow-area
+# calls at all" reading of the service; the "non-stop" claim in the plan's
+# gap-analysis document refers to the Paddington-Heathrow leg having no
+# calls anywhere else (no Old Oak Common, Ealing Broadway, etc.), which this
+# confirms, not to skipping Terminals 2&3 itself.
+#
+# Heathrow Terminal 4 (HAF) is NOT served: per Wikipedia's "Heathrow
+# Terminal 4 railway station" article, "Upon the opening of the new Heathrow
+# Terminal 5 station in 2008, all Heathrow Express services were re-routed
+# to terminate there," leaving Terminal 4 on a shuttle service (since
+# succeeded by the Elizabeth line) rather than Heathrow Express --
+# independently confirmed by heathrowexpress.com's own current
+# journey-planner copy, which routes Terminal 4 passengers via "free
+# Elizabeth Line from Terminal 2&3 station," not via any direct Heathrow
+# Express call. HAF is deliberately absent from this file's station list for
+# that reason -- Heathrow Express itself simply does not go there today.
+#
+# CRS codes PAD, HXX and HWV are reused from `elizabeth-heathrow.toml`'s own
+# verified entries (elizabeth-line.toml also independently verifies PAD),
+# not re-derived here.
+#
+# Modelled as one file, one segment (`hx-paddington-heathrow`), no branches
+# -- the whole confirmed service is one linear calling pattern. Per the task
+# brief's explicit instruction ("do not force a shared segment with
+# elizabeth-heathrow") and this batch's standalone-operator precedent
+# (`grand-central.toml`/`hull-trains.toml`/`lumo.toml`'s own relationship to
+# LNER), this segment name is deliberately NOT shared with
+# `elizabeth-heathrow.toml`, even though the physical stations (PAD, HXX,
+# HWV) are the same three CRS codes that file also lists: Heathrow Express
+# is a separate operator with its own commercial service, not a
+# shared-trunk relationship in the sense SCHEMA.md's convention is meant to
+# capture. Station-level overlap is expected (both genuinely serve the same
+# two Heathrow terminal buildings and Paddington) and is handled by the
+# regression test below, not by forcing a shared segment.
+#
+# ===== Required re-check (per the task brief) =====
+# Now that this file exists, does `elizabeth-heathrow.toml`'s
+# `excluded_keywords = ["Heathrow Express", "Piccadilly line"]` still need
+# the "Heathrow Express" entry?
+#
+# CONCLUSION: YES, unchanged -- no edit made to `elizabeth-heathrow.toml`.
+#
+# Reasoning: the exclusion's job was never "there's no real Heathrow
+# Express line to match instead" (a gap this file now fills) -- it was, and
+# remains, "a Knowledgebase message about the Elizabeth line's Heathrow
+# branch that happens to mention Heathrow Express in passing (e.g.
+# describing shared station congestion, or a platform/infrastructure issue
+# affecting both services at Terminals 2&3 or Terminal 5) must not get
+# misattributed to the Elizabeth line." That concern is about
+# `elizabeth-heathrow.toml`'s own matching precision and is independent of
+# whether a real, separately-matchable Heathrow Express line file exists
+# elsewhere in the catalogue.
+#
+# If anything, this file's existence makes the exclusion's continued
+# presence MORE clearly correct, not less: this file's own stations (PAD,
+# HXX, HWV) are the exact same three CRS codes `elizabeth-heathrow.toml`
+# already lists, so a Knowledgebase incident naming an affected station at
+# HWV or HXX and mentioning "Heathrow Express" would, without that
+# exclusion, station-hit-match `elizabeth-heathrow.toml` too (`has_station`
+# has no awareness of which operator a Knowledgebase message is actually
+# about) -- exactly the false-positive `elizabeth-heathrow.toml`'s own
+# comment already describes. Demonstrated directly by
+# `heathrow_express_incident_stays_exclusive_of_elizabeth_heathrow` in
+# `crates/aggregator/src/matcher.rs`, which shows the veto is still live and
+# still doing necessary work with this file in place.
+#
+# UPDATE (final review, Fix #4): the re-check above only reasoned about one
+# direction. The mirror was missed: an Elizabeth-line-only incident naming a
+# shared Heathrow station could station-match THIS file too, once/if
+# station-level matching is live for these shared PAD/HXX/HWV stations.
+# This file now carries its own `excluded_keywords = ["Elizabeth line",
+# "Piccadilly line"]`, mirroring `elizabeth-heathrow.toml`'s list, closing
+# that gap symmetrically. Residual limitation, documented rather than fixed
+# here: `is_excluded` is a whole-line veto, so a genuine incident affecting
+# BOTH the Elizabeth line and Heathrow Express simultaneously (e.g. a shared
+# Terminal 5 infrastructure failure) would now have one side silently
+# dropped by the other's exclusion list. This is an accepted, documented
+# tradeoff -- precision over recall for the rare both-affected case -- not
+# an oversight.
+# ---------------------------------------------------------------------
+
+[[stations]]
+crs = "PAD"
+role = "terminus"
+segment = "hx-paddington-heathrow"
+
+[[stations]]
+crs = "HXX"
+role = "major"
+segment = "hx-paddington-heathrow"
+
+[[stations]]
+crs = "HWV"
+role = "terminus"
+segment = "hx-paddington-heathrow"

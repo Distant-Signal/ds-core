@@ -1,0 +1,171 @@
+id = "lumo"
+name = "Lumo"
+mode = "national-rail"
+category = "regional"
+operators = ["LD"]
+# Open-access operator (outside the 2024 Act nationalisation programme —
+# pays track access charges and takes full commercial risk, per the
+# gap-analysis document's "Open access operators" section). Reporting mark
+# `LD` confirmed via railwaycodes.org.uk's own operator-code table, which
+# lists it against "East Coast Trains Lumo, 12 December 2021 to date" — and
+# cross-checked against Wikipedia's "Lumo (train operating company)" article,
+# which gives the same reporting mark for the East Coast Main Line brand.
+# Note: railwaycodes.org.uk also lists a *second*, separate reporting mark
+# `LF` ("First Rail Stirling Lumo", 14 December 2025 to date) for Lumo's new
+# London Euston-Stirling West Coast Main Line service (launched June 2026,
+# per Wikipedia) — that is a different route on different metals and is out
+# of scope for this file, which models only the King's Cross-Edinburgh-
+# Glasgow ECML service the gap-analysis document and task brief both
+# describe. Only `LD` is claimed here.
+
+sample_stations = ["NCL", "EDB", "GLQ"]
+# One representative intermediate station plus the terminus for each of this
+# file's two calling patterns (Edinburgh-terminating and Glasgow-extended),
+# same approach as `hull-trains.toml`'s `["BUH", "HUL", "BEV"]`.
+destination_crs_filter = ["EDB", "GLQ"]
+
+match_keywords = ["Lumo"]
+# The operator's own distinctive brand name; no known false-positive
+# collision in a UK rail-incident context (unlike Grand Central's shopping-
+# centre collision), so no `excluded_keywords` veto is added — same reasoning
+# as `hull-trains.toml`'s "Hull Trains" keyword.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as the other open-access ECML operator files
+# (`grand-central.toml`, `hull-trains.toml`, and the LNER branch files) —
+# long-distance service where a single cancellation is a bigger share of the
+# day's service than on a metro-frequency line.
+
+# ---------------------------------------------------------------------
+# Route research (verified against two independent sources each; see the
+# station-level comments below for individual CRS-code citations).
+#
+# Lumo is a limited-stop, open-access, no-frills operator launched
+# 25 October 2021 (initially 2 trains per day each way, King's Cross-
+# Edinburgh Waverley only, per Wikipedia's "Lumo (train operating company)"
+# article) — its stopping pattern was verified directly rather than assumed
+# to match LNER's own, much more frequent, fuller-stopping ECML service.
+#
+# Current pattern, "as of December 2025" per that same article's services
+# table: 6 trains per day each way between London King's Cross and Edinburgh
+# Waverley/Glasgow Queen Street combined. "The vast majority of journeys run
+# the full route from Edinburgh to London, calling at Morpeth and Newcastle."
+# "A number of services additionally call at Stevenage, for pick-up only on
+# northbound services, and drop-off only for southbound trains." From
+# December 2025, 2 of the 6 daily trains additionally extend northbound
+# beyond Edinburgh Waverley to Glasgow Queen Street (via Haymarket and
+# Falkirk High), and 1 train per day starts from Glasgow Queen Street
+# southbound to King's Cross — an asymmetric 2-up/1-down extension pattern,
+# not a simple return working. This was cross-checked independently against
+# two further, separate Wikipedia articles that each state the same figures
+# without reference to the main Lumo article: "Falkirk High railway station"
+# ("2 trains per day to Glasgow Queen Street and 1 train to London King's
+# Cross") and "Glasgow Queen Street railway station" ("1 tpd to London
+# King's Cross, via Falkirk High, Edinburgh Waverley and Newcastle... two
+# trains per day operate northbound"). Three independent Wikipedia articles
+# agree on the same 2-northbound/1-southbound split, so this is treated as
+# confirmed rather than a single-source artefact of the main article's own
+# summary table. "Haymarket railway station"'s own article independently
+# confirms Lumo calls there too ("Lumo Glasgow-London").
+#
+# Notably absent from every calling-points list above: Peterborough, York,
+# Darlington, Durham and any other core ECML principal station LNER's own
+# fuller-stopping service calls at (`lner-ecml.toml`) — confirming Lumo's
+# "limited-stop, fewer calls than LNER" premise rather than assuming it.
+#
+# Modelled as one file with an internal main segment (King's Cross to
+# Edinburgh Waverley, carrying all services) and one internal exclusive
+# branch segment (Haymarket/Falkirk High/Glasgow Queen Street, carrying only
+# the extended workings) — the same self-contained trunk+branch structure
+# `hull-trains.toml` uses for its own Hull Paragon/Beverley split, where the
+# "branch" is a service extension past a station most trains already
+# terminate at, rather than a fork partway along the route.
+#
+# Per the task brief's standalone-operator exception (the same one
+# `grand-central.toml` and `hull-trains.toml` already established for their
+# own relationship to LNER), NO segment name here is shared with any
+# `lner-*.toml` file and NO shared-trunk regression test against LNER is
+# included below. Real, expected station-level overlap with
+# `lner-ecml.toml` (Task 6.1's spine, see that report's exact station list)
+# exists at King's Cross, Stevenage, Newcastle, Morpeth and Edinburgh
+# Waverley/Haymarket — every intermediate station this file lists except
+# Falkirk High and Glasgow Queen Street, both north of where `lner-ecml.toml`
+# forks off towards Aberdeen at Haymarket and so not on that file's own
+# station list. This is deliberate, documented station-overlap-is-fine per
+# `xc-south-coast.toml`'s own precedent for the same judgment call, not a
+# shared segment — both operators run their own distinct commercial services
+# over the same physical ECML/Fife Circle metals.
+# ---------------------------------------------------------------------
+
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "lumo-kings-cross-edinburgh"
+# CRS reused from `lner-ecml.toml`'s own verified KGX entry, not
+# re-researched here.
+
+[[stations]]
+crs = "SVG"
+role = "minor"
+segment = "lumo-kings-cross-edinburgh"
+# Stevenage — CRS reused from `lner-ecml.toml`'s own verified SVG entry.
+# Limited stop (pick-up only northbound, drop-off only southbound, per the
+# services-table citation above); still listed as an ordinary station on
+# this segment regardless, matching `hull-trains.toml`'s and
+# `grand-central.toml`'s identical treatment of their own select-service
+# stations.
+
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "major"
+segment = "lumo-kings-cross-edinburgh"
+# Newcastle — CRS/TIPLOC reused from `lner-ecml.toml`'s own verified NCL
+# entry.
+
+[[stations]]
+crs = "MPT"
+role = "minor"
+segment = "lumo-kings-cross-edinburgh"
+# Morpeth — CRS reused from `lner-ecml.toml`'s own verified MPT entry.
+
+[[stations]]
+crs = "EDB"
+role = "junction"
+segment = "lumo-kings-cross-edinburgh"
+# Edinburgh Waverley — CRS reused from `lner-ecml.toml`'s own verified EDB
+# entry. Tagged `junction` per SCHEMA.md's rule of thumb: this is where this
+# file's own routes diverge (4 of the 6 daily trains terminate here; 2
+# continue on to Glasgow Queen Street, with a 3rd starting a southbound
+# working from there instead), so it belongs to the shared main segment, not
+# the exclusive `lumo-glasgow` branch — the branch's exclusive segment
+# starts at the next station, Haymarket.
+
+[[stations]]
+crs = "HYM"
+role = "minor"
+segment = "lumo-glasgow"
+# Haymarket — CRS reused from `lner-ecml.toml`'s own verified HYM entry.
+# Tagged `minor` here (not `junction`, unlike that file's own tagging):
+# unlike LNER's Aberdeen/Inverness fork at this station, Lumo does not
+# branch at Haymarket in this file's model — every Glasgow-extended service
+# runs the same way from here through to Glasgow Queen Street via Falkirk
+# High.
+
+[[stations]]
+crs = "FKK"
+role = "minor"
+segment = "lumo-glasgow"
+# Falkirk High — CRS confirmed via Wikipedia's "Falkirk High railway
+# station" article and cross-checked against nationalrail.co.uk's own
+# station detail page.
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "lumo-glasgow"
+# Glasgow Queen Street — CRS confirmed via Wikipedia's "Glasgow Queen
+# Street railway station" article and cross-checked against
+# nationalrail.co.uk's own station detail page.

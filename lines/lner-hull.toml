@@ -1,0 +1,134 @@
+id = "lner-hull"
+name = "LNER Hull Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GR"]
+
+# HUL is this file's own terminus; the shared King's Cross-Doncaster trunk
+# stations are already covered by `lner-ecml.toml`'s own sample_stations.
+sample_stations = ["SBY", "BUH", "HUL"]
+destination_crs_filter = ["HUL"]
+# No match_keywords: "LNER"/"East Coast Main Line" are claimed by
+# `lner-ecml.toml` (branch files don't re-add the generic operator brand,
+# per that file's own comment and `lner-leeds.toml`'s identical call). A
+# plain "Hull line"/"Selby line" phrase was considered and rejected for the
+# same reason `lner-leeds.toml` rejected "Harrogate line": Northern, TPE and
+# the open-access Hull Trains (`HT`, Task 6.6, a different file/operator per
+# the gap analysis) all also run this physical route, so either phrase would
+# pull in incidents that only affect those other operators, not this one.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as `lner-ecml.toml`/`lner-leeds.toml`: long-distance service
+# where a single cancellation matters more than on a metro-frequency line —
+# doubly so here, since LNER's own Hull working is only 1 train per day each
+# way (see below), the sparsest service pattern of any LNER file so far.
+
+# King's Cross to Hull Paragon via Selby and Brough. LNER operates one
+# train per day Monday-Saturday in each direction between Hull and King's
+# Cross (06:58 departure from Hull, arriving back 20:05), a Class 800 Azuma
+# working — confirmed via Wikipedia's "London North Eastern Railway"
+# article (services table: "1tpd extends to Hull calling at Retford,
+# Doncaster, Selby and Brough instead of Lincoln" — this working is
+# physically an extension of the King's Cross-Lincoln pattern, diverging
+# from that route after Newark Northgate rather than turning off toward
+# Lincoln), cross-checked against Wikipedia's "Hull Paragon Interchange"
+# and "Brough railway station" articles (both independently describe the
+# same one-per-day LNER King's Cross service). This is LNER's own service
+# (operator `GR`, reusing the code verified in `lner-ecml.toml`, not
+# re-derived here) and is distinct from the separate, more frequent,
+# open-access Hull Trains service (`HT`) that calls at the same stations —
+# see Task 6.6's not-yet-written `hull-trains.toml`; both terminate at Hull
+# Paragon but are different operators/files, exactly like Grand
+# Central/Hull Trains/Lumo are each their own file rather than folded into
+# LNER's, per the gap analysis document's own framing.
+#
+# King's Cross-Doncaster is the same physical ECML spine as
+# `lner-ecml.toml` and reuses its exact segment names (`ecml-london`,
+# `ecml-fenland`, `ecml-doncaster`) verbatim, per that file's own comment
+# on the DON station entry and matching `lner-leeds.toml`'s identical reuse
+# for its own King's Cross-Doncaster stretch (RET/DON tiploc "DONC" and
+# calling points confirmed against `lner-ecml.toml` itself, not
+# re-researched here).
+#
+# Real divergence point: the physical junction where Hull-bound trains
+# leave the current ECML tracks is Temple Hirst Junction, north of
+# Doncaster — not Doncaster station itself. Confirmed via Wikipedia's
+# "East Coast Main Line" article ("Route alterations"/Selby Diversion
+# section: the 1983 diversion "diverged from the original alignment at
+# Temple Hirst Junction, north of Doncaster", with the pre-1983 alignment
+# continuing south to Selby), cross-checked against Wikipedia's "List of
+# proposed railway electrification schemes in Great Britain" article, which
+# separately names "Temple Hirst Junction on the East Coast Main Line" as
+# the Hull/Selby electrification scheme's own tie-in point to the ECML.
+# Temple Hirst Junction is a signalling junction, not a passenger station,
+# so it has no CRS code and can't be modelled as a `[[stations]]` entry.
+# Per `lner-ecml.toml`'s own explicit instruction on its DON entry (and
+# `lner-leeds.toml`'s identical precedent for its own Doncaster-diverging
+# branch), this file shares `ecml-doncaster` through DON as the
+# CRS-identifiable shared-trunk boundary rather than forcing an artificial
+# match at a non-station junction; `lner-hull` becomes the exclusive
+# segment name starting at the next station, Selby.
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "ecml-london"
+
+[[stations]]
+crs = "SVG"
+role = "minor"
+segment = "ecml-london"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "GRA"
+role = "minor"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "NNG"
+role = "junction"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "RET"
+role = "minor"
+segment = "ecml-doncaster"
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "ecml-doncaster"
+# Diverges from the current ECML tracks onto the pre-1983 alignment toward
+# Selby here in this file's model (the real physical junction, Temple Hirst
+# Junction, is a few miles further north with no CRS code — see the
+# file-level comment above). `lner-hull` becomes the exclusive segment name
+# from the next station onward, matching `lner-ecml.toml`'s own instruction
+# on this station.
+
+[[stations]]
+crs = "SBY"
+role = "major"
+segment = "lner-hull"
+# CRS confirmed via Wikipedia's "Selby railway station" article and
+# cross-checked against nationalrail.co.uk's own station detail page.
+
+[[stations]]
+crs = "BUH"
+role = "minor"
+segment = "lner-hull"
+# CRS confirmed via Wikipedia's "Brough railway station" article and
+# cross-checked against nationalrail.co.uk's own station detail page.
+
+[[stations]]
+crs = "HUL"
+role = "terminus"
+segment = "lner-hull"
+# CRS confirmed via Wikipedia's "Hull Paragon Interchange" article and
+# cross-checked against nationalrail.co.uk's own station detail page.

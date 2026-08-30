@@ -1,0 +1,170 @@
+id = "lner-leeds"
+name = "LNER Leeds Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GR"]
+
+# LDS and HGT are this file's own termini; not the trunk stations already
+# covered by `lner-ecml.toml`'s own sample_stations.
+sample_stations = ["WKF", "LDS", "HGT"]
+destination_crs_filter = ["LDS", "HGT"]
+# No match_keywords: "LNER"/"East Coast Main Line" are claimed by
+# `lner-ecml.toml` (branch files don't re-add the generic operator brand,
+# per that file's own comment). "Wakefield Westgate" and "Harrogate line"
+# were both considered and rejected: Wakefield Westgate is also served by
+# Northern and CrossCountry (confirmed via Wikipedia's Wakefield Westgate
+# article), and the Harrogate line itself is overwhelmingly a Northern
+# service (LNER runs a handful of daily workings on it — see below), so
+# either phrase would pull in incidents that only affect Northern. Same
+# reasoning as `xc-south-coast.toml`'s "no route name the Knowledgebase
+# uses consistently" call.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as `lner-ecml.toml`/`xc-south-coast.toml`: long-distance,
+# roughly hourly-or-better service where a single cancellation matters more
+# than on a metro-frequency line.
+
+# King's Cross to Leeds via Wakefield Westgate, continuing to Harrogate via
+# Horsforth. The King's Cross-Doncaster stretch is the same physical ECML
+# spine as `lner-ecml.toml` and reuses its exact segment names
+# (`ecml-london`, `ecml-fenland`, `ecml-doncaster`) verbatim, per that
+# file's own comment on the DON station entry (RET/DON tiploc "DONC" and
+# calling points confirmed against `lner-ecml.toml` itself, not
+# re-researched here). LNER's own fast Leeds service (confirmed via
+# Wikipedia's "London North Eastern Railway" article, cross-checked against
+# Wikipedia's "Wakefield Line" article: LNER's Leeds trains stop at
+# Peterborough, Grantham, Doncaster and Wakefield Westgate only) skips
+# Retford/Newark Northgate and the Wakefield Line's own local stops
+# (Outwood, Sandal & Agbrigg, Fitzwilliam, South Elmsall, Adwick, Bentley —
+# Northern-only, deliberately omitted here as "minor intermediate calls",
+# same convention as `xc-cardiff.toml`/`xc-south-coast.toml`); it still
+# physically runs over that trunk track, so the shared segment names still
+# apply for incident-matching purposes even where this line's own trains
+# don't stop.
+#
+# Harrogate/Skipton fold-in (per the gap analysis's suggestion): verified
+# LNER genuinely operates both, but only one is modeled as stations here.
+#   - Harrogate: confirmed via Wikipedia's "Harrogate line" article ("a few
+#     additional workings by London North Eastern Railway starting and
+#     terminating at Harrogate") and Wikipedia's "Harrogate railway
+#     station" article ("LNER operates six daily services to and from
+#     London King's Cross on Mondays to Saturdays... a third hourly
+#     clockface service to Leeds every two hours"). This is modeled below
+#     as the file's own ordered extension past Leeds (LDS -> HRS -> HGT).
+#   - Skipton: confirmed via Wikipedia's "Skipton railway station" article
+#     ("London North Eastern Railway operates a daily return service from
+#     Skipton to London King's Cross, via Leeds; the morning southbound
+#     train does not run on Sundays") and cross-checked against Wikipedia's
+#     "Airedale Line" article ("LNER currently operate a small number of
+#     daily services... between Skipton/Bradford and London King's Cross").
+#     Only one daily return working, versus Harrogate's six-a-day-plus
+#     pattern. Both Harrogate (via Horsforth) and Skipton (via Shipley and
+#     Keighley, on the Airedale Line) are genuine forks that diverge from
+#     this line's own Leeds-bound path at Leeds itself, not a continuation
+#     of one another — the same "a single ordered station list can't
+#     honestly represent two forks" situation `lner-ecml.toml` hit with its
+#     own Aberdeen/Inverness choice (see that file's comments), and SCHEMA.md's
+#     own curation rule ("branches noted in comments"). Following that
+#     precedent and picking the higher-frequency, better-established
+#     service (mirroring the Aberdeen-over-Inverness choice there):
+#     Harrogate is modeled as real stations; Skipton is documented here,
+#     sourced, but deliberately left unmodeled rather than force a false
+#     shared path or invent intermediate CRS codes (Shipley/Keighley) I
+#     didn't independently verify to the two-source standard.
+#   - A possible LNER Leeds<->Bradford Forster Square working also turned
+#     up in one source (Leeds station's own Wikipedia article), but I could
+#     not confirm it against a second source to the required standard (the
+#     Airedale Line article's own coverage of it is flagged
+#     citation-needed) — left out entirely per the no-invented-facts rule,
+#     not even as a station-list entry.
+#
+# Northern-sharing decision (`northern-yorkshire`, LDS<->YRK, shared today
+# between `northern.toml` and `northern-yorkshire-coast.toml`): NOT shared.
+# Researched whether LNER runs any Leeds<->York service that would
+# genuinely share that physical trunk. Two independent sources say no:
+# Wikipedia's "Harrogate line" article states service on that line (the
+# only physical route connecting Leeds and York other than the main ECML
+# route through York, which this file's Leeds branch never joins) "is
+# operated by Northern, with a few additional workings by London North
+# Eastern Railway starting and terminating at Harrogate" (i.e. LNER's own
+# Harrogate-line workings stop short of York); Wikipedia's "Leeds railway
+# station" article lists LNER's own Leeds destinations as King's Cross,
+# Harrogate, Bradford Forster Square (unconfirmed, see above) and Skipton —
+# no York — and separately notes CrossCountry, not LNER, as the operator
+# running north to York from Leeds. LNER's only York service at all is the
+# separate ECML-direct working already covered by `lner-ecml.toml`'s own
+# `ecml-yorkshire` segment (King's Cross-Peterborough-Retford-Doncaster-York,
+# never touching Leeds). So the premise the gap analysis flagged as a
+# "genuine candidate" doesn't hold once checked: this file has no LDS<->YRK
+# running to share a segment name for in the first place, and doesn't even
+# list YRK as a station. What overlap does exist is station-level only, at
+# LDS itself, which both `northern.toml` and `northern-yorkshire-coast.toml`
+# also call at — exactly the `xc-south-coast.toml` "station overlap is
+# fine, segment-sharing is a deliberate choice" situation, so LDS keeps its
+# own `lner-leeds` segment tag rather than borrowing `northern-yorkshire`.
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "ecml-london"
+
+[[stations]]
+crs = "SVG"
+role = "minor"
+segment = "ecml-london"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "GRA"
+role = "minor"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "NNG"
+role = "junction"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "RET"
+role = "minor"
+segment = "ecml-doncaster"
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "ecml-doncaster"
+# Diverges from the ECML spine onto the Wakefield Line here (Wikipedia's
+# "Wakefield Line" article confirms the Doncaster-Leeds route runs via
+# Wakefield Westgate). `lner-leeds` becomes the exclusive segment name from
+# the next station onward, matching `lner-ecml.toml`'s own instruction on
+# this station.
+
+[[stations]]
+crs = "WKF"
+role = "major"
+segment = "lner-leeds"
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "junction"
+segment = "lner-leeds"
+# Harrogate (via Horsforth) and Skipton (via Shipley/Keighley) both diverge
+# from here — see the file-level comment above for why only Harrogate is
+# modeled as stations and the Northern-sharing decision for this station.
+
+[[stations]]
+crs = "HRS"
+role = "minor"
+segment = "lner-leeds-harrogate"
+
+[[stations]]
+crs = "HGT"
+role = "terminus"
+segment = "lner-leeds-harrogate"

@@ -1,0 +1,134 @@
+id = "lner-lincoln"
+name = "LNER Lincoln Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GR"]
+
+# LCN is this file's own terminus; the shared King's Cross-Newark Northgate
+# trunk stations are already covered by `lner-ecml.toml`'s own
+# sample_stations.
+sample_stations = ["LCN"]
+destination_crs_filter = ["LCN"]
+# No match_keywords: "LNER"/"East Coast Main Line" are claimed by
+# `lner-ecml.toml` (branch files don't re-add the generic operator brand,
+# per that file's own comment and `lner-leeds.toml`/`lner-hull.toml`'s
+# identical call). A plain "Lincoln line" phrase was considered and
+# rejected for the same reason those two files rejected their own
+# route names: East Midlands Railway (confirmed via Wikipedia's "Lincoln
+# railway station" article) runs the majority of services at Lincoln,
+# including its own Newark Northgate-Peterborough workings over the same
+# tracks this file's LNER service uses further south — either phrase would
+# pull in incidents that only affect EMR, not this LNER working.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as `lner-ecml.toml`/`lner-leeds.toml`/`lner-hull.toml`:
+# long-distance service where a single cancellation matters more than on a
+# metro-frequency line.
+
+# King's Cross to Lincoln via Peterborough, Grantham and Newark Northgate.
+# LNER operates roughly every two hours in each direction between Lincoln
+# and King's Cross (confirmed via Wikipedia's "London North Eastern
+# Railway" article, services table: "1/2 tph" i.e. one train every two
+# hours, calling at "Peterborough, Grantham, Newark Northgate", with a
+# separate 1tpd working continuing on to Hull instead of Lincoln — that
+# working is `lner-hull.toml`, a different file per the gap analysis
+# document's own framing), cross-checked against Wikipedia's "Lincoln
+# railway station" article, whose own infobox independently lists the
+# identical LNER calling points ("1 tp2h to London King's Cross via Newark
+# Northgate, Grantham and Peterborough"). This is LNER's own service
+# (operator `GR`, reusing the code verified in `lner-ecml.toml`, not
+# re-derived here).
+#
+# King's Cross-Newark Northgate is the same physical ECML spine as
+# `lner-ecml.toml` and reuses its exact segment names (`ecml-london`,
+# `ecml-fenland`) verbatim, per that file's own comment on the NNG station
+# entry and matching `lner-leeds.toml`/`lner-hull.toml`'s identical reuse
+# for their own King's Cross-Doncaster stretch (this branch never reaches
+# Retford/Doncaster, since it diverges earlier, at Newark).
+#
+# Real divergence point: the physical junction where Lincoln-bound trains
+# leave the ECML tracks is the Newark flat crossing, confirmed via
+# Wikipedia's "Nottingham to Lincoln Line" article ("There is also a few
+# trains a day in each direction run by London North Eastern Railway from
+# Lincoln to London King's Cross which leaves/joins the Nottingham to
+# Lincoln line at the Newark flat crossing with the ECML just north of
+# Newark North Gate station"), cross-checked against Wikipedia's "Newark
+# Northgate railway station" article ("The short connection to the Newark
+# Castle to Lincoln St. Marks line was opened in 1965 by British Rail to
+# maintain a link between the East Coast Main Line (ECML) and Lincoln").
+# The flat crossing itself, like Temple Hirst Junction on `lner-hull.toml`,
+# is a piece of track layout rather than a passenger station, so it has no
+# CRS code and can't be modelled as a `[[stations]]` entry — but unlike
+# Temple Hirst (several miles from Doncaster), it sits immediately adjacent
+# to Newark Northgate ("just north of" it per the source above), and Newark
+# Northgate is itself the last ECML station these trains call at before
+# diverging (both Wikipedia sources above list Newark Northgate, not any
+# station beyond it, as the final shared-trunk calling point). Per
+# `lner-ecml.toml`'s own explicit instruction on its NNG entry (and
+# `lner-hull.toml`'s identical precedent for its own uncoded-junction
+# case), this file shares `ecml-fenland` through NNG as the
+# CRS-identifiable shared-trunk boundary; `lner-lincoln` becomes the
+# exclusive segment name starting at the next station, Lincoln itself.
+#
+# Between Newark Northgate and Lincoln, the physical Nottingham-Lincoln
+# line also calls at Collingham, Swinderby and Hykeham (confirmed via
+# Wikipedia's "Nottingham to Lincoln Line" article route description), but
+# neither of the two calling-points sources above lists any of these three
+# for LNER's own King's Cross working — they're East Midlands Railway local
+# stops this LNER service runs non-stop through, the same
+# "minor-intermediate-calls-this-operator-skips" convention
+# `lner-leeds.toml` applied to the Wakefield Line's own local stations. Not
+# added as stations here, and not independently CRS-verified since they're
+# out of scope for this line.
+#
+# Lincoln's station was renamed from "Lincoln Central" to plain "Lincoln"
+# in 2019 (Wikipedia's "Lincoln railway station" article; the gap-analysis
+# document and Task 6.1's report both still say "Lincoln Central", the
+# name current at the time those were written/researched). CRS code `LCN`
+# confirmed via Wikipedia's "Lincoln railway station" article and
+# cross-checked against nationalrail.co.uk's own station detail page
+# (railwaycodes.org.uk's CRS table returned a rate-limit error when
+# fetched for this file and could not be used as the second source; the
+# brief's WebFetch-against-named-sources fallback was used instead of
+# WebSearch, which had exhausted its session budget).
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "ecml-london"
+
+[[stations]]
+crs = "SVG"
+role = "minor"
+segment = "ecml-london"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "GRA"
+role = "minor"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "NNG"
+role = "junction"
+segment = "ecml-fenland"
+# Diverges from the ECML tracks onto the Nottingham-Lincoln line at the
+# Newark flat crossing here in this file's model (the real physical
+# junction is a short distance further north with no CRS code — see the
+# file-level comment above). `lner-lincoln` becomes the exclusive segment
+# name from the next station onward, matching `lner-ecml.toml`'s own
+# instruction on this station.
+
+[[stations]]
+crs = "LCN"
+role = "terminus"
+segment = "lner-lincoln"
+# CRS confirmed via Wikipedia's "Lincoln railway station" article and
+# cross-checked against nationalrail.co.uk's own station detail page.
+# Station renamed from "Lincoln Central" to "Lincoln" in 2019 — see the
+# file-level comment above.

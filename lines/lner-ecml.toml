@@ -1,0 +1,243 @@
+id = "lner-ecml"
+name = "LNER East Coast Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GR"]
+# GR is the historic reporting mark ("GNER"), carried unchanged through
+# National Express East Coast, state-run "East Coast", Virgin Trains East
+# Coast and now LNER (DfT Operator Ltd, took over 9 June 2018) — the same
+# code-survives-operator-changes pattern as GNER/LNER and AW/TfW cited in
+# this repo's other line files. Verified against railwaycodes.org.uk's TOC
+# code table (which lists GR against all of the above franchise names) and
+# cross-checked against Wikipedia/Network Rail's own "References and
+# Symbols" timetable PDF.
+
+# South, midpoint(s), north.
+sample_stations = ["KGX", "DON", "NCL", "EDB", "ABD"]
+match_keywords = ["East Coast Main Line", "ECML", "LNER"]
+# "LNER" claimed here only: the Leeds/Hull/Lincoln branch files (Tasks
+# 6.2-6.4) should follow the `northern.toml`/branch-file precedent (only
+# the trunk file keeps the generic operator-brand keyword; branches get
+# their own route-specific phrases) rather than re-adding it themselves.
+
+# Long-distance, roughly hourly on secondary flows and better on the core
+# King's Cross-Edinburgh corridor: the same 5-minute delay matters less
+# than it does on a metro-frequency line, and a single cancellation is a
+# bigger share of the service. Same values as `cross-country.toml`.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# King's Cross to Aberdeen, ordered south to north, covering the section
+# LNER runs its own through trains end to end (confirmed via LNER's own
+# December-2025 timetable structure and the "Northern Lights" named
+# service, Wikipedia/lner.co.uk: LNER books 4 trains per day through to
+# Aberdeen). LNER also runs a daily through service to Inverness (the
+# "Highland Chieftain", calling at Falkirk Grahamston, Stirling,
+# Gleneagles, Perth, Pitlochry, Kingussie, Aviemore) but that diverges from
+# the Aberdeen line just north of Haymarket onto a genuinely different
+# route (via Stirling/Perth rather than the Fife Circle/Dundee), not a
+# continuation of the same corridor. Per this catalogue's one-file/one-
+# linear-path convention (see how `elizabeth-line.toml` keeps its Heathrow
+# and Shenfield forks in separate files), this file models the Aberdeen
+# fork only; Inverness's calling points above are cited here so a future
+# curation pass has them without re-deriving, but are deliberately left
+# unmodeled rather than force a false shared path.
+#
+# The Leeds (via Wakefield Westgate), Hull (via Selby/Brough) and Lincoln
+# (via Newark Northgate) branches are separate definitions sharing the GR
+# operator code: `lner-leeds.toml` (Task 6.2), Task 6.3's Hull file and
+# Task 6.4's Lincoln file. Their real divergence points from this spine are
+# Doncaster (Leeds and Hull both) and Newark Northgate (Lincoln) — see the
+# segment comments below for exactly which segment names to reuse for
+# their own shared-trunk stretch.
+#
+# Separately, York sits on this spine (`ecml-yorkshire`) but Leeds does
+# not: the gap-analysis document flags Northern's `northern-yorkshire`
+# segment (Leeds<->York, shared today between `northern.toml` and
+# `northern-yorkshire-coast.toml`) as also being LNER territory between
+# Leeds and York. That judgment call (whether `lner-leeds.toml` should
+# reuse `northern-yorkshire` or define its own) belongs to Task 6.2, not
+# this file — noted here for the record only, since this spine doesn't
+# touch Leeds.
+#
+# TIPLOCs are given only where verified (reused from `cross-country.toml`
+# where this spine passes through the same stations); absent values simply
+# mean no TRUST/SCHEDULE correlation hint for that station.
+[[stations]]
+crs = "KGX"
+role = "terminus"
+segment = "ecml-london"
+# Great Northern (GTR, code GN) suburban services share ECML "slow line"
+# tracks out of here as far as Alexandra Palace/Potters Bar/Welwyn Garden
+# City (gap-analysis doc) — physically separate tracks from the fast lines
+# LNER's own services listed in this file run on, and none of this file's
+# other stations are exclusively on the slow lines (this spine skips
+# straight from King's Cross to Stevenage, a fast-line stop). Following
+# the `xc-manchester.toml`/west-coast-main-line.toml precedent of not
+# forcing a shared segment name across genuinely different tracks just
+# because of station-level overlap: no segment here is shared for this. If
+# a future `lines/great-northern-*.toml` wants a name for its own
+# exclusive King's Cross-area slow-line segment, `ecml-kgx-slow-lines` is
+# a reasonable candidate — suggested here, not applied, since it isn't
+# this file's segment to claim.
+
+[[stations]]
+crs = "SVG"
+role = "minor"
+segment = "ecml-london"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "GRA"
+role = "minor"
+segment = "ecml-fenland"
+
+[[stations]]
+crs = "NNG"
+role = "junction"
+segment = "ecml-fenland"
+# Lincoln diverges here via the Newark Castle-Lincoln St Marks connection
+# (opened 1965, confirmed via Wikipedia's Newark Northgate article and
+# nationalrail.co.uk's own station page). Task 6.4's Lincoln branch file
+# should share the `ecml-fenland` segment for its own King's Cross-Newark
+# stretch (this station belongs to the shared trunk, not an exclusive
+# segment, per SCHEMA.md's junction rule), then start its own exclusive
+# segment at the next station after Newark Northgate.
+
+[[stations]]
+crs = "RET"
+role = "minor"
+segment = "ecml-doncaster"
+
+[[stations]]
+crs = "DON"
+tiploc = "DONC"
+role = "junction"
+segment = "ecml-doncaster"
+# Leeds (via Wakefield Westgate) and Hull (via Selby/Brough) both diverge
+# from the ECML around Doncaster. Tasks 6.2 (`lner-leeds.toml`) and 6.3
+# (Hull) should share `ecml-doncaster` (and `ecml-fenland`/`ecml-london`
+# further south, since both branches also run over that stretch) for their
+# own shared-trunk portion, then start their own exclusive segments at the
+# next station after Doncaster. Lincoln does not share this segment: it
+# has already diverged off the ECML at Newark Northgate, before Retford.
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "major"
+segment = "ecml-yorkshire"
+
+[[stations]]
+crs = "NTR"
+role = "minor"
+segment = "ecml-yorkshire"
+
+[[stations]]
+crs = "DAR"
+role = "major"
+segment = "ecml-northeast"
+
+[[stations]]
+crs = "DHM"
+role = "minor"
+segment = "ecml-northeast"
+
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "major"
+segment = "ecml-northeast"
+# CrossCountry also calls here and continues north to Edinburgh/Aberdeen on
+# `cross-country.toml`'s own (unlisted-beyond-NCL) spine — station-level
+# overlap only, no segment forced, same pattern as XC's other main-line
+# overlaps elsewhere in this catalogue. Northern's Tyne Valley line
+# (`northern-tyne-valley.toml`) and Lumo (`lumo.toml`, this same batch)
+# also call at Newcastle — station-level overlap only for both, same
+# reasoning.
+
+[[stations]]
+crs = "MPT"
+role = "minor"
+segment = "ecml-borders"
+
+[[stations]]
+crs = "ALM"
+role = "minor"
+segment = "ecml-borders"
+
+[[stations]]
+crs = "BWK"
+role = "minor"
+segment = "ecml-borders"
+
+[[stations]]
+crs = "DUN"
+role = "minor"
+segment = "ecml-borders"
+
+[[stations]]
+crs = "EDB"
+role = "major"
+segment = "ecml-edinburgh"
+# Grand Central (King's Cross-Sunderland/Bradford), Hull Trains and Lumo
+# (King's Cross-Edinburgh, extended to Glasgow) are all open-access
+# operators running King's Cross-out services on ECML metals that call at
+# many of this file's stations. None of those files exist yet (out of this
+# task's scope); when they're written, the `xc-south-coast.toml` "station
+# overlap is fine, segment-sharing is a deliberate choice" precedent
+# applies here too.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "ecml-edinburgh"
+# The Aberdeen line (Fife Circle via Inverkeithing, Kirkcaldy, Leuchars,
+# Dundee) and the Inverness line (via Falkirk Grahamston, Stirling, Perth —
+# not modeled, see the file-level comment above) genuinely fork just north
+# of here.
+
+[[stations]]
+crs = "INK"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "KDY"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "LEU"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "DEE"
+role = "major"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "ARB"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "MTS"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "STN"
+role = "minor"
+segment = "ecml-aberdeen"
+
+[[stations]]
+crs = "ABD"
+role = "terminus"
+segment = "ecml-aberdeen"
