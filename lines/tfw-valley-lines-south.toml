@@ -1,0 +1,294 @@
+id = "tfw-valley-lines-south"
+name = "Cardiff Valley Lines: City Line, Coryton & Cardiff Bay"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+# `destination_crs_filter` deliberately covers only the two genuine dead-end
+# termini in this file (Coryton, Cardiff Bay) and omits Cardiff Central,
+# Cardiff Queen Street and Radyr. Those three are all shared hub/junction
+# stations with real through-running onto other lines (see the Cardiff hub
+# and Radyr junction notes below), so a destination filter keyed on them
+# would misclassify genuine through-services as off-route -- the same
+# reasoning `tfw-marches.toml` used to omit this field entirely. Coryton and
+# Cardiff Bay have no such ambiguity: nothing continues past either.
+destination_crs_filter = ["COY", "CDB"]
+sample_stations = ["CDQ", "CDF", "COY", "CDB"]
+match_keywords = ["Cardiff City Line", "Coryton Line", "Cardiff Bay Line"]
+
+# Sourcing note (same "Wikipedia infobox, fetched station by station, cross-
+# checked against a live verbatim-quoted railwaycodes.org.uk row" standard
+# established across Tasks 11.1-11.6 of this batch): all 14 CRS codes below
+# were fetched from that station's own Wikipedia infobox. Of those, CDF, CDQ
+# and RDR are reused unchanged from `tfw-valley-lines-north.toml`, which
+# already cross-checked them there -- not re-derived here. Of the remaining
+# 11, eight (HLL, NNP, WNG, FRW, DCT, BCG, RHI, CDB) were additionally
+# cross-checked against a live, verbatim-quoted railwaycodes.org.uk row and
+# matched exactly (each row: location name, CRS, NLC, TIPLOC, STANME,
+# STANOX). Three (TGS, WHT, COY) could not be cross-checked: railwaycodes.org.uk
+# groups locations onto one page per the first letter of the location's own
+# name, and each of the relevant per-letter pages (T, W, C) truncated well
+# before reaching these three alphabetically -- e.g. the "T" page's fetched
+# content ran only as far as "Trafford Park" (Ty Glas sorts after Trafford
+# alphabetically), the "W" page only as far as "West Thurrock" (Whitchurch
+# sorts after that), and the "C" page only as far as "Chetti" (Coryton sorts
+# after that). This is the identical truncation failure mode
+# `tfw-marches.toml` already disclosed for CWM/PPL/LUD/CRV/CTT/CRK/RUA/WRX --
+# a live fetch tool limitation, not a fabricated or guessed reading. TGS,
+# WHT and COY's CRS codes below are Wikipedia-only pending a clean
+# second-source re-fetch; their TIPLOCs are omitted rather than guessed.
+# TIPLOCs for the eight cross-checked stations are the exact values
+# railwaycodes.org.uk returned; CDF/CDQ/RDR's TIPLOCs are carried over
+# unchanged from `tfw-valley-lines-north.toml`.
+#
+# Only currently open, passenger-served stations are listed. Tongwynlais,
+# which sits geographically between Coryton and points further
+# north/west on the historic Cardiff Railway route, closed to passengers in
+# 1931 (confirmed via its own Wikipedia article -- "no trace of the station
+# remains, as it has since been buried under the A470 road") and is not
+# listed. Butetown, the planned intermediate station on the Cardiff Bay
+# branch between Cardiff Queen Street and Cardiff Bay, is confirmed via
+# Cardiff Bay's own Wikipedia article as a "Proposed station" under South
+# Wales Metro plans, not yet open, and is likewise not listed -- a future
+# editor should add it once it opens.
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+# Matches `tfw-valley-lines-north.toml`'s override, for the same reasoning:
+# tighter than this catalogue's default because these are short-headway
+# urban Cardiff services where delays are proportionately more disruptive
+# than on an hourly regional line, but not as tight as `thameslink-core.toml`.
+# Confirmed frequencies, each sourced from the relevant station/line's own
+# Wikipedia article: City Line and Coryton Line both run "half-hourly"/"two
+# trains per hour in each direction" Monday-Saturday daytime (2 tph each,
+# confirmed independently at Fairwater and Ty Glas); the Cardiff Bay Line
+# (Butetown branch line) runs "four trains per hour to Cardiff Queen Street"
+# (4 tph) -- a noticeably higher frequency than its two City/Coryton
+# siblings, but its own article confirms it as a single 1.7 km shuttle with
+# no intermediate open stations today, not a long corridor, so this file
+# does not give it its own tighter override; the shared value above is judged
+# an honest middle ground for the file as a whole rather than three separate
+# per-branch overrides, matching how `tfw-valley-lines-north.toml` set one
+# file-wide override across branches of differing frequency.
+
+# Task-scope decision (the task brief's explicit invitation to verify or
+# deviate from the plan's list, and the note in `tfw-valley-lines-north.toml`
+# speculating this file would also cover "Cardiff Bay and Vale of
+# Glamorgan/Barry routes"): this file covers the City Line, the Coryton Line
+# and the Cardiff Bay Line (Butetown branch line) -- all three genuinely
+# short, Cardiff-radius local services converging on the same Cardiff
+# Central/Queen Street hub used by `tfw-valley-lines-north.toml`'s four
+# branches, matching the task brief's own "Cardiff-area circle services"
+# framing (City Line and Coryton Line together form the historic Cardiff
+# Railway loop around northern Cardiff, per Radyr's own Wikipedia article
+# describing the City Line as diverging "immediately south of the station"
+# on a separate corridor from the Taff Vale route through Llandaf/Cathays,
+# while the Coryton Line takes yet another, third corridor north via Heath).
+# This file deliberately does NOT include the Vale of Glamorgan Line (Cardiff
+# Central-Bridgend via Barry, with its own Barry Island and Penarth branches)
+# despite `tfw-valley-lines-north.toml`'s comment speculating it would be
+# covered here. Verified via that line's own Wikipedia article: it runs
+# ~30 km from Cardiff Central out to Bridgend via Rhoose (for Cardiff
+# Airport) and Llantwit Major, with its own Barry Island and Penarth
+# branches -- a shape and scale much closer to
+# `tfw-valley-lines-north.toml`'s Merthyr/Aberdare/Rhondda branches (a
+# genuine separate corridor radiating outward) than to a Cardiff-area
+# "circle" service, and it comes from a distinct historic company lineage
+# (Barry Railway/Vale of Glamorgan Railway/GWR, not the Cardiff Railway/Taff
+# Vale Railway lineage the other routes in this batch share). Coordinating
+# with the plan's total coverage: this leaves the Vale of Glamorgan Line,
+# Barry Island Line and Penarth Line uncovered by Batch 11 entirely -- flagged
+# here explicitly for the controller to pick up as a future task during Task
+# 11.8's batch verification, rather than silently assumed either in or out
+# of scope.
+#
+# South Wales Main Line overlap (the gap analysis's flagged Newport/Cardiff/
+# Swansea overlap, checked at the station level per the task brief): only
+# Cardiff Central (CDF) overlaps -- this file's routes never reach Newport or
+# Swansea. CDF already appears in `xc-cardiff.toml` (as that line's own
+# terminus, segment `xc-cardiff`) and will also appear in the not-yet-merged
+# Batch 4 `gwr-south-wales.toml` (per this batch's cross-file convention of
+# noting an expected future overlap rather than inventing the other side's
+# decision -- see Task 1.4's precedent, cited in the task brief). CDF below
+# keeps its own `tfw-valley-cardiff-hub` segment (see the Cardiff hub
+# decision below) rather than reusing `xc-cardiff.toml`'s `xc-cardiff`
+# segment name: this is the same station-overlap-only treatment
+# `tfw-marches.toml` gave Hereford against GWR/West Midlands Trains services
+# there, and `xc-cardiff.toml` itself already coexists with CDF appearing in
+# `tfw-valley-lines-north.toml` under a distinct segment name without any
+# cross-file sharing, so this file follows the same, already-established
+# pattern rather than introducing a new one.
+#
+# Cardiff hub segment-sharing decision (the call `tfw-valley-lines-north.toml`
+# left open for this file -- see its own comment above the Cardiff hub
+# stations): SHARED. Both Cardiff Central and Cardiff Queen Street below
+# reuse `tfw-valley-lines-north.toml`'s exact segment name,
+# `tfw-valley-cardiff-hub`. This was a deliberate, independently-verified
+# call, not an assumption carried over from that file's speculation: every
+# route in this file genuinely calls at one or both of the same two
+# platforms as `tfw-valley-lines-north.toml`'s four branches -- the City
+# Line terminates at Cardiff Central, and both the Coryton Line and the
+# Cardiff Bay Line originate at Cardiff Queen Street, per each line's own
+# Wikipedia article (Cardiff City Line: "runs between Radyr and Cardiff
+# Central"; Coryton Line: preceding station "Cardiff Queen Street" per Heath
+# Low Level's own infobox; Butetown branch line/Cardiff Bay Line: "starts
+# from Cardiff Bay to Cardiff [Queen Street]"). This is the same genuine
+# same-platform sharing `tfw-valley-lines-north.toml`'s own comment judged
+# "strong" for this exact pairing, unlike the thinner Llandudno
+# Junction/Chester station-touch cases elsewhere in this batch that stayed
+# station-overlap-only. See `valley_lines_cardiff_hub_shared_segment_propagates`
+# in `crates/aggregator/src/matcher.rs`, which replaces
+# `tfw-valley-lines-north.toml`'s own now-superseded
+# `valley_lines_north_cardiff_hub_is_exclusive_pending_task_11_7` pending
+# test (that test's own docstring said it was expected to flip once this
+# file made its decision; it has been updated in place in matcher.rs, not
+# left stale -- `tfw-valley-lines-north.toml` itself was not edited).
+#
+# Radyr junction decision: also SHARED, for the same reason, but via a
+# dedicated Radyr-only segment name, `tfw-valley-radyr-junction`, minted in
+# both files rather than reusing `tfw-valley-lines-north.toml`'s
+# `tfw-valley-taff-trunk` name for Radyr alone. Segment sharing is indexed
+# by name across the whole catalogue, not per-station, so reusing the Taff
+# trunk name here would have falsely flagged the six other, unrelated
+# stations on that trunk (Cathays, Llandaf, Taffs Well, Treforest, Treforest
+# Estate, Pontypridd) as shared too -- this file's City Line never runs
+# through any of them. `tfw-valley-radyr-junction` follows the same
+# single-station-junction pattern `tfw-valley-lines-north.toml` already uses
+# at Abercynon (`tfw-valley-merthyr-aberdare-junction`), which is likewise
+# shared by only the two branches that genuinely meet there. Radyr's own
+# Wikipedia article confirms genuine physical junction: "the station is on
+# the Merthyr Line, and is also the northern terminus of the City Line,"
+# with the City Line historically diverging "immediately south of the
+# station" via its own separate corridor (Waterhall Junction) rather than
+# via the Taff Vale trunk's Llandaf/Cathays route -- i.e. the two corridors
+# genuinely meet only at Radyr's own platforms, not further south. The City
+# Line's own exclusive segment resumes at the next station, Danescourt.
+#
+# (Post-landing fix note: the original Task 11.7 diff reused
+# `tfw-valley-taff-trunk` verbatim for Radyr, which had exactly the
+# false-sharing effect described above. This was caught in review and fixed
+# by minting `tfw-valley-radyr-junction` here and in
+# `tfw-valley-lines-north.toml`'s own RDR entry.)
+
+# --- Cardiff hub: shared with `tfw-valley-lines-north.toml`'s four branches.
+# See the Cardiff hub segment-sharing decision above.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Central: this file's own southern terminus for the City Line.
+
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Queen Street: origin for both the Coryton Line and the Cardiff Bay
+# Line below.
+
+# --- City Line: Cardiff Central to Radyr via Fairwater, ordered south to
+# north. Diverges from the Taff Vale trunk only at Radyr itself -- see the
+# Radyr junction decision above. Exclusive to this branch throughout its
+# intermediate stations.
+[[stations]]
+crs = "NNP"
+tiploc = "NINIANP"
+role = "minor"
+segment = "tfw-valley-city-line"
+# Ninian Park.
+
+[[stations]]
+crs = "WNG"
+tiploc = "WAUNGRN"
+role = "minor"
+segment = "tfw-valley-city-line"
+# Waun-gron Park.
+
+[[stations]]
+crs = "FRW"
+tiploc = "FRWATER"
+role = "minor"
+segment = "tfw-valley-city-line"
+# Fairwater.
+
+[[stations]]
+crs = "DCT"
+tiploc = "DANESCT"
+role = "minor"
+segment = "tfw-valley-city-line"
+# Danescourt.
+
+[[stations]]
+crs = "RDR"
+tiploc = "RADYR"
+role = "junction"
+segment = "tfw-valley-radyr-junction"
+# Radyr: this file's own northern terminus for the City Line, and a genuine
+# physical junction with `tfw-valley-lines-north.toml`'s Taff Vale trunk. See
+# the Radyr junction decision above for why this reuses that file's
+# dedicated `tfw-valley-radyr-junction` segment name rather than an
+# exclusive one of this file's own.
+
+# --- Coryton Line: Cardiff Queen Street to Coryton via Heath, ordered south
+# to north. A separate corridor from the City Line above -- both historically
+# built by the Cardiff Railway, meeting only at the Cardiff hub, not each
+# other. Exclusive to this branch.
+[[stations]]
+crs = "HLL"
+tiploc = "HEATHLL"
+role = "minor"
+segment = "tfw-valley-coryton"
+# Heath Low Level: a separate station from `tfw-valley-lines-north.toml`'s
+# Heath High Level (HHL) on the Rhymney Line -- confirmed as distinct CRS/
+# TIPLOC pairs by both sources, an interchange point rather than a shared
+# platform, so no segment-sharing question arises between the two Heath
+# stations.
+
+[[stations]]
+crs = "TGS"
+role = "minor"
+segment = "tfw-valley-coryton"
+# Ty Glas. CRS confirmed via Wikipedia only -- see the sourcing note above.
+
+[[stations]]
+crs = "BCG"
+tiploc = "BCHGRV"
+role = "minor"
+segment = "tfw-valley-coryton"
+# Birchgrove.
+
+[[stations]]
+crs = "RHI"
+tiploc = "RHIWBNA"
+role = "minor"
+segment = "tfw-valley-coryton"
+# Rhiwbina.
+
+[[stations]]
+crs = "WHT"
+role = "minor"
+segment = "tfw-valley-coryton"
+# Whitchurch (Glamorgan). CRS confirmed via Wikipedia only -- see the
+# sourcing note above.
+
+[[stations]]
+crs = "COY"
+role = "terminus"
+segment = "tfw-valley-coryton"
+# Coryton: the line's northern terminus, confirmed via its own Wikipedia
+# article ("the terminus of the Coryton Line"). CRS confirmed via Wikipedia
+# only -- see the sourcing note above.
+
+# --- Cardiff Bay Line (Butetown branch line): Cardiff Queen Street to
+# Cardiff Bay, a single-track 1.7 km shuttle with no intermediate open
+# stations today (Butetown, the one planned intermediate stop, is not yet
+# open -- see the sourcing note above). Exclusive to this branch.
+[[stations]]
+crs = "CDB"
+tiploc = "CARDFBR"
+role = "terminus"
+segment = "tfw-valley-cardiff-bay"
+# Cardiff Bay: the branch's southern terminus, confirmed via its own
+# Wikipedia article ("the southern terminus of the Butetown branch line").

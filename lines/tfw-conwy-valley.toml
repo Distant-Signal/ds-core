@@ -1,0 +1,166 @@
+id = "tfw-conwy-valley"
+name = "Conwy Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["AW"]
+
+destination_crs_filter = ["LLJ", "BFF"]
+sample_stations = ["LLJ", "BYC", "BFF"]
+match_keywords = ["Conwy Valley Line"]
+
+# Sourcing note (per the catalogue's "cross-checked against a second source"
+# curation standard, matching the disclosure format established for
+# tfw-cambrian.toml and tfw-heart-of-wales.toml): every CRS code below was
+# confirmed from that station's own Wikipedia infobox. Of those, LLJ, GCW,
+# TLC, DLG, NLR, LWR, BYC, DWD and BFF were additionally cross-checked
+# against railwaycodes.org.uk's per-letter CRS pages (CRSl/g/t/d/n/b.shtm)
+# and match exactly, including their TIPLOCs (LANDUDJ, GLNCNWY, TALYCFN,
+# DOLGARG, NLANRST, LNRWST, BETSYCD, DLWYDLN, BLAENAU respectively -- all
+# included below). PYP (Pont-y-Pant) and RMB (Roman Bridge) are Wikipedia-
+# only so far: railwaycodes.org.uk's "P" and "R" per-letter pages were
+# fetched and scanned in full but genuinely contain no row for either
+# station name (the same "page doesn't reach the relevant row" failure mode
+# disclosed in the two sibling files, though here it reads as a true
+# absence rather than a truncation -- the "P" page's "Pon-" entries jump
+# straight from Ponteland-family names to Pontesbury/Pontypool-family names
+# with no "Pont-y-Pant" row, and the "R" page's "Rom-" entries contain only
+# "Romford Junction"). Both codes are directly read from a live source and
+# are not invented, but a future editor should treat PYP and RMB as pending
+# a full second-source confirmation.
+#
+# The full station list (11 stations, Llandudno Junction to Blaenau
+# Ffestiniog) plus each stop's request-stop status was confirmed via each
+# station's own Wikipedia "Services" section and cross-checked against the
+# line's own route-diagram template (Template:Conwy Valley Line) and the
+# Conwy Valley line infobox, both fetched directly. No intermediate calls
+# are omitted here -- unlike `xc-cardiff.toml` and `northern-furness.toml`,
+# this line's complete current station list is short enough that every
+# stop (including request stops) is enumerated below rather than
+# summarised.
+
+# Per the Conwy Valley line's own Wikipedia infobox: single track throughout
+# except a passing loop at North Llanrwst (the line's only passing point),
+# and double track only on the short Llandudno-Llandudno Junction stretch
+# which is out of this file's scope (see the Llandudno Junction note
+# below). Service pattern (confirmed via multiple individual station
+# "Services" sections, e.g. Betws-y-Coed's and Dolwyddelan's): six trains
+# each way Mon-Sat (most intermediate request stops slightly fewer, five
+# southbound/six northbound), roughly every three hours, with a reduced
+# Sunday service. This is sparser than the Cambrian Coast Line's two-hourly
+# Pwllheli branch and the Heart of Wales Line's 2-3-hourly service
+# (`tfw-cambrian.toml`, `tfw-heart-of-wales.toml`), so the same
+# proportional-impact rationale applies at least as strongly here: this
+# mirrors those two files' thresholds rather than Furness's hourly-service
+# ones.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Llandudno Junction to Blaenau Ffestiniog, ordered north to south (the only
+# possible order -- this is a single-track branch with no internal split).
+#
+# Llandudno Junction is a through station on the North Wales Coast Line
+# (Chester-Holyhead) and also the junction for the separate Llandudno
+# branch (Llandudno Junction-Llandudno via Deganwy) -- confirmed via
+# Llandudno Junction's own Wikipedia article. Task 11.4
+# (`lines/tfw-north-wales-coast.toml`, Chester-Holyhead, not yet written
+# when this file was authored) is expected to read this file and decide
+# whether to reuse the `tfw-conwy-valley` segment name at Llandudno
+# Junction for a genuine cross-file shared-trunk relationship, or to give
+# its own line a distinct segment name there instead -- that decision is
+# deliberately left to Task 11.4, not made here. For now, since no other
+# line in the catalogue reaches Llandudno Junction yet, this file uses a
+# single segment name for the whole route (matching `northern-furness.toml`'s
+# treatment of its own through-junction stations, LAN and CNF, which are
+# tagged with that file's one whole-line segment name rather than a
+# separate trunk/exclusive split).
+[[stations]]
+crs = "LLJ"
+tiploc = "LANDUDJ"
+role = "junction"
+segment = "tfw-conwy-valley"
+
+[[stations]]
+crs = "GCW"
+tiploc = "GLNCNWY"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Request stop (confirmed via this station's own Wikipedia "Services"
+# section).
+
+[[stations]]
+crs = "TLC"
+tiploc = "TALYCFN"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Request stop for northbound trains only; southbound trains call
+# regardless, so the crossing keeper can operate the adjacent manual level
+# crossing gates (confirmed via this station's own Wikipedia "Services"
+# section).
+
+[[stations]]
+crs = "DLG"
+tiploc = "DOLGARG"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Request stop.
+
+[[stations]]
+crs = "NLR"
+tiploc = "NLANRST"
+role = "minor"
+segment = "tfw-conwy-valley"
+# North Llanrwst: request stop, and the site of the line's only passing
+# loop -- a working signal box here requires trains to stop and exchange
+# tokens regardless of whether any passenger is boarding or alighting
+# (confirmed via this station's own Wikipedia article). A distinct station
+# from Llanrwst below, half a mile to the south; the original 1863 station
+# for the town, per Llanrwst railway station's own Wikipedia article.
+
+[[stations]]
+crs = "LWR"
+tiploc = "LNRWST"
+role = "major"
+segment = "tfw-conwy-valley"
+# Llanrwst: opened by British Rail in 1989 to serve the town centre
+# directly; a scheduled stop, not a request stop.
+
+[[stations]]
+crs = "BYC"
+tiploc = "BETSYCD"
+role = "major"
+segment = "tfw-conwy-valley"
+# Betws-y-Coed: a scheduled stop (not request), and the line's principal
+# intermediate destination -- described on its own Wikipedia article as
+# "an important tourist village" and bus interchange for Snowdonia
+# National Park Sherpa services.
+
+[[stations]]
+crs = "PYP"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Pont-y-Pant: request stop. CRS confirmed via Wikipedia only -- see the
+# sourcing note above.
+
+[[stations]]
+crs = "DWD"
+tiploc = "DLWYDLN"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Dolwyddelan: request stop.
+
+[[stations]]
+crs = "RMB"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Roman Bridge: request stop. CRS confirmed via Wikipedia only -- see the
+# sourcing note above.
+
+[[stations]]
+crs = "BFF"
+tiploc = "BLAENAU"
+role = "terminus"
+segment = "tfw-conwy-valley"
+# Blaenau Ffestiniog: terminus, and the interchange with the heritage
+# narrow-gauge Ffestiniog Railway.

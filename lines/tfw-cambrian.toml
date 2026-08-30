@@ -1,0 +1,237 @@
+id = "tfw-cambrian"
+name = "Cambrian Line"
+mode = "national-rail"
+category = "regional"
+operators = ["AW"]
+
+destination_crs_filter = ["AYW", "PWL", "SHR"]
+sample_stations = ["SHR", "MCN", "AYW", "PWL"]
+match_keywords = ["Cambrian Line", "Cambrian Coast Line"]
+
+# `destination_crs_filter` direction-coverage note (final review Important
+# #3): the original two-entry filter (`AYW`, `PWL`) only matched westbound
+# departures at Shrewsbury/Machynlleth heading out to the branch termini --
+# a departure FROM `AYW` or `PWL` heading back east has destination `SHR`
+# (or, on some through workings, further towards Birmingham), which the
+# original filter silently dropped. This is a genuine Y-shaped dead-end line
+# like `tfw-conwy-valley.toml`, so that file's remedy (extend with the
+# opposite-direction anchor) is the fit used here, rather than
+# `tfw-marches.toml`'s omit-entirely remedy. Adding `SHR` is safe despite
+# Shrewsbury also being served by `tfw-marches` and `tfw-heart-of-wales`:
+# `destination_crs_filter` is only evaluated against departures sampled at
+# this file's own `sample_stations` (`SHR`, `MCN`, `AYW`, `PWL`), and MCN/
+# AYW/PWL are exclusive to this line -- no other catalogued line reaches
+# them, so any AW departure there with destination `SHR` is unambiguously a
+# Cambrian service. At `SHR` itself, a departure whose destination is also
+# `SHR` is a logical impossibility (a train can't depart from and terminate
+# at the same station), so including `SHR` in the filter has no effect
+# there and can't misclassify a Marches or Heart of Wales departure as
+# Cambrian. This still leaves a residual, smaller gap for any Cambrian
+# through-working that continues past Shrewsbury to Birmingham without
+# terminating at SHR (destination e.g. `BHM`/`BSI`) -- not closed here,
+# since those codes aren't Cambrian-exclusive the way SHR's role in this
+# filter is; left as a known residual rather than guessed at.
+
+# Sourcing note (per the catalogue's "cross-checked against a second
+# source" curation standard): every CRS code below was confirmed from that
+# station's own Wikipedia infobox. Of those, SHR, WLP, NWT, CWS, MCN, DVY,
+# AYW, AVY, ABH and BRM were additionally cross-checked against
+# railwaycodes.org.uk and match exactly. The remaining codes -- BOW, BRH,
+# TYW, FRB, MFA, HRL, PRH, MFF, PTM, CCC, PWL -- are Wikipedia-only so far;
+# railwaycodes.org.uk's per-letter pages for those initials repeatedly
+# rate-limited (HTTP 429) or truncated before reaching the relevant row
+# during research. None of these are invented -- they're all directly
+# read from a live source -- but a future editor should treat the
+# Wikipedia-only subset as pending a full second-source pass rather than
+# as fully cross-checked.
+
+# Long single-track sections with limited passing loops. Aberystwyth branch
+# runs near-hourly; the Pwllheli (Cambrian Coast) branch only every two
+# hours, so a single cancellation is a bigger proportional hit than on a
+# typical hourly rural line (cf. `northern-furness.toml`'s Furness Line
+# rationale, which this mirrors).
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Shrewsbury to Dovey Junction is the shared trunk; the line then splits at
+# Dovey Junction into two branches: Aberystwyth (the "Cambrian Line" proper)
+# and Pwllheli via the coast (the "Cambrian Coast Line"). Per the
+# shared-trunk rule of thumb, Dovey Junction itself belongs to the trunk
+# segment and each exclusive segment starts at the next station down each
+# branch. No other line in this catalogue reaches Shrewsbury or shares this
+# trunk yet, so `tfw-cambrian-trunk` is not (yet) a cross-file shared
+# segment -- Task 11.5 (`tfw-marches.toml`, not yet written) is responsible
+# for deciding whether to reuse this segment name at Shrewsbury.
+#
+# Only principal calling points are listed. Numerous request-stop halts are
+# omitted for brevity: on the trunk, several closed intermediate stations
+# between Shrewsbury and Machynlleth are gone entirely; on the coast branch,
+# Penhelig, Tonfanau, Llangelynin, Llwyngwril, Llanaber, Talybont, Dyffryn
+# Ardudwy, Llanbedr, Pensarn, Llandanwg, Tygwyn, Talsarnau, Llandecwyn and
+# Penychain are all open request stops not listed here. Penhelig specifically
+# was flagged by the final whole-branch review as a possible undisclosed gap
+# (some sources describe it as the real first coast-branch calling point
+# after Dovey Junction, before Aberdovey) -- researched rather than left
+# undecided: its own Wikipedia article confirms it's a genuinely open,
+# currently passenger-served request stop (opened 1933, unstaffed, no
+# ticketing facilities, ~8 trains/day), but describes it as a minor halt on
+# "the eastern outskirts" of Aberdyfi/Aberdovey, opened only because of
+# historical complaints about the walk to Aberdovey's own station -- the
+# same character as the other minor request-stop halts already in this
+# omissions list, not a principal calling point in its own right, so it's
+# disclosed here rather than given its own station entry.
+#
+# This file is "bundled": a shared trunk (Shrewsbury-Dovey Junction) plus
+# two branches (Aberystwyth; the coast to Pwllheli) concatenated in one
+# station list below, not a single continuous end-to-end route -- see the
+# trunk/branch explanation above. A future reader relying on file order
+# (e.g. for `stations_between`-style logic) should not assume consecutive
+# entries are geographically adjacent across a branch boundary.
+[[stations]]
+crs = "SHR"
+role = "junction"
+segment = "tfw-cambrian-trunk"
+# Shrewsbury is also a junction with the Welsh Marches Line and the
+# Wolverhampton/Chester routes -- neither is in this catalogue yet.
+
+[[stations]]
+crs = "WLP"
+role = "major"
+segment = "tfw-cambrian-trunk"
+
+[[stations]]
+crs = "NWT"
+role = "major"
+segment = "tfw-cambrian-trunk"
+
+[[stations]]
+crs = "CWS"
+role = "minor"
+segment = "tfw-cambrian-trunk"
+
+[[stations]]
+crs = "MCN"
+tiploc = "MCHYNLT"
+role = "major"
+segment = "tfw-cambrian-trunk"
+# Machynlleth is TfW's Cambrian crew/train base; most through services
+# join or divide their units here even though the physical track split is
+# a few miles further on, at Dovey Junction.
+
+[[stations]]
+crs = "DVY"
+tiploc = "DOVYJN"
+role = "junction"
+segment = "tfw-cambrian-trunk"
+# Physical junction where the line splits. No road access; some services
+# (notably certain Sunday workings) run Shrewsbury/Birmingham-Aberystwyth
+# only and don't touch the coast branch at all.
+#
+# Sourcing note: the "split happens at Dovey Junction, not Machynlleth"
+# fact -- the load-bearing decision behind where `tfw-cambrian-trunk` ends
+# and the two branch segments begin -- is sourced from Dovey Junction's own
+# Wikipedia article. railwaycodes.org.uk's CRS listing for DVY confirms the
+# code/TIPLOC but carries no descriptive text about the junction's role,
+# and Network Rail's route page for this line 404s, so this specific claim
+# hasn't yet had an independent second-source confirmation, only a
+# Wikipedia mirror (abcrailwayguide.uk) that itself cites Wikipedia as its
+# source. Treat as high-confidence but not fully cross-checked.
+
+# --- Aberystwyth branch (the "Cambrian Line" proper) ---
+
+[[stations]]
+crs = "BRH"
+role = "minor"
+segment = "tfw-cambrian-aberystwyth"
+# Borth: corrected during the final whole-branch review (Important #1) from
+# a prior mis-filing under the coast branch. Re-verified independently
+# rather than applied on the review's say-so alone: this station's own
+# Wikipedia infobox route diagram gives its preceding/following stations as
+# Dovey Junction and Bow Street respectively, on the "Birmingham
+# International-Aberystwyth" route -- i.e. Dovey Junction -> Borth -> Bow
+# Street -> Aberystwyth, matching the ordering below. The Cambrian Coast
+# Line's own separate Wikipedia article's calling points, by contrast, start
+# Dovey Junction -> Aberdovey (`AVY`) -> Tywyn (`TYW`) -> ..., with no Borth
+# -- confirming Borth was never a coast-branch station.
+
+[[stations]]
+crs = "BOW"
+role = "minor"
+segment = "tfw-cambrian-aberystwyth"
+# Reopened February 2021 after closure in 1965.
+
+[[stations]]
+crs = "AYW"
+role = "terminus"
+segment = "tfw-cambrian-aberystwyth"
+
+# --- Cambrian Coast Line (Dovey Junction to Pwllheli) ---
+
+[[stations]]
+crs = "AVY"
+role = "minor"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "TYW"
+role = "major"
+segment = "tfw-cambrian-coast"
+# Interchange with the heritage narrow-gauge Talyllyn Railway.
+
+[[stations]]
+crs = "FRB"
+role = "minor"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "MFA"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Request stop. Formerly "Barmouth Junction" -- the closed line to Ruabon
+# via Bala diverged here; today it's a through station only.
+
+[[stations]]
+crs = "BRM"
+role = "major"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "HRL"
+role = "major"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "PRH"
+role = "minor"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "MFF"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Interchange with the heritage narrow-gauge Ffestiniog Railway.
+
+[[stations]]
+crs = "PTM"
+role = "major"
+segment = "tfw-cambrian-coast"
+# Interchange with the heritage Welsh Highland Railway. Distinct from that
+# railway's own separately-sited station of the same town.
+
+[[stations]]
+crs = "CCC"
+role = "minor"
+segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "ABH"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Request stop.
+
+[[stations]]
+crs = "PWL"
+role = "terminus"
+segment = "tfw-cambrian-coast"

@@ -1,0 +1,201 @@
+id = "tfw-north-wales-coast"
+name = "North Wales Coast Line"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "AW",  # Transport for Wales -- principal TOC, hourly-ish stopping service.
+  "VT",  # Avanti West Coast -- see sourcing note below on why this is
+         # included (genuine scheduled stops, not just track-sharing).
+]
+
+destination_crs_filter = ["HHD", "CTR"]
+# South, midpoint, near-north, terminus.
+sample_stations = ["CTR", "RHL", "BNG", "HHD"]
+match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
+
+# `destination_crs_filter` direction-coverage note (final review Important
+# #3): originally `["HHD"]` only, which the sourcing note below already
+# flags as a risk without having acted on it -- "the majority of Avanti
+# Euston-Chester/North Wales trains terminate at Chester (1tph); only a
+# minority (6/day) continue to Holyhead", so a `HHD`-only filter silently
+# dropped the majority of Chester-terminating departures sampled at RHL/BNG.
+# Since this file's own scope starts at Chester and doesn't extend south of
+# it, `CTR` is added as a second anchor here -- the same extend-with-
+# opposite-direction-anchor remedy `tfw-conwy-valley.toml` established
+# (`["LLJ", "BFF"]`), rather than `tfw-marches.toml`'s omit-entirely remedy.
+# This is safe: `destination_crs_filter` is only evaluated against
+# departures sampled at this file's own `sample_stations` (`CTR`, `RHL`,
+# `BNG`, `HHD`), and RHL/BNG/HHD are exclusive to this line -- no other
+# catalogued line reaches them, so any departure there with destination
+# `CTR` is unambiguously a North Wales Coast Line service. `CTR` is also
+# shared with `tfw-marches.toml` at the station level, but a departure
+# whose destination is also `CTR` is a logical impossibility at Chester
+# itself (a train can't depart from and terminate at the same station), so
+# adding `CTR` to the filter has no effect there and can't misclassify a
+# Marches departure as North Wales Coast Line.
+
+# Sourcing note (per the catalogue's "cross-checked against a second
+# source" curation standard established for tfw-cambrian.toml,
+# tfw-heart-of-wales.toml and tfw-conwy-valley.toml): all 7 CRS codes
+# below that are new to this file (CTR, FLN, PRT, RHL, CWB, BNG, HHD)
+# were confirmed from each station's own Wikipedia infobox "Station code"
+# field, AND independently cross-checked against railwaycodes.org.uk's
+# per-letter CRS/NLC/TIPLOC/STANME/STANOX pages (crsc/f/p/r/b/h.shtm),
+# which returned an exact match for every one -- e.g. Chester really is
+# CTR (not the more "obvious"-looking CHR), Prestatyn really is PRT (not
+# PTA). Both sources were fetched live during this file's authoring; none
+# of these codes are invented. TIPLOCs (CHST, FLINT, PSTA, RHYL, CBAY,
+# BANGOR, HLYH) come from railwaycodes.org.uk's TIPLOC column directly;
+# that field isn't shown on the Wikipedia infoboxes, so unlike the CRS
+# codes it has only the one live source, consistent with TIPLOC's
+# "optional, helps with TRUST/SCHEDULE correlation" status in
+# lines/SCHEMA.md and the standard already used for TIPLOCs elsewhere in
+# this catalogue. LLJ/LANDUDJ is not new -- it's carried over unchanged
+# from `tfw-conwy-valley.toml`, itself already cross-checked there.
+#
+# Category: confirmed "main-line" (not "regional") via the line's own
+# Wikipedia article, which describes it as "a major railway line" of
+# 105.5 miles, predominantly double track, matching the treatment
+# `west-coast-main-line.toml` gets for the same reason.
+#
+# Only principal calling points are listed, matching the "minor
+# intermediate calls omitted" pattern used in `xc-cardiff.toml` and
+# `northern-furness.toml` (and flagged as the applicable precedent for
+# this file specifically in `tfw-conwy-valley.toml`'s own comments).
+# Confirmed via the line's own Wikipedia route diagram (Template:North
+# Wales Coast Line), cross-checked station-by-station against each
+# omitted station's own Wikipedia infobox: the following are open,
+# currently-served stations omitted here as minor intermediate calls --
+# Shotton (SHT, also the Borderlands Line junction -- no line in this
+# catalogue reaches the Borderlands Line yet, so no shared-segment
+# question arises there), Conwy (CNW), Penmaenmawr (PMW),
+# Llanfairfechan (LLF), and, on Anglesey after Bangor, Llanfairpwll
+# (LPG), Bodorgan (BOR), Tŷ Croes (TYC), Rhosneigr (RHO) and Valley
+# (VAL). Separately, Queensferry, Connah's Quay, Bagillt, Mostyn,
+# Talacre, Llandulas, Llysfaen, Old Colwyn, Mochdre & Pabo, Menai
+# Bridge, Britannia Bridge and Gaerwen are not omissions -- each was
+# checked and is a closed/disused station (mostly closed in the 1966
+# Beeching cuts), confirmed via each one's own Wikipedia infobox
+# "Status: Disused" field, so they were never candidates for inclusion.
+#
+# Llandudno itself (the town, CRS LLD) is deliberately out of scope: per
+# the line's own route diagram, it sits on a short branch via Deganwy
+# that leaves the through route at Llandudno Junction, distinct from
+# both the Chester-Holyhead main line and the separate Conwy Valley
+# Line branch (which diverges south at the same station). It isn't a
+# through station on this line and isn't covered by the "minor
+# intermediate calls" note above -- it's a different line's territory,
+# not yet written up in this catalogue, so leaving it out here rather
+# than guessing at a segment for it is the "minor intermediate calls
+# omitted" pattern's sibling case, not an exception to it.
+#
+# Operator question (VT): confirmed Avanti West Coast genuinely
+# timetables its own stopping service on this corridor rather than only
+# transiting it. Avanti West Coast's own Wikipedia article states
+# directly: "Six trains per day continue to Holyhead, calling at Flint,
+# Prestatyn, Rhyl, Colwyn Bay, Llandudno Junction and Bangor" (part of
+# the London Euston-Chester/Holyhead/Wrexham General service group).
+# This is corroborated by the North Wales Coast Line's own, separately
+# maintained Wikipedia article ("The principal through passenger
+# services are London ... Avanti West Coast ...") and further by Avanti
+# West Coast's own official website, whose global "Where we go"
+# navigation lists both Chester and Bangor as served destinations (not
+# just Holyhead as an endpoint reached by transiting). All three were
+# fetched live. Per `west-coast-main-line.toml`'s own precedent of
+# listing every TOC that genuinely timetables services on a shared
+# line, VT is included here on that basis.
+#
+# Llandudno Junction segment-sharing decision (the call this file was
+# asked to make -- see `tfw-conwy-valley.toml`'s comment, which
+# deliberately left this open for this file to decide): station-overlap
+# only, NOT a shared segment. LLJ below uses this file's own segment
+# name (`tfw-north-wales-coast`), not `tfw-conwy-valley`. Reasoning:
+# the two lines meet only at the LLJ station itself -- the Conwy Valley
+# Line's own route diagram and Llandudno Junction's own Wikipedia
+# article both show the Conwy Valley branch diverging south immediately
+# at the station, with no stretch of track actually shared/run over by
+# both lines' services beyond that single calling point. That's a
+# genuine junction (interchange) but not a shared trunk of track, so an
+# incident reported at Llandudno Junction should independently match
+# both lines (each still sees the station in its own list) but as two
+# separate `MatchScope::ExclusiveSegment` matches, not one propagated
+# `MatchScope::SharedSegment` match -- see the regression test in
+# `crates/aggregator/src/matcher.rs` for the concrete assertion.
+#
+# Cross-batch note (controller ruling, reconciled during Task 11.8's
+# batch verification): `lines/wcml-north-wales.toml` (Batch 1's Task 1.4)
+# did not exist when this file was first written -- that worktree was
+# still at the shared base commit with no new commits. It has since
+# landed (Batch 1, still on its own unmerged worktree branch as of this
+# check) and its own Chester-Holyhead segment
+# (`wcml-north-wales-branch`) carries an explicit "TfW future-overlap
+# note" comment offering this file's curator exactly two options: reuse
+# its segment name as a genuine shared trunk, or give this line its own
+# distinct segment name with station-overlap-only at Chester. This file
+# already independently chose the second option before that file existed
+# -- confirmed here as one of the two options that file's own comment
+# explicitly sanctioned, not a conflicting or overlooked choice. No
+# rename needed on either side; the two files deliberately use distinct
+# segment names at Chester (`tfw-north-wales-coast` here,
+# `wcml-north-wales-branch` there), matching the same
+# station-overlap-only pattern as the LLJ decision above. This reconciles
+# cleanly once both batches merge to main -- no further action required
+# unless a future review disputes the station-overlap-only physical
+# claim itself (it does not; see source 1 in `wcml-north-wales.toml`'s
+# own research for the physical-junction description of Chester).
+[[stations]]
+crs = "CTR"
+tiploc = "CHST"
+role = "junction"
+segment = "tfw-north-wales-coast"
+# Chester is a real multi-line junction (West Coast Main Line, the
+# Wrexham/Borderlands corridor, the Wirral Line, the Mid-Cheshire Line
+# and the Shrewsbury-Chester Line all meet here, per the line's own
+# route diagram) -- but none of those is `wcml-north-wales.toml` itself
+# sharing a segment name with this file; see the cross-batch note above.
+
+[[stations]]
+crs = "FLN"
+tiploc = "FLINT"
+role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "PRT"
+tiploc = "PSTA"
+role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "RHL"
+tiploc = "RHYL"
+role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "CWB"
+tiploc = "CBAY"
+role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "LLJ"
+tiploc = "LANDUDJ"
+role = "junction"
+segment = "tfw-north-wales-coast"
+# Junction with the Conwy Valley Line (`tfw-conwy-valley.toml`) and,
+# out of this file's scope, the short Llandudno branch via Deganwy. See
+# the segment-sharing decision comment above the [[stations]] list.
+
+[[stations]]
+crs = "BNG"
+tiploc = "BANGOR"
+role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "HHD"
+tiploc = "HLYH"
+role = "terminus"
+segment = "tfw-north-wales-coast"
+# Terminus, and the ferry interchange for Ireland (Dublin Port).
