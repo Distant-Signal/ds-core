@@ -1,0 +1,189 @@
+id = "overground-mildmay"
+name = "Mildmay line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["RMD", "CMD", "SRA", "CLJ"]
+
+# Former North London line core (Richmond to Stratford) plus the former
+# West London line's north end (a Clapham Junction branch), converging at
+# Willesden Junction. Two branches, each ordered geographically within its
+# own `[[stations]]` block; the Clapham Junction branch rejoins the core
+# at Willesden Junction, which is only listed once (in the core block).
+#
+# NOTE: this file models more than one physical branch in a single
+# `stations` list. If a future "incident affects stations between A and B"
+# range-parser is ever built per `lines/SCHEMA.md`'s ordering rule, it must
+# not assume the whole list is one single physical sequence — a range query
+# spanning a branch boundary (e.g. "between Willesden Junction and
+# Shepherd's Bush") would incorrectly sweep through the other branch's
+# stations too.
+#
+# Primrose Hill and Mildmay Park are deliberately excluded — Primrose Hill
+# closed to passengers in 1992, Mildmay Park closed in 1934, and neither
+# carries any current service, despite both appearing on some older
+# route diagrams.
+#
+# `overground-canonbury-curve`: Mildmay and the Windrush line both call at
+# Highbury & Islington (HHY) and Canonbury (CNN) — the real curve of track
+# connecting the North London and East London route alignments at that
+# point — then diverge to two different, non-identical next stations
+# (Mildmay to Dalston Kingsland, DLK; Windrush to Dalston Junction, DLJ —
+# different CRS codes, ~350m apart, not the same station). Per
+# `lines/SCHEMA.md`'s junction rule, both junction stations belong to the
+# shared segment and each line's own exclusive segment resumes at the very
+# next station.
+#
+# Other touchpoints are station-level overlaps only, not shared segments:
+# Willesden Junction (WIJ, this file) with `overground-lioness`; Gospel Oak
+# (GPO, this file) with `overground-suffragette` (which terminates there
+# without continuing onto Mildmay track); Clapham Junction (CLJ, this
+# file's own separate branch) with the existing `swr-alton`/
+# `swr-portsmouth-direct`/`swr-south-west-main` catalogue and with
+# `overground-windrush`'s own separate Clapham Junction branch; and
+# Stratford (SRA, this file) with `elizabeth-shenfield`.
+# All are different routes converging on shared stations, not shared
+# track, matching the `xc-south-coast.toml`/Reading precedent.
+
+# Core branch, Richmond to Stratford.
+[[stations]]
+crs = "RMD"
+role = "terminus"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "KWG"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "GUN"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "SAT"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "ACC"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "WIJ"
+role = "junction"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "KNR"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "BSP"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "BSY"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "WHD"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "FNY"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "HDH"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "GPO"
+role = "junction"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "KTW"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "CMD"
+role = "major"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "CIR"
+role = "minor"
+segment = "overground-mildmay-west"
+
+[[stations]]
+crs = "HHY"
+role = "junction"
+segment = "overground-canonbury-curve"
+
+[[stations]]
+crs = "CNN"
+role = "junction"
+segment = "overground-canonbury-curve"
+
+[[stations]]
+crs = "DLK"
+role = "minor"
+segment = "overground-mildmay-east"
+
+[[stations]]
+crs = "HKC"
+role = "major"
+segment = "overground-mildmay-east"
+
+[[stations]]
+crs = "HMN"
+role = "minor"
+segment = "overground-mildmay-east"
+
+[[stations]]
+crs = "HKW"
+role = "minor"
+segment = "overground-mildmay-east"
+
+[[stations]]
+crs = "SRA"
+role = "terminus"
+segment = "overground-mildmay-east"
+
+# Clapham Junction branch. Rejoins the core at Willesden Junction (WIJ),
+# already listed above.
+[[stations]]
+crs = "CLJ"
+role = "terminus"
+segment = "overground-mildmay-clapham-branch"
+
+[[stations]]
+crs = "IMW"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+
+[[stations]]
+crs = "WBP"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+
+[[stations]]
+crs = "KPA"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+
+[[stations]]
+crs = "SPB"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"

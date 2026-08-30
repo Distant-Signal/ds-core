@@ -1,0 +1,214 @@
+id = "overground-windrush"
+name = "Windrush line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["HHY", "SQE", "NWX", "CYP", "WCY", "CLJ"]
+
+# Former East London line (extended). Core from the shared Canonbury
+# curve down to Surrey Quays, then four branches: New Cross (direct); a
+# New Cross Gate shared sub-trunk out to Sydenham, which itself splits
+# into Crystal Palace and West Croydon; and a separate Clapham Junction
+# branch from Surrey Quays. Each branch/trunk is its own `[[stations]]`
+# block, ordered geographically within itself, per SCHEMA's curation rule.
+#
+# NOTE: this file models more than one physical branch in a single
+# `stations` list. If a future "incident affects stations between A and B"
+# range-parser is ever built per `lines/SCHEMA.md`'s ordering rule, it must
+# not assume the whole list is one single physical sequence — a range query
+# spanning a branch boundary (e.g. mixing the Crystal Palace and West
+# Croydon branch stations) would incorrectly sweep through the other
+# branch's stations too.
+#
+# `overground-canonbury-curve`: this line and `overground-mildmay` both
+# call at Highbury & Islington (HHY) and Canonbury (CNN) — the real curve
+# of track connecting the North London and East London route alignments
+# at that point — then diverge to two different, non-identical next
+# stations (Windrush to Dalston Junction, DLJ; Mildmay to Dalston
+# Kingsland, DLK — different CRS codes, ~350m apart, not the same
+# station). Per `lines/SCHEMA.md`'s junction rule, both junction stations
+# belong to the shared segment and each line's own exclusive segment
+# resumes at the very next station. See `lines/overground-mildmay.toml`
+# for the same explanation from that file's side, kept consistent with
+# this one (same CRS codes, same segment string), matching this
+# catalogue's cross-file citation convention used elsewhere (e.g.
+# `lines/elizabeth-shenfield.toml`'s note on the `elizabeth-line`/
+# `elizabeth-central` shared-segment convention).
+#
+# Battersea Park, on the Clapham Junction branch, receives a reduced/
+# limited service compared to the line's other four termini (New Cross,
+# Clapham Junction, Crystal Palace, West Croydon) — confirmed by the
+# Task 3.0 research pass (two independent live sources described it as
+# getting a reduced service relative to the rest of the branch, one as
+# "(limited service)", another as "(selected services)").
+#
+# Other touchpoints are station-level overlaps only, not shared segments:
+# Whitechapel (ZLW, this file) already appears on
+# `elizabeth-line.toml`/`elizabeth-heathrow.toml`/`elizabeth-shenfield.toml`
+# — a different, exclusive segment family, no segment shared. Canada
+# Water (ZCW, this file) also already appears on `elizabeth-line.toml`
+# (segment `elizabeth-south-east`) — another station-level overlap the
+# Task 3.0 research pass didn't call out; noted here for the same reason.
+# Clapham Junction (CLJ, this file's own separate branch) is a three-way
+# station-level overlap between this line, `overground-mildmay`'s own
+# separate Clapham Junction branch, and the existing SWR catalogue's
+# `swr-alton`/`swr-portsmouth-direct`/`swr-south-west-main` — three
+# different routes converging on one station, not a shared segment.
+
+# Shared curve with `overground-mildmay`.
+[[stations]]
+crs = "HHY"
+role = "junction"
+segment = "overground-canonbury-curve"
+
+[[stations]]
+crs = "CNN"
+role = "junction"
+segment = "overground-canonbury-curve"
+
+# Core, from the shared curve down to Surrey Quays.
+[[stations]]
+crs = "DLJ"
+role = "junction"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "HGG"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "HOX"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "SDC"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "ZLW"
+role = "major"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "SDE"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "WPE"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "ROE"
+role = "minor"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "ZCW"
+role = "major"
+segment = "overground-windrush-core"
+
+[[stations]]
+crs = "SQE"
+role = "junction"
+segment = "overground-windrush-core"
+
+# New Cross branch, from Surrey Quays.
+[[stations]]
+crs = "NWX"
+role = "terminus"
+segment = "overground-windrush-new-cross"
+
+# New Cross Gate shared sub-trunk, from Surrey Quays.
+[[stations]]
+crs = "NXG"
+role = "junction"
+segment = "overground-windrush-new-cross-gate-trunk"
+
+[[stations]]
+crs = "BCY"
+role = "minor"
+segment = "overground-windrush-new-cross-gate-trunk"
+
+[[stations]]
+crs = "HPA"
+role = "minor"
+segment = "overground-windrush-new-cross-gate-trunk"
+
+[[stations]]
+crs = "FOH"
+role = "minor"
+segment = "overground-windrush-new-cross-gate-trunk"
+
+[[stations]]
+crs = "SYD"
+role = "junction"
+segment = "overground-windrush-new-cross-gate-trunk"
+
+# Crystal Palace branch, from Sydenham.
+[[stations]]
+crs = "CYP"
+role = "terminus"
+segment = "overground-windrush-crystal-palace"
+
+# West Croydon branch, from Sydenham.
+[[stations]]
+crs = "PNW"
+role = "minor"
+segment = "overground-windrush-west-croydon"
+
+[[stations]]
+crs = "ANZ"
+role = "minor"
+segment = "overground-windrush-west-croydon"
+
+[[stations]]
+crs = "NWD"
+role = "major"
+segment = "overground-windrush-west-croydon"
+
+[[stations]]
+crs = "WCY"
+role = "terminus"
+segment = "overground-windrush-west-croydon"
+
+# Clapham Junction branch, from Surrey Quays.
+[[stations]]
+crs = "QRP"
+role = "minor"
+segment = "overground-windrush-clapham-branch"
+
+[[stations]]
+crs = "PMR"
+role = "major"
+segment = "overground-windrush-clapham-branch"
+
+[[stations]]
+crs = "DMK"
+role = "minor"
+segment = "overground-windrush-clapham-branch"
+
+[[stations]]
+crs = "CLP"
+role = "minor"
+segment = "overground-windrush-clapham-branch"
+
+[[stations]]
+crs = "WWR"
+role = "minor"
+segment = "overground-windrush-clapham-branch"
+
+[[stations]]
+crs = "BAK"
+role = "minor"
+segment = "overground-windrush-clapham-branch"
+# Limited service
+
+[[stations]]
+crs = "CLJ"
+role = "terminus"
+segment = "overground-windrush-clapham-branch"

@@ -1,0 +1,166 @@
+id = "overground-weaver"
+name = "Weaver line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["LST", "HAC", "ENF", "CHN", "CHI"]
+
+# Former Lea Valley lines. A trunk from Liverpool Street splits into three
+# branches (Enfield Town, Cheshunt, Chingford); the Enfield Town and
+# Cheshunt branches themselves share a sub-trunk out to Edmonton Green.
+# Each branch/trunk is its own `[[stations]]` block, ordered geographically
+# within itself, per SCHEMA's curation rule.
+#
+# NOTE: this file models more than one physical branch in a single
+# `stations` list. If a future "incident affects stations between A and B"
+# range-parser is ever built per `lines/SCHEMA.md`'s ordering rule, it must
+# not assume the whole list is one single physical sequence — a range query
+# spanning a branch boundary (e.g. mixing Enfield Town and Chingford branch
+# stations) would incorrectly sweep through the other branch's stations too.
+#
+# The Enfield Town/Cheshunt sub-trunk sharing is internal to this one line
+# and file — SCHEMA's segment-sharing mechanism only cares about sharing
+# *between different lines*, so it doesn't need a cross-line test.
+#
+# No genuine shared segment with any sibling Overground line. See
+# `lines/overground-suffragette.toml`'s note about Seven Sisters (SVS,
+# this line) vs. South Tottenham (SOT, Suffragette) being different
+# stations despite proximity — cross-referenced here so the judgment call
+# is documented from both sides.
+#
+# Also note: Liverpool Street (LST) already appears in this catalogue on
+# `elizabeth-line.toml`/`elizabeth-heathrow.toml`/`elizabeth-shenfield.toml`
+# — a station-level overlap the Task 3.0 research pass didn't call out;
+# noted here for the same reason as the other cross-catalogue overlaps
+# flagged elsewhere in this batch (station-level only, no segment shared).
+
+# Trunk (all three branches), from Liverpool Street.
+[[stations]]
+crs = "LST"
+role = "terminus"
+segment = "overground-weaver-trunk"
+
+[[stations]]
+crs = "BET"
+role = "minor"
+segment = "overground-weaver-trunk"
+
+[[stations]]
+crs = "CBH"
+role = "minor"
+segment = "overground-weaver-trunk"
+
+[[stations]]
+crs = "LOF"
+role = "minor"
+segment = "overground-weaver-trunk"
+
+[[stations]]
+crs = "HAC"
+role = "junction"
+segment = "overground-weaver-trunk"
+
+# Enfield Town/Cheshunt shared sub-trunk, continuing from Hackney Downs.
+[[stations]]
+crs = "REC"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "SKW"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "SMH"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "SVS"
+role = "major"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "BCV"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "WHL"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "SLV"
+role = "minor"
+segment = "overground-weaver-edmonton-trunk"
+
+[[stations]]
+crs = "EDR"
+role = "junction"
+segment = "overground-weaver-edmonton-trunk"
+
+# Enfield Town branch, continuing from Edmonton Green.
+[[stations]]
+crs = "BHK"
+role = "minor"
+segment = "overground-weaver-enfield"
+
+[[stations]]
+crs = "ENF"
+role = "terminus"
+segment = "overground-weaver-enfield"
+
+# Cheshunt branch, continuing from Edmonton Green.
+[[stations]]
+crs = "SBU"
+role = "minor"
+segment = "overground-weaver-cheshunt"
+
+[[stations]]
+crs = "TUR"
+role = "minor"
+segment = "overground-weaver-cheshunt"
+
+[[stations]]
+crs = "TEO"
+role = "minor"
+segment = "overground-weaver-cheshunt"
+
+[[stations]]
+crs = "CHN"
+role = "terminus"
+segment = "overground-weaver-cheshunt"
+
+# Chingford branch, diverging at Hackney Downs directly (not via Rectory
+# Road/Stoke Newington).
+[[stations]]
+crs = "CPT"
+role = "minor"
+segment = "overground-weaver-chingford"
+
+[[stations]]
+crs = "SJS"
+role = "minor"
+segment = "overground-weaver-chingford"
+
+[[stations]]
+crs = "WHC"
+role = "major"
+segment = "overground-weaver-chingford"
+
+[[stations]]
+crs = "WST"
+role = "minor"
+segment = "overground-weaver-chingford"
+
+[[stations]]
+crs = "HIP"
+role = "minor"
+segment = "overground-weaver-chingford"
+
+[[stations]]
+crs = "CHI"
+role = "terminus"
+segment = "overground-weaver-chingford"

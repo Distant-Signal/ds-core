@@ -1,0 +1,36 @@
+id = "overground-liberty"
+name = "Liberty line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["RMF", "EMP", "UPM"]
+
+# The former Romford to Upminster line — the line's own historic name,
+# now branded Liberty after London Overground's Nov 2024 line-naming
+# rebrand. A short shuttle service (~5.4 km) entirely within the London
+# Borough of Havering.
+#
+# Standalone: the Liberty line's own article states explicitly it "does
+# not have interchanges with any other London Overground line" — confirmed
+# genuinely isolated, no shared segment with any sibling Overground line.
+#
+# Romford (RMF) already appears in this catalogue on
+# `lines/elizabeth-shenfield.toml` (role `major`). That's a station-level
+# overlap between two different operators calling at the same station,
+# not a segment overlap — no action needed beyond this note, matching the
+# `xc-south-coast.toml`/Reading precedent of documenting overlaps without
+# forcing a shared segment.
+[[stations]]
+crs = "RMF"
+role = "terminus"
+segment = "overground-liberty"
+
+[[stations]]
+crs = "EMP"
+role = "minor"
+segment = "overground-liberty"
+
+[[stations]]
+crs = "UPM"
+role = "terminus"
+segment = "overground-liberty"

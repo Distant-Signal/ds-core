@@ -1,0 +1,85 @@
+id = "overground-suffragette"
+name = "Suffragette line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["GPO", "LEM", "BGV"]
+
+# Former Gospel Oak to Barking line ("Goblin"), 13 stations, extended to
+# Barking Riverside in Feb 2022.
+#
+# No genuine shared segment with any sibling Overground line. Gospel Oak
+# (GPO, role `junction`) is a station-level overlap with
+# `overground-mildmay` only — this line terminates there, Mildmay
+# continues past it, so no track is shared.
+#
+# Explicitly note: South Tottenham (SOT, this line) and Seven Sisters
+# (SVS, on the Weaver line) are two different stations, not the same
+# station under different names, despite being within walking distance —
+# they are not treated as an interchange or a shared segment here, since
+# neither line's own sourcing claims they are the same stop. Flagging
+# this so nobody accidentally merges them into a shared segment later.
+[[stations]]
+crs = "GPO"
+role = "junction"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "UHL"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "CRH"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "HRY"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "STO"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "BHO"
+role = "major"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "WMW"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "LEM"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "LER"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "WNP"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "WGR"
+role = "minor"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "BKG"
+role = "major"
+segment = "overground-suffragette"
+
+[[stations]]
+crs = "BGV"
+role = "terminus"
+segment = "overground-suffragette"

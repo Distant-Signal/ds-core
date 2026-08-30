@@ -1,0 +1,123 @@
+id = "overground-lioness"
+name = "Lioness line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LO"]
+sample_stations = ["EUS", "WMB", "HRW", "WFJ"]
+
+# The former Watford DC line, Euston to Watford Junction, 19 stations.
+#
+# Primrose Hill is deliberately excluded — it closed to passengers in
+# 1992 and carries no current service, despite still appearing on some
+# older/historical route diagrams.
+#
+# Willesden Junction (WIJ, role `junction`) is a station-level overlap
+# with `overground-mildmay` only — both lines call there but run on
+# physically separate track either side of it, so no segment is shared.
+# This is the same station-overlap-not-segment-sharing judgment call
+# already documented elsewhere in this catalogue (e.g. `xc-south-coast.toml`
+# at Reading).
+#
+# The Bakerloo line (London Underground, out of scope for this National
+# Rail catalogue) shares the physical DC tracks between Queen's Park and
+# Harrow & Wealdstone.
+#
+# Also note: Watford Junction (WFJ) already appears in this catalogue on
+# `lines/west-coast-main-line.toml` — this is a station-level overlap the
+# task 3.0 research pass didn't flag; noted here for the same reason as
+# the Willesden Junction/Romford overlaps above (station-level only, no
+# segment shared, matching the `xc-south-coast.toml`/Reading precedent).
+[[stations]]
+crs = "EUS"
+role = "terminus"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "SOH"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "KBN"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "QPW"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "KNL"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "WIJ"
+role = "junction"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "HDN"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "SBP"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "WMB"
+role = "major"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "NWB"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "SOK"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "KNT"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "HRW"
+role = "major"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "HDL"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "HTE"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "CPK"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "BSH"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "WFH"
+role = "minor"
+segment = "overground-lioness"
+
+[[stations]]
+crs = "WFJ"
+role = "terminus"
+segment = "overground-lioness"
