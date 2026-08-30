@@ -1,0 +1,165 @@
+id = "greater-anglia-stansted-express"
+name = "Stansted Express"
+mode = "national-rail"
+category = "commuter"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) against railwaycodes.org.uk's
+# operators/toccodes.shtm — not re-derived here per the brief. Stansted
+# Express is a Greater Anglia brand, not a separate TOC/ATOC code (Wikipedia's
+# "Stansted Express" article infobox: "parent_company = Greater Anglia";
+# "The name is used as a brand of state-owned operator Greater Anglia."),
+# so `operators` is `["LE"]`, matching Task 2.1/2.2, not a distinct code.
+
+# `category = "commuter"`, matching `elizabeth-heathrow.toml`'s category
+# field (checked for a sanity comparison only, per the brief — its content
+# otherwise not copied here). Stansted Express is a single branded
+# point-to-point airport-link service like the Heathrow branch, not a
+# multi-route franchise-wide catch-all (contrast `northern.toml`'s
+# `category = "operator"`, used there for exactly that broader case), and not
+# an intercity corridor in GEML's sense either.
+
+destination_crs_filter = ["SSD"]
+# Liverpool Street, Tottenham Hale, Harlow Town and Bishop's Stortford are
+# also called at by other Greater Anglia West Anglia Main Line services
+# (`greater-anglia-west-anglia.toml`) sharing the same platforms/tracks;
+# filtering LDBWS-inferred services to those terminating/originating at
+# Stansted Airport (SSD) disambiguates Stansted Express workings at the
+# shared stations, mirroring `elizabeth-heathrow.toml`'s use of
+# `destination_crs_filter` for the same kind of shared-trunk-station
+# disambiguation problem.
+sample_stations = ["LST", "TOM", "SSD"]
+match_keywords = ["Stansted Express"]
+# A specific, unambiguous brand name (confirmed as Greater Anglia's own
+# branding for this exact service by the Wikipedia article's own title and
+# infobox) — no other TOC or route plausibly produces this phrase in
+# Knowledgebase incident text, so a single keyword is enough; not padding
+# with weaker/broader phrases per SCHEMA.md's "don't overload" rule.
+
+# No [severity_overrides]. Tempting to copy `elizabeth-heathrow.toml`'s
+# tighter thresholds (both are airport-link services with time-sensitive
+# passengers) but the brief explicitly warns against copying that file's
+# content rather than using it as a category sanity check, and no
+# Stansted-Express-specific punctuality/frequency research surfaced a
+# verified reason to deviate from config.py's base thresholds, so none are
+# set here — same conservative call `greater-anglia-west-anglia.toml` (Task
+# 2.2) made for the same reason.
+
+# Liverpool Street to Stansted Airport, ordered south/west to north/east.
+# Stansted Express is a limited-stop service, not every West Anglia Main Line
+# station: Wikipedia's "Stansted Express" article (fetched raw 2026-08-30) is
+# explicit about the calling pattern — "The Stansted Express stops at
+# Tottenham Hale... typically take 46 minutes to London Liverpool Street (32
+# minutes to Tottenham Hale)" (i.e. non-stop Liverpool Street-Tottenham Hale,
+# skipping Stratford and the Lea Valley stops) and its off-peak service table:
+# 4 tph Liverpool Street-Stansted Airport via Tottenham Hale, of which 2 tph
+# call at Bishop's Stortford, 2 tph call at Harlow Town (of which 1 tph also
+# calls at Stansted Mountfitchet). Cross-checked against Stansted Airport
+# station's own article (fetched raw), whose services section and route
+# diagram independently confirm the same "4 tph to London Liverpool Street,
+# via Tottenham Hale... 2 tph call at Bishop's Stortford / 2 tph call at
+# Harlow Town, of which 1 tph also calls at Stansted Mountfitchet" pattern.
+# Together these give exactly 6 calling points end to end (matching the
+# Stansted Express infobox's own "stations = 6" field): Liverpool Street,
+# Tottenham Hale, Harlow Town, Bishop's Stortford, Stansted Mountfitchet,
+# Stansted Airport. Sawbridgeworth, Harlow Mill, Roydon, Broxbourne,
+# Cheshunt, Meridian Water, Northumberland Park and Stratford are genuine
+# West Anglia Main Line calling points but are NOT served by Stansted
+# Express and are deliberately omitted here rather than added just because
+# they lie geographically along the corridor (SCHEMA.md: don't invent a
+# calling pattern that isn't the line's own).
+#
+# ## Segment decision: genuine shared trunk with West Anglia Main Line
+#
+# Confirmed independently (not just taking Task 2.2's note on faith): fetched
+# Stansted Mountfitchet station's own Wikipedia article raw, whose two
+# route-diagram entries both list "previous=Bishop's Stortford" — one for
+# "toc=Stansted Express" with "next=Stansted Airport", the other for
+# "toc=Greater Anglia" / "route=West Anglia Main Line" with "next=Elsenham".
+# Same predecessor, different successor: Stansted Mountfitchet (SST) is the
+# real, physical divergence point, and the Stansted Airport station's own
+# history section confirms the airport branch is "a new double-track branch
+# line connecting to the West Anglia Main Line, north of Stansted
+# Mountfitchet" — i.e. genuine shared physical track from Liverpool Street
+# through Stansted Mountfitchet, not a parallel/independent alignment (unlike
+# the GEML/Elizabeth-Shenfield "separate main vs electric tracks" case in
+# Task 2.1, or the `xc-south-coast.toml`/`elizabeth-line.toml` Reading
+# station-overlap-only case the brief flagged for comparison). Stansted
+# Express being limited-stop over that shared stretch doesn't change this —
+# `elizabeth-heathrow.toml` shares `elizabeth-trunk-west`/`elizabeth-central`
+# with `elizabeth-line.toml` under the same shape (branch service, subset of
+# calling points, same physical trunk).
+#
+# Per Task 2.2's explicit hand-off note and SCHEMA.md's shared-trunk rule of
+# thumb (junction station belongs to the shared segment), this file reuses
+# `greater-anglia-west-anglia.toml`'s exact `waml-trunk-london` segment name
+# for Liverpool Street through Stansted Mountfitchet (SST) inclusive. An
+# incident on that stretch should propagate to both lines as a shared-trunk
+# event.
+#
+# Beyond SST, the dedicated double-track airport branch (via the triangular
+# junction north of Stansted Mountfitchet, including the tunnel under the
+# runway) is exclusive to Stansted Express services approaching from London —
+# `greater-anglia-west-anglia.toml` doesn't include Stansted Airport (SSD) at
+# all, so there's no segment name of its to reuse there. Stansted Airport
+# station is also served by Greater Anglia's separate Norwich-Stansted
+# Airport service and by CrossCountry's Birmingham-Stansted service
+# (`xc-stansted.toml`), but both of those approach via Audley End on the
+# WAML mainline side of the same triangular junction, not via this line's
+# Stansted Mountfitchet approach — `xc-stansted.toml` already tags SSD (and
+# CBG) with its own whole-route `xc-stansted` segment name, so reusing that
+# name here (even just for SSD) would incorrectly mark this file's entire
+# London-Stansted Mountfitchet trunk as shared with CrossCountry's
+# Birmingham corridor, the exact segment-name-collision hazard the Global
+# Constraints warn about (mirrors the CBG station-overlap-only precedent
+# `greater-anglia-west-anglia.toml` documents for the same reason). So SSD
+# gets its own new, exclusive segment name below: station-level overlap with
+# `xc-stansted.toml` (and with Greater Anglia's own unwritten Norwich-Stansted
+# Airport line, not yet covered by any task in this batch), not a shared
+# segment.
+[[stations]]
+crs = "LST"
+role = "terminus"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "TOM"
+role = "major"
+segment = "waml-trunk-london"
+# Tottenham Hale: London Underground (Victoria line) interchange, and per
+# the Wikipedia article the first calling point after a non-stop run from
+# Liverpool Street (Stratford and the Lea Valley stops are not served).
+
+[[stations]]
+crs = "HWN"
+role = "major"
+segment = "waml-trunk-london"
+# Harlow Town: called at by 2 of the 4 tph (the other 2 tph call at Bishop's
+# Stortford instead) — see the calling-pattern note above.
+
+[[stations]]
+crs = "BIS"
+role = "major"
+segment = "waml-trunk-london"
+# Bishop's Stortford: called at by 2 of the 4 tph (the other 2 tph call at
+# Harlow Town instead).
+
+[[stations]]
+crs = "SST"
+role = "junction"
+segment = "waml-trunk-london"
+# Stansted Mountfitchet: served by 1 of the 4 tph (those also calling at
+# Bishop's Stortford northbound / Harlow Town southbound, per the Stansted
+# Airport station article). Last station of the shared trunk with
+# `greater-anglia-west-anglia.toml`; the exclusive airport-branch segment
+# starts at the next station — see the segment-decision note above.
+
+[[stations]]
+crs = "SSD"
+role = "terminus"
+segment = "stansted-express-branch"
+# Stansted Airport: northern terminus, on the dedicated branch line north of
+# Stansted Mountfitchet. Station-level overlap only with `xc-stansted.toml`
+# (CrossCountry's Birmingham-Stansted service also terminates here, via a
+# different approach) — see the segment-decision note above for why this
+# isn't a shared segment name.

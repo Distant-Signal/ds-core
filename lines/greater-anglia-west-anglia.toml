@@ -1,0 +1,284 @@
+id = "greater-anglia-west-anglia"
+name = "West Anglia Main Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) against railwaycodes.org.uk's
+# operators/toccodes.shtm — not re-derived here per the brief.
+
+# `category = "commuter"` rather than `main-line`: Wikipedia's "West Anglia
+# Main Line" infobox (fetched raw 2026-08-29) classifies the line's own
+# `type` field as "Commuter rail, Suburban rail" (not intercity/main-line),
+# and the article body is explicit: "Following the 1988 electrification of
+# the Cambridge Line, between Hitchin and Cambridge, the West Anglia Main
+# Line is now primarily a commuter route for stations between Cambridge and
+# London". That's a direct contrast with GEML (Task 2.1), whose own article
+# never disclaims its intercity character and which runs London-Norwich
+# non-stop in ~90 minutes. WAML's London end (Liverpool Street-Cheshunt) is
+# dense outer-suburban/metro-adjacent territory (Tottenham Hale is
+# literally branded "the Tottenham Hale branch of the Lea Valley Lines"),
+# closer in character to `elizabeth-shenfield.toml`/`thameslink-core.toml`
+# than to `xc-south-coast.toml`/`west-coast-main-line.toml`.
+
+sample_stations = ["LST", "BXB", "BIS", "CBG"]
+match_keywords = ["West Anglia Main Line", "WAML"]
+# "WAML" confirmed as an in-use abbreviation by the Wikipedia article itself
+# (e.g. "SRSA made several improvements on the West Anglia Main Line (WAML)
+# between Cambridge station and Shepreth"). Deliberately NOT including
+# "Cambridge line" as a keyword: that phrase names a *different* physical
+# route in the real world (the Hitchin-Cambridge line to London King's
+# Cross, run by Great Northern/Thameslink, not Greater Anglia) and would be
+# a false-positive magnet.
+
+# No [severity_overrides]: this line's London end runs turn-up-and-go
+# suburban frequencies but its outer end (Bishop's Stortford-Cambridge) is
+# a lower-frequency semi-fast pattern, unlike Thameslink/Elizabeth's
+# uniformly metro-dense cores. Nothing in the research surfaced a clear
+# reason to deviate from config.py's base thresholds either direction, so
+# none are set here rather than guess.
+
+# Liverpool Street to Cambridge, ordered south/west to north/east. Station
+# list, CRS codes and calling pattern verified against:
+# - Wikipedia's "West Anglia Main Line" article (fetched raw 2026-08-29)
+#   and its embedded route diagram (Template:West_Anglia_Main_Line_RDT,
+#   fetched raw), which gives the ordered principal-station mileage chain
+#   from Liverpool Street.
+# - Wikipedia's "Lea Valley lines" article/RDT (Template:Lea_Valley_Lines_RDT,
+#   fetched raw), which distinguishes the National Rail route "Liverpool
+#   Street / Stratford to Cheshunt via Tottenham Hale" (this line) from the
+#   physically separate London Overground route "Liverpool Street to
+#   Cheshunt / Enfield Town via Seven Sisters" (a different alignment,
+#   entirely out of scope here).
+# - Each individual station's own Wikipedia article/infobox (fetched raw,
+#   with a proper User-Agent after an initial 429 without one), used for
+#   CRS codes and to cross-check adjacency via "previous"/"next"
+#   route-diagram fields and explicit mileage-from-Liverpool-Street figures.
+#
+# ## Tottenham Hale / Northumberland Park / Meridian Water
+#
+# These three ARE included as genuine, current Greater Anglia calling
+# points (not Elizabeth-line-style "sparse/non-standard" stops): each
+# station's own Wikipedia article states plainly that it "is served by
+# Greater Anglia" (Tottenham Hale) or that "the station and all trains
+# serving it are operated by Greater Anglia" (Northumberland Park, Meridian
+# Water), with published off-peak trains-per-hour figures. This is a
+# genuinely different, GA-exclusive physical alignment via Coppermill
+# Junction from the London Overground stations covering the same stretch of
+# the Lea Valley (Clapton, Stoke Newington, Seven Sisters, etc., via a
+# separate route) — there is no other `lines/*.toml` file claiming these
+# three CRS codes.
+#
+# ## The King's Lynn question (the brief's premise vs. verified reality)
+#
+# The task brief describes this line as "Liverpool Street-Cambridge/King's
+# Lynn". Live research contradicts the "King's Lynn" half: Wikipedia's WAML
+# infobox itself scopes the line as `end = Cambridge`, and the "Fen Line"
+# article (Cambridge-King's Lynn, fetched raw, cross-checking the WAML
+# article) is explicit and dated: "Until the timetable change in May 2023,
+# Greater Anglia ran a few direct services between London Liverpool Street
+# and King's Lynn or Ely (via the West Anglia Main Line)... After the
+# alterations, these services only run to and from Ely, and King's Lynn no
+# longer has any direct services to London Liverpool Street." So as things
+# stand, Greater Anglia does not run Liverpool Street-King's Lynn services
+# at all, and even the surviving Liverpool Street-Ely peak extension is a
+# limited, peak-only pattern beyond WAML's own defined northern terminus,
+# not the line's standard calling pattern. Per the "don't invent, comment
+# and omit instead" instruction, this file terminates at Cambridge (CBG)
+# rather than inventing a King's Lynn (or Ely/Cambridge North) endpoint the
+# brief assumed but current sourcing doesn't support.
+#
+# ## Segments and the Task 2.3 (Stansted Express) hand-off
+#
+# Two segments, mirroring GEML's two-segment shape:
+#
+# - `waml-trunk-london` (Liverpool Street through Stansted Mountfitchet):
+#   Stansted Mountfitchet's own Wikipedia article is unambiguous that this
+#   is the actual diverging point — its route-diagram fields give
+#   "next=Stansted Airport" for the Stansted Express route and, separately,
+#   "next=Elsenham" for the West Anglia Main Line route, i.e. both routes
+#   list Stansted Mountfitchet as their common predecessor before splitting
+#   (the physical junction is a short distance north of the station itself,
+#   per the Stansted Airport article: "a new double-track branch line
+#   connecting to the West Anglia Main Line, north of Stansted
+#   Mountfitchet"). Task 2.3 (`greater-anglia-stansted-express.toml`,
+#   Liverpool Street-Stansted Airport) should reuse this exact segment name
+#   for its own Liverpool Street-through-Stansted Mountfitchet stations —
+#   this is a genuine shared trunk, not just station overlap.
+# - `waml-mainline` (Elsenham through Cambridge): this line's own exclusive
+#   continuation from London's perspective. BUT — per the Stansted Airport
+#   station's own route-diagram fields plus the Fen Line article
+#   (independently, cross-checking) — Greater Anglia also runs an hourly
+#   Norwich-Stansted Airport service (via the Breckland line and Cambridge
+#   North, non-stop Ely-Cambridge North) that joins this exact stretch at
+#   Cambridge and follows it down to the Stansted Mountfitchet junction
+#   before diverging onto the airport branch. If Task 2.3 models that
+#   second branch, it should reuse `waml-mainline` for its
+#   Cambridge-through-Elsenham stations too — a genuine second shared
+#   trunk, not incidental.
+#
+# ## Cambridge / xc-stansted.toml (CrossCountry) — station overlap, NOT a
+# shared segment
+#
+# CrossCountry's Birmingham-Stansted service (`xc-stansted.toml`) also
+# traverses this line's `waml-mainline` stretch (Cambridge to the Stansted
+# Mountfitchet junction, via Audley End) per the WAML article's own
+# services section ("Services from Stansted Airport to Cambridge (and
+# onward to Birmingham New Street via Peterborough) are operated by
+# CrossCountry") — but `xc-stansted.toml`, as committed, tags only its own
+# CBG and SSD stations with the single segment name `xc-stansted`, spanning
+# its entire Birmingham-Nuneaton-Leicester-Peterborough-Ely-Cambridge route,
+# not just the WAML-shared tail end. Reusing `xc-stansted` here (or any
+# name that file already uses) for just this line's Cambridge station would
+# — per `segments.rs`'s file-wide (not per-station) shared-segment marking,
+# the exact hazard `greater-anglia-main-line.toml` documents for its own
+# Romford/Shenfield overlap with `elizabeth-shenfield.toml` — incorrectly
+# reclassify XC's entire Midlands trunk as sharing track with this line,
+# which isn't true. So this is deliberately left as station-level overlap
+# only at CBG (both files independently match an incident there, each as
+# ExclusiveSegment) rather than a shared segment name; see the matcher.rs
+# regression test for this.
+[[stations]]
+crs = "LST"
+role = "terminus"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "SRA"
+role = "major"
+segment = "waml-trunk-london"
+# Stratford: major interchange, not a branch point of this line itself
+# (mirrors greater-anglia-main-line.toml's own SRA role reasoning).
+
+[[stations]]
+crs = "TOM"
+role = "major"
+segment = "waml-trunk-london"
+# Tottenham Hale: London Underground (Victoria line) interchange. "The
+# Tottenham Hale branch of the Lea Valley Lines" per the WAML article's own
+# phrasing for this corridor.
+
+[[stations]]
+crs = "NUM"
+role = "minor"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "MRW"
+role = "minor"
+segment = "waml-trunk-london"
+# Meridian Water: opened 2019, replacing the former Angel Road station a
+# short distance away as part of the Lea Valley Rail Project.
+
+[[stations]]
+crs = "CHN"
+role = "minor"
+segment = "waml-trunk-london"
+# Cheshunt: also the northern terminus of London Overground's Weaver line
+# (Southbury Loop, a separate physical route) — out of scope here, station
+# overlap only, no other `lines/*.toml` file currently claims CHN.
+
+[[stations]]
+crs = "BXB"
+role = "junction"
+segment = "waml-trunk-london"
+# Hertford East branch line diverges here. Not covered by any task in this
+# batch; out of scope for this file.
+
+[[stations]]
+crs = "RYN"
+role = "minor"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "HWN"
+role = "major"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "HWM"
+role = "minor"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "SAW"
+role = "minor"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "BIS"
+role = "major"
+segment = "waml-trunk-london"
+
+[[stations]]
+crs = "SST"
+role = "junction"
+segment = "waml-trunk-london"
+# Stansted Mountfitchet: the Stansted Airport branch (Task 2.3's
+# `greater-anglia-stansted-express.toml`) diverges just north of here — see
+# the segment/Task-2.3 hand-off note above. Last station of the shared
+# trunk; the exclusive `waml-mainline` segment starts at the next station.
+
+[[stations]]
+crs = "ESM"
+role = "minor"
+segment = "waml-mainline"
+# Elsenham: on the main line, not the airport branch, despite being
+# geographically close to the Stansted Mountfitchet junction — confirmed by
+# its own article's route-diagram fields (previous=Stansted Mountfitchet,
+# next=Newport, route=West Anglia Main Line).
+
+[[stations]]
+crs = "NWE"
+role = "minor"
+segment = "waml-mainline"
+
+[[stations]]
+crs = "AUD"
+role = "minor"
+segment = "waml-mainline"
+# Former junction for the Saffron Walden branch (closed to passengers 1964)
+# and the Elsenham & Thaxted Light Railway's southern connection; both long
+# closed, no live branch here today.
+
+[[stations]]
+crs = "GRC"
+role = "minor"
+segment = "waml-mainline"
+
+[[stations]]
+crs = "WLF"
+role = "minor"
+segment = "waml-mainline"
+
+[[stations]]
+crs = "SED"
+role = "minor"
+segment = "waml-mainline"
+# Shepreth Branch Junction, where the Cambridge Line to London King's Cross
+# (Great Northern/Thameslink, a different operator's route entirely) leaves
+# the WAML, is a short distance north of here, between Shelford and
+# Cambridge South. Out of scope for this file.
+
+[[stations]]
+crs = "CMS"
+role = "minor"
+segment = "waml-mainline"
+# Cambridge South: opened 28 June 2026 (BBC News, cross-checked against the
+# station's own Wikipedia article, fetched raw 2026-08-29), serving the
+# Cambridge Biomedical Campus. "The station is located on the Cambridge
+# line and the West Anglia Main Line... All passenger trains call at the
+# station." Trumpington, a further proposed station between here and
+# Cambridge, has never opened (its Wikipedia title is a redirect to a
+# section of the Trumpington area article, not a station article) and is
+# deliberately omitted rather than invented as a current calling point.
+
+[[stations]]
+crs = "CBG"
+role = "terminus"
+segment = "waml-mainline"
+# Terminus of this line (see the King's Lynn note above for why). Also the
+# junction for the Fen Line (to Ely/King's Lynn), the Breckland Line (to
+# Norwich) and the Ipswich-Ely line — all out of scope for this file, and
+# for the Fen/Breckland lines, GA's own peak-only Liverpool Street-Ely
+# extension beyond this terminus.

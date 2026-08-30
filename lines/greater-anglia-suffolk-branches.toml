@@ -1,0 +1,246 @@
+id = "greater-anglia-suffolk-branches"
+name = "Suffolk Branch Lines"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) against railwaycodes.org.uk's
+# operators/toccodes.shtm — not re-derived here per the brief.
+
+# One sample station per branch terminus: Sudbury (Gainsborough line),
+# Felixstowe (Felixstowe branch line) and Harwich Town (Mayflower line).
+sample_stations = ["SUY", "FLX", "HWC"]
+
+# One officially-attested current marketing name per branch (Wikipedia
+# article titles/infobox `name` fields, fetched raw 2026-08-30). Three
+# branches, three keywords: at the file's stated 2-3 max per SCHEMA.md,
+# deliberately not padded further with looser phrasing — matches
+# greater-anglia-essex-branches.toml's (Task 2.4) precedent exactly.
+match_keywords = ["Gainsborough line", "Felixstowe branch line", "Mayflower line"]
+
+# All three branches run an hourly service in each direction (Gainsborough
+# line, Felixstowe branch line and Mayflower line articles each state
+# "typical service frequency is one train per hour in each direction",
+# fetched raw 2026-08-30). Same reasoning and same numbers as
+# `greater-anglia-essex-branches.toml`'s override (itself following
+# `northern-lakes.toml`/`northern-tyne-valley.toml`'s branch-line pattern):
+# one cancellation is a large fraction of the hour's service, and a
+# 5-minute delay on a short branch journey isn't yet a story at
+# config.py's base thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Structure: one file, three branches (per the task's own grouping)
+#
+# The task brief groups "Sudbury, Felixstowe, Harwich" into a single file.
+# Live research (Wikipedia, raw-fetched 2026-08-30) confirms these are three
+# separate, unconnected branch lines that only share the fact of being minor
+# Greater Anglia branches off the GEML corridor covered by Task 2.1
+# (`greater-anglia-main-line.toml`) — there is no reason to split them into
+# separate files (none is large enough on its own), matching
+# `greater-anglia-essex-branches.toml`'s (Task 2.4) identical structural
+# call, itself following the `swr-alton.toml`/`swr-south-west-main.toml`
+# precedent of a branch or branch-group living in one file alongside its
+# trunk connection. Each branch is listed geographically outward from its
+# own junction with the GEML, per SCHEMA.md's ordering rule.
+#
+# ## Segment decisions at Marks Tey, Ipswich and Manningtree: station-level
+# overlap only, NOT a shared segment name — verified, not assumed
+#
+# Marks Tey (Sudbury branch), Ipswich (Felixstowe branch) and Manningtree
+# (Mayflower line) are all already `geml-mainline`-tagged junction stations
+# in `greater-anglia-main-line.toml` ("Gainsborough line (to Sudbury)
+# diverges here" / "East Suffolk Line ... and the Felixstowe branch line
+# both diverge here" / "Mayflower line (to Harwich Town) diverges here"),
+# and all three branches' trains genuinely run through to Liverpool Street
+# over that same GEML trunk beyond their junction. The tempting move is to
+# reuse the literal segment name `geml-mainline` here too. Checked this
+# against the matcher's actual mechanics before doing it — mirroring
+# `greater-anglia-essex-branches.toml`'s (Task 2.4) identical decision at
+# Witham and Colchester, itself mirroring `greater-anglia-main-line.toml`'s
+# own Romford/Shenfield decision and `greater-anglia-west-anglia.toml`'s
+# Cambridge decision, all three flagging the identical hazard:
+# `segments.rs`'s `SegmentRegistry::is_shared` marks a segment name shared
+# **globally by name**, the instant a second line uses it anywhere — not
+# scoped to the stations the two files actually have in common.
+# `geml-mainline` in `greater-anglia-main-line.toml` spans the entire
+# Ingatestone-Norwich stretch (INT, CHM, BPA, HAP, WTM, KEL, MKT, COL, MNG,
+# IPS, SMK, DIS, NRW). Reusing that exact name for just MKT/IPS/MNG here
+# would silently reclassify ALL of those stations — including ones with
+# nothing to do with these three branches, like Diss and Norwich — as
+# "shared trunk" too, which is not true. So, per the same reasoning already
+# established twice in this batch (Task 2.1's Romford/Shenfield and Task
+# 2.4's Witham/Colchester): Marks Tey, Ipswich and Manningtree get this
+# file's own exclusive segment names below (`gainsborough-line`,
+# `felixstowe-branch`, `mayflower-line`), not `geml-mainline`. All three
+# stations still show up as genuine station-level overlap — an incident
+# there matches both lines independently (each as
+# `MatchScope::ExclusiveSegment`), it just doesn't escalate to
+# `MatchScope::SharedSegment`. See the matcher.rs regression tests for this.
+#
+# Grepped every committed `lines/*.toml` file for MKT/IPS/MNG and for the
+# segment names `gainsborough-line`, `felixstowe-branch`, `mayflower-line`
+# before drafting: `greater-anglia-essex-branches.toml` (Task 2.4) does not
+# touch Marks Tey or Ipswich (its own junctions are Witham and Colchester),
+# so there is no accidental collision at any shared station.
+#
+# ## Gainsborough line / Sudbury branch (Marks Tey–Sudbury)
+#
+# Wikipedia's "Gainsborough line" article (fetched raw; "Sudbury branch
+# line" redirects to it) — the current marketing name, commemorating
+# painter Thomas Gainsborough, of the former Stour Valley Railway — is
+# explicit: "a railway branch line off the Great Eastern Main Line ... that
+# links Marks Tey in Essex with Sudbury in Suffolk", single-track
+# throughout, hourly service, four stations total (its own stations table
+# lists Marks Tey, Chappel & Wakes Colne, Bures, Sudbury in that mileage
+# order from London). CRS codes verified from each station's own Wikipedia
+# infobox `code` field (fetched raw) and independently cross-checked against
+# railwaycodes.org.uk's CRS index pages (CRSB.shtm, CRSC.shtm, CRSS.shtm,
+# fetched 2026-08-30): Chappel & Wakes Colne (CWC), Bures (BUE), Sudbury
+# (SUY). Marks Tey (MKT) already verified in `greater-anglia-main-line.toml`.
+#
+# ## Felixstowe branch line (Ipswich/Westerfield–Felixstowe)
+#
+# Wikipedia's "Felixstowe branch line" article (fetched raw): "connects the
+# Great Eastern Main Line to Felixstowe and its port ... The passenger
+# services originate at Ipswich but the branch itself starts one station
+# further along at Westerfield." So the passenger-facing origin (and the
+# point `greater-anglia-main-line.toml` itself already documents as the
+# junction — "the Felixstowe branch line ... diverge[s] here" at IPS) is
+# Ipswich, while the true physical fork ("Felixstowe trains curve to the
+# right at Westerfield Junction as they leave the station") is one stop
+# further out, at Westerfield — a station on the (currently uncatalogued)
+# East Suffolk Line, not on the GEML itself. Both are included here: IPS as
+# the genuine station-level overlap with `greater-anglia-main-line.toml`
+# (per the decision above), and WFI as the real branch-line fork, tagged
+# `junction` in its own right but with no overlap risk since no committed
+# `lines/*.toml` file currently covers the East Suffolk Line (grepped;
+# confirmed absent from `lines/`). Stations table order (Westerfield, Derby
+# Road, Trimley, Felixstowe) and hourly Ipswich–Felixstowe frequency
+# confirmed from the same article. CRS codes verified from each station's
+# own Wikipedia infobox `code` field and cross-checked against
+# railwaycodes.org.uk's CRS index pages (CRSW.shtm, CRSD.shtm, CRST.shtm,
+# CRSF.shtm, fetched 2026-08-30): Westerfield (WFI), Derby Road (DBR),
+# Trimley (TRM), Felixstowe (FLX). Ipswich (IPS) already verified in
+# `greater-anglia-main-line.toml`. Trimley's own freight-only spurs to the
+# Port of Felixstowe's terminals are not passenger junctions and are
+# omitted per SCHEMA.md's "don't overload" rule.
+#
+# ## Mayflower line (Manningtree–Harwich Town)
+#
+# Wikipedia's "Mayflower line" article (fetched raw): "links Manningtree, on
+# the Great Eastern Main Line, to Harwich Town ... six stations, including
+# the two termini". Stations table (Manningtree, Mistley, Wrabness, Harwich
+# International, Dovercourt, Harwich Town) gives the mileage order from
+# London used here; hourly service confirmed from the same article. The line
+# is double-track and electrified as far as Harwich International, then
+# single-track (bidirectional) on to Harwich Town — infrastructure detail,
+# not a station-list concern. CRS codes verified from each station's own
+# Wikipedia infobox `code` field and independently cross-checked against
+# railwaycodes.org.uk's CRS index pages (CRSM.shtm, CRSW.shtm, CRSH.shtm,
+# CRSD.shtm, fetched 2026-08-30): Mistley (MIS), Wrabness (WRB), Harwich
+# International (HPQ, listed there as "formerly Harwich Parkeston Quay"),
+# Dovercourt (DVC), Harwich Town (HWC). Manningtree (MNG) already verified
+# in `greater-anglia-main-line.toml`.
+
+# --- Gainsborough line / Sudbury branch ---
+
+[[stations]]
+crs = "MKT"
+role = "junction"
+segment = "gainsborough-line"
+# Marks Tey: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml. Station-level overlap only, not a shared
+# segment name — see the segment-decision note above.
+
+[[stations]]
+crs = "CWC"
+role = "minor"
+segment = "gainsborough-line"
+
+[[stations]]
+crs = "BUE"
+role = "minor"
+segment = "gainsborough-line"
+
+[[stations]]
+crs = "SUY"
+role = "terminus"
+segment = "gainsborough-line"
+
+# --- Felixstowe branch line ---
+
+[[stations]]
+crs = "IPS"
+tiploc = "IPSWICH"
+role = "junction"
+segment = "felixstowe-branch"
+# Ipswich: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml, and where Felixstowe branch passenger
+# services originate. Station-level overlap only, not a shared segment
+# name — see the segment-decision note above.
+
+[[stations]]
+crs = "WFI"
+role = "junction"
+segment = "felixstowe-branch"
+# Westerfield: the branch's real physical fork ("Felixstowe trains curve to
+# the right at Westerfield Junction"), one stop beyond Ipswich, on the
+# currently uncatalogued East Suffolk Line. No overlap with any committed
+# line — see the note above.
+
+[[stations]]
+crs = "DBR"
+role = "minor"
+segment = "felixstowe-branch"
+
+[[stations]]
+crs = "TRM"
+role = "minor"
+segment = "felixstowe-branch"
+# Trimley: freight-only spurs to the Port of Felixstowe's terminals diverge
+# here, but not a passenger junction — not tagged `junction` per SCHEMA.md's
+# "don't overload" rule.
+
+[[stations]]
+crs = "FLX"
+role = "terminus"
+segment = "felixstowe-branch"
+
+# --- Mayflower line ---
+
+[[stations]]
+crs = "MNG"
+role = "junction"
+segment = "mayflower-line"
+# Manningtree: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml. Station-level overlap only, not a shared
+# segment name — see the segment-decision note above.
+
+[[stations]]
+crs = "MIS"
+role = "minor"
+segment = "mayflower-line"
+
+[[stations]]
+crs = "WRB"
+role = "minor"
+segment = "mayflower-line"
+
+[[stations]]
+crs = "HPQ"
+role = "major"
+segment = "mayflower-line"
+# Harwich International: ferry interchange (Stena Line to Hook of Holland).
+
+[[stations]]
+crs = "DVC"
+role = "minor"
+segment = "mayflower-line"
+
+[[stations]]
+crs = "HWC"
+role = "terminus"
+segment = "mayflower-line"

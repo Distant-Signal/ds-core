@@ -1,0 +1,511 @@
+id = "greater-anglia-norfolk-branches"
+name = "Norfolk Branch Lines"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) against railwaycodes.org.uk's
+# operators/toccodes.shtm — not re-derived here per the brief.
+
+# One sample station per named branch/route terminus: Sheringham (Bittern
+# Line), Great Yarmouth and Lowestoft (Wherry Lines' two principal
+# termini — a third, much lower-frequency route to Great Yarmouth exists
+# too, see the Wherry Lines notes below) and Cambridge (Breckland Line).
+sample_stations = ["SHM", "GYM", "LWT", "CBG"]
+
+# One officially-attested current marketing name per branch (Wikipedia
+# article titles/infobox `name` fields, fetched raw 2026-08-30). Three
+# branches, three keywords — the file's stated 2-3 max per SCHEMA.md,
+# matching greater-anglia-essex-branches.toml's (Task 2.4) and
+# greater-anglia-suffolk-branches.toml's (Task 2.5) identical precedent.
+# "Breckland line" (lowercase "line") matches the infobox `name` field's own
+# capitalisation exactly, unlike "Bittern Line"/"Wherry Lines" — kept as
+# attested rather than normalised, since match_keywords is free text matched
+# case-insensitively by the matcher anyway (see matcher.rs's
+# `haystack.contains(&kw.to_lowercase())`).
+match_keywords = ["Bittern Line", "Wherry Lines", "Breckland line"]
+
+# All three groups are effectively hourly-or-sparser branch/secondary lines
+# (Bittern: "typical service is one train per hour in each direction" per
+# its own Wikipedia article; Wherry Lines: each of the three routes is
+# "1 per hour in each direction" except the Berney Arms route's 3/day rump
+# service; Breckland: Greater Anglia's own Norwich-bound service is
+# "typically hourly", though several stations see far sparser calls — see
+# the Breckland Line notes below). Same reasoning and same numbers as
+# `greater-anglia-essex-branches.toml`/`greater-anglia-suffolk-branches.toml`
+# (Tasks 2.4/2.5, themselves following `northern-lakes.toml`/
+# `northern-tyne-valley.toml`'s branch-line pattern): one cancellation is a
+# large fraction of the hour's service, and a 5-minute delay on a short
+# branch journey isn't yet a story at config.py's base thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Structure: one file, three branch groups (per the task's own grouping)
+#
+# The task brief groups "Bittern Line, Wherry Lines, Breckland Line" into a
+# single file — all three radiate from Norwich, matching
+# `greater-anglia-essex-branches.toml`/`greater-anglia-suffolk-branches.toml`'s
+# identical structural call (Tasks 2.4/2.5), itself following the
+# `swr-alton.toml`/`swr-south-west-main.toml` precedent of a branch or
+# branch-group living in one file alongside its trunk connection. Each group
+# is listed geographically outward from the shared Norwich hub, per
+# SCHEMA.md's ordering rule.
+#
+# ## Segment decision at Norwich: station-level overlap only with
+# `greater-anglia-main-line.toml`, NOT a shared segment name — verified,
+# not assumed, and a deliberate departure from a literal reading of this
+# task's own brief
+#
+# Norwich (NRW) is the terminus of `geml-mainline` in
+# `greater-anglia-main-line.toml` (Task 2.1) — "Terminus of this line. Also
+# the junction for the Bittern, Wherry and Breckland lines... out of scope
+# for this file" per that file's own NRW comment — and is also the shared
+# origin of all three branches modelled here. The tempting move, and the
+# literal wording of this task's own brief (which describes a "shared-trunk
+# propagation test... asserting MatchScope::SharedSegment on both lines"),
+# is to reuse the literal segment name `geml-mainline` here for NRW.
+# Checked this against the matcher's actual mechanics before doing it —
+# mirroring `greater-anglia-essex-branches.toml`'s (Task 2.4) Witham/
+# Colchester decision and `greater-anglia-suffolk-branches.toml`'s (Task 2.5)
+# Marks Tey/Ipswich/Manningtree decision, both already flagging the
+# identical hazard, and this file's own task instructions explicitly say to
+# follow that precedent "unless your own research finds a genuine reason to
+# differ" — it doesn't: `segments.rs`'s `SegmentRegistry::is_shared` marks a
+# segment name shared **globally by name**, the instant a second line uses
+# it anywhere — not scoped to the stations the two files actually have in
+# common. `geml-mainline` spans the entire Ingatestone-Norwich stretch (INT,
+# CHM, BPA, HAP, WTM, KEL, MKT, COL, MNG, IPS, SMK, DIS, NRW). Reusing that
+# exact name for just NRW here would silently reclassify ALL of those
+# stations — including ones with nothing to do with the Norfolk branches,
+# like Diss and Ingatestone — as "shared trunk" with this file too, which is
+# not true (GEML terminates at Norwich; there is no track beyond it that
+# GEML and these three branches jointly occupy — the branches merely start
+# where GEML ends). So Norwich gets this file's own exclusive segment name
+# below (`norfolk-branches-norwich`), not `geml-mainline`. Norwich still
+# shows up as genuine station-level overlap — an incident there matches both
+# lines independently (each as `MatchScope::ExclusiveSegment`), it just
+# doesn't escalate to `MatchScope::SharedSegment`. See the matcher.rs
+# regression test for this (which replaces the brief's suggested
+# SharedSegment-asserting test with an ExclusiveSegment station-overlap test,
+# per the task's own override instruction and this batch's established
+# precedent).
+#
+# ## Bittern Line (Norwich-Sheringham)
+#
+# Wikipedia's "Bittern Line" article (fetched raw): "links Norwich to
+# Sheringham... 10 stations." Its own stations table gives the mileage order
+# from Norwich used here: Norwich, Salhouse, Hoveton & Wroxham, Worstead,
+# North Walsham, Gunton, Roughton Road, Cromer, West Runton, Sheringham. No
+# internal forks — a simple single branch. `major`/`minor` roles assigned
+# from the same table's ORR 2022/23 passenger entries/exits figures: Hoveton
+# & Wroxham (124,804), North Walsham (243,208) and Cromer (244,294) are an
+# order of magnitude busier than Salhouse (14,006), Worstead (26,816),
+# Gunton (28,446), Roughton Road (24,670) and West Runton (32,918), hence
+# `major` for the former three and `minor` for the latter five. CRS codes
+# verified from each station's own Wikipedia infobox `code` field and
+# independently cross-checked against railwaycodes.org.uk's CRS index pages
+# (CRSS.shtm, CRSH.shtm, CRSW.shtm, CRSN.shtm, CRSG.shtm, CRSR.shtm,
+# CRSC.shtm, fetched 2026-08-30): Salhouse (SAH), Hoveton & Wroxham (HXM,
+# listed on railwaycodes.org.uk under its pre-rename "Wroxham" entry, cross
+# referenced from the Hoveton page), Worstead (WRT), North Walsham (NWA),
+# Gunton (GNT), Roughton Road (RNR), Cromer (CMR), West Runton (WRN),
+# Sheringham (SHM).
+#
+# ## Wherry Lines (Norwich-Great Yarmouth / Norwich-Lowestoft) — a genuine
+# three-way branching structure, verified rather than assumed
+#
+# The brief flagged this as "plausibly two branches off a shared Norwich-area
+# trunk... confirm the actual junction point, likely Reedham or Brundall."
+# Live research (Wikipedia's "Wherry Lines" article, fetched raw, plus each
+# individual junction station's own route-diagram fields, fetched raw) shows
+# it is neither one branch nor a simple two-way split, but three distinct
+# routes sharing a common Norwich-Brundall trunk, forking at TWO junctions:
+#
+# - At Brundall: the Great Yarmouth-via-Acle route diverges (Brundall's own
+#   route-diagram fields give `next1=Lingwood ... (via Acle)` and
+#   `next2=Buckenham ... (via Reedham)`, i.e. Brundall itself is the first
+#   fork). The Wherry Lines article's own infrastructure section confirms:
+#   "the two branches to Great Yarmouth that diverge from Brundall, the
+#   route via Acle and from Reedham via Berney Arms, are single-tracked."
+# - The remaining double-tracked spine continues Brundall-Buckenham-Cantley-
+#   Reedham (this stretch carries both the Lowestoft-bound and the Berney
+#   Arms-bound Great Yarmouth trains).
+# - At Reedham: the second fork. Reedham's own route-diagram fields give
+#   `next1=Berney Arms ... Great Yarmouth branch` and `next2=Haddiscoe ...
+#   Lowestoft branch`.
+# - Beyond Reedham, the Lowestoft branch continues via Haddiscoe-Somerleyton-
+#   Oulton Broad North to Lowestoft.
+#
+# The Wherry Lines article's own service table confirms the three resulting
+# routes and their frequencies: Lowestoft-Norwich (hourly, via Oulton Broad
+# North/Somerleyton/Haddiscoe/Reedham/Cantley/Brundall), Great Yarmouth-
+# Norwich via Acle (hourly, via Lingwood/Brundall/Brundall Gardens) and Great
+# Yarmouth-Norwich via Berney Arms (3 per day, via Reedham/Cantley/Brundall).
+# Buckenham (not in that summary service table, but confirmed as a genuine
+# current stop by the article's own "lightly served" infrastructure note —
+# "two trains call on weekdays and Saturdays, with thirteen on Sundays" —
+# and by its own Wikipedia route-diagram fields, `previous=Brundall,
+# next=Cantley`) is included between Brundall and Cantley to make 14
+# stations total, matching the article infobox's own count.
+#
+# Segments (junction-station-belongs-to-the-wider-segment pattern, mirroring
+# `greater-anglia-west-anglia.toml`'s Stansted Mountfitchet/`sunshine-coast-
+# main`'s Thorpe-le-Soken precedent — internal to this one line/file, so
+# every segment here resolves as this line's own `MatchScope::
+# ExclusiveSegment`, not a cross-file shared trunk):
+# - `wherry-trunk-brundall` (Norwich [see above] through Brundall): shared by
+#   all three routes.
+# - `wherry-acle-branch` (Lingwood, Acle, Great Yarmouth): exclusive to the
+#   Acle route, starts at the station after the Brundall junction.
+# - `wherry-trunk-reedham` (Buckenham, Cantley, Reedham): the continuing
+#   spine shared by the Berney Arms and Lowestoft routes only (NOT the Acle
+#   route, which has already diverged at Brundall).
+# - `wherry-berney-branch` (Berney Arms only — see the Great Yarmouth note
+#   below): exclusive to the Berney Arms route, starts at the station after
+#   the Reedham junction.
+# - `wherry-lowestoft-branch` (Haddiscoe, Somerleyton, Oulton Broad North,
+#   Lowestoft): exclusive to the Lowestoft route, starts at the station
+#   after the Reedham junction.
+#
+# Great Yarmouth (GYM) is physically the terminus of BOTH the Acle route and
+# the Berney Arms route — a genuine reconvergence, not modelled elsewhere in
+# this batch. Listing it twice would give the same CRS two different
+# `segment` values in one file; `common::LineDefinition::segment_for` (first
+# match wins) and `segments.rs`'s `SegmentRegistry` (last-inserted-per-line
+# wins, since `station_segments` is a HashMap keyed by `(line_id, crs)`)
+# would then disagree about which segment "owns" GYM, and worse, silently
+# depend on file ordering. GYM is therefore listed once, as the Acle route's
+# terminus (the busier, hourly service), with a comment on the Berney Arms
+# branch noting the real-world reconvergence rather than re-listing the CRS.
+# This does not lose any matching precision: an incident at GYM still
+# resolves as `MatchScope::ExclusiveSegment` for this line regardless of
+# which of the two (both wholly-exclusive-to-this-line) segment names is
+# recorded for it.
+#
+# CRS codes verified from each station's own Wikipedia infobox `code` field
+# and independently cross-checked against railwaycodes.org.uk's CRS index
+# pages (CRSB.shtm, CRSL.shtm, CRSA.shtm, CRSG.shtm, CRSC.shtm, CRSR.shtm,
+# CRSH.shtm, CRSS.shtm, CRSO.shtm, fetched 2026-08-30): Brundall Gardens
+# (BGA), Brundall (BDA), Lingwood (LGD), Acle (ACL), Great Yarmouth (GYM —
+# railwaycodes.org.uk lists it under a cross-reference from its former code
+# YAR to the current entry, confirmed GYM), Buckenham (BUC), Cantley (CNY),
+# Reedham (REE), Berney Arms (BYA), Haddiscoe (HAD), Somerleyton (SYT),
+# Oulton Broad North (OUN), Lowestoft (LWT).
+#
+# ## Breckland Line (Norwich-Cambridge)
+#
+# The brief asked to confirm "via Ely, or via Thetford." Live research
+# (Wikipedia's "Breckland line" article, fetched raw — "Breckland Line"
+# redirects to it) shows this is a false alternative: it is one single route
+# that calls at both, via Wymondham, Attleborough, Thetford AND Brandon
+# before reaching Ely and then Cambridge — not two competing routings. The
+# article's own "Route" section table gives the ordered station list from
+# Norwich used here: Norwich, Wymondham, Spooner Row, Attleborough, Eccles
+# Road (serving Quidenham), Harling Road (serving East Harling), Thetford,
+# Brandon, Lakenheath, Shippea Hill, Ely, Cambridge North, Cambridge. The
+# article is explicit that "trains pass through Waterbeach station between
+# Ely and Cambridge North without stopping" — Waterbeach is deliberately
+# omitted rather than invented as a calling point. Some stations see very
+# sparse service ("Spooner Row, Lakenheath and Shippea Hill" are request
+# stops only; "Harling Road and Eccles Road have peak-hour only services")
+# but are genuine current calling points, not closed stations, so are kept
+# per SCHEMA's "don't invent... comment and omit instead" cutting the other
+# way here (real, sparse service is not the same as no service).
+#
+# CRS codes verified from each station's own Wikipedia infobox `code` field
+# and independently cross-checked against railwaycodes.org.uk's CRS index
+# pages (CRSW.shtm, CRSS.shtm, CRSA.shtm, CRSE.shtm, CRSH.shtm, CRST.shtm,
+# CRSB.shtm, CRSL.shtm, CRSC.shtm, fetched 2026-08-30): Wymondham (WMD),
+# Spooner Row (SPN), Attleborough (ATL), Eccles Road (ECS), Harling Road
+# (HRD), Thetford (TTF), Brandon (BND), Lakenheath (LAK), Shippea Hill
+# (SPP), Ely (ELY), Cambridge North (CMB), Cambridge (CBG — already verified
+# in `greater-anglia-west-anglia.toml`, Task 2.2).
+#
+# ## Segment decision at Ely and Cambridge: station-level overlap only —
+# verified, not assumed, and involving a THIRD file this task's own brief
+# didn't originally flag
+#
+# The brief asked to check whether the Breckland Line's Cambridge end
+# overlaps `greater-anglia-west-anglia.toml`'s `waml-mainline` segment
+# (Elsenham-Cambridge). It doesn't, physically: the Breckland Line reaches
+# Cambridge from the north via Ely and Cambridge North, an entirely
+# different, non-electrified-until-Ely corridor from WAML's approach via
+# Bishop's Stortford, Elsenham, Newport, Audley End and Cambridge South from
+# the south. The two corridors share no track — they only meet at Cambridge
+# station itself, which is exactly the "runs over a different physical route
+# but claims neither line's segments, station-level overlap only" pattern
+# `greater-anglia-west-anglia.toml` already documents for its own Cambridge/
+# `xc-stansted.toml` overlap. So Cambridge is a shared STATION between this
+# line and `greater-anglia-west-anglia.toml`, not a shared segment.
+#
+# Grepping every committed `lines/*.toml` file for this line's new CRS codes
+# before drafting (per the Global Constraints) surfaced a second, genuine
+# overlap the brief didn't name: `xc-stansted.toml` (CrossCountry's
+# Birmingham-Stansted Airport route, Task 2.2's own hand-off note for its
+# Cambridge/`xc-stansted` decision) already lists BOTH Ely (ELY, role
+# `junction`, segment `xc-stansted`) and Cambridge (CBG, segment
+# `xc-stansted`) — CrossCountry's route approaches Cambridge via
+# Peterborough and Ely too, on the same Fen Line corridor this line uses
+# between Ely and Cambridge North. Reusing `xc-stansted` verbatim for this
+# line's own ELY/CBG entries would trigger the exact same segment-name-
+# collision hazard already documented repeatedly in this batch (it would
+# reclassify `xc-stansted.toml`'s entire Birmingham-Leicester-Peterborough
+# corridor as shared trunk with this file, which is not true), so both
+# stations get this line's own exclusive `breckland-line` segment name
+# instead — station-level overlap only, with BOTH `greater-anglia-west-
+# anglia.toml` (at Cambridge only) and `xc-stansted.toml` (at Ely and
+# Cambridge). This means Cambridge is now a genuine three-way station
+# overlap. `greater-anglia-west-anglia.toml`'s own pre-existing
+# `west_anglia_cambridge_is_station_overlap_only_with_xc_stansted` matcher
+# test asserted an exact two-line match set at Cambridge; adding this file's
+# real, verified CBG entry makes that assertion stale (not wrong about the
+# two lines it already covered — incomplete, now that a third genuinely
+# overlapping line is catalogued). That test is updated in this commit to
+# include this line, per the same reasoning
+# `greater-anglia-essex-branches.toml`'s own notes describe for checking
+# collateral test breakage before committing, rather than left broken or
+# routed around by inventing a fake distinction.
+#
+# Per the brief's own instruction ("add a third test only if research finds
+# a genuine shared segment... station-only if not, skip that third test"):
+# this is station-only, so no SharedSegment-asserting third test is added.
+# A regression test for the Ely overlap (new, not previously covered by any
+# matcher.rs test since `xc-stansted.toml` had no other line touching ELY
+# before this file existed) is added instead, alongside an update to the
+# existing Cambridge test, both confirming `MatchScope::ExclusiveSegment` on
+# every line involved.
+
+# --- Norwich: shared origin of all three branches below ---
+
+[[stations]]
+crs = "NRW"
+tiploc = "NRCH"
+role = "junction"
+segment = "norfolk-branches-norwich"
+# Terminus of greater-anglia-main-line.toml's `geml-mainline` and the shared
+# origin of the Bittern, Wherry and Breckland lines below. Station-level
+# overlap only with `greater-anglia-main-line.toml` — see the segment-
+# decision note above.
+
+# --- Bittern Line (Norwich-Sheringham) ---
+
+[[stations]]
+crs = "SAH"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "HXM"
+role = "major"
+segment = "bittern-line"
+# Hoveton & Wroxham: gateway station for Wroxham, "capital of the Broads."
+
+[[stations]]
+crs = "WRT"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "NWA"
+role = "major"
+segment = "bittern-line"
+
+[[stations]]
+crs = "GNT"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "RNR"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "CMR"
+role = "major"
+segment = "bittern-line"
+
+[[stations]]
+crs = "WRN"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "SHM"
+role = "terminus"
+segment = "bittern-line"
+
+# --- Wherry Lines: Norwich-Brundall (shared trunk of all three routes) ---
+
+[[stations]]
+crs = "BGA"
+role = "minor"
+segment = "wherry-trunk-brundall"
+# Brundall Gardens.
+
+[[stations]]
+crs = "BDA"
+role = "junction"
+segment = "wherry-trunk-brundall"
+# Brundall: the Great Yarmouth-via-Acle route diverges here — see the
+# Wherry Lines segment note above. Last station of this trunk; the Acle
+# route's own exclusive segment starts at the next station.
+
+# --- Wherry Lines: Great Yarmouth via Acle (exclusive, hourly) ---
+
+[[stations]]
+crs = "LGD"
+role = "minor"
+segment = "wherry-acle-branch"
+
+[[stations]]
+crs = "ACL"
+role = "minor"
+segment = "wherry-acle-branch"
+
+[[stations]]
+crs = "GYM"
+role = "terminus"
+segment = "wherry-acle-branch"
+# Great Yarmouth: also the physical terminus of the separate Berney Arms
+# route below (a genuine reconvergence) — see the segment note above for
+# why GYM is listed once here rather than duplicated.
+
+# --- Wherry Lines: Brundall-Reedham (shared trunk of the Berney Arms and
+# Lowestoft routes only — the Acle route has already diverged at Brundall) ---
+
+[[stations]]
+crs = "BUC"
+role = "minor"
+segment = "wherry-trunk-reedham"
+# Buckenham: lightly served (per the Wherry Lines article, two trains call
+# on weekdays/Saturdays, thirteen on Sundays) but a genuine current stop.
+
+[[stations]]
+crs = "CNY"
+role = "minor"
+segment = "wherry-trunk-reedham"
+
+[[stations]]
+crs = "REE"
+role = "junction"
+segment = "wherry-trunk-reedham"
+# Reedham: the Great Yarmouth-via-Berney Arms route diverges here — see the
+# Wherry Lines segment note above. Last station of this trunk; the Berney
+# Arms and Lowestoft routes' own exclusive segments start at the next
+# station on each.
+
+# --- Wherry Lines: Great Yarmouth via Berney Arms (exclusive, ~3/day) ---
+
+[[stations]]
+crs = "BYA"
+role = "minor"
+segment = "wherry-berney-branch"
+# Berney Arms: one of the most remote and lightly-used stations in Britain
+# (request stop, no road access). This route's real terminus is Great
+# Yarmouth (GYM), already listed above under the Acle branch — not
+# duplicated here, see the segment note above.
+
+# --- Wherry Lines: Lowestoft (exclusive, hourly) ---
+
+[[stations]]
+crs = "HAD"
+role = "minor"
+segment = "wherry-lowestoft-branch"
+
+[[stations]]
+crs = "SYT"
+role = "minor"
+segment = "wherry-lowestoft-branch"
+
+[[stations]]
+crs = "OUN"
+role = "minor"
+segment = "wherry-lowestoft-branch"
+
+[[stations]]
+crs = "LWT"
+role = "terminus"
+segment = "wherry-lowestoft-branch"
+
+# --- Breckland Line (Norwich-Cambridge, via Wymondham, Thetford and Ely) ---
+
+[[stations]]
+crs = "WMD"
+role = "major"
+segment = "breckland-line"
+
+[[stations]]
+crs = "SPN"
+role = "minor"
+segment = "breckland-line"
+# Spooner Row: request stop.
+
+[[stations]]
+crs = "ATL"
+role = "major"
+segment = "breckland-line"
+
+[[stations]]
+crs = "ECS"
+role = "minor"
+segment = "breckland-line"
+# Eccles Road: peak-hour only service (two trains each direction, Mon-Sat).
+
+[[stations]]
+crs = "HRD"
+role = "minor"
+segment = "breckland-line"
+# Harling Road: peak-hour only service, same pattern as Eccles Road.
+
+[[stations]]
+crs = "TTF"
+role = "major"
+segment = "breckland-line"
+
+[[stations]]
+crs = "BND"
+role = "minor"
+segment = "breckland-line"
+
+[[stations]]
+crs = "LAK"
+role = "minor"
+segment = "breckland-line"
+# Lakenheath: request stop.
+
+[[stations]]
+crs = "SPP"
+role = "minor"
+segment = "breckland-line"
+# Shippea Hill: request stop; some stopping trains only once a day in each
+# direction per the Breckland line article's own Services section.
+
+[[stations]]
+crs = "ELY"
+role = "junction"
+segment = "breckland-line"
+# Ely: also on `xc-stansted.toml`'s `xc-stansted` segment (CrossCountry's
+# Birmingham-Stansted Airport route also calls here, approaching via
+# Peterborough). Station-level overlap only, not a shared segment name —
+# see the segment-decision note above.
+
+[[stations]]
+crs = "CMB"
+role = "minor"
+segment = "breckland-line"
+# Cambridge North: opened 2017. Trains pass through Waterbeach, between here
+# and Ely, without stopping — deliberately omitted per the article's own
+# text.
+
+[[stations]]
+crs = "CBG"
+role = "terminus"
+segment = "breckland-line"
+# Terminus of this line. Also on `greater-anglia-west-anglia.toml`'s
+# `waml-mainline` segment and `xc-stansted.toml`'s `xc-stansted` segment —
+# both genuine station-level overlaps (different physical approach
+# corridors converging only at this station), not shared segment names —
+# see the segment-decision note above.

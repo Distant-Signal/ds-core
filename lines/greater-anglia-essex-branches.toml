@@ -1,0 +1,308 @@
+id = "greater-anglia-essex-branches"
+name = "Essex Branch Lines"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) against railwaycodes.org.uk's
+# operators/toccodes.shtm — not re-derived here per the brief.
+
+# One sample station per branch terminus: Southminster (Crouch Valley line),
+# Clacton-on-Sea and Walton-on-the-Naze (the Sunshine Coast line's two
+# outer arms) and Braintree (Braintree branch line).
+sample_stations = ["SMN", "CLT", "WON", "BTR"]
+
+# One officially-attested name per branch (Wikipedia article titles/infobox
+# `name` fields, fetched raw 2026-08-30, cross-checked against each other and
+# against each branch's own station articles — see the per-branch notes
+# below). Three branches, three keywords: at the file's stated 2-3 max
+# per SCHEMA.md, deliberately not padded further with looser phrasing.
+match_keywords = ["Crouch Valley line", "Sunshine Coast line", "Braintree branch line"]
+
+# All three branches are low-frequency single-line-worked branches off the
+# GEML (Crouch Valley: "Rural" character per its own infobox, 2tph weekday/
+# hourly Sunday; Braintree branch: "Regional rail" infobox type, 1tph
+# off-peak; Sunshine Coast: 1tph to Clacton-on-Sea and 1tph to
+# Walton-on-the-Naze). Same reasoning and same numbers as
+# `northern-lakes.toml`/`northern-tyne-valley.toml`'s branch-line overrides:
+# one cancellation is a large fraction of the hour's service, and a 5-minute
+# delay on a short branch journey isn't yet a story at config.py's base
+# thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Structure: one file, three branches (per the task's own grouping)
+#
+# The task brief groups "Southminster, Clacton/Walton/Braintree via
+# Colchester" into a single file. Live research (Wikipedia, raw-fetched
+# 2026-08-30) confirms these are three separate, unconnected branch lines
+# that only share the fact of being minor Greater Anglia branches off the
+# GEML corridor covered by Task 2.1 (`greater-anglia-main-line.toml`) — there
+# is no reason to split them into separate files (none is large enough on
+# its own, and `swr-alton.toml`/`swr-south-west-main.toml` already establish
+# the precedent of a branch or branch-group living in one file alongside its
+# trunk connection), so the single-file reading holds. Each branch is listed
+# geographically outward from its own junction with the shared trunk it
+# actually diverges from, per SCHEMA.md's ordering rule; branch splits
+# within a single physical route (Sunshine Coast Line's own Thorpe-le-Soken
+# fork into Clacton-on-Sea and Walton-on-the-Naze arms) are called out in
+# comments at the fork, mirroring `swr-south-west-main.toml`'s and
+# `northern.toml`'s "note the branch, don't invent a merged ordering"
+# approach.
+#
+# ## Segment decision at Witham and Colchester: station-level overlap only,
+# NOT a shared segment name — verified, not assumed
+#
+# Witham (Braintree branch) and Colchester (Sunshine Coast line) are both
+# already `geml-mainline`-tagged junction stations in
+# `greater-anglia-main-line.toml` ("Braintree branch line diverges here" /
+# "Sunshine Coast line (to Clacton-on-Sea/Walton-on-the-Naze) diverges
+# here"), and both branches' trains genuinely run through to Liverpool
+# Street over that same GEML trunk beyond their junction. The tempting move
+# is to reuse the literal segment name `geml-mainline` here too. Checked
+# this against the matcher's actual mechanics before doing it (mirroring
+# `greater-anglia-main-line.toml`'s own Romford/Shenfield decision and
+# `greater-anglia-west-anglia.toml`'s Cambridge decision, both flagging the
+# identical hazard): `segments.rs`'s `SegmentRegistry::is_shared` marks a
+# segment name shared **globally by name**, the instant a second line uses
+# it anywhere — not scoped to the stations the two files actually have in
+# common. `geml-mainline` in `greater-anglia-main-line.toml` spans the
+# entire Ingatestone-Norwich stretch (INT, CHM, BPA, HAP, WTM, KEL, MKT,
+# COL, MNG, IPS, SMK, DIS, NRW). Reusing that exact name for just WTM/COL
+# here would silently reclassify ALL of those stations — including ones
+# with nothing to do with the Essex branches, like Diss and Norwich — as
+# "shared trunk" too, which is not true; confirmed empirically, this broke
+# `greater-anglia-main-line.toml`'s own pre-existing
+# `greater_anglia_exclusive_far_end_does_not_propagate` regression test the
+# moment it was tried. So, per the same reasoning already established twice
+# in this batch: Witham and Colchester get this file's own exclusive
+# segment names below (`braintree-branch`, `sunshine-coast-main`), not
+# `geml-mainline`. Both stations still show up as genuine station-level
+# overlap — an incident there matches both lines independently (each as
+# `MatchScope::ExclusiveSegment`), it just doesn't escalate to
+# `MatchScope::SharedSegment`. See the matcher.rs regression tests for this.
+#
+# ## Braintree branch line (Witham–Braintree)
+#
+# Wikipedia's "Braintree branch line" article (fetched raw): "diverges from
+# the Great Eastern Main Line at Witham and runs north-west to Braintree...
+# five stations, including the two termini." CRS codes for the other four
+# stations independently verified from each station's own Wikipedia infobox
+# `code` field (fetched raw): White Notley (WNY), Cressing (CES), Braintree
+# Freeport (BTP), Braintree (BTR).
+#
+# ## Sunshine Coast line (Colchester–Clacton-on-Sea / Walton-on-the-Naze)
+#
+# Wikipedia's "Sunshine Coast Line" article (fetched raw) — the current
+# marketing name for the former Tendring Hundred Railway — gives `start =
+# Colchester`, `end = Clacton-on-Sea / Walton-on-the-Naze` and an explicit
+# 12-station table split into "Main section to Thorpe-le-Soken," "Branch to
+# Clacton-on-Sea" and "Branch to Walton-on-the-Naze" sections (plus a fourth,
+# short "Branch to Colchester Town" spur — see the omission note below).
+# Thorpe-le-Soken (TLS) is the real fork point within this branch itself,
+# per the article's own services section: "1tph Clacton-on-Sea–Liverpool
+# Street... 1tph Walton-on-the-Naze–Colchester... This service waits for the
+# Clacton-on-Sea service to pass at Thorpe-le-Soken." CRS codes independently
+# verified from each station's own Wikipedia infobox `code` field:
+# Hythe/Essex (HYH), Wivenhoe (WIV), Alresford/Essex (ALR), Great Bentley
+# (GRB), Weeley (WEE), Thorpe-le-Soken (TLS), Clacton-on-Sea (CLT), Kirby
+# Cross (KBX), Frinton-on-Sea (FRI), Walton-on-the-Naze (WON).
+#
+# Deliberately omitted: the short "Branch to Colchester Town" spur (Colchester
+# to Colchester Town, CET, 1tph shuttle per the same services section) is
+# part of the Sunshine Coast Line's own infobox station count but is not one
+# of the three branches this task names (Southminster, Clacton/Walton,
+# Braintree) and is a self-contained inner-city shuttle rather than part of
+# the seaside/branch topology those three describe — omitted per SCHEMA.md's
+# "don't overload" rule rather than added just because Wikipedia's table
+# includes it under the same line name.
+#
+# ## Crouch Valley line / Southminster branch — deviation from the brief's
+# premise, verified and noted
+#
+# The brief's own context section describes this branch as leaving "the GEML
+# around Wickford/Witham." Live research contradicts the Wickford half of
+# that for this branch specifically. Wikipedia's "Crouch Valley line"
+# article (fetched raw) is unambiguous: "The Crouch Valley line... is a
+# branch line off the Shenfield–Southend line... It links Wickford in the
+# west to Southminster in the east... The line diverges from the
+# Shenfield–Southend line at Wickford." Wickford's own station article
+# (fetched raw) confirms the same thing from the other side: "Wickford
+# railway station is a junction stop on the Shenfield to Southend Line and
+# also the western terminus of the Crouch Valley Line... Most Southend
+# services connect to the Great Eastern Main Line at Shenfield."
+#
+# So the real topology is two hops, not one: GEML → (Shenfield–Southend
+# line, diverging at Shenfield/SNF) → (Crouch Valley line, diverging at
+# Wickford/WIC). Wickford is not itself a GEML station, and — confirmed by
+# grepping every committed `lines/*.toml` file plus this whole plan's task
+# list (`docs/superpowers/plans/2026-08-29-line-catalogue-coverage.md`) —
+# the intervening Shenfield–Southend Victoria line is not covered by any
+# file or task in this catalogue, so there is no existing segment name for
+# Wickford, Billericay or the rest of that line to reuse, and inventing one
+# (or silently borrowing `geml-london-shenfield` for Wickford despite
+# Wickford not being on that segment's own station list) would fabricate
+# topology this task cannot verify end-to-end. Per SCHEMA.md's "don't
+# invent... comment and omit instead": this branch is modelled starting at
+# its own real, verified junction (Wickford), tagged as this file's own
+# exclusive segment, NOT as a shared segment with
+# `greater-anglia-main-line.toml`. (Peak Southminster–Liverpool Street
+# through-services exist per both articles, but that's a service pattern
+# over unmodelled intermediate track, not a claim this file can make about
+# station-level segment sharing.) Southminster's junction (Wickford) also
+# isn't a station-level overlap with any other committed line — nothing else
+# in the catalogue currently touches Wickford — unlike Witham and Colchester
+# above, which are genuine station-level overlaps with
+# `greater-anglia-main-line.toml` (see the segment-decision note above for
+# why those two don't escalate to a shared segment name either). CRS codes
+# independently verified from each station's own Wikipedia infobox
+# `code` field: Wickford (WIC), Battlesbridge (BLB), South Woodham Ferrers
+# (SOF), North Fambridge (NFA), Althorne (ALN), Burnham-on-Crouch (BUU),
+# Southminster (SMN).
+
+# --- Braintree branch line ---
+
+[[stations]]
+crs = "WTM"
+role = "junction"
+segment = "braintree-branch"
+# Witham: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml. Station-level overlap only, not a shared
+# segment name — see the segment-decision note above.
+
+[[stations]]
+crs = "WNY"
+role = "minor"
+segment = "braintree-branch"
+
+[[stations]]
+crs = "CES"
+role = "minor"
+segment = "braintree-branch"
+
+[[stations]]
+crs = "BTP"
+role = "minor"
+segment = "braintree-branch"
+
+[[stations]]
+crs = "BTR"
+role = "terminus"
+segment = "braintree-branch"
+
+# --- Sunshine Coast line: Colchester to Thorpe-le-Soken (shared trunk of
+# both the Clacton-on-Sea and Walton-on-the-Naze arms) ---
+
+[[stations]]
+crs = "COL"
+role = "junction"
+segment = "sunshine-coast-main"
+# Colchester: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml. Station-level overlap only, not a shared
+# segment name — see the segment-decision note above.
+
+[[stations]]
+crs = "HYH"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "WIV"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "ALR"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "GRB"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "WEE"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "TLS"
+role = "junction"
+segment = "sunshine-coast-main"
+# Thorpe-le-Soken: the line's own internal fork. Clacton-on-Sea trains and
+# Walton-on-the-Naze trains cross here (the Walton service "waits for the
+# Clacton-on-Sea service to pass," per the Sunshine Coast Line article) —
+# last station of the shared main section; each arm's own exclusive segment
+# starts at the next station on that arm.
+
+# Branch to Clacton-on-Sea:
+
+[[stations]]
+crs = "CLT"
+role = "terminus"
+segment = "sunshine-coast-clacton"
+
+# Branch to Walton-on-the-Naze:
+
+[[stations]]
+crs = "KBX"
+role = "minor"
+segment = "sunshine-coast-walton"
+
+[[stations]]
+crs = "FRI"
+role = "minor"
+segment = "sunshine-coast-walton"
+
+[[stations]]
+crs = "WON"
+role = "terminus"
+segment = "sunshine-coast-walton"
+
+# --- Crouch Valley line / Southminster branch ---
+# See the deviation note above: this branch's real junction (Wickford) is
+# two hops from the GEML via the unmodelled Shenfield-Southend line, so
+# unlike the two branches above, this one is NOT tagged with any
+# `greater-anglia-main-line.toml` segment name.
+
+[[stations]]
+crs = "WIC"
+role = "junction"
+segment = "crouch-valley-line"
+# Wickford: junction with the Shenfield-Southend line (not itself a GEML
+# station) and the western terminus/start of the Crouch Valley line proper.
+
+[[stations]]
+crs = "BLB"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "SOF"
+role = "major"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "NFA"
+role = "minor"
+segment = "crouch-valley-line"
+# North Fambridge: the line's midpoint, and its only passing loop on an
+# otherwise single-track branch.
+
+[[stations]]
+crs = "ALN"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "BUU"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "SMN"
+role = "terminus"
+segment = "crouch-valley-line"

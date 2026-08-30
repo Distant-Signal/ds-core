@@ -1,0 +1,207 @@
+id = "greater-anglia-main-line"
+name = "Greater Anglia Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code. Confirmed in the gap-analysis document's
+# "Appendix: ATOC codes referenced in this document" (cross-checked there
+# against railwaycodes.org.uk). Spot-checked again here directly against
+# railwaycodes.org.uk/operators/toccodes.shtm: code LE has been continuously
+# assigned to the Greater Anglia franchise/concession since 14 May 2012,
+# including through the 12 Oct 2025 nationalisation and the operating
+# company's most recent rename to "GA Trains" (14 Dec 2025 to date) — the
+# *code* did not change, only the registered company name behind it.
+
+# South (London) / midpoint / north (Norwich), matching the WCML
+# sample_stations pattern for a long intercity corridor.
+sample_stations = ["LST", "CHM", "COL", "IPS", "NRW"]
+match_keywords = ["Great Eastern Main Line", "GEML"]
+
+# Genuine intercity main line (Liverpool Street–Norwich in fastest ~90min),
+# not a rural branch, so start from the same thresholds as WCML/other
+# main-line corridors rather than a commuter line's tighter ones. No
+# GEML-specific research surfaced a reason to deviate.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Great Eastern Main Line: Liverpool Street to Norwich via Stratford,
+# Shenfield, Chelmsford, Colchester and Ipswich, ordered south/west to
+# north/east. Station list and calling pattern verified against Wikipedia's
+# "Great Eastern Main Line" article (route diagram template
+# Template:Great_Eastern_Main_Line_RDT, fetched raw 2026-08-29, and the
+# article's own "Services" > "Main line" section/table), cross-checked
+# against CRS codes independently looked up per-station (railwaycodes.org.uk-
+# derived aggregators: railwaydata.co.uk, National Rail Enquiries station
+# pages, and the ABC Railway Guide) rather than assumed.
+#
+# ## The Shenfield-corridor decision (elizabeth-shenfield.toml overlap)
+#
+# `elizabeth-shenfield.toml` runs Liverpool Street -> Stratford -> Shenfield,
+# calling at every intermediate station (Maryland, Forest Gate, Manor Park,
+# Ilford, Seven Kings, Goodmayes, Chadwell Heath, Romford, Gidea Park, Harold
+# Wood, Brentwood) on dedicated Elizabeth line "electric"/metro tracks.
+# Wikipedia's GEML article is explicit that Greater Anglia's fast/semi-fast
+# services use separate "main" line tracks over this same stretch (the
+# route diagram itself labels the three parallel formations leaving
+# Liverpool Street as "1 Suburban line, 2 Main line, 3 Electric line"), and
+# that GA's calling pattern on those main-line tracks is sparse: "Branch
+# lines diverge at Romford, Shenfield, ..." and "a very limited number of
+# main line services call at Ilford, Seven Kings and Gidea Park during
+# early mornings and late nights, often for the convenience of train
+# drivers" (i.e. not a standard passenger calling pattern). So the true
+# physical/service overlap with `elizabeth-shenfield.toml`'s station list is
+# just two stations: Romford (RMF, a genuine GA main-line stop and the
+# Romford-Upminster line junction) and Shenfield (SNF, the Elizabeth line's
+# terminus and the Shenfield-Southend line junction). Ilford, despite being
+# geographically adjacent and appearing in `elizabeth-shenfield.toml`, is
+# NOT a standard GA main-line calling point and is deliberately omitted here
+# (per SCHEMA.md's "don't overload" curation rule — it isn't part of this
+# line's normal calling pattern) rather than added just because it's nearby.
+#
+# DECISION: station-level overlap only, per the `xc-south-coast.toml` /
+# `xc-manchester.toml` precedent — NOT a shared segment name with
+# `elizabeth-shenfield.toml`. Two independent reasons:
+#
+# 1. Operationally: GA runs on separate "main" tracks from Liverpool Street
+#    all the way to Shenfield, not the Elizabeth line's dedicated
+#    "electric" tracks — a genuinely parallel, mostly-independent corridor
+#    rather than shared metals, exactly the "runs over the same physical
+#    route corridor but claims neither line's segments" situation
+#    `xc-south-coast.toml` documents for its own Reading/Basingstoke
+#    overlap with `elizabeth-line.toml` and `swr-south-west-main.toml`.
+# 2. Mechanically: `segments.rs`'s `SegmentRegistry` marks a segment name
+#    "shared" globally, by name, across every `lines/*.toml` file that uses
+#    it — not per-station. Reusing the literal segment name
+#    "elizabeth-shenfield" here (even for just the RMF/SNF stations) would
+#    silently reclassify *all* of `elizabeth-shenfield.toml`'s stations
+#    (Maryland through Shenfield) as a shared trunk too, which is not true
+#    (those metro stops are exclusive to the Elizabeth line) and would
+#    break that file's own exclusivity semantics/tests. This is exactly the
+#    segment-name-collision hazard the Global Constraints warn about, so a
+#    distinct segment name (`geml-london-shenfield`, exclusive to this
+#    file) is used instead. RMF and SNF still show up as station-level
+#    overlap because both lines' station lists genuinely include them — an
+#    incident there matches both lines independently (each as
+#    MatchScope::ExclusiveSegment), it just doesn't escalate to
+#    MatchScope::SharedSegment.
+#
+# The far side of the junction (Ingatestone onward to Norwich) is
+# unambiguously exclusive Greater Anglia territory — the Elizabeth line
+# terminates at Shenfield and goes no further.
+[[stations]]
+crs = "LST"
+role = "terminus"
+segment = "geml-london-shenfield"
+
+[[stations]]
+crs = "SRA"
+role = "major"
+segment = "geml-london-shenfield"
+# Stratford: major interchange (Underground/DLR/Overground/Elizabeth line),
+# but not itself a GA branch point on this line, so "major" not "junction".
+
+[[stations]]
+crs = "RMF"
+role = "junction"
+segment = "geml-london-shenfield"
+# Romford-Upminster line ("Liberty line") diverges here. Also on
+# `elizabeth-shenfield.toml`'s station list (station overlap, not a shared
+# segment — see decision above).
+
+[[stations]]
+crs = "SNF"
+role = "junction"
+segment = "geml-london-shenfield"
+# The junction this file's comments discuss at length: Elizabeth line
+# terminates here (elizabeth-shenfield.toml), Shenfield-Southend line
+# diverges here, and Greater Anglia continues beyond to Norwich.
+
+[[stations]]
+crs = "INT"
+role = "minor"
+segment = "geml-mainline"
+
+[[stations]]
+crs = "CHM"
+tiploc = "CHLMSFD"
+role = "major"
+segment = "geml-mainline"
+
+[[stations]]
+crs = "BPA"
+role = "minor"
+segment = "geml-mainline"
+# Beaulieu Park: opened 26 October 2025, the first new GEML station in 100
+# years. Has a central loop so stopping services can call while fast trains
+# pass through — genuinely part of GA's calling pattern, not omitted as a
+# "minor call".
+
+[[stations]]
+crs = "HAP"
+role = "minor"
+segment = "geml-mainline"
+
+[[stations]]
+crs = "WTM"
+role = "junction"
+segment = "geml-mainline"
+# Braintree branch line diverges here.
+
+[[stations]]
+crs = "KEL"
+role = "minor"
+segment = "geml-mainline"
+
+[[stations]]
+crs = "MKT"
+role = "junction"
+segment = "geml-mainline"
+# Gainsborough line (to Sudbury) diverges here.
+
+[[stations]]
+crs = "COL"
+tiploc = "CLCHSTR"
+role = "junction"
+segment = "geml-mainline"
+# Sunshine Coast line (to Clacton-on-Sea/Walton-on-the-Naze) diverges here.
+
+[[stations]]
+crs = "MNG"
+role = "junction"
+segment = "geml-mainline"
+# Mayflower line (to Harwich Town) diverges here.
+
+[[stations]]
+crs = "IPS"
+tiploc = "IPSWICH"
+role = "junction"
+segment = "geml-mainline"
+# East Suffolk line (to Lowestoft) and the Felixstowe branch line both
+# diverge here.
+
+[[stations]]
+crs = "SMK"
+role = "junction"
+segment = "geml-mainline"
+# Ipswich-Ely line diverges here.
+# Needham Market (NMT), between Ipswich and Stowmarket, is deliberately
+# omitted: Wikipedia's GEML "Main line" services table notes it explicitly
+# as "not served by main line trains" (Elizabeth-line-style stopping
+# service only, on this line unverified/out of scope for this file).
+
+[[stations]]
+crs = "DIS"
+tiploc = "DISS"
+role = "minor"
+segment = "geml-mainline"
+
+[[stations]]
+crs = "NRW"
+tiploc = "NRCH"
+role = "terminus"
+segment = "geml-mainline"
+# Terminus of this line. Also the junction for the Bittern, Wherry and
+# Breckland lines (Norwich's other Greater Anglia branches) — out of scope
+# for this file; those get their own line definitions elsewhere in this
+# batch.
