@@ -1,0 +1,62 @@
+id = "northern-cumbrian-coast"
+name = "Cumbrian Coast Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["BIF", "CAR"]
+sample_stations = ["WTH", "WKG", "CAR"]
+match_keywords = ["Cumbrian Coast Line"]
+
+# Generally-hourly rural line (Barrow-Carlisle, single track for long
+# stretches): same rationale as the Furness Line and the Lakes Line.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Barrow-in-Furness to Carlisle via Whitehaven and Workington, ordered
+# south-west to north-east. Shares its Barrow end with `northern-furness`
+# (segment "northern-furness" — Barrow is the junction station per
+# SCHEMA.md's shared-trunk rule of thumb; `northern-furness.toml`'s own
+# comment flags this route as the gap this file fills). The exclusive
+# stretch beyond Barrow starts at the next station north-west.
+#
+# Only principal/town stations are listed; the many intermediate halts
+# (Askam, Kirkby-in-Furness, Foxfield, Green Road, Silecroft, Bootle,
+# Ravenglass, Drigg, Seascale, Sellafield, Braystones, Nethertown, St Bees,
+# Corkickle, Parton, Harrington, Flimby, Aspatria, Wigton, Dalston, etc.)
+# are omitted pending CRS verification, matching the precedent set by
+# `northern-furness.toml` and `northern-lakes.toml`.
+[[stations]]
+crs = "BIF"
+tiploc = "BARROW"
+role = "junction"
+segment = "northern-furness"
+
+[[stations]]
+crs = "MLM"
+role = "minor"
+segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "WTH"
+tiploc = "WHITHVN"
+role = "major"
+segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "WKG"
+role = "major"
+segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "MRY"
+role = "minor"
+segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "CAR"
+tiploc = "CARLILE"
+role = "terminus"
+segment = "northern-cumbrian-coast"

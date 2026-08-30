@@ -1,0 +1,188 @@
+id = "northern-esk-valley"
+name = "Esk Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["NNT", "GMT", "WTB"]
+match_keywords = ["Esk Valley Line"]
+
+# A handful of weekday/Saturday services extend beyond Middlesbrough towards
+# Hartlepool, Sunderland and Newcastle (per eskvalleyrailway.co.uk, "This new
+# service will run Monday to Saturday from Whitby along the Esk Valley Line
+# to James Cook, Middlesbrough and on to Hartlepool, Sunderland and
+# Newcastle"), so a single `destination_crs_filter` list of MBR/NNT/WTB would
+# be incomplete for those workings. Omitted rather than guessed at.
+#
+# `sample_stations` deliberately excludes MBR (Middlesbrough) for a related
+# reason: Northern also runs the separate, unmodelled Tees Valley service
+# (Darlington/Bishop Auckland-Middlesbrough-Saltburn/Hartlepool) through the
+# same station, and without a `destination_crs_filter` to disambiguate,
+# LDBWS sampling at MBR would be swamped by Tees Valley departures rather
+# than the handful of daily Whitby workings. NNT (Nunthorpe), GMT (Grosmont)
+# and WTB (Whitby) are Esk-Valley-only stations, so the operator-only filter
+# is sufficient there without needing a `destination_crs_filter`.
+
+# Sparser than the already-tuned Furness/Yorkshire Coast branches: the line's
+# own Community Rail Partnership site (eskvalleyrailway.co.uk/timetable/)
+# states "There are also 10 services a day on a Sunday (includes the four
+# Whitby to Middlesbrough services)" and describes "[s]everal additional (13)
+# weekday and Saturday services operate locally between Nunthorpe and
+# Middlesbrough" - i.e. most weekday workings are short Nunthorpe-Middlesbrough
+# turns, with only a handful of trains covering the full Middlesbrough-Whitby
+# route each day. That confirms a comparably-or-more sparse timetable than
+# `northern-furness.toml`/`northern-yorkshire-coast.toml`, so the same
+# overrides are reused rather than invented fresh.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Middlesbrough to Whitby, ordered south-west to north-east, via Nunthorpe,
+# Battersby, Glaisdale and Grosmont. Designated a Community Rail line in July
+# 2005 (Wikipedia: "The Esk Valley Line was designated as a community rail
+# line in July 2005, being one of seven intended pilots for the Department
+# for Transport's Community Rail Development Strategy."). Per the gap
+# analysis (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "Northern - is the existing 6-branch coverage actually complete?"): "Esk
+# Valley Line (Middlesbrough -> Whitby) - Community Rail line, entirely
+# separate from anything currently modelled."
+#
+# Confirmed standalone: grepped `lines/*.toml` for every CRS code below and
+# for any existing `esk-valley`/`northern-esk` segment name - no collisions
+# found. This whole line uses one segment, `northern-esk-valley`, because
+# nothing else in this catalogue claims any track between Middlesbrough and
+# Whitby. James Cook is also on the (currently unmodelled) Tees Valley line
+# towards Hartlepool/Sunderland/Newcastle, and Grosmont is a physical
+# interchange with the heritage North Yorkshire Moors Railway (Wikipedia:
+# "The station is also served by heritage services operated by the North
+# Yorkshire Moors Railway.") - station-level overlap only, not a National
+# Rail segment this catalogue tracks, so no segment is shared. Per
+# SCHEMA.md's shared-trunk rule and the Global Constraints' documented
+# exception for standalone lines (parallel to how `c2c`/Merseyrail are
+# expected to be called out elsewhere in this plan), no shared-trunk
+# regression test is included for this file - it would have nothing to
+# propagate to. Only the exclusive-segment test is required, and is present
+# in `crates/aggregator/src/matcher.rs`.
+#
+# Unlike `northern-furness.toml`/`northern-calder-valley.toml`, no
+# intermediate calls are omitted here: the whole route is only 18 stations
+# and every one of them is a principal call on this line (there's no denser
+# "trunk" to trim down to).
+#
+# All 18 CRS codes cross-checked against two independent sources each
+# (Wikipedia's "Esk Valley line" article for the ordered station list, and
+# each station's own nationalrail.co.uk detail page for the CRS code/name
+# pairing), fetched 2026-08-30. eskvalleyrailway.co.uk (the line's own
+# Community Rail Partnership site) independently corroborates the count:
+# "serving 17 stations along the route" (i.e. 17 beyond the Middlesbrough
+# terminus itself, matching the 18 listed here).
+[[stations]]
+crs = "MBR"
+tiploc = "MDLSBRO"
+role = "terminus"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "JCH"
+role = "minor"
+segment = "northern-esk-valley"
+# James Cook (University Hospital), also served by Tees Valley line trains
+# towards Hartlepool/Sunderland/Newcastle - not currently modelled in this
+# catalogue, so no segment is shared here.
+
+[[stations]]
+crs = "MTO"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "GYP"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "NNT"
+role = "major"
+segment = "northern-esk-valley"
+# Common turn-back point for short Nunthorpe-Middlesbrough workings (see the
+# severity_overrides comment above); most trains beyond here run through to
+# Whitby.
+
+[[stations]]
+crs = "GTA"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "BTT"
+role = "minor"
+segment = "northern-esk-valley"
+# Battersby - all services reverse direction here (Wikipedia: "all services
+# have to reverse in the station"), a legacy of the former Picton-Battersby
+# branch (once "Ingleby Junction") closing west of here in 1954. Not a
+# junction with anything in this catalogue, so `role` is left as "minor"
+# rather than "junction" to avoid implying segment-sharing.
+
+[[stations]]
+crs = "KLD"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "COM"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "CSM"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "DNY"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "LHM"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "GLS"
+role = "minor"
+segment = "northern-esk-valley"
+# Glaisdale is the one remaining passing loop still regularly used in both
+# directions on this now-mostly-single-track line.
+
+[[stations]]
+crs = "EGT"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "GMT"
+role = "major"
+segment = "northern-esk-valley"
+# Grosmont - physical interchange with the heritage North Yorkshire Moors
+# Railway (Pickering-Whitby); see the top-of-file comment. Not a National
+# Rail segment this catalogue tracks.
+
+[[stations]]
+crs = "SLH"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "RUS"
+role = "minor"
+segment = "northern-esk-valley"
+
+[[stations]]
+crs = "WTB"
+# TIPLOC not included: could not confirm it against a second independent
+# source (railwaycodes.org.uk's alphabetical listing did not surface it in
+# the fetched excerpt) alongside nationalrail.co.uk's CRS confirmation.
+role = "terminus"
+segment = "northern-esk-valley"

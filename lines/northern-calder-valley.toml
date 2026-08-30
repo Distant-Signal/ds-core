@@ -1,0 +1,106 @@
+id = "northern-calder-valley"
+name = "Calder Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["LDS", "BDI", "MCV"]
+sample_stations = ["HFX", "TOD", "MCV"]
+match_keywords = ["Calder Valley Line"]
+
+# Leeds/Bradford Interchange to Manchester Victoria via Halifax, Sowerby
+# Bridge, Todmorden and Rochdale, ordered east to west. This is a genuinely
+# distinct corridor from `northern.toml`'s `northern-transpennine` segment
+# (Manchester-Stalybridge-Huddersfield-Leeds, the Standedge Tunnel route):
+# Wikipedia's Calder Valley line article confirms the two routes are
+# physically separate, stating that "at Dryclough Junction the Huddersfield
+# route leaves the main line" close to Halifax — i.e. the lines diverge onto
+# different tracks rather than sharing a trunk. No segment name is shared
+# with `northern-transpennine`, and this file introduces no new evidence of
+# track-sharing between the two corridors, matching the gap analysis's
+# framing of them as "two genuinely different Leeds-Manchester corridors,
+# both Northern-operated, only one [previously] modelled."
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Northern
+# - is the existing 6-branch coverage actually complete?"; source:
+# https://en.wikipedia.org/wiki/Calder_Valley_line)
+#
+# Station overlap without segment-sharing, following the `xc-manchester.toml`
+# precedent ("station overlap is fine, segment-sharing is a deliberate
+# choice"):
+#   - LDS (Leeds) is also in `northern.toml`/`northern-yorkshire-coast.toml`
+#     under segment `northern-yorkshire` (the York direction) - an unrelated
+#     corridor, so no segment is shared here.
+#   - MCV (Manchester Victoria) is also in `northern.toml` under segment
+#     `northern-manchester` (the Liverpool/Wigan direction) - again unrelated
+#     track, so no segment is shared here either.
+# This whole line uses one segment, `northern-calder-valley`, because no
+# other file in this catalogue currently claims any track between Bradford
+# Interchange and Manchester Victoria as its own - it is a standalone
+# corridor with nothing to share a trunk with. (Task 8.6's Clitheroe/Ribble
+# Valley line, if it exists by the time this is read, approaches Manchester
+# via Blackburn - a different corridor to the north; nothing in this
+# research found a confirmed shared-trunk point between the two beyond both
+# terminating at MCV, which is station-level overlap only, not a segment.)
+# Per SCHEMA.md's shared-trunk rule, no test asserting shared-segment
+# propagation is included for this file - it would have nothing to
+# propagate to.
+#
+# The initial Leeds-Bradford Interchange section is technically its own
+# grouping in the source material ("Leeds-Bradford lines"), separate from
+# the Calder Valley line proper, which Wikipedia's own article treats as
+# beginning at Bradford Interchange. Both are included here as one ordered,
+# physically contiguous route (Leeds services reach Bradford Interchange via
+# that initial stretch before joining the Calder Valley line proper
+# westbound) since this catalogue models user-facing lines, not the
+# underlying route-naming conventions; minor intermediate calls on both the
+# Leeds-Bradford stretch and the Calder Valley proper (e.g. Bramley, New
+# Pudsey, Laisterdyke, Low Moor, Brighouse, Mytholmroyd, Hebden Bridge,
+# Littleborough, Castleton) are omitted, matching the "only principal
+# stations" precedent set by `xc-manchester.toml` and `northern-cumbrian-
+# coast.toml`. Some through services continue beyond Manchester Victoria
+# towards Blackpool North; that's a separate corridor and out of scope here.
+#
+# CRS codes cross-checked against two independent sources each (Wikipedia
+# station infoboxes and nationalrail.co.uk station detail pages), fetched
+# 2026-08-29; LDS and MCV were already verified in-repo via `northern.toml`.
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-calder-valley"
+
+[[stations]]
+crs = "BDI"
+role = "junction"
+segment = "northern-calder-valley"
+# Where the Calder Valley line proper begins per Wikipedia's own framing;
+# also where the Leeds approach and any independent Bradford-originating
+# services converge.
+
+[[stations]]
+crs = "HFX"
+role = "junction"
+segment = "northern-calder-valley"
+# Dryclough Junction, just outside Halifax, is where the Huddersfield route
+# (`northern-transpennine`) diverges onto separate track - see the top-of-
+# file comment.
+
+[[stations]]
+crs = "SOW"
+role = "minor"
+segment = "northern-calder-valley"
+
+[[stations]]
+crs = "TOD"
+role = "minor"
+segment = "northern-calder-valley"
+
+[[stations]]
+crs = "RCD"
+role = "major"
+segment = "northern-calder-valley"
+
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "northern-calder-valley"

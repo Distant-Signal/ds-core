@@ -1,0 +1,123 @@
+id = "northern-airedale"
+name = "Airedale Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["LDS", "BDQ", "SKI"]
+sample_stations = ["SHY", "KEI", "SKI"]
+match_keywords = ["Airedale Line"]
+
+# Leeds and Bradford Forster Square to Skipton via Shipley and Keighley.
+# Wikipedia's Airedale line article confirms both approaches converge at
+# Shipley: "From Bradford Forster Square, the line shares track with the
+# Airedale and Leeds-Bradford lines through Manningham, Frizinghall,
+# Shipley" before continuing as one route to Keighley and Skipton.
+# (https://en.wikipedia.org/wiki/Airedale_line)
+#
+# LDS and BDQ are two parallel starting termini (not sequential stops) that
+# merge at Shipley - listed adjacently here per SCHEMA.md's "order stations
+# geographically... with branches noted in comments", matching the
+# `northern-calder-valley.toml` precedent for a similar Leeds/Bradford dual
+# approach.
+#
+# --- Shared-trunk naming decision (read this before writing Task 8.4) ---
+# This corridor is a shared-trunk consideration with the Wharfedale Line
+# (Leeds/Bradford Forster Square -> Ilkley), which is not yet a file in this
+# catalogue as of this commit. Per the gap analysis
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "Northern - is the existing 6-branch coverage actually complete?"), the two
+# lines "share track as far as Shipley". Wikipedia's Wharfedale line article
+# confirms the exact divergence point: "The service to Ilkley branches north
+# of Shipley railway station" (https://en.wikipedia.org/wiki/Wharfedale_line)
+# - i.e. Shipley itself is the last station both lines have in common, and
+# per SCHEMA.md's shared-trunk rule of thumb the junction station belongs to
+# the shared segment.
+#
+# This file is landing before the Wharfedale Line file, so it gets to name
+# the shared segment: chosen name is `northern-shipley-trunk` (place-based,
+# matching the existing `swr-trunk-waterloo` convention of naming trunks
+# after the junction/place rather than concatenating both line names).
+# LDS, BDQ and SHY are all on `northern-shipley-trunk`. Whoever writes
+# `lines/northern-wharfedale.toml` should reuse this exact segment name for
+# its own LDS/BDQ/SHY entries so an incident at any of these three
+# propagates to both lines as a shared-trunk event; do not invent a
+# different name.
+#
+# The exclusive `northern-airedale` segment starts at the next station after
+# the junction, Keighley, per the same rule of thumb.
+#
+# --- LNER overlap (flagging for a future, not-yet-written LNER batch) ---
+# The gap analysis also notes "both LNER and Northern services use parts of
+# Airedale". Confirmed: Skipton's own Wikipedia station article lists LNER
+# running "a daily return service from Skipton to London King's Cross, via
+# Leeds" over the East Coast Main Line
+# (https://en.wikipedia.org/wiki/Skipton_railway_station). There is no
+# `lines/lner-*.toml` file in this catalogue yet (a separate, not-yet-
+# executed batch of the same plan) - no LNER segment name is invented here.
+# Whoever writes LNER's Skipton/Leeds service file should be aware this
+# corridor is not exclusively Northern's.
+#
+# --- Carlisle/Lancaster extension: researched and deliberately omitted ---
+# The gap analysis's phrasing ("some services on to Carlisle/Lancaster") is
+# accurate at the level of "trains you can ride through Skipton without
+# changing", but Northern itself treats the onward services as separate
+# named lines, not as the Airedale Line continuing: Skipton's Wikipedia
+# station article lists the Airedale Line's own service ("half-hourly
+# service to Leeds and an hourly service to Bradford Forster Square")
+# distinctly from the Settle-Carlisle Line ("two-hourly services between
+# Leeds and Carlisle") and the Leeds-Morecambe/Bentham Line ("two-hourly
+# service...between Leeds, Lancaster, Carnforth and Morecambe"), each listed
+# as its own line serving Skipton. The Airedale line article corroborates
+# this framing from the other direction ("Trains of the Leeds-Morecambe line
+# and Settle-Carlisle line also run along the Airedale line from Leeds").
+# Cross-checked against nationalrail.co.uk, which lists Skipton as managed
+# by Northern with the same CRS code (SKI) but doesn't merge these into one
+# route either. Given both sources agree the Carlisle/Lancaster continuation
+# belongs to two other, separately-named lines (out of scope for this file,
+# and not yet present in this catalogue), Skipton is kept as this line's
+# terminus rather than extending the station list further.
+#
+# Only principal/town stations are listed; intermediate halts (Manningham,
+# Frizinghall on the Bradford approach; Saltaire, Bingley, Crossflatts on
+# the Shipley-Keighley stretch; Steeton & Silsden, Kildwick & Crosshills,
+# Cononley on the Keighley-Skipton stretch) are omitted, matching the
+# "only principal stations" precedent set by `xc-manchester.toml` and
+# `northern-cumbrian-coast.toml`.
+#
+# CRS codes cross-checked against two independent sources each (Wikipedia
+# station infoboxes and nationalrail.co.uk station detail pages), fetched
+# 2026-08-29; LDS was already verified in-repo via `northern.toml` and
+# `northern-calder-valley.toml`.
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-shipley-trunk"
+
+[[stations]]
+crs = "BDQ"
+role = "terminus"
+segment = "northern-shipley-trunk"
+# Bradford Forster Square - the other parallel starting terminus; see the
+# top-of-file comment. Not to be confused with Bradford Interchange (BDI),
+# used by `northern-calder-valley.toml` - a different Bradford station on a
+# different corridor.
+
+[[stations]]
+crs = "SHY"
+role = "junction"
+segment = "northern-shipley-trunk"
+# Shipley: where the Leeds and Bradford Forster Square approaches converge,
+# and where the (not-yet-filed) Wharfedale Line diverges north towards
+# Ilkley. See the shared-trunk naming decision above.
+
+[[stations]]
+crs = "KEI"
+role = "major"
+segment = "northern-airedale"
+
+[[stations]]
+crs = "SKI"
+role = "terminus"
+segment = "northern-airedale"

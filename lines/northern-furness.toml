@@ -20,21 +20,33 @@ delay_threshold_minutes = 10
 # own definition.
 #
 # Minor intermediate calls are omitted; only principal stations are listed.
+#
+# Segment split, added when `lines/northern-cumbrian-coast.toml` was merged:
+# only BIF (Barrow-in-Furness) is the real shared-trunk junction with that
+# line, per SCHEMA.md's shared-trunk rule of thumb -- Batch 8's own final
+# review caught that this file originally tagged ALL FOUR of its stations
+# `segment = "northern-furness"`, which (once a second file also used that
+# name for BIF) would have made `SegmentRegistry` treat the whole literal
+# segment name as shared, silently reclassifying a Lancaster/Carnforth/
+# Ulverston incident -- nowhere near Cumbrian Coast -- as SharedSegment.
+# LAN/CNF/ULV now sit on their own exclusive `northern-furness-branch`
+# segment instead; only BIF keeps `northern-furness` as the genuine shared
+# trunk.
 [[stations]]
 crs = "LAN"
 tiploc = "LANCSTR"
 role = "junction"
-segment = "northern-furness"
+segment = "northern-furness-branch"
 
 [[stations]]
 crs = "CNF"
 role = "junction"
-segment = "northern-furness"
+segment = "northern-furness-branch"
 
 [[stations]]
 crs = "ULV"
 role = "minor"
-segment = "northern-furness"
+segment = "northern-furness-branch"
 
 [[stations]]
 crs = "BIF"

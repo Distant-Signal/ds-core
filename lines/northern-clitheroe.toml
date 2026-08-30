@@ -1,0 +1,192 @@
+id = "northern-clitheroe"
+name = "Ribble Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+destination_crs_filter = ["CLH"]
+# Blackburn is deliberately excluded from this filter even though some
+# Manchester Victoria services terminate there rather than continuing to
+# Clitheroe: Blackburn is also served by other routes (e.g. towards Preston
+# and towards Colne) whose services are not this line, so a bare "BBN"
+# destination would be ambiguous. CLH alone is unambiguous.
+sample_stations = ["BON", "BBN", "CLH"]
+match_keywords = ["Ribble Valley Line", "Clitheroe Line"]
+
+# Generally-hourly community rail line, single track for a long stretch: same
+# rationale as the Furness/Cumbrian Coast/Lakes lines. Wikipedia's Ribble
+# Valley line article confirms both facts: "the current level of one service
+# per hour" southbound, and that the Bolton-Blackburn section "was reduced to
+# single track operation in two stages as part of major resignalling
+# projects on the East Lancashire line (1973) and Bolton area (1985)."
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Manchester Victoria to Clitheroe via Salford, Bolton, Entwistle, Darwen and
+# Blackburn (the "Ribble Valley Line", designated a community rail service by
+# the Department for Transport in March 2007 per Wikipedia:
+# "The service from Manchester to Clitheroe was designated by the Department
+# for Transport as a community rail service in March 2007."), ordered
+# south-east to north-west. Per the gap analysis
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Northern
+# - is the existing 6-branch coverage actually complete?"): "Clitheroe/Ribble
+# Valley Line (Manchester/Blackburn -> Clitheroe)" is a confirmed gap,
+# distinct from the separately-flagged (and out-of-scope for this plan)
+# Manchester-Southport/Wigan-Kirkby branches mentioned in the same section.
+#
+# --- Shared-trunk fact: Manchester Victoria hub ---
+# Wikipedia's article states this line "shares track with the Manchester-
+# Preston line through Bolton" and that "[t]he track diverges at Bolton,
+# where the Ribble Valley line branches northeast toward Blackburn while the
+# Manchester-Preston line continues northwest to Preston" (a curve added at
+# Bolton in 1888 "allowed trains to run between the Preston and Blackburn
+# lines without needing to reverse in the station"). `lines/northern-
+# blackpool.toml` (Manchester Victoria - Bolton - Preston - Blackpool North)
+# is exactly that Manchester-Preston line, and it already tags its own MCV
+# entry with the `northern-manchester` segment shared with `northern.toml`.
+# This is genuine confirmed track-sharing, not just both routes touching
+# Manchester (per the `xc-manchester.toml` precedent this catalogue follows:
+# "station overlap is fine, segment-sharing is a deliberate choice"), so
+# this file's own MCV entry joins that same `northern-manchester` segment
+# rather than inventing a new name, making it a three-way shared trunk
+# (`northern`, `northern-blackpool`, `northern-clitheroe`).
+#
+# Per SCHEMA.md's shared-trunk rule of thumb the junction station belongs to
+# the shared segment and the exclusive segment starts at the next station.
+# `northern-blackpool.toml` already models this coarsely - only MCV itself
+# carries the shared name, with its own exclusive segment starting at the
+# very next station (Salford Crescent) despite real shared track continuing
+# physically as far as Bolton. This file follows that same established
+# precedent rather than re-litigating it (which would require touching
+# `northern-blackpool.toml`, out of scope for this task): the exclusive
+# `northern-clitheroe` segment starts at Salford Central, the station
+# immediately after MCV, and includes Bolton itself even though physical
+# track-sharing with the Blackpool/Preston line continues that far - Bolton
+# appears in both files under different (non-shared) segment names, which is
+# station-level overlap, not segment-sharing, consistent with the
+# `xc-manchester.toml` precedent.
+#
+# --- Manchester Victoria hub: other overlaps checked, no further sharing ---
+# `northern-calder-valley.toml` (Task 8.2) also terminates at MCV; its own
+# comment already confirms "nothing in this research found a confirmed
+# shared-trunk point between the two beyond both terminating at MCV, which
+# is station-level overlap only, not a segment" - some Clitheroe line
+# services continue through MCV onto the Calder Valley line towards Rochdale
+# (Wikipedia: "Passenger services from Clitheroe to Rochdale via Blackburn
+# and Manchester Victoria are operated by Northern Trains"), but that is a
+# through-service working over Calder Valley's own separate physical track
+# east of MCV, not shared track this file's stations occupy - no segment is
+# shared with `northern-calder-valley` here either.
+# `xc-manchester.toml` (Manchester Piccadilly, not Victoria) and
+# `northern.toml`'s Liverpool/Wigan-facing `northern-manchester` MCV entry
+# are the same station-level-only overlaps already documented above/in
+# `northern-blackpool.toml`.
+#
+# --- Station list and sourcing ---
+# Only principal/town stations are listed; several closed/historical
+# stations that still appear in some route diagrams are deliberately
+# excluded after verification: The Oaks (closed 1950), Astley Bridge (closed
+# to passengers 1879), Daisyfield (closed 1958), Lower Darwen (closed 1958),
+# and the original Wilpshire station (closed 1962/1964, superseded by the
+# newly-built Ramsgreave & Wilpshire in 1994) - all per their own Wikipedia
+# station articles. Hall i' th' Wood, despite being a minor halt, is
+# included because it is a currently-open, in-service station explicitly
+# described by its own Wikipedia article as "the last stop before Bolton on
+# the ... Ribble Valley line".
+#
+# The line historically continued beyond Clitheroe to Hellifield (the
+# "Little North Western"); that section lost its regular passenger service
+# and is excluded here as Clitheroe is the current passenger terminus, per
+# the Clitheroe station article's own framing of "an hourly service daily
+# from Clitheroe to Rochdale via Blackburn and Manchester Victoria" (i.e. no
+# regular passenger service north of Clitheroe).
+#
+# CRS codes cross-checked against two independent sources each (Wikipedia
+# station infoboxes plus either railwaycodes.org.uk's CRS listing or each
+# station's own nationalrail.co.uk detail page), fetched 2026-08-30; MCV was
+# already verified in-repo via `northern.toml`/`northern-blackpool.toml`.
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "northern-manchester"
+# Manchester Victoria - shared hub; see the top-of-file comment.
+
+[[stations]]
+crs = "SFD"
+role = "minor"
+segment = "northern-clitheroe"
+# Salford Central.
+
+[[stations]]
+crs = "SLD"
+role = "junction"
+segment = "northern-clitheroe"
+# Salford Crescent - physical track-sharing with the Blackpool/Preston line
+# continues from here to Bolton, but no segment is shared; see the
+# top-of-file comment.
+
+[[stations]]
+crs = "BON"
+role = "junction"
+segment = "northern-clitheroe"
+# Bolton - the Manchester-Preston (Blackpool line) route diverges northwest
+# from here; this line continues northeast towards Blackburn.
+
+[[stations]]
+crs = "HID"
+role = "minor"
+segment = "northern-clitheroe"
+# Hall i' th' Wood.
+
+[[stations]]
+crs = "BMC"
+role = "minor"
+segment = "northern-clitheroe"
+# Bromley Cross.
+
+[[stations]]
+crs = "ENT"
+role = "minor"
+segment = "northern-clitheroe"
+# Entwistle.
+
+[[stations]]
+crs = "DWN"
+role = "minor"
+segment = "northern-clitheroe"
+# Darwen.
+
+[[stations]]
+crs = "BBN"
+tiploc = "BLKB"
+role = "major"
+segment = "northern-clitheroe"
+# Blackburn - some services from Manchester Victoria terminate here rather
+# than continuing to Clitheroe.
+
+[[stations]]
+crs = "RGW"
+role = "minor"
+segment = "northern-clitheroe"
+# Ramsgreave & Wilpshire (opened 1994, not the original Wilpshire station -
+# see the top-of-file comment).
+
+[[stations]]
+crs = "LHO"
+role = "minor"
+segment = "northern-clitheroe"
+# Langho.
+
+[[stations]]
+crs = "WHE"
+role = "minor"
+segment = "northern-clitheroe"
+# Whalley.
+
+[[stations]]
+crs = "CLH"
+role = "terminus"
+segment = "northern-clitheroe"
+# Clitheroe.
