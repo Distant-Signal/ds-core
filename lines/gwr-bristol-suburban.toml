@@ -1,0 +1,402 @@
+id = "gwr-bristol-suburban"
+name = "Bristol area suburban services"
+mode = "national-rail"
+category = "commuter"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here, since it's the same operator running both groups below.
+# en.wikipedia.org/wiki/Severn_Beach_line: "Great Western Railway operates
+# all services." Weymouth's own station page confirms GWR "generally
+# operates eight trains per day to Bristol Temple Meads" on the other group
+# (South Western Railway also serves Weymouth, but only on its own,
+# unrelated London Waterloo-Weymouth route — not part of this Bristol-
+# sourced group, so SW is deliberately not added to `operators`).
+
+# Per the gap-analysis text this task is grounded in
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Great
+# Western Railway (GWR)" section (b)): "likely a Bristol-area suburban
+# group (Severn Beach line, Bristol-Weymouth via Bath/Castle Cary)." This
+# file covers both, per the plan's own stated one-file grouping (task-4.6-
+# brief.md), matching swr-south-west-main.toml's precedent for "one file
+# covers two operationally-related destinations."
+
+destination_crs_filter = ["SVB", "WEY"]
+# The two real, verified termini of this file's two groups.
+
+# One per group/segment below, for a clean read of each.
+sample_stations = ["AVN", "BTH", "WEY"]
+
+# "Severn Beach line" and "Heart of Wessex line" are the two groups' own
+# well-established current infrastructure/branding names (both are literal
+# Wikipedia article titles: en.wikipedia.org/wiki/Severn_Beach_line and
+# en.wikipedia.org/wiki/Heart_of_Wessex_Line). "Bristol to Weymouth" is
+# deliberately not added on top — SCHEMA.md's "don't overload
+# match_keywords" rule, and "Heart of Wessex" is the phrase actually used
+# in current GWR/National Rail branding for the Bristol-Weymouth service.
+match_keywords = ["Severn Beach line", "Heart of Wessex line"]
+
+# Mixed frequency across this file: the Severn Beach line itself is a
+# genuine suburban service (its own Wikipedia "Service" section: "Monday to
+# Friday, two trains per hour run from Bristol Temple Meads to Avonmouth...
+# on weekends, a roughly hourly service"), but the Bristol-Weymouth group
+# thins out considerably towards its own far end (Weymouth's own station
+# page: GWR "generally operates eight trains per day to Bristol Temple
+# Meads" — nearer six-per-day of headway across a normal traffic day, far
+# sparser than the Severn Beach branch, though closer-in stations like
+# Freshford see a better "half-hourly peak and hourly off-peak" local
+# pattern per that station's own page). Given this mix, this file applies
+# the same override gwr-cotswold.toml/gwr-thames-valley.toml already settled
+# on for GWR secondary lines that aren't a frequent double-tracked express
+# main line, rather than inventing a third value pair.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# --- Bristol Temple Meads: shared departure point, station overlap only ---
+#
+# BRI is also gwr-main-line.toml's own terminus (its own exclusive
+# `gwr-main-line` segment, covering CPM-BTH-BRI). This task's own research
+# independently found the Bristol-Weymouth group's own approach to Bath Spa
+# genuinely reuses the same Bristol-Bath physical double-track railway
+# gwr-main-line.toml already claims for BTH/BRI (there is only one railway
+# between Bristol Temple Meads and Bath Spa) — a second, real, multi-station
+# overlap this task's research found beyond what the brief itself flags (the
+# Westbury/Castle Cary one below). Following Task 4.5's identical judgment
+# call for its own self-found overlaps (gwr-thames-valley.toml's Oxford/
+# Newbury cases): reusing `gwr-main-line` verbatim for just this file's
+# BTH/BRI rows was considered, but that segment also covers Chippenham
+# (CPM), which this file's own Bristol-Weymouth service does not reach — a
+# technically correct fix needs gwr-main-line.toml's own segment split at
+# Bath Spa, out of this task's file scope (lines/gwr-bristol-suburban.toml
+# and matcher.rs only). Station overlap only is used instead at BTH and
+# BRI, flagged here (and in this task's report) for the controller,
+# alongside the already-known Westbury/Castle Cary finding below.
+#
+# --- File structure: two distinct groups, not forced onto one segment ---
+#
+# Per the task brief's own steer, the Severn Beach line and the Bristol-
+# Weymouth service are genuinely different corridors from BRI (Severn Beach
+# heads north-west along the Avon Gorge to the Severn estuary; the Weymouth
+# service heads south-east via Bath and Westbury) — unlike
+# gwr-thames-valley.toml's Didcot-Oxford/Reading-Newbury branches (which
+# share one segment name because neither is shared with another catalogued
+# line and they're both short suburban offshoots of the same Reading hub),
+# these two groups get their own distinct exclusive segment names below
+# (`gwr-severn-beach`, `gwr-bristol-weymouth`), following
+# swr-south-west-main.toml's "one file, plausible sub-branches" precedent
+# without over-modelling every fork. BRI itself is tagged with
+# `gwr-severn-beach` (the first group listed below) purely as a documentation
+# choice — both groups genuinely depart from here; this has no effect on
+# matching (an incident at BRI matches this line as a whole either way).
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "terminus"
+segment = "gwr-severn-beach"
+# Shared departure point for both groups below (see comment above). Also
+# gwr-main-line.toml's own terminus — station overlap only, not a segment
+# share (see comment above).
+
+# --- Group 1: Severn Beach line (Bristol Temple Meads - Avonmouth - Severn
+#     Beach) ---
+#
+# en.wikipedia.org/wiki/Severn_Beach_line's own route diagram, cross-checked
+# station-by-station against each station's own Wikipedia infobox (to catch
+# any since-closed halts — several nearby stations on the *other* group
+# below turned out to be closed, so this was checked carefully rather than
+# assumed), confirms the current full stopping pattern below. Every station
+# is currently open with live GWR service; none are omitted as
+# "non-principal" the way the express-line siblings in this batch omit
+# minor halts, since this whole branch is an all-stations suburban service
+# with no faster alternative calling pattern to compare against (matching
+# gwr-thames-valley.toml's precedent of listing every real current stop on
+# a local/stopping-only branch, e.g. its own thinly-served Appleford).
+# CRS codes verified individually against each station's own Wikipedia
+# infobox. Portway Park & Ride (PRI) is the newest addition — its own page
+# confirms it "opened on 1 August 2023 as part of the MetroWest package of
+# improvements", with GWR-operated services, and its own infobox route
+# diagram confirms its position (preceding: Shirehampton; following:
+# Avonmouth) used below.
+[[stations]]
+crs = "LWH"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SRD"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "MTP"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "RDA"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "CFN"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SML"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SHH"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "PRI"
+role = "minor"
+segment = "gwr-severn-beach"
+# Opened 1 August 2023 (MetroWest) — see comment above.
+
+[[stations]]
+crs = "AVN"
+role = "major"
+segment = "gwr-severn-beach"
+# The branch's principal intermediate stop (Avonmouth, an industrial town
+# and port); most weekday services turn back here (see comment above), with
+# only some continuing to St Andrews Road/Severn Beach.
+
+[[stations]]
+crs = "SAR"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SVB"
+role = "terminus"
+segment = "gwr-severn-beach"
+
+# --- Group 2: Bristol-Weymouth via Bath/Castle Cary (the "Heart of Wessex
+#     line") ---
+#
+# en.wikipedia.org/wiki/Heart_of_Wessex_Line's own route diagram was
+# cross-checked station-by-station against each individual station's own
+# Wikipedia infobox, since several stations that first appeared in the
+# line's general route description turned out to already be closed (St
+# Anne's Park: "closed on 5 January 1970"; Saltford: "closed entirely" 5
+# January 1970; Twerton-on-Avon: closed 1917; Bathampton: closed 3 October
+# 1966; Limpley Stoke: closed 1966; Hampton Row Halt: closed 1917; Sparkford
+# — on the Yeovil side — "closed to both passengers and goods traffic on 3
+# October 1966") — all deliberately omitted below, verified individually
+# rather than assumed from the general route diagram, to avoid inventing
+# current stops that no longer exist. The stations below are each
+# individually confirmed currently open (live CRS code, no disused/closed
+# status) with current GWR service.
+[[stations]]
+crs = "KYN"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "OLF"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "BTH"
+tiploc = "BATHSPA"
+role = "major"
+segment = "gwr-bristol-weymouth"
+# Also gwr-main-line.toml's own exclusive-segment station — station overlap
+# only, not a segment share (see comment above). Row's tiploc copied
+# verbatim from gwr-main-line.toml, matching this batch's convention for
+# rows genuinely shared with a sibling file.
+
+[[stations]]
+crs = "FFD"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# Freshford's own Wikipedia page: "a half-hourly peak and hourly off-peak
+# service is currently provided."
+
+[[stations]]
+crs = "AVF"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# Avoncliff's own page: no longer a request stop since July 2010 ("all
+# stops became mandatory").
+
+[[stations]]
+crs = "BOA"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "TRO"
+role = "major"
+segment = "gwr-bristol-weymouth"
+# Trowbridge, the county town of Wiltshire — the largest intermediate town
+# on this stretch.
+
+# --- Westbury-Castle Cary: genuine shared trunk with gwr-west-of-
+#     england.toml (the risk this task's own brief flags) ---
+#
+# This task's own research directly confirms real, physical track sharing
+# here, cross-checked across two independent Wikipedia articles:
+#   - en.wikipedia.org/wiki/Heart_of_Wessex_Line's own lead paragraph:
+#     the line "shares the Wessex Main Line as far as Westbury and then
+#     follows the course of the Reading to Taunton Line as far as Castle
+#     Cary."
+#   - en.wikipedia.org/wiki/Castle_Cary_railway_station, independently:
+#     "the Reading to Taunton Line and the Heart of Wessex Line... share
+#     tracks between Westbury and Castle Cary stations," and "Immediately
+#     to the west of the station the Weymouth line diverges from the London
+#     to Penzance Line" (confirming Castle Cary itself as the real physical
+#     junction where this line's own Yeovil/Weymouth-bound exclusive
+#     segment begins).
+# This is the same "genuine multi-station shared corridor" shape as
+# `xc-south-west`/`gwr-trunk-paddington` earlier in this batch, not a
+# single-waypoint coincidence, and unlike this task's own BTH/BRI finding
+# above, this exact overlap is the one the brief itself directs reusing the
+# sibling's segment name for.
+#
+# --- Corrected scope: WSB/CLC only, not the whole Westbury-Castle Cary
+#     stretch ---
+#
+# An earlier draft of this file reused gwr-west-of-england.toml's own
+# exclusive segment name, `gwr-west-of-england`, verbatim for WSB, FRO, BRU
+# AND CLC, reasoning that both sourced quotes describe the whole stretch as
+# shared. That was wrong: neither source actually names Frome or Bruton as
+# a shared station, only Westbury and Castle Cary; Frome itself sits on what
+# its own page calls "a looped branch" off the through line via Clink Road
+# Junction, and gwr-west-of-england.toml's own text independently confirms
+# Frome is NOT on its route (reached via Clink Road Junction, off the
+# direct Castle Cary route its own principal expresses use — see that
+# file's own comment). Reusing the sibling's segment name for FRO/BRU also
+# pulled Newbury (NBY), a station gwr-bristol-suburban.toml's own service
+# never reaches, into "shared" status catalogue-wide, since segment sharing
+# is tracked per segment name, not per individual station. Fixed by
+# introducing a new, narrower segment name, `gwr-westbury-castle-cary`,
+# used below ONLY for WSB and CLC — the two stations both sourced quotes
+# actually name, and the only two stations both real services actually
+# call at. Frome and Bruton move onto this file's OWN segment,
+# `gwr-bristol-weymouth` (the segment this file already uses for its other
+# exclusive Bristol-Weymouth-group stations) — they are this line's own
+# exclusive territory, not genuinely shared with gwr-west-of-england.toml at
+# all, consistent with that file's own stated reasoning for excluding Frome.
+# Witham (the historic intermediate station, not the modern junction of the
+# same name) is deliberately excluded — its own Wikipedia infobox confirms
+# it "closed" to passengers in 1966.
+[[stations]]
+crs = "WSB"
+tiploc = "WSTBRYW"
+role = "junction"
+segment = "gwr-westbury-castle-cary"
+# This line's own approach joins the shared Reading to Taunton Line/Heart of
+# Wessex trunk here (see comment above). Row's tiploc copied verbatim from
+# gwr-west-of-england.toml.
+
+[[stations]]
+crs = "FRO"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# This line's own exclusive territory, not part of the genuinely-shared
+# WSB/CLC stretch — see corrected-scope comment above.
+
+[[stations]]
+crs = "BRU"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# This line's own exclusive territory, not part of the genuinely-shared
+# WSB/CLC stretch — see corrected-scope comment above.
+
+[[stations]]
+crs = "CLC"
+tiploc = "CCARY"
+role = "junction"
+segment = "gwr-westbury-castle-cary"
+# The real physical junction where this line's own Weymouth-bound exclusive
+# segment below begins (see comment above) — per the shared-trunk rule of
+# thumb (SCHEMA.md), the junction station itself stays on the shared trunk.
+# Row's tiploc copied verbatim from gwr-west-of-england.toml. Role is
+# deliberately "junction" here even though gwr-west-of-england.toml's own
+# CLC row uses "minor" — a per-file role choice, not a sync error: this
+# file's own research specifically confirmed Castle Cary's real physical
+# junction role (the Weymouth line diverging here), which that earlier
+# file's own research didn't have occasion to flag.
+
+# --- Castle Cary - Weymouth: this line's own exclusive segment, past the
+#     shared-trunk junction ---
+#
+# Per the shared-trunk rule of thumb, this line's own exclusive segment
+# starts at the first station past Castle Cary reached only by this
+# service. Sparkford — the geographically obvious next stop — was checked
+# individually and found closed ("closed to both passengers and goods
+# traffic on 3 October 1966"); Castle Cary's own route diagram confirms the
+# real current next station is Yeovil Pen Mill directly.
+[[stations]]
+crs = "YVP"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "THO"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# Thornford, previously missing from this file despite being open, GWR-
+# operated and on the same footing as Yetminster/Chetnole below. Confirmed
+# open and currently served (en.wikipedia.org/wiki/Thornford_railway_station:
+# "Great Western Railway manages the station and operates" services on the
+# Heart of Wessex line, Bristol Temple Meads-Weymouth via this stretch). A
+# request stop, same as Yetminster/Chetnole ("This is a request stop so
+# passengers must signal clearly to the driver if they wish to board the
+# train"), hence the same "minor" role.
+
+[[stations]]
+crs = "YET"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "CNO"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "MDN"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "DCW"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+
+[[stations]]
+crs = "UPW"
+role = "minor"
+segment = "gwr-bristol-weymouth"
+# Upwey's own page confirms current GWR service: "up to eight daily trains
+# to/from Bristol Temple Meads."
+
+[[stations]]
+crs = "WEY"
+role = "terminus"
+segment = "gwr-bristol-weymouth"
+# This group's terminus. WEY is also swr-south-west-main.toml's own
+# terminus (its own exclusive `swr-swml-south` segment, `operators =
+# ["SW"]`, its own "Weymouth line" match_keywords entry) — a third genuine
+# station overlap this task's research found, corrected during review after
+# an earlier draft of this comment wrongly claimed SWR's route "is not
+# otherwise catalogued yet." Real, physical track sharing plausibly exists
+# further up SWR's own route too, but this file's own scope (Bristol-
+# Weymouth via Bath/Castle Cary) never runs over any of swr-south-west-
+# main.toml's own claimed stations except WEY itself, so — mirroring the
+# BTH/BRI vs gwr-main-line.toml treatment above — this stays station
+# overlap only, not a shared segment: `gwr-bristol-weymouth` and
+# `swr-swml-south` are different segment names, so no incorrect
+# `SharedSegment` cross-propagation occurs; `operators` stays `["GW"]` per
+# this file's own scope (see comment at top). See
+# `gwr_bristol_suburban_station_overlap_with_swr_south_west_main_stays_exclusive_each_line`
+# in matcher.rs for the regression test confirming this.

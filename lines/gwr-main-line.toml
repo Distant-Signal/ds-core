@@ -1,0 +1,128 @@
+id = "gwr-main-line"
+name = "Great Western Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GW"]
+# Great Western Railway, FirstGroup-operated. Code confirmed against Network
+# Rail's National Rail Timetable "References and Symbols" PDF and
+# nationalrail.co.uk's operator page (cross-checked, per Global Constraints
+# after `west-coast-main-line.toml`'s prior AW/VT mix-up). GWR is scheduled
+# to transfer to public ownership on 13 Dec 2026; per this catalogue's
+# precedent with other nationalised operators (LNER "GR", SWR "SW"), the
+# ATOC code itself is not expected to change on transfer, only the owner —
+# left as `GW` accordingly, to be re-verified after the transfer date.
+
+destination_crs_filter = ["BRI"]
+# Only the confirmed core terminus. Paddington-originating services that
+# continue past Bristol Temple Meads (Weston-super-Mare, Taunton, Cardiff/
+# Swansea via the South Wales Main Line, etc.) belong to sibling GWR line
+# definitions not yet added in this batch — not claimed here to avoid
+# inventing routing this task didn't verify.
+
+# Exclusive-segment stations only, for a clean read of Bristol-bound-only
+# services (mirrors swr-south-west-main.toml's sample_stations rationale).
+sample_stations = ["CPM", "BTH", "BRI"]
+
+match_keywords = ["Great Western Main Line", "GWML"]
+
+# --- Segment naming (read this before adding a sibling GWR file) ---
+#
+# `gwr-trunk-paddington` is the shared-trunk segment name established by
+# this task (4.1, first in the Batch 4 GWR sequence) for the Paddington-
+# Reading-Didcot-Swindon stretch that every London-originating GWR service
+# in this batch (Cotswold, South Wales, West of England/Cornish, Thames
+# Valley suburban) physically runs over. Later batch tasks: reuse this
+# exact string for any station your line shares with this stretch, per the
+# controller ruling in shared-context.md. Do not invent a second name for
+# the same track.
+#
+# Real diverging points researched for this task (Wikipedia's Great Western
+# Main Line / South Wales Main Line articles, cross-checked against
+# railwaycodes.org.uk-derived TIPLOC/CRS sources and RAIL magazine's
+# reporting on this corridor):
+#   - Cotswold Line (Oxford/Worcester) services diverge at Didcot (Foxhall
+#     Junction / the Didcot East curve), so DID is the last station shared
+#     with that arm.
+#   - South Wales Main Line services diverge at Wootton Bassett Junction,
+#     a few miles west of Swindon station itself (not at Swindon proper),
+#     so SWI is the last station shared with that arm.
+#   - West of England/Cornish and Thames Valley suburban services diverge
+#     in the Reading area (exact split point left to those tasks' own
+#     research per shared-context.md; may not be exactly RDG for the
+#     suburban stopping service).
+# Since both the Cotswold and South Wales arms still share track as far as
+# Swindon, the trunk here extends through DID and SWI. The exclusive
+# `gwr-main-line` segment (this line's own name, following
+# `thameslink-core.toml`'s precedent of reusing the line id as its own
+# exclusive segment name) therefore starts at CPM (Chippenham), the first
+# station reached only by Bristol-via-Bath services.
+#
+# Reading-area overlap: RDG is also served by `xc-south-coast.toml` and is
+# the western terminus of `elizabeth-line.toml`'s `elizabeth-west` segment.
+# Following both those files' own documented precedent ("station overlap is
+# fine, segment-sharing is a deliberate choice"), RDG here stays on
+# `gwr-trunk-paddington` and is NOT put on `xc-south-coast` or
+# `elizabeth-west` — those lines extend well beyond this shared stretch in
+# other directions, and incidents at RDG still match all relevant lines by
+# station hit rather than forced segment sharing.
+
+# Ordered London to Bristol. Principal/express-pattern stations only, per
+# the gap-analysis section this task is grounded in
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Great
+# Western Railway (GWR)"). All CRS and TIPLOC codes below were verified
+# directly against railwaycodes.org.uk's own CRS/TIPLOC table (the
+# authoritative primary source; it rate-limited some requests during initial
+# research but was successfully retried for every station here), and
+# cross-checked against Wikidata, ianvisits.co.uk and railwaydata.co.uk,
+# which all agree. Note railwaycodes.org.uk's table also carries a STANME
+# (station mnemonic) column distinct from TIPLOC — e.g. Swindon's STANME is
+# "SWINDON" and Bristol Temple Meads' is "BRISTOLTM", easy to mistake for
+# the TIPLOC at a glance; the TIPLOC values below (SDON, BRSTLTM) are taken
+# from the correct column and were re-confirmed after a review flagged the
+# apparent mismatch.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# West of England/Cornish and Thames Valley suburban services diverge in
+# this area (left to Tasks 4.4/4.5's own research for the exact point).
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# Cotswold Line (Oxford/Worcester) services diverge here.
+
+[[stations]]
+crs = "SWI"
+tiploc = "SDON"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# South Wales Main Line services diverge just west of here, at Wootton
+# Bassett Junction — the last station genuinely shared with that arm.
+
+[[stations]]
+crs = "CPM"
+tiploc = "CHIPNHM"
+role = "minor"
+segment = "gwr-main-line"
+
+[[stations]]
+crs = "BTH"
+tiploc = "BATHSPA"
+role = "major"
+segment = "gwr-main-line"
+
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "terminus"
+segment = "gwr-main-line"

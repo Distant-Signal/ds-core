@@ -1,0 +1,376 @@
+id = "gwr-thames-valley"
+name = "Thames Valley suburban"
+mode = "national-rail"
+category = "commuter"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here, since it's the same operator running this route.
+
+# Deliberately unset. This task's research (see the segment-naming comment
+# below) found this line's real service pattern splits into two genuinely
+# different products beyond Reading (a Didcot-Oxford/Banbury local stopper
+# and a Reading-Newbury local stopper that only irregularly runs through to
+# Paddington), and even the Paddington-end pattern mixes a "2tph semi-fast
+# to Didcot Parkway" working with occasional Newbury-bound extras. Setting
+# this to just NBY/OXF would overclaim a clean Paddington-through pattern
+# this task did not verify service-by-service. Left unset rather than
+# invent or over-scope it, mirroring gwr-cotswold.toml's/gwr-south-wales.toml's/
+# gwr-west-of-england.toml's/gwr-cornish-main-line.toml's identical judgment
+# call.
+
+# Exclusive-segment stations only, for a clean read of this line's own
+# local/stopping services (mirrors the other GWR siblings' sample_stations
+# rationale). One per branch plus the shared core.
+sample_stations = ["SLO", "OXF", "NBY"]
+
+# "Thames Valley" is the well-established collective name for GWR's local
+# stopping network in this corridor (per the gap-analysis text this task is
+# grounded in — see below). Kept to one high-precision phrase per SCHEMA.md's
+# "don't overload match_keywords" rule; "local" or "stopping" would be too
+# generic and risk false-positiving on unrelated GWR incident text.
+match_keywords = ["Thames Valley"]
+
+# Hourly-or-better frequency throughout (2tph Paddington-Didcot core, hourly
+# Reading-Newbury and Didcot-Oxford locals — see segment-naming comment
+# below for sourcing), with no metro-frequency safety net once east of
+# Reading, closer to gwr-cotswold.toml's rural/no-alternative judgment call
+# than to a frequent double-tracked main line. Mirrors that file's override
+# values.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# --- Segment naming (read gwr-main-line.toml's own comment block first) ---
+#
+# This task is grounded in the gap-analysis document's GWR section
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md): "a
+# large Thames Valley suburban service (Paddington-Reading-Newbury/Oxford
+# local stopping)."
+#
+# --- Why this line does NOT reuse `gwr-trunk-paddington` ---
+#
+# The controller ruling in shared-context.md flags this as the one batch
+# case where "same corridor, different service tier" is genuinely
+# non-obvious, and directs verifying whether the suburban service actually
+# runs on dedicated relief lines physically separate from the express
+# tracks before deciding. This task's research found real, sourced evidence
+# that it does:
+#   - en.wikipedia.org/wiki/Reading_railway_station: "The Great Western Main
+#     Line at Reading has two pairs of tracks - the Main ('fast') lines on
+#     the southern side and the Relief ('slow') lines on the northern side,"
+#     with the Relief lines carrying local stopping services and the
+#     Elizabeth line, and the Main lines carrying express GWR services.
+#   - Independently, en.wikipedia.org/wiki/Southall_railway_station
+#     describes the same split further east: "platforms 1 and 2, on the
+#     fast lines... are not used by passengers; platforms 3 and 4 are used
+#     by all trains serving the station" — i.e. every calling service at
+#     Southall (Elizabeth line today, formerly also GWR outer-suburban
+#     locals) uses the slow/relief pair, while non-stop GWR/cross-country
+#     expresses run through on the fast/main pair.
+# Since `gwr-trunk-paddington` (established by gwr-main-line.toml, Task 4.1)
+# represents the express Main-line service every other GWR sibling in this
+# batch runs, and this line's own local/stopping product is confirmed to run
+# on the physically distinct Relief lines for at least the Reading approach,
+# this task does NOT reuse that segment name — including for PAD and RDG
+# themselves, even though both stations are also served by the express.
+# Station-level overlap at PAD/RDG/DID with gwr-main-line.toml/
+# gwr-cotswold.toml/gwr-south-wales.toml/gwr-west-of-england.toml is real
+# and expected (same physical station buildings), but per those files' own
+# "station overlap is fine, segment-sharing is a deliberate choice"
+# precedent (already applied by this exact batch to RDG against
+# xc-south-coast.toml and elizabeth-line.toml), it is left as station
+# overlap only. This line's entire station list instead uses one new
+# exclusive segment, `gwr-thames-valley` (following the established
+# line-id-as-exclusive-segment-name convention), covering both branches
+# below — neither branch is genuinely shared with another catalogued line
+# (see the two flagged overlaps below, both resolved as station-overlap
+# only), so one segment name for the whole line is sufficient.
+#
+# --- Real calling pattern Paddington-Reading (this task's own research) ---
+#
+# Station-level Wikipedia "Services" sections checked for this file
+# (Slough, Maidenhead, Twyford) independently and consistently describe a
+# genuine GWR "2tph to Didcot Parkway" local/semi-fast product distinct from
+# both the Elizabeth line and the express core:
+#   - Slough: "2 tph to Didcot Parkway" plus "2 tph to London Paddington
+#     (non-stop)."
+#   - Maidenhead: "2 tph to Didcot Parkway" plus "2 tph to London Paddington
+#     (calls at Slough only)."
+#   - Twyford: "2 tph to London Paddington (calls at Maidenhead and Slough
+#     only)," "2 tph to Didcot Parkway," and a separate Henley-on-Thames
+#     branch service (out of this task's scope — the gap-analysis text
+#     names only Newbury/Oxford, not Henley — not claimed here).
+# Twyford's own wording ("calls at Maidenhead and Slough only") confirms the
+# real calling pattern between Paddington and Twyford is exactly Slough and
+# Maidenhead, and nothing else — the inner-suburban stations further east
+# (Ealing Broadway, Southall, Hayes & Harlington, West Drayton, Iver,
+# Langley, Burnham, Taplow) are not part of this pattern.
+# en.wikipedia.org/wiki/West_Drayton_railway_station corroborates this from
+# the other direction: "the station is also served by a small number of
+# early morning and late evening Great Western Railway services between
+# London Paddington and Reading" — i.e. GWR's own presence there today is a
+# minor exception to an otherwise Elizabeth-line-only pattern, not a
+# principal calling point, so West Drayton (and the other inner-suburban
+# stations) are deliberately omitted here, matching gwr-cotswold.toml's
+# precedent for omitting non-principal halts.
+#
+# --- Branch 1: Didcot Parkway - Oxford (via Appleford, Culham, Radley) ---
+#
+# en.wikipedia.org/wiki/Didcot_Parkway_railway_station and
+# en.wikipedia.org/wiki/Oxford_railway_station both independently describe a
+# real local stopping service between Didcot Parkway and Oxford (Oxford's
+# own page: "two stopping services to Didcot Parkway" per hour, alongside
+# the separate express "two fast trains per hour to London Paddington via
+# Reading" that gwr-cotswold.toml already covers). Each intermediate
+# station's own "Services" section was checked individually and confirms
+# calling here: Culham and Radley ("one train per hour in each direction
+# between Didcot Parkway and Oxford, with alternate trains continuing beyond
+# Oxford to and from Banbury every two hours"); Appleford (thinner, "one
+# train every two hours in each direction," no Sunday service, but still a
+# genuine, currently-operating calling point, so included rather than
+# omitted). Geographic order (Didcot Parkway - Appleford - Culham - Radley -
+# Oxford) confirmed via each station's own Wikipedia infobox
+# preceding/following-station chain: Appleford's neighbours are Didcot
+# Parkway and Culham; Culham's neighbours are Appleford and Radley.
+#
+# Oxford (OXF) overlap: OXF is also gwr-cotswold.toml's own exclusive
+# segment's starting station (Task 4.2's research: Cotswold Line services
+# continue north-west from here towards Charlbury/Worcester on the Cherwell
+# Valley line, the same physical Didcot-Oxford track this line's local
+# stopper also uses). This is a genuine, not just assumed, finding — DID-OXF
+# is real single-track-corridor shared infrastructure between this line and
+# gwr-cotswold.toml, beyond what the plan text or task-4.5-brief.md flag by
+# name (they only name the Reading-area overlaps with xc-south-coast.toml
+# and elizabeth-line.toml). Reusing gwr-cotswold.toml's own `gwr-cotswold`
+# segment name verbatim for just this file's OXF row was considered, but
+# rejected for the same file-scope reason gwr-south-wales.toml's BPW/NWP
+# analysis already established in this batch: `gwr-cotswold` also covers
+# Charlbury/Kingham/Moreton-in-Marsh/Honeybourne/Evesham/Pershore/Worcester,
+# none of which this line serves, so reusing it verbatim would incorrectly
+# mark those Cotswold-exclusive stations as shared with this line too. A
+# technically correct fix needs gwr-cotswold.toml's own OXF row split onto a
+# segment name distinct from its Worcester-direction rows — out of scope for
+# this task (lines/gwr-thames-valley.toml and matcher.rs only). Station
+# overlap only is used instead, flagged here (and in this task's report) for
+# the controller to consider alongside the equivalent gwr-south-wales.toml
+# finding.
+#
+# --- Branch 2: Reading - Newbury (via Reading West, Theale, Aldermaston,
+#     Midgham, Thatcham) ---
+#
+# en.wikipedia.org/wiki/Newbury_railway_station and the intermediate
+# stations' own "Services" sections describe a genuine Reading-Newbury local
+# stopping product (Aldermaston: "trains run hourly in both directions...
+# passengers for London Paddington must normally change trains at Reading,
+# though there are a small number of weekday peak through trains"; Midgham
+# and Reading West describe the identical pattern). This confirms the real
+# product here is Reading-based, not reliably Paddington-through — unlike
+# the Didcot-Oxford branch above, which this task's Twyford/Maidenhead/
+# Slough research confirms IS a genuine Paddington-through working. This
+# line still claims the Newbury branch (the gap-analysis text and
+# task-4.5-brief.md both name Newbury as in scope, and National Rail's own
+# "Thames Valley" branding covers this Reading-based local network too), but
+# the Paddington-through claim is deliberately not overstated in
+# destination_crs_filter above.
+#
+# gwr-west-of-england.toml (Task 4.4) already documents these same
+# intermediate halts (Reading West, Theale, Aldermaston, Midgham, Thatcham,
+# Newbury Racecourse) as "omitted as non-principal" from its own express/
+# semi-fast Reading-Taunton pattern — this file is precisely what covers
+# them instead, confirming rather than contradicting that file's own scoping
+# decision.
+#
+# Newbury (NBY) overlap: NBY is also gwr-west-of-england.toml's own
+# exclusive segment's starting station. This task's research (the Southcote
+# Junction divergence gwr-west-of-england.toml already documents) confirms
+# the Reading-Newbury local stopper and the Reading-Taunton express run over
+# the same physical Berks and Hants line track for this whole stretch — a
+# genuine shared corridor, not just a single-waypoint coincidence. As with
+# the Oxford/gwr-cotswold.toml case above, reusing gwr-west-of-england.toml's
+# own `gwr-west-of-england` segment name would require adding this line's
+# five intermediate stations to that file (out of this task's file scope:
+# lines/gwr-thames-valley.toml and matcher.rs only) or otherwise risks
+# misrepresenting which stations are genuinely on which line. Station
+# overlap only is used instead at NBY, flagged here (and in this task's
+# report) as a second genuine shared-corridor finding for the controller,
+# alongside the Oxford one above.
+#
+# --- Flagged overlap: Reading (RDG) with xc-south-coast.toml and
+#     elizabeth-line.toml's western arm ---
+#
+# Per task-4.5-brief.md: RDG is also served by xc-south-coast.toml (its own
+# `xc-south-coast` segment) and is the terminus of elizabeth-line.toml's
+# `elizabeth-west` segment. Following both those files' own documented
+# precedent ("station overlap is fine, segment-sharing is a deliberate
+# choice" — already applied to RDG by gwr-main-line.toml, gwr-cotswold.toml,
+# gwr-south-wales.toml and gwr-west-of-england.toml earlier in this same
+# batch), RDG here stays on `gwr-thames-valley` and is not put on either of
+# those segments.
+#
+# --- Flagged overlap: MAI, SLO, TWY, WDT with elizabeth-line.toml's western
+#     arm ---
+#
+# elizabeth-line.toml's own `elizabeth-west` segment also lists RDG, TWY,
+# MAI, SLO and WDT (Reading to Paddington, calling all local stations) — a
+# second, real overlap beyond the RDG one the plan text names, per this
+# task's brief. This task's own research (above) confirms this line's real
+# GWR service calls at MAI, SLO and TWY too (though WDT is deliberately
+# excluded here — see above, it's an Elizabeth-line-primary station with
+# only minor early/late GWR exceptions, not a principal calling point for
+# this line). MAI/SLO/TWY are a genuine case of "different service class
+# serving the same physical station": the Elizabeth line runs a
+# high-frequency metro-style all-stations stopper through the central
+# tunnel core, while this line's GWR service is a lower-frequency (2tph)
+# semi-fast product that continues past Reading onto GWR-exclusive
+# territory (Didcot/Oxford/Newbury) the Elizabeth line does not reach.
+# Following the controller ruling's default expectation, segment-sharing is
+# NOT forced here — MAI/SLO/TWY stay on `gwr-thames-valley`, not
+# `elizabeth-west`. See `gwr_thames_valley_station_overlap_with_elizabeth_west_stays_exclusive_each_line`
+# in matcher.rs for the regression test confirming this stays a
+# station-level match, not a segment-level one.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "SLO"
+tiploc = "SLOUGH"
+role = "major"
+segment = "gwr-thames-valley"
+# Also served by elizabeth-line.toml (`elizabeth-west`) — station overlap
+# only, no segment shared (see above).
+
+[[stations]]
+crs = "MAI"
+tiploc = "MDNHEAD"
+role = "major"
+segment = "gwr-thames-valley"
+# Also served by elizabeth-line.toml (`elizabeth-west`) — station overlap
+# only, no segment shared (see above).
+
+[[stations]]
+crs = "TWY"
+tiploc = "TWYFORD"
+role = "minor"
+segment = "gwr-thames-valley"
+# Also served by elizabeth-line.toml (`elizabeth-west`) — station overlap
+# only, no segment shared (see above). Also the junction for the Henley
+# branch (out of this task's scope, not claimed here).
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-thames-valley"
+# Also served by gwr-main-line.toml/gwr-cotswold.toml/gwr-south-wales.toml/
+# gwr-west-of-england.toml (their shared `gwr-trunk-paddington`),
+# xc-south-coast.toml (its own `xc-south-coast`), and elizabeth-line.toml
+# (terminus of its own `elizabeth-west`) — station overlap only in every
+# case, no segment shared (see above). This line's Oxford and Newbury
+# branches (below) both diverge from here, in different directions.
+
+# --- Branch 1: Didcot Parkway - Oxford ---
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-thames-valley"
+# Also served by gwr-main-line.toml/gwr-cotswold.toml/gwr-south-wales.toml
+# (their shared `gwr-trunk-paddington`) — station overlap only, no segment
+# shared (see above).
+
+[[stations]]
+crs = "APF"
+tiploc = "APPLEFD"
+role = "minor"
+segment = "gwr-thames-valley"
+# Thinnest-served station on this file (2-hourly, no Sunday service — see
+# segment-naming comment above) but a genuine, currently-operating calling
+# point, so included rather than omitted.
+
+[[stations]]
+crs = "CUM"
+tiploc = "CULHAM"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "RAD"
+tiploc = "RDLEY"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "OXF"
+tiploc = "OXFD"
+role = "terminus"
+segment = "gwr-thames-valley"
+# This branch's terminus. Also served by gwr-cotswold.toml (its own
+# `gwr-cotswold`, starting here) — real shared DID-OXF track, deliberately
+# kept as station overlap only for this task's file-scope reasons (see
+# above). Also served by xc-south-coast.toml (its own `xc-south-coast`) —
+# station overlap only, already documented as such by gwr-cotswold.toml.
+
+# --- Branch 2: Reading - Newbury ---
+[[stations]]
+crs = "RDW"
+tiploc = "REDGWST"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "THE"
+tiploc = "THEALE"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "AMT"
+tiploc = "ALDMSTN"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "MDG"
+tiploc = "MIDGHAM"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "THA"
+tiploc = "THATCHM"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "NRC"
+role = "minor"
+segment = "gwr-thames-valley"
+# Newbury Racecourse, previously omitted here as non-principal alongside
+# Reading West/Theale/Aldermaston/Midgham/Thatcham (per the comment above and
+# gwr-west-of-england.toml's own scoping note) — but unlike those, this
+# task's re-verification found NRC currently carries a genuine regular
+# scheduled stopping service, not just a race-day-only one. Wikipedia
+# (en.wikipedia.org/wiki/Newbury_Racecourse_railway_station) confirms this is
+# still current, not merely historical: the station is "served by local
+# services operated by Great Western Railway between Reading and Newbury"
+# year-round, with "a regular stopping service... introduced for the
+# station" in 1990 that continues today (passenger-count figures given for
+# as recently as 2023/24), plus extra race-day-only shuttles layered on top.
+# Corrects an earlier draft of this file's own comment (see the Branch 2
+# comment above, "Reading West, Theale, Aldermaston, Midgham, Thatcham,
+# Newbury Racecourse") which wrongly implied NRC was in the same
+# non-principal-omission bucket as those other halts.
+
+[[stations]]
+crs = "NBY"
+tiploc = "NEWBURY"
+role = "terminus"
+segment = "gwr-thames-valley"
+# This branch's terminus. Also served by gwr-west-of-england.toml (its own
+# `gwr-west-of-england`, starting here) — real shared Reading-Newbury track
+# via Southcote Junction, deliberately kept as station overlap only for this
+# task's file-scope reasons (see above).

@@ -1,0 +1,269 @@
+id = "gwr-west-of-england"
+name = "Reading to Taunton Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here, since it's the same operator running this route.
+# en.wikipedia.org/wiki/Reading_to_Taunton_line's own infobox names GWR as
+# operator: "Passenger services on the route are operated by Great Western
+# Railway (GWR)."
+
+# --- Naming note: deliberately NOT called "West of England Line" ---
+#
+# The gap-analysis text and this task's own brief use "West of England
+# Line" as a colloquial label for this route (Reading-Taunton, continuing
+# as the Cornish Main Line). This task's research found that name is
+# already taken: Wikipedia's actual "West of England line" article
+# (en.wikipedia.org/wiki/West_of_England_line) is a *different, real*
+# route — the Basingstoke-Salisbury-Exeter line, operated by South Western
+# Railway, not yet in this catalogue. That article even cross-references
+# this one: "Exeter can be reached more quickly from London Paddington via
+# the Reading-Taunton line" — confirming the two are distinct railways
+# that happen to share a very similar informal name.
+#
+# The real infrastructure name for this route (per that article's own
+# infobox and lead paragraph) is the "Reading-Taunton line", used as this
+# file's `name` accordingly. The file's `id` stays `gwr-west-of-england`
+# per this task's own dispatched filename (task-4.4-brief.md), but
+# `match_keywords` below deliberately omits "West of England Line" to
+# avoid false-matching Knowledgebase incidents about the real,
+# SWR-operated West of England line once that route is eventually added to
+# this catalogue. Flagged for the controller in this task's report.
+
+# Deliberately unset. Real GWR services on this route terminate at a mix of
+# points depending on the working (Wikipedia: "A few services from London
+# travel only part way along the line, terminating at Westbury or Frome...
+# GWR also provide local services along parts of the line, between Reading
+# and Bedwyn, and between Westbury and Castle Cary"), while the principal
+# long-distance pattern continues past this file's own scope to Plymouth or
+# Penzance (covered by lines/gwr-cornish-main-line.toml). Setting this to
+# only TAU/EXD would wrongly exclude the many services that run through to
+# Devon/Cornwall, while setting it to the full real destination set (WSB,
+# FRM, TAU, EXD, PLY, PNZ, and Paignton via Newton Abbot) risks listing
+# destinations this task didn't itself verify service-by-service. Left
+# unset rather than invent or under-scope it, mirroring gwr-cotswold.toml's
+# and gwr-south-wales.toml's identical judgment call.
+
+# Exclusive-segment stations only, for a clean read of this line's own
+# services (mirrors gwr-main-line.toml's / gwr-cotswold.toml's /
+# gwr-south-wales.toml's sample_stations rationale).
+sample_stations = ["NBY", "WSB", "CLC"]
+
+# "Reading to Taunton line" is the real infrastructure name (see naming
+# note above). "Berks and Hants line" is the well-established historic name
+# still in current use for the Reading-Westbury section specifically
+# (en.wikipedia.org/wiki/Reading_to_Taunton_line: "The section from Reading
+# to Westbury is sometimes called the Berks and Hants Line"). "West of
+# England Line" is deliberately excluded — see naming note above.
+match_keywords = ["Reading to Taunton line", "Berks and Hants line"]
+
+# No severity_overrides: Wikipedia's infrastructure section describes this
+# route as "double-track throughout, with passing loops at certain
+# locations" carrying a roughly-hourly-or-better GWR InterCity pattern (not
+# a sparse single-track regional line like gwr-cotswold.toml), matching
+# gwr-main-line.toml's and gwr-south-wales.toml's identical no-override
+# judgment call for comparable double-track main-line corridors.
+
+# --- Segment naming (read gwr-main-line.toml's own comment block first) ---
+#
+# `gwr-trunk-paddington` is the shared-trunk segment name established by
+# Task 4.1 (gwr-main-line.toml) for the Paddington-Reading stretch. This
+# task's own research (en.wikipedia.org/wiki/Reading_to_Taunton_line,
+# "Reading to Bedwyn" section) confirms this line uses the same Paddington-
+# Reading approach as the other GWR London expresses — it is described as
+# "a major branch of the Great Western Main Line from which it diverges at
+# Reading railway station" itself, curving away onto former Berks and Hants
+# Railway metals just past Reading at Southcote Junction. This directly
+# answers the brief's own caution about a possibly-separate relief-line
+# pairing out of Paddington: no evidence of one was found — the line is
+# GWML infrastructure as far as Reading, same as gwr-main-line.toml's own
+# approach tracks, and only diverges physically after Reading station.
+# Reused verbatim here for PAD/RDG (station/TIPLOC rows copied directly
+# from gwr-main-line.toml rather than re-derived).
+#
+# Southcote Junction itself (where the physical divergence happens) has no
+# current CRS/TIPLOC of its own — same situation as Wootton Bassett
+# Junction in gwr-south-wales.toml's research — so, per the shared-trunk
+# rule of thumb (SCHEMA.md), this line's own exclusive segment
+# (`gwr-west-of-england`, following the established line-id-as-exclusive-
+# segment-name convention) starts at the first real passenger station
+# reached only by this route: Newbury (NBY). Reading-area local halts
+# between Reading and Newbury (Reading West, Theale, Aldermaston, Midgham,
+# Thatcham, Newbury Racecourse) and further west (Kintbury, Hungerford,
+# Bedwyn, Savernake Low Level, Pewsey, Woodborough, Patney and Chirton,
+# Lavington, Edington and Bratton) are omitted as non-principal: Bedwyn's
+# own Wikipedia "Services" section confirms it is "served by local services
+# operated by Great Western Railway between here and Newbury" with only "a
+# limited number" of services continuing further west, and none of the
+# other listed halts were found to carry a broadly-hourly London-through
+# pattern — matching gwr-cotswold.toml's precedent for omitting minor
+# stopping-only halts.
+#
+# Frome is also omitted: en.wikipedia.org/wiki/Reading_to_Taunton_line
+# describes it as reached via a branch diverging at Clink Road Junction,
+# off the direct Castle Cary route that principal London-Devon/Cornwall
+# expresses use — consistent with the gap-analysis text itself, which
+# names only "Westbury/Castle Cary" for this stretch, not Frome. Frome (and
+# Bruton) are this line's own exclusive-to-gwr-bristol-suburban.toml
+# territory: they sit on the Heart of Wessex line's own local pattern, not
+# on the through Reading-Taunton route this file claims, so they never
+# belong on this file's segment at all (see the corrected shared-segment
+# note below).
+#
+# --- Westbury: two real sub-routes converging (per the brief's own steer) ---
+#
+# The gap-analysis text's "Reading -> Westbury/Castle Cary -> Exeter"
+# wording is confirmed by this task's research to describe a real
+# operational split: en.wikipedia.org/wiki/Reading_to_Taunton_line
+# ("On to Taunton" section) states "non-stop trains curve to the left to
+# pass under the Wessex Main Line and avoid the complex of junctions around
+# Westbury station, but trains that call here diverge to the right at
+# Heywood Road Junction" — both rejoin a short distance further on at
+# Fairwood Junction, before continuing together via Bruton to Castle Cary.
+# Neither Heywood Road nor Fairwood Junction carries a CRS/TIPLOC of its
+# own, so (matching the Southcote/Wootton Bassett precedent above) this
+# file lists Westbury (WSB) itself as the single calling point representing
+# both sub-routes, rather than inventing a station for either junction.
+#
+# --- Corrected shared-segment scope: `gwr-westbury-castle-cary` (WSB/CLC
+#     only), not the whole `gwr-west-of-england` segment ---
+#
+# An earlier draft of this file (and of gwr-bristol-suburban.toml) reused
+# this line's own exclusive segment name, `gwr-west-of-england`, verbatim
+# for WSB and CLC to represent the genuine Westbury-Castle Cary track
+# sharing with the Heart of Wessex line. That was wrong: it pulled the
+# whole `gwr-west-of-england` segment name — including Newbury (NBY), which
+# gwr-bristol-suburban.toml's service never reaches — into "shared" status
+# catalogue-wide, purely because segment sharing is tracked per segment
+# *name*, not per individual station. It also, transitively, mislabelled
+# Frome and Bruton (gwr-bristol-suburban.toml's own exclusive stations,
+# reached only via a loop off this line's through route, per the comment
+# above) as belonging to a segment this file's own text says isn't really
+# on this line's route. Fixed by introducing a new, narrower segment name,
+# `gwr-westbury-castle-cary`, used below ONLY for WSB and CLC — the two
+# stations both this file's and gwr-bristol-suburban.toml's own cited
+# sources (Castle Cary's own Wikipedia page and the Heart of Wessex Line's
+# own lead paragraph) actually name as shared, and the only two stations
+# both real services actually call at. NBY reverts to this line's own
+# exclusive `gwr-west-of-england` segment, since gwr-bristol-suburban.toml
+# never reaches Newbury.
+#
+# --- Taunton/Exeter: genuine shared trunk with cross-country.toml ---
+#
+# Unlike the single-station BPW/NWP/CDF overlaps gwr-south-wales.toml
+# documents against cross-country.toml (station overlap only, no shared
+# segment), this task's research found a real multi-station shared trunk
+# here. en.wikipedia.org/wiki/Reading_to_Taunton_line: "The 1906 openings
+# saw an additional cut-off from Athelney to Cogload Junction where the
+# line joins the route from Bristol, the old Bristol and Exeter Railway."
+# en.wikipedia.org/wiki/Bristol_to_Exeter_line confirms the same junction
+# from the other direction: "the line towards Taunton climbs up here and
+# crosses above the Reading to Taunton Line which it then joins." From
+# Cogload Junction (which, like the other junctions above, has no CRS/
+# TIPLOC of its own) onward through Taunton and Exeter St Davids, this
+# line's trains run on the same physical route already claimed by
+# cross-country.toml's own `xc-south-west` segment (its TAU/EXD/NTA/PLY
+# rows, Bristol-Exeter-Plymouth via the South Devon Main Line). This is a
+# genuine multi-station shared corridor, the same shape as
+# `swr-trunk-waterloo` or `gwr-trunk-paddington`, not a single-waypoint
+# case — so `xc-south-west` is reused verbatim here for TAU and EXD (rows
+# copied directly from cross-country.toml, including its own role/tiploc
+# choices for those stations, to keep the shared rows identical across
+# files) rather than inventing a separate name.
+#
+# --- File split: lines/gwr-west-of-england.toml + gwr-cornish-main-line.toml ---
+#
+# This task's research found the combined Reading-Penzance route (~20+
+# principal stations across two separately-Wikipedia-documented named
+# routes — the "Reading to Taunton line" and the "Cornish Main Line",
+# joined by the South Devon Main Line's Exeter-Plymouth stretch) too large
+# and too operationally distinct for one file, taking up the split option
+# task-4.4-brief.md explicitly offers. This is a deviation from the plan's
+# stated 6-file Batch 4 count (now 7 files) — noted in both files' commit
+# messages. Per the brief's own steer for the split case ("treat the
+# Exeter-area junction the same way swr-south-west-main.toml's shared-trunk
+# rule describes: junction station on the shared segment, exclusive segment
+# starts at the next station past it"), this file's own scope ends at
+# Exeter St Davids (EXD), which sits on the `xc-south-west` shared segment
+# established above; lines/gwr-cornish-main-line.toml repeats EXD as its
+# own starting station (same segment, same row data) and picks up the
+# exclusive Cornish Main Line segment starting at Liskeard, the first
+# station west of Plymouth not already claimed by cross-country.toml.
+#
+# --- Night Riviera sleeper ---
+#
+# en.wikipedia.org/wiki/Night_Riviera confirms GWR's overnight London
+# Paddington-Penzance sleeper normally follows this same station pattern
+# (Reading (pick-up only) - Taunton - Exeter St Davids - Newton Abbot -
+# Plymouth - most Cornish Main Line stations - Penzance), so it introduces
+# no new stations beyond what's already listed across these two files. The
+# same source notes it can be diverted "via Bristol Temple Meads on the
+# Great Western and South Wales Main Lines" or "via Chippenham and
+# Trowbridge to rejoin at Westbury" during overnight engineering work —
+# those diversionary routes run over gwr-main-line.toml's and
+# gwr-south-wales.toml's own already-catalogued track, not new stations, so
+# no further modelling is needed here.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# This line diverges just past here, at Southcote Junction (no CRS/TIPLOC
+# of its own) — see segment-naming comment above.
+
+[[stations]]
+crs = "NBY"
+tiploc = "NEWBURY"
+role = "major"
+segment = "gwr-west-of-england"
+# This line's own exclusive segment starts here (see segment-naming comment
+# above). Newbury racecourse and market town; Wikipedia's route description
+# notes "some long-distance trains also call here" in addition to the local
+# Reading-Bedwyn stopping service.
+
+[[stations]]
+crs = "WSB"
+tiploc = "WSTBRYW"
+role = "junction"
+segment = "gwr-westbury-castle-cary"
+# Real multi-route junction (Wessex Main Line towards Trowbridge/Salisbury,
+# the Weymouth line, and the Frome branch all meet here); some GWR services
+# terminate or start here (see comment above). Represents both the
+# calling and non-stop-bypass sub-routes described in the segment-naming
+# comment above — neither Heywood Road nor Fairwood Junction has its own
+# CRS/TIPLOC. On `gwr-westbury-castle-cary`, not this line's own exclusive
+# segment — see the corrected segment-naming comment above (WSB/CLC are the
+# only two stations genuinely shared with gwr-bristol-suburban.toml).
+
+[[stations]]
+crs = "CLC"
+tiploc = "CCARY"
+role = "minor"
+segment = "gwr-westbury-castle-cary"
+# On `gwr-westbury-castle-cary` — see comment above and the segment-naming
+# comment further up.
+
+[[stations]]
+crs = "TAU"
+tiploc = "TAUNTON"
+role = "minor"
+segment = "xc-south-west"
+# Shared trunk with cross-country.toml from here onward — see segment-
+# naming comment above. Row copied verbatim from cross-country.toml.
+
+[[stations]]
+crs = "EXD"
+role = "major"
+segment = "xc-south-west"
+# This file's own scope ends here per the west-of-england/Cornish Main Line
+# split (see segment-naming comment above); lines/gwr-cornish-main-line.toml
+# continues from this same station. Row copied verbatim from
+# cross-country.toml (no tiploc set there either).

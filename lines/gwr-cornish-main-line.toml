@@ -1,0 +1,213 @@
+id = "gwr-cornish-main-line"
+name = "Cornish Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here. CrossCountry also runs a handful of daily Penzance
+# services (cross-country.toml's own comment: "Continues to Penzance via
+# Truro on a handful of daily services") but this file follows
+# gwr-south-wales.toml's precedent of keeping `operators` to the TOC that
+# actually defines the line per the gap-analysis scope, not every operator
+# that touches it.
+
+# This file is the second half of a deliberate two-file split of Task
+# 4.4's scope (see lines/gwr-west-of-england.toml's own "File split"
+# comment for the full reasoning) — a deviation from the plan's stated
+# 6-file Batch 4 count, noted in this file's commit message.
+
+# Deliberately unset. Real GWR Cornish Main Line services mix stopping
+# patterns and through-London workings (station-level Wikipedia "Services"
+# sections checked for this file — Liskeard, Truro, St Austell, Camborne,
+# Bodmin Parkway, Lostwithiel, Redruth, St Erth, Par — each independently
+# confirm regular Paddington through service, e.g. Liskeard: "Some trains
+# run through to or from London Paddington including the Night Riviera");
+# a small number of CrossCountry services also reach Penzance. Narrowing
+# this to only PLY/PNZ would exclude genuine intermediate destinations, and
+# this task did not verify every real terminating pattern (Newquay branch
+# services, Falmouth branch, Paignton splits at Newton Abbot) closely
+# enough to list them all with confidence. Left unset rather than invent or
+# under-scope it, mirroring gwr-cotswold.toml's and gwr-south-wales.toml's
+# identical judgment call.
+
+# Exclusive-segment stations only, for a clean read of Cornish-only
+# services (mirrors gwr-main-line.toml's / gwr-west-of-england.toml's
+# sample_stations rationale).
+sample_stations = ["PAR", "TRU", "PNZ"]
+
+# "Cornish Main Line" is the real infrastructure/Wikipedia name for this
+# route. "Cornish Riviera" is the well-known historic/current express
+# branding (Camborne's own Wikipedia "Services" section: "2 tph to
+# Penzance, including the Cornish Riviera which calls in mid-afternoon").
+# "Night Riviera" is the GWR sleeper's own brand name, kept here rather
+# than duplicated onto gwr-west-of-england.toml, since Penzance/Cornwall is
+# its defining destination (see that file's own Night Riviera comment for
+# the full routing detail) — matches SCHEMA.md's "don't overload
+# match_keywords" curation rule.
+match_keywords = ["Cornish Main Line", "Cornish Riviera", "Night Riviera"]
+
+# No severity_overrides: station-level sources checked for this file
+# consistently describe a 1-2 tph GWR service (e.g. Truro: "2 trains per
+# hour to Penzance, 2 trains per hour to Plymouth"; Liskeard: "one or two
+# trains an hour... between Penzance and Plymouth") — a main-line frequency
+# much closer to gwr-main-line.toml's/gwr-south-wales.toml's Bristol/South
+# Wales services than to gwr-cotswold.toml's sparser single-track pattern,
+# so no override is applied, matching those files' identical judgment call.
+
+# --- Segment naming (read gwr-west-of-england.toml's own comment block
+# first — it has the full research trail for the shared-trunk decision) ---
+#
+# This file picks up at Exeter St Davids (EXD), the split boundary shared
+# with lines/gwr-west-of-england.toml. EXD, Newton Abbot (NTA) and
+# Plymouth (PLY) are all already on cross-country.toml's own `xc-south-west`
+# segment — this task's research (en.wikipedia.org/wiki/
+# Bristol_to_Exeter_line and general South Devon Main Line geography:
+# Exeter St Davids-Newton Abbot-Plymouth is a single double-track route
+# with no alternative, used by every Devon/Cornwall-bound GWR and
+# CrossCountry service alike) confirms this is genuinely shared track, not
+# just a station-level coincidence, so `xc-south-west` is reused verbatim
+# for all three rows (copied directly from cross-country.toml, including
+# its own role/tiploc choices, to keep the shared rows identical across
+# files).
+#
+# cross-country.toml's own `xc-south-west` segment ends at PLY, with a
+# comment noting XC's Penzance services are a "handful of daily" extras
+# beyond its own modelled scope — it does not list any station west of
+# Plymouth. This line's own exclusive segment (`gwr-cornish-main-line`,
+# following the established line-id-as-exclusive-segment-name convention)
+# therefore starts at the next real station past Plymouth: Liskeard (LSK),
+# per the shared-trunk rule of thumb (SCHEMA.md).
+#
+# --- Principal-station verification for the exclusive segment ---
+#
+# Every station below (Liskeard through Penzance) was individually checked
+# against its own Wikipedia "Services" section for this task (not just
+# read off the general Cornish Main Line route diagram) to confirm a
+# genuinely principal, roughly-hourly-or-better GWR calling pattern rather
+# than a minor local-only halt — matching gwr-cotswold.toml's and
+# gwr-south-wales.toml's precedent for this judgment call:
+#   - Liskeard: "served by most Great Western Railway trains... Some trains
+#     run through to or from London Paddington."
+#   - Bodmin Parkway: "1 tph to London Paddington (with occasional hours
+#     excluded)", plus 2 tph to Penzance.
+#   - Lostwithiel: "1 tph to Penzance" and "1 tph to Plymouth", some
+#     extending to London Paddington.
+#   - Par: "2 tph to Penzance", "2 tph to Plymouth" (one continuing to
+#     London Paddington), and the junction for the Newquay branch (Atlantic
+#     Coast Line) — a further branch out of this task's scope, not claimed
+#     here.
+#   - St Austell: "2 tph to Penzance", "2 tph to Plymouth" (one continuing
+#     to London Paddington), plus the Night Riviera.
+#   - Truro: "1 tp2h continues to London Paddington, via Exeter St Davids,
+#     Taunton and Reading", 2 tph to Penzance and to Plymouth. Also the
+#     junction for the Maritime Line to Falmouth — out of this task's
+#     scope, not claimed here.
+#   - Redruth: "two trains per hour in each direction", some through to
+#     London Paddington including the Night Riviera and the Cornish
+#     Riviera.
+#   - Camborne: "8 tpd to London Paddington... including the Cornish
+#     Riviera", 2 tph to Penzance.
+#   - St Erth: "served by all Great Western Railway trains services on the
+#     Cornish Main Line between Penzance and Plymouth", ~21-22 trains/day
+#     each direction, some through to London Paddington including the
+#     Night Riviera; also the junction for the St Ives Bay Line — a further
+#     branch out of this task's scope, not claimed here.
+#   By contrast, St Germans (between Plymouth and Liskeard, on the same
+#   line) was checked and found to be "mostly local stopping trains... but
+#   a few run through to/from London Paddington" — a materially thinner
+#   pattern than every station above, so it (and the other Plymouth-area
+#   suburban halts: Devonport, Keyham, St Budeaux Ferry Road, Saltash,
+#   Menheniot) are omitted as non-principal, matching gwr-cotswold.toml's
+#   precedent for omitting minor local-only halts.
+[[stations]]
+crs = "EXD"
+role = "major"
+segment = "xc-south-west"
+# This file's own scope starts here, shared with lines/gwr-west-of-england.toml
+# (see segment-naming comment above). Row copied verbatim from
+# cross-country.toml (no tiploc set there either).
+
+[[stations]]
+crs = "NTA"
+role = "minor"
+segment = "xc-south-west"
+# Row copied verbatim from cross-country.toml. Also the real junction for
+# the Riviera/Paignton branch (out of this task's scope, not claimed here).
+
+[[stations]]
+crs = "PLY"
+role = "junction"
+segment = "xc-south-west"
+# Row copied verbatim from cross-country.toml, including its own comment
+# that GWR/XC services continue to Penzance from here.
+
+[[stations]]
+crs = "LSK"
+tiploc = "LISKARD"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# This line's own exclusive segment starts here (see segment-naming
+# comment above).
+
+[[stations]]
+crs = "BOD"
+tiploc = "BODMNPW"
+role = "minor"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "LOS"
+tiploc = "LSTWTHL"
+role = "minor"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "PAR"
+tiploc = "PARR"
+role = "major"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "SAU"
+tiploc = "STAUSTL"
+role = "major"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "TRU"
+tiploc = "TRURO"
+role = "major"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "RED"
+tiploc = "REDRUTH"
+role = "minor"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "CBN"
+tiploc = "CBORNE"
+role = "minor"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "HYL"
+tiploc = "HAYLE"
+role = "minor"
+segment = "gwr-cornish-main-line"
+
+[[stations]]
+crs = "SER"
+tiploc = "STERTH"
+role = "junction"
+segment = "gwr-cornish-main-line"
+# Junction for the St Ives Bay Line (out of this task's scope, not claimed
+# here).
+
+[[stations]]
+crs = "PNZ"
+tiploc = "PENZNCE"
+role = "terminus"
+segment = "gwr-cornish-main-line"

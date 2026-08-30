@@ -1,0 +1,239 @@
+id = "gwr-south-wales"
+name = "South Wales Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here, since it's the same operator running this route.
+
+# Deliberately unset. Newport station's own Wikipedia "Services" section
+# ("2tph to London Paddington via Bristol Parkway, Swindon, Didcot Parkway
+# and Reading. These services are from Cardiff Central, Swansea or
+# Carmarthen...") confirms real through services continue past Swansea to
+# Carmarthen — outside this task's scope (the gap-analysis text and
+# task-4.3-brief.md both stop at "Newport/Cardiff/Swansea"). Setting this to
+# only CDF/NWP/SWA would wrongly exclude those genuine Carmarthen-destined
+# services from LDBWS-based sampling at the shared trunk stations, mirroring
+# gwr-cotswold.toml's identical judgment call for its Great
+# Malvern/Hereford continuations. Left unset rather than invent or
+# under-scope it.
+
+# Exclusive-segment stations only, for a clean read of South-Wales-only
+# services (mirrors gwr-main-line.toml's / gwr-cotswold.toml's
+# sample_stations rationale).
+sample_stations = ["NWP", "CDF", "SWA"]
+
+# Both high-precision proper nouns unlikely to false-positive. "Severn
+# Tunnel" in particular is worth keeping on its own: the tunnel dips below
+# the estuary bed and has a long history of water-ingress-driven speed
+# restrictions and pumping-related engineering work reported independently
+# of general South Wales Main Line incidents (Network Rail Wales route
+# press releases, BBC Wales coverage of Severn Tunnel pumping station
+# upgrades) — a real single point of failure for this whole corridor, since
+# unlike the GWML core (which has the Bath vs Badminton alternative), there
+# is no other rail route under/over the Severn for South Wales Main Line
+# services.
+match_keywords = ["South Wales Main Line", "Severn Tunnel"]
+
+# No severity_overrides: this is a double-tracked, roughly-hourly-or-better
+# intercity corridor much like gwr-main-line.toml's own Bristol services
+# (which also has no overrides), not a sparse single-track regional line
+# like gwr-cotswold.toml. Default thresholds apply.
+
+# --- Segment naming (read gwr-main-line.toml's own comment block first) ---
+#
+# `gwr-trunk-paddington` is the shared-trunk segment name established by
+# Task 4.1 (gwr-main-line.toml) for the Paddington-Reading-Didcot-Swindon
+# stretch. Per the controller ruling in shared-context.md, South Wales Main
+# Line services are the other real user of this same GWML approach — Task
+# 4.1's own comment already anticipates and names this arm by name. Reused
+# verbatim here for PAD/RDG/DID/SWI (station/TIPLOC rows copied directly
+# from gwr-main-line.toml rather than re-derived).
+#
+# Task 4.1 documents the real diverging point as Wootton Bassett Junction,
+# "a few miles west of Swindon station itself." This task's own research
+# confirms Wootton Bassett Junction has NO current CRS/TIPLOC to anchor a
+# station row on: Wikipedia's disambiguation page for the name lists only
+# "Wootton Bassett Junction: a station that operated from 1841 to 1965" —
+# it closed over 60 years ago and carries no passenger service or code
+# today. So, per the shared-trunk rule of thumb (SCHEMA.md — "the exclusive
+# segment starts at the next station after the junction"), this line's own
+# exclusive segment (`gwr-south-wales`, following the established
+# line-id-as-exclusive-segment-name convention) starts at the first real
+# passenger station reached only by South-Wales-bound services: Bristol
+# Parkway (BPW). This is corroborated independently by Newport station's own
+# Wikipedia "Services" section, which names Bristol Parkway (not Swindon,
+# not Wootton Bassett) as the westbound-facing calling point on the 2tph
+# Paddington service.
+#
+# Patchway, Pilning and Severn Tunnel Junction (all real intermediate
+# stations between Bristol Parkway and Newport, per Wikipedia's South Wales
+# Main Line route diagram) are omitted as non-principal: none of the
+# station-level Wikipedia "Services" sources checked for this file name them
+# as calling points on the London Paddington-Swansea pattern (Newport's own
+# "Services" section lists only Bristol Parkway/Swindon/Didcot
+# Parkway/Reading eastbound), matching gwr-cotswold.toml's precedent for
+# omitting non-principal intermediate halts.
+#
+# --- Overlap 1: Bristol Parkway (BPW) with cross-country.toml ---
+#
+# cross-country.toml also lists BPW (its own `xc-bristol` segment, shared
+# internally with BRI/Bristol Temple Meads for the XC spine's Birmingham-
+# Bristol-Exeter run). This task's research (en.wikipedia.org/wiki/
+# Westerleigh_Junction) found that the XC spine's Cross Country Route
+# genuinely joins South Wales Main Line tracks at Westerleigh Junction, just
+# north of Bristol Parkway, and the two only separate again a short distance
+# south at Filton Junction (where the SWML continues west while
+# Bristol-Temple-Meads-bound trains, including XC's own, peel off) — meaning
+# Bristol Parkway itself sits on a stretch that is, physically, briefly
+# shared track. Despite that, BPW is deliberately kept on this file's own
+# `gwr-south-wales` segment rather than reusing `xc-bristol`: the genuinely-
+# shared stretch contains exactly one passenger calling point (BPW itself,
+# same shape as the RDG/OXF/BRI overlaps already in this catalogue — a
+# single-station waypoint, not a multi-station trunk like
+# `swr-trunk-waterloo` or `gwr-trunk-paddington`), and reusing `xc-bristol`
+# verbatim would incorrectly mark cross-country.toml's own BRI row as
+# "shared" too (BRI is not served by this line at all — South Wales Main
+# Line services bypass Bristol Temple Meads via Bristol Parkway, which is
+# the entire reason BPW exists on this route). Fixing that properly would
+# mean splitting cross-country.toml's `xc-bristol` segment, which is outside
+# this task's file scope (lines/gwr-south-wales.toml and matcher.rs only).
+# Station overlap only, following the same "station overlap is fine,
+# segment-sharing is a deliberate choice" precedent gwr-main-line.toml
+# already applies to BRI itself against cross-country.toml's own
+# `xc-bristol` segment.
+#
+# --- Overlap 2: Newport (NWP) / Cardiff Central (CDF) with xc-cardiff.toml ---
+#
+# xc-cardiff.toml already terminates its own `xc-cardiff` segment at NWP and
+# CDF (reached via Gloucester/Lydney/Chepstow — the Gloucester to Newport
+# Line). The plan (task-4.3-brief.md) frames this as "station-level overlap
+# expected... different physical route... unlikely [to share exclusive
+# track], but verify rather than assume." This task's research found the
+# assumption is only partly right: the Gloucester to Newport Line and the
+# South Wales Main Line are genuinely separate corridors (different Severn
+# crossings — the Severn Railway Bridge/Wye Valley route vs. the Severn
+# Tunnel) for most of their length, but en.wikipedia.org/wiki/
+# Severn_Tunnel_Junction_railway_station describes the two lines converging
+# at that station (2010 resignalling: SWML uses platforms 3/4, the Gloucester
+# line platforms 1/2, with crossovers "to the west" of the station joining
+# them) — meaning the routes do run on shared track for the stretch from
+# roughly Severn Tunnel Junction through Newport to Cardiff Central.
+#
+# That said, this file does NOT reuse xc-cardiff.toml's `xc-cardiff` segment
+# name for NWP/CDF, for the same file-scope reason as the Bristol Parkway
+# case above: `xc-cardiff` also covers GCR/LYD/CPW (Gloucester, Lydney,
+# Chepstow), none of which this line serves or shares track with, so reusing
+# it verbatim would incorrectly mark those XC-exclusive stations as shared
+# too. A technically correct fix needs xc-cardiff.toml's own NWP/CDF rows
+# split onto a new segment name distinct from its Gloucester-area rows —
+# out of scope for this task (lines/gwr-south-wales.toml and matcher.rs
+# only). Station overlap only is used instead, matching the plan's default
+# and the xc-south-coast.toml/xc-cardiff.toml precedent. Flagged in this
+# task's report as a genuine (not just assumed) finding for the controller
+# to consider a follow-up reconciliation task, since the "unlikely" framing
+# in task-4.3-brief.md turned out to undersell the real track-sharing here.
+
+# Ordered London to Swansea. Principal/express-pattern stations only, per
+# the gap-analysis section this task is grounded in
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Great
+# Western Railway (GWR)": "South Wales Main Line (branches off the GWML at
+# Wootton Bassett via Bristol Parkway and the Severn Tunnel to Newport/
+# Cardiff/Swansea)"). Bridgend, Port Talbot Parkway and Neath are each
+# independently confirmed, via their own Wikipedia "Services" sections, to
+# carry an hourly-plus Great Western Railway London Paddington service (not
+# just a local/regional one), so they are included as principal stations
+# rather than omitted as minor halts. All CRS/NLC/TIPLOC/STANME/STANOX
+# values below were read directly from railwaycodes.org.uk's own CRS/TIPLOC
+# HTML tables (crsb/crsc/crsn/crsp/crss.shtm — the authoritative primary
+# source, fetched directly via curl since WebFetch's AI-summarized reads of
+# these tables have previously mis-transcribed the STANME column as TIPLOC;
+# every TIPLOC below was length-checked against the real 7-character cap and
+# cross-referenced against the raw HTML column order [Location, CRS, NLC,
+# TIPLOC, STANME, STANOX]), and cross-checked against each station's
+# Wikipedia infobox CRS code, which all agree. Note Newport's own plain
+# "Newport" entry in railwaycodes.org.uk's table carries no CRS at all (it's
+# a non-passenger/generic entry) — the real station row is "Newport (South
+# Wales)" (CRS NWP, TIPLOC NWPTRTG), used below. PAD/RDG/DID/SWI rows are
+# copied verbatim from gwr-main-line.toml rather than re-derived.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "SWI"
+tiploc = "SDON"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# South Wales Main Line services diverge just west of here, at Wootton
+# Bassett Junction (see segment-naming comment above).
+
+[[stations]]
+crs = "BPW"
+tiploc = "BRSTPWY"
+role = "major"
+segment = "gwr-south-wales"
+# This line's own exclusive segment starts here (see segment-naming comment
+# above). Also served by cross-country.toml (its `xc-bristol` segment) —
+# station overlap only, no segment shared (see above).
+
+[[stations]]
+crs = "NWP"
+tiploc = "NWPTRTG"
+role = "major"
+segment = "gwr-south-wales"
+# Also served by xc-cardiff.toml (its `xc-cardiff` segment, arriving via the
+# Gloucester to Newport Line) — station overlap only, no segment shared (see
+# above).
+
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "major"
+segment = "gwr-south-wales"
+# Also served by xc-cardiff.toml (its own terminus) — station overlap only,
+# no segment shared (see above). Not this line's own terminus: real GWR
+# services continue west to Bridgend/Port Talbot/Neath/Swansea below.
+
+[[stations]]
+crs = "BGN"
+tiploc = "BRGEND"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "PTA"
+tiploc = "PTALBOT"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "NTH"
+tiploc = "NEATH"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "SWA"
+tiploc = "SWANSEA"
+role = "terminus"
+segment = "gwr-south-wales"
+# This task's scope ends here (gap-analysis "...to Newport/Cardiff/Swansea"
+# wording). Real GWR services continue past here to Carmarthen (see
+# destination_crs_filter comment above) but that station belongs to a line
+# definition this task doesn't claim to cover.

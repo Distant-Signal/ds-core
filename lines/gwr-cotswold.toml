@@ -1,0 +1,208 @@
+id = "gwr-cotswold"
+name = "Cotswold Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. Code confirmed for this route (not just re-assumed
+# from gwr-main-line.toml): every station-level source checked below
+# (Oxford, Charlbury, Kingham, Moreton-in-Marsh, Honeybourne, Evesham,
+# Pershore, Worcester Shrub Hill, Worcester Foregate Street Wikipedia
+# articles) independently describes GWR as the operator of this service.
+
+# Deliberately unset. GWR's real Paddington-Oxford-Worcester service
+# continues past Worcester to Great Malvern (GMV) and, ~5 times/day, to
+# Hereford (HFD) (en.wikipedia.org/wiki/Cotswold_Line, "Services" section:
+# "about half the trains continue to/from Great Malvern and five trains a
+# day continue to and from Hereford"). Those stations are beyond this
+# task's scope (gap-analysis doc's "Cotswold Line (Didcot/Oxford-Worcester)"
+# wording) and not independently verified here, so a destination_crs_filter
+# naming only WOS/WOF would wrongly exclude most of this line's actual
+# through services rather than correctly scope them. Left unset rather than
+# invent or overclaim.
+
+# Exclusive-segment stations only, for a clean read of Cotswold-only
+# services (mirrors swr-south-west-main.toml's / gwr-main-line.toml's
+# sample_stations rationale).
+sample_stations = ["OXF", "MIM", "WOS"]
+
+match_keywords = ["Cotswold Line"]
+
+# Roughly hourly London service (half-hourly "Oxford fast trains" extended
+# to Worcester roughly every other working), and much of the route beyond
+# Charlbury has historically been single-track with passing loops (Wikipedia
+# "Cotswold Line": Charlbury is "the first stop for faster trains over the
+# line" past the redoubled section) — a service reduction or blockage here
+# has an outsized effect versus a frequent double-tracked main line. The
+# {0.30, 10} pair itself is the dominant catalogue precedent for this
+# situation (also used by cross-country.toml, all four xc-*.toml files, and
+# northern-yorkshire-coast.toml/northern-hope-valley.toml) — not
+# northern-tyne-valley.toml, which actually uses a different override shape
+# (`reduced_service_pct = 0.35`, not a `delay_threshold_minutes` override);
+# corrected here from an earlier draft that miscited it.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# --- Segment naming (read gwr-main-line.toml's own comment block first) ---
+#
+# `gwr-trunk-paddington` is the shared-trunk segment name established by
+# Task 4.1 (gwr-main-line.toml) for the Paddington-Reading-Didcot-Swindon
+# stretch. This line's own research independently confirms the Cotswold
+# Line's London-connected service does run over that same Paddington-
+# Reading-Didcot stretch: every one of the station-level Wikipedia articles
+# checked for this file (Charlbury, Kingham, Moreton-in-Marsh, Honeybourne,
+# Evesham, Pershore) states a direct "1 tph to London Paddington" service,
+# and the Great Western Main Line / Cherwell Valley line Wikipedia articles
+# both independently describe Cotswold Line trains branching off the GWML
+# at Didcot Parkway onto the Cherwell Valley line towards Oxford, matching
+# gwr-main-line.toml's own documented diverging point (Foxhall
+# Junction/Didcot East curve area) — that specific junction name is per
+# Task 4.1's research and was not independently re-confirmed by name here
+# (the dedicated Wikipedia article for it 404s), but the Didcot divergence
+# point itself is corroborated by two independent sources.
+#
+# Reusing `gwr-trunk-paddington` verbatim for PAD/RDG/DID accordingly. This
+# line does NOT continue to Swindon (SWI) — Cotswold services turn off onto
+# the Cherwell Valley line at Didcot, before Swindon — so SWI is correctly
+# absent from this file's station list even though it's part of the named
+# shared-trunk segment in gwr-main-line.toml.
+#
+# The exclusive segment (named `gwr-cotswold`, following gwr-main-line.toml's
+# own exclusive-segment-named-after-the-line convention) starts at Oxford
+# (OXF), the next station after the DID junction, per the shared-trunk rule
+# of thumb in SCHEMA.md. The real physical split from the Cherwell Valley
+# line (which continues north to Banbury/Birmingham, xc-south-coast.toml's
+# territory) is actually at Wolvercot Junction, ~3 miles north of Oxford
+# (en.wikipedia.org/wiki/Cherwell_Valley_line) — an unstaffed junction with
+# no CRS/TIPLOC of its own, so OXF (the last calling-point station shared by
+# both onward routes) is used as the practical segment boundary instead of
+# inventing a station for Wolvercot.
+#
+# Oxford overlap: OXF is also served by `xc-south-coast.toml` (its own
+# `xc-south-coast` segment, Birmingham-Bournemouth via Banbury/Reading).
+# Following that file's own "station overlap is fine, segment-sharing is a
+# deliberate choice" precedent (and gwr-main-line.toml's identical judgment
+# call for RDG), OXF here stays on `gwr-cotswold` and is not put on
+# `xc-south-coast` — the two lines diverge in different directions beyond
+# this shared calling point.
+
+# Ordered London to Worcester. Principal/express-pattern stations only, per
+# the gap-analysis section this task is grounded in
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Great
+# Western Railway (GWR)"). Several intermediate Cotswold Line halts (Combe,
+# Finstock, Ascott-under-Wychwood, Shipton) exist between Oxford and Kingham
+# but were independently confirmed (Wikipedia, per-station "Services"
+# sections) to carry only a minimal local service (2-3 trains/day, no
+# regular through-Paddington service) rather than the broadly-hourly London
+# pattern the stations below carry, so they are omitted as non-principal.
+# Blockley, Chipping Campden and Littleton & Badsey stations closed in 1966
+# and no longer exist. All CRS/NLC/TIPLOC/STANME/STANOX values below were
+# read directly from railwaycodes.org.uk's own CRS/TIPLOC HTML tables
+# (crso/crsc/crsk/crsm/crsh/crse/crsp/crsw.shtm — the authoritative primary
+# source), and cross-checked against each station's Wikipedia infobox CRS
+# code, which all agree. PAD/RDG/DID rows are copied verbatim from
+# gwr-main-line.toml rather than re-derived.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# Cotswold Line services diverge here, onto the Cherwell Valley line towards
+# Oxford (see segment-naming comment above).
+
+[[stations]]
+crs = "OXF"
+tiploc = "OXFD"
+role = "junction"
+segment = "gwr-cotswold"
+# Cotswold Line's own exclusive segment starts here (see segment-naming
+# comment above). Also served by xc-south-coast.toml — station overlap
+# only, no segment shared (see above).
+
+[[stations]]
+crs = "CBY"
+tiploc = "CHBURY"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "KGM"
+tiploc = "KINGHAM"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "MIM"
+tiploc = "MINMARS"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "HYB"
+tiploc = "HONYBRN"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "EVE"
+tiploc = "EVESHAM"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "PSH"
+tiploc = "PERSHOR"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "WOP"
+role = "major"
+segment = "gwr-cotswold"
+# Worcestershire Parkway, opened 23 February 2020 (en.wikipedia.org/wiki/
+# Worcestershire_Parkway_railway_station: "opened on 23 February 2020").
+# This file's own inclusion standard ("every station-level article checked
+# states a direct 1 tph to London Paddington service") is met here too: the
+# same article's current off-peak service section states GWR runs "1 train
+# per hour to London Paddington via Oxford" and "1 train per hour to
+# Worcester Shrub Hill (some continuing to Worcester Foregate Street, Great
+# Malvern and Hereford)" — the same onward pattern already documented at the
+# top of this file. It's also a major interchange (CrossCountry's
+# Birmingham-Bristol/Cardiff/Nottingham/Edinburgh routes cross here too, on
+# a separate low-level platform pair), matching this file's own "major" role
+# for a similarly significant interchange (WOS). Geographic position
+# confirmed via the same article's route diagram: preceding station Worcester
+# Shrub Hill, following station Stoulton (an unstaffed location further
+# towards Pershore/Evesham) — i.e. it sits between Pershore and Worcester
+# Shrub Hill on this line, as placed below. TIPLOC not independently
+# verified against railwaycodes.org.uk in this pass (page did not return a
+# result for this station); left unset per this batch's own convention
+# rather than guess.
+
+[[stations]]
+crs = "WOS"
+tiploc = "WORCSSH"
+role = "major"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "WOF"
+tiploc = "WORCSFS"
+role = "terminus"
+segment = "gwr-cotswold"
+# This task's scope ends here (gap-analysis "Didcot/Oxford-Worcester"
+# wording). Real GWR services continue past here to Great Malvern and
+# Hereford (see destination_crs_filter comment above) but those stations
+# belong to a line definition this task doesn't claim to cover.
