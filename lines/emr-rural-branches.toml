@@ -1,0 +1,468 @@
+id = "emr-rural-branches"
+name = "EMR Rural Branches (Robin Hood, Poacher, Derwent Valley)"
+mode = "national-rail"
+category = "regional"
+# "regional" chosen to match `northern-furness.toml`/`northern-hope-valley.toml`'s
+# category choice for comparable hourly, single/double-track DMU branches -
+# these are not part of the electrified intercity core (`emr-midland-main-line.toml`,
+# category "main-line").
+operators = ["EM"]  # East Midlands Railway
+
+# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "East Midlands Railway (EMR)" section (a): "...rural branches (Robin Hood
+# Line Nottingham-Worksop, the Poacher/Skegness line, Derby-Matlock)." This
+# task's brief groups all three into one file (an explicitly-scoped exception
+# to "one line per file", not a further split or further combination).
+
+# Three ultimate termini, one per branch.
+destination_crs_filter = ["NOT", "DBY", "WRK", "SKG", "MAT"]
+
+# Terminus/waypoint per branch: Worksop end of the Robin Hood Line; Grantham
+# (shared-trunk waypoint) and Skegness terminus for the Poacher Line; Derby
+# junction and Matlock terminus for the Derwent Valley Line.
+sample_stations = ["NOT", "WRK", "GRA", "SKG", "DBY", "MAT"]
+
+match_keywords = ["Robin Hood Line", "Poacher Line", "Derwent Valley Line"]
+
+# All three branches are roughly hourly, single-class DMU (Class 15x/170)
+# services - confirmed per-branch below (Robin Hood Line: "trains run at
+# hourly intervals between Nottingham and Worksop", Wikipedia "Robin Hood
+# Line" article; Poacher Line: "an hourly service in each direction between
+# Nottingham and Skegness", Wikipedia "Nottingham-Grantham line" article;
+# Derby-Matlock: "one train per hour in each direction", Wikipedia
+# "Ambergate railway station"/"Duffield railway station" articles).
+# Thresholds follow `northern-furness.toml`'s identical rationale/values for
+# a comparable hourly branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# --- Data-model note: Nottingham is listed ONCE, not once per branch ---
+# Both the Robin Hood Line and the Poacher Line (branches 1 and 2 below)
+# start from Nottingham, but `common::LineDefinition`/`SegmentRegistry` key
+# station-segment lookups on `(line_id, crs)` - a single line file cannot
+# list the same CRS code twice with two different segment names and have
+# both honoured (the second entry silently wins in the lookup map; verified
+# by reading `crates/common/src/lib.rs`'s `Station`/`LineDefinition` and
+# `crates/aggregator/src/segments.rs`'s `SegmentRegistry::new`). Nottingham
+# is therefore listed once, here, tagged `emr-robin-hood` (an arbitrary tie-
+# break between the two branches that both start there - see Branch 2's
+# ruling below for why this does NOT matter for cross-file matching: neither
+# branch ends up sharing a segment name with a sibling file at Nottingham
+# itself, so which of this file's own two names Nottingham carries has no
+# effect on any other line's classification).
+[[stations]]
+crs = "NOT"
+role = "junction"
+segment = "emr-robin-hood"
+# Nottingham: common starting junction for both the Robin Hood Line and the
+# Poacher Line below. See the data-model note above.
+
+# =====================================================================
+# Branch 1: Robin Hood Line (Nottingham - Worksop)
+# =====================================================================
+#
+# Station list and CRS codes verified station-by-station against Wikipedia
+# infobox pages, each independently cross-checked against nationalrail.co.uk's
+# own per-station pages (`/stations/<CRS>/details.html`) - WebSearch was
+# exhausted this session (confirmed by trying it first), so this task used
+# WebFetch against Wikipedia's Special:Export raw-wikitext endpoint plus
+# nationalrail.co.uk, per the task brief's documented fallback. The line's
+# own infobox states "13" stations; the list below - Nottingham, Bulwell,
+# Hucknall, Newstead, Kirkby-in-Ashfield, Sutton Parkway, Mansfield,
+# Mansfield Woodhouse, Shirebrook, Langwith-Whaley Thorns, Creswell,
+# Whitwell, Worksop - totals exactly 13, confirming completeness. Several
+# other place names turn up in the Wikipedia "Robin Hood Line" article's
+# prose/history (Lenton, Radford, Basford Vernon, Linby, Annesley, Kirkby-
+# in-Ashfield East, Sutton-in-Ashfield, a separate former "Langwith"
+# station) but these are pre-Beeching-era stations on the original
+# Nottingham-Worksop line that were NOT reinstated when the Robin Hood Line
+# reopened in stages 1993-1998 (or, for Langwith, were superseded half a
+# mile away by the current Langwith-Whaley Thorns station per that station's
+# own article) - they are omitted here as they are not currently open/
+# servable stations, not as an uncertain-verification omission.
+#
+# Frequency: "During the day, trains run at hourly intervals between
+# Nottingham and Worksop, the full journey taking 67 minutes" (Wikipedia
+# "Robin Hood Line" article).
+#
+# --- Segment-sharing ruling: NO genuine shared trunk anywhere on this
+# branch ---
+# Nottingham is also served by `emr-midland-main-line.toml`'s Nottingham
+# spur (`emr-mml-nottingham-spur`, approaching from the south via East
+# Midlands Parkway/Trent Junction/Attenborough/Beeston) and by this task's
+# own Poacher Line branch below (approaching from the east via Grantham) -
+# but the Robin Hood Line leaves Nottingham heading north via Bulwell, a
+# third, physically distinct approach into the same terminal station. This
+# mirrors `emr-regional.toml`'s Ruling 3 (Nottingham is station-overlap-only
+# between its Erewash Valley approach and MML's Nottingham spur) - same
+# station, three different physical approaches, no shared track. None of
+# this branch's other CRS codes (BLW, HKN, NSD, KKB, SPK, MFT, MSW, SHB,
+# LAG, CWD, WWL, WRK) appear in any other file in this catalogue at
+# authoring time (checked via grep across `lines/*.toml`). Per the task
+# brief's documented exception ("if your research confirms these branches
+# share no segment with any sibling line... skip the shared-trunk
+# propagation assertion"), this applies cleanly to the Robin Hood Line
+# specifically: nothing is shared with `emr-midland-main-line` or any other
+# line beyond the Nottingham station itself, so no shared-trunk propagation
+# test is written for this branch (see the regression tests in
+# `crates/aggregator/src/matcher.rs` for the exclusive-segment case instead,
+# at Worksop). NOTE: this per-branch skip does NOT extend to the other two
+# branches in this file - see their own rulings below, one of which found
+# genuine physical track-sharing (though not a shared *segment name* - see
+# that ruling for why). Nottingham itself is listed once, above (see the
+# data-model note), tagged `emr-robin-hood`; the rest of this branch
+# (Bulwell onward) is exclusively this line's own territory.
+[[stations]]
+crs = "BLW"
+role = "minor"
+segment = "emr-robin-hood"
+# Bulwell.
+
+[[stations]]
+crs = "HKN"
+role = "minor"
+segment = "emr-robin-hood"
+# Hucknall.
+
+[[stations]]
+crs = "NSD"
+role = "minor"
+segment = "emr-robin-hood"
+# Newstead.
+
+[[stations]]
+crs = "KKB"
+role = "minor"
+segment = "emr-robin-hood"
+# Kirkby-in-Ashfield.
+
+[[stations]]
+crs = "SPK"
+role = "minor"
+segment = "emr-robin-hood"
+# Sutton Parkway.
+
+[[stations]]
+crs = "MFT"
+role = "minor"
+segment = "emr-robin-hood"
+# Mansfield.
+
+[[stations]]
+crs = "MSW"
+role = "minor"
+segment = "emr-robin-hood"
+# Mansfield Woodhouse.
+
+[[stations]]
+crs = "SHB"
+role = "minor"
+segment = "emr-robin-hood"
+# Shirebrook.
+
+[[stations]]
+crs = "LAG"
+role = "minor"
+segment = "emr-robin-hood"
+# Langwith-Whaley Thorns.
+
+[[stations]]
+crs = "CWD"
+role = "minor"
+segment = "emr-robin-hood"
+# Creswell.
+
+[[stations]]
+crs = "WWL"
+role = "minor"
+segment = "emr-robin-hood"
+# Whitwell.
+
+[[stations]]
+crs = "WRK"
+role = "terminus"
+segment = "emr-robin-hood"
+# Worksop. Also served by Northern's Sheffield-Lincoln-Leeds regional
+# service (Wikipedia "Worksop railway station": "an intermediate stop on
+# the regional service between Lincoln Central and Leeds"), but no
+# `northern*.toml` file in this catalogue lists WRK at authoring time
+# (checked via grep) - nothing to cite/reuse a segment name from, so this
+# is not asserted as a shared segment. Cost if wrong: none today (no other
+# line's file references this station at all yet); if a future Northern
+# Sheffield-Lincoln-Leeds line file lands and turns out to genuinely share
+# track through Worksop, that file's author should reconcile segment names
+# then, per the same pattern as `emr-midland-main-line.toml`'s own
+# Thameslink/Bedford cross-batch-dependency ruling.
+
+# =====================================================================
+# Branch 2: Poacher Line (Nottingham - Skegness, via Grantham/Sleaford/Boston)
+# =====================================================================
+#
+# --- Segment-sharing ruling: Nottingham-Grantham IS genuine shared TRACK
+# with `emr-regional.toml`, but NO segment name is shared ---
+# The Wikipedia "Nottingham-Grantham line" article states plainly: "All
+# services on the line are provided by East Midlands Railway. There is an
+# hourly service in each direction between Liverpool Lime Street and
+# Norwich, generally calling only at Nottingham and Grantham [...] and an
+# hourly service in each direction between Nottingham and Skegness, via
+# Grantham, calling at most stations along the route." This is a dedicated
+# infrastructure article (not just a train-service article) confirming both
+# EMR services use the *same physical line* between Nottingham and Grantham
+# - genuine track-sharing, not mere station overlap, contradicting this task
+# brief's own default expectation ("unlikely for these particular branches,
+# but check") for at least this one stretch.
+#
+# However, the segment name is deliberately NOT shared. `emr-regional.toml`
+# tags its own Nottingham-Grantham stations with `emr-regional-east` - but
+# that same segment name also spans that file's Alfreton station (Erewash
+# Valley approach, `emr-regional.toml`'s own Ruling 3: deliberately
+# NOT shared with anything) and its entire Peterborough-Ely-Thetford-Norwich
+# continuation beyond Grantham. Because `SegmentRegistry::is_shared` and
+# `is_exclusive_to` operate per segment *name* across the whole catalogue,
+# not per station, reusing `emr-regional-east` here would incorrectly
+# promote that file's Alfreton (and Peterborough/Ely/Norwich) stations to
+# "shared" too, even though nothing in this file touches them - this is
+# exactly the coarse-segment-granularity mismatch `emr-regional.toml`'s own
+# Ruling 4 describes for its Peterborough-Ely overlap with `xc-stansted.toml`
+# ("that line uses one coarse segment name... spanning far more track than
+# any possible overlap... mirrors `xc-manchester.toml`'s deliberate non-
+# sharing with `wcml` for the identical coarse-segment-granularity reason").
+# Confirmed empirically too: an earlier draft of this file that did reuse
+# `emr-regional-east` broke the existing
+# `emr_regional_erewash_incident_stays_on_its_own_line` regression test by
+# making Alfreton incidents classify as SharedSegment. This file's own
+# `emr-poacher-skegness` segment name is used instead, for the entire
+# Poacher Line branch (Nottingham through Skegness) uniformly - this is the
+# Global Constraints' "if research confirms these branches share no
+# *segment* with any sibling line... skip the shared-trunk propagation
+# assertion" case, just arrived at via a coarse-mismatch ruling rather than
+# an absence of physical sharing. Cost if wrong (i.e. if a finer split of
+# `emr-regional.toml`'s segment would have been preferable): bounded - a
+# Nottingham/Bingham/Grantham incident still matches both lines
+# independently via StationHit/ExclusiveSegment (both already list these
+# CRS codes under their own segment names); the only effect is that neither
+# line reports SharedSegment for the other at this specific overlap. See
+# the regression test in `crates/aggregator/src/matcher.rs` confirming both
+# lines independently match a Grantham incident without over-propagating.
+#
+# Intermediate stations between Nottingham and Grantham on the real service
+# (per the same "Nottingham-Grantham line" article's places-served list:
+# Netherfield & Colwick, Radcliffe-on-Trent, Bingham, Aslockton & Whatton,
+# Elton & Orston, Bottesford) are only partially included here: Bingham
+# (BIN) is independently verified two-source (Wikipedia infobox + national
+# rail.co.uk) and is specifically named in the Poacher Line's own express
+# calling-pattern description, so it is included. Netherfield & Colwick,
+# Radcliffe-on-Trent, Aslockton & Whatton, Elton & Orston and Bottesford
+# were not individually cross-checked to this task's two-source standard
+# within this session and are omitted pending CRS verification, matching
+# `northern-hope-valley.toml`'s "minor intermediate calls...are omitted
+# pending CRS verification" pattern.
+[[stations]]
+crs = "BIN"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Bingham. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/bin.
+
+[[stations]]
+crs = "GRA"
+role = "junction"
+segment = "emr-poacher-skegness"
+# Grantham: real physical junction where this branch diverges from
+# `emr-regional`'s own continuation towards Peterborough/Norwich (both
+# genuinely reach Grantham via the same Nottingham-Grantham line - see
+# ruling above), but not a shared *segment name* - see ruling above.
+
+[[stations]]
+crs = "ANC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Ancaster. The two intermediate stations between Grantham and Ancaster on
+# the original line - Barkston and Honington - are both long-closed
+# (Barkston: passenger service withdrawn 1955; Honington: withdrawn 1962),
+# confirmed via their own Wikipedia infobox "status = Disused" fields, and
+# are correctly omitted as closed rather than flagged as unverified.
+
+[[stations]]
+crs = "RAU"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Rauceby.
+
+[[stations]]
+crs = "SLR"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Sleaford.
+
+[[stations]]
+crs = "HEC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Heckington.
+
+[[stations]]
+crs = "SWE"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Swineshead.
+
+[[stations]]
+crs = "HBB"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Hubberts Bridge (no apostrophe - confirmed via nationalrail.co.uk's own
+# spelling, which differs from some informal renderings as "Hubbert's
+# Bridge").
+
+[[stations]]
+crs = "BSN"
+role = "major"
+segment = "emr-poacher-skegness"
+# Boston. The next two intermediate stations on the original line - Sibsey
+# and Old Leake - are both long-closed (Sibsey: passenger service withdrawn
+# 1961; Old Leake: withdrawn 1956), confirmed via their own Wikipedia
+# infobox "status = Disused" fields ("The line through the station continues
+# to be used by services on the Poacher Line" per Sibsey's own article,
+# confirming the *track* is still in use even though the station itself is
+# not), and are correctly omitted as closed rather than flagged as
+# unverified.
+
+[[stations]]
+crs = "TPC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Thorpe Culvert.
+
+[[stations]]
+crs = "WFL"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Wainfleet (Wainfleet All Saints).
+
+[[stations]]
+crs = "HVN"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Havenhouse.
+
+[[stations]]
+crs = "SKG"
+role = "terminus"
+segment = "emr-poacher-skegness"
+# Skegness.
+
+# =====================================================================
+# Branch 3: Derwent Valley Line (Derby - Matlock)
+# =====================================================================
+#
+# --- Segment-sharing ruling: Derby is shared trunk with
+# `emr-midland-main-line.toml`'s `emr-mml-derby` segment; Duffield-
+# Ambergate is physically shared Midland Main Line track too, but is NOT a
+# shared *segment name* ---
+# The Wikipedia "Ambergate railway station" article states directly: "It
+# is located on the Derwent Valley Line, which connects Derby and Matlock;
+# it diverges from the Midland Main Line just south of the station at
+# Ambergate Junction." The "Midland Main Line" article's own route-
+# description table independently corroborates this, listing Duffield,
+# Belper and Ambergate in sequence between Derby and Chesterfield. Two
+# independent, purpose-built Wikipedia articles agree the Derby-Matlock
+# branch runs over the same physical Midland Main Line metals as far as
+# Ambergate Junction, just south of Ambergate station.
+#
+# However, `emr-midland-main-line.toml`'s own station list has no entry
+# for Duffield, Belper, or Ambergate (its intercity service does not call
+# there) - Derby is the *only* station both files' station lists literally
+# include in common. Because `SegmentRegistry::is_shared`/`is_exclusive_to`
+# operate per segment name across the whole catalogue and check only
+# which *files* use a name (not which specific stations), reusing
+# `emr-mml-derby` for Duffield/Belper/Ambergate too would incorrectly mark
+# those three stations "shared" even though `emr-midland-main-line.toml`
+# has no independent station entry there to confirm it - the exact same
+# invariant-violation shape the catalogue's final review caught for this
+# batch's earlier `emr-mml-north` over-reuse. So: Derby (the one genuinely
+# common station) reuses `emr-mml-derby` verbatim; Duffield, Belper and
+# Ambergate are folded into this branch's own exclusive `emr-matlock-
+# branch` segment instead, per the schema's shared-trunk rule of thumb
+# (junction station - Derby - stays on the shared segment; the exclusive
+# segment starts at the next station). Cost if this distinction ever
+# matters: bounded - if a future revision adds Duffield/Belper/Ambergate as
+# genuine `emr-midland-main-line.toml` calling points, those three
+# stations' segment here should be revisited to reuse `emr-mml-derby` (or
+# a new, wider shared name) at that point; in the meantime both lines
+# still independently match an incident at any of these three stations via
+# StationHit/ExclusiveSegment, they just won't jointly report
+# SharedSegment for Duffield/Belper/Ambergate specifically (Derby itself
+# still does, correctly, via the test below).
+#
+# Frequency: "one train per hour in each direction" (Wikipedia "Ambergate
+# railway station"/"Duffield railway station" articles).
+#
+# Station list, CRS codes verified two-source (Wikipedia infobox +
+# nationalrail.co.uk) for every station below except Derby, whose CRS is
+# reused unchanged from `emr-midland-main-line.toml` (already verified
+# there, same physical station; TIPLOC also reused - see that file).
+[[stations]]
+crs = "DBY"
+tiploc = "DERBY"  # reused from emr-midland-main-line.toml/cross-country.toml
+role = "junction"
+segment = "emr-mml-derby"
+# Derby: junction for this branch, reusing `emr-midland-main-line.toml`'s
+# `emr-mml-derby` segment - see ruling above.
+
+[[stations]]
+crs = "DFI"
+role = "minor"
+segment = "emr-matlock-branch"
+# Duffield. Physically on shared Midland Main Line metal as far as
+# Ambergate Junction (see ruling above), but folded into this branch's own
+# exclusive segment since `emr-midland-main-line.toml` has no station entry
+# here to share a segment name with. A former branch to Wirksworth
+# diverges here too (now the heritage Ecclesbourne Valley Railway, not
+# National Rail - not a passenger-service overlap with any line in this
+# catalogue).
+
+[[stations]]
+crs = "BLP"
+role = "minor"
+segment = "emr-matlock-branch"
+# Belper. Same reasoning as Duffield above.
+
+[[stations]]
+crs = "AMB"
+role = "junction"
+segment = "emr-matlock-branch"
+# Ambergate: Ambergate Junction, immediately south of the station, is the
+# real physical point where the Derwent Valley Line diverges from the
+# Midland Main Line - see ruling above for why this catalogue's
+# segment-sharing model still folds this station into the branch's own
+# exclusive segment rather than the shared one.
+
+[[stations]]
+crs = "WTS"
+role = "minor"
+segment = "emr-matlock-branch"
+# Whatstandwell.
+
+[[stations]]
+crs = "CMF"
+role = "minor"
+segment = "emr-matlock-branch"
+# Cromford.
+
+[[stations]]
+crs = "MTB"
+role = "minor"
+segment = "emr-matlock-branch"
+# Matlock Bath.
+
+[[stations]]
+crs = "MAT"
+role = "terminus"
+segment = "emr-matlock-branch"
+# Matlock. Also the southern terminus of the heritage Peak Rail line
+# (Wikipedia "Matlock railway station": "the terminus of both the Derwent
+# Valley Line from Derby and Peak Rail") - not a National Rail passenger
+# service, so no overlap with any line in this catalogue.

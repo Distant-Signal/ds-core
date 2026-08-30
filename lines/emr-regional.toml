@@ -1,0 +1,273 @@
+id = "emr-regional"
+name = "EMR Regional (Liverpool - Norwich)"
+mode = "national-rail"
+category = "regional"
+# "regional" chosen over "main-line": real-world frequency is roughly hourly,
+# formed of Class 158 DMUs, not the electrified/frequent St Pancras core
+# service (`emr-midland-main-line.toml`, category "main-line"). Character
+# matches `northern-hope-valley.toml` (also an hourly cross-Pennine DMU
+# service) more closely than the MML spine, despite the gap analysis calling
+# it "EMR Regional intercity" - "intercity" here describes the journey
+# length, not the frequency/rolling-stock tier that `category` is meant to key.
+operators = ["EM"]  # East Midlands Railway
+
+destination_crs_filter = ["LIV", "NRW"]  # the line's two ultimate termini
+sample_stations = ["LIV", "MAN", "SHF", "NOT", "NRW"]
+
+match_keywords = ["Liverpool to Norwich", "Liverpool - Norwich"]
+# Same reasoning as `emr-midland-main-line.toml`'s identical exclusion: this
+# line shares Chesterfield-Sheffield metals with CrossCountry's spine (see
+# the `emr-mml-north` ruling below), so a CrossCountry incident on that
+# stretch shouldn't be misattributed to this line via station-only matching.
+excluded_keywords = ["Cross Country"]
+
+# Roughly hourly service end to end (Wikipedia's East Midlands Railway
+# services table lists it at "1" train per hour) - single-Wikipedia-sourced
+# for the frequency figure specifically (not cross-checked against a second
+# source), flagged per the "if unconfirmed, say so" rule, though it only
+# informs this threshold tuning, not the station list/segment topology.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Liverpool Lime Street to Norwich, ordered west to east. Full route, CRS
+# codes and calling pattern verified against Wikipedia's "East Midlands
+# Railway" article (EMR Regional services table, raw wikitext fetched
+# directly: "Liverpool Lime Street - Norwich || 1 || Liverpool South
+# Parkway, Widnes, Warrington Central, Manchester Oxford Road, Manchester
+# Piccadilly, Stockport, Sheffield, Chesterfield, Alfreton, Nottingham,
+# Grantham, Peterborough, Ely, Thetford [, Norwich]") and independently
+# cross-checked against the "Hope Valley Line" Wikipedia article (which
+# separately corroborates the Manchester Piccadilly/Stockport/Sheffield
+# calling pattern for this exact EMR service) and the "Breckland Line"
+# Wikipedia article (which separately corroborates the Ely-Thetford-Norwich
+# leg for this exact EMR service). CRS codes cross-checked against
+# railwaycodes.org.uk's CRS tables (LIV, WAC, MCO, MAN, SHF, CHD, ALF, NOT,
+# NRW, GRA, PBO, ELY, TTF all independently confirmed there) and, for WID and
+# SPT specifically (railwaycodes.org.uk's paginated tables truncated before
+# reaching those two entries within this session), against
+# nationalrail.co.uk's own per-station pages instead (`/stations/WID/...` and
+# `/stations/SPT/...` both resolve to the expected station names). LPY
+# confirmed via railwaycodes.org.uk as the current code (superseding the
+# original LSP code for Liverpool South Parkway).
+# Gap-analysis source: this task's brief, "Task 7.2 - lines/emr-regional.toml"
+# section: "EMR Regional intercity (Liverpool-Norwich via
+# Nottingham/Sheffield)... Liverpool-Norwich crosses Northern and TPE
+# territory around Sheffield/Manchester 'without literal track-sharing in
+# most places' (different routes into those cities), lower risk than the
+# MML/Thameslink overlap."
+#
+# Minor Hope Valley wayside halts the real service skips entirely (Chinley,
+# Edale, Hope, Bamford, Hathersage, Grindleford, Dore & Totley) are correctly
+# omitted, not just "pending verification" - both the EMR services table and
+# the Hope Valley Line article's own calling-pattern list agree this service
+# runs fast between Manchester Piccadilly/Stockport and Sheffield, unlike
+# Northern's all-stations Hope Valley service.
+
+# --- RULING 1 (revised after final review): Manchester Piccadilly -
+# Stockport - Sheffield IS genuine physical track-sharing with
+# `northern-hope-valley.toml`'s Hope Valley Line, but is NOT a shared
+# *segment name* - a coarse-granularity mismatch, the same shape as
+# Ruling 4 below (Peterborough/Ely vs `xc-stansted.toml`) and this file's
+# own sibling `emr-rural-branches.toml`'s Poacher Line ruling. The Hope
+# Valley Line ("Hope Valley Line" Wikipedia article) is the *only* direct
+# passenger route between Manchester Piccadilly and Sheffield; that
+# article's own services section separately confirms EMR's Liverpool-
+# Norwich service as one of three operators running over it (alongside
+# Northern's stopping service and TransPennine Express's Liverpool-
+# Cleethorpes service), calling at "Manchester Piccadilly, Stockport,
+# Sheffield" specifically - so the underlying track-sharing claim stands
+# exactly as before.
+#
+# However, reusing `northern-hope-valley.toml`'s own segment name verbatim
+# was found (in this batch's final whole-branch review) to violate this
+# catalogue's shared-segment invariant: every pre-existing shared segment
+# has a byte-identical station set across every file that uses it, but
+# `northern-hope-valley.toml`'s own `northern-hope-valley` segment also
+# covers Edale/Hope/Dore (EDL/HOP/DOR) wayside halts this line doesn't
+# call at at all. Because `SegmentRegistry::is_shared` operates per
+# segment name across the whole catalogue (checking only which files use a
+# name, not which specific stations), reusing it here would have
+# incorrectly promoted `northern-hope-valley.toml`'s own EDL/HOP/DOR
+# stations to "shared" too, even though nothing in this file touches them
+# - regressing pre-existing data this batch has no business changing. So:
+# `emr-regional-hope-valley`, a new name exclusive to this file, is used
+# for MAN/SPT instead. Cost if wrong (i.e. if the team later decides this
+# corridor really should propagate jointly): bounded - both lines already
+# independently match a Manchester Piccadilly/Stockport incident via
+# StationHit/ExclusiveSegment regardless of segment name; the only effect
+# of this choice is that neither line reports SharedSegment for the other
+# at this specific overlap. See the regression test in
+# `crates/aggregator/src/matcher.rs` confirming both lines independently
+# match a Stockport incident without over-propagating (mirrors
+# `emr_rural_branches_poacher_line_and_emr_regional_both_match_grantham_without_over_propagating`).
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "emr-regional-liverpool"
+
+[[stations]]
+crs = "LPY"
+role = "minor"
+segment = "emr-regional-liverpool"
+# Liverpool South Parkway. LPY is the current CRS code (superseding the
+# original LSP code) per railwaycodes.org.uk.
+
+[[stations]]
+crs = "WID"
+role = "minor"
+segment = "emr-regional-liverpool"
+
+[[stations]]
+crs = "WAC"
+role = "minor"
+segment = "emr-regional-liverpool"
+# Warrington Central - distinct station/route from Warrington Bank Quay
+# (WBQ, on the WCML); this service uses the Cheshire Lines Committee route
+# via Warrington Central, not the WCML. Not shared with any line already in
+# this catalogue (`northern.toml`'s own Liverpool station, LIV, sits on a
+# different segment - `northern-merseyside`, via Huyton/Newton-le-Willows -
+# a different physical route out of Liverpool from this one).
+
+[[stations]]
+crs = "MCO"
+role = "minor"
+segment = "emr-regional-liverpool"
+# Manchester Oxford Road: last station before Manchester Piccadilly, where
+# this line's exclusive Liverpool approach ends and the Hope Valley shared
+# trunk begins (see Ruling 1 above; per the schema's shared-trunk rule of
+# thumb, the junction itself - MAN, next station - carries the shared
+# segment name, not this one).
+
+[[stations]]
+crs = "MAN"
+role = "junction"
+segment = "emr-regional-hope-valley"
+# Manchester Piccadilly: junction where this line joins the Hope Valley
+# Line's physical track (see Ruling 1 above - not a shared segment name).
+
+[[stations]]
+crs = "SPT"
+role = "junction"
+segment = "emr-regional-hope-valley"
+# Stockport: also a `northern-hope-valley.toml` station (role "junction"
+# there too, under that file's own segment name). See Ruling 1 above.
+
+# --- RULING 2: Sheffield - Chesterfield IS genuine track-sharing with
+# `emr-midland-main-line.toml`'s `emr-mml-north` segment - this is the
+# prerequisite question the brief asked to check directly (Task 7.1's own
+# file touches Nottingham and Sheffield too). The Midland Main Line
+# Wikipedia article confirms the Chesterfield-Sheffield stretch is the
+# Midland Main Line itself ("In 1870, the Midland Railway opened a new
+# route from Chesterfield to Rotherham which went through Sheffield via the
+# Bradway Tunnel"), with no other passenger route mentioned between the two
+# towns (the article's only "alternative route" mention, the Hope Valley
+# Line, serves Manchester, not Chesterfield). `emr-mml-north` in
+# `emr-midland-main-line.toml` now spans exactly CHD-SHF (split out from
+# the rest of that file's route by this batch's final review, to keep the
+# shared-segment extent byte-identical between the two files, per the
+# catalogue-wide convention); this
+# line's own overlap (SHF-CHD only, arriving from Manchester via Hope Valley
+# rather than from Derby) is a clean subset of that same physical
+# trackage, so the segment name is reused verbatim rather than invented.
+# SHF is tagged with this segment (not `northern-hope-valley`) because it is
+# simultaneously the end of the Hope Valley approach and the start of the
+# Midland Main Line departure for this line specifically (the real service
+# reverses direction at Sheffield); either shared name would classify an
+# SHF-only incident as SharedSegment for this line, so the choice is a
+# documentation call, not a correctness one - `emr-mml-north` is picked to
+# match `emr-midland-main-line.toml`'s own existing SHF tag exactly.
+# Cost if wrong: same shape as Ruling 1 - bounded, since even without this
+# segment name a Sheffield/Chesterfield incident still matches both lines
+# independently via StationHit (both already list these CRS codes).
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"  # reused from cross-country.toml/northern-hope-valley.toml/emr-midland-main-line.toml - already verified in this repo
+role = "junction"
+segment = "emr-mml-north"
+
+[[stations]]
+crs = "CHD"
+role = "junction"
+segment = "emr-mml-north"
+# Chesterfield: junction where this line's shared Midland Main Line stretch
+# ends and its own exclusive route (Erewash Valley Line towards Alfreton and
+# Nottingham) begins. Per the schema's shared-trunk rule of thumb, the
+# junction stays on the shared segment; the exclusive segment starts at the
+# next station (ALF).
+
+# --- RULING 3: Nottingham is station-overlap-only with
+# `emr-midland-main-line.toml`, NOT a shared segment - despite both lines
+# calling there, confirming the "different routes into those cities" half
+# of the gap analysis's hedge for this particular station. This line
+# reaches Nottingham from the north via the Erewash Valley Line (Chesterfield
+# area towards Alfreton, Langley Mill, Ilkeston, Trowell per the "Erewash
+# Valley line" Wikipedia article); MML's Nottingham spur
+# (`emr-mml-nottingham-spur` in `emr-midland-main-line.toml`) reaches it
+# from the south via East Midlands Parkway/Trent Junction/
+# Attenborough/Beeston. These are different physical approaches into the
+# same terminal station, not a shared stretch of track - mirrors
+# `emr-midland-main-line.toml`'s own identical reasoning for its Sheffield
+# overlap with `cross-country.toml`/`northern-hope-valley.toml` ("only the
+# station is common, not the trunk"). No segment name is shared here.
+[[stations]]
+crs = "ALF"
+role = "minor"
+segment = "emr-regional-east"
+# Alfreton (& Mansfield Parkway). Erewash Valley Line.
+
+[[stations]]
+crs = "NOT"
+role = "major"
+segment = "emr-regional-east"
+# Nottingham - see Ruling 3 above: station-overlap only with
+# `emr-midland-main-line.toml`'s Nottingham spur, no segment shared.
+
+# --- RULING 4: Peterborough and Ely are also `xc-stansted.toml` stations
+# (that line's own Birmingham-Stansted route also calls at both, in the same
+# west-to-east direction as far as Ely). Whether the two lines physically
+# share the Peterborough-Ely stretch itself could not be confirmed to this
+# task's standard within this session (the "Fen Line" Wikipedia article
+# turned out to cover the separate Cambridge-King's Lynn route, not
+# Peterborough-Ely, and a dedicated Peterborough-Ely article could not be
+# located/fetched) - so per the "if a fact can't be confirmed, omit/flag
+# rather than guess" rule, no claim is made either way about the underlying
+# trackage. Regardless of the answer, no segment name is shared here:
+# `xc-stansted.toml` uses one coarse segment name ("xc-stansted") for its
+# entire Nuneaton-Stansted Airport route, spanning far more track than any
+# possible Peterborough-Ely overlap - mirrors `xc-manchester.toml`'s
+# deliberate non-sharing with `wcml` for the identical
+# coarse-segment-granularity reason. Cost if wrong (i.e. if genuine sharing
+# exists here): bounded - both lines already independently match a
+# Peterborough or Ely incident via StationHit regardless.
+[[stations]]
+crs = "GRA"
+role = "major"
+segment = "emr-regional-east"
+
+[[stations]]
+crs = "PBO"
+role = "major"
+segment = "emr-regional-east"
+# Peterborough - also an `xc-stansted.toml` station. See Ruling 4 above.
+
+[[stations]]
+crs = "ELY"
+role = "major"
+segment = "emr-regional-east"
+# Ely - also an `xc-stansted.toml` station. See Ruling 4 above. XC's route
+# continues from Ely towards Cambridge; this line continues towards
+# Thetford/Norwich (Breckland Line) - confirmed via the "Breckland Line"
+# Wikipedia article, which separately lists both operators' Ely services
+# heading in these two different directions.
+
+[[stations]]
+crs = "TTF"
+role = "minor"
+segment = "emr-regional-east"
+# Thetford. Breckland Line.
+
+[[stations]]
+crs = "NRW"
+role = "terminus"
+segment = "emr-regional-east"

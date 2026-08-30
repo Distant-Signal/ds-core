@@ -1,0 +1,214 @@
+id = "emr-midland-main-line"
+name = "Midland Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["EM"]  # East Midlands Railway (Transport UK Group; not yet nationalised as of Aug 2026)
+
+# Two ultimate destinations: the Chesterfield/Sheffield arm and the Nottingham
+# spur (folded into this file per the gap analysis's SWML/Weymouth-style
+# precedent — see `swr-south-west-main.toml`).
+destination_crs_filter = ["STP", "SHF", "NOT"]
+
+# Terminus plus one waypoint on the shared trunk and one on each exclusive arm.
+sample_stations = ["STP", "LEI", "DBY", "SHF", "NOT"]
+
+match_keywords = ["Midland Main Line", "MML"]
+# CrossCountry's Aberdeen/Edinburgh - Penzance spine runs over these same
+# metals between Derby and Sheffield (see the `emr-mml-north` comment below);
+# vetoing keeps XC-service incidents on that shared stretch from being
+# misattributed to EMR. Mirrors `west-coast-main-line.toml`'s identical
+# exclusion for the same reason (XC also shares WCML metals Crewe-Wolverhampton).
+excluded_keywords = ["Cross Country"]
+
+# Ordered south to north: St Pancras - Bedford - Leicester - Derby -
+# Chesterfield - Sheffield, with the Nottingham spur diverging after East
+# Midlands Parkway. Station list, CRS codes and route topology verified
+# against Wikipedia (individual station infobox pages, cross-checked against
+# each other for ordering) and railwaycodes.org.uk's CRS code tables
+# (independently confirmed BDM, BEE, LGE, LTN/LUT, EMD; a handful of
+# additional stations - WEL, KET, MHR, LEI, LBO, DBY, CHD, SHF, NOT, ATB -
+# could not get a second-source cross-check within this session due to
+# railwaycodes.org.uk rate-limiting mid-research (HTTP 429); those codes are
+# taken from Wikipedia station infoboxes only, which is the "live source"
+# tier but not the required second-source cross-check. Flagging per the
+# "if a fact can't be confirmed to that standard, say so" rule rather than
+# silently treating them as fully verified.
+# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "East Midlands Railway (EMR)" section (a): route St Pancras - Leicester -
+# Derby - Chesterfield - Sheffield with a Nottingham spur, operator code EM.
+
+# --- Bedford-St Pancras: cross-batch dependency ruling ---
+# This stretch is the same infrastructure Thameslink's northern branch would
+# use south of Bedford (gap analysis (c), and this task's brief, flag this as
+# a required cross-batch citation). At authoring time,
+# `lines/thameslink-bedford.toml` (Batch 5, Task 5.12) does not yet exist in
+# this worktree (checked via `ls .claude/worktrees/impl-line-batch-05/lines/`
+# before drafting - not present) or in this worktree's own `lines/`
+# directory, so there is no segment name to cite/reuse. RULING: this
+# stretch is named `emr-mml-south`, in this file's own naming scheme, and is
+# NOT asserted as shared with Thameslink. Cost if wrong: bounded - a
+# follow-up segment rename once Batch 5 lands, not silent data loss (both
+# lines still each match an incident here independently via their own
+# station lists in the meantime; they just won't both report
+# MatchScope::SharedSegment for it). Whoever integrates both batches should
+# confirm whether `emr-mml-south`'s stations here and Thameslink's Bedford
+# branch segment should be unified so an incident on this stretch propagates
+# to both lines with SharedSegment scope.
+[[stations]]
+crs = "STP"
+tiploc = "STPX"  # reused from thameslink-core.toml - same physical station, already verified in this repo
+role = "terminus"
+segment = "emr-mml-south"
+
+[[stations]]
+crs = "LTN"
+role = "minor"
+segment = "emr-mml-south"
+# Luton Airport Parkway. Confirmed LTN (not LUT) via two independent
+# Wikipedia infobox fetches for Luton and Luton Airport Parkway respectively
+# after an initial railwaycodes.org.uk summarisation conflated the two -
+# see LUT below.
+
+[[stations]]
+crs = "LUT"
+role = "minor"
+segment = "emr-mml-south"
+
+[[stations]]
+crs = "BDM"
+role = "junction"
+segment = "emr-mml-south"
+# Bedford: last station on the stretch shared with Thameslink's northern
+# branch (see ruling above); segment boundary per the schema's shared-trunk
+# rule of thumb (junction station belongs to the shared segment, exclusive
+# starts at the next station).
+
+# WEL/KET: `emr-mml-trunk` is reused verbatim by `emr-connect.toml`, whose
+# entire route runs over this same stretch as far as Kettering before
+# diverging to Corby at Glendon Junction (see that file's own ruling).
+# This segment covers exactly {WEL, KET} in both files, matching the
+# byte-identical-extent convention every other shared segment in this
+# catalogue already follows (e.g. `swr-trunk-waterloo`). Market Harborough
+# onward is NOT part of this shared segment - EMR Connect doesn't reach
+# there - see `emr-mml-central` below.
+[[stations]]
+crs = "WEL"
+role = "minor"
+segment = "emr-mml-trunk"
+
+[[stations]]
+crs = "KET"
+role = "minor"
+segment = "emr-mml-trunk"
+
+# --- emr-mml-central: this file's own exclusive middle stretch (Market
+# Harborough - East Midlands Parkway - Long Eaton), not claimed by any
+# other file in this catalogue at authoring time (checked via grep) ---
+[[stations]]
+crs = "MHR"
+role = "minor"
+segment = "emr-mml-central"
+
+[[stations]]
+crs = "LEI"
+role = "major"
+segment = "emr-mml-central"
+# Leicester is also a `xc-stansted` station (CrossCountry's Birmingham-
+# Stansted arm), but that route approaches/leaves via Nuneaton and Syston
+# Junction on different metals - only the station building is common, not
+# the trunk. No segment shared, matching `northern-hope-valley.toml`'s
+# identical reasoning for its Sheffield overlap with CrossCountry.
+
+[[stations]]
+crs = "LBO"
+role = "minor"
+segment = "emr-mml-central"
+
+[[stations]]
+crs = "EMD"
+role = "junction"
+segment = "emr-mml-central"
+# East Midlands Parkway: the branch point for the Nottingham spur. The
+# physical divergence (Trent Junction) lies immediately north of here - a
+# chord links East Midlands Parkway and Long Eaton for Derby-bound trains,
+# while Nottingham-bound trains peel off east via Attenborough/Beeston. Per
+# the schema's shared-trunk rule of thumb, the junction station (this one)
+# stays on the shared trunk segment; the two exclusive arms start at the
+# next station on each branch. TIPLOC omitted: the value this file
+# originally carried here was not independently sourced/cited, and this
+# catalogue's "don't invent" rule treats an uncited value as equivalent to
+# a guess even when it looks plausible - see this file's provenance
+# comment above, which already flags TIPLOCs as outside its cited scope.
+
+[[stations]]
+crs = "LGE"
+role = "minor"
+segment = "emr-mml-central"
+
+# --- emr-mml-derby: shared trunk with `emr-rural-branches.toml`'s
+# Derwent Valley Line branch. Derby is the only station both files'
+# station lists literally include in common (this file's intercity
+# service does not call at Duffield/Belper/Ambergate, even though the
+# underlying Midland Main Line track is physically shared as far as
+# Ambergate Junction) - segment-sharing for matcher purposes is therefore
+# scoped to Derby itself; see `emr-rural-branches.toml`'s Branch 3 ruling
+# for the fuller explanation of that distinction. ---
+[[stations]]
+crs = "DBY"
+tiploc = "DERBY"  # reused from cross-country.toml - already verified in this repo
+role = "major"
+segment = "emr-mml-derby"
+
+# --- emr-mml-north: shared trunk with `emr-regional.toml` (Chesterfield-
+# Sheffield only - that file's own Manchester-arrival service joins this
+# same Midland Main Line stretch at Sheffield; see its Ruling 2). Scoped
+# to exactly {CHD, SHF} in both files. ---
+[[stations]]
+crs = "CHD"
+role = "minor"
+segment = "emr-mml-north"
+
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"  # reused from cross-country.toml/northern-hope-valley.toml - already verified in this repo
+role = "terminus"
+segment = "emr-mml-north"
+# `emr-mml-north` (Chesterfield-Sheffield) runs over the same Midland Main
+# Line metals CrossCountry's spine uses between Derby and Sheffield
+# (`cross-country.toml`'s `xc-midlands`/`xc-yorkshire` segments cover DBY
+# and CHD/SHF respectively), and Sheffield is also `northern-hope-valley`'s
+# eastern terminus. No segment name is shared with either: `cross-
+# country.toml` and `northern-hope-valley.toml` already include these same
+# stations under their own segment names, so both lines independently
+# match a station-level incident here without needing a shared name
+# (mirrors `west-coast-main-line.toml`/`xc-manchester.toml`'s identical
+# choice not to share a segment name for the Crewe-Wolverhampton stretch
+# they both run over, and `northern-hope-valley.toml`'s explicit "only the
+# station is common" reasoning for its own Sheffield overlap).
+
+# --- Nottingham spur ---
+# This file lists the Nottingham spur after the Chesterfield/Sheffield arm
+# in file order (both diverge from the shared trunk at East Midlands
+# Parkway, not from each other) - a multi-station incident spanning both
+# arms could in principle derive a nonsensical from/to AffectedRoute pair
+# via naive first/last-position order. Inherent to folding a branching
+# topology into one file (the SWML/Weymouth-style precedent this file
+# follows), not a data error.
+[[stations]]
+crs = "ATB"
+role = "minor"
+segment = "emr-mml-nottingham-spur"
+# Attenborough is included for track-topology completeness (part of the
+# Trent Junction chord to the Nottingham spur) rather than as a typical
+# EMR intercity calling point served at the same frequency as the rest of
+# this file's stations.
+
+[[stations]]
+crs = "BEE"
+role = "minor"
+segment = "emr-mml-nottingham-spur"
+
+[[stations]]
+crs = "NOT"
+role = "terminus"
+segment = "emr-mml-nottingham-spur"

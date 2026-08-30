@@ -1,0 +1,118 @@
+id = "emr-connect"
+name = "EMR Connect"
+mode = "national-rail"
+category = "commuter"  # local stopping service, matches thameslink-core.toml's choice
+operators = ["EM"]  # East Midlands Railway
+
+# Single ultimate destination: Corby (see the route-scope ruling below).
+destination_crs_filter = ["STP", "COR"]
+
+sample_stations = ["STP", "LTN", "BDM", "COR"]
+
+# "Luton Airport Express" is the same physical service, dual-branded for the
+# Luton-Airport-bound market. Wikipedia's "East Midlands Railway" article
+# titles its section "EMR Connect / Luton Airport Express" rather than
+# treating the latter as a full rename, so both names are kept as
+# match_keywords rather than assuming one has fully superseded the other.
+match_keywords = ["EMR Connect", "Luton Airport Express"]
+
+# --- Route-scope ruling: this is NOT a St Pancras-Luton Airport Parkway
+# shuttle ---
+# The gap analysis's one-line description (cited above, from
+# docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "East
+# Midlands Railway (EMR)" section: "EMR Connect (St Pancras-Luton Airport
+# Parkway local)") only names the airport-market portion of the journey.
+# Live-source verification (Wikipedia's "East Midlands Railway" article,
+# cross-checked against its "Corby railway station" article and against
+# National Rail Enquiries' station page for Corby, since railwaycodes.org.uk
+# hit its own rate limit again mid-research - same issue
+# `emr-midland-main-line.toml` hit) shows the service actually runs twice
+# hourly London St Pancras - Corby, calling at Luton Airport Parkway, Luton,
+# Bedford, Wellingborough and Kettering along the way; Luton Airport Parkway
+# is a stop partway along, not the terminus. Kept the task's `emr-connect`
+# id/name (it's this task's stable identifier per the plan), but the station
+# list below reflects the real route rather than the brief's provisional
+# one. Cost if wrong: bounded - if a future check finds some EMR Connect
+# workings genuinely short-turn before Corby, this just needs the tail
+# station(s) trimmed, not a redesign of the shared-trunk decision below.
+#
+# --- Segment-sharing decision vs. emr-midland-main-line.toml ---
+# Because the real route runs St Pancras - Corby rather than terminating at
+# Luton Airport Parkway, EVERY intermediate station on this line
+# (LTN/LUT/BDM/WEL/KET) already appears in `emr-midland-main-line.toml`,
+# under its `emr-mml-south` (STP-BDM) and `emr-mml-trunk` (WEL-KET-...)
+# segments respectively - this is a genuine shared trunk, not a
+# station-only overlap (both services run the same electrified Midland
+# Main Line metals). Per the swr-alton.toml precedent (a small branch
+# reusing its bigger sibling's trunk segment name) and per this task's
+# brief, both segment names are reused verbatim rather than inventing new
+# ones, so an incident anywhere on St Pancras-Kettering propagates to both
+# `emr-connect` and `emr-midland-main-line` as MatchScope::SharedSegment.
+# Kettering is a junction in real life too (Glendon Junction, just north of
+# the station, is where the Corby branch leaves the Kettering-Sheffield
+# line - Wikipedia's "Kettering railway station" article), so per the
+# schema's shared-trunk rule of thumb it stays on the shared `emr-mml-trunk`
+# segment; the exclusive segment starts at the next (and last) station,
+# Corby, which does NOT appear in `emr-midland-main-line.toml` at all (that
+# file's northern arms go to Sheffield/Nottingham, not Corby) and is this
+# line's only genuinely exclusive territory. See the regression tests in
+# `crates/aggregator/src/matcher.rs` for both the shared-segment and
+# exclusive-segment cases.
+#
+# Station list, CRS codes and route topology: STP/LTN/LUT/BDM/WEL/KET are
+# already verified (with their own citations) in `emr-midland-main-line.toml`
+# and reused here unchanged - same physical stations, same TOC. COR (Corby)
+# is newly verified this task: CRS code COR confirmed via Wikipedia's
+# "Corby railway station" infobox, cross-checked against National Rail
+# Enquiries' own station page (nationalrail.co.uk/stations/COR). No TIPLOC
+# is given for COR - not listed in Wikipedia's infobox, and per the "don't
+# invent" rule it's omitted rather than guessed.
+[[stations]]
+crs = "STP"
+tiploc = "STPX"  # reused from emr-midland-main-line.toml/thameslink-core.toml
+role = "terminus"
+segment = "emr-mml-south"
+
+[[stations]]
+crs = "LTN"
+role = "minor"
+segment = "emr-mml-south"
+# Luton Airport Parkway.
+
+[[stations]]
+crs = "LUT"
+role = "minor"
+segment = "emr-mml-south"
+# Luton.
+
+[[stations]]
+crs = "BDM"
+role = "junction"
+segment = "emr-mml-south"
+# Bedford: last station of the emr-mml-south segment (see ruling above);
+# also the boundary emr-midland-main-line.toml uses.
+
+[[stations]]
+crs = "WEL"
+role = "minor"
+segment = "emr-mml-trunk"
+# Wellingborough.
+
+[[stations]]
+crs = "KET"
+role = "junction"
+segment = "emr-mml-trunk"
+# Kettering: Glendon Junction (just north of the station) is where the
+# Corby branch diverges from the Kettering-Sheffield line. Junction station
+# stays on the shared trunk segment per the schema's rule of thumb; the
+# exclusive segment starts at the next station, Corby.
+
+[[stations]]
+crs = "COR"
+role = "terminus"
+segment = "emr-connect-corby"
+# Corby: this line's only exclusive station - not present in
+# `emr-midland-main-line.toml` (whose northern arms serve Sheffield and
+# Nottingham, not Corby) or in any other file in this catalogue at
+# authoring time. Segment name is scoped to this file (`emr-connect-`
+# prefix) since it is not shared with anything.
