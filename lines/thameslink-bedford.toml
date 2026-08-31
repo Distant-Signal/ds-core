@@ -1,0 +1,200 @@
+id = "thameslink-bedford"
+name = "Thameslink Bedford Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["TL"]
+
+# Most northbound Thameslink services from the core terminate at Bedford;
+# a small number turn back short (e.g. at St Albans City or Luton) but that
+# specific turnback pattern wasn't independently confirmed to this batch's
+# two-source bar, so it's omitted rather than guessed at (see
+# destination_crs_filter note below).
+destination_crs_filter = ["BDM"]
+sample_stations = ["STP", "SAC", "BDM"]
+# "Thameslink Bedford" is used cautiously - this file does NOT rely on the
+# "Bedford to Brighton" branding southern-brighton-main-line.toml's own
+# header flags as Wikipedia-only/unconfirmed-to-this-batch's-bar; that
+# phrase belongs to Task 5.14's southern-branch decision, not this file.
+match_keywords = ["Thameslink Bedford"]
+
+# Commuter line: tighter thresholds, matching thameslink-core.toml.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list and CRS codes confirmed station-by-station via each station's
+# own Wikipedia infobox ("Station code: XXX"), cross-checked against a
+# second source for every code: railwaycodes.org.uk's crs*.shtm tables
+# (CRSk/CRSw/CRSh/CRSe/CRSr/CRSs/CRSl.shtm - reachable and loaded fully for
+# these) for KTN/WHP/HEN/ELS/RDT/SAC/HPD/LTN/LUT/LEA/HLN/BDM, and
+# nationalrail.co.uk's own station detail pages (which name-and-code each
+# station in their page heading, e.g. "Cricklewood (CRI)") for CRI and BCZ,
+# whose railwaycodes.org.uk page section didn't load a matching row via the
+# fetch tool used for this task. STP/STPX is already verified in
+# thameslink-core.toml and reused unchanged.
+#
+# Ordering (Bedford to St Pancras, i.e. north to south, mirroring
+# thameslink-core.toml's own "ordered north to south" convention so the two
+# files read as one continuous journey) was cross-checked station-by-station
+# using each intermediate station's own Wikipedia infobox route diagram
+# (preceding-station/following-station fields), not just a single article's
+# route list:
+#   Bedford -> Flitwick -> Harlington -> Leagrave -> Luton ->
+#   Luton Airport Parkway -> Harpenden -> St Albans City -> Radlett ->
+#   Elstree & Borehamwood -> Mill Hill Broadway -> Hendon ->
+#   Brent Cross West -> Cricklewood -> West Hampstead Thameslink ->
+#   Kentish Town -> St Pancras International.
+# Brent Cross West (BCZ) is a genuinely new station (opened 10 Dec 2023,
+# confirmed via its own Wikipedia infobox and independently via
+# nationalrail.co.uk, which also names it "managed by Thameslink") between
+# Cricklewood and Hendon - it postdates most general-knowledge route
+# descriptions of this line and is easy to miss; it is included here because
+# it was independently confirmed to the required bar.
+#
+# NOT included, omitted rather than guessed: any turn-back/short-working
+# pattern short of Bedford (e.g. peak extras terminating at St
+# Albans City or Luton) - plausible but not confirmed to this batch's bar in
+# the time available, so destination_crs_filter above only lists the
+# terminus, BDM.
+#
+# ============================================================================
+# SEGMENT NAMING - REQUIRED CITATION FOR BATCH 7, TASK 7.1
+# ============================================================================
+# Every station on this file, Bedford through St Pancras International
+# (STP) inclusive, is on a single segment named `mml-bedford-st-pancras`.
+# This is deliberately the SAME physical Midland Main Line infrastructure
+# the gap analysis
+# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "East
+# Midlands Railway (EMR)" section, part (c)) says EMR's Midland Main Line
+# will need for its own Bedford-St Pancras section: "MML's southern
+# (Bedford-St Pancras) section is the same infrastructure Thameslink's
+# northern branch would need - direct dependency."
+#
+# THIS SEGMENT NAME (`mml-bedford-st-pancras`) COVERS BEDFORD-ST PANCRAS AND
+# IS SHARED INFRASTRUCTURE WITH EMR'S MIDLAND MAIN LINE
+# (`lines/emr-midland-main-line.toml`, Batch 7, Task 7.1 - not yet written
+# in this worktree; that task is required by its own plan text to cite this
+# segment name). Batch 7's implementer: reuse `mml-bedford-st-pancras`
+# verbatim for whichever of your own Bedford-St Pancras stations you
+# confirm sit on this same physical corridor, so the matcher treats an
+# incident there as SharedSegment for both lines. Do not rename it
+# independently - a mismatched name here would silently produce
+# station-overlap-only behaviour instead of the genuine shared trunk both
+# files intend.
+#
+# No shared-segment regression test for the EMR pairing is added in THIS
+# file/worktree: lines/emr-midland-main-line.toml does not exist here yet,
+# so a matcher test asserting propagation to it would fail to compile/run.
+# That test is Batch 7's responsibility to add once its own file exists.
+#
+# STP is ALSO thameslink-core.toml's own terminus (its own `thameslink-core`
+# segment) and southeastern-highspeed.toml's own terminus (its own
+# `hs1-domestic` segment, purpose-built HS1 infrastructure). This file
+# deliberately does NOT reuse either of those segment names at STP: this
+# file doesn't touch any of thameslink-core's other stations
+# (Farringdon/City Thameslink/Blackfriars/London Bridge - this branch
+# diverges from the core northwards, it doesn't run through the core
+# tunnel), and doesn't touch HS1 at all. Reusing either name verbatim would
+# incorrectly mark those untouched stations as SharedSegment too - the
+# exact trap southeastern-highspeed.toml's own header comment already flags
+# for `seml-coast`/`chatham-medway`. So STP is station overlap only between
+# all three files (thameslink-core, thameslink-bedford,
+# southeastern-highspeed), each keeping its own segment name, matching this
+# batch's LBG/AFK precedent.
+#
+# Ordered north to south, from Bedford down to the St Pancras junction with
+# the Thameslink core.
+[[stations]]
+crs = "BDM"
+role = "terminus"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "FLT"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "HLN"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "LEA"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "LUT"
+role = "major"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "LTN"
+role = "major"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "HPD"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "SAC"
+role = "junction"
+segment = "mml-bedford-st-pancras"
+# Also a junction for the separate Abbey Line branch to St Albans Abbey
+# (a different line, not covered by this file).
+
+[[stations]]
+crs = "RDT"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "ELS"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "MIL"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "HEN"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "BCZ"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "CRI"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "WHP"
+role = "major"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "KTN"
+role = "minor"
+segment = "mml-bedford-st-pancras"
+
+[[stations]]
+crs = "STP"
+tiploc = "STPX"
+role = "junction"
+segment = "mml-bedford-st-pancras"
+# Station overlap only with thameslink-core.toml and
+# southeastern-highspeed.toml here - see SEGMENT NAMING comment above.
+# Trains continue south into the Thameslink core tunnel towards
+# Farringdon/Blackfriars/London Bridge and beyond.

@@ -1,0 +1,246 @@
+id = "southeastern-hayes-line"
+name = "Hayes Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SE"]
+
+sample_stations = ["CHX", "LEW", "ELE", "HYS"]
+match_keywords = ["Hayes line"]
+
+# REVIEW FIX (final whole-branch review of this batch): four entries were
+# REMOVED from this list - "South Eastern Main Line", "Dartford Loop line",
+# "Bexleyheath line" and "Sidcup line".
+#
+# The original rationale written here was that "an operator-only 'SE'
+# incident that happens to name another Southeastern route explicitly
+# shouldn't also tag this file". That rationale does not hold up:
+# `lines_affected_by` in crates/aggregator/src/matcher.rs already drops
+# every `OperatorOnly` match whenever any precise match exists, and this
+# file's own `match_keywords` is just ["Hayes line"], so no KeywordOnly
+# false positive was possible either. The only LIVE effect these entries had
+# was on the station-hit path - and there they were actively harmful.
+#
+# `is_excluded` is a HARD VETO evaluated BEFORE station matching, so it
+# vetoes a line even when the incident lists a CRS genuinely on that line.
+# All four removed entries pointed at sibling files this file really does
+# share stations with: southeastern-main-line.toml shares CHX/LBG, and
+# southeastern-metro-north-kent.toml (which owns all three of the "Dartford
+# Loop line"/"Bexleyheath line"/"Sidcup line" names - see SCOPE above)
+# shares CHX/LBG/LEW. An incident like "Disruption between London Bridge and
+# Lewisham affecting the Hayes line and the Dartford Loop line" with
+# `affected_stations = ["LEW"]` therefore vetoed BOTH this file and
+# southeastern-metro-north-kent.toml at once - each excluded the other's
+# name - returning zero matches for exactly the multi-line incident these
+# two files were written to model. Station-CRS matching already gives the
+# correct, precise signal here; see
+# lew_station_overlap_matches_hayes_line_and_senk_... and
+# sibling_line_names_no_longer_veto_a_shared_station_hit in matcher.rs.
+#
+# The remaining entries are kept because they cause none of that harm
+# (verified station-by-station against each sibling's own CRS list):
+#   - "Chatham Main Line": southeastern-chatham.toml shares no station at
+#     all with this file.
+#   - "Javelin"/"High Speed 1": southeastern-highspeed.toml likewise shares
+#     no station with this file.
+#   - "North Kent Line": no file in this catalogue models that line yet, so
+#     it is a forward-looking placeholder with zero current risk.
+excluded_keywords = [
+    "Chatham Main Line",
+    "North Kent Line",
+    "Javelin",
+    "High Speed 1",
+]
+
+# Commuter/metro line: tighter thresholds, matching thameslink-core.toml,
+# elizabeth-shenfield.toml and southeastern-metro-north-kent.toml - frequent
+# short-hop services where a 4-minute delay on a short-interval service is
+# more disruptive than the same delay on an hourly long-distance one.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE - deviation from this task's literal "southeastern-metro-south-
+# london.toml" (Sidcup, Hayes) framing, and from the plan's own phrasing
+# ============================================================================
+# Task 5.4's own research (independently re-verified in that task's review
+# via a live source-check, not just claimed) already established that
+# "Sidcup line" is not a fourth, separate route - it's Wikipedia's own
+# stated informal/colloquial alias for the Dartford Loop Line, and is fully
+# covered by southeastern-metro-north-kent.toml's `senk-dartford-loop`
+# segment (HGR/LEE/MTG/NEH/SID/AYP/BXY/CRY/DFD). Re-deriving a duplicate
+# "Sidcup" station list here would violate the "one line per file" /
+# no-duplication rule in COMMON.md. The Hayes line, by contrast, IS a
+# genuinely separate, differently-numbered route confirmed by its own
+# Wikipedia article (own independent verification below), diverging from
+# the South Eastern formation at Lewisham. So this file's real, correct
+# scope is Hayes-only; no third, distinct south-London service group beyond
+# Hayes and Dartford Loop/Sidcup/Bexleyheath was found during this file's
+# own research either. Filed as `southeastern-hayes-line.toml` rather than
+# the plan's literal `southeastern-metro-south-london.toml` title, since a
+# "south London metro" file that covers exactly one line reads as
+# misleading about its own scope; this matches this batch's other files'
+# practice of naming the file after the one route it actually documents
+# (`southeastern-main-line.toml`, `southeastern-chatham.toml`, etc.) rather
+# than the broader multi-line grouping the plan's phrasing suggested before
+# research narrowed it down.
+#
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list and route geography: Wikipedia's "Hayes line" article
+# (infobox: start = Lewisham, end = Hayes, stations = 10), cross-checked
+# against the article's own {{Hayes Line}} navigation template and
+# individual station articles. The raw wikitext of the "Infobox rail line"
+# confirms "stations = 10", which matches exactly: Lewisham, Ladywell,
+# Catford Bridge, Lower Sydenham, New Beckenham, Clock House, Elmers End,
+# Eden Park, West Wickham, Hayes.
+#
+# Two stations initially appeared to belong on the route but were confirmed
+# NOT to be genuine Hayes line calling points, each checked against a
+# second, independent source:
+#   - Beckenham Junction: sits geographically between New Beckenham and
+#     Clock House, and is served by other Southeastern/Southern services,
+#     but New Beckenham railway station's own Wikipedia article states
+#     plainly that "the spur between New Beckenham and Beckenham Junction
+#     (the original 1857 route) was reduced to single track in 1987" and
+#     gives New Beckenham's own next station as Clock House - i.e. the
+#     Hayes line bypasses Beckenham Junction via a different (non-branch)
+#     alignment. Including "stations = 10" in the infobox count only works
+#     if Beckenham Junction is excluded, confirming this reading.
+#   - Catford (as distinct from Catford Bridge): this is a station on the
+#     physically separate Catford Loop Line (Thameslink's Sevenoaks
+#     service, Nunhead - Crofton Park - Catford - Bellingham - ... -
+#     Shortlands - already documented in southeastern-metro-north-kent.toml's
+#     own FINDING 2), not the Hayes line; the two stations sit close
+#     together but are on different tracks.
+#
+# CRS codes: LEW confirmed in southeastern-metro-north-kent.toml already;
+# LAD, CFB, ELE, EDN, WWI, HYS confirmed via railwaycodes.org.uk's crs*.shtm
+# tables. LSY (Lower Sydenham) and CLK (Clock House) are alphabetised under
+# "S"/"C" by their full names in a way the fetched table excerpts didn't
+# reach, so - matching this batch's established fallback (see
+# southeastern-metro-north-kent.toml's own sourcing comment) - both were
+# instead confirmed via two independent sources each: their own Wikipedia
+# infobox AND nationalrail.co.uk's station-details page.
+#
+# NBC (New Beckenham) was confirmed via railwaycodes.org.uk's crsn.shtm
+# table and cross-checked against its own Wikipedia infobox, which also
+# supplied the Beckenham Junction spur/bypass fact above.
+#
+# ============================================================================
+# SEGMENT DECISION - CHX/LBG/LEW vs southeastern-lewisham-corridor
+# ============================================================================
+# southeastern-metro-north-kent.toml (Task 5.4) names `southeastern-
+# lewisham-corridor` for its own CHX/CST/LBG/NWX/SAJ/LEW stretch and invites
+# this file to reuse that name verbatim if the Hayes line's own London-end
+# route genuinely matches that same trunk. It does NOT: the Southeastern
+# TOC's own Wikipedia article gives the Hayes line's calling points as
+# "Waterloo East, London Bridge, Lewisham" with no New Cross or St Johns
+# stop, and St Johns railway station's own Wikipedia article explicitly
+# lists which Southeastern metro routes call there (the Bexleyheath/Sidcup/
+# North Kent group) while stating the Hayes line is NOT among them. So this
+# file's own London-end stations (CHX, LBG, LEW) are a different, smaller
+# set than the six-station corridor senk documents, and no source available
+# confirms the two runs share the same physical tracks through New Cross/
+# St Johns rather than running on separate fast/local pairs that happen to
+# pass through the same station buildings - the same standard of evidence
+# (or lack of it) that senk's own FINDING 2 already applied to decline a
+# Thameslink shared-trunk claim through this exact area. So CHX, LBG and
+# LEW are treated as station overlap only, not a shared segment - given
+# this file's own name for its own short London-approach stretch:
+# `hayes-london`. Cannon Street (CST) is not included at all: every source
+# checked describes Hayes line services as starting from Charing Cross via
+# Waterloo East only, never Cannon Street.
+#
+# Per the shared-trunk rule of thumb, LEW (the diverging junction) stays on
+# `hayes-london`; the exclusive `hayes-branch` segment starts at the next
+# station, Ladywell.
+[[stations]]
+crs = "CHX"
+role = "terminus"
+segment = "hayes-london"
+# Also southeastern-main-line.toml's and southeastern-metro-north-kent.toml's
+# terminus - station overlap only, not a shared segment; see header comment.
+
+[[stations]]
+crs = "LBG"
+role = "major"
+segment = "hayes-london"
+# Also on southeastern-main-line.toml's `seml-london`, thameslink-core.toml's
+# terminus, and southeastern-metro-north-kent.toml's
+# `southeastern-lewisham-corridor` - four-way station overlap, no shared
+# segment, per the xc-south-coast.toml/xc-manchester.toml precedent (and
+# this batch's own established practice for this exact station).
+
+[[stations]]
+crs = "LEW"
+role = "junction"
+segment = "hayes-london"
+# Lewisham. Hayes line trains reach here fast from London Bridge without
+# calling at New Cross/St Johns (see header comment); the Dartford Loop/
+# Bexleyheath group's own trunk (southeastern-metro-north-kent.toml) and the
+# North Kent Line also diverge/join here, neither sharing a segment name
+# with this file - station overlap only.
+
+# --- Hayes line's own exclusive branch (diverges south from Lewisham via
+# the Courthill Loop) ---
+[[stations]]
+crs = "LAD"
+role = "minor"
+segment = "hayes-branch"
+# Ladywell.
+
+[[stations]]
+crs = "CFB"
+role = "minor"
+segment = "hayes-branch"
+# Catford Bridge - distinct from "Catford" station on the physically
+# separate Catford Loop Line (see header comment).
+
+[[stations]]
+crs = "LSY"
+role = "minor"
+segment = "hayes-branch"
+# Lower Sydenham.
+
+[[stations]]
+crs = "NBC"
+role = "minor"
+segment = "hayes-branch"
+# New Beckenham. Beckenham Junction is not a Hayes line calling point - the
+# spur from here toward Beckenham Junction was reduced to single track in
+# 1987 and is not part of the passenger route this line follows onward to
+# Clock House (see header comment).
+
+[[stations]]
+crs = "CLK"
+role = "minor"
+segment = "hayes-branch"
+# Clock House.
+
+[[stations]]
+crs = "ELE"
+role = "minor"
+segment = "hayes-branch"
+# Elmers End. Also a Tramlink interchange (London Trams), and the former
+# junction for the Addiscombe branch, closed 1997 and converted to Tramlink
+# - neither a National Rail line, so not treated as a "junction" role here.
+
+[[stations]]
+crs = "EDN"
+role = "minor"
+segment = "hayes-branch"
+# Eden Park.
+
+[[stations]]
+crs = "WWI"
+role = "minor"
+segment = "hayes-branch"
+# West Wickham.
+
+[[stations]]
+crs = "HYS"
+role = "terminus"
+segment = "hayes-branch"
+# Hayes (Kent).

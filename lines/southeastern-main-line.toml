@@ -1,0 +1,169 @@
+id = "southeastern-main-line"
+name = "South Eastern Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SE"]
+
+sample_stations = ["TON", "AFK", "DVP"]
+match_keywords = ["South Eastern Main Line"]
+
+# Southeastern also operates the Hastings line (Tonbridge - Tunbridge Wells -
+# Battle - Hastings), a distinct historic route with its own Wikipedia
+# article that diverges well before/away from this line's stations and
+# shares no station with this file, so a bare "Southeastern"/operator-only
+# match on it shouldn't also tag this file. The Hastings line via Tunbridge
+# Wells currently has no line-catalogue task anywhere in this plan and is a
+# known coverage gap.
+#
+# REVIEW FIX (final whole-branch review of this batch): "Chatham Main Line"
+# was removed from this list. southeastern-chatham.toml (Task 5.2) and this
+# file both terminate at Dover Priory (DVP is listed in both files'
+# `[[stations]]`), and `is_excluded` in crates/aggregator/src/matcher.rs is
+# a HARD VETO evaluated BEFORE station matching - so an incident naming both
+# routes with `affected_stations = ["DVP"]` was being silently vetoed on
+# both files at once, returning zero matches where two correct StationHit/
+# ExclusiveSegment matches belonged. The entry also bought nothing: an
+# `OperatorOnly` "SE" match is already dropped by `lines_affected_by`
+# whenever any precise match exists, and this file's own `match_keywords`
+# is just ["South Eastern Main Line"], so no KeywordOnly false positive was
+# possible either. Station-CRS matching already disambiguates DVP correctly
+# (see chatham_dover_branch_incident_does_not_propagate_to_seml in
+# matcher.rs). "Hastings line" stays: no file in the catalogue models that
+# route, and it shares no station with this file, so it causes no such harm.
+excluded_keywords = ["Hastings line"]
+
+# Charing Cross/Cannon Street, via Sevenoaks and Tonbridge, to Ashford
+# International, then via Folkestone to Dover Priory. Ordered London to
+# Dover. Verified against Wikipedia's "South Eastern Main Line" article
+# cross-checked with railwaycodes.org.uk's CRS/mileage data (Westenhanger
+# 64m15ch, Sandling 65m36ch from Charing Cross, confirming their order) and
+# a second web search confirming Ashford International = AFK and
+# Staplehurst = SPU (railwaycodes.org.uk's own site fetch mis-rendered both
+# of those two codes; the National Rail Enquiries / ABC Railway Guide /
+# railwaydata.co.uk figures agree with each other and were used instead).
+#
+# The plan's brief for this task describes the route as splitting "toward
+# Dover Priory and toward Hastings" past Ashford. That doesn't hold up:
+# Wikipedia treats "South Eastern Main Line" as the Charing Cross/Cannon
+# Street - Tonbridge - Ashford - Folkestone - Dover Priory route only. The
+# Hastings line is a separate route diverging much earlier, at Tonbridge,
+# via Tunbridge Wells - not a fork past Ashford. (There is also a lightly
+# used Ashford-Hastings service over the Marshlink line via Rye, but that's
+# a different, minor route, not the primary Hastings corridor, and Marshlink
+# is not documented as SE's usual booked route to Hastings in the sources
+# checked here.) This file therefore covers only the Dover Priory leg and
+# omits Hastings entirely, rather than folding two divergent corridors into
+# one file (the swr-south-west-main.toml precedent this task's brief points
+# to is for a same-direction Bournemouth/Weymouth fork, not this case).
+#
+# Suburban stopping-pattern stations between London Bridge and Orpington
+# (New Cross, Hither Green, Grove Park, Chislehurst, Petts Wood, etc.) are
+# omitted pending CRS verification of the exact fast-line calling order,
+# and because they sit more naturally with this batch's forthcoming
+# Southeastern metro files (southeastern-metro-north-kent.toml /
+# southeastern-metro-south-london.toml, Tasks 5.4/5.5) than with this
+# main-line spine.
+#
+# LBG is also served by Thameslink (`thameslink-core.toml`, whose own
+# segment ends at LBG) but via a physically different route (the Thameslink
+# core tunnel through Blackfriars/Farringdon, not the Kent lines this file
+# covers into LBG's south-eastern platforms) - station overlap only, no
+# segment sharing, per the xc-south-coast.toml/xc-manchester.toml precedent.
+#
+# No sibling Southeastern file exists yet in this catalogue (this is the
+# first), so none of this file's segments are shared with another line
+# today. AFK (Ashford International) is where HS1 domestic and the
+# Maidstone East line join, and the Canterbury West and Marshlink lines
+# diverge; it's kept on `seml-weald` (the segment ending there) rather than
+# `seml-coast`, following the junction-belongs-to-the-trunk convention in
+# SCHEMA.md, in case a future HS1/Chatham file wants to share a trunk
+# segment name up to and including AFK.
+[[stations]]
+crs = "CHX"
+role = "terminus"
+segment = "seml-london"
+
+[[stations]]
+crs = "CST"
+role = "terminus"
+segment = "seml-london"
+
+[[stations]]
+crs = "LBG"
+role = "major"
+segment = "seml-london"
+
+[[stations]]
+crs = "ORP"
+role = "major"
+segment = "seml-london"
+
+[[stations]]
+crs = "SEV"
+role = "major"
+segment = "seml-weald"
+
+[[stations]]
+crs = "TON"
+role = "junction"
+segment = "seml-weald"
+# Hastings line diverges here (via Tunbridge Wells); Redhill-Tonbridge
+# line joins here from the west. Neither is covered by this catalogue yet.
+
+[[stations]]
+crs = "PDW"
+role = "minor"
+segment = "seml-weald"
+# Medway Valley line diverges here.
+
+[[stations]]
+crs = "MRN"
+role = "minor"
+segment = "seml-weald"
+
+[[stations]]
+crs = "SPU"
+role = "minor"
+segment = "seml-weald"
+
+[[stations]]
+crs = "HCN"
+role = "minor"
+segment = "seml-weald"
+
+[[stations]]
+crs = "PLC"
+role = "minor"
+segment = "seml-weald"
+
+[[stations]]
+crs = "AFK"
+role = "junction"
+segment = "seml-weald"
+# HS1 domestic and the Maidstone East line join here; the Canterbury
+# West (to Ramsgate) and Marshlink (to Hastings) lines diverge here.
+
+[[stations]]
+crs = "WHA"
+role = "minor"
+segment = "seml-coast"
+
+[[stations]]
+crs = "SDG"
+role = "minor"
+segment = "seml-coast"
+
+[[stations]]
+crs = "FKW"
+role = "minor"
+segment = "seml-coast"
+
+[[stations]]
+crs = "FKC"
+role = "major"
+segment = "seml-coast"
+
+[[stations]]
+crs = "DVP"
+role = "terminus"
+segment = "seml-coast"

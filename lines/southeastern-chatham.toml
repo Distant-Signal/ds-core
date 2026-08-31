@@ -1,0 +1,287 @@
+id = "southeastern-chatham"
+name = "Chatham Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SE"]
+
+sample_stations = ["VIC", "CTM", "RAM", "DVP"]
+match_keywords = ["Chatham Main Line"]
+
+# "Hastings line" is a distinct, separate Southeastern corridor (diverging
+# from the SEML at Tonbridge, not from anywhere on this line) that shares no
+# station with this file, so an operator-only "SE" incident naming it
+# explicitly shouldn't also tag this file.
+#
+# REVIEW FIX (final whole-branch review of this batch): "South Eastern Main
+# Line" was removed from this list. southeastern-main-line.toml (Task 5.1)
+# and this file both terminate at Dover Priory - DVP is listed in both
+# files' `[[stations]]` (see the DVP comment below) - and `is_excluded` in
+# crates/aggregator/src/matcher.rs is a HARD VETO evaluated BEFORE station
+# matching, so an incident naming both routes with
+# `affected_stations = ["DVP"]` was silently vetoed on both files at once,
+# returning zero matches instead of the two correct ones. The entry bought
+# nothing either: `lines_affected_by` already drops every `OperatorOnly`
+# match whenever any precise match exists, and this file's own
+# `match_keywords` is just ["Chatham Main Line"], so no KeywordOnly false
+# positive was possible. Station-CRS matching already disambiguates DVP
+# correctly (see chatham_dover_branch_incident_does_not_propagate_to_seml
+# in matcher.rs). "Hastings line" stays - no file models that route and it
+# shares no station here, so it causes none of the above harm.
+excluded_keywords = ["Hastings line"]
+
+# London Victoria to Ramsgate and Dover Priory via Herne Hill, Bromley
+# South and the Medway towns (Chatham, Gillingham). Ordered London to
+# Kent coast. Verified against Wikipedia's "Chatham Main Line" article
+# (lead sentence: "a railway line in England between London Victoria, and
+# Dover Priory and Ramsgate... via the Medway towns") cross-checked against
+# railwaycodes.org.uk's CRS-code tables (crs/crsb.shtm, crsc.shtm,
+# crsd.shtm, crsf.shtm, crsg.shtm, crsh.shtm, crsk.shtm, crsl.shtm,
+# crsm.shtm, crsr.shtm, crss.shtm) and, for codes that page truncated
+# before reaching (Bromley South, Broadstairs, Swanley, Sole Street,
+# Strood, Sittingbourne, Snowdown, Teynham, Westgate-on-Sea, Whitstable,
+# Adisham, Aylesham, Shepherds Well), the individual station's own
+# Wikipedia infobox instead.
+#
+# One code conflict was found and resolved the same way Task 5.1 flagged
+# for Staplehurst/Ashford International: railwaycodes.org.uk's crsr.shtm
+# fetch rendered Rochester (Kent) as "ROC", but Rochester's own Wikipedia
+# infobox states "RTR" and explicitly confirms itself as "on the Chatham
+# Main Line... between Sole Street and Chatham". RTR is used here as the
+# better-attested code from a direct station-specific source.
+#
+# Route geography: this is not a simple two-way fork. Past Faversham the
+# route splits into (a) the coastal loop via Whitstable/Herne Bay/
+# Birchington/Westgate-on-Sea/Margate/Broadstairs to Ramsgate, which in
+# reality continues on round the coast via Minster/Sandwich/Deal/Walmer/
+# Martin Mill to rejoin the direct route at Dover, and (b) the direct
+# inland route via Canterbury East/Bekesbourne/Adisham/Aylesham/Snowdown/
+# Shepherds Well/Kearsney to Dover Priory. The Minster-to-Martin Mill leg
+# of the coastal loop (Ramsgate onward to Dover) could not be confirmed to
+# this file's sourcing standard in the time available - no second source
+# was cross-checked for that stretch's exact station list/CRS codes - so
+# it is omitted; this file treats Ramsgate as the confirmed limit of the
+# coastal branch rather than guess at the remainder of the loop. This
+# matches the plan's own "Ramsgate/Dover" phrasing without inventing the
+# unconfirmed middle section.
+#
+# Both eastern branches are covered in this ONE file (unlike Task 5.1's
+# Hastings-line exclusion) because Wikipedia's own "Chatham Main Line"
+# article treats Victoria-to-Dover-Priory-and-Ramsgate as a single route
+# with a late split at Faversham, not two separately-named corridors the
+# way SEML and the Hastings line are.
+#
+# Branches not covered by this catalogue, noted where they diverge:
+# Bromley North branch (from Bickley), Maidstone East line (from Swanley),
+# North Kent Line (from Strood), Sheerness Line (from Sittingbourne), and
+# the Catford Loop Line alternative Victoria routing (from Shortlands, via
+# Catford/Peckham Rye rather than Herne Hill/Brixton).
+#
+# Suburban/slow-line stopping-pattern stations between Herne Hill and
+# Bromley South (West Dulwich, Sydenham Hill, Penge East, Kent House) are
+# omitted, same reasoning as southeastern-main-line.toml's LBG-Orpington
+# omission: unconfirmed fast/slow calling pattern, and they sit more
+# naturally with this batch's forthcoming Southeastern metro files.
+#
+# DVP (Dover Priory) is also the southeastern-main-line.toml terminus, but
+# the two lines approach it from physically different directions (this
+# line via Kearsney from the north; SEML via Folkestone from the
+# southeast) that only converge at the station itself - station overlap
+# only, no segment sharing, per the xc-south-coast.toml/xc-manchester.toml
+# precedent (and the same judgment southeastern-main-line.toml already
+# made for LBG/Thameslink).
+#
+# This is the second Southeastern file in the catalogue; none of its
+# segments are shared with southeastern-main-line.toml's seml-* segments
+# today. Segment names use a "chatham-" prefix (matching the file id) -
+# the brief for this task doesn't require reusing seml-*'s abbreviation
+# style, only internal consistency, and "chatham-" also matches this
+# catalogue's more common full-word-prefix convention (northern-*,
+# elizabeth-*, wcml-*, xc-*, swr-*).
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "chatham-london"
+
+[[stations]]
+crs = "HNH"
+role = "major"
+segment = "chatham-london"
+# Also reachable via the Catford Loop Line (Shortlands - Catford - Peckham
+# Rye), an alternative Victoria routing not covered by this catalogue.
+
+[[stations]]
+crs = "BKJ"
+role = "major"
+segment = "chatham-london"
+
+[[stations]]
+crs = "SRT"
+role = "junction"
+segment = "chatham-london"
+# Catford Loop Line diverges here (alternative Victoria routing, above).
+
+[[stations]]
+crs = "BMS"
+role = "major"
+segment = "chatham-london"
+
+[[stations]]
+crs = "BKL"
+role = "junction"
+segment = "chatham-london"
+# Bromley North branch diverges here; not covered by this catalogue.
+
+[[stations]]
+crs = "SMY"
+role = "junction"
+segment = "chatham-london"
+# Cannon Street services diverge here onto the South Eastern Main Line
+# near Chislehurst (a different physical route - no segment shared).
+
+[[stations]]
+crs = "SAY"
+role = "junction"
+segment = "chatham-london"
+# Maidstone East line diverges here; not covered by this catalogue.
+
+[[stations]]
+crs = "LGF"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "MEP"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "SOR"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "SOO"
+role = "junction"
+segment = "chatham-medway"
+# North Kent Line joins here; not covered by this catalogue.
+
+[[stations]]
+crs = "RTR"
+role = "major"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "CTM"
+role = "major"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "GLM"
+role = "major"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "RAI"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "SIT"
+role = "junction"
+segment = "chatham-medway"
+# Sheerness Line diverges here; not covered by this catalogue.
+
+[[stations]]
+crs = "TEY"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "FAV"
+role = "junction"
+segment = "chatham-medway"
+# Route splits here: coastal loop toward Margate/Ramsgate (chatham-coastal)
+# and direct inland route toward Canterbury East/Dover (chatham-dover).
+
+[[stations]]
+crs = "WHI"
+role = "minor"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "HNB"
+role = "major"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "BCH"
+role = "minor"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "WGA"
+role = "minor"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "MAR"
+role = "major"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "BSR"
+role = "major"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "DMP"
+role = "minor"
+segment = "chatham-coastal"
+
+[[stations]]
+crs = "RAM"
+role = "major"
+segment = "chatham-coastal"
+# Not a physical terminus - the coastal loop continues to Dover Priory via
+# Deal/Sandwich (omitted; see the route-geography comment above). Treated
+# as this branch's confirmed limit for this file.
+
+[[stations]]
+crs = "CBE"
+role = "major"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "BKS"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "ADM"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "AYH"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "SWO"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "SPH"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "KSN"
+role = "minor"
+segment = "chatham-dover"
+
+[[stations]]
+crs = "DVP"
+role = "terminus"
+segment = "chatham-dover"

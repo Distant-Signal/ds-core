@@ -1,0 +1,340 @@
+id = "southern-coastway-west"
+name = "Coastway West Line"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "SN",  # Southern
+]
+
+sample_stations = ["WRH", "CCH", "PMH"]
+match_keywords = ["Coastway West", "West Coastway"]
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list and CRS codes confirmed via Wikipedia's "West Coastway line"
+# article plus each individual station's own Wikipedia article/infobox,
+# cross-checked against a real second source of the type COMMON.md
+# requires: nationalrail.co.uk's own per-station detail pages
+# (nationalrail.co.uk/stations/<CRS>/), which loaded fine and each show the
+# station's name and CRS code in their page heading (e.g. "Brighton (BTN)",
+# "Hove (HOV)"), for every station below except BTN/HAV/PMS/PMH (already
+# established via already-committed southern-coastway-east.toml and
+# swr-portsmouth-direct.toml respectively - not re-verified here, reused).
+# BAA (Barnham), BDH (Bedhampton), EMS (Emsworth), EWR (East Worthing) and
+# WBL (Warblington) additionally cross-check against railwaycodes.org.uk's
+# crs*.shtm pages, which loaded fully for those particular entries (several
+# other crs*.shtm pages hit the same alphabetical-page-truncation issue
+# already flagged in southern-brighton-main-line.toml's own sourcing
+# comment; nationalrail.co.uk was the fallback for those, same approach
+# southern-coastway-east.toml used).
+#
+# southernrailway.com (the TOC's own site) returned HTTP 403 to automated
+# fetches for this task too, same as Tasks 5.6/5.7 - not used.
+#
+# ============================================================================
+# ROUTE SCOPE - Brighton to Portsmouth only, not Southampton
+# ============================================================================
+# Wikipedia's own "West Coastway line" article scopes the line itself as
+# Brighton-Southampton Central (its infobox lists both as termini, and
+# describes Southern services running "Brighton and Southampton Central" in
+# addition to "Brighton and Portsmouth & Southsea"/"...Portsmouth Harbour").
+# This task's brief and the gap-analysis source both scope this file to
+# "Brighton-Portsmouth" only - so the Southampton continuation is left out
+# deliberately, mirroring how southern-coastway-east.toml deliberately left
+# Ore out of its own Brighton-Hastings scope. This is confirmed to be a
+# genuinely separate physical routing, not just an arbitrary cut: per the
+# raw wikitext route-diagram templates on Cosham's and Havant's own
+# Wikipedia articles (quoted structure, not just prose - a stronger read
+# than the usual prose-only Wikipedia sourcing), Southern's Havant-Cosham
+# "West Coastway line / Southampton services" pattern is its own listed
+# service entry, physically bypassing the Bedhampton/Hilsea/Fratton
+# approach into Portsmouth entirely (a chord via Portcreek Junction, not
+# modelled as a station in this catalogue - no CRS code, not a passenger
+# stop). So Fareham, Portchester and Cosham are not on this file's own
+# Brighton-Portsmouth route at all, and are left out rather than guessed
+# at further - a real coverage gap (Southampton via Fareham/Cosham/
+# Portsmouth), noted here rather than silently absorbed by this file.
+#
+# The Littlehampton branch (a short spur off Ford) and the Arun Valley Line
+# (Ford/Arundel Junction north toward Arundel/Pulborough/Horsham, not part
+# of this catalogue) are also left out for the same reason: per Ford's own
+# Wikipedia article, the Brighton-Portsmouth through service mostly runs
+# via the direct Angmering-Ford-Barnham alignment ("off-peak... 3 tph to
+# Brighton, 1 of these runs via Littlehampton" - i.e. two-thirds of the
+# direct service bypasses the Littlehampton loop). Neither Littlehampton
+# nor Arundel is listed as a station below.
+#
+# ============================================================================
+# STATION-OVERLAP AT BRIGHTON - southern-brighton-main-line.toml (Task 5.6)
+# and southern-coastway-east.toml (Task 5.7)
+# ============================================================================
+# Brighton (BTN) is also both of those files' own terminus - a third line
+# now sharing this one station. Per COMMON.md's "station overlap is fine,
+# segment-sharing is a deliberate choice" precedent (xc-south-coast.toml /
+# xc-manchester.toml, and southern-coastway-east.toml's own note about this
+# same station): this file's own segment at Brighton (`coastway-west-
+# brighton`) is a DIFFERENT segment name from both `southern-bml-victoria`/
+# `southern-bml-south` and `coastway-east-brighton`. All three lines
+# diverge immediately out of Brighton in three different directions - this
+# line heads west via Hove/Shoreham toward Worthing, the Brighton Main Line
+# heads north toward Preston Park/Gatwick/London, and Coastway East heads
+# east via London Road/Moulsecoomb toward Lewes - so this is a real
+# three-way station-level overlap only, not a shared trunk. No segment name
+# is reused between any of the three files.
+#
+# ============================================================================
+# STATION-OVERLAP CHECK - xc-south-coast.toml (checked, NO overlap found)
+# ============================================================================
+# The brief also asked to check for overlap with existing XC files. Checked
+# directly: xc-south-coast.toml's own [[stations]] list is BHM/COV/LMS/BAN/
+# OXF/RDG/BSK/WIN/SOU/BMH - its "South Coast" route runs Birmingham to
+# Bournemouth via Banbury/Oxford/Reading/Basingstoke/Winchester/Southampton,
+# terminating at Bournemouth, and never reaches Chichester, Havant, or any
+# other station this file lists. A repo-wide grep of every CRS code in this
+# file below against every `lines/*.toml` file confirms no overlap exists
+# with xc-south-coast.toml (or any other XC file) anywhere on this line -
+# the only two overlaps found in the whole catalogue are the Brighton and
+# Havant/Portsmouth ones documented elsewhere in this file.
+#
+# ============================================================================
+# STATION-OVERLAP AT HAVANT/PORTSMOUTH - swr-portsmouth-direct.toml
+# ============================================================================
+# This is the real, flagged overlap the brief asked to check (it named
+# swr-south-west-main.toml specifically, but that file's own station list
+# only reaches Basingstoke/Winchester/Southampton/Bournemouth/Poole/
+# Weymouth - no Portsmouth station at all, so no overlap exists there. The
+# actual overlap is with the already-committed swr-portsmouth-direct.toml,
+# which reaches Havant, Portsmouth & Southsea and Portsmouth Harbour via
+# its own route from Waterloo via Guildford).
+#
+# Per the raw wikitext route-diagram templates on Havant's own Wikipedia
+# article: Southern's West Coastway "stopping services" pattern runs
+# Warblington/Emsworth - Havant - Bedhampton - Hilsea (a limited-service
+# continuation) toward Portsmouth, physically the SAME Havant-Bedhampton-
+# Hilsea-Fratton-Portsmouth&Southsea-Portsmouth Harbour track
+# swr-portsmouth-direct.toml's own `swr-portsmouth-direct` segment already
+# covers (that file's own [[stations]] list already includes HAV, PMS and
+# PMH on that one segment). This is genuine physical track-sharing, not
+# just two lines arriving at the same station by coincidence.
+#
+# Even so, per the established convention already set by xc-south-coast.
+# toml/xc-manchester.toml - the only place in this whole catalogue where a
+# DIFFERENT operator's line runs over another operator's own metals -
+# segment names are reused across files ONLY between sibling lines of the
+# SAME operator's own branching network (swr-trunk-waterloo across
+# swr-south-west-main/swr-portsmouth-direct/swr-alton; xc-birmingham across
+# every CrossCountry arm; elizabeth-central across every Elizabeth line
+# branch). A different operator running over shared track is always
+# treated as station overlap only, matched by CRS code, never by reusing
+# the other file's segment name (xc-south-coast.toml's own header comment:
+# "claims neither line's segments... Incidents on the shared track still
+# match both lines by station"). SN and SW are different operators here,
+# so that precedent applies: HAV, BDH, HLS, FTN, PMS and PMH below use this
+# file's own `coastway-west-portsmouth` segment name, not
+# `swr-portsmouth-direct` - station overlap only at HAV/PMS/PMH (the three
+# stations both files actually list), no SharedSegment match asserted.
+#
+# ============================================================================
+# STATIONS - ordered west from Brighton. This is a stopping regional line
+# (like southern-coastway-east.toml), so every intermediate station on the
+# direct route is included, not just principal/interchange ones.
+# ============================================================================
+[[stations]]
+crs = "BTN"
+role = "terminus"
+segment = "coastway-west-brighton"
+# Brighton. Also southern-brighton-main-line.toml's and southern-coastway-
+# east.toml's own terminus - station overlap only, see above; all three
+# lines diverge immediately out of Brighton.
+
+[[stations]]
+crs = "HOV"
+role = "major"
+segment = "coastway-west-brighton"
+# Hove.
+
+[[stations]]
+crs = "AGT"
+role = "minor"
+segment = "coastway-west-brighton"
+# Aldrington.
+
+[[stations]]
+crs = "PLD"
+role = "minor"
+segment = "coastway-west-brighton"
+# Portslade.
+
+[[stations]]
+crs = "FSG"
+role = "minor"
+segment = "coastway-west-brighton"
+# Fishersgate.
+
+[[stations]]
+crs = "SWK"
+role = "minor"
+segment = "coastway-west-brighton"
+# Southwick.
+
+[[stations]]
+crs = "SSE"
+role = "minor"
+segment = "coastway-west-brighton"
+# Shoreham-by-Sea.
+
+[[stations]]
+crs = "LAC"
+role = "minor"
+segment = "coastway-west-brighton"
+# Lancing.
+
+[[stations]]
+crs = "EWR"
+role = "minor"
+segment = "coastway-west-brighton"
+# East Worthing.
+
+[[stations]]
+crs = "WRH"
+role = "major"
+segment = "coastway-west-brighton"
+# Worthing. Per its own Wikipedia article, "all timetabled trains stop
+# here" - principal intermediate station on this line.
+
+[[stations]]
+crs = "WWO"
+role = "minor"
+segment = "coastway-west-brighton"
+# West Worthing.
+
+[[stations]]
+crs = "DUR"
+role = "minor"
+segment = "coastway-west-brighton"
+# Durrington-on-Sea.
+
+[[stations]]
+crs = "GBS"
+role = "minor"
+segment = "coastway-west-brighton"
+# Goring-by-Sea.
+
+[[stations]]
+crs = "ANG"
+role = "minor"
+segment = "coastway-west-brighton"
+# Angmering.
+
+[[stations]]
+crs = "FOD"
+role = "junction"
+segment = "coastway-west-brighton"
+# Ford. Junction station: the Littlehampton branch (a short spur) and the
+# Arun Valley Line (toward Arundel/Pulborough/Horsham, not covered by this
+# catalogue) both diverge near here - see ROUTE SCOPE above. Neither is
+# modelled separately in this file.
+
+[[stations]]
+crs = "BAA"
+role = "minor"
+segment = "coastway-west-brighton"
+# Barnham. The Bognor Regis branch historically diverged near here (the
+# former Barnham Junction) - not covered by this catalogue.
+
+[[stations]]
+crs = "CCH"
+role = "major"
+segment = "coastway-west-brighton"
+# Chichester.
+
+[[stations]]
+crs = "FSB"
+role = "minor"
+segment = "coastway-west-brighton"
+# Fishbourne (West Sussex - confirmed distinct from the Isle of Wight
+# station of the same name, see SOURCING note).
+
+[[stations]]
+crs = "BOH"
+role = "minor"
+segment = "coastway-west-brighton"
+# Bosham.
+
+[[stations]]
+crs = "NUT"
+role = "minor"
+segment = "coastway-west-brighton"
+# Nutbourne.
+
+[[stations]]
+crs = "SOB"
+role = "minor"
+segment = "coastway-west-brighton"
+# Southbourne.
+
+[[stations]]
+crs = "EMS"
+role = "minor"
+segment = "coastway-west-brighton"
+# Emsworth.
+
+[[stations]]
+crs = "WBL"
+role = "minor"
+segment = "coastway-west-brighton"
+# Warblington.
+
+[[stations]]
+crs = "HAV"
+role = "junction"
+segment = "coastway-west-brighton"
+# Havant. Junction station per the shared-trunk rule of thumb (SCHEMA.md):
+# belongs to the segment before the branch point. Also where
+# swr-portsmouth-direct.toml's own route (from Waterloo via Guildford)
+# joins for the final approach into Portsmouth, and where the separate
+# Southampton-bound bypass via Cosham/Portchester/Fareham diverges (not
+# modelled by this file - see ROUTE SCOPE above). See the STATION-OVERLAP
+# AT HAVANT/PORTSMOUTH comment above for why the segment below is this
+# file's own name, not swr-portsmouth-direct.toml's.
+
+[[stations]]
+crs = "BDH"
+role = "minor"
+segment = "coastway-west-portsmouth"
+# Bedhampton. Exclusive segment starts here, one station past the Havant
+# junction, per the shared-trunk rule of thumb - though "exclusive" here
+# means exclusive to this file's own segment name, not to Southern: see
+# the STATION-OVERLAP AT HAVANT/PORTSMOUTH comment above, this and the
+# next three stations are also swr-portsmouth-direct.toml's own stations,
+# deliberately not sharing a segment name with that file.
+
+[[stations]]
+crs = "HLS"
+role = "minor"
+segment = "coastway-west-portsmouth"
+# Hilsea. Per Havant's own route-diagram template, Southern's "stopping
+# services" pattern calls here; some faster services skip it.
+
+[[stations]]
+crs = "FTN"
+role = "minor"
+segment = "coastway-west-portsmouth"
+# Fratton.
+
+[[stations]]
+crs = "PMS"
+role = "major"
+segment = "coastway-west-portsmouth"
+# Portsmouth & Southsea. Also swr-portsmouth-direct.toml's own station -
+# station overlap only, see above.
+
+[[stations]]
+crs = "PMH"
+role = "terminus"
+segment = "coastway-west-portsmouth"
+# Portsmouth Harbour. Confirmed as this line's current western terminus
+# (per Wikipedia and nationalrail.co.uk, cross-checked as described in
+# SOURCING above) - also swr-portsmouth-direct.toml's own terminus,
+# station overlap only, see above.

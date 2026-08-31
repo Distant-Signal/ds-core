@@ -1,0 +1,252 @@
+id = "southern-coastway-east"
+name = "Coastway East Line"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "SN",  # Southern
+]
+
+sample_stations = ["LWS", "EBN", "HGS"]
+match_keywords = ["Coastway East", "East Coastway"]
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list, ordering and CRS codes confirmed via Wikipedia's "East
+# Coastway line" article, cross-checked station-by-station against a real
+# second source of the type COMMON.md requires: nationalrail.co.uk's own
+# per-station detail pages (which load fine and each show the station's
+# name and CRS code in their heading, e.g. "Brighton (BTN)", "Lewes (LWS)")
+# for BTN/MCB/GLY/PLG/PEV/PEB/NSB/COB/CLL/EBN/SLQ/HGS, and against
+# railwaycodes.org.uk's crs*.shtm pages (which loaded fully for this
+# line's entries, unlike the truncation southern-brighton-main-line.toml
+# hit on crsb.shtm) for LRB/FMR/LWS/BRK/HMD/BEX/HGS. Every station below
+# has at least one of those two live cross-checks; several have both.
+#
+# Two assumed CRS codes turned out to be wrong on first guess and were
+# caught by this cross-check, which is exactly why COMMON.md requires it
+# rather than trusting Wikipedia/memory alone: "FAL" is Falmouth Docks
+# (Cornwall), not Falmer (the correct code, confirmed via
+# railwaycodes.org.uk, is FMR); "LWR" is Llanrwst (Wales), not London Road
+# (Brighton) (the correct code, confirmed via railwaycodes.org.uk, is LRB).
+#
+# southernrailway.com (the TOC's own site) returned HTTP 403 to automated
+# fetches for this task too, same as it did for Task 5.6 - not used.
+# railwaycodes.org.uk's ELR/mileage pages for this corridor were not found
+# under a reachable ELR code in the time available, so station-to-station
+# ordering rests on Wikipedia's route-diagram order corroborated by each
+# station's real postal address from its nationalrail.co.uk page (Pevensey
+# & Westham/Pevensey Bay/Normans Bay in Pevensey, Cooden Beach/Collington
+# in Bexhill-on-Sea, etc. - all consistent with the known west-to-east
+# Sussex coast geography Brighton -> Lewes -> Eastbourne -> Bexhill ->
+# Hastings). This is weaker than a mileage-based cross-check but the
+# ordering itself is not a contested or ambiguous fact the way a service
+# calling-pattern claim would be, so it is presented as confirmed rather
+# than flagged as a gap.
+#
+# ============================================================================
+# ROUTE SCOPE - Brighton to Lewes: which of two approaches?
+# ============================================================================
+# Per Wikipedia's "East Coastway line" article, Lewes is reached by TWO
+# different physical approaches: (1) the direct coastal route this file
+# uses, Brighton - London Road (Brighton) - Moulsecoomb - Falmer - Lewes,
+# and (2) a separate inland route leaving the Brighton Main Line at Keymer
+# Junction (near Wivelsfield) and running via Plumpton and Cooksbridge to
+# Lewes. The article's own infobox lists "Wivelsfield" alongside Brighton
+# as a western terminus and says the Keymer Junction approach "shares the
+# East Coastway line east of Lewes" - i.e. Wikipedia itself treats that
+# inland approach as belonging administratively to the Brighton Main Line,
+# only converging with (not being part of) the Brighton-Falmer-Lewes route
+# proper east of Lewes.
+#
+# This task's brief scopes this file to "Brighton, via Lewes, Eastbourne,
+# to Hastings" - the Brighton-origin coastal approach - so Wivelsfield,
+# Plumpton and Cooksbridge are NOT included below. This is a real second
+# route into Lewes, not a minor variant, and is left out deliberately
+# rather than folded in, mirroring how southeastern-main-line.toml
+# deliberately left the Hastings line out of its own file rather than
+# folding two divergent corridors together. Note also that
+# southern-brighton-main-line.toml's own station list does not reach
+# Wivelsfield either, so this inland approach is not yet covered by any
+# file in this catalogue - a real coverage gap, noted here rather than
+# silently absorbed by either file.
+#
+# ============================================================================
+# STATION-OVERLAP AT BRIGHTON - southern-brighton-main-line.toml (Task 5.6)
+# ============================================================================
+# Brighton (BTN) is also that file's own terminus. Per COMMON.md's
+# "station overlap is fine, segment-sharing is a deliberate choice"
+# precedent (xc-south-coast.toml / xc-manchester.toml): this file's own
+# segment at Brighton (`coastway-east-brighton`) is a DIFFERENT segment
+# name, not `southern-bml-south` or `southern-bml-victoria`. The two lines
+# diverge immediately east of Brighton - Coastway East heads out via
+# London Road/Moulsecoomb/Falmer to Lewes, a physically different route
+# from the Brighton Main Line's own territory (which runs north toward
+# Preston Park/Haywards Heath/Gatwick/London) - so this is a real
+# station-level overlap only, not a shared trunk. No segment name is
+# reused between the two files.
+#
+# ============================================================================
+# HASTINGS - checked against southeastern-main-line.toml (Task 5.1) as the
+# brief instructed, and found NOT to overlap after all
+# ============================================================================
+# The brief flagged a possible station-level overlap at Hastings with
+# southeastern-main-line.toml, since the gap-analysis plan text for
+# Southeastern mentions "Ashford/Dover/Hastings". Checked directly: that
+# file's own header comment explains it deliberately excludes the Hastings
+# line entirely ("This file therefore covers only the Dover Priory leg and
+# omits Hastings entirely") and its `excluded_keywords` list includes
+# "Hastings line"; its `[[stations]]` list has no HGS entry. A repo-wide
+# check (`grep`/awk over every `lines/*.toml` station block) confirms no
+# other already-curated file lists HGS as a station either. So the
+# anticipated overlap does not currently exist in the catalogue: this
+# file's HGS entry is the only one, and its segment
+# (`coastway-east-hastings`) is exclusive. St Leonards Warrior Square
+# (SLQ), one stop before Hastings on this line, is managed by Southeastern
+# per its own nationalrail.co.uk page (interesting real-world detail - GTR
+# runs the trains but doesn't manage every station this line calls at -
+# but that's a station-management fact, not a line-coverage one, and
+# doesn't change this file's own station list or segment scope). If a
+# future task adds Southeastern's own Hastings line (Tonbridge - Tunbridge
+# Wells - Battle - Hastings, currently a documented coverage gap per that
+# file's own comment), it will create a genuine station overlap at HGS
+# (and likely SLQ) at that point - the same judgment call applies then:
+# station overlap only, two physically different approaches into Hastings
+# (this file via Eastbourne/the coast, Southeastern's via Ashford/the
+# Weald), not a shared segment.
+#
+# ============================================================================
+# OUT OF SCOPE
+# ============================================================================
+# Trains "from London and Brighton continue beyond Hastings to Ore" per
+# Wikipedia, where there's a turnback siding - Ore is a real extension
+# beyond this file's Brighton-Hastings scope per the brief, and is left
+# out rather than guessed at further (not independently verified for this
+# task). The Seaford branch (diverging at Southerham Junction, just south
+# of Lewes) is a separate line, not covered here. Only principal calling
+# stations of the direct Brighton-Lewes-Hastings route are listed below;
+# this is a stopping regional line (unlike the main-line files in this
+# batch) so every intermediate station on the direct route is included,
+# not just principal/interchange ones.
+# ============================================================================
+[[stations]]
+crs = "BTN"
+role = "terminus"
+segment = "coastway-east-brighton"
+# Brighton. Also southern-brighton-main-line.toml's own terminus - station
+# overlap only, see above; the two lines diverge immediately east of here.
+
+[[stations]]
+crs = "LRB"
+role = "minor"
+segment = "coastway-east-brighton"
+# London Road (Brighton).
+
+[[stations]]
+crs = "MCB"
+role = "minor"
+segment = "coastway-east-brighton"
+# Moulsecoomb.
+
+[[stations]]
+crs = "FMR"
+role = "minor"
+segment = "coastway-east-brighton"
+# Falmer.
+
+[[stations]]
+crs = "LWS"
+role = "junction"
+segment = "coastway-east-brighton"
+# Lewes. Junction station: the Keymer Junction/Wivelsfield/Plumpton/
+# Cooksbridge inland approach (see ROUTE SCOPE above, not covered by this
+# file) and the Seaford branch (via Southerham Junction, not covered by
+# this file) both join/diverge here. Kept on the Brighton-side segment per
+# the shared-trunk rule of thumb (SCHEMA.md), in case a future file for
+# either of those routes wants to share a trunk segment name up to and
+# including Lewes.
+
+[[stations]]
+crs = "GLY"
+role = "minor"
+segment = "coastway-east-hastings"
+# Glynde. Exclusive segment starts here, one station past the Lewes
+# junction, per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "BRK"
+role = "minor"
+segment = "coastway-east-hastings"
+# Berwick (Sussex).
+
+[[stations]]
+crs = "PLG"
+role = "junction"
+segment = "coastway-east-hastings"
+# Polegate. The (currently withdrawn/very limited) Cuckoo line trackbed
+# and the branch toward Hampden Park/Eastbourne diverge historically near
+# here; not modelled separately in this file.
+
+[[stations]]
+crs = "HMD"
+role = "minor"
+segment = "coastway-east-hastings"
+# Hampden Park.
+
+[[stations]]
+crs = "EBN"
+role = "major"
+segment = "coastway-east-hastings"
+# Eastbourne. Principal intermediate station on this line.
+
+[[stations]]
+crs = "PEV"
+role = "minor"
+segment = "coastway-east-hastings"
+# Pevensey & Westham.
+
+[[stations]]
+crs = "PEB"
+role = "minor"
+segment = "coastway-east-hastings"
+# Pevensey Bay.
+
+[[stations]]
+crs = "NSB"
+role = "minor"
+segment = "coastway-east-hastings"
+# Normans Bay.
+
+[[stations]]
+crs = "COB"
+role = "minor"
+segment = "coastway-east-hastings"
+# Cooden Beach.
+
+[[stations]]
+crs = "CLL"
+role = "minor"
+segment = "coastway-east-hastings"
+# Collington.
+
+[[stations]]
+crs = "BEX"
+role = "minor"
+segment = "coastway-east-hastings"
+# Bexhill.
+
+[[stations]]
+crs = "SLQ"
+role = "minor"
+segment = "coastway-east-hastings"
+# St Leonards Warrior Square. Managed by Southeastern per its own
+# nationalrail.co.uk page, but that's a station-management fact, not
+# evidence this line doesn't call here - see the HASTINGS comment above.
+
+[[stations]]
+crs = "HGS"
+role = "terminus"
+segment = "coastway-east-hastings"
+# Hastings. See the HASTINGS comment above for why this is NOT currently a
+# station overlap with any other file in the catalogue, despite the
+# brief's flag that it might be.

@@ -1,0 +1,411 @@
+id = "great-northern-kings-lynn"
+name = "Great Northern: King's Cross to Peterborough, Cambridge & King's Lynn"
+mode = "national-rail"
+category = "main-line"
+operators = ["GN"]  # Great Northern (GTR brand). Confirmed against the gap
+# analysis's own ATOC appendix (`GN`); Great Northern's Moorgate/suburban
+# service group is a separate file (Task 5.11, great-northern-suburban.toml)
+# and not covered here.
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Route/station facts: Wikipedia's "Cambridge Line", "Fen Line", "Hertford
+# Loop Line", "Digswell Viaduct" and "Welwyn Garden City railway station"
+# articles, cross-checked against each other and against each individual
+# station's own Wikipedia infobox. CRS codes were independently confirmed
+# against railwaycodes.org.uk's crs*.shtm alphabetical tables where those
+# loaded (AAP, BIW, BDK, CBG, CMB, CMS, HAT, HIT, KGX, KLN, KBW, LET, LTP,
+# MEL, PBO); railwaycodes.org.uk returned HTTP 429 (rate-limited) partway
+# through this research session for the remaining letters (same issue
+# `wcml-north-wales.toml` hit), so the rest (HUN, PBR, RYS, SDY, STH, SNO,
+# SVG, WBC, WTG, WLW, FPK, FXN, DOW, ARL, AWM) were instead independently
+# confirmed against each station's own Wikipedia infobox "Station code"
+# field (or, for ARL, the `{{stn art lnk|ARL|...}}` template in the raw
+# wikitext, which encodes the same CRS code as a structured field) - same
+# fallback pattern `southeastern-metro-north-kent.toml` already used for its
+# own railwaycodes.org.uk truncation gaps.
+#
+# The Digswell Junction / four-track-to-two-track bottleneck claim below is
+# corroborated by two independent Wikipedia articles ("Digswell Viaduct" and
+# "Welwyn Garden City railway station") that agree with each other, but a
+# non-Wikipedia third source could not be reached for it: networkrail.co.uk's
+# East Coast Main Line route page 404s to automated fetches (same failure
+# southern-brighton-main-line.toml already logged for networkrail.co.uk
+# generally) and railwaycodes.org.uk has no prose page for it (only CRS/ELR
+# code tables). Flagged here as Wikipedia-cross-Wikipedia only, below this
+# batch's ideal two-source bar, following the same disclosure precedent
+# southern-brighton-main-line.toml sets for its own under-sourced claims -
+# not asserted with full confidence, but specific and corroborated enough to
+# record.
+#
+# ============================================================================
+# LNER HAND-OFF - the ECML "slow lines" out of King's Cross, for Batch 6
+# (lines/lner-ecml.toml, Task 6.1, being written in a different, parallel
+# git worktree that does not exist here)
+# ============================================================================
+# Per the gap analysis's own LNER section (c): "Great Northern (GTR)
+# suburban services share ECML 'slow line' tracks out of King's Cross as far
+# as Alexandra Palace/Potters Bar/Welwyn - relevant once both LNER and Great
+# Northern exist." Confirmed: out of King's Cross the ECML runs on four
+# tracks (two "fast", two "slow"/relief) as far as Welwyn Garden City. North
+# of there, the line narrows to two tracks to cross Digswell Viaduct (the
+# "Welwyn Viaduct") and pass through the Welwyn North tunnels - a
+# long-standing, well-documented capacity bottleneck - so the slow lines
+# merge into the fast lines at Digswell Junction, just north of Welwyn
+# Garden City station, and no distinct slow-line pair exists beyond that
+# point. This means Welwyn Garden City, not Alexandra Palace or Potters Bar,
+# is the real northern end of the segment the gap analysis is describing.
+#
+# This file's segment for that stretch is named `gn-ecml-slow-lines`
+# (covering KGX/FPK/AAP/PBR/HAT/WGC below) - deliberately GN-prefixed, not a
+# bare `ecml-slow-lines` name LNER's own file might reach for on its own.
+# Grepped `lines/*.toml` before choosing it (per the Global Constraints): no
+# existing file uses this name or any of the CRS codes this file introduces.
+#
+# This is a DELIBERATE non-decision, not an oversight, same as
+# `wcml-north-wales.toml`'s own TfW hand-off: whoever curates Batch 6's LNER
+# file should read this comment and this file's own station list, then
+# decide on that file's own merits whether to reuse `gn-ecml-slow-lines`
+# verbatim as a genuine shared trunk (if LNER's own segmentation is fine-
+# grained enough to match this one-segment-per-shared-stretch convention) or
+# give LNER's line its own distinct segment name for this stretch (the
+# `xc-manchester.toml` precedent: station overlap is fine, segment-sharing
+# is a deliberate choice). No shared-segment regression test is added in
+# this file for this pairing - the sibling file genuinely doesn't exist in
+# this worktree, and the test would fail; add it once both files exist, in
+# whichever file is written second.
+#
+# IMPORTANT CAVEAT for whoever writes LNER: north of Digswell Junction, this
+# file's own stations (Welwyn North, Knebworth, Stevenage, Hitchin, and the
+# entire direct Peterborough branch: Arlesey/Biggleswade/Sandy/St Neots/
+# Huntingdon/Peterborough) are NOT modelled as a second shared segment here,
+# even though LNER's own Anglo-Scottish expresses physically run over this
+# exact two-track alignment all the way to Peterborough (there is no
+# separate GN-exclusive pair of tracks anywhere on the direct Peterborough
+# route - the ECML is single-pair from Digswell Junction onward). This is a
+# deliberate scope decision, not a missed fact: the gap analysis specifically
+# scopes its "shared slow lines" claim to the KGX-Welwyn stretch, and
+# forcing a second shared-segment name for the fast-line-only stretch beyond
+# it, without LNER's own file to confirm its preferred granularity against,
+# risks guessing wrong. Whoever writes `lner-ecml.toml` should independently
+# decide whether any part of Welwyn North-Peterborough deserves its own
+# shared-segment treatment with this file - station overlap there is
+# expected and correct either way.
+#
+# The Hertford Loop Line (which physically diverges from the ECML at/near
+# Alexandra Palace and rejoins near Stevenage, serving Cuffley/Hertford
+# North) is a different, real GN service group - not this file's King's
+# Cross main line, but Task 5.11's Moorgate/suburban file. Alexandra Palace
+# is marked a junction below for that reason; the loop itself is out of
+# scope here. Task 5.11's own brief already flags the Moorgate-route/
+# King's-Cross-route shared-trunk question as its own open research item -
+# not re-litigated here, but note that the Moorgate route's own stations
+# (per the "Great Northern route" Wikipedia article) rejoin the surface ECML
+# at Finsbury Park, i.e. at or before this file's own `gn-ecml-slow-lines`
+# segment starts, so Task 5.11 should check whether that segment name (or a
+# subset of its stations) is the right one to reuse for its own trunk.
+#
+# ============================================================================
+# CAMBRIDGE / KING'S LYNN: NOT TWO BRANCHES OFF PETERBOROUGH
+# ============================================================================
+# This task's brief asked whether Cambridge and King's Lynn diverge from a
+# shared point past Peterborough, or independently from further back.
+# Neither framing holds up: King's Lynn services do not touch Peterborough
+# at all. Per the "Fen Line" article, King's Lynn is reached by continuing
+# NORTH of Cambridge via Cambridge North, Waterbeach, Ely, Littleport and
+# Downham Market - "one train an hour is extended beyond Cambridge to serve
+# all stations to King's Lynn, whilst the alternative services run to Ely."
+# So King's Lynn is simply the Cambridge route's own northward extension,
+# not a second branch off a shared point near Peterborough - much like how
+# `wcml-north-wales.toml` treats Chester/Holyhead as one route with two
+# real termini rather than two branches. Direct King's Cross-Peterborough
+# services (via Huntingdon) are a completely separate, physically
+# unconnected route from this one (they diverge from it at Hitchin - see
+# below), sharing no track or stations with the Cambridge/King's Lynn route
+# anywhere in this file.
+#
+# The real divergence point for BOTH of this file's branches is Hitchin.
+# Per the "Cambridge Line" article, that line "diverges from the East Coast
+# Main Line at Cambridge Junction north of Hitchin"; the "Great Northern
+# route" article independently corroborates this, describing the route as
+# diverging "from the northbound slow line at a new junction just beyond
+# Hitchin station" via the Hitchin Flyover (opened June 2013) to "Hitchin
+# East Junction". This is also the real answer to this task's other
+# question (the junction where GN's own exclusive territory diverges from
+# LNER's ECML fast lines): LNER's own expresses never run over the Cambridge
+# Line/Fen Line at all, so everything from Letchworth Garden City onward
+# (this file's `gn-cambridge-kings-lynn-branch` segment, below) is
+# genuinely GN-exclusive track - unlike the direct Peterborough branch,
+# which remains physically shared with LNER's ECML fast lines the whole way
+# (see the LNER HAND-OFF section above).
+#
+# ============================================================================
+# STATION OVERLAP WITH xc-stansted.toml (Peterborough, Cambridge, Ely)
+# ============================================================================
+# `xc-stansted.toml` already has stations at PBO, ELY and CBG on its own
+# `xc-stansted` segment (Birmingham-Leicester-Peterborough-Ely-Cambridge-
+# Stansted Airport). That route reaches these three stations from the west/
+# north (via Leicester and March/Ely), physically distinct from this file's
+# own approaches (via Huntingdon for PBO, via Hitchin/Royston for CBG/ELY).
+# Per the `xc-south-coast.toml`/`xc-manchester.toml` precedent ("station
+# overlap is fine, segment-sharing is a deliberate choice"), these three
+# stations are listed here under this file's own segments, not
+# `xc-stansted` - station overlap only, not a shared trunk. See the
+# regression test for CBG below confirming both lines match independently,
+# each still `ExclusiveSegment`.
+#
+# ============================================================================
+# MATCH KEYWORDS - deliberately omitted
+# ============================================================================
+# No confirmed live-Knowledgebase phrasing was available to check candidate
+# keywords ("King's Lynn line", "Fen Line", "Cambridge Line") against, and
+# "Great Northern" alone is too generic (risks matching unrelated Great
+# Northern-branded content, e.g. the Moorgate suburban file once Task 5.11
+# exists). Same reasoning `wcml-north-wales.toml` gives for its own omission
+# - operator code and station/segment evidence carry matching instead.
+sample_stations = ["KGX", "HIT", "PBO", "CBG", "KLN"]
+
+# Three real destinations reachable from this line's own King's Cross
+# terminus (Peterborough direct; Cambridge, where some King's Lynn services
+# terminate/originate; King's Lynn itself), plus KGX for up-direction
+# (London-bound) services - same reasoning `wcml-north-wales.toml` gives for
+# including its own London terminus in this list.
+destination_crs_filter = ["PBO", "CBG", "KLN", "KGX"]
+
+# ============================================================================
+# STATIONS - ordered south to north from King's Cross; splits into two
+# branches at Hitchin (see the CAMBRIDGE/KING'S LYNN section above).
+# ============================================================================
+
+# --- ECML slow lines, King's Cross to Welwyn Garden City. Shared with LNER
+# once Batch 6 exists - see the LNER HAND-OFF section above. ---
+[[stations]]
+crs = "KGX"
+tiploc = "KNGX"
+role = "terminus"
+segment = "gn-ecml-slow-lines"
+
+[[stations]]
+crs = "FPK"
+role = "junction"
+segment = "gn-ecml-slow-lines"
+# Finsbury Park. Also where Great Northern's own Moorgate/Northern City Line
+# suburban services (Task 5.11, not yet written) rejoin the surface ECML -
+# see the LNER HAND-OFF section above.
+
+[[stations]]
+crs = "AAP"
+role = "junction"
+segment = "gn-ecml-slow-lines"
+# Alexandra Palace. CRS code AAP, not the more obvious-looking ALX - verify
+# against railwaycodes.org.uk if reusing this file's codes elsewhere. The
+# Hertford Loop Line diverges here (toward Cuffley/Hertford North); that
+# loop is Task 5.11's Moorgate/suburban file, not this one.
+
+[[stations]]
+crs = "PBR"
+role = "major"
+segment = "gn-ecml-slow-lines"
+# Potters Bar.
+
+[[stations]]
+crs = "HAT"
+role = "major"
+segment = "gn-ecml-slow-lines"
+# Hatfield.
+
+[[stations]]
+crs = "WGC"
+role = "junction"
+segment = "gn-ecml-slow-lines"
+# Welwyn Garden City. The real northern end of the slow lines - Digswell
+# Junction, where slow merges into fast for the two-track Digswell Viaduct/
+# Welwyn North tunnels, sits just north of this station (see the LNER
+# HAND-OFF section above). Junction station, so per the shared-trunk rule of
+# thumb it stays on this segment; the next segment starts at the next
+# station, Welwyn North.
+
+# --- Trunk continuing on the now-single-pair ECML fast lines, Welwyn North
+# to Hitchin. Still physically shared with LNER's expresses (see the LNER
+# HAND-OFF section's caveat above) but not claimed as a cross-file shared
+# segment in this file. ---
+[[stations]]
+crs = "WLW"
+role = "minor"
+segment = "gn-welwyn-hitchin-trunk"
+# Welwyn North. CRS code WLW, not WLN.
+
+[[stations]]
+crs = "KBW"
+role = "minor"
+segment = "gn-welwyn-hitchin-trunk"
+# Knebworth.
+
+[[stations]]
+crs = "SVG"
+role = "junction"
+segment = "gn-welwyn-hitchin-trunk"
+# Stevenage. The Hertford Loop Line rejoins the ECML near here (see the AAP
+# comment above); out of scope for this file.
+
+[[stations]]
+crs = "HIT"
+role = "junction"
+segment = "gn-welwyn-hitchin-trunk"
+# Hitchin. The real divergence point between this file's two branches (see
+# the CAMBRIDGE/KING'S LYNN section above) - the Cambridge Line leaves the
+# ECML just beyond here via the Hitchin Flyover/Hitchin East Junction.
+# Junction station, so per the shared-trunk rule of thumb it stays on this
+# trunk segment; both branches' own exclusive segments start at the next
+# station in each direction.
+
+# --- Direct Peterborough branch (continues on the ECML fast lines past
+# Hitchin - still physically shared with LNER, see the LNER HAND-OFF
+# section's caveat above). ---
+[[stations]]
+crs = "ARL"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Arlesey.
+
+[[stations]]
+crs = "BIW"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Biggleswade.
+
+[[stations]]
+crs = "SDY"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Sandy.
+
+[[stations]]
+crs = "SNO"
+role = "minor"
+segment = "gn-peterborough-branch"
+# St Neots. CRS code SNO, not SNE.
+
+[[stations]]
+crs = "HUN"
+role = "major"
+segment = "gn-peterborough-branch"
+# Huntingdon.
+
+[[stations]]
+crs = "PBO"
+role = "terminus"
+segment = "gn-peterborough-branch"
+# Peterborough. Also `xc-stansted.toml`'s own station (approached from the
+# west via Leicester, a physically distinct route) - station overlap only,
+# not a shared segment, per the STATION OVERLAP section above.
+
+# --- Cambridge / King's Lynn branch (diverges from the ECML at Hitchin via
+# the Cambridge Line, then continues north of Cambridge via the Fen Line -
+# see the CAMBRIDGE/KING'S LYNN section above; this whole branch is
+# genuinely GN-exclusive track, never touched by LNER). ---
+[[stations]]
+crs = "LET"
+role = "major"
+segment = "gn-cambridge-kings-lynn-branch"
+# Letchworth Garden City.
+
+[[stations]]
+crs = "BDK"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Baldock.
+
+[[stations]]
+crs = "AWM"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Ashwell & Morden.
+
+[[stations]]
+crs = "RYS"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Royston.
+
+[[stations]]
+crs = "MEL"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Meldreth.
+
+[[stations]]
+crs = "STH"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Shepreth.
+
+[[stations]]
+crs = "FXN"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Foxton.
+
+[[stations]]
+crs = "CMS"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Cambridge South. Opened 28 June 2026 - confirmed as a genuinely current,
+# open station as of this file's research date (2026-08-30), not a future
+# planned one.
+
+[[stations]]
+crs = "CBG"
+role = "major"
+segment = "gn-cambridge-kings-lynn-branch"
+# Cambridge. Also `xc-stansted.toml`'s own terminus (approached from the
+# north-east via Ely/March, a physically distinct route) - station overlap
+# only, not a shared segment, per the STATION OVERLAP section above and the
+# regression test below.
+
+[[stations]]
+crs = "CMB"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Cambridge North.
+
+[[stations]]
+crs = "WBC"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Waterbeach.
+
+[[stations]]
+crs = "ELY"
+role = "junction"
+segment = "gn-cambridge-kings-lynn-branch"
+# Ely. Also `xc-stansted.toml`'s own station (same physically distinct
+# XC route as CBG/PBO above) - station overlap only, not a shared segment.
+# The Hereward/Breckland lines toward Peterborough and Norwich also diverge
+# here; not covered by this catalogue.
+
+[[stations]]
+crs = "LTP"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Littleport.
+
+[[stations]]
+crs = "DOW"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Downham Market.
+
+[[stations]]
+crs = "WTG"
+role = "minor"
+segment = "gn-cambridge-kings-lynn-branch"
+# Watlington (Norfolk) - not the closed Oxfordshire station of the same
+# name.
+
+[[stations]]
+crs = "KLN"
+role = "terminus"
+segment = "gn-cambridge-kings-lynn-branch"
+# King's Lynn.

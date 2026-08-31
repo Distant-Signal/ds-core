@@ -1,0 +1,681 @@
+id = "thameslink-southern"
+name = "Thameslink Southern Branches"
+mode = "national-rail"
+category = "commuter"
+operators = ["TL"]
+
+# Three branches south of the Thameslink core: Sevenoaks (via the Catford
+# Loop Line), the Sutton Loop, and the Bedford-Brighton service (which runs
+# via London Bridge, not through the Catford Loop). Not one continuous
+# route, but the plan's own Task 5.14 explicitly asks for one file covering
+# all three - same "one file, multiple named branches" pattern
+# thameslink-cambridge.toml (Peterborough + Cambridge Line) and
+# southeastern-metro-north-kent.toml (Bexleyheath + Dartford Loop) already
+# use for their own multi-branch files.
+sample_stations = ["SEV", "SUO", "BTN"]
+
+# "Thameslink Sevenoaks"/"Sutton loop line"/"Thameslink Brighton" are three
+# high-precision phrases naming this file's three branches unambiguously -
+# per the Global Constraints' "don't overload match_keywords" rule, and
+# chosen to avoid colliding with thameslink-bedford.toml's own "Thameslink
+# Bedford" or thameslink-cambridge.toml's own "Thameslink Cambridge"/
+# "Thameslink Peterborough" keywords, or southern-brighton-main-line.toml's
+# own "Brighton Main Line"/"Gatwick Express" keywords.
+match_keywords = ["Thameslink Sevenoaks", "Sutton loop line", "Thameslink Brighton"]
+
+# No destination_crs_filter: this file's Sevenoaks and Brighton branches
+# have clear real termini (SEV, BTN), but the Sutton Loop is a genuine round
+# trip (see SUTTON LOOP section below) whose real LDBWS destination_crs is
+# the northern origin station (e.g. St Albans City), not a station on this
+# file's own list - a partial filter naming only SEV/BTN would silently
+# under-count the loop branch's own services. Omitted rather than guessed,
+# per this batch's "no invented facts" rule.
+
+# Commuter line: tighter thresholds, matching thameslink-core.toml,
+# thameslink-bedford.toml and thameslink-cambridge.toml.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Primary source: Wikipedia's "Thameslink" article, fetched fresh for this
+# task, giving the exact off-peak calling pattern for all three branches:
+#   - Sevenoaks: "London Blackfriars to Sevenoaks via Catford and Otford",
+#     calling at Elephant & Castle, Denmark Hill, Peckham Rye, Nunhead,
+#     Crofton Park, Catford, Bellingham, Beckenham Hill, Ravensbourne,
+#     Shortlands, Bromley South, Bickley, St Mary Cray, Swanley, Eynsford,
+#     Shoreham, Otford, Bat & Ball, Sevenoaks - explicitly via Elephant &
+#     Castle, NOT London Bridge.
+#   - Sutton Loop: two round-trip services from St Albans via Blackfriars,
+#     calling at Elephant & Castle, Loughborough Junction, Herne Hill, Tulse
+#     Hill, Streatham, then around the loop via Wimbledon one way and via
+#     Mitcham Junction the other (see SUTTON LOOP section below).
+#   - Brighton: "Bedford to Brighton" via London Bridge, calling at East
+#     Croydon, Gatwick Airport, Three Bridges, Balcombe, Haywards Heath,
+#     Wivelsfield, Burgess Hill, Hassocks, Preston Park (see BRIGHTON
+#     section below for which of these are included).
+#
+# CRS codes cross-checked against a second source for every new station:
+# railwaycodes.org.uk's crs*.shtm tables where they loaded fully (EPH, DMK,
+# PMR, NHD, CTF, BGM, BEC, RVB, SRT (reused unchanged from
+# southeastern-chatham.toml, see SEVENOAKS section), EYN, SEH, OTF, BBL,
+# SEV, WSU, CSH), and each station's own Wikipedia infobox cross-checked
+# against nationalrail.co.uk's own station-details page (same
+# alphabetical-page-truncation fallback southeastern-metro-north-kent.toml's
+# own sourcing comment already flags) for CFT, BMS, SAY, STE, SUC, SMO,
+# WBO, TOO, HYR, HCB, LGJ, MDS, MTC, MIJ, SIH, SUO. HNH is reused unchanged
+# from southeastern-chatham.toml (already independently confirmed there);
+# BFR/LBG are reused unchanged from thameslink-core.toml; WIM is reused
+# unchanged from swr-south-west-main.toml/swr-alton.toml; GTW/TBD/HHE/BUG/
+# HSK/PRP/BTN are reused unchanged from southern-brighton-main-line.toml.
+#
+# For the two flagged coordination questions (see BRIGHTON and SEVENOAKS
+# sections below), a genuine non-Wikipedia second source was also sought,
+# per COMMON.md's bar. thetrainline.com's own live journey-planner pages
+# (an independent commercial source drawing on the National Rail timetable
+# feed, not another Wikipedia article) confirmed real, current, bookable
+# direct services exist for both routes: "Direct trains available" London
+# Bridge-Brighton (~81/day, operated by Southern and Thameslink) and London
+# Blackfriars-Sevenoaks (~39/day, operated by Thameslink). NOTE, on review:
+# thetrainline.com is NOT one of COMMON.md's four approved second-source
+# categories ("railwaycodes.org.uk, Network Rail's own route pages,
+# National Rail Enquiries, or the TOC's own site") and only shows
+# service-existence, not physical track-sharing/calling-pattern facts - it
+# does NOT clear the bar for the Brighton coordination claim (see BRIGHTON
+# section below for the corrected finding; the Sevenoaks/Chatham finding
+# does not depend on it either way, since that stretch was already treated
+# as station-overlap-only for an unrelated, independent granularity
+# reason - see SEVENOAKS section below). GTR's own thameslinkrailway.com
+# (both its network-map page and the specific
+# timetables.thameslinkrailway.com citation URLs Wikipedia's own "Thameslink"
+# article uses) returned HTTP 403/loading-only content for every URL tried,
+# same block southern-brighton-main-line.toml's own SOURCING note already
+# recorded; nationalrail.co.uk's own station-details pages confirm only the
+# managing operator, not route/calling-pattern prose, also matching that
+# file's own finding. No genuine second source of the required type was
+# found for either the Brighton or the Sevenoaks/Chatham track-sharing
+# claim - both are documented as Wikipedia-sourced leads, not confirmed
+# facts, matching this batch's disclosure convention.
+#
+# ============================================================================
+# CORE BOUNDARY - Blackfriars, not "south of London Bridge"
+# ============================================================================
+# thameslink-core.toml's own LBG entry says "trains diverge south of London
+# Bridge" - true for the Brighton branch (see BRIGHTON below), but the
+# Sevenoaks and Sutton Loop branches actually diverge earlier, at/after
+# Blackfriars via Elephant & Castle, and never touch London Bridge at all.
+# This file therefore has TWO separate core-boundary junctions: BFR (for
+# Sevenoaks/Sutton Loop) and LBG (for Brighton) - reused unchanged from
+# thameslink-core.toml, station overlap only against that file's own
+# `thameslink-core` segment (this file doesn't touch Farringdon/City
+# Thameslink, so reusing that name verbatim would incorrectly mark those
+# untouched stations SharedSegment too - the same trap
+# thameslink-bedford.toml's and thameslink-cambridge.toml's own STP header
+# comments already flag).
+#
+# BFR and Elephant & Castle (EPH, the point where Sevenoaks and Sutton Loop
+# split from each other) are both genuinely shared by both of THIS file's
+# OWN branches, so per the shared-trunk rule of thumb they sit on one
+# internal segment (`thameslink-southern-trunk`) - not shared with
+# any other file (a name unique to this file), but correctly marking an
+# incident there as affecting both of this file's own branches together
+# rather than exclusively one.
+[[stations]]
+crs = "BFR"
+tiploc = "BLCKFRS"
+role = "junction"
+segment = "thameslink-southern-trunk"
+# Blackfriars. Station overlap only with thameslink-core.toml's own
+# `thameslink-core` segment - see CORE BOUNDARY above.
+
+[[stations]]
+crs = "EPH"
+role = "junction"
+segment = "thameslink-southern-trunk"
+# Elephant & Castle. Sevenoaks and Sutton Loop branches split from each
+# other here (see below); Brighton branch does not touch this station at
+# all (it runs via London Bridge instead - see BRIGHTON below).
+
+# ============================================================================
+# SEVENOAKS BRANCH - Task 5.4 coordination (Lewisham corridor): does NOT
+# hold up on independent re-verification, same finding as Task 5.4's own
+# southeastern-metro-north-kent.toml. A genuine, DIFFERENT shared segment
+# was found further down this same branch instead - see below.
+# ============================================================================
+# southeastern-metro-north-kent.toml's own FINDING 2 and its "SEGMENT
+# NAMING" comment ask this file to check whether Thameslink's Sevenoaks
+# service genuinely shares track with Southeastern's metro services toward
+# Lewisham, and to reuse `southeastern-lewisham-corridor` verbatim if so.
+# Independently re-verified here via Wikipedia's "Thameslink" article
+# (fetched fresh for this task, not reused from that file's own research):
+# the Sevenoaks service runs "via Catford and Otford", calling at Elephant &
+# Castle, Denmark Hill, Peckham Rye, Nunhead, Crofton Park, Catford,
+# Bellingham, Beckenham Hill, Ravensbourne - the Catford Loop Line, well
+# west of Lewisham, never calling there at all. This independently confirms
+# Task 5.4's own FINDING 2: no genuine shared running with Southeastern's
+# metro services toward Lewisham. `southeastern-lewisham-corridor` is
+# therefore NOT reused - this file's own stations below use their own
+# segment names, and LBG/Lewisham are not touched by this branch at all (it
+# diverges from the core at Blackfriars, before reaching London Bridge - see
+# CORE BOUNDARY above).
+[[stations]]
+crs = "DMK"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Denmark Hill.
+
+[[stations]]
+crs = "PMR"
+role = "major"
+segment = "thameslink-sevenoaks-catford"
+# Peckham Rye. Also an Overground/Southern interchange, not modelled by
+# this catalogue.
+
+[[stations]]
+crs = "NHD"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Nunhead.
+
+[[stations]]
+crs = "CFT"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Crofton Park.
+
+[[stations]]
+crs = "CTF"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Catford. Not to be confused with Catford Bridge (the neighbouring,
+# physically separate Hayes line station covered by
+# southeastern-hayes-line.toml) - a different route entirely.
+
+[[stations]]
+crs = "BGM"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Bellingham.
+
+[[stations]]
+crs = "BEC"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Beckenham Hill.
+
+[[stations]]
+crs = "RVB"
+role = "minor"
+segment = "thameslink-sevenoaks-catford"
+# Ravensbourne. The Catford Loop Line's own exclusive stretch ends here -
+# the next station, Shortlands, is where it rejoins the Chatham Main Line
+# (see below).
+
+# ============================================================================
+# LIKELY TRACK SHARING FOUND (not the one either coordination hand-off
+# expected): the Catford Loop Line rejoins the Chatham Main Line at
+# Shortlands - but NOT modelled as a SharedSegment. The decisive reason is a
+# granularity one (see below), which holds regardless; the supporting
+# evidence also falls short of this batch's sourcing bar, same as this
+# file's other unconfirmed claims
+# ============================================================================
+# southeastern-chatham.toml's own SRT (Shortlands) entry already has a
+# comment flagging this: "Catford Loop Line diverges here (alternative
+# Victoria routing, above)" - i.e. that file's own curator already knew this
+# junction existed, from the Victoria direction. Confirmed independently
+# here from the Thameslink direction too, via three separate sources:
+# Wikipedia's "Thameslink" article (Sevenoaks branch "rejoining the Chatham
+# Main Line at Shortlands before continuing via Swanley to Otford/
+# Sevenoaks" - matching wording independently confirmed via Task 5.4's own
+# FINDING 2 comment, itself sourced from the same article), and
+# independently via Wikipedia's own "Swanley railway station" article
+# ("Two train operators provide service at Swanley: Southeastern... and
+# Thameslink") and thetrainline.com's non-Wikipedia confirmation of real
+# booked London Blackfriars-Sevenoaks Thameslink services (see SOURCING
+# above).
+#
+# CORRECTED on review, for consistency with this file's own sourcing
+# standard: the Shortlands-Swanley stretch APPEARS to be genuine, everyday,
+# current shared physical track on the available sources - but that evidence
+# does NOT clear this batch's required sourcing bar. Two of the three
+# sources are Wikipedia articles, and the third (thetrainline.com) is not
+# one of COMMON.md's four approved second-source categories and shows
+# service existence rather than physical track-sharing - the exact
+# limitation this file's own SOURCING note at lines 82-90 already records,
+# and the exact reason the Brighton claim was downgraded to "documented
+# lead, not confirmed fact" there. Claiming this one IS confirmed while
+# ruling the other one out on identical evidence would contradict this
+# file's own stated standard. So it is recorded here as a well-supported but
+# unconfirmed lead, and treated as station-overlap-only regardless - the
+# same treatment the modelling decision below already independently arrives
+# at for its own granularity reason.
+#
+# BUT: southeastern-chatham.toml's own `chatham-london` segment does not
+# stop at Shortlands - it starts all the way back at Victoria (VIC, BKJ,
+# HNH are also `chatham-london` in that file), covering the WHOLE
+# Victoria-to-Swanley approach as one name. This file's own Sevenoaks
+# branch does not touch Victoria/Herne Hill/BKJ at all (it reaches
+# Shortlands from Blackfriars via the Catford Loop, a different approach -
+# see CORE BOUNDARY above). Reusing `chatham-london` verbatim here would
+# therefore mark Victoria/BKJ/Herne Hill - stations this file's own service
+# never calls at - as SharedSegment too, purely because segment-name
+# matching in this catalogue's matcher is name-based, not per-station (this
+# was actually tried while drafting this file and confirmed empirically: it
+# broke `vic_station_overlap_matches_brighton_main_line_chatham_and_oxted_
+# uckfield_as_independent_exclusive_segments` in matcher.rs, which correctly
+# expects southeastern-chatham to stay ExclusiveSegment at Victoria). This
+# is exactly the trap thameslink-cambridge.toml's own OVERLAP (a)/(b)
+# comment already warns about for a same-track-different-calling-pattern
+# case; here it's a same-track-coarser-existing-segment-granularity case
+# instead, but the remedy is identical: don't reuse the name.
+#
+# So: this file's own segment name is used instead below
+# (`thameslink-sevenoaks-shortlands-swanley`), station overlap only against
+# southeastern-chatham.toml's `chatham-london`, even though track sharing
+# very likely exists for this specific SRT-SAY stretch. Splitting that already-
+# committed file's own `chatham-london` segment into a Victoria-only piece
+# and a Shortlands-Swanley piece (which WOULD let this genuine overlap be
+# modelled precisely) is out of scope for this task - it would mean editing
+# an already-committed sibling file's own station list, beyond what
+# COMMON.md's Out of Scope section authorises here. Flagged in this task's
+# own report as a real, reportable finding for the controller to weigh.
+[[stations]]
+crs = "SRT"
+role = "junction"
+segment = "thameslink-sevenoaks-shortlands-swanley"
+# Shortlands. CRS/role reused unchanged from southeastern-chatham.toml;
+# segment name deliberately NOT reused - see above.
+
+[[stations]]
+crs = "BMS"
+role = "major"
+segment = "thameslink-sevenoaks-shortlands-swanley"
+# Bromley South.
+
+[[stations]]
+crs = "BKL"
+role = "junction"
+segment = "thameslink-sevenoaks-shortlands-swanley"
+# Bickley.
+
+[[stations]]
+crs = "SMY"
+role = "junction"
+segment = "thameslink-sevenoaks-shortlands-swanley"
+# St Mary Cray.
+
+[[stations]]
+crs = "SAY"
+role = "junction"
+segment = "thameslink-sevenoaks-shortlands-swanley"
+# Swanley. This file's own segment ends here, matching
+# southeastern-chatham.toml's own comment at this station - the Maidstone
+# Line/Darent Valley Line spur towards Eynsford/Otford/Sevenoaks below is
+# not covered by that file (or any other file in this catalogue yet).
+
+# ============================================================================
+# OTFORD/SEVENOAKS SPUR - exclusive to this file (coverage gap for a future
+# Southeastern Maidstone Line/Darent Valley Line file, not acted on here)
+# ============================================================================
+# Per Wikipedia's "Swanley railway station" article, "the Maidstone Line
+# branches from the main line east of Swanley" - Southeastern also runs
+# services over this stretch (confirmed via that article and via Wikipedia's
+# "Otford railway station" article, both independently naming Southeastern
+# as a current operator here), but no file in this catalogue covers
+# Southeastern's own Maidstone Line/Darent Valley Line service, so there is
+# no existing segment name to reuse - this file's own exclusive segment name
+# is used instead, matching the precedent
+# southeastern-metro-north-kent.toml's own Slade Green/North Kent Line
+# comment already set for an analogous situation (a real overlap exists,
+# but with an uncovered line, so it's noted as a future gap rather than
+# acted on).
+[[stations]]
+crs = "EYN"
+role = "minor"
+segment = "thameslink-sevenoaks-otford"
+# Eynsford.
+
+[[stations]]
+crs = "SEH"
+role = "minor"
+segment = "thameslink-sevenoaks-otford"
+# Shoreham (Kent) - not to be confused with Shoreham-by-Sea on Southern's
+# West Coastway, a different station entirely (also unrelated to this
+# catalogue's other "Shoreham" mentions elsewhere).
+
+[[stations]]
+crs = "OTF"
+role = "junction"
+segment = "thameslink-sevenoaks-otford"
+# Otford. Per Wikipedia's own "Otford railway station" article, "the lines
+# to Bat & Ball and Maidstone diverge" here - the Maidstone East line
+# continues towards Ashford International (not covered by this catalogue);
+# this file's own branch continues via Bat & Ball to Sevenoaks, below.
+
+[[stations]]
+crs = "BBL"
+role = "minor"
+segment = "thameslink-sevenoaks-otford"
+# Bat & Ball.
+
+[[stations]]
+crs = "SEV"
+role = "terminus"
+segment = "thameslink-sevenoaks-otford"
+# Sevenoaks - this branch's own terminus. Also southeastern-main-line.toml's
+# own station (that file's `seml-weald` segment), approached via a
+# physically distinct route: per Sevenoaks station's own Wikipedia article,
+# "two distinct approach routes" reach this station - the South Eastern
+# Main Line via Dunton Green/Chelsfield (that file's own route), and this
+# file's own route via Bat & Ball, on which "Thameslink trains... all
+# start/terminate here on Platform 4". No shared track between the two
+# approaches beyond the station itself is documented anywhere found - station
+# overlap only, not a shared segment, matching this catalogue's Dartford/
+# STP/LBG precedent for terminus-style convergence elsewhere.
+
+# ============================================================================
+# SUTTON LOOP - exclusive to this file except a single station overlap with
+# SWR at Wimbledon; also served by Southern (a genuine overlap, but with an
+# uncovered line - see below, not acted on)
+# ============================================================================
+# Per Wikipedia's own "Sutton Loop Line" article: the loop diverges from the
+# Streatham corridor at Streatham South Junction and rejoins near Sutton,
+# forming a genuine physical loop - trains run "St Albans, via Blackfriars
+# round the loop", described as "Sutton via Mitcham Junction" (one
+# direction) and "Sutton via Wimbledon" (the other) - i.e. ONE round-trip
+# service per train, not two separate point-to-point branches, so every
+# loop station below sits on one segment (`thameslink-sutton-loop`) rather
+# than being split into two branches the way the genuinely separate
+# Bexleyheath/Dartford Loop pair is in southeastern-metro-north-kent.toml.
+#
+# The same article also states Southern serves this loop too - a real
+# overlap, but Southern's own Sutton/Wimbledon-loop suburban service has no
+# file anywhere in this catalogue yet (the gap-analysis document's own
+# Southern section only covers the Brighton Main Line, Coastway east/west,
+# and Oxted/Uckfield - this loop isn't any of those), so there is no
+# existing segment name to reuse - a coverage gap for a future Southern
+# suburban file, noted here and not acted on, matching the same pattern as
+# the Otford/Sevenoaks spur above.
+[[stations]]
+crs = "LGJ"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Loughborough Junction.
+
+[[stations]]
+crs = "HNH"
+role = "major"
+segment = "thameslink-sutton-loop"
+# Herne Hill. Reused unchanged from southeastern-chatham.toml (CRS only,
+# not the segment name): also a Chatham Main Line station approached from
+# Victoria (that file's own `chatham-london` segment) - a different London
+# terminus and a different physical approach into Herne Hill from this
+# file's own Blackfriars-via-Elephant & Castle route, so station overlap
+# only here, not a shared segment (that file's own SRT comment already
+# distinguishes the Catford Loop Line as "an alternative Victoria routing"
+# from Herne Hill's own Victoria approach - this file's route reaches Herne
+# Hill a different way still, via Elephant & Castle/Loughborough Junction
+# from Blackfriars, not via either of those).
+
+[[stations]]
+crs = "TUH"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Tulse Hill.
+
+[[stations]]
+crs = "STE"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Streatham. The loop itself splits away from the trunk just past here, at
+# Streatham South Junction (not a passenger station, no CRS code, not
+# listed separately - same treatment Windmill Bridge Junction gets in
+# southern-brighton-main-line.toml).
+
+[[stations]]
+crs = "MTC"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Mitcham Eastfields.
+
+[[stations]]
+crs = "MIJ"
+role = "junction"
+segment = "thameslink-sutton-loop"
+# Mitcham Junction. Also a junction for Southern's own Wimbledon-Sutton and
+# Epsom Downs branches, neither covered by this catalogue.
+
+[[stations]]
+crs = "HCB"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Hackbridge.
+
+[[stations]]
+crs = "CSH"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Carshalton.
+
+[[stations]]
+crs = "SUO"
+role = "major"
+segment = "thameslink-sutton-loop"
+# Sutton - the loop's own midpoint/interchange, per the Sutton Loop Line
+# article ("rejoins [the trunk] near Sutton station"). Both loop directions
+# pass through here; listed once, matching how Dartford (DFD) is listed
+# once in southeastern-metro-north-kent.toml despite being the shared
+# terminus of that file's own two branches.
+
+[[stations]]
+crs = "WSU"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# West Sutton.
+
+[[stations]]
+crs = "SUC"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Sutton Common.
+
+[[stations]]
+crs = "SIH"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# St Helier.
+
+[[stations]]
+crs = "MDS"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Morden South.
+
+[[stations]]
+crs = "SMO"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# South Merton.
+
+[[stations]]
+crs = "WBO"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Wimbledon Chase.
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "thameslink-sutton-loop"
+# Wimbledon. Reused unchanged from swr-south-west-main.toml/swr-alton.toml/
+# swr-portsmouth-direct.toml (CRS only): this loop reaches Wimbledon via
+# Haydons Road, a physically distinct approach from SWR's own South West
+# Main Line via Clapham Junction/Earlsfield (`swr-trunk-waterloo`) - station
+# overlap only, not a shared segment.
+
+[[stations]]
+crs = "HYR"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Haydons Road.
+
+[[stations]]
+crs = "TOO"
+role = "minor"
+segment = "thameslink-sutton-loop"
+# Tooting. The loop rejoins the Streatham corridor back towards the core
+# just past here.
+
+# ============================================================================
+# BRIGHTON BRANCH - Task 5.6 coordination (London Bridge/Windmill Bridge
+# Jn/East Croydon): REVISED after review - does NOT clear this batch's
+# two-source bar after all. `southern-bml-north` is NOT reused; this whole
+# branch (LBG through BTN) uses this file's own segment name,
+# `thameslink-brighton`, station overlap only against
+# southern-brighton-main-line.toml.
+# ============================================================================
+# An earlier draft of this file reused `southern-bml-north` verbatim for
+# LBG/ECR, reasoning that thetrainline.com's live journey-planner page
+# (confirming ~81 direct daily London Bridge-Brighton trains, operated by
+# Southern and Thameslink) was a qualifying non-Wikipedia second source.
+# On review this was wrong, for two reasons:
+#   1. COMMON.md's approved second-source list is a closed set -
+#      "railwaycodes.org.uk, Network Rail's own route pages, National Rail
+#      Enquiries, or the TOC's own site" - and a commercial ticket retailer
+#      is none of those four categories. Arguing thetrainline.com "should"
+#      count because it draws on the same underlying timetable data is an
+#      argument for expanding the approved list, not a citation showing it
+#      is already on it.
+#   2. Even setting that aside, what thetrainline.com actually shows is a
+#      service-existence/operator-brand fact (this route exists, run by
+#      these two operators) - it doesn't attest physical track sharing, the
+#      calling pattern, or the Quarry-line-vs-via-Redhill alignment
+#      question. The actual route claim was still really being carried by
+#      Wikipedia's "Thameslink" article plus a second Wikipedia article
+#      ("East Croydon railway station") - exactly the combination COMMON.md
+#      rules out.
+#
+# Two sibling tasks already tried and failed to clear this exact bar for
+# this exact claim: southern-brighton-main-line.toml's own SOURCING note
+# documents four failed non-Wikipedia source attempts (nationalrail.co.uk
+# had no route prose, gatwickexpress.com/southernrailway.com/
+# thameslinkrailway.com all returned HTTP 403, networkrail.co.uk 404'd,
+# railwaycodes.org.uk's CRS/ELR tables are codes-and-mileage only) before
+# falling back to a Wikipedia-only, explicitly-unconfirmed finding.
+# southern-oxted-uckfield.toml went further and explicitly distinguished
+# nationalrail.co.uk as a genuine second source for station-identity facts
+# but NOT for service-pattern facts, declining to share a segment at this
+# same corridor on that basis. This file was asserting sharing that both
+# siblings, using the same or stronger sourcing, explicitly declined to
+# assert - so the SharedSegment claim is withdrawn.
+#
+# The gap analysis's own framing ("almost certainly a shared-trunk segment
+# once both exist") is a conjecture, not a stated fact, and doesn't
+# independently license the claim either.
+#
+# Per southern-brighton-main-line.toml's own fallback instruction for
+# exactly this outcome ("state that plainly and treat LBG/East Croydon as
+# station overlap only, same as southeastern-metro-north-kent.toml does
+# today for its own unconfirmed stretch"), this branch is treated the same
+# way this file's own Sevenoaks branch already treats the Lewisham
+# question: real service exists (confirmed - Wikipedia's "Thameslink"
+# article plus the East Croydon infobox both independently describe it),
+# but genuine PHYSICAL TRACK SHARING with southern-brighton-main-line.toml
+# is not confirmed to this batch's required bar, so it is not modelled as
+# one.
+#
+# Windmill Bridge Junction itself (per southern-brighton-main-line.toml's
+# own comment, sourced from Wikipedia's "Quarry line" article) has no CRS
+# code and is not listed here, matching that file's own treatment.
+[[stations]]
+crs = "LBG"
+tiploc = "LNDNBDG"
+role = "junction"
+segment = "thameslink-brighton"
+# London Bridge. Also thameslink-core.toml's own terminus (station overlap
+# only there, different segment name - see CORE BOUNDARY above) and
+# southeastern-metro-north-kent.toml's/southeastern-main-line.toml's/
+# southeastern-hayes-line.toml's/southern-oxted-uckfield.toml's own station
+# (station overlap only with all four - see SEVENOAKS BRANCH above for why
+# this file's own Sevenoaks branch does NOT reuse
+# southeastern-metro-north-kent.toml's own LBG-area segment name either).
+# Also southern-brighton-main-line.toml's own station - station overlap
+# only, NOT a shared segment - see above for why the earlier draft's
+# SharedSegment claim here was withdrawn.
+
+[[stations]]
+crs = "ECR"
+role = "junction"
+segment = "thameslink-brighton"
+# East Croydon. Also southern-brighton-main-line.toml's own station (its
+# own `southern-bml-north` segment) and southern-oxted-uckfield.toml's own
+# station (its own `oxted-trunk` segment) - station overlap only with both,
+# see above.
+
+# ============================================================================
+# PAST EAST CROYDON - this branch's real terminus is Brighton, not East
+# Croydon, so its own stations have to be listed all the way there (the
+# curation rules require ordering stations end to end). The whole branch,
+# LBG through BTN, is one segment (`thameslink-brighton`), matching the
+# precedent thameslink-bedford.toml/thameslink-cambridge.toml already set
+# of using a single segment name for a branch's entire length including its
+# own core-boundary station.
+#
+# East Croydon's own Wikipedia infobox separately lists "4 trains per hour
+# to Brighton" alongside the "4 tph to Bedford via London Bridge" figure
+# (the same service's two direction-labels), with no "via Redhill"
+# qualifier - unlike this station's other, unrelated Thameslink services to
+# Three Bridges/Horsham/Gatwick Airport, which explicitly ARE "via
+# Redhill" - suggesting the Brighton-bound service stays on the same
+# direct/fast alignment southern-brighton-main-line.toml's own
+# `southern-bml-south` segment models (GTW, TBD, HHE, BUG, HSK, PRP, BTN).
+# This is the same evidentiary situation as the LBG/ECR stretch above
+# though (Wikipedia-only, no qualifying second source found), so it is not
+# modelled as shared either, for the same reason.
+[[stations]]
+crs = "GTW"
+role = "major"
+segment = "thameslink-brighton"
+# Gatwick Airport. Also served by Great Western Railway, not modelled by
+# this catalogue.
+
+[[stations]]
+crs = "TBD"
+role = "junction"
+segment = "thameslink-brighton"
+# Three Bridges. The Arun Valley line diverges here, not covered by this
+# catalogue.
+
+[[stations]]
+crs = "HHE"
+role = "major"
+segment = "thameslink-brighton"
+# Haywards Heath.
+
+[[stations]]
+crs = "BUG"
+role = "minor"
+segment = "thameslink-brighton"
+# Burgess Hill.
+
+[[stations]]
+crs = "HSK"
+role = "minor"
+segment = "thameslink-brighton"
+# Hassocks.
+
+[[stations]]
+crs = "PRP"
+role = "minor"
+segment = "thameslink-brighton"
+# Preston Park.
+
+[[stations]]
+crs = "BTN"
+role = "terminus"
+segment = "thameslink-brighton"
+# Brighton - this branch's own terminus. Also southern-coastway-east.toml's
+# and southern-coastway-west.toml's own station (station overlap only with
+# both, per the precedent those files' own header comments already set).

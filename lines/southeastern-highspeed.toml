@@ -1,0 +1,274 @@
+id = "southeastern-highspeed"
+name = "Southeastern High Speed (Javelin)"
+mode = "national-rail"
+category = "main-line"
+operators = ["SE"]
+
+sample_stations = ["STP", "EBD", "AFK", "RAM"]
+match_keywords = ["Javelin", "High Speed 1"]
+
+# southeastern-main-line.toml (Task 5.1) and southeastern-chatham.toml
+# (Task 5.2) are the two classic-infrastructure Southeastern main lines out
+# of Charing Cross/Cannon Street and Victoria. This file is a third,
+# physically distinct thing: the domestic "Javelin" (Class 395) service,
+# branded "Southeastern High Speed", running from St Pancras International
+# over High Speed 1 (HS1/CTRL) - purpose-built, largely grade-separated
+# high-speed infrastructure opened 2007-2009 - before rejoining classic
+# Southeastern metals for its onward Kent-coast legs.
+#
+# REVIEW FIX (final whole-branch review of this batch): this file previously
+# carried `excluded_keywords = ["South Eastern Main Line", "Chatham Main
+# Line"]`. Both entries have been removed and the key dropped entirely, the
+# same state as the 24 other files in this catalogue that never declared it.
+# Reason: this file genuinely SHARES stations with both of those files - AFK/
+# FKW/FKC/DVP with southeastern-main-line.toml, and SOO/RTR/CTM/GLM/RAI/SIT/
+# TEY/FAV/WHI/HNB/BCH/WGA/MAR/BSR/DMP/RAM/DVP with southeastern-chatham.toml
+# (the file's own comment above already explains the Javelin rejoins classic
+# metals over exactly that track). `is_excluded` in
+# crates/aggregator/src/matcher.rs is a HARD VETO evaluated BEFORE station
+# matching, so an incident naming a classic route and listing one of those
+# shared CRS codes was silently vetoing this file even though the Javelin
+# genuinely calls there - zeroing out a correct match. The entries bought
+# nothing in return: `lines_affected_by` already drops every `OperatorOnly`
+# match whenever any precise match exists, and this file's own
+# `match_keywords` is ["Javelin", "High Speed 1"], neither of which the
+# classic routes' own incident text uses, so no KeywordOnly false positive
+# was possible either. Station-CRS matching already draws the right line
+# here - see afk_station_overlap_matches_both_seml_and_hs1_..., hs1_ashford_
+# station_overlap_..., and hs1_northkent_station_overlap_... in matcher.rs.
+
+# Sourced from Wikipedia's "British Rail Class 395" article and the "High
+# Speed" section of Wikipedia's "Southeastern (train operating company)"
+# article (the latter's route list includes Thanet Parkway, a station that
+# only opened in 2023, which is strong evidence it describes the current
+# pattern rather than the 2009-2011 launch-era pattern the Class 395 article
+# is explicitly flagged as not having been updated past). Cross-checked
+# against railwaycodes.org.uk and station-infobox CRS lookups for the CRS
+# codes not already verified by Tasks 5.1/5.2 (SFA, EBD, GRV below).
+#
+# St Pancras International - Stratford International - Ebbsfleet
+# International is the confirmed HS1-exclusive trunk every domestic Javelin
+# pattern runs over. Past Ebbsfleet, patterns diverge:
+#   (a) continuing on HS1 itself to Ashford International, then onward over
+#       classic South Eastern Main Line metals via Folkestone to Dover
+#       Priory - the original 2009 "East Kent" pattern.
+#   (b) leaving HS1 near Ebbsfleet for the classic North Kent Line via
+#       Gravesend to Strood, then over classic Chatham Main Line metals via
+#       Rochester/Chatham/Faversham and the coastal loop to Margate/
+#       Ramsgate - the "North Kent" pattern (some short workings terminate
+#       at Faversham rather than continuing to the coast).
+#
+# CRS codes: STP, AFK, FKW, FKC, DVP, RTR/CTM/GLM/RAI/SIT/TEY/FAV,
+# WHI/HNB/BCH/WGA/MAR/BSR/DMP/RAM are all already verified in
+# southeastern-main-line.toml / southeastern-chatham.toml / thameslink-
+# core.toml and reused here unchanged. SFA (Stratford International) and
+# EBD (Ebbsfleet International's domestic-platform code - railwaycodes.org.uk
+# separately lists EBF for the international/Eurostar side) were confirmed
+# via each station's own Wikipedia infobox. GRV (Gravesend) was confirmed
+# via both its Wikipedia infobox and railwaycodes.org.uk's crsg.shtm table.
+#
+# NOT included, omitted rather than guessed: the "one train" Ashford -
+# Canterbury West - Thanet Parkway - Ramsgate/Broadstairs pattern the
+# Southeastern TOC article also mentions (Canterbury West and Thanet
+# Parkway CRS codes were not cross-checked against a second source in the
+# time available), and the Dover Priory - Martin Mill - Walmer - Deal -
+# Sandwich coastal-loop continuation onward to Ramsgate (this is the exact
+# same stretch southeastern-chatham.toml's own header comment already
+# flagged as unconfirmed and omitted - not filling that gap here either,
+# for consistency, since it wasn't independently 2-source-verified here).
+# Both are coverage gaps for a future task, not this one.
+#
+# Segment-sharing decision (station overlap only, everywhere - no shared
+# segment in this file):
+# HS1 is physically distinct, purpose-built high-speed infrastructure for
+# its whole length that this catalogue's other lines never touch, so
+# `hs1-domestic` (STP/SFA/EBD) is exclusive to this file outright. STP is
+# also thameslink-core.toml's terminus, but Thameslink's low-level
+# core-tunnel platforms and St Pancras International's high-level HS1
+# domestic platforms are physically different infrastructure converging
+# only at the station building - station overlap only, matching this
+# batch's LBG/DVP precedent.
+#
+# Past Ebbsfleet, this service rejoins classic Southeastern metals that
+# southeastern-main-line.toml and southeastern-chatham.toml already
+# document as `seml-coast` and `chatham-medway`/`chatham-coastal`. That
+# looks at first like a case for reusing those exact segment names as a
+# shared trunk (per SCHEMA.md's shared-trunk rule) - but `SegmentRegistry`
+# marks an entire *segment name* shared the moment two files use it, not
+# just the specific stations that overlap. This service does not call at
+# every station on those classic segments (e.g. it never touches Longfield/
+# Meopham/Sole Street on `chatham-medway`, or Westenhanger/Sandling on
+# `seml-coast`) - reusing those names verbatim would therefore also flip an
+# incident at, say, Meopham to `SharedSegment` scope even though this file
+# has no station there at all and genuinely can't be affected. So, per this
+# task's brief ("the default expectation is station-level overlap... at
+# Ashford International and possibly other shared stations") and the
+# xc-south-coast.toml/xc-manchester.toml precedent ("station overlap is
+# fine, segment-sharing is a deliberate choice... incidents on the shared
+# track still match both lines by station"), every overlap in this file -
+# AFK, FKW/FKC/DVP, SOO, RTR/CTM/GLM/RAI/SIT/TEY/FAV,
+# WHI/HNB/BCH/WGA/MAR/BSR/DMP/RAM - is deliberately kept on this file's own
+# `hs1-ashford`/`hs1-northkent` segments rather than the sibling files'
+# segment names. An incident at any of those stations still matches both
+# lines (each independently, via its own station list), just each scoped
+# ExclusiveSegment rather than SharedSegment - correct, since this file's
+# own exclusive infrastructure ends at Ebbsfleet, and everything past it is
+# "this line happens to also serve a station on someone else's segment",
+# not "this line and that line share an as-yet-undivided trunk".
+#
+# DVP ends up served by all three Southeastern files: southeastern-main-line
+# (`seml-coast`), southeastern-chatham (`chatham-dover`), and this file
+# (`hs1-ashford`) - three different physical approaches (via Folkestone,
+# via Kearsney, and via HS1/Ashford respectively) converging at one station,
+# station overlap only in every direction. RAM is served by both
+# southeastern-chatham (`chatham-coastal`) and this file (`hs1-northkent`),
+# again station overlap only for the reasons above.
+#
+# southeastern-main-line.toml and southeastern-chatham.toml are not edited
+# by this task to add "Javelin"/"High Speed 1" to their own
+# excluded_keywords - a pure keyword-only "Javelin delayed" incident with no
+# station data already can't also produce a spurious operator-only match on
+# them, because lines_affected_by() drops all OperatorOnly matches whenever
+# any more-precise match exists elsewhere in the same incident.
+[[stations]]
+crs = "STP"
+role = "terminus"
+segment = "hs1-domestic"
+
+[[stations]]
+crs = "SFA"
+role = "major"
+segment = "hs1-domestic"
+
+[[stations]]
+crs = "EBD"
+role = "junction"
+segment = "hs1-domestic"
+# North Kent pattern diverges here via Gravesend; East Kent pattern
+# continues on HS1 itself toward Ashford International.
+
+[[stations]]
+crs = "AFK"
+role = "junction"
+segment = "hs1-ashford"
+# Reaches Ashford via HS1's own alignment through the North Downs Tunnel,
+# physically distinct from SEML's classic route via Sevenoaks/Tonbridge -
+# station overlap with southeastern-main-line.toml's AFK (on `seml-weald`),
+# not a shared segment; see header comment. The sparser Ashford - Canterbury
+# West - Thanet Parkway - Ramsgate/Broadstairs pattern also reported for
+# this service is not covered here; see header comment.
+
+[[stations]]
+crs = "FKW"
+role = "minor"
+segment = "hs1-ashford"
+# Also on southeastern-main-line.toml's `seml-coast` - station overlap
+# only, not a shared segment; see header comment.
+
+[[stations]]
+crs = "FKC"
+role = "major"
+segment = "hs1-ashford"
+
+[[stations]]
+crs = "DVP"
+role = "terminus"
+segment = "hs1-ashford"
+# Confirmed limit of this branch; the coastal-loop continuation onward to
+# Ramsgate via Martin Mill/Walmer/Deal/Sandwich is not covered here (same
+# unconfirmed stretch southeastern-chatham.toml's own comment already
+# flags and omits). Also on southeastern-main-line.toml's `seml-coast` and
+# southeastern-chatham.toml's `chatham-dover` - three-way station overlap,
+# no shared segment; see header comment.
+
+[[stations]]
+crs = "GRV"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "SOO"
+role = "junction"
+segment = "hs1-northkent"
+# Also on southeastern-chatham.toml's `chatham-medway`, reached there via
+# the Chatham Main Line's own alignment through Longfield/Meopham/Sole
+# Street rather than via Gravesend - station overlap only; see header
+# comment.
+
+[[stations]]
+crs = "RTR"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "CTM"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "GLM"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "RAI"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "SIT"
+role = "junction"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "TEY"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "FAV"
+role = "junction"
+segment = "hs1-northkent"
+# Some short workings terminate here rather than continuing to the coast.
+
+[[stations]]
+crs = "WHI"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "HNB"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "BCH"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "WGA"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "MAR"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "BSR"
+role = "major"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "DMP"
+role = "minor"
+segment = "hs1-northkent"
+
+[[stations]]
+crs = "RAM"
+role = "terminus"
+segment = "hs1-northkent"
+# Also on southeastern-chatham.toml's `chatham-coastal` - station overlap
+# only, not a shared segment; see header comment.

@@ -1,0 +1,382 @@
+id = "great-northern-suburban"
+name = "Great Northern: Moorgate to Welwyn Garden City & Hertford Loop"
+mode = "national-rail"
+category = "commuter"
+operators = ["GN"]  # Great Northern (GTR brand), same ATOC code as
+# lines/great-northern-kings-lynn.toml (Task 5.10). That file covers GN's
+# King's Cross-Peterborough/Cambridge/King's Lynn main line; this file
+# covers the genuinely separate Moorgate-suburban service group (a
+# different London terminus - Moorgate, reached via the Northern City
+# Line tunnel - not King's Cross).
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Overall route shape: Wikipedia's "Northern City Line" and "Hertford Loop
+# Line" articles, cross-checked against each other and against Wikipedia's
+# "Great Northern route" article (whose own service-pattern table gives the
+# full Moorgate-Welwyn Garden City and Moorgate-Stevenage-via-Hertford-North
+# calling lists used to order the stations below). The Potters Bar-
+# Brookmans Park-Welham Green-Hatfield-Welwyn Garden City ordering was
+# additionally corroborated by the route-diagram ("succession box") on the
+# Brookmans Park and Hatfield station articles themselves (both independently
+# confirm Potters Bar -> Brookmans Park -> Welham Green -> Hatfield -> Welwyn
+# Garden City), because a separate single fetch of Welham Green's own article
+# misread its succession box and would otherwise have suggested a wrong
+# order - not trusted, superseded by the two corroborating fetches.
+#
+# CRS codes: verified against each station's own Wikipedia infobox "Station
+# code" field, cross-checked against nationalrail.co.uk's own
+# `/stations/<CODE>/details.html` pages (which return the live station name
+# for each code). railwaycodes.org.uk's own CRSb.shtm page was tried first
+# for Bowes Park/Brookmans Park/Bayford but repeatedly truncated before
+# reaching entries past "Bloxwich" alphabetically (same class of failure
+# `great-northern-kings-lynn.toml` hit with rate-limiting, but here it's
+# page-length truncation) - Bayford's row loaded and matched (BAY), but an
+# earlier, since-discarded fetch attempt had misattributed BPK/BMP to Bowes
+# Park/Brookmans Park before the truncation was noticed. That misattribution
+# is NOT used in this file: Bowes Park (BOP) and Brookmans Park (BPK) below
+# are the nationalrail.co.uk-confirmed codes, cross-checked against each
+# station's own Wikipedia infobox (both agree), and BMP was independently
+# confirmed via nationalrail.co.uk to actually belong to a different
+# station entirely (Brampton, Cumbria) - a useful reminder that a single
+# unverified fetch is not enough, matching this batch's own "cross-check
+# against a second source" rule. FPK, AAP, PBR, HAT, WGC and SVG were already
+# verified in `great-northern-kings-lynn.toml` and are reused unchanged here.
+#
+# ============================================================================
+# SHARED-TRUNK RESEARCH FINDING (this task's open research question)
+# ============================================================================
+# Per `great-northern-kings-lynn.toml`'s own hand-off comment, this task
+# needed to confirm whether the Moorgate suburban services and that file's
+# King's Cross main line share any physical trunk before diverging to their
+# separate London termini.
+#
+# Finding: yes, a genuine physical overlap exists, but it is NOT a clean
+# "both services run identically over this exact section" shared trunk -
+# the two service groups have different calling patterns on the same
+# alignment. Per the "Northern City Line" article, Moorgate services surface
+# from the Drayton Park tunnel/cutting and join the East Coast Main Line
+# "south of Finsbury Park" - i.e. at or before FPK, exactly where
+# `great-northern-kings-lynn.toml`'s own `gn-ecml-slow-lines` segment starts.
+# From FPK, Moorgate's own "Welwyn Garden City" pattern continues over the
+# same ECML slow-line pair as that file's KGX-Peterborough/Cambridge/King's
+# Lynn service as far as Welwyn Garden City, also calling at Alexandra
+# Palace/Potters Bar/Hatfield - all four already `gn-ecml-slow-lines`
+# stations in that file. Moorgate's "Stevenage via Hertford North" pattern
+# also shares FPK and Alexandra Palace, then diverges onto the Hertford
+# Loop Line (departing the ECML at Wood Green South Junction, just north of
+# Alexandra Palace, per the "Hertford Loop Line" article) before rejoining
+# the ECML again briefly at Langley Junction, just south of Stevenage, to
+# reach that file's own `gn-welwyn-hitchin-trunk` terminus station, SVG.
+#
+# BUT: unlike that file's KGX semi-fast/express service, Moorgate's own
+# services stop at every intermediate station along these stretches -
+# Harringay and Hornsey (between FPK and Alexandra Palace), and New
+# Southgate/Oakleigh Park/New Barnet/Hadley Wood/Brookmans Park/Welham Green
+# (between Alexandra Palace and Hatfield) - none of which appear in
+# `great-northern-kings-lynn.toml`'s own station list at all, because that
+# file's semi-fast service does not call there. This is the exact same
+# "same physical track, different calling pattern" situation
+# `southeastern-highspeed.toml`'s own header comment already worked through
+# for the Javelin sharing `seml-coast`/`chatham-medway`/`chatham-coastal`
+# infrastructure with Southeastern's classic stopping services: reusing the
+# sibling file's segment name verbatim would mark stations that file's
+# service doesn't call at (and vice versa) as `SharedSegment`, which is
+# wrong in both directions. Following that precedent, this file does NOT
+# reuse `gn-ecml-slow-lines` or `gn-welwyn-hitchin-trunk` - every station
+# this file shares with `great-northern-kings-lynn.toml` (FPK, AAP, PBR,
+# HAT, WGC, SVG) is kept on THIS file's own segment names instead, each
+# individually commented below. An incident at any of those stations still
+# matches both files independently (each via its own station list), each
+# scoped `ExclusiveSegment`, never `SharedSegment` - see the regression
+# tests below.
+#
+# This makes `great-northern-suburban` a genuinely standalone line for the
+# purposes of `SegmentRegistry.is_shared()`: it shares no segment *name*
+# with any other already-curated file, so per COMMON.md's own exception no
+# cross-file `SharedSegment` propagation test is added here. This file does
+# have its own internal shared stretch (both of ITS OWN branches - Welwyn
+# Garden City and Hertford Loop - run over the same Moorgate-Finsbury
+# Park-Alexandra Palace tracks before diverging at Alexandra Palace), but
+# since that stretch is only ever touched by this one line ID, the registry
+# always reports it `ExclusiveSegment` regardless - same non-effect
+# `great-northern-kings-lynn.toml`'s own KGX-Hitchin trunk has between ITS
+# two branches.
+#
+# ============================================================================
+# MATCH KEYWORDS
+# ============================================================================
+# "Northern City Line" and "Hertford Loop Line" are both specific,
+# unambiguous rail infrastructure names (each is also the title of its own
+# Wikipedia article, evidence they're standard usage) unlikely to false-
+# match unrelated content - unlike a bare "Moorgate", which would also match
+# London Underground Northern/Circle/Metropolitan line content at the same
+# station and was deliberately left out for that reason, same reasoning
+# `great-northern-kings-lynn.toml` gives for omitting "Great Northern" alone.
+match_keywords = ["Northern City Line", "Hertford Loop Line"]
+
+sample_stations = ["MOG", "FPK", "AAP", "WGC", "HFN"]
+
+# Five real terminus destinations this line's own services actually run to:
+# Moorgate (down-direction, London-bound), Welwyn Garden City (Welwyn
+# Garden City branch terminus), and Hertford North/Watton-at-Stone/Stevenage
+# (all three are genuine termini on the Hertford Loop branch - short peak
+# workings terminate at Watton-at-Stone and Hertford North, others continue
+# to Stevenage - per the "Hertford Loop Line" article's own service
+# description).
+destination_crs_filter = ["MOG", "WGC", "HFN", "WAS", "SVG"]
+
+# Commuter line: tighter thresholds. Added in this batch's final review -
+# this was the only `category = "commuter"` file in the catalogue without a
+# `[severity_overrides]` block, and these are the same values every other
+# commuter file uses (thameslink-core.toml, elizabeth-shenfield.toml,
+# thameslink-bedford.toml, thameslink-cambridge.toml, thameslink-southern.toml,
+# southeastern-metro-north-kent.toml, southeastern-hayes-line.toml). The
+# reasoning applies here too: Moorgate suburban services run every few
+# minutes at peak, so a 4-minute delay is more disruptive than the same
+# delay on an hourly long-distance service.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# STATIONS - ordered south to north from Moorgate; splits into two branches
+# at Alexandra Palace (see the SHARED-TRUNK RESEARCH FINDING section above).
+# ============================================================================
+
+# --- Northern City Line tunnel/cutting section, Moorgate to Drayton Park.
+# Exclusive to this file - no other curated line touches any of these
+# stations. ---
+[[stations]]
+crs = "MOG"
+role = "terminus"
+segment = "gn-moorgate-tunnel"
+# Moorgate. Deep-level tunnel platforms shared operationally with the
+# London Underground station of the same name, but the National Rail/GN
+# platforms are their own distinct infrastructure - CRS code MOG.
+
+[[stations]]
+crs = "OLD"
+role = "minor"
+segment = "gn-moorgate-tunnel"
+# Old Street.
+
+[[stations]]
+crs = "EXR"
+role = "minor"
+segment = "gn-moorgate-tunnel"
+# Essex Road.
+
+[[stations]]
+crs = "HHY"
+role = "major"
+segment = "gn-moorgate-tunnel"
+# Highbury & Islington. CRS code HHY specifically for the Great
+# Northern/National Rail platforms - the adjacent London Overground/
+# Underground interchange uses a different code (HII) for its own
+# ticketing/TOC purposes per the "Northern City Line" article.
+
+[[stations]]
+crs = "DYP"
+role = "minor"
+segment = "gn-moorgate-tunnel"
+# Drayton Park. Where trains change between 750V DC third-rail traction
+# (used in the tunnel south of here) and 25kV AC overhead traction (used on
+# the surface line north of here) - the "Northern City Line" article's own
+# description of this changeover. The line continues in a cutting from here
+# until physically joining the East Coast Main Line just south of Finsbury
+# Park - see the SHARED-TRUNK RESEARCH FINDING section above.
+
+# --- Trunk shared between this file's own two branches (Welwyn Garden City
+# and Hertford Loop), Finsbury Park to Alexandra Palace. Also the stretch
+# where this file's own stations physically overlap
+# `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines` segment - station
+# overlap only, not a shared segment name; see the SHARED-TRUNK RESEARCH
+# FINDING section above for why. ---
+[[stations]]
+crs = "FPK"
+role = "junction"
+segment = "gn-moorgate-trunk"
+# Finsbury Park. Physical joining point with the East Coast Main Line - see
+# the SHARED-TRUNK RESEARCH FINDING section above. Also a station on
+# `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines` segment - station
+# overlap only, deliberately not reused as a shared segment name here.
+
+[[stations]]
+crs = "HGY"
+role = "minor"
+segment = "gn-moorgate-trunk"
+# Harringay. Not a `great-northern-kings-lynn.toml` station - that file's
+# semi-fast service does not call here.
+
+[[stations]]
+crs = "HRN"
+role = "minor"
+segment = "gn-moorgate-trunk"
+# Hornsey. Not a `great-northern-kings-lynn.toml` station, same reason as
+# Harringay above.
+
+[[stations]]
+crs = "AAP"
+role = "junction"
+segment = "gn-moorgate-trunk"
+# Alexandra Palace. The real divergence point between this file's two
+# branches: the Hertford Loop Line leaves the East Coast Main Line at Wood
+# Green South Junction, just north of this station, per the "Hertford Loop
+# Line" article. Junction station, so per the shared-trunk rule of thumb it
+# stays on this trunk segment; both branches' own exclusive segments start
+# at the next station in each direction. Also a station on
+# `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines` segment - station
+# overlap only, same as FPK above; see the regression test below.
+
+# --- Welwyn Garden City branch (continues on the ECML slow lines past
+# Alexandra Palace). Every station from Potters Bar onward is also on
+# `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines` segment except the
+# purely-local stops (New Southgate, Oakleigh Park, New Barnet, Hadley Wood,
+# Brookmans Park, Welham Green) that file's semi-fast service skips - see
+# the SHARED-TRUNK RESEARCH FINDING section above for why none of this is
+# reused as a shared segment name. ---
+[[stations]]
+crs = "NSG"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# New Southgate.
+
+[[stations]]
+crs = "OKL"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# Oakleigh Park.
+
+[[stations]]
+crs = "NBA"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# New Barnet.
+
+[[stations]]
+crs = "HDW"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# Hadley Wood.
+
+[[stations]]
+crs = "PBR"
+role = "major"
+segment = "gn-moorgate-wgc-branch"
+# Potters Bar. Also on `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines`
+# - station overlap only, not a shared segment; see header comment above.
+
+[[stations]]
+crs = "BPK"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# Brookmans Park. CRS code BPK - see the SOURCING AND VERIFICATION section
+# above for why this needed extra cross-checking.
+
+[[stations]]
+crs = "WMG"
+role = "minor"
+segment = "gn-moorgate-wgc-branch"
+# Welham Green.
+
+[[stations]]
+crs = "HAT"
+role = "major"
+segment = "gn-moorgate-wgc-branch"
+# Hatfield. Also on `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines`
+# - station overlap only; see header comment above.
+
+[[stations]]
+crs = "WGC"
+role = "terminus"
+segment = "gn-moorgate-wgc-branch"
+# Welwyn Garden City. Also `great-northern-kings-lynn.toml`'s own
+# `gn-ecml-slow-lines` terminus station - station overlap only; see header
+# comment above.
+
+# --- Hertford Loop branch (diverges from the East Coast Main Line at Wood
+# Green South Junction, just north of Alexandra Palace; rejoins it again
+# briefly at Langley Junction, just south of Stevenage, to reach that
+# station - per the "Hertford Loop Line" article). ---
+[[stations]]
+crs = "BOP"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Bowes Park. CRS code BOP - see the SOURCING AND VERIFICATION section
+# above for why this needed extra cross-checking (not to be confused with
+# Brookmans Park's BPK on the other branch).
+
+[[stations]]
+crs = "PAL"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Palmers Green.
+
+[[stations]]
+crs = "WIH"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Winchmore Hill.
+
+[[stations]]
+crs = "GPK"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Grange Park.
+
+[[stations]]
+crs = "ENC"
+role = "major"
+segment = "gn-moorgate-hertford-branch"
+# Enfield Chase.
+
+[[stations]]
+crs = "GDH"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Gordon Hill.
+
+[[stations]]
+crs = "CWH"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Crews Hill.
+
+[[stations]]
+crs = "CUF"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Cuffley.
+
+[[stations]]
+crs = "BAY"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Bayford.
+
+[[stations]]
+crs = "HFN"
+role = "major"
+segment = "gn-moorgate-hertford-branch"
+# Hertford North. A genuine terminus for some services (others continue to
+# Watton-at-Stone/Stevenage) - per the "Hertford Loop Line" article's own
+# service description.
+
+[[stations]]
+crs = "WAS"
+role = "minor"
+segment = "gn-moorgate-hertford-branch"
+# Watton-at-Stone. Also a genuine terminus for some (peak) short workings,
+# per the "Hertford Loop Line" article.
+
+[[stations]]
+crs = "SVG"
+role = "terminus"
+segment = "gn-moorgate-hertford-branch"
+# Stevenage. Reached via a short readmission onto the East Coast Main Line
+# at Langley Junction, just south of the station - see the SHARED-TRUNK
+# RESEARCH FINDING section above. Also `great-northern-kings-lynn.toml`'s
+# own `gn-welwyn-hitchin-trunk` station - station overlap only, not a
+# shared segment, same reasoning as FPK/AAP/PBR/HAT/WGC above.

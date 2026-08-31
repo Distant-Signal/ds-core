@@ -1,0 +1,309 @@
+id = "southern-oxted-uckfield"
+name = "Oxted Line"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "SN",  # Southern
+]
+
+sample_stations = ["OXT", "UCK", "EGR"]
+match_keywords = ["Oxted line", "Uckfield line", "East Grinstead branch"]
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list, ordering and CRS codes confirmed via Wikipedia's "Oxted
+# line" article (which itself covers the shared trunk plus both the
+# Uckfield and East Grinstead branches as one route), cross-checked against
+# Wikipedia's "Southern (train operating company)" article (independent
+# calling-point lists for both branches) and against each station's own
+# Wikipedia infobox. Every single station below (all 18, including VIC/LBG/
+# ECR) was then independently cross-checked against a real second source of
+# the type COMMON.md requires: nationalrail.co.uk's own per-station detail
+# pages, which loaded fine for every station tried on this task (unlike
+# southern-brighton-main-line.toml's/southern-coastway-east.toml's
+# experience with southernrailway.com, which still 403s automated fetches)
+# and each confirm the station's name, CRS code, and "Station managed by
+# Southern" in their heading/body. This gives this file a stronger sourcing
+# bar than southern-brighton-main-line.toml achieved for its own
+# fold-in/hand-off findings - see the specific caveats below for the one
+# area (Thameslink's East Grinstead peak overlay, and the exact London
+# terminus split between branches) that still falls short of a genuine
+# non-Wikipedia *service-pattern* source, as opposed to a station-identity
+# source.
+#
+# ============================================================================
+# DIVERGING JUNCTION FROM THE BRIGHTON MAIN LINE - confirmed, not assumed
+# ============================================================================
+# Per Wikipedia's "Oxted line" article: the line "diverges from the
+# Brighton Main Line at South Croydon Junction, immediately to the south of
+# South Croydon station." Cross-checked against Wikipedia's "South Croydon
+# railway station" article, which independently states the station "is on
+# the Brighton Line at its junction with the Oxted Line" - confirming both
+# the junction's existence and its location at South Croydon, not (as the
+# brief flagged as one plausible guess) at East Croydon itself. South
+# Croydon (SCY) is NOT a station in southern-brighton-main-line.toml's own
+# list, so there is no segment-name collision risk from this file adding
+# it; this is a genuinely new station to the catalogue (confirmed via
+# repo-wide grep before drafting).
+#
+# ============================================================================
+# STATION OVERLAP AT VIC / LBG / ECR - judgment call, mirrors
+# southern-brighton-main-line.toml's own reasoning for the same three hubs
+# ============================================================================
+# Both this line's London approaches (Victoria for the East Grinstead
+# branch, London Bridge for the Uckfield branch - see LONDON TERMINI below)
+# and its shared approach through East Croydon are also stations in one or
+# more already-curated files: VIC (southern-brighton-main-line.toml,
+# southeastern-chatham.toml), LBG (thameslink-core.toml,
+# southeastern-main-line.toml, southeastern-metro-north-kent.toml,
+# southeastern-hayes-line.toml, southern-brighton-main-line.toml), ECR
+# (southern-brighton-main-line.toml). Whether Oxted line services
+# physically share the same fast/slow tracks as those other services
+# between these hubs and East Croydon was not established to COMMON.md's
+# bar (the same specific kind of claim southern-brighton-main-line.toml's
+# own header flagged as unconfirmed for its LBG/Windmill Bridge Jn/ECR
+# stretch, and for the same reason: no reachable source describes exact
+# track-sharing, only shared stations). Per the xc-south-coast.toml/
+# xc-manchester.toml precedent ("station overlap is fine, segment-sharing
+# is a deliberate choice"), this file therefore uses its own segment names
+# at all three stations (`oxted-victoria-approach`, `oxted-london-bridge-
+# approach`, `oxted-trunk`) rather than reusing any sibling file's segment
+# name - station overlap only, not a shared trunk. See the matcher.rs test
+# updates (lbg overlap test extended; new vic_station_overlap test added)
+# for the behavioural proof this produces independent ExclusiveSegment
+# matches at each hub, never SharedSegment.
+#
+# ============================================================================
+# LONDON TERMINI - which branch uses which London terminus
+# ============================================================================
+# Per Wikipedia's "Oxted line" article, cross-checked against Wikipedia's
+# "Southern (train operating company)" article (which independently lists
+# calling points for each branch): the East Grinstead branch's usual
+# service is London Victoria - East Grinstead (electrified throughout,
+# Class 377 Electrostar EMUs), while the Uckfield branch's usual service is
+# London Bridge - Uckfield (Class 171 Turbostar diesel units, since
+# electrification per the Oxted line article stops at Hurst Green Junction
+# and none of the Uckfield branch itself is electrified). THIS SPECIFIC
+# TERMINUS-PER-BRANCH SPLIT AND ITS ROLLING-STOCK DETAIL IS CROSS-CHECKED
+# BETWEEN TWO WIKIPEDIA ARTICLES BUT NOT AGAINST A NON-WIKIPEDIA SOURCE OF
+# THE TYPE COMMON.md REQUIRES - nationalrail.co.uk's per-station pages
+# confirm station identity/management but not which London terminus each
+# branch's service starts from. Flagged here as Wikipedia-only for this
+# specific claim, same disclosure standard southern-brighton-main-line.toml
+# used for its own Gatwick Express/Thameslink calling-pattern claims - the
+# station list and CRS codes themselves are NOT affected by this caveat
+# (those are independently confirmed per the SOURCING note above).
+#
+# ============================================================================
+# EAST GRINSTEAD - confirmed Southern's own Oxted line branch, NOT
+# Thameslink territory (the brief's open question)
+# ============================================================================
+# The gap-analysis document groups "Brighton/Horsham/East Grinstead/Sutton
+# loop/Sevenoaks" together as Thameslink's southern branches. Checked
+# directly rather than assumed either way, per the brief: Wikipedia's
+# "Oxted line" article, its "East Grinstead line" section, and East
+# Grinstead's own station article all independently and consistently state
+# that OFF-PEAK, ALL services at East Grinstead are operated by Southern
+# (Class 377 EMUs) as the London Victoria - East Grinstead service, and
+# that Thameslink only adds PEAK-HOUR supplementary services (Class 700
+# EMUs, to/from London Bridge and Bedford) over the same branch. East
+# Grinstead's own station article states it is "one of the two southern
+# termini of the Oxted line" (the Oxted line being explicitly Southern's
+# own route, per the DIVERGING JUNCTION and STATIONS sections above/below).
+# So East Grinstead is genuinely part of THIS Southern line, not Thameslink
+# territory, and IS included below - the gap-analysis document's grouping
+# describes where Thameslink's own timetable reaches, not who owns/defines
+# the line. This is cross-checked across three separate Wikipedia articles
+# (stronger corroboration than a single-article claim, though still not a
+# non-Wikipedia source for the specific peak/off-peak operator split).
+#
+# HAND-OFF NOTE for a future Thameslink southern-branches file (mirrors
+# southern-brighton-main-line.toml's own Task 5.14 hand-off style): if that
+# future file's own research confirms Thameslink's East Grinstead peak
+# service runs over the same physical trackage this file models as
+# `oxted-trunk` (East Croydon to Hurst Green Junction) and
+# `oxted-east-grinstead-branch` (Lingfield to East Grinstead), those would
+# become genuine cross-file shared trunks - a plausible and reasonably
+# well-corroborated lead (three consistent Wikipedia articles, not one),
+# but NOT independently verified to COMMON.md's full bar by this task, and
+# not treated as confirmed here. No `TL` operator code and no shared-segment
+# test are added preemptively; that is that future task's own call to make
+# after its own independent verification, same rule
+# southern-brighton-main-line.toml's own hand-off note follows.
+#
+# ============================================================================
+# STATIONS - the shared Oxted line trunk (South Croydon Junction to Hurst
+# Green Junction), then the two branches. Every intermediate station is
+# listed (this is a stopping regional line, matching southern-coastway-
+# east.toml's/southern-coastway-west.toml's convention, not the principal-
+# stations-only convention used by the main-line files in this batch).
+# ============================================================================
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "oxted-victoria-approach"
+# London Victoria. Usual London terminus for the East Grinstead branch
+# service (see LONDON TERMINI above). Station overlap only with
+# southern-brighton-main-line.toml/southeastern-chatham.toml - see STATION
+# OVERLAP above.
+
+[[stations]]
+crs = "LBG"
+role = "terminus"
+segment = "oxted-london-bridge-approach"
+# London Bridge. Usual London terminus for the Uckfield branch service (see
+# LONDON TERMINI above). Station overlap only with thameslink-core.toml/
+# southeastern-main-line.toml/southeastern-metro-north-kent.toml/
+# southeastern-hayes-line.toml/southern-brighton-main-line.toml - see
+# STATION OVERLAP above.
+
+[[stations]]
+crs = "ECR"
+role = "junction"
+segment = "oxted-trunk"
+# East Croydon. Both London approaches converge here before continuing to
+# South Croydon Junction. Also southern-brighton-main-line.toml's own
+# station - station overlap only, see STATION OVERLAP above.
+
+[[stations]]
+crs = "SCY"
+role = "junction"
+segment = "oxted-trunk"
+# South Croydon. The Brighton Main Line/Oxted line diverging junction (see
+# DIVERGING JUNCTION above) is immediately south of this station, not an
+# internal branch point of this file's own line - kept on `oxted-trunk`
+# for consistency and because it isn't a station any other curated file
+# lists.
+
+[[stations]]
+crs = "SNR"
+role = "minor"
+segment = "oxted-trunk"
+# Sanderstead.
+
+[[stations]]
+crs = "RDD"
+role = "minor"
+segment = "oxted-trunk"
+# Riddlesdown.
+
+[[stations]]
+crs = "UWL"
+role = "minor"
+segment = "oxted-trunk"
+# Upper Warlingham.
+
+[[stations]]
+crs = "WOH"
+role = "minor"
+segment = "oxted-trunk"
+# Woldingham.
+
+[[stations]]
+crs = "OXT"
+role = "major"
+segment = "oxted-trunk"
+# Oxted. The line's namesake and principal intermediate interchange; per
+# Hurst Green's own Wikipedia article, train splitting/joining between the
+# two branches is carried out here operationally, even though the physical
+# track divergence itself is at Hurst Green Junction just south (kept as
+# `role = "major"`, not `"junction"`, since matching logic only reads
+# `segment`, and the real infrastructure junction is at Hurst Green - see
+# next station).
+
+[[stations]]
+crs = "HUR"
+role = "junction"
+segment = "oxted-trunk"
+# Hurst Green. Per Wikipedia's "Oxted line" article: "At Hurst Green
+# Junction, south of Hurst Green station, the line splits into two, with an
+# electrified branch running to East Grinstead and an unelectrified branch
+# running to Uckfield." Cross-checked against Hurst Green's own Wikipedia
+# article, which independently confirms the junction and the Uckfield/East
+# Grinstead split. Kept on the shared `oxted-trunk` segment per the
+# shared-trunk rule of thumb (SCHEMA.md); each branch's own exclusive
+# segment starts at the next station past this junction.
+
+# ----------------------------------------------------------------------
+# East Grinstead branch (electrified; see EAST GRINSTEAD above for why
+# this is included as Southern's own branch, not Thameslink territory).
+# ----------------------------------------------------------------------
+[[stations]]
+crs = "LFD"
+role = "minor"
+segment = "oxted-east-grinstead-branch"
+# Lingfield. Exclusive segment starts here, one station past the Hurst
+# Green junction, per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "DMS"
+role = "minor"
+segment = "oxted-east-grinstead-branch"
+# Dormans.
+
+[[stations]]
+crs = "EGR"
+role = "terminus"
+segment = "oxted-east-grinstead-branch"
+# East Grinstead. Southern's own terminus off-peak; Thameslink adds
+# peak-hour services over this same branch - see the HAND-OFF NOTE above.
+
+# ----------------------------------------------------------------------
+# Uckfield branch (unelectrified from Hurst Green Junction; diesel-worked).
+# ----------------------------------------------------------------------
+[[stations]]
+crs = "EBT"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Edenbridge Town. Exclusive segment starts here, one station past the
+# Hurst Green junction, per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "HEV"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Hever.
+
+[[stations]]
+crs = "CWN"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Cowden.
+
+[[stations]]
+crs = "AHS"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Ashurst (Kent) - not to be confused with the unrelated Ashurst station in
+# the Hampshire New Forest; confirmed via nationalrail.co.uk, which
+# disambiguates this station explicitly as "Ashurst (Kent)".
+
+[[stations]]
+crs = "ERI"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Eridge. Also the northern terminus of the heritage Spa Valley Railway
+# (not part of the National Rail network and not modelled by this
+# catalogue).
+
+[[stations]]
+crs = "COH"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Crowborough. Named "Crowborough & Jarvis Brook" from 1897-1980; current
+# name is simply "Crowborough" per its own Wikipedia article.
+
+[[stations]]
+crs = "BXD"
+role = "minor"
+segment = "oxted-uckfield-branch"
+# Buxted.
+
+[[stations]]
+crs = "UCK"
+role = "terminus"
+segment = "oxted-uckfield-branch"
+# Uckfield. Southern terminus of the branch; the line south to Lewes closed
+# in 1969, per Uckfield's own Wikipedia article, leaving this a genuine
+# single-track rural terminus with no onward National Rail connection.

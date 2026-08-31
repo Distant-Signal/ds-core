@@ -1,0 +1,317 @@
+id = "thameslink-cambridge"
+name = "Thameslink Cambridge & Peterborough Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["TL"]
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Route/service facts: Wikipedia's "Thameslink" article (its own off-peak
+# service-pattern tables for the "Cambridge to Brighton" and "Peterborough to
+# Horsham" routes, which give the exact calling points north of Finsbury
+# Park), cross-checked against the "Canal Tunnels (London)" article and the
+# "St Pancras railway station" article (both independently describing the
+# Canal Tunnels connection - see ROUTE VIA CANAL TUNNELS below), and against
+# each individual station's own Wikipedia infobox/services section
+# (Stevenage, Hitchin, Cambridge South, Welwyn Garden City, Meldreth,
+# Shepreth, Foxton - see the EXCLUSIONS sections below for what those last
+# three confirmed).
+#
+# CRS codes for every station this file shares with
+# `great-northern-kings-lynn.toml` (FPK, SVG, HIT, ARL, BIW, SDY, SNO, HUN,
+# PBO, LET, BDK, AWM, RYS, CMS, CBG) are reused unchanged from that file,
+# where they were already independently confirmed against
+# railwaycodes.org.uk and/or each station's own Wikipedia infobox - not
+# re-verified from scratch here, same reuse pattern
+# `thameslink-bedford.toml` used for STP/STPX from `thameslink-core.toml`.
+# STP/STPX is likewise reused unchanged from `thameslink-core.toml`.
+#
+# ============================================================================
+# ROUTE VIA CANAL TUNNELS
+# ============================================================================
+# Per the "Canal Tunnels (London)" and "St Pancras railway station" articles:
+# a pair of single-track tunnels, built 2004-2006 as part of the St Pancras
+# HS1 redevelopment, "start immediately off the St Pancras Thameslink
+# platforms, dive under the Regent's Canal, and join the East Coast Main
+# Line" near King's Cross (where the North London Line and HS1 pass over the
+# top - i.e. north of King's Cross itself, south of Finsbury Park). From
+# February/December 2018 this let GTR run Cambridge and Peterborough trains
+# straight through the Thameslink core instead of terminating at King's
+# Cross. This is a real, physical, purpose-built connection - not the
+# Hertford Loop Line (checked and ruled out: the "Hertford Loop Line"
+# article describes that route as Great Northern's own King's
+# Cross/Moorgate-Stevenage/Hertford North suburban service, with Thameslink
+# using it only "occasionally... when diverted off the main section of the
+# East Coast Main Line" - not this line's normal routing).
+#
+# So this line's own path north of the core is: St Pancras International
+# (low-level Thameslink platforms) -> Canal Tunnels -> East Coast Main Line
+# near King's Cross -> Finsbury Park -> (non-stop through Alexandra
+# Palace/Potters Bar/Hatfield/Welwyn Garden City - see WGC EXCLUSION below)
+# -> Digswell Junction/Welwyn North/Knebworth (non-stop) -> Stevenage ->
+# Hitchin, where it splits into the same two branches
+# `great-northern-kings-lynn.toml` already documents (direct Peterborough
+# branch, and the Cambridge Line towards Cambridge).
+#
+# ============================================================================
+# OVERLAP WITH GREAT-NORTHERN-KINGS-LYNN.TOML - FOUR DIFFERENT ANSWERS FOR
+# FOUR DIFFERENT STRETCHES
+# ============================================================================
+# This task's brief flagged the GN/King's Cross corridor overlap as real
+# research, not a given. Splitting it by stretch:
+#
+# (a) Finsbury Park through Welwyn Garden City (that file's
+# `gn-ecml-slow-lines` segment): GN's own suburban stopping service runs on
+# the physical SLOW/relief pair of the four-track ECML here (confirmed by
+# that file's own header comment). This line's Cambridge/Peterborough
+# service does not stop at Alexandra Palace, Potters Bar, Hatfield or
+# Welwyn Garden City at all (confirmed per-station below), which is strong
+# evidence it runs on the FAST pair through this four-track stretch instead
+# - physically different track from `gn-ecml-slow-lines`, not just a
+# skipped stop. FPK itself (the only common station in this stretch) is
+# therefore kept as station overlap only, on this file's own segment, not
+# `gn-ecml-slow-lines` - same call `great-northern-suburban.toml` already
+# made for its own FPK overlap with that file, for the analogous
+# same-track-but-different-calling-pattern reason described in its own
+# SHARED-TRUNK RESEARCH FINDING comment (that precedent itself follows
+# `southeastern-highspeed.toml`'s original "reusing the sibling's segment
+# name verbatim would mark stations that file's service doesn't call at as
+# SharedSegment, which is wrong" reasoning).
+#
+# (b) Welwyn North through Hitchin (that file's `gn-welwyn-hitchin-trunk`
+# segment, physically a single two-track pair after slow merges into fast at
+# Digswell Junction - see that file's own LNER HAND-OFF comment): this line
+# calls at Stevenage and Hitchin, both on that segment, but not at Welwyn
+# North or Knebworth (also on that segment) - a different calling pattern on
+# the same named segment, the identical situation as (a). Per the same
+# precedent, SVG and HIT are kept on this file's own segment, not
+# `gn-welwyn-hitchin-trunk`.
+#
+# (c) The direct Peterborough branch past Hitchin (`gn-peterborough-branch`:
+# Arlesey, Biggleswade, Sandy, St Neots, Huntingdon, Peterborough) - this is
+# different from (a)/(b): Stevenage station's own Wikipedia services section
+# states this line runs "2 tph to Peterborough (all stations)" - i.e. an
+# all-stations calling pattern identical to `great-northern-kings-lynn.toml`'s
+# own complete station list for that branch, no stations skipped in either
+# direction. Combined with that file's own comment that "the ECML is
+# single-pair from Digswell Junction onward" (no separate fast/slow lines
+# to be running on different tracks of), this is a genuine shared trunk, not
+# just station overlap - `gn-peterborough-branch` IS reused verbatim below.
+# See the SharedSegment regression test for Huntingdon.
+#
+# (d) The Cambridge Line branch past Hitchin (`gn-cambridge-kings-lynn-branch`:
+# Letchworth Garden City, Baldock, Ashwell & Morden, Royston, Meldreth,
+# Shepreth, Foxton, Cambridge South, Cambridge, ...): unlike the Peterborough
+# branch, this line's own Cambridge service is semi-fast and confirmed (via
+# each station's own Wikipedia infobox/services section) to skip Meldreth,
+# Shepreth and Foxton entirely - see MEL/STH/FXN EXCLUSION below. That's a
+# genuine calling-pattern mismatch with `gn-cambridge-kings-lynn-branch`'s
+# own complete station list, the same (a)/(b) situation, not the clean (c)
+# match - so this branch gets its own segment name, `thameslink-cambridge-
+# branch`, not a reuse of GN's name. Stations this file shares with that
+# segment (LET, BDK, AWM, RYS, CMS, CBG) are station overlap only.
+#
+# ============================================================================
+# STP - CORE JUNCTION
+# ============================================================================
+# St Pancras International is where this line meets the Thameslink core
+# (`thameslink-core.toml`) before diving into the Canal Tunnels - the same
+# core-boundary role STP plays in `thameslink-bedford.toml`, and the same
+# judgment call that file's own SEGMENT NAMING comment already made: this
+# file's own segment does NOT reuse `thameslink-core`'s segment name (this
+# branch doesn't touch Farringdon/City Thameslink/Blackfriars/London
+# Bridge), nor `mml-bedford-st-pancras` (this branch diverges towards the
+# ECML via the Canal Tunnels, not north up the Midland Main Line towards
+# Cricklewood/Bedford), nor `southeastern-highspeed.toml`'s own `hs1-domestic`
+# segment (purpose-built HS1 infrastructure, unrelated). STP is station
+# overlap only between all four files.
+#
+# ============================================================================
+# WGC EXCLUSION - PEAK-ONLY THAMESLINK SERVICE AT WELWYN GARDEN CITY IS A
+# DIFFERENT ROUTE, NOT THIS LINE
+# ============================================================================
+# Welwyn Garden City's own Wikipedia article does note some Thameslink
+# service there, but specifically: "Additional services, including several
+# Thameslink-operated services to and from Sevenoaks, via St Pancras
+# International and Catford, run to and from the station during the peak
+# hours." Catford is on the Catford Loop south of the core, nothing to do
+# with this line's own Brighton/Horsham-bound southern destinations - this
+# is a distinct peak-only Thameslink service group, not this line's standard
+# Cambridge/Peterborough pattern (which the main Thameslink article's own
+# route tables confirm does not call at WGC at all). Omitted here rather
+# than folded in as a maybe.
+#
+# ============================================================================
+# MEL/STH/FXN EXCLUSION - CONFIRMED GREAT NORTHERN ONLY
+# ============================================================================
+# Meldreth, Shepreth and Foxton (between Royston and Cambridge South on the
+# Cambridge Line) were each individually checked via their own Wikipedia
+# infobox/services section. All three give the same answer, e.g. Meldreth:
+# "All services at Meldreth are operated by Great Northern using Class 387
+# EMUs" - Thameslink does not call at any of the three. Omitted here rather
+# than guessed at from the general "semi-fast" description alone.
+#
+# ============================================================================
+# KING'S LYNN EXTENSION - NOT PART OF THIS LINE
+# ============================================================================
+# The main Thameslink article is explicit that this line's Cambridge service
+# terminates at Cambridge and does "not extend beyond Cambridge to Cambridge
+# North, Waterbeach, Ely, or King's Lynn" - that extension is
+# `great-northern-kings-lynn.toml`'s own, GN-only territory. Not included
+# here.
+#
+sample_stations = ["STP", "HIT", "CBG", "PBO"]
+
+# Two real termini this line's own services run to from the core boundary:
+# Cambridge (semi-fast Cambridge Line service) and Peterborough (all-stations
+# direct service). Mirrors `thameslink-bedford.toml`'s own single-terminus-
+# only convention (no reciprocal STP entry for up-direction, unlike
+# `great-northern-kings-lynn.toml`'s own KGX inclusion - that file's own
+# up-direction terminus is a plain terminus station in its own right; this
+# line's own up-direction destinations are the Thameslink core's many
+# southern branches, out of scope for this filter).
+destination_crs_filter = ["CBG", "PBO"]
+
+# "Thameslink Cambridge" and "Thameslink Peterborough" are specific,
+# unambiguous phrases naming this line's own two real destinations - two
+# high-precision keywords, per the Global Constraints' "don't overload
+# match_keywords" rule. A bare "Thameslink" would collide with every other
+# Thameslink branch file in this catalogue.
+match_keywords = ["Thameslink Cambridge", "Thameslink Peterborough"]
+
+# Commuter line: tighter thresholds, matching thameslink-core.toml and
+# thameslink-bedford.toml.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# STATIONS - ordered south to north from the Thameslink core boundary at St
+# Pancras; splits into two branches at Hitchin (see OVERLAP section above).
+# ============================================================================
+
+# --- Core boundary through the Canal Tunnels and ECML fast lines to
+# Hitchin. Station overlap only with every sibling file that also touches
+# these stations - see the OVERLAP and STP sections above. ---
+[[stations]]
+crs = "STP"
+tiploc = "STPX"
+role = "junction"
+segment = "thameslink-cambridge-peterborough-trunk"
+# St Pancras International. Trains continue into the core tunnel southward
+# for other Thameslink branches; northward here via the Canal Tunnels.
+
+[[stations]]
+crs = "FPK"
+role = "junction"
+segment = "thameslink-cambridge-peterborough-trunk"
+# Finsbury Park. Where the Canal Tunnels' connection to the ECML surfaces.
+# Station overlap only with great-northern-kings-lynn.toml and
+# great-northern-suburban.toml - see OVERLAP (a) above.
+
+[[stations]]
+crs = "SVG"
+role = "junction"
+segment = "thameslink-cambridge-peterborough-trunk"
+# Stevenage. Station overlap only with great-northern-kings-lynn.toml -
+# see OVERLAP (b) above.
+
+[[stations]]
+crs = "HIT"
+role = "junction"
+segment = "thameslink-cambridge-peterborough-trunk"
+# Hitchin. Station overlap only with great-northern-kings-lynn.toml - see
+# OVERLAP (b) above. This line's own branch point: Peterborough direct
+# continues on the ECML; the Cambridge Line diverges via the Hitchin
+# Flyover. Junction station, so per the shared-trunk rule of thumb it stays
+# on the trunk segment; each branch's own segment starts at the next
+# station.
+
+# --- Direct Peterborough branch. Genuine shared trunk with
+# great-northern-kings-lynn.toml's own `gn-peterborough-branch` segment -
+# see OVERLAP (c) above. ---
+[[stations]]
+crs = "ARL"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Arlesey.
+
+[[stations]]
+crs = "BIW"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Biggleswade.
+
+[[stations]]
+crs = "SDY"
+role = "minor"
+segment = "gn-peterborough-branch"
+# Sandy.
+
+[[stations]]
+crs = "SNO"
+role = "minor"
+segment = "gn-peterborough-branch"
+# St Neots.
+
+[[stations]]
+crs = "HUN"
+role = "major"
+segment = "gn-peterborough-branch"
+# Huntingdon.
+
+[[stations]]
+crs = "PBO"
+role = "terminus"
+segment = "gn-peterborough-branch"
+# Peterborough. Also xc-stansted.toml's own station (approached from the
+# west via Leicester, a physically distinct route) - station overlap only
+# with that file, per the precedent its own header comment already sets.
+
+# --- Cambridge Line branch. Station overlap only with
+# great-northern-kings-lynn.toml's own `gn-cambridge-kings-lynn-branch`
+# segment - see OVERLAP (d) above; this line's own semi-fast pattern skips
+# Meldreth/Shepreth/Foxton (see MEL/STH/FXN EXCLUSION above). ---
+[[stations]]
+crs = "LET"
+role = "major"
+segment = "thameslink-cambridge-branch"
+# Letchworth Garden City.
+
+[[stations]]
+crs = "BDK"
+role = "minor"
+segment = "thameslink-cambridge-branch"
+# Baldock.
+
+[[stations]]
+crs = "AWM"
+role = "minor"
+segment = "thameslink-cambridge-branch"
+# Ashwell & Morden.
+
+[[stations]]
+crs = "RYS"
+role = "minor"
+segment = "thameslink-cambridge-branch"
+# Royston.
+
+[[stations]]
+crs = "CMS"
+role = "minor"
+segment = "thameslink-cambridge-branch"
+# Cambridge South. Opened 28 June 2026; confirmed served by Thameslink via
+# its own Wikipedia infobox/services section ("Thameslink provides two
+# trains per hour to Brighton via London St Pancras and two trains per hour
+# to Cambridge").
+
+[[stations]]
+crs = "CBG"
+role = "terminus"
+segment = "thameslink-cambridge-branch"
+# Cambridge. This line's own terminus. Also great-northern-kings-lynn.toml's
+# own station (continues on to Cambridge North/King's Lynn - see KING'S
+# LYNN EXTENSION above) and xc-stansted.toml's own terminus (approached from
+# the north-east via Ely/March) - station overlap only with both, per the
+# precedent those files' own header comments already set.

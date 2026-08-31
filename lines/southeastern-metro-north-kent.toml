@@ -1,0 +1,344 @@
+id = "southeastern-metro-north-kent"
+name = "Dartford Loop & Bexleyheath Lines"
+mode = "national-rail"
+category = "commuter"
+operators = ["SE"]
+
+sample_stations = ["LEW", "BXH", "SID", "DFD"]
+match_keywords = ["Dartford Loop line", "Bexleyheath line", "Sidcup line"]
+
+# Southeastern's other Kent metro corridor, the Hayes line, and the North
+# Kent Line proper (via Woolwich to Dartford) diverge at/near Lewisham too
+# but are not covered by this file (the Hayes line has its own file,
+# southeastern-hayes-line.toml, Task 5.5 in this same batch - see FINDING 1
+# below; the North Kent Line is a genuine remaining gap, see the Slade
+# Green/Dartford comment below).
+#
+# REVIEW FIX (final whole-branch review of this batch): "South Eastern Main
+# Line" and "Hayes line" were REMOVED from this list. Both named files share
+# real stations with this one - southeastern-main-line.toml shares CHX/CST/
+# LBG, southeastern-hayes-line.toml shares CHX/LBG/LEW - and `is_excluded`
+# in crates/aggregator/src/matcher.rs is a HARD VETO evaluated BEFORE
+# station matching. So an incident like "Disruption between London Bridge
+# and Lewisham affecting the Hayes line and the Dartford Loop line" with
+# `affected_stations = ["LEW"]` was vetoing this file AND the Hayes file
+# simultaneously (each excluded the other's name), returning zero matches
+# for exactly the multi-line incident these two files were written to model.
+# The entries also bought nothing: `lines_affected_by` already drops every
+# `OperatorOnly` match whenever any precise match exists, and this file's
+# own `match_keywords` are the narrow ["Dartford Loop line", "Bexleyheath
+# line", "Sidcup line"], so no KeywordOnly false positive was possible
+# either. Station-CRS matching already disambiguates these correctly - see
+# lew_station_overlap_matches_hayes_line_and_senk_... and
+# sibling_line_names_no_longer_veto_a_shared_station_hit in matcher.rs.
+#
+# The remaining entries are kept because they do NOT cause that harm:
+#   - "Chatham Main Line": southeastern-chatham.toml shares no station
+#     whatsoever with this file (verified against both files' CRS lists).
+#   - "Javelin"/"High Speed 1": southeastern-highspeed.toml likewise shares
+#     no station with this file.
+#   - "North Kent Line": no file in this catalogue models that line yet, so
+#     this is a forward-looking placeholder with zero current risk. If a
+#     North Kent Line file is ever added it WILL share SGR/DFD with this
+#     file, and this entry must then be removed for the same reason as
+#     above.
+excluded_keywords = [
+    "Chatham Main Line",
+    "North Kent Line",
+    "Javelin",
+    "High Speed 1",
+]
+
+# Commuter/metro line: tighter thresholds, matching thameslink-core.toml
+# and elizabeth-shenfield.toml - frequent short-hop services where a
+# 4-minute delay on an 8-15-minute interval service is more disruptive
+# than the same delay on an hourly long-distance one.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Both named routes' own Wikipedia articles ("Bexleyheath line", "Dartford
+# loop line") were fetched and cross-checked station-by-station against
+# railwaycodes.org.uk's crs*.shtm CRS-code tables; three CRS codes that
+# fell outside the fetched excerpt of their alphabetical table page
+# (Mottingham/MTG, Slade Green/SGR, Crayford/CRY - same truncation issue
+# southeastern-chatham.toml's own comment already flagged for
+# railwaycodes.org.uk fetches) were instead cross-checked against each
+# station's own Wikipedia infobox AND nationalrail.co.uk's station-details
+# page (two independent sources, same evidentiary bar as everywhere else
+# in this file). Eltham's code (ELW) was separately confirmed via both
+# sources; its infobox also explains the code derives from the pre-1985
+# "Eltham Well Hall" station name and confirms "Eltham Park" (the other
+# pre-1985 station nearby) is long closed - not included here.
+#
+# ============================================================================
+# FINDING 1: this task's flagged "Dartford Loop/Bexleyheath vs Sidcup/
+# Hayes" open question - the plan's grouping does not hold up.
+# ============================================================================
+# The plan's brief for this batch's Southeastern section implies "Dartford
+# Loop/Bexleyheath" (this file) and "Sidcup/Hayes" (Task 5.5,
+# southeastern-metro-south-london.toml) are four distinct corridors split
+# two-and-two. That's wrong on inspection: Wikipedia's own "Dartford loop
+# line" article opens by stating the line is "also known as the Sidcup
+# line" - Sidcup is not a separate route, it's the Dartford Loop Line's own
+# informal/colloquial name (used especially in the context of Southeastern
+# Metro branding), redirecting to the same article. This file therefore
+# covers BOTH of the plan's "Dartford Loop" and "Sidcup" labels as the one
+# same route; Task 5.5 should not expect to find separate "Sidcup" stations
+# to claim, and its own brief/implementer should treat "Sidcup" as already
+# covered here rather than re-deriving a station list for it. The Hayes
+# line, by contrast, IS a genuinely separate, differently-numbered route
+# (Lewisham - Ladywell - Catford Bridge - ... - Hayes, diverging from the
+# South Eastern main formation at Lewisham itself, confirmed via its own
+# Wikipedia article) - that part of the plan's grouping for Task 5.5 is
+# fine as stated.
+#
+# ============================================================================
+# FINDING 2: this task's flagged Thameslink/Lewisham coordination premise -
+# does not hold up under verification either.
+# ============================================================================
+# The gap analysis and this task's brief both assert Southeastern metro
+# "shares tracks south toward Lewisham with Thameslink's ... Sevenoaks
+# branch". Checked against Wikipedia's "Thameslink", "Lewisham railway
+# station" and "Catford loop line" articles and found this does NOT hold up
+# as a normal-service fact:
+#   - Thameslink's real Sevenoaks service runs "London Blackfriars to
+#     Sevenoaks via Catford and Otford" over the Catford Loop Line
+#     (Brixton - Denmark Hill - Peckham Rye - Nunhead - Crofton Park -
+#     Catford - Bellingham - Beckenham Hill - Ravensbourne, rejoining the
+#     Chatham Main Line at Shortlands before continuing via Swanley to
+#     Otford/Sevenoaks) - a physically distinct alignment well to the west
+#     of Lewisham that never touches this file's own stations.
+#   - Thameslink's other Kent-direction service (Luton/Bedford to Rainham)
+#     runs via the Greenwich Line (Deptford - Greenwich - Maze Hill -
+#     Westcombe Park - Charlton - Woolwich Arsenal - Plumstead - Abbey
+#     Wood) onto the North Kent Line proper toward Slade Green/Dartford -
+#     again a physically distinct alignment from this file's Bexleyheath/
+#     Dartford Loop stations, this time to the north, via Woolwich.
+#   - Lewisham railway station's own Wikipedia article states plainly that
+#     Thameslink "does not permanently serve Lewisham" and is only "normally
+#     diverted through Lewisham" during "infrastructure works on the
+#     Greenwich Line" - i.e. Thameslink at Lewisham is an occasional
+#     engineering-outage diversion, not standing shared infrastructure, and
+#     doesn't meet this catalogue's bar for a genuine shared trunk (the
+#     matcher's SharedSegment scope is meant to represent everyday physical
+#     track sharing, not "sometimes diverted here during an outage").
+#
+# So: I could NOT confirm the specific fact this task was dispatched to
+# find. Per this task's own "no invented facts" rule, `LEW` below is NOT
+# asserted as a genuine Thameslink shared trunk. A more solid, independently
+# confirmed overlap DOES exist, just somewhere else: Slade Green railway
+# station's own Wikipedia infobox lists Thameslink's Greenwich-line service
+# as a real, current caller there (alongside the North Kent Line and this
+# file's own Bexleyheath line), and the Bexleyheath line's own exclusive
+# track merges into the North Kent Line's formation "just south of Slade
+# Green" per the Bexleyheath line article - meaning SGR/DFD are a genuine,
+# everyday point of physical overlap with Thameslink, just via the North
+# Kent Line (not covered by any file in this catalogue yet) rather than via
+# Lewisham. That's a coverage gap for a future North Kent Line file, not
+# something this file can name a shared segment for today - noted here so
+# it isn't lost, not acted on.
+#
+# ============================================================================
+# SEGMENT NAMING - the London Bridge-Lewisham stretch, for Task 5.14
+# ============================================================================
+# Per this task's coordination brief, I'm still naming and documenting a
+# segment for the London Bridge-Lewisham stretch for `thameslink-southern`
+# (Task 5.14, not yet written) to read and reuse IF its own research
+# confirms genuine shared running here - chosen name: `southeastern-lewisham-corridor`
+# (covering CHX/CST/LBG/NWX/SAJ/LEW below).
+#
+# IMPORTANT CAVEAT for Task 5.14's implementer: my own research (Finding 2
+# above) did NOT confirm that Thameslink genuinely runs this stretch as
+# normal service - only as an occasional engineering diversion, which this
+# catalogue's other precedent (station overlap only, not a shared segment,
+# per xc-south-coast.toml/xc-manchester.toml) would treat the same way
+# hs1-domestic/seml-coast overlaps are treated elsewhere in this batch:
+# as station overlap, NOT a shared trunk. Do not reuse this segment
+# name on `thameslink-southern.toml` unless your OWN independent research
+# turns up something this file's research didn't (e.g. a genuine current
+# booked Thameslink working through Lewisham I couldn't find, not just the
+# Greenwich-Line-outage diversion pattern already documented above). If your
+# research also fails to confirm it, give `thameslink-southern.toml` its own
+# segment name for this stretch instead and treat LBG/Lewisham as station
+# overlap only, same as this file does today.
+#
+# Ordered London to Dartford; two branches, each diverging at/after
+# Lewisham, both terminating back at Dartford (hence "Dartford Loop"'s own
+# name - Sidcup/Bexleyheath are the two different ways round the loop).
+# Both routes and their Wikipedia articles are distinct (unlike Chatham's
+# single combined article for its two eastern branches), but the plan's own
+# Task 5.4 explicitly asks for ONE file titled southeastern-metro-north-
+# kent.toml covering both - followed here as the deliverable the plan
+# actually specifies, same as how thameslink-core.toml's own comment
+# already promises "Northern and southern branches ... are separate lines"
+# while still being one file itself for its own core section.
+[[stations]]
+crs = "CHX"
+role = "terminus"
+segment = "southeastern-lewisham-corridor"
+
+[[stations]]
+crs = "CST"
+role = "terminus"
+segment = "southeastern-lewisham-corridor"
+
+[[stations]]
+crs = "LBG"
+role = "major"
+segment = "southeastern-lewisham-corridor"
+# Also thameslink-core.toml's own terminus (its own segment already ends
+# here) - station overlap only, not a shared segment, per the existing
+# southeastern-main-line.toml/southeastern-chatham.toml precedent for this
+# exact station.
+
+[[stations]]
+crs = "NWX"
+role = "junction"
+segment = "southeastern-lewisham-corridor"
+# New Cross. A differently-aligned North Kent Line route (via the Surrey
+# Canal curve toward Greenwich/Woolwich) diverges near here; not covered by
+# this catalogue.
+
+[[stations]]
+crs = "SAJ"
+role = "minor"
+segment = "southeastern-lewisham-corridor"
+# St Johns.
+
+[[stations]]
+crs = "LEW"
+role = "junction"
+segment = "southeastern-lewisham-corridor"
+# Lewisham. Bexleyheath line diverges here (toward Blackheath, below); the
+# Dartford Loop line's own trunk continues past here to Hither Green before
+# diverging (below). The Hayes line and North Kent Line also diverge/join
+# here; neither is covered by this catalogue.
+#
+# *** COORDINATION NOTE FOR TASK 5.14 (lines/thameslink-southern.toml,
+# not yet written): this file's segment name for the London Bridge-Lewisham
+# stretch is `southeastern-lewisham-corridor` - reuse this EXACT string
+# verbatim on your own file's LBG/Lewisham-area stations only if your own
+# research independently confirms genuine everyday Thameslink running over
+# this exact stretch. See this file's header comment (FINDING 2) for why
+# my own research could not confirm that and treated this as this file's
+# own segment rather than a proven shared trunk. ***
+
+# --- Bexleyheath line branch (diverges from Lewisham) ---
+[[stations]]
+crs = "BKH"
+role = "junction"
+segment = "senk-bexleyheath"
+# Blackheath. The North Kent Line's own alignment (toward Charlton/
+# Woolwich) diverges here; not covered by this catalogue.
+
+[[stations]]
+crs = "KDB"
+role = "minor"
+segment = "senk-bexleyheath"
+
+[[stations]]
+crs = "ELW"
+role = "minor"
+segment = "senk-bexleyheath"
+# Eltham (CRS ELW, a nod to the pre-1985 "Eltham Well Hall" station this
+# replaced; the other pre-1985 station nearby, Eltham Park, is closed and
+# not included here).
+
+[[stations]]
+crs = "FCN"
+role = "minor"
+segment = "senk-bexleyheath"
+
+[[stations]]
+crs = "WLI"
+role = "minor"
+segment = "senk-bexleyheath"
+
+[[stations]]
+crs = "BXH"
+role = "major"
+segment = "senk-bexleyheath"
+
+[[stations]]
+crs = "BNH"
+role = "minor"
+segment = "senk-bexleyheath"
+
+[[stations]]
+crs = "SGR"
+role = "junction"
+segment = "senk-bexleyheath"
+# Slade Green. This branch's own exclusive tracks merge into the North
+# Kent Line's own formation just south of here for the final leg into
+# Dartford (see FINDING 2 above) - also a genuine, everyday Thameslink
+# calling point (Greenwich-line service), and a North Kent Line coverage
+# gap for a future file, not acted on here.
+
+# --- Dartford Loop line branch (diverges from the London Bridge-Lewisham
+# trunk past Lewisham, at Hither Green) ---
+[[stations]]
+crs = "HGR"
+role = "junction"
+segment = "senk-dartford-loop"
+# Hither Green. southeastern-main-line.toml's own header comment already
+# notes this and other suburban stops (New Cross, Hither Green, Grove
+# Park, Chislehurst, Petts Wood) as deferred to this batch's Southeastern
+# metro files; the Grove Park/Orpington-bound SEML slow-line formation
+# continues past here toward Orpington, not covered by this branch.
+
+[[stations]]
+crs = "LEE"
+role = "minor"
+segment = "senk-dartford-loop"
+
+[[stations]]
+crs = "MTG"
+role = "minor"
+segment = "senk-dartford-loop"
+
+[[stations]]
+crs = "NEH"
+role = "minor"
+segment = "senk-dartford-loop"
+
+[[stations]]
+crs = "SID"
+role = "major"
+segment = "senk-dartford-loop"
+# Sidcup - the station this branch's informal "Sidcup line" name comes
+# from (see FINDING 1 above).
+
+[[stations]]
+crs = "AYP"
+role = "minor"
+segment = "senk-dartford-loop"
+
+[[stations]]
+crs = "BXY"
+role = "minor"
+segment = "senk-dartford-loop"
+
+[[stations]]
+crs = "CRY"
+role = "junction"
+segment = "senk-dartford-loop"
+# Crayford. Limited peak-hours-only North Kent Line service also calls
+# here; not covered by this catalogue.
+
+[[stations]]
+crs = "DFD"
+role = "terminus"
+segment = "senk-dartford-loop"
+# Dartford - confirmed shared terminus of BOTH this file's branches (the
+# Bexleyheath branch's own tracks rejoin the North Kent Line's formation at
+# Slade Green and reach Dartford over that shared final leg; see the SGR
+# comment above). Listed once, under this segment, since a station can only
+# appear once in one file's station list - not a second, separate
+# "shared-with-Bexleyheath" segment, since both branches are this same
+# file/line. Also a genuine everyday Thameslink calling point via the
+# Greenwich Line (see FINDING 2 above) - a North Kent Line coverage gap,
+# not acted on here.
