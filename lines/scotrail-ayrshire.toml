@@ -1,0 +1,258 @@
+id = "scotrail-ayrshire"
+name = "ScotRail Ayrshire Coast (Glasgow - Ayr - Stranraer)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.3 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "extensive Glasgow suburban electric network
+# (North Clyde, Argyle Line, Ayrshire Coast/Glasgow South Western Line to
+# Ayr/Stranraer/Girvan)" -- North Clyde/Argyle Line are Task 10.2's file,
+# not modelled here.
+#
+# Category: "regional", per the brief's own steer, confirmed rather than
+# assumed. This line has a split character -- a frequent electrified
+# suburban corridor Glasgow Central-Ayr (4 trains/hour to Kilwinning, 2/hour
+# continuing to Ayr, per Wikipedia's "Ayrshire Coast Line" Services (2025)
+# section) grafted onto a remote, single-track rural extension to Girvan and
+# Stranraer (see the `tracks` field of the Glasgow South Western Line
+# infobox, cited below: single line with passing loops from Dalrymple
+# Junction, near Maybole, to Stranraer). "Regional" matches this catalogue's
+# precedent for exactly this trunk+branch shape -- `swr-alton.toml` (a
+# frequent Waterloo trunk plus a modest branch) and `northern-furness.toml`
+# (an hourly, largely single-track rural line) -- rather than
+# `scotrail-glasgow-suburban.toml`'s uniform-density "commuter" or
+# `scotrail-central-belt.toml`'s flagship-intercity "main-line".
+
+sample_stations = ["GLC", "KWN", "AYR", "GIR", "STR"]
+
+# GLC (Glasgow Central) is also used as a sample station by
+# `scotrail-glasgow-suburban.toml` (Task 10.2), for the physically distinct
+# low-level Argyle Line platforms -- see the station-overlap note below.
+# LDBWS sampling at GLC does not distinguish platform level, so
+# `destination_crs_filter` disambiguates this line's own high-level
+# services from Argyle Line departures, mirroring
+# `swr-south-west-main.toml`'s identical use of the field at Waterloo to
+# separate SWML services from Alton/Portsmouth Direct trains sharing the
+# same terminus.
+destination_crs_filter = ["KWN", "AYR", "GIR", "STR"]
+
+match_keywords = ["Ayrshire Coast Line", "Glasgow South Western Line"]
+# Two high-precision phrases per the curation rule against padding
+# match_keywords. Both are the line's own branded/article names (confirmed
+# in the sourcing below) and don't collide with anything else in the
+# catalogue -- `swr-south-west-main.toml`'s "South West Main Line"/"SWML"
+# keywords are a different, non-overlapping string.
+
+# Rural, hourly, largely single-track extension south of Ayr: tuned
+# thresholds following `northern-furness.toml`'s precedent for a comparable
+# hourly coastal branch, rather than the tighter commuter-line defaults
+# that would misjudge a single delayed working on this section as a bigger
+# problem than it is.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Ayrshire Coast Line" (raw wikitext, Infobox + Route
+#     sections): confirms ScotRail (SR) operation, 25kV AC electrification
+#     Glasgow-Ayr, and that "the line runs along the same Glasgow and
+#     Paisley Joint Railway route as the Inverclyde Line as far as Paisley
+#     Gilmour Street... where it turns south west towards Kilwinning...
+#     [and] branches in two" -- one branch to Troon/Ayr, the other north to
+#     Ardrossan/Largs (not modelled here, see scope note below). Also
+#     confirms "Beyond Ayr, 'Sprinter' DMUs continue south towards Girvan
+#     and Stranraer."
+#   - Wikipedia "Ayrshire Coast Line", Services (2025) section: "all trains
+#     calling at Paisley Gilmour Street, Johnstone and Kilwinning" --
+#     confirms these three as genuine all-services stops on the Glasgow-
+#     Kilwinning approach common to both the Ayr branch and the (unmodelled)
+#     Largs/Ardrossan branch.
+#   - Wikipedia "Glasgow South Western Line" (raw wikitext, Route section):
+#     lists the "Stranraer line" stations in order -- Troon, Prestwick
+#     International Airport, Prestwick Town, Ayr, Maybole, Girvan, Barrhill,
+#     Stranraer -- and its History section dates each historical stage of
+#     construction in the same order (1839 Barassie-Ayr; 1856 Ayr-Maybole;
+#     1860 Maybole-Girvan; 1877 Girvan-Challoch Junction; 1861
+#     Challoch-Stranraer), independently confirming the station ordering.
+#   - Wikipedia "Glasgow South Western Line" infobox `tracks` field: "Double
+#     track ... Troon to Dalrymple Junction, Single line with Passing loops
+#     ... Dalrymple Junction to Stranraer" -- confirms the single-track rural
+#     character of the Maybole-Girvan-Barrhill-Stranraer extension, the
+#     basis for this file's severity overrides.
+#   - Template:Ayrshire Coast Line and Template:Glasgow South Western Line
+#     (raw wikitext route diagrams, "Routemap" templates): both independently
+#     show the same ordered sequence Glasgow Central - Paisley Gilmour
+#     Street - Johnstone - Kilwinning - Irvine - Barassie - [Kilmarnock
+#     branch splits, not modelled] - Troon - Prestwick International Airport
+#     - Prestwick Town - Newton-on-Ayr - Ayr - [Ayr to Mauchline Branch
+#     splits, not modelled] - Maybole - Girvan - Barrhill - Stranraer,
+#     cross-checking the prose sources above station-by-station.
+#
+# CRS codes: every code in `stations` below was verified live against
+# National Rail Enquiries (nationalrail.co.uk/stations/<slug>/, `crsCode`
+# field in the page's own embedded data) and cross-checked against each
+# station's own Wikipedia infobox `code` field. All matched with no
+# discrepancies. Two codes were the reverse of an initial guess and are
+# flagged here precisely because they're easy to mix up: Prestwick
+# International Airport is PRA, and Prestwick Town (not the airport) is
+# PTW -- confirmed both ways, live source and Wikipedia infobox.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live source
+# during this task, matching the optional-field convention already used by
+# `scotrail-central-belt.toml`/`scotrail-glasgow-suburban.toml`.
+
+# === Segment-naming coordination with `scotrail-glasgow-suburban.toml` (10.2) ===
+#
+# GLC (Glasgow Central) appears in both files. Per the Ayrshire Coast Line
+# article, this line's Ayr branch runs "into the high level at Glasgow
+# Central"; 10.2's own GLC entry is explicitly the low-level Argyle Line
+# hub ("Glasgow Central (Low Level)"). Same station complex, different
+# levels/platforms, no through-running between them -- this file
+# deliberately does NOT reuse any of 10.2's segment names for GLC, matching
+# the `xc-south-coast.toml`/`xc-manchester.toml` precedent this batch's
+# Global Constraints cite: station overlap is fine, segment-sharing is a
+# deliberate choice, and there is no sourced fact here establishing genuine
+# track-sharing beyond both lines' trains starting from the same named
+# station.
+#
+# No other existing `lines/*.toml` file touches Paisley Gilmour Street,
+# Johnstone, Kilwinning, Irvine, Barassie, Troon, Prestwick, Ayr, Maybole,
+# Girvan, Barrhill or Stranraer (grepped before starting this task), so
+# every segment below is exclusive to this file for now -- a genuinely
+# standalone addition today, like c2c or Merseyrail, even with its own
+# internal trunk/branch structure. The regression test added for this file
+# therefore only asserts exclusive-segment non-propagation for each of the
+# two segments, mirroring how Tasks 10.1 and 10.2 handled the same
+# "no sibling yet" situation.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Largs and Ardrossan Harbour branches: per the Ayrshire Coast Line
+#   article, these split from the Ayr branch at/around Kilwinning and run
+#   north along the coast. Not part of this task's gap-analysis scope
+#   ("Ayrshire Coast/Glasgow South Western Line to Ayr/Stranraer/Girvan"
+#   names only the Ayr/Stranraer/Girvan branch) and not mentioned anywhere
+#   in the gap analysis's ScotRail section -- left as a real, sourced,
+#   documented gap for whoever eventually picks it up, rather than folded
+#   in here.
+# - Milliken Park, Howwood, Lochwinnoch, Glengarnock, Dalry: these stations
+#   appear between Johnstone and Kilwinning in both route-diagram templates,
+#   but this task could not establish to the two-source standard whether
+#   they are called at by Ayr-bound services specifically (as opposed to
+#   being exclusive to the unmodelled Largs/Ardrossan branch) within its
+#   research budget -- the prose "all trains calling at Paisley Gilmour
+#   Street, Johnstone and Kilwinning" names only those three as confirmed
+#   all-services stops. Left out rather than guessed, per the Global
+#   Constraints.
+# - Glasgow South Western main line proper (Glasgow Central-Barrhead-
+#   Kilmarnock-Dumfries-Carlisle) and its East Kilbride branch: real,
+#   sourced (Wikipedia "Glasgow South Western Line" Route section), but not
+#   named anywhere in the gap analysis's ScotRail bullet and not covered by
+#   any other task in this batch -- a genuine, documented gap left for
+#   future work, not modelled here.
+# - The historical Kilmarnock and Troon Railway connection at Barassie
+#   (where the GSW main line to Kilmarnock also touches this route, per
+#   both route-diagram templates): real per those sources, but the GSW main
+#   line itself isn't modelled (see above), so no segment or station entry
+#   is added for it here beyond noting it in this comment.
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "PYG"
+role = "junction"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Paisley Gilmour Street: shared with the Inverclyde Line and Paisley Canal
+# Line (neither currently modelled in any `lines/*.toml` file), on
+# different platforms per the Ayrshire Coast Line article.
+
+[[stations]]
+crs = "JHN"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "KWN"
+role = "junction"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Kilwinning: the Largs/Ardrossan Harbour branches split here (not modelled
+# -- see the scope-boundaries note above).
+
+[[stations]]
+crs = "IRV"
+role = "major"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "BSS"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Barassie: historically also a junction with the Kilmarnock and Troon
+# Railway (the GSW main line's own route to Kilmarnock, not modelled -- see
+# the scope-boundaries note above).
+
+[[stations]]
+crs = "TRN"
+role = "major"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "PRA"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Prestwick International Airport -- confirmed distinct from Prestwick Town
+# (PTW) below; see the CRS sourcing note above.
+
+[[stations]]
+crs = "PTW"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "NOA"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "AYR"
+role = "junction"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Ayr: junction station per the shared-trunk rule of thumb -- it belongs to
+# the Glasgow-Ayr trunk segment, not the exclusive Stranraer branch segment,
+# which starts at the next station (Maybole). The historical Ayr to
+# Mauchline Branch also diverges here (not modelled, out of scope per the
+# GSW-main-line note above).
+
+[[stations]]
+crs = "MAY"
+role = "minor"
+segment = "scotrail-ayrshire-stranraer"
+
+[[stations]]
+crs = "GIR"
+role = "major"
+segment = "scotrail-ayrshire-stranraer"
+# Girvan: a genuine partial terminus for some services (not every working
+# continues to Stranraer), the same "major, not exclusively the final
+# terminus" role `swr-south-west-main.toml` gives Bournemouth on its own
+# Weymouth-bound exclusive segment.
+
+[[stations]]
+crs = "BRL"
+role = "minor"
+segment = "scotrail-ayrshire-stranraer"
+# Barrhill: a small rural halt on the single-track section (see the
+# severity-overrides sourcing above).
+
+[[stations]]
+crs = "STR"
+role = "terminus"
+segment = "scotrail-ayrshire-stranraer"

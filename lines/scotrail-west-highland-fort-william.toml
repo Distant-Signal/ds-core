@@ -1,0 +1,576 @@
+id = "scotrail-west-highland-fort-william"
+name = "ScotRail West Highland Line (Glasgow - Fort William / Mallaig)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.8 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "the West Highland Line (Glasgow-Fort
+# William/Mallaig and Glasgow-Oban, materially two different routes off a
+# shared Glasgow trunk)". This file models the Fort William/Mallaig arm;
+# the Oban arm is Task 10.9 (`lines/scotrail-west-highland-oban.toml`),
+# which did NOT exist yet when this file was written.
+#
+# Category: "regional", per the brief's own steer, confirmed rather than
+# assumed. Per Wikipedia's "West Highland Line" article: "entirely single
+# track once it leaves the North Clyde suburban network at Craigendoran"
+# with crossing loops for passing, and a current (December 2025) frequency
+# of just 3 trains per day each way Mallaig-Glasgow Queen Street plus 1 per
+# day each way Mallaig-Fort William -- a remote, scenic, sparsely-served
+# rural line even by this batch's standards, matching the precedent set by
+# `northern-furness.toml`, `scotrail-highland-main-line.toml`,
+# `scotrail-far-north.toml` and `scotrail-kyle.toml`.
+#
+# Operators: only `SR` is listed, per the task brief's explicit "Operators:
+# SR" instruction and this ScotRail batch's uniform convention. Caledonian
+# Sleeper also runs over this line (Fort William portion of the Highland
+# Sleeper, nightly) but is a structurally separate operator from ScotRail
+# (confirmed in this batch's own nationalisation-tracker research: "Scottish
+# Government-owned but structurally separate from ScotRail") and is out of
+# scope for `operators` here, matching how no other file in this catalogue
+# adds Caledonian Sleeper's own code to a ScotRail line.
+
+sample_stations = ["GLQ", "DMR", "CNR", "FTW", "MLG"]
+# GLQ (Glasgow Queen Street, this line's own terminus -- also a
+# `sample_stations` entry in `scotrail-central-belt.toml` and
+# `scotrail-glasgow-suburban.toml`, a real LDBWS ambiguity at a station
+# used by three different physical services/platform groups; see the GLQ
+# station comment below for why this file does not reuse either sibling's
+# segment there), DMR (Dalmuir, the genuine shared-trunk station with
+# `scotrail-glasgow-suburban.toml`'s own `west-trunk` segment), CNR
+# (Crianlarich, the real junction where Oban and Fort William/Mallaig
+# services divide/combine), FTW (Fort William, this file's own internal
+# trunk/branch junction for the Mallaig extension), and MLG (Mallaig, this
+# line's western terminus).
+
+destination_crs_filter = ["FTW", "MLG"]
+# GLQ and DMR are also `sample_stations` entries in `scotrail-central-belt`
+# and `scotrail-glasgow-suburban` respectively (and CNR/FTW/MLG will be
+# shared with `scotrail-west-highland-oban.toml`'s own sample stations for
+# the Glasgow-Crianlarich stretch once that file exists). Filtering LDBWS
+# departures to `destination_crs` of FTW or MLG cleanly separates this
+# line's own services from Central Belt/Glasgow Suburban/North Clyde
+# departures and from the future Oban-line's own destination-filtered
+# departures, mirroring `scotrail-ayrshire.toml`'s and
+# `scotrail-far-north.toml`'s identical use of the field at their own
+# shared sample stations.
+
+match_keywords = ["West Highland Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords. Confirmed as the line's own branded/article name both by
+# Wikipedia's article title and independently by railwaycodes.org.uk's own
+# "Line names" listing (https://www.railwaycodes.org.uk/line/line_names.shtm,
+# fetched directly during this task), which carries two entries for it:
+# "West Highland Line: Craigendoran - Fort William - Mallaig" and "West
+# Highland Line: Craigendoran - Fort William" (the shorter, pre-Mallaig-
+# extension scope). That same listing separately names "Road to the
+# Isles/Rathad Iarainn Nan Eilean" as the Glasgow Queen Street-
+# Mallaig/Oban route-branding name -- considered as a second
+# `match_keywords` entry but left out: it wasn't corroborated by a second
+# source within this task's research budget, and "West Highland Line" alone
+# already gives high-precision coverage of ScotRail/Network Rail incident
+# language for this line. Grepped `lines/*.toml` before starting this task:
+# no other file uses "West Highland", "Fort William", "Mallaig" or
+# "Crianlarich" in `match_keywords` (only `scotrail-glasgow-suburban.toml`
+# mentions these names in prose comments, not as match keywords).
+
+# Remote, single-track, largely request-stop rural line with only a
+# handful of through workings per day (3/day each way Glasgow-Mallaig,
+# plus 1/day each way Fort William-Mallaig, per December 2025 timetable
+# data) -- comparable in sparseness to `scotrail-far-north.toml` and
+# `scotrail-kyle.toml`. Same tuned thresholds as those files and
+# `northern-furness.toml`'s rural single-track precedent, per the task
+# brief's own steer.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Glasgow Queen Street to Fort William, then the Mallaig
+#     extension, via the shared Glasgow-Crianlarich trunk ===
+#
+# Ordered end to end per SCHEMA.md's curation rule. Sourced from a fresh
+# fetch of Wikipedia's "West Highland Line" article (Route/infobox
+# sections) and its own navigation template (`Template:West Highland
+# Line`), cross-checked station-by-station against each station's own
+# Wikipedia infobox and, for every code below, against National Rail
+# Enquiries' live station page (nationalrail.co.uk/stations/<crs>/
+# details.html) -- see Sources below for the full list.
+#
+# NOTE on an initial-fetch correction: a first single-page summary of the
+# West Highland Line article conflated "Tyndrum Lower" and "Upper Tyndrum"
+# and briefly suggested both might sit on the Fort William route. Each was
+# independently re-checked against its own dedicated Wikipedia article:
+# Upper Tyndrum is confirmed "on the Fort William route of the scenic West
+# Highland Line, between Crianlarich ... and Bridge of Orchy," while
+# Tyndrum Lower is confirmed "on the Oban branch of the West Highland
+# Line, originally part of the Callander and Oban Railway," between
+# Crianlarich and Dalmally. Only Upper Tyndrum belongs in this file;
+# Tyndrum Lower belongs to Task 10.9's Oban file instead. This is exactly
+# the kind of invented-topology risk the Global Constraints warn about, so
+# it is flagged here in full rather than silently corrected.
+#
+# === Segment structure: three real junctions, four segments ===
+#
+# 1. Glasgow-area North Clyde sharing (Dalmuir/Dumbarton Central): per a
+#    fresh fetch of Wikipedia's "West Highland Line" article, this line
+#    "shares track with the North Clyde Line" through the Dalmuir/
+#    Dumbarton area before "branching northward at Craigendoran Junction,"
+#    where "the West Highland Line itself is generally accepted to begin."
+#    Independently corroborated by three further, separately-fetched
+#    Wikipedia articles: "Dalmuir railway station" ("also served by trains
+#    to/from the West Highland line, which travel non-stop to Glasgow
+#    Queen Street" -- confirming Dalmuir itself as a real WHL calling
+#    point, run non-stop from Glasgow); "Dumbarton Central railway
+#    station" ("the last station on the North Clyde line where trains on
+#    the West Highland line between Glasgow and Oban and Mallaig call
+#    before diverging from the line just before Craigendoran"); and
+#    "Craigendoran railway station" ("the present layout at the junction,
+#    just east of the station, consists of a loop (available to West
+#    Highland Line trains only) ... West Highland Line trains used to call
+#    here but no longer do following the closure of the upper platforms").
+#    This last point matters for modelling: Craigendoran is the physical
+#    junction, but WHL trains today run through it without stopping
+#    (unlike Dalmuir and Dumbarton Central, which they do call at), so it
+#    is not listed as its own `[[stations]]` entry here -- Dumbarton
+#    Central, the last *confirmed calling point* before the physical
+#    split, is treated as this file's own shared/exclusive boundary
+#    station, matching the calling-point-based approach this batch uses
+#    throughout (e.g. `scotrail-kyle.toml` omitting the closed Glencarron
+#    Platform).
+#
+#    Dalmuir and Dumbarton Central are both already `[[stations]]` entries
+#    in the already-merged `lines/scotrail-glasgow-suburban.toml` (Task
+#    10.2), tagged `scotrail-glasgow-suburban-west-trunk` -- a segment that
+#    file's own DBC comment already documents as the stretch "where trains
+#    on the West Highland line ... call before diverging." This is a
+#    genuine, sourced, real track-sharing fact (not mere station-name
+#    overlap), so per the shared-trunk rule of thumb this file reuses that
+#    EXACT segment name for its own DMR/DBC entries. This makes the
+#    cross-file shared-trunk propagation live immediately (no reservation
+#    needed, unlike the Crianlarich case below): `SegmentRegistry::
+#    is_shared` now reports `scotrail-glasgow-suburban-west-trunk` shared
+#    between `scotrail-glasgow-suburban` and
+#    `scotrail-west-highland-fort-william`, asserted by
+#    `scotrail_west_highland_shares_glasgow_suburban_west_trunk_incident_propagates`
+#    in `crates/aggregator/src/matcher.rs`.
+#
+#    UPDATE (Task 10.9, now merged): `lines/scotrail-west-highland-oban.toml`
+#    independently re-confirmed that Oban services also call at Dalmuir and
+#    Dumbarton Central before diverging (Dumbarton Central's own Wikipedia
+#    article explicitly names "trains ... between Glasgow and Oban and
+#    Mallaig," not just Fort William/Mallaig) and reused this exact
+#    `scotrail-glasgow-suburban-west-trunk` segment name for its own DMR/DBC
+#    entries too, making it a genuine three-way shared segment. The
+#    `scotrail_west_highland_shares_glasgow_suburban_west_trunk_incident_propagates`
+#    test above is updated to assert all three line IDs.
+#
+#    GLQ (Glasgow Queen Street) itself is NOT tagged onto this shared
+#    segment, nor onto `scotrail-central-belt`'s own `scotrail-central-belt`
+#    segment for the same physical station. Per a fresh fetch of Wikipedia's
+#    "Glasgow Queen Street railway station" article, West Highland services
+#    "primarily use the High Level platforms" (the same physical platform
+#    group as `scotrail-central-belt.toml`'s own GLQ entry, both departing
+#    via the Queen Street Tunnel) -- a plausible lead toward a genuine
+#    shared approach as far as Cowlairs Junction, but this task could not
+#    corroborate the precise shared-infrastructure claim (as opposed to
+#    merely "same platform group, same tunnel mouth") to this batch's
+#    two-source standard within its research budget. Per the Global
+#    Constraints, this is left undecided rather than guessed: GLQ here gets
+#    its own line-specific segment name (`scotrail-west-highland-glasgow-
+#    terminus`), and this comment records the open question for whoever
+#    revisits Glasgow Queen Street High Level's internal track-sharing
+#    later, matching `scotrail-central-belt.toml`'s own precedent of
+#    leaving a documented-but-unconfirmed sharing question in comments
+#    (its own Haymarket/Bathgate note) rather than force-modelling it.
+#
+#    UPDATE (Task 10.9, fix round 1, now merged): this open question is
+#    about `scotrail-central-belt.toml` specifically and remains exactly
+#    as undecided as above. It is a SEPARATE question from whether GLQ is
+#    shared between the two West Highland files themselves, which Task
+#    10.9 confirmed it is (per the "combined trains ... splitting at
+#    Crianlarich" sourcing already quoted above -- the same physical train
+#    from GLQ itself, not just from Dalmuir onward). `lines/scotrail-west-
+#    highland-oban.toml` now reuses this exact `scotrail-west-highland-
+#    glasgow-terminus` segment name for its own GLQ entry, making it a
+#    genuine two-way shared segment between `scotrail-west-highland-fort-
+#    william` and `scotrail-west-highland-oban`, asserted by
+#    `scotrail_west_highland_shares_glasgow_terminus_incident_propagates`
+#    in `crates/aggregator/src/matcher.rs`. No change was needed to this
+#    file's own GLQ entry (`scotrail-west-highland-glasgow-terminus` was
+#    already its name) -- only the sibling file's GLQ entry changed.
+#
+# 2. Crianlarich (Oban/Fort William-Mallaig split): confirmed via a fresh
+#    fetch of Wikipedia's "Crianlarich railway station" article:
+#    "Northbound, Crianlarich is where the combined trains for Oban and
+#    Mallaig divide, with each of the services leaving roughly five
+#    minutes apart" (and the reverse merge southbound). This matches the
+#    task brief's own summary and the gap analysis's "materially two
+#    different routes off a shared Glasgow trunk" framing, now
+#    independently verified against a live source rather than trusted from
+#    the brief. Per the rule of thumb, Helensburgh Upper through Crianlarich
+#    (inclusive) is tagged `scotrail-west-highland-glasgow-crianlarich` --
+#    a deliberately line-neutral name (mirroring
+#    `scotrail-inverness-dingwall-trunk`'s own naming pattern: named for
+#    the shared geography, not for either owning line), reserved here so
+#    that Task 10.9's Oban file (`lines/scotrail-west-highland-oban.toml`,
+#    which does not exist yet as of this task) can reuse this exact string
+#    for its own Glasgow-Crianlarich station entries and get real
+#    shared-trunk propagation for free, exactly as Task 10.6
+#    (`scotrail-far-north.toml`) reserved `scotrail-inverness-dingwall-
+#    trunk` for Task 10.7 (`scotrail-kyle.toml`) to pick up later. Because
+#    no sibling file exists yet, `SegmentRegistry::is_shared` cannot yet
+#    report this segment as shared -- only this file's own exclusive-segment
+#    test is added now (see `crates/aggregator/src/matcher.rs`); the
+#    cross-file shared-trunk propagation test needs completing once Task
+#    10.9's file exists and reuses this name, exactly as Task 10.6 left it
+#    for Task 10.7.
+#
+#    UPDATE (Task 10.9, now merged): `lines/scotrail-west-highland-oban.toml`
+#    independently re-confirmed this same shared-track claim (see its own
+#    verification-note comments, citing the "West Highland Line",
+#    "Crianlarich railway station" and "Dumbarton Central railway station"
+#    Wikipedia articles) and reused this exact segment name for its own
+#    Glasgow-Crianlarich station entries. `SegmentRegistry::is_shared` now
+#    correctly reports this segment shared between
+#    `scotrail-west-highland-fort-william` and
+#    `scotrail-west-highland-oban`, and the placeholder exclusive-segment
+#    test that used to live at `crates/aggregator/src/matcher.rs` has been
+#    replaced with
+#    `scotrail_west_highland_shares_glasgow_crianlarich_trunk_incident_propagates`,
+#    asserting `MatchScope::SharedSegment` for both lines -- mirroring
+#    `scotrail_shared_inverness_dingwall_trunk_incident_propagates`.
+#
+#    Stations north of Crianlarich (Upper Tyndrum onward) are this line's
+#    own exclusive track -- the Oban branch diverges south-west instead --
+#    tagged `scotrail-west-highland-fort-william-exclusive`.
+#
+# 3. Fort William (Mallaig extension split): per a fresh fetch of
+#    Wikipedia's "Fort William railway station" article, Fort William sits
+#    "between Spean Bridge and Banavie" on the through route -- i.e. it is
+#    a real intermediate junction, not a dead-end terminus, even though
+#    some workings terminate there (ScotRail's own daytime services run
+#    "between Glasgow Queen Street and Mallaig," passing through Fort
+#    William) and Caledonian Sleeper does terminate its overnight service
+#    there. This is entirely internal to this one file -- both the
+#    Fort-William-terminating and Mallaig-continuing services belong to the
+#    same `scotrail-west-highland-fort-william` line/file (the gap analysis
+#    itself names this one line "Glasgow-Fort William/Mallaig", not two
+#    lines) -- so there is no cross-file sharing question here, only a
+#    same-file one, mirroring `scotrail-far-north.toml`'s identical
+#    same-file treatment of its own Wick/Thurso split at Georgemas
+#    Junction.
+#
+#    Per the rule of thumb, Fort William itself stays on the shared
+#    `scotrail-west-highland-fort-william-exclusive` trunk (both service
+#    patterns call there); the next station, Banavie, starts the
+#    Mallaig-extension-exclusive segment, tagged
+#    `scotrail-west-highland-mallaig`. The regression tests for this (in
+#    `crates/aggregator/src/matcher.rs`) assert the same-file structural
+#    fact: an incident on the Crianlarich-Fort-William stretch (e.g. at
+#    Tulloch) matches this line only with `ExclusiveSegment` scope, and
+#    separately an incident on the Mallaig extension (e.g. at Glenfinnan)
+#    also matches only this line, with its own distinct exclusive segment
+#    name -- mirroring `scotrail-far-north.toml`'s Wick/Thurso pair and
+#    `scotrail-ayrshire.toml`'s trunk+branch pair.
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "scotrail-west-highland-glasgow-terminus"
+# Glasgow Queen Street: this line's south-eastern terminus (High Level
+# platforms). See the Glasgow-area sourcing note above for why this is NOT
+# tagged onto `scotrail-central-belt`'s segment or onto the
+# Dalmuir/Dumbarton Central shared trunk below.
+
+[[stations]]
+crs = "DMR"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-trunk"
+# Dalmuir: genuine shared trunk with `scotrail-glasgow-suburban.toml`.
+# "A large, five-platform interchange" where North Clyde, Argyle Line and
+# West Highland Line services converge (Wikipedia); WHL trains run
+# non-stop between here and Glasgow Queen Street.
+
+[[stations]]
+crs = "DBC"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-trunk"
+# Dumbarton Central: the last North Clyde station WHL (and future Oban
+# arm) trains call at before diverging near Craigendoran Junction. Tagged
+# on the shared west-trunk segment per the shared-trunk rule of thumb
+# (junction station belongs to the shared segment) -- see the sourcing
+# note above for why Craigendoran itself is not listed as a separate
+# `[[stations]]` entry (WHL trains no longer call there).
+
+[[stations]]
+crs = "HLU"
+role = "major"
+segment = "scotrail-west-highland-glasgow-crianlarich"
+# Helensburgh Upper: the first exclusively-WHL station beyond the
+# Craigendoran Junction split (Helensburgh Central, the North Clyde
+# electrified terminus, is a separate station not served by this line).
+# Not a request stop.
+
+[[stations]]
+crs = "GCH"
+role = "major"
+segment = "scotrail-west-highland-glasgow-crianlarich"
+# Garelochhead: not a request stop.
+
+[[stations]]
+crs = "ART"
+role = "major"
+segment = "scotrail-west-highland-glasgow-crianlarich"
+# Arrochar & Tarbet: not a request stop.
+
+[[stations]]
+crs = "AUI"
+role = "minor"
+segment = "scotrail-west-highland-glasgow-crianlarich"
+# Ardlui: request stop.
+
+[[stations]]
+crs = "CNR"
+role = "junction"
+segment = "scotrail-west-highland-glasgow-crianlarich"
+# Crianlarich: the real junction where Oban and Fort William/Mallaig
+# services divide (northbound) or combine (southbound). Tagged on the
+# shared Glasgow-Crianlarich segment per the shared-trunk rule of thumb
+# (junction station belongs to the shared segment, not the exclusive
+# segment beyond it) -- see the segment-structure note above for the
+# reservation this leaves for Task 10.9.
+
+[[stations]]
+crs = "AUT"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Upper Tyndrum: first station past the Crianlarich split that is
+# exclusive to the Fort William/Mallaig arm -- confirmed via its own
+# Wikipedia article as "on the Fort William route of the scenic West
+# Highland Line, between Crianlarich ... and Bridge of Orchy" (Tyndrum
+# Lower, on the Oban branch instead, is NOT listed here -- see the
+# sourcing note above). Not a request stop.
+
+[[stations]]
+crs = "BRO"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Bridge of Orchy: not a request stop.
+
+[[stations]]
+crs = "RAN"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Rannoch: not a request stop, though access is via a stepped footbridge
+# only (no step-free access).
+
+[[stations]]
+crs = "CRR"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Corrour: not a request stop. The highest mainline railway station in the
+# United Kingdom (1,340 ft / 410 m above sea level) and one of the most
+# remote.
+
+[[stations]]
+crs = "TUL"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Tulloch: not a request stop.
+
+[[stations]]
+crs = "RYB"
+role = "minor"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Roy Bridge: request stop for the Caledonian Sleeper, but a regular
+# scheduled ScotRail stop (three trains per day each way Monday-Saturday,
+# per Wikipedia).
+
+[[stations]]
+crs = "SBR"
+role = "major"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Spean Bridge: not a request stop.
+
+[[stations]]
+crs = "FTW"
+role = "junction"
+segment = "scotrail-west-highland-fort-william-exclusive"
+# Fort William: a real intermediate junction, not a dead end -- the line
+# continues to Banavie/Mallaig, and some services terminate here while
+# ScotRail's own daytime services continue through to Mallaig. Tagged on
+# the shared (same-file) exclusive trunk per the rule of thumb; the
+# Mallaig-extension-exclusive segment starts at the next station, Banavie.
+# Also the terminus of the overnight Caledonian Sleeper (a separate
+# operator, not modelled in `operators` -- see the note above).
+
+[[stations]]
+crs = "BNV"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Banavie: not a request stop. First station on the Mallaig extension,
+# exclusive to this branch within the file.
+
+[[stations]]
+crs = "CPA"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Corpach: not a request stop.
+
+[[stations]]
+crs = "LHE"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Loch Eil Outward Bound: not a request stop.
+
+[[stations]]
+crs = "LCS"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Locheilside: request stop.
+
+[[stations]]
+crs = "GLF"
+role = "major"
+segment = "scotrail-west-highland-mallaig"
+# Glenfinnan: not a request stop. Famous for the Glenfinnan Viaduct.
+
+[[stations]]
+crs = "LCL"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Lochailort: request stop.
+
+[[stations]]
+crs = "BSL"
+role = "minor"
+segment = "scotrail-west-highland-mallaig"
+# Beasdale: request stop.
+
+[[stations]]
+crs = "ARG"
+role = "major"
+segment = "scotrail-west-highland-mallaig"
+# Arisaig: not a request stop.
+
+[[stations]]
+crs = "MRR"
+role = "major"
+segment = "scotrail-west-highland-mallaig"
+# Morar: not a request stop.
+
+[[stations]]
+crs = "MLG"
+role = "terminus"
+segment = "scotrail-west-highland-mallaig"
+# Mallaig: this line's western terminus, 41 miles from Fort William.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, track and operator:
+#   - Wikipedia "West Highland Line" (fetched fresh during this task):
+#     confirms the ordered station list, ScotRail (and Caledonian Sleeper)
+#     operation, "entirely single track once it leaves the North Clyde
+#     suburban network at Craigendoran" with crossing loops, current
+#     (December 2025) service frequency (3 tpd each way Mallaig-Glasgow
+#     Queen Street, 1 tpd each way Mallaig-Fort William, 6 tpd each way
+#     Oban-Glasgow Queen Street with 3 portions dividing at Crianlarich),
+#     "shares track with the North Clyde Line" through Dalmuir/Dumbarton
+#     before "branching northward at Craigendoran Junction," and "the
+#     branch to Oban diverges at Crianlarich."
+#   - Wikipedia "Mallaig Extension Railway": confirms the Fort
+#     William-Mallaig station order, ScotRail operation, Network
+#     Rail-maintained infrastructure, and the 1901 opening under the North
+#     British Railway.
+#   - Wikipedia "Template:West Highland Line" (navigation template,
+#     fetched fresh): independently cross-checks the full station-order
+#     claim above and distinguishes the Fort William/Mallaig main line from
+#     the Oban branch (Connel Ferry, Taynuilt, Tyndrum Lower, Dalmally,
+#     Loch Awe, Falls of Cruachan -- none of which belong in this file).
+#   - Wikipedia "Craigendoran railway station": confirms the junction
+#     location ("just east of the station"), that WHL trains no longer
+#     call there since the upper platforms closed, and the North Clyde
+#     Line's own current service pattern there.
+#   - Wikipedia "Dalmuir railway station": confirms WHL trains call there,
+#     running non-stop to/from Glasgow Queen Street.
+#   - Wikipedia "Dumbarton Central railway station": confirms it as the
+#     last shared North Clyde calling point before the WHL/Oban divergence
+#     near Craigendoran, and gives the current split-working pattern
+#     (6 tpd Oban, 3 portions splitting at Crianlarich for Fort
+#     William/Mallaig).
+#   - Wikipedia "Westerton railway station": checked and found to carry no
+#     mention of West Highland Line services -- corroborates that WHL
+#     trains run non-stop between Glasgow Queen Street and Dalmuir rather
+#     than calling at intermediate North Clyde stops.
+#   - Wikipedia "Glasgow Queen Street railway station": confirms WHL
+#     services "primarily use the High Level platforms" via the Queen
+#     Street Tunnel (see the GLQ segment-naming note above for the open
+#     question this leaves about Falkirk-High sharing, deliberately not
+#     resolved here).
+#   - Wikipedia "Crianlarich railway station": confirms the Oban/Fort
+#     William-Mallaig divide/combine happens here, both directions.
+#   - Wikipedia "Upper Tyndrum railway station" and "Tyndrum Lower railway
+#     station": independently fetched and cross-checked against each
+#     other to correct an initial-fetch conflation -- see the note above.
+#   - Wikipedia "Fort William railway station": confirms it sits "between
+#     Spean Bridge and Banavie" (a real through station, not a dead end),
+#     and that ScotRail's own daytime service runs "between Glasgow Queen
+#     Street and Mallaig."
+#   - Individual Wikipedia articles for every other station (Helensburgh
+#     Upper, Garelochhead, Arrochar and Tarbet, Ardlui, Bridge of Orchy,
+#     Rannoch, Corrour, Tulloch, Roy Bridge, Spean Bridge, Banavie,
+#     Corpach, Loch Eil Outward Bound, Locheilside, Glenfinnan,
+#     Lochailort, Beasdale, Arisaig, Morar, Mallaig): each checked
+#     individually for CRS code and request-stop status (the "stations
+#     listed in italics are request stops" convention).
+#   - railwaycodes.org.uk "Line names" listing
+#     (https://www.railwaycodes.org.uk/line/line_names.shtm, fetched
+#     directly, independent non-Wikipedia source per the Global
+#     Constraints): confirms two official "West Highland Line" entries,
+#     "Craigendoran - Fort William - Mallaig" and the shorter
+#     "Craigendoran - Fort William," and separately names "Road to the
+#     Isles/Rathad Iarainn Nan Eilean" as the Glasgow Queen
+#     Street-Mallaig/Oban route-branding name (considered for
+#     `match_keywords`, not added -- see that field's own comment above).
+#     This independently confirms the line's own official scope begins at
+#     Craigendoran, not Glasgow, consistent with every other source above.
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "Station code" field and National Rail
+# Enquiries' own live station page (nationalrail.co.uk/stations/<crs>/
+# details.html, confirmed via each page's own "<Name> (<CRS>)" heading,
+# fetched directly during this task). All matched with no discrepancies:
+# GLQ, DMR, DBC, HLU, GCH, ART, AUI, CNR, AUT, BRO, RAN, CRR, TUL, RYB, SBR,
+# FTW, BNV, CPA, LHE, LCS, GLF, LCL, BSL, ARG, MRR, MLG.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - West Highland Line Oban branch (Glasgow-Crianlarich-Oban, including
+#   Tyndrum Lower, Dalmally, Loch Awe, Falls of Cruachan, Connel Ferry):
+#   real, sourced above, assigned to Task 10.9
+#   (`lines/scotrail-west-highland-oban.toml`), which did not exist yet
+#   when this file was written. The shared Glasgow-Crianlarich segment
+#   name (`scotrail-west-highland-glasgow-crianlarich`) is reserved above
+#   for that file to reuse -- see the segment-structure note.
+# - Various unstaffed halts/platforms shown on the West Highland Line
+#   navigation template but not treated as current, generally-served
+#   stations within this task's research budget (e.g. Gorton, Fersit Halt,
+#   Glen Falloch Halt, Inveruglas, Glen Douglas Halt, Whistlefield Halt,
+#   Shandon, Faslane Platform, Rhu, Banavie Pier, Lech-a-Vuie/Lechavuie
+#   Platform, Helensburgh Central): left out rather than guessed, matching
+#   `scotrail-far-north.toml`'s and `scotrail-ayrshire.toml`'s own
+#   precedent for omitting unconfirmed minor stops. Helensburgh Central
+#   specifically belongs to `scotrail-glasgow-suburban.toml`'s own North
+#   Clyde `helensburgh-branch` segment, not to this line.
+# - Glasgow Queen Street High Level's possible track-sharing with
+#   `scotrail-central-belt.toml`'s own Falkirk High route (both use the
+#   Queen Street Tunnel out of the High Level platforms): a plausible,
+#   partially-sourced lead not confirmed to the two-source standard within
+#   this task's budget -- see the GLQ segment-naming note above. Left as a
+#   documented, unmodelled question rather than guessed.

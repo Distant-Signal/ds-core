@@ -1,0 +1,298 @@
+id = "scotrail-highland-main-line"
+name = "ScotRail Highland Main Line (Perth - Inverness)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.5 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Highland Main Line (Perth-Inverness)".
+#
+# Category: "regional", per the brief's own steer, confirmed rather than
+# assumed. Per Wikipedia's "Highland Main Line" article, this is a
+# long-distance trunk route but a rural, largely single-track one:
+# "Initially the only double track was between Inverness and Daviot and
+# also Stanley Junction and Perth"; the 1960s saw "many sections of the
+# line ... converted from double track to single track"; today the only
+# other doubled stretch is Blair Atholl-Dalwhinnie (redoubled 1976). The
+# passenger service itself is sparse -- "a roughly two-hourly ScotRail
+# service operates between Perth and Inverness throughout the day" (plus a
+# handful of daily LNER Azuma and the overnight Caledonian Sleeper
+# workings, neither modelled as an `operators` entry here -- see the
+# operators note below). This matches this catalogue's precedent for a
+# single-track, sparsely-served rural trunk -- `northern-furness.toml`
+# and `scotrail-ayrshire.toml`'s Stranraer extension -- rather than
+# `west-coast-main-line.toml`/`cross-country.toml`'s dense, largely
+# double-track "main-line" treatment, despite this being a genuinely
+# long, named intercity corridor.
+
+# Operators: only `SR` is listed, matching the task brief's explicit
+# instruction and the gap analysis's own framing of this as a ScotRail
+# route. Per Wikipedia's infobox, "London North Eastern Railway" (a
+# handful of daily Inverness-London Azuma workings) and the Caledonian
+# Sleeper also traverse this route end to end, the same way
+# `west-coast-main-line.toml` lists `CS` (Caledonian Sleeper) as a minor
+# additional operator alongside its dominant West Coast TOCs. Unlike that
+# file, LNER/CS are NOT added here: every other file in this ScotRail
+# batch (`scotrail-central-belt.toml`, `scotrail-ayrshire.toml`,
+# `scotrail-fife-borders.toml`) lists `operators = ["SR"]` only, even
+# where other operators' services also touch the metals, and the task
+# brief for this file explicitly states "Operators: `SR`." Kept consistent
+# with that batch-wide convention rather than mixed on a per-file basis.
+
+sample_stations = ["PTH", "PIT", "AVM", "INV"]
+match_keywords = ["Highland Main Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords -- the line's own branded/article name, confirmed in the
+# sourcing below, and it doesn't collide with anything else in the
+# catalogue (grepped before starting this task).
+
+# No `destination_crs_filter`: PTH and INV are not currently claimed as
+# `sample_stations`/stations by any other `lines/*.toml` file (grepped
+# before starting this task), so there is no live LDBWS ambiguity to
+# resolve today, unlike `scotrail-ayrshire.toml`'s GLC disambiguation
+# against `scotrail-glasgow-suburban.toml`. Perth in particular is a real
+# multi-line junction (Glasgow-Dundee line, Edinburgh-Aberdeen main line
+# access via Hilton Junction, per Wikipedia's "Perth railway station
+# (Scotland)" article), so this may need revisiting once a Perth-Dundee-
+# Aberdeen or Glasgow-Perth line is added to the catalogue in a later
+# batch -- left as a documented future consideration, not modelled now.
+
+# Rural, roughly two-hourly, largely single-track long-distance line: a
+# single delayed or cancelled working is a much bigger share of the day's
+# service than on a frequent corridor, and typical single-track running
+# already has its own minor timekeeping variance. Same tuned thresholds as
+# `northern-furness.toml`/`scotrail-ayrshire.toml`'s comparable rural
+# single-track extensions, per the task brief's own steer to follow that
+# precedent.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Perth to Inverness, ordered south to north ===
+#
+# Ten stations total (matching Wikipedia's infobox `stations = 10` field):
+# Perth, Dunkeld & Birnam, Pitlochry, Blair Atholl, Dalwhinnie, Newtonmore,
+# Kingussie, Aviemore, Carrbridge, Inverness. No intermediate stations are
+# omitted -- unlike some of this batch's denser corridors, the Highland
+# Main Line's intermediate stops are genuinely this sparse. Daviot, the
+# only other historically-served intermediate location this task
+# considered, closed in 1965 (confirmed live via Wikipedia's "Daviot
+# railway station" article: status "Disused", "closed on 3 May 1965") and
+# is correctly excluded from today's list.
+#
+# Stanley Junction (Perth-Dunkeld & Birnam section), where the Aberdeen-
+# Inverness route's own approach to the Highland main line historically
+# diverges, is not itself a passenger station and so is not a
+# `[[stations]]` entry -- noted here only for completeness, per Wikipedia's
+# "Perth railway station (Scotland)" article.
+
+[[stations]]
+crs = "PTH"
+role = "terminus"
+segment = "scotrail-highland-main-line"
+# Perth. Also a real junction with the Glasgow-Dundee line and, via Hilton
+# Junction, the Edinburgh-Aberdeen main line (per Wikipedia's "Perth
+# railway station (Scotland)" article) -- neither modelled in this
+# catalogue yet. Tagged `terminus`, not `junction`, mirroring
+# `scotrail-ayrshire.toml`'s GLC precedent: role reflects this line's own
+# structure (this is one of this line's two end stations), not every
+# other line that happens to also call here.
+
+[[stations]]
+crs = "DKD"
+role = "minor"
+segment = "scotrail-highland-main-line"
+# Dunkeld & Birnam: not all trains call here per Wikipedia's Stations
+# table.
+
+[[stations]]
+crs = "PIT"
+role = "major"
+segment = "scotrail-highland-main-line"
+# Pitlochry: all trains call here per Wikipedia's Stations table; the
+# largest town directly on this stretch of the route.
+
+[[stations]]
+crs = "BLA"
+role = "minor"
+segment = "scotrail-highland-main-line"
+# Blair Atholl: not all trains call here. Southern end of the
+# Blair Atholl-Dalwhinnie doubled section (redoubled 1976).
+
+[[stations]]
+crs = "DLW"
+role = "minor"
+segment = "scotrail-highland-main-line"
+# Dalwhinnie: not all trains call here. Northern end of the
+# Blair Atholl-Dalwhinnie doubled section.
+
+[[stations]]
+crs = "NWR"
+role = "minor"
+segment = "scotrail-highland-main-line"
+# Newtonmore: not all trains call here.
+
+[[stations]]
+crs = "KIN"
+role = "major"
+segment = "scotrail-highland-main-line"
+# Kingussie: all trains call here per Wikipedia's Stations table.
+
+[[stations]]
+crs = "AVM"
+role = "major"
+segment = "scotrail-highland-main-line"
+# Aviemore: all trains call here; also the southern terminus of the
+# preserved Strathspey Railway heritage line (not part of the National
+# Rail network, not modelled as a segment/junction relationship here).
+
+[[stations]]
+crs = "CAG"
+role = "minor"
+segment = "scotrail-highland-main-line"
+# Carrbridge: not all trains call here.
+
+[[stations]]
+crs = "INV"
+role = "terminus"
+segment = "scotrail-highland-inverness-approach"
+# Inverness -- see the Inverness-area segment-naming note below for why
+# this gets its own segment name rather than folding into
+# `scotrail-highland-main-line` above.
+
+# === Inverness-area segment naming: documented for Tasks 10.6/10.7/10.10 ===
+#
+# Per this batch's pre-flight scan (cited in this task's brief), three
+# other tasks converge on or near Inverness: Task 10.6 (Far North Line,
+# Inverness-Wick/Thurso), Task 10.7 (Kyle of Lochalsh Line, Dingwall-Kyle
+# via Inverness) and Task 10.10 (Aberdeen-Inverness Line). This task may
+# run before any of those files exist, so per the brief's instruction this
+# section documents what this task's own research found, and the naming
+# choice made, without assuming a shared segment that hasn't been
+# independently confirmed.
+#
+# What this task's research established (Wikipedia's "Inverness railway
+# station" article, cross-checked structurally against the "Highland Main
+# Line" and "Aberdeen-Inverness line" articles):
+#   - "Inverness railway station ... is the terminus of the Highland Main
+#     Line, the Aberdeen-Inverness line ..., the Kyle of Lochalsh line and
+#     the Far North Line."
+#   - "The Highland Main and Aberdeen Lines both approach the station from
+#     the east and use Platforms 1-4, while the Far North Line (which also
+#     carries traffic heading for the Kyle Line) approaches from the
+#     north-west and use Platforms 5-7."
+#
+# This establishes that the Highland Main Line and the Aberdeen-Inverness
+# Line approach Inverness from the same direction and share platforms at
+# the terminus throat -- but it does NOT establish, to this batch's
+# two-source standard, that the two lines run on genuinely shared running
+# track for some distance outside the station (a real "shared trunk" in
+# `SCHEMA.md`'s sense) as opposed to two physically separate double/single
+# lines that simply converge into a shared platform group right at the
+# station approach. The Aberdeen-Inverness line's own Wikipedia article
+# does not name a specific junction or describe the physical arrangement
+# in enough detail to settle this either way within this task's research
+# budget, and no dedicated "Millburn Junction" (or similarly-named
+# article) was found to confirm it directly.
+#
+# Per the brief's explicit instruction, this task does NOT assume a shared
+# segment on the strength of "approaches from the same direction, shares
+# platforms" alone. Instead: INV is given its own segment name,
+# `scotrail-highland-inverness-approach`, distinct from this line's own
+# exclusive `scotrail-highland-main-line` segment covering Perth through
+# Carrbridge. Whichever of Task 10.6, 10.7 or 10.10 runs next (most
+# likely 10.10, the Aberdeen-Inverness Line, given the platform-sharing
+# evidence above points at that pairing specifically, not the Far
+# North/Kyle lines which use separate platforms 5-7) should read this
+# comment, do its own independent research into the physical approach
+# east of Inverness, and either:
+#   (a) reuse the exact string `scotrail-highland-inverness-approach` for
+#       its own Inverness station entry, if it independently confirms
+#       genuine track-sharing on the approach; or
+#   (b) leave it alone and give its own Inverness entry a different
+#       segment name, if its research finds the lines are physically
+#       separate right up to the platform throat.
+# Either outcome is correct per this plan's Global Constraints; this
+# comment exists so that decision is made on real evidence, not
+# inherited assumption.
+#
+# The regression test added for this file (see
+# `crates/aggregator/src/matcher.rs`) therefore only asserts exclusive-
+# segment non-propagation, for a station on the `scotrail-highland-main-line`
+# segment (Kingussie) -- not at Inverness itself, since Inverness's segment
+# fate is deliberately left open per the above. No shared-segment
+# propagation assertion is made today, mirroring how Tasks 10.1-10.4
+# handled the "no sibling ScotRail line exists yet" situation.
+#
+# UPDATE (Task 10.10, now merged): `lines/scotrail-aberdeen-inverness.toml`
+# did independently confirm genuine track-sharing (not just platform
+# sharing) on this approach -- via Wikipedia's "Aberdeen and Perth lines
+# diverge at Millburn Junction, a short distance beyond Welsh's Bridge" plus
+# an independent railwaycodes.org.uk ELR cross-check (ELR "ANI3" ends at
+# Millburn Junction; the final stretch into Inverness runs on this line's
+# own ELR "HGL2") -- and reused this exact segment name for its own INV
+# entry, per option (a) above. `SegmentRegistry::is_shared` now correctly
+# reports `scotrail-highland-inverness-approach` shared between
+# `scotrail-highland-main-line` and `scotrail-aberdeen-inverness`, and
+# `scotrail_shared_highland_inverness_approach_incident_propagates` in
+# `crates/aggregator/src/matcher.rs` asserts the resulting
+# `MatchScope::SharedSegment` propagation for both lines. Per Task 10.6/10.7's
+# own findings (unchanged by this update), the Far North and Kyle lines do
+# not share this segment.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, track and operator:
+#   - Wikipedia "Highland Main Line" (rendered article and raw wikitext via
+#     Special:Export): confirms the ordered station list Perth-Dunkeld and
+#     Birnam-Pitlochry-Blair Atholl-Dalwhinnie-Newtonmore-Kingussie-
+#     Aviemore-Carrbridge-Inverness (10 stations, matching the infobox
+#     `stations` field); confirms ScotRail (plus LNER and Caledonian
+#     Sleeper) operation; confirms "much of the Highland Main Line is
+#     single track, and trains coming in opposite directions are often
+#     timed to arrive at stations at the same time, where crossing loops
+#     permit them to pass"; confirms the doubling history quoted above
+#     (Inverness-Daviot and Stanley Junction-Perth originally double;
+#     1960s singling; Blair Atholl-Dalwhinnie redoubled 1976); confirms the
+#     line is not currently electrified, with a Scottish Government 2035
+#     target; confirms "a roughly two-hourly ScotRail service operates
+#     between Perth and Inverness throughout the day"; confirms "at
+#     Inverness the line connects with the Far North Line, the
+#     Aberdeen-Inverness Line and the Kyle of Lochalsh Line."
+#   - Wikipedia "Inverness railway station": confirms INV is the terminus
+#     of all four lines named above, and the platform-sharing detail
+#     (Highland Main + Aberdeen Lines on Platforms 1-4 from the east; Far
+#     North + Kyle Lines on Platforms 5-7 from the north-west) used in the
+#     Inverness-area segment-naming discussion above.
+#   - Wikipedia "Perth railway station (Scotland)": confirms PTH lies on
+#     both the Glasgow-Dundee line and the Highland Main Line, and the
+#     historical Stanley Junction/Hilton Junction running-powers detail
+#     used in this file's comments.
+#   - Wikipedia "Aviemore railway station": confirms it is the southern
+#     terminus of the preserved Strathspey Railway heritage line.
+#   - Wikipedia "Daviot railway station": confirms disused/closed 1965
+#     status, supporting this file's decision not to list it.
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "code" field and National Rail Enquiries'
+# own live station page (nationalrail.co.uk/stations/<crs>/details.html,
+# confirmed via each page's own "<Name> (<CRS>)" heading). All ten matched
+# with no discrepancies: PTH, DKD, PIT, BLA, DLW, NWR, KIN, AVM, CAG, INV.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Aberdeen-Inverness Line, Far North Line, Kyle of Lochalsh Line: real,
+#   sourced (see above), named in the gap analysis as separate ScotRail
+#   entries and assigned to Tasks 10.10, 10.6 and 10.7 respectively of
+#   this same batch -- not modelled here beyond the Inverness-area
+#   segment-naming discussion above.
+# - Perth's other junctions (Glasgow-Dundee line, Edinburgh-Aberdeen main
+#   line via Hilton Junction): real per the Perth station sourcing above,
+#   not named in this task's gap-analysis bullet and not covered by any
+#   task in this batch -- a genuine, documented gap left for future work.

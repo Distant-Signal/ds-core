@@ -1,0 +1,194 @@
+id = "scotrail-central-belt"
+name = "ScotRail Central Belt (Edinburgh - Glasgow)"
+mode = "national-rail"
+category = "main-line"
+operators = ["SR"]
+
+# Task 10.1 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Central Belt (Edinburgh-Glasgow via Falkirk High
+# as the core, plus via Shotts and via Bathgate/North Clyde as alternate
+# routes)". Batch 10 is running as one file per task; the gap analysis
+# groups all three Edinburgh-Glasgow routings into this single file rather
+# than splitting them further, the same way Task 10.4 will group Fife
+# Circle + Borders Railway.
+#
+# Category: "main-line", not "commuter", despite the dense quarter-hourly
+# peak frequency on the core -- ScotRail's own service-level commitment
+# names this "Route 2a", the flagship link between Scotland's two largest
+# cities, structurally closer to how `west-coast-main-line.toml` and
+# `cross-country.toml` are categorised than to `thameslink-core.toml`'s
+# metro-frequency treatment.
+
+sample_stations = ["GLQ", "FKK", "HYM", "EDB"]
+match_keywords = ["Falkirk High"]
+# Kept to a single high-precision phrase per the curation rule against
+# padding match_keywords. "Edinburgh to Glasgow" alone was considered and
+# rejected: it also describes the Shotts and Bathgate routings (not
+# modelled as stations in this file -- see below), so it would produce
+# false precision once those routings get their own coverage.
+
+# === Three routings, one ordered station list: the modelling decision ===
+#
+# This corridor has three real, distinct physical routings between
+# Edinburgh and Glasgow, sharing only their Edinburgh-end approach:
+#   - via Falkirk High: Glasgow Queen Street - Edinburgh Waverley (the
+#     core/flagship route, electrified 2017, ~quarter-hourly).
+#   - via Shotts: Glasgow Central - Edinburgh Waverley, diverging from the
+#     WCML at Uddingston and rejoining it at Midcalder Junction
+#     (electrified April 2019).
+#   - via Bathgate/North Clyde (the Airdrie-Bathgate rail link, reopened
+#     2010-2011): Glasgow Queen Street Low Level - Edinburgh Waverley via
+#     Airdrie, Drumgelloch, Bathgate and the Edinburgh & Bathgate line.
+#
+# `stations` is a single ordered list per the schema, and these three
+# routings diverge for almost their entire length -- they start from two
+# different Glasgow termini (Queen Street high-level vs. Central vs. Queen
+# Street low-level) and only share physical track again on the approach
+# into Edinburgh. Representing all three faithfully in one ordered list
+# is not workable without fabricating a station order that doesn't
+# correspond to any single real route.
+#
+# Per the task brief's documented fallback: this file models the via
+# Falkirk High routing fully (it is the core/principal service the gap
+# analysis names first) and records the other two routings' distinguishing
+# intermediate stations in comments only, below, without fabricating
+# segment tags or schema station entries for stations that aren't part of
+# the Falkirk High routing.
+#
+# Sources (cross-checked per the plan's Global Constraints, both Wikipedia
+# and a second source for every station-list claim used in `stations`
+# below):
+#   - Wikipedia "Glasgow-Edinburgh via Falkirk line" (station list, calling
+#     pattern, electrification date).
+#   - ScotRail's own franchise service-level-commitment document, "Route
+#     2a Edinburgh-Falkirk High-Glasgow Queen Street" (quarter-hourly
+#     0700-1900, principal stops Croy/Falkirk High/Polmont/Linlithgow/
+#     Haymarket, additional peak-only stops Bishopbriggs/Lenzie) --
+#     confirms the same station set and ordering as Wikipedia.
+#   - CRS codes for every station in `stations` below were cross-checked
+#     individually between each station's Wikipedia infobox and National
+#     Rail Enquiries' own station page (nationalrail.co.uk/stations/<crs>).
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, and the field is optional (per
+# `xc-manchester.toml`/`cross-country.toml`'s own convention of only
+# giving TIPLOCs where verified).
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "scotrail-central-belt"
+
+[[stations]]
+crs = "BBG"
+role = "minor"
+segment = "scotrail-central-belt"
+# Bishopbriggs: peak-hour-only additional calls, not part of the core
+# quarter-hourly stopping pattern.
+
+[[stations]]
+crs = "LNZ"
+role = "minor"
+segment = "scotrail-central-belt"
+# Lenzie: peak-hour-only additional calls, same as Bishopbriggs.
+
+[[stations]]
+crs = "CRO"
+role = "major"
+segment = "scotrail-central-belt"
+
+[[stations]]
+crs = "FKK"
+role = "major"
+segment = "scotrail-central-belt"
+# Falkirk High: called at by every service, all-day, per both sources.
+
+[[stations]]
+crs = "PMT"
+role = "major"
+segment = "scotrail-central-belt"
+
+[[stations]]
+crs = "LIN"
+role = "major"
+segment = "scotrail-central-belt"
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Haymarket and Edinburgh Waverley are given their own segment name,
+# distinct from the rest of the Falkirk High routing, for a specific,
+# sourced reason: per Network Rail's Scotland Route Specification and
+# RAILSCOT's account of the Airdrie-Bathgate rail link electrification,
+# the Edinburgh-Bathgate line shares physical track with this Falkirk
+# High routing "east of Newbridge Junction" all the way into Haymarket
+# and Edinburgh Waverley. That means an incident reported at Haymarket or
+# Edinburgh Waverley genuinely can affect the Bathgate routing too, not
+# just this one.
+#
+# Whoever writes the Bathgate/North Clyde routing (flagged out of scope
+# for this file -- see the North Clyde note below) should read this
+# comment before naming their own Haymarket/Edinburgh Waverley segment:
+# reusing `scotrail-central-belt-edinburgh-throat` for those same two
+# stations would make the matcher treat an incident there as a shared-
+# segment event across both lines, which matches the physical reality
+# described above. This wasn't forced pre-emptively here because no
+# sibling file exists yet to actually share it with (the schema's shared-
+# trunk mechanism only activates once two files use the same segment
+# name), consistent with `xc-south-coast.toml`'s "station overlap is
+# fine, segment-sharing is a deliberate choice" precedent -- the choice is
+# recorded here for whoever writes that file next to make deliberately.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-central-belt-edinburgh-throat"
+
+# === Via Shotts (not modelled as stations above) ===
+#
+# Glasgow Central - Edinburgh Waverley via Shotts, electrified April 2019.
+# Diverges from the West Coast Main Line at Uddingston and rejoins it at
+# Midcalder Junction (`west-coast-main-line.toml` does not currently model
+# any station this far north -- its northernmost station is Carlisle
+# (CAR), with Glasgow Central noted only in a comment, not as a station --
+# so there is no live schema-level overlap to reconcile today, but a
+# future WCML update reaching Glasgow Central would need to know this).
+# Distinguishing intermediate stations, west to east, per Wikipedia
+# (cross-checked against general web coverage of the route, including
+# Network Rail-sourced material): Cambuslang, Uddingston, Bellshill,
+# Holytown, Carfin, Cleland, Hartwood, Shotts, Fauldhouse, Breich,
+# Addiewell, West Calder, Livingston South, Kirknewton, Curriehill, Wester
+# Hailes, Kingsknowe, Slateford -- then Haymarket and Edinburgh Waverley,
+# shared with the Falkirk High routing above. Not lifted into `stations`
+# per the modelling decision above; no CRS codes were verified for these
+# station names during this task, so none are asserted here.
+
+# === Via Bathgate / North Clyde (not modelled as stations above) ===
+#
+# Glasgow Queen Street Low Level - Edinburgh Waverley via Airdrie,
+# Drumgelloch, Caldercruix, Blackridge, Armadale, Bathgate, then the
+# Edinburgh & Bathgate line towards Haymarket. Reopened in stages
+# 2010-2011 (Airdrie-Bathgate rail link); electrified throughout.
+#
+# IMPORTANT for whoever writes Task 10.2 (`lines/scotrail-glasgow-
+# suburban.toml`): the western end of this routing (Glasgow Queen Street
+# Low Level out to Airdrie/Drumgelloch) runs over the same electrified
+# North Clyde infrastructure that Task 10.2 covers as Glasgow suburban
+# territory. Per this batch's pre-flight ruling, this file (10.1) does
+# NOT model any North Clyde suburban station (Dalmuir, Milngavie,
+# Balloch, Helensburgh, or the Airdrie/Bathgate stations themselves) --
+# those belong to 10.2. This file only records that the *Edinburgh-end*
+# of the Bathgate routing rejoins Falkirk High metals east of Newbridge
+# Junction (see the Haymarket comment above) as a fact 10.2 may want when
+# deciding its own segment names.
+#
+# Resolution (added when Task 10.2 ran): `scotrail-glasgow-suburban.toml`
+# deliberately stops its North Clyde eastern branch at Airdrie (a real,
+# sourced North Clyde terminus service pattern) and does not model the
+# Drumgelloch-Bathgate-Edinburgh continuation, so it has no `[[stations]]`
+# entry that coincides with this file's actual stations -- the
+# `scotrail-central-belt-edinburgh-throat` segment name above remains
+# unshared for now. See `scotrail-glasgow-suburban.toml`'s own comments
+# for the sourcing behind that boundary decision.

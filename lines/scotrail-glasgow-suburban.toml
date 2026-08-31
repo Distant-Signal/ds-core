@@ -1,0 +1,404 @@
+id = "scotrail-glasgow-suburban"
+name = "ScotRail Glasgow Suburban (North Clyde & Argyle Line)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Task 10.2 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "extensive Glasgow suburban electric network
+# (North Clyde, Argyle Line)" -- explicitly listed separately from the
+# Ayrshire Coast/Glasgow South Western Line (Ayr/Stranraer/Girvan), which
+# is its own future gap-analysis item and is NOT modelled here.
+#
+# Category: "commuter", per the brief's own steer, confirmed rather than
+# assumed -- this network is uniformly dense electric suburban working
+# (multiple trains per hour, short inter-station hops, urban/suburban
+# stopping pattern throughout), unlike `northern.toml`'s "operator"
+# category (chosen there because Northern's own network mixes trans-
+# Pennine, rural and suburban character across its branches) and unlike
+# `scotrail-central-belt.toml`'s "main-line" category (the Edinburgh-
+# Glasgow flagship inter-city corridor). `thameslink-core.toml` is the
+# closest structural comparison: a dense, multi-branch electric metro-
+# style network under one TOC.
+
+sample_stations = ["GLQ", "PTK", "DMR", "MLN", "GLC", "RUT"]
+match_keywords = ["North Clyde", "Argyle Line"]
+# Two high-precision phrases per the curation rule against padding
+# match_keywords. Both are specific line brand names used consistently in
+# ScotRail/Network Rail incident language and don't collide with anything
+# else in the catalogue (no other line uses "Clyde" or "Argyle").
+
+# Commuter line: tighter thresholds, following `thameslink-core.toml`'s
+# precedent for a dense multi-branch metro-style network -- a short delay
+# on a service running every 15-30 minutes at peak is more disruptive than
+# the same delay on an hourly regional service.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route/branch structure:
+#   - Wikipedia "North Clyde Line" (raw wikitext, Route and History
+#     sections): confirms the line runs from Glasgow Queen Street (Low
+#     Level) to four western termini -- Helensburgh Central, Balloch,
+#     Dalmuir and Milngavie -- via two alternative Partick-Dalmuir
+#     routings (via Singer or via Yoker); an eastern short branch to
+#     Springburn with a Cumbernauld Line interchange there; and that the
+#     Partick-Dalmuir/Milngavie section is also used by Argyle Line
+#     services (the shared-trunk fact this file's `west-trunk` segment is
+#     built on).
+#   - Wikipedia "Argyle Line" (raw wikitext, Route section): confirms the
+#     line's central Glasgow low-level route (Exhibition Centre, Anderston,
+#     Glasgow Green tunnels, Bridgeton, Dalmarnock), its western end
+#     joining North Clyde metals via Singer/Westerton to Dalmuir/Milngavie,
+#     and its eastern end reaching Rutherglen (where the Whifflet Line
+#     diverges) and on to Motherwell. Operator confirmed as ScotRail (SR).
+#   - Wikipedia "Dalmuir railway station": confirms Dalmuir is "a large,
+#     five-platform interchange" where North Clyde, Argyle Line and West
+#     Highland Line services meet, with onward North Clyde service to
+#     Helensburgh Central and Balloch.
+#   - Wikipedia "Craigendoran railway station": confirms it sits on the
+#     North Clyde Line between Helensburgh Central and Cardross, and that
+#     "the present layout at the junction, just east of the station,
+#     consists of a loop (available to West Highland Line trains only)"
+#     -- i.e. this is where the West Highland Line begins.
+#   - Wikipedia "Bellgrove railway station": confirms Bellgrove is where
+#     eastbound North Clyde services split three ways -- "every fifteen
+#     minutes towards Airdrie, half-hourly towards Springburn and hourly
+#     to Edinburgh Waverley" (the last of those is the Bathgate routing
+#     covered by `scotrail-central-belt.toml`, not modelled here -- see
+#     the Airdrie/Bathgate boundary note below).
+#   - Wikipedia "Springburn railway station": confirms it "is a terminus
+#     of the Springburn branch, a spur from Bellgrove station, on the
+#     North Clyde Line" -- NOT a through station on the way to Airdrie, a
+#     misreading this task's research initially had to correct.
+#   - Wikipedia "Dalreoch railway station" (added in fix round 1, post-
+#     review): confirms Dalreoch, not Dumbarton Central, is the real
+#     Balloch/Helensburgh split point -- see the DBC/DLR comments below.
+#   - Wikipedia "Hyndland railway station" (added in fix round 1): confirms
+#     the Milngavie/Yoker/Singer split is at "Hyndland East Junction",
+#     immediately west of the station -- see the HYN comment below for the
+#     single-source caveat on this one.
+#
+# CRS codes: every code in `stations` below was verified live against
+# National Rail Enquiries (nationalrail.co.uk/stations/<crs>/details.html)
+# and cross-checked against each station's own Wikipedia infobox where
+# fetched. Several initial code guesses were wrong and caught by this
+# verification pass (e.g. Balloch is BHC not BAC; Dalmarnock is DAK not
+# DAL; Craigendoran is CGD, not the initially-guessed code; Charing Cross
+# Glasgow is CHC, distinct from London Charing Cross's CHX) -- underlining
+# why every code here was checked against a live source rather than
+# assumed from memory.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by `xc-manchester.toml`/`scotrail-central-belt.toml`.
+
+# === Segment-naming coordination with `scotrail-central-belt.toml` (10.1) ===
+#
+# GLQ (Glasgow Queen Street) appears in both files. In 10.1 it's the
+# high-level terminus of the Falkirk High inter-city routing; here it's
+# the Low Level suburban hub. These are operationally distinct halves of
+# the same named station (different platforms/levels, no through-running
+# between them), so this file deliberately does NOT reuse the
+# `scotrail-central-belt` segment name for GLQ -- station overlap is fine,
+# segment-sharing is a deliberate choice, per the `xc-south-coast.toml`/
+# `xc-manchester.toml` precedent this batch's Global Constraints cite.
+#
+# 10.1 also flagged that the western end of its Bathgate/North Clyde
+# routing comment (Glasgow Queen Street Low Level out to Airdrie/
+# Drumgelloch) runs over the same electrified infrastructure this file
+# covers, and left the Haymarket/Edinburgh Waverley segment name
+# `scotrail-central-belt-edinburgh-throat` available for this file to
+# share IF this file's stations physically coincide with it. They don't:
+# per the batch's pre-flight ruling, this file's eastern North Clyde
+# branch stops at Airdrie (a real, current North Clyde terminus service
+# pattern -- see the Bellgrove sourcing above), and does not model the
+# Drumgelloch-Bathgate-Edinburgh continuation, which belongs to the
+# Central Belt/Bathgate inter-city corridor 10.1 already flagged as an
+# unmodelled gap. No station in `stations` below is a `[[stations]]` entry
+# in 10.1 (10.1's Bathgate-route stations are comment-only), so no
+# segment-sharing applies here. A one-line pointer comment was added to
+# `scotrail-central-belt.toml` recording this resolution.
+#
+# No other existing `lines/*.toml` file touches North Clyde/Argyle Line
+# territory (grepped before starting this task), so every segment below
+# is exclusive to this file for now -- this is a genuinely standalone
+# addition today, like c2c or Merseyrail, even though it has rich internal
+# branch structure. The regression test added for this file therefore only
+# asserts exclusive-segment non-propagation, mirroring how 10.1's own test
+# handled the same "no sibling yet" situation.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Ayrshire Coast / Glasgow South Western Line (Ayr/Stranraer/Girvan):
+#   separate gap-analysis item, not modelled here.
+# - Argyle Line's own Lanarkshire branches beyond Motherwell/Rutherglen
+#   (Whifflet -> Coatbridge Central -> Hamilton Central, then Larkhall and
+#   Lanark branches): real per Wikipedia's Argyle Line route section, but
+#   this task could not independently verify their CRS codes/exact station
+#   order to the two-source standard within its research budget, so they
+#   are left out rather than guessed. Motherwell and Rutherglen are
+#   included as the confirmed, sourced eastern extent of this file's
+#   Argyle Line coverage.
+# - Minor intermediate stations not individually verified to the
+#   two-source CRS standard (e.g. Jordanhill, Anniesland, Westerton,
+#   Bearsden, Hillfoot, Scotstounhill, Garscadden, Yoker, Clydebank,
+#   Singer, Drumry, Kilpatrick, Bowling, Renton, Cardross,
+#   Alexandria, High Street, Uddingston, Bellshill): omitted from
+#   `stations` below. Only the confirmed termini/junctions/major stations
+#   needed to establish this line's exclusive/shared segment structure are
+#   included, matching `scotrail-central-belt.toml`'s own precedent for
+#   its unmodelled Shotts routing.
+
+# --- West end: Milngavie branch, West Trunk, Balloch/Helensburgh branch ---
+
+[[stations]]
+crs = "MLN"
+role = "terminus"
+segment = "scotrail-glasgow-suburban-milngavie-branch"
+
+[[stations]]
+crs = "PTK"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-approach"
+# Partick: Glasgow Subway interchange; also where Argyle Line services
+# join North Clyde metals westbound towards Dalmuir/Milngavie. Partick is
+# the first stop out of Glasgow on this line's own western approach
+# track.
+#
+# CORRECTION (post-review fix round 2): moved here from its previous
+# position after HLC/CGD/BHC further down this file, which put it out of
+# geographic order -- `crates/aggregator/src/aggregation.rs`'s
+# `routes_from_stations` sorts an incident's affected stations by their
+# position in this `[[stations]]` list to build "between A and B" route
+# descriptions, and a misordered station there can produce a reversed or
+# wrong-sounding range. See the HYN entry immediately below for why this
+# station's segment name also changed in the same pass.
+
+[[stations]]
+crs = "HYN"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-approach"
+# Hyndland: per Wikipedia's own Hyndland article, "immediately to the west
+# of the station is Hyndland East Junction where the Yoker and Singer
+# (including the Milngavie branch) lines diverge" -- so the physical split
+# is a few hundred metres west of the station, not at the platforms
+# themselves. This is Wikipedia-sourced only: a second, non-Wikipedia
+# source for the "Hyndland East Junction" name/location specifically was
+# not reachable within this task's research budget (railwaycodes.org.uk
+# returned 404s for the pages guessed, ScotRail's own site returned 403).
+# Hyndland is used here as the nearest *confirmed* station to the actual
+# divergence point, not asserted as the divergence point itself; exclusive
+# segment starts at the next station, MLN, per the shared-trunk rule of
+# thumb.
+#
+# CORRECTION (post-review fix round 2): Hyndland, Dalreoch (DLR, below)
+# and Partick (above) were previously all tagged onto the SAME
+# `scotrail-glasgow-suburban-west-trunk` segment name used by DMR (Dalmuir)
+# and DBC (Dumbarton Central) below -- the segment this file genuinely
+# shares with `scotrail-west-highland-fort-william.toml` and
+# `scotrail-west-highland-oban.toml`. That was wrong: `SegmentRegistry::
+# is_shared` (in `crates/aggregator/src/segments.rs`) keys on segment NAME
+# only, not station, so it made an incident at Hyndland, Dalreoch or
+# Partick get classified as `MatchScope::SharedSegment` and surface a
+# false, user-visible "also affects other lines" claim -- even though West
+# Highland Line trains run non-stop between Glasgow Queen Street and
+# Dumbarton Central and do not physically call at Hyndland, Dalreoch or
+# Partick at all (see both West Highland files' own DMR comments: "WHL
+# trains run non-stop between here and Glasgow Queen Street"). West
+# Highland services only join this line's own metals from Dumbarton
+# Central (DBC) onward towards Glasgow.
+#
+# Hyndland, Dalreoch and Partick are therefore retagged onto a new segment
+# exclusive to this file, `scotrail-glasgow-suburban-west-approach`,
+# splitting the old west-trunk segment at DMR/DBC: everything on this
+# line's own approach track that is NOT physically traversed by West
+# Highland trains is `west-approach`; DMR and DBC, and the genuinely
+# shared stretch they represent, stay on `west-trunk` (unchanged --
+# neither the sibling West Highland files nor their own segment name were
+# touched by this fix).
+
+[[stations]]
+crs = "DMR"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-trunk"
+# Dalmuir: "a large, five-platform interchange" (Wikipedia) where North
+# Clyde, Argyle Line and West Highland Line services converge.
+
+[[stations]]
+crs = "DBC"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-trunk"
+# Dumbarton Central: on the shared west trunk, one station short of the
+# actual Balloch/Helensburgh split (see Dalreoch, next). Per Wikipedia's
+# Dumbarton Central article it is "the last station on the North Clyde
+# line where trains on the West Highland line between Glasgow and Oban
+# and Mallaig call before diverging from the line just before
+# Craigendoran" -- a separate fact about West Highland services, not the
+# Balloch/Helensburgh split (see Craigendoran below for that junction).
+#
+# CORRECTION (post-review, fix round 1): an earlier version of this file
+# stated "Balloch and Helensburgh branches split here" at Dumbarton
+# Central. That was wrong and uncited -- re-verified against Wikipedia's
+# Dalreoch article (cross-checked against National Rail Enquiries for the
+# CRS code), which shows the actual split is one station further out, at
+# Dalreoch. Corrected below.
+#
+# UPDATE (Task 10.8, `lines/scotrail-west-highland-fort-william.toml`):
+# that file independently re-confirmed this same West Highland Line
+# sharing fact (see its own Sources comments) and reused this exact
+# `scotrail-glasgow-suburban-west-trunk` segment name for its own DMR/DBC
+# station entries. `SegmentRegistry::is_shared` now correctly reports this
+# segment shared between `scotrail-glasgow-suburban` and
+# `scotrail-west-highland-fort-william`, and
+# `scotrail_west_highland_shares_glasgow_suburban_west_trunk_incident_propagates`
+# in `crates/aggregator/src/matcher.rs` asserts the resulting
+# `MatchScope::SharedSegment` propagation for both lines. That file's own
+# GLQ entry deliberately does NOT reuse this segment (or
+# `scotrail-central-belt`'s) -- see its own sourcing comments.
+#
+# UPDATE (Task 10.9, now merged): `lines/scotrail-west-highland-oban.toml`
+# independently re-confirmed the same West Highland sharing fact --
+# Dumbarton Central's own Wikipedia article explicitly names "trains ...
+# between Glasgow and Oban and Mallaig," not just Fort William/Mallaig --
+# and reused this exact `scotrail-glasgow-suburban-west-trunk` segment name
+# for its own DMR/DBC entries too, making this a genuine three-way shared
+# segment across `scotrail-glasgow-suburban`,
+# `scotrail-west-highland-fort-william` and
+# `scotrail-west-highland-oban`. The propagation test above now asserts all
+# three line IDs. That file's own GLQ entry likewise does NOT reuse this
+# segment (it gets its own line-specific terminus segment, mirroring
+# `scotrail-west-highland-fort-william`'s identical GLQ boundary choice).
+
+[[stations]]
+crs = "DLR"
+role = "junction"
+segment = "scotrail-glasgow-suburban-west-approach"
+# Dalreoch: the real Balloch/Helensburgh split point. Wikipedia's Dalreoch
+# article, describing the station's own track layout: "the line diverging
+# to the right becomes single track and heads to Balloch. The line to the
+# left runs to Helensburgh Central." The same article confirms Dalreoch
+# immediately follows Dumbarton Central (moving away from Glasgow) and
+# precedes Renton (Balloch direction) / Cardross (Helensburgh direction).
+# CRS code DLR cross-checked against National Rail Enquiries.
+#
+# Retagged (post-review fix round 2) from `scotrail-glasgow-suburban-
+# west-trunk` to `scotrail-glasgow-suburban-west-approach` -- see the HYN
+# comment above for the full explanation: Dalreoch, like Hyndland and
+# Partick, is not physically traversed by West Highland Line trains, so it
+# isn't part of the segment genuinely shared with the West Highland files.
+
+[[stations]]
+crs = "BHC"
+role = "terminus"
+segment = "scotrail-glasgow-suburban-balloch-branch"
+
+[[stations]]
+crs = "CGD"
+role = "junction"
+segment = "scotrail-glasgow-suburban-helensburgh-branch"
+# Craigendoran: West Highland Line begins here (loop east of the station,
+# available to West Highland Line trains only, per Wikipedia).
+
+[[stations]]
+crs = "HLC"
+role = "terminus"
+segment = "scotrail-glasgow-suburban-helensburgh-branch"
+
+# --- Core: Charing Cross, Glasgow Queen Street (Low Level) ---
+
+[[stations]]
+crs = "CHC"
+role = "major"
+segment = "scotrail-glasgow-suburban-core"
+
+[[stations]]
+crs = "GLQ"
+role = "junction"
+segment = "scotrail-glasgow-suburban-core"
+# Glasgow Queen Street (Low Level) -- distinct from the High Level terminus
+# modelled in `scotrail-central-belt.toml`; see the segment-naming
+# coordination note above for why this deliberately isn't shared.
+
+[[stations]]
+crs = "BLG"
+role = "junction"
+segment = "scotrail-glasgow-suburban-core"
+# Bellgrove: eastbound North Clyde services split three ways here --
+# Airdrie (15 min), Springburn (30 min), and Edinburgh Waverley via
+# Bathgate (hourly, not modelled -- see the boundary note above).
+
+# --- East end: Springburn spur, Airdrie branch ---
+
+[[stations]]
+crs = "SPR"
+role = "terminus"
+segment = "scotrail-glasgow-suburban-springburn-spur"
+# Springburn is a terminus of a short spur from Bellgrove, with a
+# Cumbernauld Line interchange there (Cumbernauld Line itself not
+# currently modelled in any `lines/*.toml` file).
+
+[[stations]]
+crs = "ADR"
+role = "terminus"
+segment = "scotrail-glasgow-suburban-airdrie-branch"
+# Airdrie: North Clyde terminus per the batch's pre-flight ruling. Real
+# electrified track continues beyond here (Drumgelloch, then the
+# Airdrie-Bathgate Line to Edinburgh) but that continuation belongs to
+# `scotrail-central-belt.toml`'s Bathgate routing, not this file.
+
+# --- Argyle Line: central Glasgow low-level route ---
+
+[[stations]]
+crs = "EXG"
+role = "minor"
+segment = "scotrail-glasgow-suburban-argyle-core"
+
+[[stations]]
+crs = "AND"
+role = "minor"
+segment = "scotrail-glasgow-suburban-argyle-core"
+
+[[stations]]
+crs = "AGS"
+role = "minor"
+segment = "scotrail-glasgow-suburban-argyle-core"
+
+[[stations]]
+crs = "GLC"
+role = "major"
+segment = "scotrail-glasgow-suburban-argyle-core"
+# Glasgow Central (Low Level) -- the Argyle Line's own central Glasgow
+# hub, physically separate from the North Clyde route through Queen
+# Street Low Level above.
+
+[[stations]]
+crs = "BDG"
+role = "minor"
+segment = "scotrail-glasgow-suburban-argyle-core"
+
+[[stations]]
+crs = "DAK"
+role = "minor"
+segment = "scotrail-glasgow-suburban-argyle-core"
+
+# --- Argyle Line: eastern branch towards Motherwell ---
+
+[[stations]]
+crs = "RUT"
+role = "junction"
+segment = "scotrail-glasgow-suburban-argyle-east"
+# Rutherglen: the Whifflet Line diverges here (not modelled -- see the
+# scope-boundaries note above).
+
+[[stations]]
+crs = "MTH"
+role = "major"
+segment = "scotrail-glasgow-suburban-argyle-east"
+# Motherwell: junction with the West Coast Main Line, which
+# `west-coast-main-line.toml` does not currently model this far north
+# (its northernmost modelled station is Carlisle) -- no live schema-level
+# overlap to reconcile today.

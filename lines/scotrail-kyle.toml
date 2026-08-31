@@ -1,0 +1,361 @@
+id = "scotrail-kyle"
+name = "ScotRail Kyle of Lochalsh Line (Dingwall - Kyle of Lochalsh via Inverness)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.7 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Kyle of Lochalsh Line (Dingwall-Kyle, via
+# Inverness)".
+#
+# Category: "regional", per the brief's own steer, confirmed rather than
+# assumed. Per Wikipedia's "Kyle of Lochalsh Line" article, this is an
+# even more sparsely-served remote single-track line than
+# `scotrail-far-north.toml`/`scotrail-highland-main-line.toml`: "almost
+# entirely single-track, except for four double-track passing loops" (at
+# Dingwall, Garve, Achnasheen and Strathcarron), with "four trains per day
+# in each direction" Monday-Saturday (as of April 2022) and just one
+# (rising to two in summer) each way on Sundays. Several intermediate
+# stations are unstaffed request stops (Lochluichart, Achanalt,
+# Achnashellach, Attadale, Duncraig, Duirinish). This matches this
+# catalogue's precedent for a remote, sparsely-served rural line --
+# `northern-furness.toml`, `scotrail-highland-main-line.toml` and
+# `scotrail-far-north.toml`'s equivalent treatment.
+#
+# Operators: only `SR` is listed, per the task brief's explicit "Operators:
+# SR" instruction and this ScotRail batch's uniform convention.
+
+sample_stations = ["DIN", "STC", "KYL"]
+# DIN (junction with the Far North Line, also a `sample_stations` entry in
+# `scotrail-far-north.toml`), STC (Strathcarron -- the only other
+# double-track passing loop besides Garve/Achnasheen, and roughly the
+# midpoint of the exclusive stretch) and KYL (this line's own terminus).
+# INV is deliberately NOT added here: it is already a contested
+# `sample_stations` entry between `scotrail-far-north.toml` and
+# `scotrail-highland-main-line.toml` (a real LDBWS ambiguity those two
+# files' own comments already flag), and this file does not need it --
+# DIN alone, filtered by `destination_crs_filter` below, is enough to
+# disambiguate Kyle-line-bound services from Far-North-bound ones without
+# adding a third contender at INV.
+
+destination_crs_filter = ["KYL"]
+# DIN is also a `sample_stations` entry in `scotrail-far-north.toml`.
+# West of Dingwall there is exactly one line (this one) and exactly one
+# terminus (Kyle of Lochalsh), so filtering LDBWS departures sampled at
+# DIN to `destination_crs = "KYL"` cleanly separates this line's services
+# from Far-North-bound ones (destined for GGJ/WCK/THS) -- mirroring
+# `scotrail-far-north.toml`'s own use of the field at the same shared
+# station and `scotrail-ayrshire.toml`'s identical pattern at GLC against
+# `scotrail-glasgow-suburban.toml`.
+
+match_keywords = ["Kyle of Lochalsh Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords -- the line's own branded/article name, confirmed by
+# Wikipedia's article title, the gap analysis document's own naming, and
+# cross-checked independently by fetching the live Wikipedia article
+# directly during this task (see Sources below). Grepped `lines/*.toml`
+# before starting this task: no other file uses "Kyle" in `match_keywords`.
+
+# Remote, single-track, request-stop-heavy rural line with only four
+# through workings per day (one each way on winter Sundays) -- an even
+# sparser service pattern than `scotrail-highland-main-line.toml`'s
+# roughly-two-hourly Perth-Inverness corridor, comparable to
+# `scotrail-far-north.toml`. Same tuned thresholds as
+# `northern-furness.toml`/`scotrail-highland-main-line.toml`/
+# `scotrail-far-north.toml`'s comparable rural single-track lines, per the
+# task brief's own steer to follow the `northern-furness.toml` precedent
+# for a rural single-track severity profile.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Inverness to Kyle of Lochalsh, via the shared
+#     Inverness-Dingwall trunk ===
+#
+# Wikipedia's "Kyle of Lochalsh Line" infobox states `stations = 13` --
+# this counts only Dingwall (the line's own zero mileage point, per
+# Wikipedia's "Kyle of Lochalsh railway station" article: "63 miles 64
+# chains ... from Dingwall railway station") through Kyle of Lochalsh (13
+# stations inclusive). This file additionally lists the four stations
+# Inverness-Dingwall shares with the Far North Line (Inverness, Beauly,
+# Muir of Ord, Conon Bridge) because passenger services on this line
+# physically run over that stretch end to end (confirmed independently,
+# see Sources below) -- 17 stations total in this file, matching
+# `scotrail-far-north.toml`'s equivalent treatment of its own shared
+# stretch.
+#
+# Glencarron Platform (between Achnashellach and Strathcarron) is
+# deliberately excluded: confirmed via its own Wikipedia article to have
+# closed in 1964 as part of the Beeching cuts (some drivers reportedly
+# kept stopping there unofficially into the 1990s, but it has no current
+# CRS code and is not part of today's National Rail network) -- the same
+# treatment `scotrail-highland-main-line.toml` gives Daviot (closed 1965).
+#
+# === Segment structure: shared trunk + one exclusive segment ===
+#
+# This line crosses exactly one real junction, handled per SCHEMA.md's
+# shared-trunk rule of thumb (junction station belongs to the shared
+# segment; the exclusive segment starts at the *next* station):
+#
+# Dingwall Junction (just north of Dingwall station): confirmed
+# independently during this task (not merely trusted from
+# `scotrail-far-north.toml`'s own comments) via a direct fetch of
+# Wikipedia's "Kyle of Lochalsh Line" article: "All services are provided
+# by ScotRail and run beyond Dingwall to Inverness," and "Almost
+# immediately north of Dingwall, the two lines diverge at Dingwall
+# Junction and the line to Kyle of Lochalsh takes a sharp left turn to
+# head west" -- i.e. Kyle Line trains physically run over the Far North
+# Line's own Inverness-Dingwall metals, not a separate parallel route.
+# Independently cross-checked against a second, separately-fetched
+# Wikipedia article, "Far North Line": "At Dingwall Junction just north of
+# the station, the Kyle of Lochalsh line diverges to the west." Both
+# fetches were performed fresh during this task (not inherited from Task
+# 10.6's own citations), satisfying this batch's two-source standard.
+#
+# Per the rule of thumb, and per the explicit reservation left by Task
+# 10.6 in `scotrail-far-north.toml`'s own comments, this file reuses the
+# EXACT segment name `scotrail-inverness-dingwall-trunk` for its own
+# Inverness-through-Dingwall station entries. This is now a genuine
+# cross-file shared trunk: `SegmentRegistry::is_shared` reports it shared
+# because two distinct line IDs (`scotrail-far-north` and
+# `scotrail-kyle`) both use it, and the load-bearing shared-trunk
+# regression test in `crates/aggregator/src/matcher.rs`
+# (`scotrail_shared_inverness_dingwall_trunk_incident_propagates`) asserts
+# exactly this: an incident at Dingwall (or another Inverness-Dingwall
+# station) matches BOTH lines with `MatchScope::SharedSegment`.
+#
+# Stations north of Dingwall (Garve onward) are this line's own exclusive
+# track -- the Far North Line never touches them -- tagged
+# `scotrail-kyle-exclusive`.
+
+[[stations]]
+crs = "INV"
+role = "terminus"
+segment = "scotrail-inverness-dingwall-trunk"
+# Inverness: this line's eastern terminus (via Dingwall). Also the
+# terminus of the Highland Main Line, Aberdeen-Inverness Line and Far
+# North Line. Per `scotrail-highland-main-line.toml`'s own sourcing
+# (Wikipedia's "Inverness railway station"), independently re-fetched and
+# re-confirmed during this task: "The Highland Main and Aberdeen Lines
+# both approach the station from the east and use Platforms 1-4, while
+# the Far North Line (which also carries traffic heading for the Kyle
+# Line) approaches from the north-west and use Platforms 5-7." This
+# confirms the Kyle Line does NOT share track/platforms with the Highland
+# Main Line at Inverness (opposite approach direction, separate platform
+# group) -- it runs in via the Far North Line's own approach instead. See
+# the "Highland Main Line" note below for the full reasoning on why this
+# file declines to reuse `scotrail-highland-inverness-approach`.
+
+[[stations]]
+crs = "BEL"
+role = "minor"
+segment = "scotrail-inverness-dingwall-trunk"
+# Beauly: shared with the Far North Line; see that file's own station
+# comment for sourcing (reopened 2002, not a request stop, shortest
+# National Rail platform in Great Britain).
+
+[[stations]]
+crs = "MOO"
+role = "major"
+segment = "scotrail-inverness-dingwall-trunk"
+# Muir of Ord: shared with the Far North Line; the sole remaining passing
+# loop on the single line between Dingwall and Inverness, per that file's
+# own sourcing.
+
+[[stations]]
+crs = "CBD"
+role = "minor"
+segment = "scotrail-inverness-dingwall-trunk"
+# Conon Bridge: shared with the Far North Line; reopened 2013.
+
+[[stations]]
+crs = "DIN"
+role = "junction"
+segment = "scotrail-inverness-dingwall-trunk"
+# Dingwall: the real junction where this line diverges west from the Far
+# North Line (Dingwall Junction, just north of the station). Also this
+# line's own zero mileage point (Wikipedia's "Kyle of Lochalsh railway
+# station" article measures distances from here, not from Inverness).
+# Tagged on the Inverness-Dingwall trunk segment per the shared-trunk rule
+# of thumb (junction station belongs to the shared segment).
+
+[[stations]]
+crs = "GVE"
+role = "major"
+segment = "scotrail-kyle-exclusive"
+# Garve: not a request stop. One of the line's four double-track passing
+# loops (with Dingwall, Achnasheen, Strathcarron). First station past the
+# Dingwall Junction split, so this is where the Kyle-Line-exclusive
+# segment begins per the rule of thumb.
+
+[[stations]]
+crs = "LCC"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Lochluichart: request stop.
+
+[[stations]]
+crs = "AAT"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Achanalt: request stop.
+
+[[stations]]
+crs = "ACN"
+role = "major"
+segment = "scotrail-kyle-exclusive"
+# Achnasheen: not a request stop. One of the line's four double-track
+# passing loops.
+
+[[stations]]
+crs = "ACH"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Achnashellach: request stop.
+
+# Glencarron Platform (between Achnashellach and Strathcarron) omitted:
+# closed 1964 (Beeching), no current CRS code -- see the scope note above.
+
+[[stations]]
+crs = "STC"
+role = "major"
+segment = "scotrail-kyle-exclusive"
+# Strathcarron: not a request stop. One of the line's four double-track
+# passing loops.
+
+[[stations]]
+crs = "ATT"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Attadale: request stop.
+
+[[stations]]
+crs = "STF"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Stromeferry: not a request stop, but a small stop.
+
+[[stations]]
+crs = "DCG"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Duncraig: request stop.
+
+[[stations]]
+crs = "PLK"
+role = "major"
+segment = "scotrail-kyle-exclusive"
+# Plockton: not a request stop -- a genuine village/tourist destination
+# station.
+
+[[stations]]
+crs = "DRN"
+role = "minor"
+segment = "scotrail-kyle-exclusive"
+# Duirinish: request stop.
+
+[[stations]]
+crs = "KYL"
+role = "terminus"
+segment = "scotrail-kyle-exclusive"
+# Kyle of Lochalsh: this line's western terminus, 63 miles 64 chains from
+# Dingwall. Fully staffed, unlike most of this line's intermediate stops.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, track and operator:
+#   - Wikipedia "Kyle of Lochalsh Line" (fetched fresh during this task):
+#     confirms the ordered station list Dingwall-Garve-Lochluichart-
+#     Achanalt-Achnasheen-Achnashellach-Strathcarron-Attadale-Stromeferry-
+#     Duncraig-Plockton-Duirinish-Kyle of Lochalsh (13 stations, matching
+#     the infobox `stations` field); confirms ScotRail operation; confirms
+#     "almost entirely single-track, except for four double-track passing
+#     loops" at Dingwall, Garve, Achnasheen and Strathcarron; confirms
+#     current service frequency ("four trains per day" each direction
+#     Monday-Saturday, one each way Sundays rising to two in summer);
+#     confirms "All services ... run beyond Dingwall to Inverness" and
+#     "Almost immediately north of Dingwall, the two lines diverge at
+#     Dingwall Junction and the line to Kyle of Lochalsh takes a sharp
+#     left turn to head west."
+#   - Wikipedia "Far North Line" (fetched fresh, independently of Task
+#     10.6's own citation of the same article): independently corroborates
+#     "At Dingwall Junction just north of the station, the Kyle of
+#     Lochalsh line diverges to the west" -- the second, separately-
+#     fetched source confirming the Inverness-Dingwall shared-trunk claim
+#     to this batch's two-source standard.
+#   - Wikipedia "Dingwall railway station": confirms Dingwall is "located
+#     just south of the junction of the Far North Line and the Kyle of
+#     Lochalsh Line" and is the Kyle Line's own zero mileage point.
+#   - Wikipedia "Glencarron Platform railway station": confirms closure in
+#     1964 as part of the Beeching Report, supporting this file's decision
+#     not to list it.
+#   - Wikipedia "Inverness railway station" (fetched fresh during this
+#     task, independently of Task 10.5/10.6's own citation of the same
+#     article): confirms the Highland Main/Aberdeen Lines approach from
+#     the east on Platforms 1-4 while the Far North Line (carrying Kyle
+#     Line traffic) approaches from the north-west on Platforms 5-7 --
+#     the basis for this file's Highland Main Line finding below.
+#   - Individual Wikipedia articles for every other intermediate station
+#     (Garve, Lochluichart, Achanalt, Achnasheen, Achnashellach,
+#     Strathcarron, Attadale, Stromeferry, Duncraig, Plockton, Duirinish,
+#     Kyle of Lochalsh): each checked individually for CRS code and
+#     request-stop status.
+#   - railwaycodes.org.uk's own "Line names" listing
+#     (https://www.railwaycodes.org.uk/line/line_names.shtm, fetched
+#     directly): checked for a standalone "Kyle" or "Kyle of Lochalsh"
+#     entry; none exists as a separate line-name record (only "Far North
+#     Line - Inverness - Wick including Thurso branch" appears) -- this
+#     does not contradict the shared-track finding above (Wikipedia and
+#     Dingwall-station sourcing independently confirm it), it simply means
+#     this particular database does not carry a separate named entry for
+#     the Kyle Line. `id`/`name` in this file follow the gap analysis
+#     document's own "Kyle of Lochalsh Line" naming instead.
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "code"/"Station code" field and National
+# Rail Enquiries' own live station page (nationalrail.co.uk/stations/
+# <crs>/details.html, confirmed via each page's own "<Name> (<CRS>)"
+# heading, fetched directly during this task). All matched with no
+# discrepancies: INV, BEL, MOO, CBD, DIN, GVE, LCC, AAT, ACN, ACH, STC,
+# ATT, STF, DCG, PLK, DRN, KYL.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Highland Main Line question (independently investigated, per the
+#     task brief's explicit instruction) ===
+#
+# The brief asks whether this line shares anything with
+# `scotrail-highland-main-line.toml` beyond the Inverness station itself.
+# This task's own fresh fetch of Wikipedia's "Inverness railway station"
+# article (see Sources above) reproduces the same finding
+# `scotrail-highland-main-line.toml`'s own comments already document: the
+# Highland Main Line and Aberdeen-Inverness Line approach Inverness from
+# the east on Platforms 1-4, while the Far North Line -- which "also
+# carries traffic heading for the Kyle Line" -- approaches from the
+# north-west on Platforms 5-7. This is direct, explicit evidence (not
+# merely "approaches from the same direction, shares platforms" as
+# `scotrail-highland-main-line.toml`'s own Aberdeen-Inverness discussion
+# had to work with) that Kyle Line trains run in via the *opposite*
+# approach and a *different* platform group than Highland Main Line
+# trains. Independently confirmed: no shared segment with
+# `scotrail-highland-main-line.toml` beyond the INV station identity
+# itself (which is not modelled as a shared segment in this catalogue --
+# station overlap alone is not segment-sharing, per this plan's own
+# `xc-south-coast.toml`/`xc-manchester.toml` precedent). This file's own
+# Inverness entry therefore does NOT reuse
+# `scotrail-highland-inverness-approach`; it uses
+# `scotrail-inverness-dingwall-trunk` instead, per the Far North Line
+# pairing confirmed above.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Highland Main Line, Aberdeen-Inverness Line: real, already covered
+#   (Highland Main Line, Task 10.5, merged) or pending (Aberdeen-Inverness,
+#   Task 10.10) elsewhere in this batch. Confirmed via this file's own
+#   independent research (see above) to *not* share track with this line
+#   at Inverness (opposite approach directions, separate platform groups)
+#   -- not modelled as a shared segment.

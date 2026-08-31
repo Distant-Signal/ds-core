@@ -1,0 +1,402 @@
+id = "scotrail-fife-borders"
+name = "ScotRail Fife Circle and Borders Railway"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.4 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Fife Circle, the Borders Railway (Edinburgh-
+# Tweedbank)"; section (b) explicitly suggests grouping them: "Fife Circle
+# + Borders Railway possibly grouped".
+#
+# === Deliberate two-routes-in-one-file exception ===
+#
+# This file bundles TWO genuinely separate routes with no shared track
+# between them: the Fife Circle Line (a loop north of the Forth Bridge)
+# and the Borders Railway (Edinburgh-Tweedbank, running south-east of
+# Edinburgh). This is an intentional exception to the batch's "one line
+# per file" Global Constraint, made because the gap analysis's own
+# section (b) explicitly names this grouping -- the same pattern Task
+# 10.1 (`scotrail-central-belt.toml`) already used for its core routing
+# plus Shotts/Bathgate alternates. Unlike 10.1 (which modelled only one
+# of its three routings as real `[[stations]]` entries and left the
+# others as comments), both routes here get full, real station lists,
+# because the gap analysis names both as first-class items to cover, not
+# as alternates of a single core routing.
+#
+# The two routes get distinct segment-name prefixes (`scotrail-fife-
+# circle*` / `scotrail-borders`) throughout, per the task brief's
+# instruction -- they share no track, so nothing here should ever read as
+# a shared-trunk segment between them.
+#
+# Category: "regional" for the whole file. Neither route is a flagship
+# main line, and this file spans two different frequency profiles (Fife
+# Circle's decent-frequency loop around several distinct Fife towns;
+# Borders Railway's hourly, largely single-track branch) that don't
+# cleanly fit `scotrail-glasgow-suburban.toml`'s single-city dense-metro
+# "commuter" category or `scotrail-central-belt.toml`'s flagship-
+# intercity "main-line" category. "Regional" matches the precedent
+# `scotrail-ayrshire.toml` set for a similarly split-character line (a
+# denser corridor grafted onto a modest rural extension) -- and, per that
+# precedent, this file also carries the same `[severity_overrides]` block
+# below (`scotrail-ayrshire.toml`, `scotrail-highland-main-line.toml`,
+# `scotrail-far-north.toml`, `scotrail-kyle.toml` and both West Highland
+# files all use the identical regional-line override values), rather than
+# silently falling through to the schema's global defaults.
+
+match_keywords = ["Fife Circle", "Borders Railway"]
+# One high-precision phrase per bundled route, per the curation rule
+# against padding match_keywords. Both are the routes' own branded names
+# (confirmed in the sourcing below) and don't collide with anything else
+# in the catalogue.
+
+sample_stations = ["EDB", "KDY", "DFE", "GAL", "TWB"]
+
+# Regional-line thresholds, following `scotrail-ayrshire.toml`'s precedent
+# for this batch's other split-character/mixed-density regional lines,
+# rather than the tighter commuter-line defaults that would misjudge a
+# single delayed working on the Borders Railway's largely single-track,
+# hourly southern section as a bigger problem than it is.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station-overlap note: `scotrail-central-belt.toml` (Task 10.1) ===
+#
+# Both routes in this file depart Edinburgh Waverley (EDB); the Fife
+# Circle route also calls at Haymarket (HYM). Both stations are already
+# `[[stations]]` entries in `scotrail-central-belt.toml`, tagged
+# `scotrail-central-belt-edinburgh-throat`. This file deliberately does
+# NOT reuse that segment name for either station.
+#
+# Reasoning: `scotrail-central-belt.toml`'s own comment explains that
+# segment exists because the Bathgate/North Clyde routing rejoins Falkirk
+# High metals "east of Newbridge Junction" into Haymarket/Waverley --
+# Newbridge Junction is well to the west of Edinburgh, on the
+# Falkirk/Bathgate approach. The Fife Circle diverges from the Waverley
+# throat in the opposite direction (north-west via Saughton/South Gyle
+# towards Dalmeny and the Forth Bridge), and the Borders Railway diverges
+# south-east (via Portobello/Niddrie towards Newcraighall) -- neither
+# route's Edinburgh-approach track plausibly coincides with the Newbridge
+# Junction throat `scotrail-central-belt-edinburgh-throat` represents.
+# This task's research (Wikipedia's Fife Circle Line and Borders Railway
+# articles, cross-checked against National Rail Enquiries station pages)
+# did not establish genuine track-sharing beyond both routes calling at
+# the same named station building, so per the
+# `xc-south-coast.toml`/`xc-manchester.toml` precedent this batch's
+# Global Constraints cite ("station overlap is fine, segment-sharing is a
+# deliberate choice"), EDB and HYM get this file's own segment names
+# instead.
+
+# ============================================================
+# Route 1: Fife Circle Line
+# ============================================================
+#
+# === Circular topology: how this file represents it ===
+#
+# The Fife Circle Line is a literal loop: services leave Edinburgh
+# Waverley, cross the Forth Bridge, run around Fife calling at every
+# station on the loop in one direction or the other, and return to
+# Edinburgh Waverley over the same Waverley-Haymarket-Dalmeny approach
+# they started on. `SCHEMA.md`'s `stations` list is inherently linear/
+# ordered ("Ordered list of CRS codes from one end to the other"), which
+# has no natural fit for a route whose two "ends" are the same station.
+#
+# Per the task brief's suggested approach, this file represents the loop
+# as a single directional traversal, choosing to go out via the coastal
+# towns (Dalgety Bay/Aberdour/Burntisland/Kinghorn/Kirkcaldy) and return
+# via the inland towns (Glenrothes with Thornton/Cardenden/Lochgelly/
+# Cowdenbeath/Dunfermline), rather than modelling the return leg or a true
+# loop. `stations` below therefore runs Edinburgh Waverley -> (shared
+# throat) -> Inverkeithing -> coastal side -> Kirkcaldy -> inland side ->
+# Rosyth, and stops there: the next stations physically would be
+# Inverkeithing, Dalmeny, Edinburgh Gateway, South Gyle, Haymarket and
+# Edinburgh Waverley again, all already listed above, closing the loop.
+# They are not repeated as a second set of `[[stations]]` entries.
+#
+# `stations` also therefore only lists Rosyth (ROS) as the final entry
+# without a `role = "terminus"` tag -- it is not a real terminus, just
+# where this file's single-direction traversal of the loop runs out of
+# new stations. Only Edinburgh Waverley (the one real terminus this route
+# has) is tagged `terminus`.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-fife-circle-throat"
+# Edinburgh Waverley. Also the Borders Railway's terminus (see Route 2
+# below) -- listed once here, not duplicated as a second `[[stations]]`
+# entry for the Borders route. Duplicating it with a different segment
+# tag would be actively misleading: `crates/aggregator/src/segments.rs`'s
+# `SegmentRegistry` indexes `(line_id, crs) -> segment` in a `HashMap`
+# built by iterating `stations` in order, so a second EDB entry later in
+# this same file would silently overwrite the first entry's segment in
+# that index, while `common::LineDefinition::segment_for` (`.find()`,
+# first-match) would keep reading the first entry's segment -- the two
+# lookup paths would disagree about which segment EDB belongs to. Both
+# routes' matching is unaffected either way: `has_station` checks CRS
+# membership across the whole flat list regardless of which segment tag
+# is attached, and neither of this file's segments is shared with any
+# other line, so an incident at EDB matches only `scotrail-fife-borders`
+# with `MatchScope::ExclusiveSegment` under either reading. See the
+# Borders Railway section below for where its own list picks up instead.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-fife-circle-throat"
+# Haymarket. See the station-overlap note above re: not sharing
+# `scotrail-central-belt-edinburgh-throat` here.
+
+[[stations]]
+crs = "SGL"
+role = "minor"
+segment = "scotrail-fife-circle"
+
+[[stations]]
+crs = "EGY"
+role = "minor"
+segment = "scotrail-fife-circle"
+
+[[stations]]
+crs = "DLM"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Dalmeny: last station before the Forth Bridge crossing into Fife.
+
+[[stations]]
+crs = "NQU"
+role = "minor"
+segment = "scotrail-fife-circle"
+# North Queensferry: first station in Fife, immediately north of the
+# Forth Bridge.
+
+[[stations]]
+crs = "INK"
+role = "junction"
+segment = "scotrail-fife-circle"
+# Inverkeithing: where the loop's coastal and inland sides diverge (this
+# traversal takes the coastal side first, then returns via the inland
+# side further down this list).
+
+[[stations]]
+crs = "DAG"
+role = "minor"
+segment = "scotrail-fife-circle"
+
+[[stations]]
+crs = "AUR"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Aberdour.
+
+[[stations]]
+crs = "BTS"
+role = "major"
+segment = "scotrail-fife-circle"
+# Burntisland.
+
+[[stations]]
+crs = "KGH"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Kinghorn.
+
+[[stations]]
+crs = "KDY"
+role = "major"
+segment = "scotrail-fife-circle"
+# Kirkcaldy: the largest town directly on the coastal side of the loop.
+# The coastal side's stations end here; the inland side (back towards
+# Edinburgh via Cowdenbeath/Dunfermline) picks up at the next station.
+
+[[stations]]
+crs = "GLT"
+role = "junction"
+segment = "scotrail-fife-circle"
+# Glenrothes with Thornton: per Wikipedia, timetabled as the Fife Circle's
+# "northern terminal" -- some services terminate here, others continue
+# back towards Edinburgh via the inland side listed below. Also a physical
+# junction where the line towards Markinch/Perth/Dundee diverges (not
+# modelled -- that's the separate Edinburgh-Aberdeen main line, out of
+# scope for this file).
+
+[[stations]]
+crs = "CDD"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Cardenden.
+
+[[stations]]
+crs = "LCG"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Lochgelly.
+
+[[stations]]
+crs = "COW"
+role = "major"
+segment = "scotrail-fife-circle"
+# Cowdenbeath.
+
+[[stations]]
+crs = "DFL"
+role = "minor"
+segment = "scotrail-fife-circle"
+# Dunfermline Queen Margaret.
+
+[[stations]]
+crs = "DFE"
+role = "major"
+segment = "scotrail-fife-circle"
+# Dunfermline City. Named "Dunfermline Town" historically (and still the
+# title of its Wikipedia article); National Rail Enquiries' own station
+# page now shows the current name "Dunfermline City" for CRS code DFE,
+# reflecting Dunfermline's 2022 city-status grant. Used here as the
+# current live-source name per the Global Constraints' sourcing method.
+
+[[stations]]
+crs = "ROS"
+role = "major"
+segment = "scotrail-fife-circle"
+# Rosyth: last new station on this single-direction traversal of the
+# loop. The physical service continues from here back through
+# Inverkeithing, Dalmeny, Edinburgh Gateway, South Gyle and Haymarket into
+# Edinburgh Waverley -- all already listed above -- completing the
+# physical loop. Not repeated here; see the circular-topology note above.
+
+# ============================================================
+# Route 2: Borders Railway (Edinburgh Waverley - Tweedbank)
+# ============================================================
+#
+# Reopened 6 September 2015 (the "Waverley Route" reinstatement, in
+# stages from the original line closed in 1969). Per Wikipedia: OHLE
+# (overhead electrification) Waverley to Newcraighall, unelectrified
+# Newcraighall to Tweedbank; 21.25 of the line's 35 miles 25 chains are
+# single-track with three "dynamic" passing loops. This file's whole-line
+# `category = "regional"` reflects this route's modest, largely
+# single-track rural character (see the file-level category note above).
+#
+# Edinburgh Waverley (EDB) is this route's terminus too, but is not
+# re-declared as a second `[[stations]]` entry -- see the comment on the
+# EDB entry in the Fife Circle section above for why, and the technical
+# reasoning for why that's still safe for matching. This route's own
+# `[[stations]]` entries below pick up at the next station, Brunstane.
+
+[[stations]]
+crs = "BSU"
+role = "minor"
+segment = "scotrail-borders"
+# Brunstane: opened 2002, predating the Borders Railway reopening proper,
+# but per Wikipedia is served exclusively by the Borders Railway service
+# today (not the North Berwick line, which does not call here and is not
+# modelled in this catalogue in any case).
+
+[[stations]]
+crs = "NEW"
+role = "minor"
+segment = "scotrail-borders"
+# Newcraighall: also opened 2002, same service pattern as Brunstane.
+
+[[stations]]
+crs = "SFI"
+role = "minor"
+segment = "scotrail-borders"
+# Shawfair: opened with the 2015 Borders Railway reinstatement.
+
+[[stations]]
+crs = "EKB"
+role = "minor"
+segment = "scotrail-borders"
+# Eskbank.
+
+[[stations]]
+crs = "NEG"
+role = "minor"
+segment = "scotrail-borders"
+# Newtongrange.
+
+[[stations]]
+crs = "GBG"
+role = "minor"
+segment = "scotrail-borders"
+# Gorebridge.
+
+[[stations]]
+crs = "SOI"
+role = "minor"
+segment = "scotrail-borders"
+# Stow: on the unelectrified, single-track southern section.
+
+[[stations]]
+crs = "GAL"
+role = "major"
+segment = "scotrail-borders"
+# Galashiels: the largest town on the route south of Edinburgh.
+
+[[stations]]
+crs = "TWB"
+role = "terminus"
+segment = "scotrail-borders"
+# Tweedbank: southern terminus.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "Fife Circle Line": confirms ScotRail operation, the
+#     Edinburgh-Kirkcaldy stretch running via the Forth Bridge, the loop
+#     dividing at Inverkeithing into a coastal side (Dalgety Bay,
+#     Aberdour, Burntisland, Kinghorn, Kirkcaldy) and an inland side
+#     (Rosyth, Dunfermline City, Dunfermline Queen Margaret, Cowdenbeath,
+#     Lochgelly, Cardenden, Glenrothes with Thornton), and that Glenrothes
+#     with Thornton is timetabled as the loop's "northern terminal" where
+#     some services turn back towards Edinburgh "along the opposite side
+#     of the circle". Also confirms the Haymarket-Dalmeny electrification
+#     project (target completion March 2027, delayed from December 2024).
+#   - Wikipedia "Glenrothes with Thornton railway station": confirms the
+#     junction west of the station splits towards Markinch/Perth/Dundee on
+#     one side and towards Kirkcaldy/Edinburgh (the Fife Circle) on the
+#     other, and that Markinch itself sits on the separate Edinburgh-
+#     Aberdeen main line, not the Fife Circle loop.
+#   - Wikipedia "Borders Railway": confirms the 6 September 2015 reopening
+#     date, the ordered station list Edinburgh Waverley-Brunstane-
+#     Newcraighall-Shawfair-Eskbank-Newtongrange-Gorebridge-Stow-
+#     Galashiels-Tweedbank (9 stations besides Waverley, matching the
+#     infobox's `stations = 9` field, which excludes the pre-existing
+#     Waverley terminus), the OHLE Waverley-Newcraighall/unelectrified
+#     Newcraighall-Tweedbank electrification split, and the single-track-
+#     with-passing-loops character of most of the route.
+#   - Wikipedia "Brunstane railway station" and "Newcraighall railway
+#     station": both confirm exclusive service by the Borders Railway
+#     today (not the North Berwick line), cross-checking their inclusion
+#     in this file's Borders Railway list rather than treating them as
+#     North Berwick line stations.
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "code" field and National Rail Enquiries'
+# own station page (nationalrail.co.uk/stations/<crs>/details.html). All
+# matched with no discrepancies, except that National Rail Enquiries shows
+# Dunfermline's DFE station under its current name "Dunfermline City"
+# (Wikipedia's article title, "Dunfermline Town railway station", predates
+# the town's 2022 city-status grant) -- the current live-source name is
+# used in this file's comment, per the Global Constraints' sourcing
+# method.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Levenmouth Rail Link (Glenrothes with Thornton/Cameron Bridge/
+#   Leven, reopened 2024): per Wikipedia, also calls at Glenrothes with
+#   Thornton, but is a distinct branch service, not named in the gap
+#   analysis's ScotRail bullet for this task and not covered by any other
+#   task in this batch -- a real, documented gap left for future work.
+# - The Levenmouth-related "two different paths" to Leven mentioned in
+#   ScotRail's current (May 2025) service pattern, and the Perth/Dundee
+#   continuations some Fife Circle-branded services make past Glenrothes
+#   with Thornton or Markinch: real per the sourcing above, but out of
+#   scope for the Fife Circle loop itself as named in the gap analysis.

@@ -1,0 +1,423 @@
+id = "scotrail-far-north"
+name = "ScotRail Far North Line (Inverness - Wick / Thurso)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Task 10.6 of the Batch 10 (ScotRail) line-catalogue effort. Gap analysis
+# source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Far North Line (Inverness-Wick/Thurso)".
+#
+# Category: "regional", per the brief's own steer, confirmed rather than
+# assumed. Per Wikipedia's "Far North Line" article, this is the most
+# remote and sparsely-served line in this batch so far: "almost entirely
+# single-track" with "10 double-track passing loops"; the May 2026-era
+# timetable has only a handful of Inverness-Wick/Thurso through workings
+# per day (Wick's own station article: "four trains per day in each
+# direction" on weekdays/Saturdays, one daily each way on Sundays); several
+# intermediate stations are unstaffed request stops served on demand only
+# (Ardgay, Culrain, Invershin, Rogart, Dunrobin Castle, Kildonan, Kinbrace,
+# Altnabreac, Scotscalder). This matches this catalogue's precedent for a
+# remote, sparsely-served rural line -- `northern-furness.toml` and
+# `scotrail-highland-main-line.toml`'s equivalent treatment -- rather than
+# a "commuter"/"main-line" classification.
+#
+# Operators: only `SR` is listed, per the task brief's explicit "Operators:
+# SR" instruction and matching this ScotRail batch's uniform convention
+# already used by every prior file in it.
+
+sample_stations = ["INV", "DIN", "GGJ", "WCK", "THS"]
+
+# INV is also a `sample_stations` entry in `scotrail-highland-main-line.toml`
+# (Task 10.5) -- a real LDBWS ambiguity this task's addition creates (Task
+# 10.5's own comment flagged this as a "future consideration" once a second
+# Inverness-terminating line was added; this is that line). `destination_crs_filter`
+# disambiguates Far North Line departures from Highland Main Line ones at
+# the shared INV sample station, mirroring `scotrail-ayrshire.toml`'s
+# identical use of the field at GLC against `scotrail-glasgow-suburban.toml`.
+destination_crs_filter = ["DIN", "GGJ", "WCK", "THS"]
+
+match_keywords = ["Far North Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords -- the line's own branded/article name, confirmed both by
+# Wikipedia's article title and independently by railwaycodes.org.uk's own
+# "Line names" listing (see Sources below), and it doesn't collide with
+# anything else in the catalogue (grepped before starting this task).
+
+# Remote, single-track, request-stop-heavy rural line with only a handful
+# of through workings per day -- an even sparser service pattern than
+# `scotrail-highland-main-line.toml`'s roughly-two-hourly Perth-Inverness
+# corridor. Same tuned thresholds as `northern-furness.toml`/
+# `scotrail-highland-main-line.toml`'s comparable rural single-track lines,
+# per the task brief's own steer to follow the `northern-furness.toml`
+# precedent for a rural single-track severity profile.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Inverness to Wick, with the Thurso branch off
+#     Georgemas Junction ===
+#
+# 26 stations total (Wikipedia's "Far North Line" infobox: "stations =
+# 26"): the Inverness-Georgemas Junction-Wick main line (24 stations
+# Inverness through Georgemas Junction, plus Wick) and the short Georgemas
+# Junction-Thurso branch (Thurso). No intermediate stations are omitted --
+# this line's full stop pattern is listed, unlike some of this batch's
+# denser corridors, because most of these stops are single-daily-service
+# request halts rather than genuinely negligible ones.
+#
+# === Segment structure: two nested junctions, four segments ===
+#
+# This line crosses two real junctions, each handled per SCHEMA.md's
+# shared-trunk rule of thumb (junction station belongs to the shared
+# segment; the exclusive segment starts at the *next* station):
+#
+# 1. Dingwall Junction (just north of Dingwall station): the Kyle of
+#    Lochalsh Line -- not yet a file in this catalogue; assigned to Task
+#    10.7 of this same batch -- diverges here. Per Wikipedia's "Kyle of
+#    Lochalsh Line" article: "All services are provided by ScotRail and run
+#    beyond Dingwall to Inverness," and "Almost immediately north of
+#    Dingwall, the two lines diverge at Dingwall Junction and the line to
+#    Kyle of Lochalsh takes a sharp left turn to head west" -- i.e. Kyle
+#    Line trains physically run over this line's own Inverness-Dingwall
+#    metals, not a separate parallel route, confirmed independently by
+#    Wikipedia's "Dingwall railway station" article ("located just south of
+#    the junction of the Far North Line and the Kyle of Lochalsh Line") and
+#    by the Far North Line's own article ("At Dingwall Junction, the Kyle
+#    of Lochalsh line diverges to the west"). Three separate Wikipedia
+#    articles independently agree on this specific claim, and it matches
+#    the well-known real topology the task brief itself named -- this is
+#    treated as confirmed to this batch's two-source standard.
+#
+#    Per the rule of thumb, Inverness through Dingwall (inclusive) is
+#    tagged `scotrail-inverness-dingwall-trunk` -- a deliberately
+#    line-neutral name (mirroring `swr-trunk-waterloo`'s naming pattern:
+#    named for the shared geography, not for either owning line), reserved
+#    here so that Task 10.7's Kyle of Lochalsh Line could reuse this exact
+#    string for its own Inverness-Dingwall station entries and get real
+#    shared-trunk propagation for free.
+#
+#    UPDATE (Task 10.7, now merged): `lines/scotrail-kyle.toml` did
+#    independently confirm this same topology (see its own Sources
+#    comments) and reused this exact segment name. `SegmentRegistry::
+#    is_shared` now correctly reports this segment shared between
+#    `scotrail-far-north` and `scotrail-kyle`, and
+#    `scotrail_shared_inverness_dingwall_trunk_incident_propagates` in
+#    `crates/aggregator/src/matcher.rs` asserts the resulting
+#    `MatchScope::SharedSegment` propagation for both lines. Per the note
+#    below, `lines/scotrail-kyle.toml` does not reuse this segment name
+#    past Dingwall -- its own exclusive track (Garve onward) is tagged
+#    `scotrail-kyle-exclusive` instead.
+#
+#    (Original note for Task 10.7, kept for history:) do not reuse this
+#    segment name past Dingwall -- stations north of Dingwall (Alness
+#    onward) are Far-North-exclusive track the Kyle Line never touches;
+#    tagging them with this shared name would incorrectly propagate a
+#    Far-North-only incident (e.g. at Georgemas Junction) onto the Kyle
+#    Line.
+#
+# 2. Georgemas Junction: confirmed via Wikipedia's "Georgemas Junction
+#    railway station" article as "the northernmost railway junction in the
+#    United Kingdom," where "the branch line to Thurso starts" and
+#    (historically) "northbound passenger trains would divide ... with the
+#    rear portion for Thurso and the front portion for Wick." This split is
+#    entirely internal to this one file -- both the Wick and Thurso
+#    branches belong to the same `scotrail-far-north` line/file (the gap
+#    analysis itself names this one line "Inverness-Wick/Thurso", not two
+#    lines), so there is no cross-file sharing question here, only a
+#    same-file one.
+#
+#    Per the rule of thumb, Alness through Georgemas Junction (inclusive)
+#    -- i.e. everything between the Dingwall junction and the Georgemas
+#    split that is exclusively Far North Line track -- is tagged
+#    `scotrail-far-north-trunk`. This single segment is the stretch *both*
+#    the Wick and Thurso branches have in common: an incident anywhere on
+#    it affects services to both destinations, which is exactly the
+#    "Inverness-Georgemas Junction stretch since both branches share it"
+#    case the task brief calls out. Because it is one file/one line ID,
+#    `SegmentRegistry::is_shared` does not (and structurally cannot) mark
+#    it "shared" the way a cross-file trunk is -- that concept only applies
+#    across distinct lines. The regression test for this (in
+#    `crates/aggregator/src/segments.rs`) instead asserts the same-file
+#    structural fact directly: this trunk segment is touched together with
+#    *both* the Wick-exclusive and the Thurso-exclusive segment, mirroring
+#    `segments_touched_by_finds_shared_and_exclusive_together`'s existing
+#    SWR-alton precedent for a trunk-plus-branch layout in one file.
+#
+#    Wick: `scotrail-far-north-wick` (Georgemas Junction's own passengers
+#    stay on `scotrail-far-north-trunk`; the next station, Wick, starts the
+#    exclusive branch segment -- there are no intermediate stations on this
+#    18-mile-35-chain stretch).
+#    Thurso: `scotrail-far-north-thurso` (same reasoning; no intermediate
+#    stations on this 6-mile-50-chain stretch).
+
+[[stations]]
+crs = "INV"
+role = "terminus"
+segment = "scotrail-inverness-dingwall-trunk"
+# Inverness: this line's southern terminus. Also the terminus of the
+# Highland Main Line, Aberdeen-Inverness Line and Kyle of Lochalsh Line
+# (per `scotrail-highland-main-line.toml`'s own Inverness-area sourcing).
+# Per that file's own research (Wikipedia's "Inverness railway station"):
+# "The Highland Main and Aberdeen Lines both approach the station from the
+# east and use Platforms 1-4, while the Far North Line (which also carries
+# traffic heading for the Kyle Line) approaches from the north-west and use
+# Platforms 5-7." This confirms the Far North Line does *not* share track
+# with the Highland Main Line here (opposite approach directions, separate
+# platform groups) -- consistent with this file's decision not to reuse
+# `scotrail-highland-inverness-approach`. It also independently corroborates
+# this file's Kyle Line finding: the Far North Line's own approach *does*
+# carry Kyle Line traffic.
+
+[[stations]]
+crs = "BEL"
+role = "minor"
+segment = "scotrail-inverness-dingwall-trunk"
+# Beauly: reopened 2002; not a request stop (confirmed via Wikipedia's
+# station-list italics convention), but a small village stop with Great
+# Britain's shortest National Rail platform (15.06m).
+
+[[stations]]
+crs = "MOO"
+role = "major"
+segment = "scotrail-inverness-dingwall-trunk"
+# Muir of Ord: not a request stop; "the location of the sole remaining
+# passing loop on the single line between Dingwall and Inverness" per
+# Wikipedia -- genuinely operationally significant to this stretch.
+
+[[stations]]
+crs = "CBD"
+role = "minor"
+segment = "scotrail-inverness-dingwall-trunk"
+# Conon Bridge: reopened 2013; not a request stop, but a small stop.
+
+[[stations]]
+crs = "DIN"
+role = "junction"
+segment = "scotrail-inverness-dingwall-trunk"
+# Dingwall: real junction -- the Kyle of Lochalsh Line (Task 10.7)
+# diverges just north of here. Also this line's busiest station after
+# Inverness (~80k passengers, 2019-20, per Wikipedia). Tagged on the
+# Inverness-Dingwall trunk segment per the shared-trunk rule of thumb
+# (junction station belongs to the shared segment).
+
+[[stations]]
+crs = "ASS"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Alness: closed 1960, reopened 1973 after local housing development; not
+# a request stop. First station past the Dingwall Junction split, so this
+# is where the Far-North-exclusive trunk begins per the rule of thumb.
+
+[[stations]]
+crs = "IGD"
+role = "major"
+segment = "scotrail-far-north-trunk"
+# Invergordon: a genuine town station (cruise-ship port on the Cromarty
+# Firth); not a request stop.
+
+[[stations]]
+crs = "FRN"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Fearn: not a request stop, but a small rural stop.
+
+[[stations]]
+crs = "TAI"
+role = "major"
+segment = "scotrail-far-north-trunk"
+# Tain: a market town station; not a request stop.
+
+[[stations]]
+crs = "ARD"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Ardgay: request stop.
+
+[[stations]]
+crs = "CUA"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Culrain: request stop; only 680m from Invershin.
+
+[[stations]]
+crs = "INH"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Invershin: request stop.
+
+[[stations]]
+crs = "LRG"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Lairg: not a request stop, but a small village -- the furthest-inland
+# point on the whole line (the "Lairg loop").
+
+[[stations]]
+crs = "ROG"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Rogart: request stop; briefly closed and reopened in 1960.
+
+[[stations]]
+crs = "GOL"
+role = "major"
+segment = "scotrail-far-north-trunk"
+# Golspie: a town station where the line returns to the coastline after
+# roughly 40 route miles inland; not a request stop.
+
+[[stations]]
+crs = "DNO"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Dunrobin Castle: a private halt built for the Duke of Sutherland's
+# estate; request stop (National Rail's own station page: passengers must
+# use the platform's "Request Stop Kiosk" 5-20 minutes before the train is
+# due); summer-only, closed late October to March.
+
+[[stations]]
+crs = "BRA"
+role = "major"
+segment = "scotrail-far-north-trunk"
+# Brora: a town station; not a request stop.
+
+[[stations]]
+crs = "HMS"
+role = "major"
+segment = "scotrail-far-north-trunk"
+# Helmsdale: a fishing-village town station; not a request stop.
+
+[[stations]]
+crs = "KIL"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Kildonan: request stop; one of the least-used stations on the line.
+
+[[stations]]
+crs = "KBC"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Kinbrace: request stop.
+
+[[stations]]
+crs = "FRS"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Forsinard: not a request stop, but a remote stop serving the Flow
+# Country National Nature Reserve; last passing loop on the line.
+
+[[stations]]
+crs = "ABC"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Altnabreac: request stop; one of Great Britain's most geographically
+# isolated stations.
+
+[[stations]]
+crs = "SCT"
+role = "minor"
+segment = "scotrail-far-north-trunk"
+# Scotscalder: request stop; typically fewer than one passenger per day.
+
+[[stations]]
+crs = "GGJ"
+role = "junction"
+segment = "scotrail-far-north-trunk"
+# Georgemas Junction: "the northernmost railway junction in the United
+# Kingdom" (Wikipedia) -- the Wick and Thurso branches split here. Tagged
+# on the shared trunk segment per the rule of thumb (junction station
+# belongs to the shared segment, not either exclusive branch).
+
+[[stations]]
+crs = "WCK"
+role = "terminus"
+segment = "scotrail-far-north-wick"
+# Wick: this line's northern (main-line) terminus, 161 miles 36 chains
+# from Inverness and 18 miles 35 chains from Georgemas Junction, with no
+# intermediate stations on that stretch.
+
+[[stations]]
+crs = "THS"
+role = "terminus"
+segment = "scotrail-far-north-thurso"
+# Thurso: the Thurso-branch terminus, 6 miles 50 chains from Georgemas
+# Junction, with no intermediate stations on that stretch. "The
+# northernmost station on mainland Britain's National Rail network" per
+# Wikipedia, but *not* this line's overall terminus -- passenger services
+# continue to/from Wick (via a reversal at Thurso), matching this line's
+# own "Inverness-Wick/Thurso" framing in the gap analysis rather than
+# treating Thurso as the line's single endpoint.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, track and operator:
+#   - Wikipedia "Far North Line": confirms the ordered station list (26
+#     stations total, matching the infobox `stations` field), ScotRail
+#     operation with Class 158 units, "almost entirely single-track" with
+#     10 passing loops, the Georgemas Junction Wick/Thurso split, and "At
+#     Dingwall Junction, the Kyle of Lochalsh line diverges to the west."
+#   - railwaycodes.org.uk "Line names" listing (independent, non-Wikipedia
+#     source per the Global Constraints' named list of acceptable second
+#     sources): confirms the line's own official name and scope --
+#     "Far North Line - Inverness - Wick including Thurso branch" -- i.e.
+#     Thurso is a branch off the main Inverness-Wick line, not a
+#     co-equal second terminus, matching this file's terminus/branch
+#     modelling above.
+#   - Wikipedia "Kyle of Lochalsh Line": confirms services "run beyond
+#     Dingwall to Inverness" and that "the two lines diverge at Dingwall
+#     Junction" just north of Dingwall -- the basis for this file's
+#     `scotrail-inverness-dingwall-trunk` segment, cross-checked against
+#     the two further sources below.
+#   - Wikipedia "Dingwall railway station": independently corroborates the
+#     Dingwall Junction location ("located just south of the junction of
+#     the Far North Line and the Kyle of Lochalsh Line") and Dingwall's
+#     ridership significance.
+#   - Wikipedia "Georgemas Junction railway station": confirms the
+#     "northernmost railway junction in the United Kingdom" framing and the
+#     historical/current Wick-Thurso divide/reversal pattern.
+#   - Wikipedia "Wick railway station": confirms WCK as the line's overall
+#     terminus and current "four trains per day in each direction"
+#     (weekday/Saturday) service level.
+#   - Wikipedia "Thurso railway station": confirms THS is a branch
+#     terminus, not the line's overall terminus, and the "northernmost
+#     station on mainland Britain" framing.
+#   - Individual Wikipedia articles for every other intermediate station
+#     (Beauly, Muir of Ord, Conon Bridge, Alness, Invergordon, Fearn, Tain,
+#     Ardgay, Culrain, Invershin, Lairg, Rogart, Golspie, Dunrobin Castle,
+#     Brora, Helmsdale, Kildonan, Kinbrace, Forsinard, Altnabreac,
+#     Scotscalder): each checked individually for its CRS code and
+#     request-stop status (the "stations listed in italics are request
+#     stops" convention used consistently across these articles' own
+#     service-pattern sections).
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "Station code" field and National Rail
+# Enquiries' own live station page (nationalrail.co.uk/stations/<crs>/
+# details.html, confirmed via each page's own "<Name> (<CRS>)" heading).
+# All 26 matched with no discrepancies after correction: an initial
+# single-page summary fetch of the Far North Line article mis-stated
+# several codes (e.g. "GMJ" for Georgemas Junction, "DGL" for Dingwall) --
+# every code below was independently re-verified against that station's
+# own dedicated Wikipedia infobox and then against nationalrail.co.uk
+# before being trusted, precisely because of that discrepancy: INV, BEL,
+# MOO, CBD, DIN, ASS, IGD, FRN, TAI, ARD, CUA, INH, LRG, ROG, GOL, DNO,
+# BRA, HMS, KIL, KBC, FRS, ABC, SCT, GGJ, WCK, THS.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Kyle of Lochalsh Line (Dingwall-Kyle via Inverness): real, sourced
+#   above, now its own file (`lines/scotrail-kyle.toml`, Task 10.7,
+#   merged), which reused this file's `scotrail-inverness-dingwall-trunk`
+#   segment name after independently confirming the same topology (see
+#   the segment-structure note above).
+# - Highland Main Line, Aberdeen-Inverness Line: real, already covered
+#   (Highland Main Line, Task 10.5, merged) or pending (Aberdeen-Inverness,
+#   Task 10.10) elsewhere in this batch. Confirmed via this file's own
+#   research to *not* share track with the Far North Line at Inverness
+#   (opposite approach directions, separate platform groups -- see the
+#   INV station comment above) -- not modelled as a shared segment.
