@@ -1,0 +1,322 @@
+id = "scotrail-shotts"
+name = "ScotRail Shotts Line (Glasgow Central - Edinburgh Waverley via Shotts)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Follow-up task to the Batch 10 (ScotRail) line-catalogue effort. Batch 10's
+# own whole-branch review (see `docs/superpowers/plans/
+# 2026-08-29-line-catalogue-coverage.md`) flagged that `scotrail-central-
+# belt.toml` (Task 10.1) modelled only the core "via Falkirk High" routing
+# of the three real, distinct Edinburgh-Glasgow ScotRail routings, and
+# recorded the other two -- via Shotts and via Bathgate/North Clyde -- as
+# prose comments only, with no `[[stations]]` entries. This file closes the
+# Shotts half of that gap; `scotrail-bathgate.toml` closes the Bathgate half
+# separately (see that file's own header for why this is two files, not
+# one).
+#
+# Category: "regional", not "main-line". `scotrail-central-belt.toml`'s own
+# framing already distinguishes the Falkirk High routing as "the
+# core/flagship route" from Shotts and Bathgate as "alternate routes" --
+# this line is a real, useful second Glasgow-Edinburgh link (roughly
+# half-hourly per the current ScotRail timetable) but structurally the
+# less-frequent, non-flagship alternative, closer to how
+# `scotrail-ayrshire.toml` and `scotrail-fife-borders.toml` categorise their
+# own real-but-non-flagship corridors than to `scotrail-central-belt.toml`'s
+# own "main-line" choice.
+
+sample_stations = ["GLC", "SHS", "HYM", "EDB"]
+# GLC (Glasgow Central) is also a `sample_stations` entry in
+# `scotrail-ayrshire.toml` and `tpe-anglo-scottish.toml`, for their own
+# distinct high-level services, and in `scotrail-glasgow-suburban.toml` for
+# the physically separate Low Level Argyle Line platforms -- see the
+# station-overlap note below. SHS (Shotts) is this line's own namesake
+# mid-corridor station. HYM/EDB are the shared Edinburgh throat (see below).
+
+destination_crs_filter = ["EDB"]
+# LDBWS sampling at GLC does not distinguish platform level or route, and
+# GLC is shared with three sibling files' own sample stations (see above).
+# Every Shotts-line working terminates at Edinburgh Waverley (EDB), unlike
+# `scotrail-ayrshire.toml`'s own branching Ayr/Stranraer destinations, so a
+# single-entry filter is enough to separate this line's own departures from
+# Ayrshire Coast, Anglo-Scottish and Argyle Line departures sharing the same
+# GLC LDBWS feed, mirroring `scotrail-west-highland-fort-william.toml`'s
+# identical single-purpose use of the field.
+
+match_keywords = ["Shotts Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords. This is the line's own branded/article name (Wikipedia
+# "Shotts line") and grepped clean against every other file's own
+# `match_keywords` before adding.
+
+# Regional-line thresholds, following `scotrail-ayrshire.toml`'s and
+# `scotrail-fife-borders.toml`'s precedent -- both explicitly note that
+# every "regional"-category file in this batch (`scotrail-ayrshire.toml`,
+# `scotrail-highland-main-line.toml`, `scotrail-far-north.toml`,
+# `scotrail-kyle.toml`, both West Highland files, `scotrail-fife-
+# borders.toml`) shares this identical override block rather than falling
+# through to the schema's global defaults.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Glasgow Central to Edinburgh Waverley via Shotts ===
+#
+# Ordered end to end per SCHEMA.md's curation rule. Station order and
+# route structure sourced from a fresh fetch of Wikipedia's "Shotts line"
+# article (infobox route diagram): Glasgow Central, Cambuslang, Uddingston,
+# Bellshill, Holytown, Carfin, Cleland, Hartwood, Shotts, Fauldhouse,
+# Breich, Addiewell, West Calder, Livingston South, Kirknewton, Curriehill,
+# Wester Hailes, Kingsknowe, Slateford, Haymarket, Edinburgh Waverley --
+# this exact order and station set independently matches
+# `scotrail-central-belt.toml`'s own prior (comment-only) research for its
+# unmodelled Shotts note, itself cross-checked there against "general web
+# coverage of the route, including Network Rail-sourced material". The line
+# "branches off towards Bellshill" at Uddingston and "rejoins" at Midcalder
+# Junction (between Kirknewton and the West Coast Main Line corridor);
+# electrification "was completed in early April 2019" (Wikipedia "Shotts
+# line").
+#
+# === Segment structure: one exclusive trunk, one shared Edinburgh throat ===
+#
+# This line has no internal branching -- a single ordered corridor -- so it
+# gets one exclusive segment, `scotrail-shotts-exclusive`, covering Glasgow
+# Central through Slateford.
+#
+# The final two stations, Haymarket and Edinburgh Waverley, reuse
+# `scotrail-central-belt.toml`'s own `scotrail-central-belt-edinburgh-
+# throat` segment name. This is a genuine, sourced, independently-confirmed
+# physical fact, not a guess: a fresh fetch of Wikipedia's "Haymarket
+# railway station" article states "the connecting line to Slateford, which
+# is presently used by services heading towards Glasgow Central railway
+# station and the West Coast Main Line, was originally constructed during
+# 1853 by the Caledonian Railway" -- i.e. the Shotts line's own approach
+# joins the shared Haymarket-Waverley throat via a real, named physical
+# connection at Slateford/Haymarket, independently corroborating the same
+# claim already recorded (for different reasons, sourced from RAILSCOT) in
+# `scotrail-central-belt.toml`'s own Haymarket comment about the Bathgate
+# routing. `scotrail-central-belt.toml`'s own text explicitly names this
+# exact scenario: "Whoever writes the Bathgate/North Clyde routing ...
+# reusing `scotrail-central-belt-edinburgh-throat` for those same two
+# stations would make the matcher treat an incident there as a shared-
+# segment event across both lines, which matches the physical reality
+# described above" -- the same reasoning applies here, now independently
+# re-confirmed for Shotts by this file's own Haymarket-station research.
+# Per the shared-trunk rule of thumb, the boundary matches the one
+# `scotrail-central-belt.toml` already reserved: Haymarket and Edinburgh
+# Waverley only, not Slateford -- this task's Haymarket-station source
+# describes the connection as resolving into the shared pair of stations,
+# not asserting Slateford itself as a shared calling point for Falkirk
+# High/Bathgate services.
+#
+# This makes `scotrail-central-belt-edinburgh-throat` a genuine three-way
+# shared segment once `scotrail-bathgate.toml` (added alongside this file)
+# also reuses it for its own HYM/EDB entries -- see that file's own
+# sourcing for the Bathgate side of this same claim. The regression test
+# for this, `scotrail_central_belt_edinburgh_throat_shared_incident_
+# propagates`, is in `crates/aggregator/src/matcher.rs`, and
+# `scotrail-central-belt.toml`'s own HYM comment has been updated to record
+# this resolution.
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-shotts-exclusive"
+# Glasgow Central: this line's own south-western terminus. Also a
+# `[[stations]]` entry in `scotrail-glasgow-suburban.toml` (the physically
+# separate Low Level Argyle Line platforms), `scotrail-ayrshire.toml` and
+# `tpe-anglo-scottish.toml` (their own high-level departures) -- station-
+# name overlap only, no genuine track-sharing claim sourced for any of
+# those pairs, so this file's own segment name is not reused from any of
+# them, matching `scotrail-ayrshire.toml`'s own GLC precedent (station
+# overlap is fine, segment-sharing is a deliberate, sourced choice).
+
+[[stations]]
+crs = "CBL"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Cambuslang. NOTE: `scotrail-glasgow-suburban.toml`'s own scope-boundary
+# comment lists Cambuslang's neighbour Uddingston (below) among stations
+# it could not verify to the two-source CRS standard for the (unmodelled)
+# Argyle Line Lanarkshire branches beyond Rutherglen/Motherwell -- real
+# ScotRail services along that corridor may call at some of the same
+# physical stations this file lists between Glasgow Central and Holytown.
+# No live schema-level overlap exists today (that file has no
+# `[[stations]]` entries there to share a segment name with), but this is
+# flagged here for whoever eventually models that Argyle Line extension, the
+# same way `scotrail-central-belt.toml` flagged the Shotts/Bathgate gap this
+# file itself now closes.
+
+[[stations]]
+crs = "UDD"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Uddingston: where the line "branches off towards Bellshill" from the West
+# Coast Main Line corridor (Wikipedia). See the CBL note above for the
+# Argyle Line Lanarkshire-branch caveat.
+
+[[stations]]
+crs = "BLH"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Bellshill.
+
+[[stations]]
+crs = "HLY"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Holytown.
+
+[[stations]]
+crs = "CRF"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Carfin.
+
+[[stations]]
+crs = "CEA"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Cleland.
+
+[[stations]]
+crs = "HTW"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Hartwood.
+
+[[stations]]
+crs = "SHS"
+role = "major"
+segment = "scotrail-shotts-exclusive"
+# Shotts: the line's own namesake town, and its natural mid-corridor sample
+# station (see `sample_stations` above).
+
+[[stations]]
+crs = "FLD"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Fauldhouse.
+
+[[stations]]
+crs = "BRC"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Breich.
+
+[[stations]]
+crs = "ADW"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Addiewell.
+
+[[stations]]
+crs = "WCL"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# West Calder.
+
+[[stations]]
+crs = "LVG"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Livingston South. Distinct station and CRS code from Livingston North
+# (LSN), which is on the separate Bathgate routing -- see
+# `scotrail-bathgate.toml`'s own station list; the two Livingston stations
+# do not overlap.
+
+[[stations]]
+crs = "KKN"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Kirknewton: Midcalder Junction, where the line rejoins the West Coast
+# Main Line corridor (Wikipedia), lies between here and the previous
+# station; not itself a passenger calling point, so no separate
+# `[[stations]]` entry is added for it, matching this batch's established
+# calling-point-based convention (e.g. `scotrail-west-highland-fort-
+# william.toml`'s Craigendoran omission).
+
+[[stations]]
+crs = "CUH"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Curriehill. CRS code cross-checked directly against a fresh fetch of
+# Wikipedia's own "Curriehill railway station" article ("Station code
+# CUH"), which also independently confirms this station as being on "the
+# Shotts Line".
+
+[[stations]]
+crs = "WTA"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Wester Hailes.
+
+[[stations]]
+crs = "KGE"
+role = "minor"
+segment = "scotrail-shotts-exclusive"
+# Kingsknowe.
+
+[[stations]]
+crs = "SLA"
+role = "junction"
+segment = "scotrail-shotts-exclusive"
+# Slateford: per Wikipedia's "Haymarket railway station" article, the named
+# physical connection joining this line's approach to the shared Haymarket-
+# Waverley throat runs via Slateford (see the segment-structure note
+# above). Marked `role = "junction"` for that reason, but kept on this
+# line's own exclusive segment rather than the shared throat segment --
+# the shared-trunk boundary follows `scotrail-central-belt.toml`'s own
+# pre-existing reservation of exactly Haymarket + Edinburgh Waverley, not
+# Slateford; see the segment-structure note above for the reasoning.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Haymarket: genuine shared trunk with `scotrail-central-belt.toml` (and
+# `scotrail-bathgate.toml`) -- see the segment-structure note above.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Edinburgh Waverley: this line's own terminus, on the same shared throat
+# segment as Haymarket.
+
+# === Sources (cross-checked per this catalogue's established two-source,
+#     no-invented-station-list convention) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Shotts line" (fetched fresh, infobox route diagram):
+#     confirms the full ordered station list, ScotRail operation
+#     ("CrossCountry services pass but do not stop at intermediate
+#     stations" -- confirming CrossCountry is correctly excluded from
+#     `operators` above), the Uddingston/Midcalder Junction WCML divergence
+#     points, and April 2019 electrification.
+#   - `scotrail-central-belt.toml`'s own pre-existing (comment-only) Shotts
+#     research: independently lists the identical station set and order,
+#     itself sourced from "Wikipedia (cross-checked against general web
+#     coverage of the route, including Network Rail-sourced material)" --
+#     a second, independent prior cross-check of the same claim.
+#   - Wikipedia "Haymarket railway station" (fetched fresh): confirms the
+#     Slateford connection used by "services heading towards Glasgow
+#     Central" (i.e. this line), built 1853, and that Haymarket is listed
+#     as serving the Shotts Line alongside the Glasgow-Edinburgh via
+#     Falkirk High line and North Clyde Line -- the basis for this file's
+#     shared-throat segment decision.
+#   - Wikipedia "Curriehill railway station" (fetched fresh): independently
+#     confirms this station's own CRS code and Shotts Line membership.
+#
+# CRS codes: every code in `stations` above was verified against
+# railwaycodes.org.uk's own station-code listing pages
+# (railwaycodes.org.uk/stations/station<letter>.shtm, fetched directly
+# during this task) and cross-checked against each station's own Wikipedia
+# infobox/article where separately fetched (Curriehill, above). No
+# discrepancies found. Full list: GLC, CBL, UDD, BLH, HLY, CRF, CEA, HTW,
+# SHS, FLD, BRC, ADW, WCL, LVG, KKN, CUH, WTA, KGE, SLA, HYM, EDB.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.

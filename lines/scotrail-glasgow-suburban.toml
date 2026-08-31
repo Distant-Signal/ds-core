@@ -330,6 +330,13 @@ segment = "scotrail-glasgow-suburban-core"
 # Bellgrove: eastbound North Clyde services split three ways here --
 # Airdrie (15 min), Springburn (30 min), and Edinburgh Waverley via
 # Bathgate (hourly, not modelled -- see the boundary note above).
+#
+# RESOLUTION (added when `lines/scotrail-bathgate.toml` was added): that
+# file now models the Bathgate routing in full and reuses this exact
+# `scotrail-glasgow-suburban-core` segment name for its own Charing
+# Cross/Glasgow Queen Street/Bellgrove entries, making it a genuine shared
+# segment between `scotrail-glasgow-suburban` and `scotrail-bathgate`. See
+# that file's own sourcing for the confirmation.
 
 # --- East end: Springburn spur, Airdrie branch ---
 
@@ -349,6 +356,15 @@ segment = "scotrail-glasgow-suburban-airdrie-branch"
 # electrified track continues beyond here (Drumgelloch, then the
 # Airdrie-Bathgate Line to Edinburgh) but that continuation belongs to
 # `scotrail-central-belt.toml`'s Bathgate routing, not this file.
+#
+# RESOLUTION (added when `lines/scotrail-bathgate.toml` was added): that
+# file now models the Bathgate routing in full and reuses this exact
+# `scotrail-glasgow-suburban-airdrie-branch` segment name for its own
+# Airdrie entry (its own service pattern continuing beyond this station,
+# hence that file gives its own ADR entry `role = "junction"` rather than
+# this file's `"terminus"` -- see that file's own ADR comment), making
+# this a genuine shared segment between `scotrail-glasgow-suburban` and
+# `scotrail-bathgate`.
 
 # --- Argyle Line: central Glasgow low-level route ---
 

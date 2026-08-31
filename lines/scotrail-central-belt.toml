@@ -140,6 +140,22 @@ segment = "scotrail-central-belt-edinburgh-throat"
 # name), consistent with `xc-south-coast.toml`'s "station overlap is
 # fine, segment-sharing is a deliberate choice" precedent -- the choice is
 # recorded here for whoever writes that file next to make deliberately.
+#
+# RESOLUTION (added when `lines/scotrail-bathgate.toml` and
+# `lines/scotrail-shotts.toml` were added, closing the gap flagged above):
+# both files reuse this exact `scotrail-central-belt-edinburgh-throat`
+# segment name for their own Haymarket/Edinburgh Waverley entries.
+# `scotrail-bathgate.toml` independently re-confirmed the Newbridge
+# Junction sharing claim via a fresh Wikipedia fetch of the "Airdrie-
+# Bathgate rail link" and "Edinburgh-Bathgate line" articles.
+# `scotrail-shotts.toml` independently found and sourced its own,
+# different physical basis for the same claim (Wikipedia's "Haymarket
+# railway station" article, describing the 1853 Slateford connection used
+# by "services heading towards Glasgow Central"). `SegmentRegistry::
+# is_shared` now reports this segment shared across all three lines, and
+# `scotrail_central_belt_edinburgh_throat_shared_incident_propagates` in
+# `crates/aggregator/src/matcher.rs` asserts the resulting
+# `MatchScope::SharedSegment` propagation for all three.
 
 [[stations]]
 crs = "EDB"
@@ -164,6 +180,12 @@ segment = "scotrail-central-belt-edinburgh-throat"
 # shared with the Falkirk High routing above. Not lifted into `stations`
 # per the modelling decision above; no CRS codes were verified for these
 # station names during this task, so none are asserted here.
+#
+# RESOLUTION: `lines/scotrail-shotts.toml` now models this routing in full,
+# with verified CRS codes for every station named above, and reuses this
+# file's own `scotrail-central-belt-edinburgh-throat` segment name for its
+# own Haymarket/Edinburgh Waverley entries -- see that file's own sourcing
+# and this file's Haymarket comment above.
 
 # === Via Bathgate / North Clyde (not modelled as stations above) ===
 #
@@ -192,3 +214,14 @@ segment = "scotrail-central-belt-edinburgh-throat"
 # `scotrail-central-belt-edinburgh-throat` segment name above remains
 # unshared for now. See `scotrail-glasgow-suburban.toml`'s own comments
 # for the sourcing behind that boundary decision.
+#
+# RESOLUTION: `lines/scotrail-bathgate.toml` now models this routing in
+# full, with verified CRS codes for every station named above. It reuses
+# `scotrail-glasgow-suburban.toml`'s own `scotrail-glasgow-suburban-core`
+# and `scotrail-glasgow-suburban-airdrie-branch` segment names for its own
+# western stations (through Airdrie), and this file's own
+# `scotrail-central-belt-edinburgh-throat` segment name for its own
+# Haymarket/Edinburgh Waverley entries -- see that file's own sourcing and
+# this file's Haymarket comment above. The
+# `scotrail-central-belt-edinburgh-throat` segment is therefore no longer
+# unshared.

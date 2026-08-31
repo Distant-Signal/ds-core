@@ -1,0 +1,335 @@
+id = "scotrail-bathgate"
+name = "ScotRail Bathgate Line (Glasgow Queen Street - Edinburgh Waverley via Airdrie & Bathgate)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Follow-up task to the Batch 10 (ScotRail) line-catalogue effort. See
+# `scotrail-shotts.toml`'s own header for the full background: this file
+# and that one together close the gap Batch 10's whole-branch review
+# flagged in `scotrail-central-belt.toml` (Task 10.1), which modelled only
+# the core "via Falkirk High" Edinburgh-Glasgow routing and left the Shotts
+# and Bathgate/North Clyde routings as prose-only comments.
+#
+# === Why this is a separate file from `scotrail-shotts.toml`, not one
+#     combined file (`scotrail-west-highland-fort-william.toml`'s
+#     precedent, considered and rejected) ===
+#
+# `scotrail-west-highland-fort-william.toml` bundled the Fort William and
+# Mallaig arms into one file because they are, physically and
+# operationally, one line with a branch: the same trains split at
+# Crianlarich, sharing a single ordered corridor for most of their length.
+# `scotrail-fife-borders.toml` bundled Fife Circle and the Borders Railway
+# for a different, weaker reason -- the gap analysis's own text explicitly
+# named that pairing.
+#
+# Neither reason applies to Shotts + Bathgate. They are not one service
+# splitting at a junction: they run from two different Glasgow termini
+# (Glasgow Central mainline for Shotts; Glasgow Queen Street Low Level for
+# Bathgate), diverge for their entire length, and this task's own research
+# (see the sourcing sections of both files) found no genuine shared track
+# between them anywhere -- the only thing they have in common is that both
+# happen to also share `scotrail-central-belt.toml`'s own Haymarket-
+# Waverley throat, independently, the same way `scotrail-fife-
+# borders.toml`'s two bundled routes each independently touch Edinburgh
+# Waverley without sharing track with each other. The gap-analysis
+# background for this task itself names them as two separate lines ("the
+# Shotts Line and the Bathgate Line"), and SCHEMA.md's default is one line
+# per file -- this file follows that default because no sourced fact
+# overrides it here, unlike the West Highland case.
+#
+# Category: "regional", matching `scotrail-shotts.toml`'s own reasoning --
+# a real, useful alternate Glasgow-Edinburgh link, not the flagship route,
+# with a split character similar to `scotrail-ayrshire.toml`'s own
+# precedent (a denser electrified suburban stretch at the western end,
+# shared with `scotrail-glasgow-suburban.toml`'s North Clyde network,
+# grafted onto a more modest, hourly-ish through corridor for the rest of
+# its length -- see the Sources section below).
+
+sample_stations = ["GLQ", "BHG", "EDP", "EDB"]
+# GLQ (Glasgow Queen Street, Low Level) is also a `sample_stations` entry
+# in `scotrail-central-belt.toml` (its own separate High Level terminus)
+# and `scotrail-glasgow-suburban.toml` (the same Low Level platforms this
+# file's own GLQ entry uses) -- see the station-overlap/segment-sharing
+# notes below. BHG (Bathgate) and EDP (Edinburgh Park) are this line's own
+# distinguishing mid-corridor stations.
+
+destination_crs_filter = ["EDB"]
+# LDBWS sampling at GLQ mixes this line's own departures with North Clyde's
+# other suburban destinations (Milngavie, Balloch, Helensburgh Central,
+# Airdrie-terminating, Springburn) sharing the same Low Level platforms and
+# LDBWS feed. Every Bathgate-line working terminates at Edinburgh Waverley
+# (EDB), so a single-entry filter cleanly separates this line's own
+# departures, mirroring `scotrail-shotts.toml`'s identical single-purpose
+# use of the field at its own shared GLC sample station.
+
+match_keywords = ["Bathgate line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords. Sourced from Wikipedia's "Edinburgh-Bathgate line"
+# article title (the eastern half of this corridor's own branded name) and
+# grepped clean against every other file's own `match_keywords` before
+# adding -- no collision with `scotrail-glasgow-suburban.toml`'s "North
+# Clyde"/"Argyle Line" keywords or any other file in the catalogue.
+
+# Regional-line thresholds, matching `scotrail-shotts.toml`'s and this
+# batch's other "regional"-category files' identical override block (see
+# that file's own comment for the full list of siblings using it).
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station list: Glasgow Queen Street to Edinburgh Waverley via Airdrie
+#     and Bathgate ===
+#
+# Ordered end to end per SCHEMA.md's curation rule, following the real
+# physical route: this line's trains start on `scotrail-glasgow-
+# suburban.toml`'s own North Clyde "core" trackage (Charing Cross - Glasgow
+# Queen Street Low Level - Bellgrove), continue over that file's own
+# "Airdrie branch" trackage as far as Airdrie itself, and only then
+# continue onto genuinely exclusive Bathgate-line track (Drumgelloch
+# onward) before rejoining `scotrail-central-belt.toml`'s own shared
+# Haymarket-Waverley throat at the Edinburgh end. This is not a guess: it
+# is exactly what `scotrail-glasgow-suburban.toml`'s own Bellgrove and
+# Airdrie comments already say -- "eastbound North Clyde services split
+# three ways here [Bellgrove] -- Airdrie (15 min), Springburn (30 min), and
+# Edinburgh Waverley via Bathgate (hourly)" and "[Airdrie:] real electrified
+# track continues beyond here (Drumgelloch, then the Airdrie-Bathgate Line
+# to Edinburgh) but that continuation belongs to
+# `scotrail-central-belt.toml`'s Bathgate routing, not this file" -- i.e.
+# that file's own author already anticipated and pointed at exactly this
+# file.
+#
+# === Segment structure: three real shared trunks, one exclusive middle ===
+#
+# 1. Charing Cross - Glasgow Queen Street (Low Level) - Bellgrove: this
+#    file reuses `scotrail-glasgow-suburban.toml`'s own
+#    `scotrail-glasgow-suburban-core` segment name for these three stations
+#    (its own CHC/GLQ/BLG entries), a genuine physical fact per that file's
+#    own Bellgrove comment (Bathgate-bound trains are one of the three
+#    services splitting at Bellgrove, having shared this same core trackage
+#    from Glasgow Queen Street). `SegmentRegistry::is_shared` now reports
+#    this segment shared between `scotrail-glasgow-suburban` and
+#    `scotrail-bathgate`.
+#
+# 2. Airdrie: this file reuses `scotrail-glasgow-suburban.toml`'s own
+#    `scotrail-glasgow-suburban-airdrie-branch` segment name for its own
+#    ADR entry. Per that file's own comment (quoted above), Airdrie is
+#    real, current North Clyde terminus for some workings, but "real
+#    electrified track continues beyond here" for Bathgate-bound services
+#    -- i.e. Airdrie is a genuine junction-in-service-pattern even though
+#    physically a through station, so per the shared-trunk rule of thumb it
+#    stays on the shared segment; this file's own exclusive segment starts
+#    at the next station, Drumgelloch. This makes
+#    `scotrail-glasgow-suburban-airdrie-branch` a second segment shared
+#    between the same two lines.
+#
+# 3. Drumgelloch through Edinburgh Park: genuinely exclusive to this file
+#    today (no other `lines/*.toml` file has any station entry here),
+#    tagged `scotrail-bathgate-exclusive`.
+#
+# 4. Haymarket - Edinburgh Waverley: this file reuses
+#    `scotrail-central-belt.toml`'s own `scotrail-central-belt-edinburgh-
+#    throat` segment name. This is the exact reuse `scotrail-central-
+#    belt.toml`'s own Haymarket comment pre-emptively documented and
+#    reserved: per RAILSCOT's account (cited there) and a fresh fetch of
+#    Wikipedia's "Airdrie-Bathgate rail link" article during this task
+#    ("Newbridge Junction, where the railways from Bathgate and Falkirk to
+#    Edinburgh join"), this line's own approach genuinely rejoins the
+#    Falkirk High routing's own track east of Newbridge Junction, all the
+#    way into Haymarket and Edinburgh Waverley. Per the shared-trunk rule
+#    of thumb and matching the boundary `scotrail-central-belt.toml`
+#    already reserved, only Haymarket and Edinburgh Waverley are on the
+#    shared segment -- Edinburgh Park, the last station before the
+#    junction, stays on this file's own exclusive segment (Edinburgh
+#    Park is not a `scotrail-central-belt.toml` calling point at all: that
+#    file's own Falkirk High station list has no Edinburgh Park entry).
+#    Combined with `scotrail-shotts.toml` (added alongside this file, which
+#    independently re-confirms and reuses the same segment name for its own
+#    reasons), `scotrail-central-belt-edinburgh-throat` is now a genuine
+#    three-way shared segment across `scotrail-central-belt`,
+#    `scotrail-shotts` and `scotrail-bathgate`. The regression test for
+#    this, `scotrail_central_belt_edinburgh_throat_shared_incident_
+#    propagates`, is in `crates/aggregator/src/matcher.rs`.
+
+[[stations]]
+crs = "CHC"
+role = "major"
+segment = "scotrail-glasgow-suburban-core"
+# Charing Cross: genuine shared trunk with `scotrail-glasgow-suburban.toml`
+# -- see the segment-structure note above.
+
+[[stations]]
+crs = "GLQ"
+role = "junction"
+segment = "scotrail-glasgow-suburban-core"
+# Glasgow Queen Street (Low Level): this line's own western terminus,
+# physically the same Low Level platforms `scotrail-glasgow-suburban.toml`
+# already models on this exact segment (genuine sharing, unlike the
+# High-Level/Low-Level GLQ split documented between `scotrail-central-
+# belt.toml` and `scotrail-glasgow-suburban.toml` themselves -- this file's
+# own GLQ is the same physical platforms as that second file's, not a third
+# distinct one).
+
+[[stations]]
+crs = "BLG"
+role = "junction"
+segment = "scotrail-glasgow-suburban-core"
+# Bellgrove: the real split point where Bathgate-bound services diverge
+# from the rest of the North Clyde core, per that file's own Bellgrove
+# comment (quoted above).
+
+[[stations]]
+crs = "ADR"
+role = "junction"
+segment = "scotrail-glasgow-suburban-airdrie-branch"
+# Airdrie: genuine shared trunk with `scotrail-glasgow-suburban.toml` -- see
+# the segment-structure note above. Marked `role = "junction"` here (this
+# file's own accurate description of Airdrie's role in the Bathgate
+# routing); `scotrail-glasgow-suburban.toml`'s own ADR entry keeps its
+# existing `role = "terminus"`, describing that file's own North Clyde
+# service pattern -- the two files' `role` values intentionally differ
+# because they describe different real service patterns at the same
+# physical station, while sharing the same `segment` name because the
+# underlying track is genuinely the same.
+
+[[stations]]
+crs = "DRU"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Drumgelloch: first station exclusive to this file. The current, "new"
+# location (opened as part of the Airdrie-Bathgate rail link) -- per
+# railwaycodes.org.uk, an earlier "old" Drumgelloch shares the same CRS
+# code at a different mileage; only the current station is modelled here.
+
+[[stations]]
+crs = "CAC"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Caldercruix.
+
+[[stations]]
+crs = "BKR"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Blackridge.
+
+[[stations]]
+crs = "ARM"
+role = "major"
+segment = "scotrail-bathgate-exclusive"
+# Armadale (West Lothian) -- distinct from any other "Armadale" station
+# elsewhere in the UK; CRS code cross-checked to confirm.
+
+[[stations]]
+crs = "BHG"
+role = "major"
+segment = "scotrail-bathgate-exclusive"
+# Bathgate: the line's own namesake town. Per Wikipedia's "Bathgate railway
+# station" article, this station "forms a fourth rail link between Glasgow
+# and Edinburgh" -- independent confirmation of this line's real, distinct
+# status alongside the Falkirk High and Shotts routings.
+
+[[stations]]
+crs = "LSN"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Livingston North -- distinct station and CRS code from Livingston South
+# (LVG), which is on the separate Shotts routing; see
+# `scotrail-shotts.toml`'s own LVG comment. The two Livingston stations do
+# not overlap.
+
+[[stations]]
+crs = "UHA"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Uphall.
+
+[[stations]]
+crs = "EDP"
+role = "minor"
+segment = "scotrail-bathgate-exclusive"
+# Edinburgh Park: per a fresh fetch of Wikipedia's "Edinburgh Park railway
+# station" article, this line's own services ("four to Glasgow Queen Street
+# Low Level via Bathgate") are one of several route groups calling here,
+# alongside a separately-branded "Glasgow Queen Street High Level via
+# Falkirk Grahamston & Cumbernauld" service -- a real but different route
+# from `scotrail-central-belt.toml`'s own "via Falkirk High" service (that
+# file's station list has no Edinburgh Park entry), so this does not create
+# an overlap with that file. Last station on this line's own exclusive
+# segment; Haymarket, next, starts the shared throat.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Haymarket: genuine shared trunk with `scotrail-central-belt.toml` (and
+# `scotrail-shotts.toml`) -- see the segment-structure note above.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Edinburgh Waverley: this line's own terminus, on the same shared throat
+# segment as Haymarket.
+
+# === Sources (cross-checked per this catalogue's established two-source,
+#     no-invented-station-list convention) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Airdrie-Bathgate rail link" (fetched fresh): confirms the
+#     western station order (Airdrie, Drumgelloch, Caldercruix, Blackridge,
+#     Armadale, Bathgate, Livingston North), ScotRail operation, 25kV AC
+#     electrification "between Drumgelloch and Haymarket", 12 December 2010
+#     opening, and "Newbridge Junction, where the railways from Bathgate
+#     and Falkirk to Edinburgh join" -- the basis for this file's shared-
+#     throat segment decision, also independently corroborated by
+#     `scotrail-central-belt.toml`'s own prior RAILSCOT-sourced comment
+#     making the same claim.
+#   - Wikipedia "Bathgate railway station" (fetched fresh): confirms CRS
+#     code BHG, "a fourth rail link between Glasgow and Edinburgh", and
+#     adjacent stations Armadale (preceding) / Livingston North (following).
+#   - Wikipedia "Edinburgh-Bathgate line" (fetched fresh): confirms the
+#     eastern station order (Bathgate, Livingston North, Uphall, Edinburgh
+#     Park, Haymarket, Edinburgh Waverley), and that Newbridge Junction was
+#     "formerly known as Bathgate Junction" -- "divergence from Edinburgh to
+#     Glasgow main line; now known as Newbridge Junction", independently
+#     confirming the junction claim above from a second article.
+#   - Wikipedia "Uphall railway station" and "Livingston North railway
+#     station" (fetched fresh): cross-check the Livingston North/Uphall
+#     ordering (Uphall precedes Livingston North travelling away from
+#     Edinburgh) against the Edinburgh-Bathgate line article above.
+#   - Wikipedia "Edinburgh Park railway station" (fetched fresh): confirms
+#     CRS code EDP, that Haymarket precedes it and Uphall follows
+#     (travelling away from Edinburgh), and that this line's own "via
+#     Bathgate" services are a distinct route group from the "via Falkirk
+#     Grahamston & Cumbernauld" services also calling there -- see the EDP
+#     station comment above for why this doesn't create a
+#     `scotrail-central-belt.toml` overlap.
+#   - `scotrail-glasgow-suburban.toml`'s own Bellgrove and Airdrie
+#     comments (already-vetted, cross-checked in that file's own prior
+#     research against Wikipedia's "Bellgrove railway station" article):
+#     the basis for this file's western shared-segment decisions -- see the
+#     segment-structure note above.
+#
+# CRS codes: every code in `stations` above was verified against
+# railwaycodes.org.uk's own station-code listing pages
+# (railwaycodes.org.uk/stations/station<letter>.shtm, fetched directly
+# during this task) and cross-checked against each station's own Wikipedia
+# infobox/article where separately fetched (Bathgate, Uphall, Livingston
+# North, Edinburgh Park, above). No discrepancies found. Full list: CHC,
+# GLQ, BLG, ADR, DRU, CAC, BKR, ARM, BHG, LSN, UHA, EDP, HYM, EDB.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The "via Falkirk Grahamston & Cumbernauld" service calling at Edinburgh
+#   Park (per that station's own Wikipedia article, cited above): real, but
+#   a different route from both this file's own Bathgate service and
+#   `scotrail-central-belt.toml`'s "via Falkirk High" service -- not named
+#   in the original gap analysis and not modelled by any file in this
+#   catalogue today. Left as a documented, unmodelled gap rather than
+#   folded in here.
