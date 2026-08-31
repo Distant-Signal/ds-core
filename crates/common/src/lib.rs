@@ -238,11 +238,22 @@ pub const TFL_LINE_ID_PREFIX: &str = "tfl-";
 /// where a TfL-sourced `line_status` row and an NR/Darwin-sourced one exist
 /// independently for what is, to a passenger, one railway. See
 /// `docs/superpowers/specs/2026-08-22-tfl-service-metrics-v2-design.md`
-/// Area 1. Elizabeth line is the only entry today; Overground will add six
-/// more once NR line definitions exist for it (that spec's Area 2, not yet
-/// done) -- `nr_line_id_for_tfl`/`tfl_line_id_for_nr` are written generically
-/// over this table so extending it needs no code change beyond a new row.
-const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[("tfl-elizabeth", "elizabeth-line")];
+/// Areas 1 and 2. Elizabeth line is Area 1; the six London Overground lines
+/// (Area 2) were added once `lines/overground-*.toml` existed for them --
+/// their TfL `id`s (`liberty`, `lioness`, `mildmay`, `suffragette`,
+/// `weaver`, `windrush`) were verified against a live
+/// `GET /Line/Mode/overground/Status` call rather than guessed.
+/// `nr_line_id_for_tfl`/`tfl_line_id_for_nr` are written generically over
+/// this table so extending it needs no code change beyond a new row.
+const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[
+    ("tfl-elizabeth", "elizabeth-line"),
+    ("tfl-liberty", "overground-liberty"),
+    ("tfl-lioness", "overground-lioness"),
+    ("tfl-mildmay", "overground-mildmay"),
+    ("tfl-suffragette", "overground-suffragette"),
+    ("tfl-weaver", "overground-weaver"),
+    ("tfl-windrush", "overground-windrush"),
+];
 
 /// The NR catalogue line id a TfL line's status should be merged into for
 /// display, or `None` if this TfL line has no NR counterpart (true for
@@ -984,6 +995,37 @@ mod tfl_nr_merge_tests {
     #[test]
     fn elizabeth_line_nr_id_maps_back_to_its_tfl_counterpart() {
         assert_eq!(tfl_line_id_for_nr("elizabeth-line"), Some("tfl-elizabeth"));
+    }
+
+    #[test]
+    fn overground_mildmay_tfl_id_maps_to_its_nr_counterpart() {
+        assert_eq!(nr_line_id_for_tfl("tfl-mildmay"), Some("overground-mildmay"));
+    }
+
+    #[test]
+    fn overground_mildmay_nr_id_maps_back_to_its_tfl_counterpart() {
+        assert_eq!(tfl_line_id_for_nr("overground-mildmay"), Some("tfl-mildmay"));
+    }
+
+    #[test]
+    fn every_overground_line_has_a_two_way_mapping() {
+        // One assertion per line rather than per-line dedicated tests like
+        // Elizabeth/Mildmay above -- this loop is what actually proves the
+        // table is complete and the lookup functions are generic over all
+        // six rows, matching this repo's existing test-coverage density for
+        // table-driven mappings (see `defaults_tests`/`custom_line_tests`
+        // above).
+        for (tfl_id, nr_id) in [
+            ("tfl-liberty", "overground-liberty"),
+            ("tfl-lioness", "overground-lioness"),
+            ("tfl-mildmay", "overground-mildmay"),
+            ("tfl-suffragette", "overground-suffragette"),
+            ("tfl-weaver", "overground-weaver"),
+            ("tfl-windrush", "overground-windrush"),
+        ] {
+            assert_eq!(nr_line_id_for_tfl(tfl_id), Some(nr_id), "{tfl_id}");
+            assert_eq!(tfl_line_id_for_nr(nr_id), Some(tfl_id), "{nr_id}");
+        }
     }
 
     #[test]
