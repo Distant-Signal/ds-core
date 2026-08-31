@@ -59,6 +59,21 @@ match_keywords = ["EMR Connect", "Luton Airport Express"]
 # `crates/aggregator/src/matcher.rs` for both the shared-segment and
 # exclusive-segment cases.
 #
+# --- Cross-batch follow-up (RESOLVED): not shared with thameslink-bedford
+# .toml ---
+# STP, LTN, LUT and BDM on this line's `emr-mml-south` segment are also on
+# `lines/thameslink-bedford.toml`'s `mml-bedford-st-pancras` segment.
+# `emr-midland-main-line.toml`'s own "Bedford-St Pancras: cross-batch
+# dependency ruling" header comment has the full research: Thameslink calls
+# at all 17 stations between St Pancras and Bedford inclusive, while both
+# EMR services here (this line and `emr-midland-main-line.toml`) call at
+# only 4 of them, skipping the same 13 local stations Thameslink stops at.
+# Station-overlap-only, not a shared segment - `emr-mml-south` is NOT
+# reused by `thameslink-bedford.toml`. Unaffected: this line's own
+# SharedSegment relationship with `emr-midland-main-line.toml` (both EMR
+# services genuinely share the identical calling pattern on `emr-mml-south`
+# and `emr-mml-trunk`).
+#
 # Station list, CRS codes and route topology: STP/LTN/LUT/BDM/WEL/KET are
 # already verified (with their own citations) in `emr-midland-main-line.toml`
 # and reused here unchanged - same physical stations, same TOC. COR (Corby)

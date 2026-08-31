@@ -61,34 +61,36 @@ delay_threshold_minutes = 4
 # terminus, BDM.
 #
 # ============================================================================
-# SEGMENT NAMING - REQUIRED CITATION FOR BATCH 7, TASK 7.1
+# SEGMENT NAMING - CROSS-BATCH FOLLOW-UP (RESOLVED)
 # ============================================================================
 # Every station on this file, Bedford through St Pancras International
 # (STP) inclusive, is on a single segment named `mml-bedford-st-pancras`.
-# This is deliberately the SAME physical Midland Main Line infrastructure
-# the gap analysis
-# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "East
-# Midlands Railway (EMR)" section, part (c)) says EMR's Midland Main Line
-# will need for its own Bedford-St Pancras section: "MML's southern
-# (Bedford-St Pancras) section is the same infrastructure Thameslink's
-# northern branch would need - direct dependency."
 #
-# THIS SEGMENT NAME (`mml-bedford-st-pancras`) COVERS BEDFORD-ST PANCRAS AND
-# IS SHARED INFRASTRUCTURE WITH EMR'S MIDLAND MAIN LINE
-# (`lines/emr-midland-main-line.toml`, Batch 7, Task 7.1 - not yet written
-# in this worktree; that task is required by its own plan text to cite this
-# segment name). Batch 7's implementer: reuse `mml-bedford-st-pancras`
-# verbatim for whichever of your own Bedford-St Pancras stations you
-# confirm sit on this same physical corridor, so the matcher treats an
-# incident there as SharedSegment for both lines. Do not rename it
-# independently - a mismatched name here would silently produce
-# station-overlap-only behaviour instead of the genuine shared trunk both
-# files intend.
+# At authoring time this header flagged the segment as probably-shared
+# physical Midland Main Line infrastructure with EMR's own Bedford-St
+# Pancras section (gap analysis, "East Midlands Railway (EMR)" section, part
+# (c)), pending `lines/emr-midland-main-line.toml` landing so the two could
+# be compared station-by-station. That file has since landed on `main`, and
+# the follow-up (done from the EMR side - see
+# `lines/emr-midland-main-line.toml`'s own "Bedford-St Pancras: cross-batch
+# dependency ruling" header comment for the full research) found the
+# corridor is genuinely track-shared but NOT calling-pattern-shared: this
+# file stops at all 17 stations between Bedford and St Pancras inclusive,
+# while EMR's own St Pancras-Bedford services (both
+# `emr-midland-main-line.toml` and `emr-connect.toml`) call at only 4 of
+# them (STP, LTN, LUT, BDM), skipping the other 13 local stops this file
+# serves. RULING: station-overlap-only, matching the same "same corridor,
+# different calling pattern" shape as `southeastern-highspeed.toml`'s
+# `hs1-domestic` decision and `great-northern-suburban.toml`'s Moorgate
+# decision (both already established in this catalogue). `mml-bedford-
+# st-pancras` is NOT reused by either EMR file, and `emr-mml-south` is NOT
+# reused here. STP, LTN, LUT and BDM are station-overlap-only between this
+# file and the two EMR files - each line independently matches an incident
+# at those stations as its own MatchScope::ExclusiveSegment.
 #
-# No shared-segment regression test for the EMR pairing is added in THIS
-# file/worktree: lines/emr-midland-main-line.toml does not exist here yet,
-# so a matcher test asserting propagation to it would fail to compile/run.
-# That test is Batch 7's responsibility to add once its own file exists.
+# Regression tests for LTN, LUT and BDM are in
+# `crates/aggregator/src/matcher.rs` (STP was already covered by
+# `stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments`).
 #
 # STP is ALSO thameslink-core.toml's own terminus (its own `thameslink-core`
 # segment) and southeastern-highspeed.toml's own terminus (its own

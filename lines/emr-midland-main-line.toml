@@ -37,23 +37,60 @@ excluded_keywords = ["Cross Country"]
 # "East Midlands Railway (EMR)" section (a): route St Pancras - Leicester -
 # Derby - Chesterfield - Sheffield with a Nottingham spur, operator code EM.
 
-# --- Bedford-St Pancras: cross-batch dependency ruling ---
-# This stretch is the same infrastructure Thameslink's northern branch would
-# use south of Bedford (gap analysis (c), and this task's brief, flag this as
-# a required cross-batch citation). At authoring time,
-# `lines/thameslink-bedford.toml` (Batch 5, Task 5.12) does not yet exist in
-# this worktree (checked via `ls .claude/worktrees/impl-line-batch-05/lines/`
-# before drafting - not present) or in this worktree's own `lines/`
-# directory, so there is no segment name to cite/reuse. RULING: this
-# stretch is named `emr-mml-south`, in this file's own naming scheme, and is
-# NOT asserted as shared with Thameslink. Cost if wrong: bounded - a
-# follow-up segment rename once Batch 5 lands, not silent data loss (both
-# lines still each match an incident here independently via their own
-# station lists in the meantime; they just won't both report
-# MatchScope::SharedSegment for it). Whoever integrates both batches should
-# confirm whether `emr-mml-south`'s stations here and Thameslink's Bedford
-# branch segment should be unified so an incident on this stretch propagates
-# to both lines with SharedSegment scope.
+# --- Bedford-St Pancras: cross-batch dependency ruling (RESOLVED) ---
+# This was originally deferred (see git history) because
+# `lines/thameslink-bedford.toml` didn't exist yet at authoring time.
+# It has since landed on `main` with its own `mml-bedford-st-pancras`
+# segment (Bedford through St Pancras International inclusive), so this is
+# the follow-up: does `emr-mml-south` genuinely share track/calling pattern
+# with Thameslink's Bedford line, or is this station-overlap-only?
+#
+# RULING: station-overlap-only. NOT unified. Confirmed by comparing the two
+# files' own station lists plus fresh research this session:
+#   - Thameslink's Bedford line stops at all 17 stations between Bedford and
+#     St Pancras inclusive (Bedford, Flitwick, Harlington, Leagrave, Luton,
+#     Luton Airport Parkway, Harpenden, St Albans City, Radlett, Elstree &
+#     Borehamwood, Mill Hill Broadway, Hendon, Brent Cross West, Cricklewood,
+#     West Hampstead Thameslink, Kentish Town, St Pancras International) -
+#     confirmed via `lines/thameslink-bedford.toml`'s own cited station list
+#     and independently via Wikipedia's "Thameslink" article ("Bedford to
+#     Brighton" service description lists the same stopping pattern).
+#   - This file's own `emr-mml-south` stretch calls at only 4 of those 17
+#     stations: STP, LTN, LUT, BDM. `emr-connect.toml`'s already-cited route
+#     research (Wikipedia's "East Midlands Railway" article, cross-checked
+#     against National Rail Enquiries) independently confirms the same
+#     pattern for EMR's other St Pancras-Bedford service: "twice hourly...
+#     calling at Luton Airport Parkway, Luton, Bedford..." - i.e. both EMR
+#     services on this stretch skip the same 13 intermediate local stations
+#     Thameslink calls at (Flitwick, Harlington, Leagrave, Harpenden, St
+#     Albans City, Radlett, Elstree & Borehamwood, Mill Hill Broadway,
+#     Hendon, Brent Cross West, Cricklewood, West Hampstead Thameslink,
+#     Kentish Town).
+#   - Wikipedia's "Bedford railway station" article confirms this isn't just
+#     a timetabling difference on identical tracks: "In 1890, fast lines
+#     were added... to allow expresses to bypass the station" - the Midland
+#     Main Line is multi-tracked (fast/slow) through here specifically so
+#     express and stopping services can run independently.
+# This is the same "same corridor, different calling pattern" shape as two
+# precedents already established elsewhere in this catalogue:
+# `southeastern-highspeed.toml`'s `hs1-domestic` vs `southeastern-main-
+# line.toml`'s `seml-coast`/`chatham-medway` decision, and `great-northern-
+# suburban.toml`'s Moorgate service vs `great-northern-kings-lynn.toml`'s
+# `gn-ecml-slow-lines` decision (see that reasoning cited in
+# `crates/aggregator/src/matcher.rs`, e.g.
+# `gn_suburban_hertford_branch_exclusive_segment_incident_does_not_propagate`).
+# Both kept distinct segment names despite genuine track-sharing, because the
+# calling patterns differ materially. Same call here: `emr-mml-south` stays
+# EMR-only; `mml-bedford-st-pancras` stays Thameslink-only. STP, LTN, LUT and
+# BDM remain station-overlap-only between the EMR files and
+# `thameslink-bedford.toml` - each line independently matches an incident at
+# those four stations as its own MatchScope::ExclusiveSegment, never
+# MatchScope::SharedSegment for the cross-TOC pairing (SharedSegment still
+# applies between `emr-mml-south` in this file and in `emr-connect.toml`,
+# since those two genuinely run the identical calling pattern - unaffected
+# by this ruling). See the regression tests in `crates/aggregator/src/
+# matcher.rs` for LTN, LUT and BDM (STP was already covered by
+# `stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments`).
 [[stations]]
 crs = "STP"
 tiploc = "STPX"  # reused from thameslink-core.toml - same physical station, already verified in this repo
@@ -78,10 +115,13 @@ segment = "emr-mml-south"
 crs = "BDM"
 role = "junction"
 segment = "emr-mml-south"
-# Bedford: last station on the stretch shared with Thameslink's northern
-# branch (see ruling above); segment boundary per the schema's shared-trunk
-# rule of thumb (junction station belongs to the shared segment, exclusive
-# starts at the next station).
+# Bedford: last station of `emr-mml-south`. Also `thameslink-bedford.toml`'s
+# own terminus, but station-overlap-only, not a shared segment - see the
+# ruling above. Segment boundary per the schema's shared-trunk rule of
+# thumb (junction station belongs to the shared segment, exclusive starts
+# at the next station) - this refers to the WEL/KET boundary with
+# `emr-connect.toml` below, the one genuine shared-segment case on this
+# file's route.
 
 # WEL/KET: `emr-mml-trunk` is reused verbatim by `emr-connect.toml`, whose
 # entire route runs over this same stretch as far as Kettering before
