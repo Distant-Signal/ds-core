@@ -11,6 +11,46 @@ operators = [
   # re-verified a third time here; same fact, same source trail.
 ]
 
+# FOLD-IN NOTE (2026-08-31 follow-up to the line-catalogue-coverage batch):
+# `lines/lnwr-euston-commuter.toml` (Task 1.7's "Euston-Northampton" file,
+# left in place at the end of that batch pending exactly this follow-up) has
+# been DELETED. Independent re-verification, redone from scratch rather than
+# trusting the batch summary, confirmed both halves of the question:
+#   1. Subset check: that file's entire station list (EUS/WFJ/LBZ/BLY/MKC on
+#      `lnwr-euston-trunk`, WOL/NMP on `lnwr-northampton`) was a byte-for-byte
+#      match of this file's own stations for the same five/two CRS codes --
+#      identical `crs`, `tiploc`, `role` and `segment` values, confirmed by
+#      direct side-by-side comparison of both files, not just re-reading
+#      Task 1.8's comment below. Nothing in that file wasn't already present
+#      here.
+#   2. Underlying claim re-checked live (2026-08-31), independent of Task
+#      1.8's own sourcing: Wikipedia's "London Northwestern Railway" article's
+#      Services section lists exactly four current Euston-area LNWR route
+#      patterns (Euston-Tring, Euston-Milton Keynes Central, Euston-Birmingham
+#      New Street, Euston-Crewe via Trent Valley) and no standalone
+#      Euston-Northampton short working. Wikipedia's "Northampton railway
+#      station" article independently corroborates: it states plainly that
+#      London Northwestern Railway "operates services between London Euston
+#      and Birmingham New Street" (no separate Northampton short-working),
+#      and that passengers travelling Northampton-to-Crewe "now have to
+#      change at Rugby" -- i.e. Northampton is a through station on the
+#      Birmingham working, not a terminus of its own. Both sources confirm
+#      Task 1.8's original finding rather than contradicting it.
+# Since the file was a strict data subset and the service it modelled isn't
+# real, it was deleted outright rather than kept. The only thing it carried
+# that this file didn't was EUS and NMP in its own `sample_stations` list --
+# both added to this file's `sample_stations` below so this line's LDBWS
+# sampling doesn't lose that coverage. `crates/aggregator/src/matcher.rs`'s
+# `lnwr_northampton_shared_segment_incident_propagates_to_both_lnwr_lines` and
+# `lnwr_euston_trunk_shared_segment_incident_propagates_to_both_lnwr_lines`
+# tests (which asserted a two-line SharedSegment match) were removed as part
+# of the same follow-up, since there is now only one LNWR line and
+# `lnwr-euston-trunk`/`lnwr-northampton` are no longer shared between
+# multiple catalogued files. Every mention of `lnwr-euston-commuter.toml`
+# below this note is left as-is as a provenance record of where a fact was
+# first curated (Task 1.7) -- it is a historical citation, not a claim that
+# file still exists.
+#
 # Route research (Step 1), fetched live 2026-08-30, cross-checked across
 # multiple independent sources:
 #   1. Wikipedia's "London Northwestern Railway" article's Services
@@ -138,8 +178,14 @@ operators = [
 
 destination_crs_filter = ["BHM", "CRE"]
 # One sample station on the shared trunk, one at the internal reconvergence
-# point, and one per branch terminus.
-sample_stations = ["MKC", "RUG", "BHM", "CRE"]
+# point, and one per branch terminus. EUS and NMP were added in the
+# 2026-08-31 fold-in of `lnwr-euston-commuter.toml` (see the FOLD-IN NOTE
+# above) -- they weren't sampled by this file before, only by that one, so
+# they're carried over here to preserve LDBWS sampling coverage now that
+# file is gone. Listed in geographic order: EUS (trunk origin), MKC
+# (shared-trunk junction), NMP (Northampton Loop), RUG (internal
+# reconvergence point), then one per branch terminus (BHM, CRE).
+sample_stations = ["EUS", "MKC", "NMP", "RUG", "BHM", "CRE"]
 # No match_keywords: same reasoning as `lnwr-euston-commuter.toml` and
 # `xc-manchester.toml` -- no confirmed Knowledgebase-used route name for
 # either branch, and generic words like "Birmingham" or "Crewe" would be
