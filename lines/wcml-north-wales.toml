@@ -87,12 +87,11 @@ sample_stations = ["CTR", "HHD"]
 
 # ---------------------------------------------------------------------
 # TfW future-overlap note (read this before touching segment names here):
-# The gap analysis flags this as a CONFIRMED future overlap -- Transport
-# for Wales' own North Wales Coast Line (Batch 11, a separate,
-# not-yet-written worktree) will cover this exact Chester-Holyhead
-# corridor with its own local/regional stopping service, a different
-# operator ("AW") and almost certainly a different, finer station list
-# than Avanti's own limited-stop calling pattern modelled below.
+# The gap analysis flagged this as a CONFIRMED future overlap -- Transport
+# for Wales' own North Wales Coast Line (Batch 11) covers this exact
+# Chester-Holyhead corridor with its own local/regional stopping service,
+# a different operator ("AW") and a different, finer station list than
+# Avanti's own limited-stop calling pattern modelled below.
 #
 # This file's exclusive segment for that corridor is named
 # `wcml-north-wales-branch` -- deliberately WCML-prefixed (matching this
@@ -105,17 +104,23 @@ sample_stations = ["CTR", "HHD"]
 # codes this file introduces (CTR, FLN, PRT, RHL, CWB, LLJ, BNG, HHD), so
 # there is no accidental collision today.
 #
-# This is a DELIBERATE non-decision, not an oversight: whoever curates
-# Batch 11's TfW file should read this comment and this file's own station
-# list, then decide on that file's own merits whether to reuse
-# `wcml-north-wales-branch` as a genuine shared trunk (if TfW's own
-# segmentation is coarse enough to match this one-segment-per-branch
-# convention) or to give TfW's line its own distinct segment name (the
+# RESOLVED (Batch 11, `lines/tfw-north-wales-coast.toml`): that file's own
+# curator read this comment and this file's own station list, then chose
+# to give TfW's line its own distinct segment name --
+# `tfw-north-wales-coast` -- rather than reuse `wcml-north-wales-branch`
+# as a shared trunk. That's station-overlap-only at Chester (the
 # `xc-manchester.toml`/`wcml-manchester.toml` precedent already documented
 # in the Global Constraints: "station overlap is fine, segment-sharing is
-# a deliberate choice"). Station-level overlap between the two files is
-# expected and correct either way -- it's the same physical stations
-# served by two different operators' services.
+# a deliberate choice"), confirmed mutually consistent by Batch 11's own
+# final review -- both files independently arrived at the same
+# station-overlap-only conclusion, so no rename is needed on either side.
+# An incident at Chester matches both lines independently, each as its own
+# `MatchScope::ExclusiveSegment` (see
+# `chester_station_overlap_matches_both_lines_as_exclusive` in
+# `crates/aggregator/src/matcher.rs` for the concrete assertion), not one
+# propagated `MatchScope::SharedSegment` match. Station-level overlap
+# between the two files is expected and correct -- it's the same physical
+# stations served by two different operators' services.
 # ---------------------------------------------------------------------
 
 # London Euston to Holyhead via Crewe and Chester, ordered south-east to
