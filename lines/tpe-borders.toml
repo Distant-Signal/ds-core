@@ -73,7 +73,7 @@ operators = [
 # already matches both lines by station lookup regardless of segment
 # naming, same precedent `xc-manchester.toml` set for shared termini.
 #
-# Two stations flagged for special care in the controller's preliminary
+# Three stations flagged for special care in the controller's preliminary
 # research, checked rather than transcribed:
 #
 # - Reston: preliminary research described it as "a new station in the
@@ -85,25 +85,34 @@ operators = [
 #   (2026-08-29), not a recent/upcoming opening. CRS code RSN confirmed
 #   by both of the same two sources. Included below in its correct
 #   geographic position, between Berwick-upon-Tweed and Dunbar.
-# - Cramlington: confirmed via its own Wikipedia page to be served by only
-#   one train per day on this line (CRS CRM also confirmed, via
-#   nationalrail.co.uk) — a legitimate very-minor call, omitted below per
-#   this catalogue's "principal stations only" convention, same treatment
-#   `xc-manchester.toml` gives its own minor calls.
-# - East Linton: on the same Dunbar-Edinburgh stretch, also a very-low-
-#   frequency call on this line — omitted below for the same
-#   "principal stations only" reason as Cramlington above.
+# - Cramlington: confirmed via two independent live sources (its own
+#   Wikipedia page and nationalrail.co.uk's station-details page, both
+#   accessed 2026-09-01) as CRS CRM, currently open, served by Northern
+#   and TransPennine Express on the East Coast Main Line just north of
+#   Newcastle — only one train per day on this line per Wikipedia, but per
+#   `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`
+#   Task 8.2 a low frequency alone doesn't disqualify a station from
+#   `stations` under this plan's full-coverage mandate. Included below in
+#   its correct geographic position, between Newcastle and Morpeth.
+# - East Linton: confirmed via two independent live sources (its own
+#   Wikipedia page and nationalrail.co.uk's station-details page, both
+#   accessed 2026-09-01) as CRS ELT, currently open — a reopened station,
+#   first timetabled services (ScotRail and TransPennine Express) began 13
+#   December 2023, on the same Dunbar-Edinburgh stretch as Reston above.
+#   Also a very-low-frequency call, but per the same Task 8.2 reasoning
+#   above that doesn't disqualify it. Included below in its correct
+#   geographic position, between Dunbar and Edinburgh Waverley.
 #
 # CRS sourcing: NCL (tiploc NWCSTLE) reused verbatim from the
 # already-curated `northern-tyne-valley.toml`. EDB reused verbatim from
 # `tpe-anglo-scottish.toml` (itself live-verified there). MPT, ALM, BWK,
-# RSN and DUN are new to this catalogue and were each independently
-# confirmed against two live sources: Wikipedia's station infobox and
-# nationalrail.co.uk's own station page (`"crsCode"` field) for every one
-# of them — MPT for Morpeth, ALM for Alnmouth, BWK for Berwick-upon-Tweed,
-# RSN for Reston, DUN for Dunbar. No tiploc data was independently
-# confirmed for MPT/ALM/BWK/RSN/DUN, so `tiploc` is omitted for those
-# rather than guessed.
+# RSN, DUN, CRM and ELT are new to this catalogue and were each
+# independently confirmed against two live sources: Wikipedia's station
+# infobox and nationalrail.co.uk's own station page (`"crsCode"` field)
+# for every one of them — MPT for Morpeth, ALM for Alnmouth, BWK for
+# Berwick-upon-Tweed, RSN for Reston, DUN for Dunbar, CRM for Cramlington,
+# ELT for East Linton. No tiploc data was independently confirmed for any
+# of these, so `tiploc` is omitted for those rather than guessed.
 sample_stations = ["NCL", "BWK", "EDB"]
 # destination_crs_filter is an inclusive whitelist consumed by LDBWS
 # sampling in `aggregation.rs` — it must list this route's two real
@@ -133,12 +142,18 @@ minor_delays_pct = 0.30
 reduced_service_pct = 0.30
 delay_threshold_minutes = 10
 
-# Ordered Newcastle -> Morpeth -> Alnmouth -> Berwick-upon-Tweed -> Reston
-# -> Dunbar -> Edinburgh Waverley, per the confirmed live route diagram.
+# Ordered Newcastle -> Cramlington -> Morpeth -> Alnmouth -> Berwick-upon-
+# Tweed -> Reston -> Dunbar -> East Linton -> Edinburgh Waverley, per the
+# confirmed live route diagram.
 [[stations]]
 crs = "NCL"
 tiploc = "NWCSTLE"
 role = "terminus"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "CRM"
+role = "minor"
 segment = "tpe-borders"
 
 [[stations]]
@@ -163,6 +178,11 @@ segment = "tpe-borders"
 
 [[stations]]
 crs = "DUN"
+role = "minor"
+segment = "tpe-borders"
+
+[[stations]]
+crs = "ELT"
 role = "minor"
 segment = "tpe-borders"
 

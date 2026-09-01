@@ -18,10 +18,13 @@ operators = [
 # "Manchester".
 #
 # North of Carlisle the route is Y-shaped: Glasgow and Edinburgh services
-# share the same line as far as Lockerbie, then split — Glasgow-bound
-# services continue via Motherwell, Edinburgh-bound services via Haymarket.
-# Both branches are included below since they're the same named TPE route,
-# not modelled as two separate line files.
+# share the same line past Lockerbie as far as Carstairs Junction, then
+# split — Glasgow-bound services continue via Motherwell, Edinburgh-bound
+# services via Haymarket. Both branches are included below since they're
+# the same named TPE route, not modelled as two separate line files.
+# (Carstairs is the real physical split point, not Lockerbie — see the
+# comment by Carstairs' entry below; Lockerbie itself has no active
+# junction, its old Dumfries branch having closed to passengers in 1952.)
 #
 # Preston-Carlisle (and onward towards Glasgow) is run over the same WCML
 # metals as Avanti West Coast. Station-overlap-only with `wcml`, deliberately:
@@ -42,8 +45,14 @@ operators = [
 # `tpe-borders.toml`'s own note on this). This line is therefore treated as
 # standalone for the shared-segment-propagation regression test.
 #
-# Minor intermediate calls are omitted; only principal stations are listed,
-# following `xc-manchester.toml`'s convention.
+# Station list below is now cross-checked against TPE's own published
+# Anglo-Scottish calling pattern (the "May-26-Anglo-ScotFINAL.pdf" linked
+# from the timetables page cited above), which enumerates every calling
+# point end to end for both the Liverpool and Manchester/Manchester
+# Airport legs, and both the Glasgow and Edinburgh branches. A handful of
+# genuinely very-minor/rare calls (e.g. single-weekday-only exceptions,
+# footnoted rather than in the main grid) are still noted rather than
+# silently included — see the comment by Carstairs' entry below.
 sample_stations = ["LIV", "MAN", "PRE", "CAR", "GLC", "EDB"]
 # Just the route-specific phrase, not the operator's own brand name — see
 # `xc-manchester.toml`'s comment on why a bare operator name doesn't
@@ -61,10 +70,30 @@ delay_threshold_minutes = 10
 
 # Ordered Liverpool/Manchester/Manchester Airport -> Preston -> Carlisle,
 # then splitting to Glasgow (via Motherwell) and Edinburgh (via Haymarket)
-# beyond Lockerbie.
+# beyond Carstairs.
 [[stations]]
 crs = "LIV"
 role = "terminus"
+segment = "tpe-anglo-scottish-nw"
+
+# St Helens Central and Wigan North Western: real, regularly-scheduled
+# calls on this route's Liverpool leg (4 trains per day each way per
+# TPE's own May-2026 Anglo-Scottish timetable PDF, cited above — a lower
+# frequency than the Manchester-leg core service, but a genuine daily
+# calling pattern, not a one-off exception). CRS codes and TIPLOCs
+# confirmed independently via railwaycodes.org.uk and Wikipedia's
+# infobox, both cross-checked against nationalrail.co.uk's own station
+# pages.
+[[stations]]
+crs = "SNH"
+tiploc = "STHLNSC"
+role = "minor"
+segment = "tpe-anglo-scottish-nw"
+
+[[stations]]
+crs = "WGN"
+tiploc = "WGNNW"
+role = "minor"
 segment = "tpe-anglo-scottish-nw"
 
 [[stations]]
@@ -78,6 +107,25 @@ segment = "tpe-anglo-scottish-nw"
 [[stations]]
 crs = "MIA"
 role = "terminus"
+segment = "tpe-anglo-scottish-nw"
+
+# Manchester Oxford Road and Bolton: real, near-hourly calls on this
+# route's Manchester leg (both MAN- and MIA-originating services route
+# via Oxford Road and Bolton to reach Preston/the WCML), per the same
+# TPE timetable PDF. MCO's CRS/TIPLOC confirmed independently via
+# railwaycodes.org.uk, Wikipedia's infobox, and nationalrail.co.uk.
+# Bolton's CRS (BON) confirmed independently via Wikipedia's infobox and
+# nationalrail.co.uk's own station page; its TIPLOC wasn't confirmable
+# to this file's usual standard, so it's left unset (optional field).
+[[stations]]
+crs = "MCO"
+tiploc = "MNCROXR"
+role = "minor"
+segment = "tpe-anglo-scottish-nw"
+
+[[stations]]
+crs = "BON"
+role = "minor"
 segment = "tpe-anglo-scottish-nw"
 
 # From here on: PRE/LAN/OXN/PNR/CAR tiplocs reused verbatim from the
@@ -115,11 +163,34 @@ role = "junction"
 segment = "tpe-anglo-scottish-wcml"
 
 # Lockerbie (CRS confirmed independently: Wikipedia infobox and
-# nationalrail.co.uk's own station page both give "LOC") is the last
-# station shared by both the Glasgow and Edinburgh branches before the
-# route splits.
+# nationalrail.co.uk's own station page both give "LOC") is on the
+# shared stretch before the route splits, but it is not itself a
+# junction — its old branch to Dumfries via Lochmaben closed to
+# passengers in 1952 (goods until 1966) and nothing diverges here today
+# (Wikipedia). The real split point is Carstairs, immediately below.
 [[stations]]
 crs = "LOC"
+role = "minor"
+segment = "tpe-anglo-scottish-scotland"
+
+# Carstairs is the actual junction where Glasgow and Edinburgh services
+# split (WCML/"Carstairs railway station" Wikipedia articles both
+# describe it as the junction where the Edinburgh and Glasgow branches
+# of the WCML diverge), not Lockerbie as this file previously assumed.
+# Its CRS code is literally the three letters "CRS" (confirmed
+# independently via railwaycodes.org.uk and nationalrail.co.uk, both
+# cross-checked against Wikipedia's infobox); TIPLOC "CRSTRS" confirmed
+# via railwaycodes.org.uk and Wikipedia's own infobox source. TPE's own
+# May-2026 Anglo-Scottish timetable PDF shows only one call here each
+# direction (0742/0745 northbound depending on day, 0947 southbound,
+# each a single-weekday-only footnoted exception, not in the main
+# timetable grid) — genuinely sparse, but it's still a real, currently
+# open, currently-served stop on this exact route, and it's this line's
+# one true physical junction, so it's included rather than omitted as
+# "minor".
+[[stations]]
+crs = "CRS"
+tiploc = "CRSTRS"
 role = "junction"
 segment = "tpe-anglo-scottish-scotland"
 

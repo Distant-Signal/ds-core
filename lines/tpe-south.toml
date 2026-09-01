@@ -43,8 +43,26 @@ operators = [
 #
 # Both Liverpool and Manchester are named as this route's western ends
 # ("Cleethorpes to Manchester and Liverpool"), the same two-city-name
-# pattern `tpe-anglo-scottish.toml` uses for its own western fork — so
-# both are marked as termini, consolidating before Stockport.
+# pattern `tpe-anglo-scottish.toml` uses for its own western fork. Task 8.4
+# (Batch 8) research corrects the shape of this, though: unlike
+# `tpe-anglo-scottish.toml`'s Liverpool/Manchester legs (two genuinely
+# separate physical lines converging at a shared point away from either
+# city), this route's Liverpool leg is the same continuous CLC
+# (Cheshire Lines Committee) route that runs straight through Manchester
+# Oxford Road into Manchester Piccadilly itself (confirmed via Wikipedia's
+# "Liverpool-Manchester lines" article: "the old Cheshire Lines Committee
+# line running from Liverpool Lime Street via Warrington Central to
+# Manchester Piccadilly", and independently via the TPE route table below,
+# which lists Manchester Piccadilly immediately after Manchester Oxford
+# Road on the Liverpool-originating leg). So Manchester Piccadilly (MAN) is
+# not a separate branch terminus needing its own segment/convergence
+# modelling — it's the point roughly two-thirds along this route's western
+# leg where some workings genuinely start/terminate (per TPE's own site:
+# the Liverpool extension "was extended from Manchester Piccadilly in
+# December 2022", i.e. Manchester Piccadilly was this route's original,
+# and still a live, terminus). `role = "terminus"` is kept for MAN below to
+# reflect that some services genuinely start/end there, even though it's
+# no longer first/second in the ordered list.
 #
 # Station-overlap-only with `xc-manchester.toml` at Stockport (SPT, role
 # reused directly from that already-curated file) and with `northern.toml`/
@@ -72,19 +90,47 @@ operators = [
 # station-overlap-only reasoning as the Stockport and Manchester Piccadilly
 # overlaps documented above.
 #
-# Minor intermediate calls (Liverpool South Parkway, Warrington West/
-# Central, Birchwood, Irlam, Urmston, Manchester Oxford Road, Meadowhall,
-# Barnetby, Habrough) are omitted, following `xc-manchester.toml`'s
-# "principal stations only" convention.
+# Task 8.4 (Batch 8, 2026-09-01): the 9 minor intermediate calls
+# previously omitted here (Liverpool South Parkway, Warrington West,
+# Warrington Central, Birchwood, Irlam, Urmston, Manchester Oxford Road,
+# Meadowhall, Barnetby, Habrough — 10 counting Manchester Oxford Road
+# twice across the plan's own "9-10" estimate) are real, currently-open,
+# currently-served calls on this exact route, confirmed via Wikipedia's
+# "TransPennine Express" article route table, which lists this South
+# route's full calling pattern end to end for both the Liverpool leg
+# (Liverpool Lime Street, Liverpool South Parkway, Warrington West,
+# Warrington Central, Birchwood, Irlam, Urmston) and the Manchester
+# Piccadilly-Cleethorpes leg (Manchester Oxford Road, Manchester
+# Piccadilly, Stockport, Sheffield, Meadowhall, Doncaster, Scunthorpe,
+# Barnetby, Habrough, Grimsby Town, Cleethorpes) — matching this file's
+# own already-cited "does not pass through Leeds" source exactly, just
+# read in full this time instead of only for the principal stations.
+# Widnes, on the same physical CLC route between Liverpool South Parkway
+# and Warrington Central per Wikipedia's "Liverpool-Manchester lines"
+# article, is deliberately NOT added: it does not appear in the TPE route
+# table's South-route row, i.e. this fast/limited-stop service does not
+# call there (Northern's own, separate, all-stations service on the same
+# metals does) — confirmed, not guessed, so left out per the two-source
+# "if unconfirmed, omit" rule (here the omission itself, not the
+# inclusion, is what's confirmed).
 #
 # CRS sourcing: LIV/MAN reused from `tpe-anglo-scottish.toml` (itself
 # live-verified); SPT reused from `xc-manchester.toml` (already verified
 # in-repo, per this task's brief); SHF/DON reused from `cross-country.toml`
 # (tiplocs SHEFFLD/DONC also reused from that file). SCU, GMB and CLE are
-# new to this catalogue and were independently confirmed against two live
-# sources each (Wikipedia's station infoboxes and nationalrail.co.uk's own
-# station pages) — CRS SCU for Scunthorpe, GMB for Grimsby Town, CLE for
-# Cleethorpes.
+# independently confirmed against two live sources each (Wikipedia's
+# station infoboxes and nationalrail.co.uk's own station pages) — CRS SCU
+# for Scunthorpe, GMB for Grimsby Town, CLE for Cleethorpes. MCO (tiploc
+# MNCROXR) reused verbatim from `tpe-anglo-scottish.toml` (itself
+# live-verified there). LPY, WAW, WAC, BWD, IRL, URM, MHS, BTB and HAB are
+# new to this catalogue and were each independently confirmed against two
+# live sources (Wikipedia's station infobox and nationalrail.co.uk's own
+# station-details page), both accessed 2026-09-01 — LPY for Liverpool
+# South Parkway, WAW for Warrington West, WAC for Warrington Central, BWD
+# for Birchwood, IRL for Irlam, URM for Urmston, MHS for Meadowhall
+# (Meadowhall Interchange), BTB for Barnetby, HAB for Habrough. No tiploc
+# data was independently confirmed for any of these nine, so `tiploc` is
+# omitted for those rather than guessed.
 sample_stations = ["LIV", "MAN", "SHF", "DON", "CLE"]
 # No match_keywords: TPE's own name for this route is simply "South",
 # which fails the precision bar badly on its own (it would match almost
@@ -102,11 +148,51 @@ sample_stations = ["LIV", "MAN", "SHF", "DON", "CLE"]
 minor_delays_pct = 0.30
 delay_threshold_minutes = 10
 
-# Ordered Liverpool & Manchester -> Stockport -> Sheffield -> Doncaster ->
-# Scunthorpe -> Grimsby Town -> Cleethorpes.
+# Ordered Liverpool -> Liverpool South Parkway -> Warrington West ->
+# Warrington Central -> Birchwood -> Irlam -> Urmston -> Manchester Oxford
+# Road -> Manchester Piccadilly -> Stockport -> Sheffield -> Meadowhall ->
+# Doncaster -> Scunthorpe -> Barnetby -> Habrough -> Grimsby Town ->
+# Cleethorpes, per the confirmed live TPE route table (see Task 8.4 note
+# above).
 [[stations]]
 crs = "LIV"
 role = "terminus"
+segment = "tpe-south"
+
+[[stations]]
+crs = "LPY"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "WAW"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "WAC"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "BWD"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "IRL"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "URM"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "MCO"
+tiploc = "MNCROXR"
+role = "minor"
 segment = "tpe-south"
 
 [[stations]]
@@ -126,6 +212,11 @@ role = "major"
 segment = "tpe-south"
 
 [[stations]]
+crs = "MHS"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
 crs = "DON"
 tiploc = "DONC"
 role = "junction"
@@ -133,6 +224,16 @@ segment = "tpe-south"
 
 [[stations]]
 crs = "SCU"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "BTB"
+role = "minor"
+segment = "tpe-south"
+
+[[stations]]
+crs = "HAB"
 role = "minor"
 segment = "tpe-south"
 
