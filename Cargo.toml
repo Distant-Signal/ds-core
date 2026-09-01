@@ -11,4 +11,5 @@ members = [
     "crates/aggregator",
     "crates/enricher",
     "crates/trust-consumer",
+    "crates/schedule-ingest",
 ]

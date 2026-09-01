@@ -19,3 +19,8 @@ __pycache__/
 # untracked so one contributor's own additions here don't leak into
 # everyone else's `mise install`.
 mise.local.toml
+
+# schedule-sftp's locally-generated SSH host keys (see local.env.example /
+# dev.env.example for the one-time `ssh-keygen` setup step) -- a
+# developer's own local dev host key must never be committed.
+/schedule-sftp-host-keys/
