@@ -161,10 +161,20 @@ role = "minor"
 segment = "scotrail-fife-circle"
 
 [[stations]]
-crs = "DLM"
+crs = "DAM"
 role = "minor"
 segment = "scotrail-fife-circle"
 # Dalmeny: last station before the Forth Bridge crossing into Fife.
+#
+# CORRECTION (Task 3.7 VERIFY pass, station-catalogue-completeness plan):
+# this entry previously carried `crs = "DLM"`, which is wrong -- DLM is the
+# live CRS code for Delamere in Cheshire, an unrelated station on a
+# different line entirely, not a stale/superseded code for this station.
+# Corrected to Dalmeny's real code, DAM, independently verified via
+# Wikipedia "Dalmeny railway station" (infobox "code" field: DAM) and
+# nationalrail.co.uk/stations/dam/details.html (page heading "Dalmeny
+# (DAM)"). No other `lines/*.toml` file uses either code, so this fix has
+# no cross-file collision.
 
 [[stations]]
 crs = "NQU"
@@ -383,6 +393,14 @@ segment = "scotrail-borders"
 # the town's 2022 city-status grant) -- the current live-source name is
 # used in this file's comment, per the Global Constraints' sourcing
 # method.
+#
+# (Task 3.7 VERIFY pass) One genuine CRS-code discrepancy was found and
+# fixed on re-verification: Dalmeny's `[[stations]]` entry previously
+# carried `crs = "DLM"`, which both sources above agree is wrong (DLM is
+# actually Delamere, Cheshire) -- corrected to `DAM`. See that entry's own
+# comment for the full sourcing. This correction means the "matched with
+# no discrepancies" statement above no longer holds without this
+# footnote; treat this paragraph as the amendment.
 #
 # TIPLOCs are omitted throughout: none were confirmed against a live
 # source during this task, matching the optional-field convention already

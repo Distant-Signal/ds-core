@@ -136,31 +136,73 @@ segment = "scotrail-shotts-exclusive"
 crs = "CBL"
 role = "minor"
 segment = "scotrail-shotts-exclusive"
-# Cambuslang. NOTE: `scotrail-glasgow-suburban.toml`'s own scope-boundary
-# comment lists Cambuslang's neighbour Uddingston (below) among stations
-# it could not verify to the two-source CRS standard for the (unmodelled)
-# Argyle Line Lanarkshire branches beyond Rutherglen/Motherwell -- real
-# ScotRail services along that corridor may call at some of the same
-# physical stations this file lists between Glasgow Central and Holytown.
-# No live schema-level overlap exists today (that file has no
-# `[[stations]]` entries there to share a segment name with), but this is
-# flagged here for whoever eventually models that Argyle Line extension, the
-# same way `scotrail-central-belt.toml` flagged the Shotts/Bathgate gap this
-# file itself now closes.
+# Cambuslang.
+#
+# RESOLUTION (Task 3.1 of the station-catalogue-completeness plan, fix
+# round 1, post-review): this comment previously flagged, as a
+# then-hypothetical future event, that whoever eventually modelled the
+# Argyle Line's Lanarkshire branches beyond Rutherglen/Motherwell might
+# find real service overlap with this file's own Uddingston/Bellshill
+# stations. That has now happened: `scotrail-glasgow-suburban.toml`'s
+# Task 3.1 added Uddingston and Bellshill on its own Rutherglen-Motherwell
+# route, and cross-file verification confirmed genuine physical track
+# sharing (not mere station-name overlap) -- see the UDD entry below for
+# the sourcing and the resulting segment rename. Cambuslang itself remains
+# exclusive to this file: `scotrail-glasgow-suburban.toml` does not
+# (yet) list it as a `[[stations]]` entry, so no shared-segment claim
+# applies to it today, even though Wikipedia's own "Shotts line" article
+# ("the line follows the ... West Coast Main Line as far as Uddingston
+# Junction") suggests Cambuslang likely sits on the same physically shared
+# stretch in reality.
 
 [[stations]]
 crs = "UDD"
 role = "minor"
-segment = "scotrail-shotts-exclusive"
+segment = "scotrail-uddingston-bellshill-trunk"
 # Uddingston: where the line "branches off towards Bellshill" from the West
-# Coast Main Line corridor (Wikipedia). See the CBL note above for the
-# Argyle Line Lanarkshire-branch caveat.
+# Coast Main Line corridor (Wikipedia).
+#
+# RESOLUTION (Task 3.1, fix round 1, post-review): retagged from the
+# exclusive `scotrail-shotts-exclusive` segment onto a new shared segment,
+# `scotrail-uddingston-bellshill-trunk`, also used by
+# `scotrail-glasgow-suburban.toml`'s own UDD entry (added by that same
+# task's FILL-IN piece). Verified as genuine physical track sharing, not
+# coincidental station-name overlap (per the `xc-south-coast.toml`/
+# `xc-manchester.toml`/GLC precedent this file's own GLC comment above
+# cites -- checked, not assumed): Wikipedia's "Shotts line" article states
+# outright "The line follows the ... West Coast Main Line as far as
+# Uddingston Junction where it branches off to the east. Until Holytown
+# Junction the line [is] used by Argyle Line services." Independently
+# corroborated by this station's own Wikipedia succession box (identical
+# Bellshill/Cambuslang neighbours listed under both a "Shotts Line" and an
+# "Argyle Line" route label -- i.e. the same physical platforms) and by
+# Bellshill's own Services section below.
+#
+# `scotrail_uddingston_bellshill_trunk_shares_glasgow_suburban_incident_
+# propagates` in `crates/aggregator/src/matcher.rs` asserts the resulting
+# `MatchScope::SharedSegment` for both lines.
 
 [[stations]]
 crs = "BLH"
 role = "minor"
-segment = "scotrail-shotts-exclusive"
+segment = "scotrail-uddingston-bellshill-trunk"
 # Bellshill.
+#
+# RESOLUTION (Task 3.1, fix round 1, post-review): same shared-trunk fix
+# as UDD above. Bellshill's own Services section (Wikipedia, fetched
+# fresh) lists the current Mon-Sat pattern as "2tph to Edinburgh Waverley
+# via Shotts" / "2tph to Lanark via Motherwell" / "4tph to Glasgow Central
+# High Level", plus "additional peak trains to Anderston via Central L.L."
+# -- i.e. genuine current Argyle Line (Central Low Level) peak services
+# still call here alongside the Shotts-branded service, even though
+# "regular daytime services through to Partick and beyond via Central
+# L.L. ended at the December 2014 timetable change" reduced their
+# frequency. The physical sharing described by the Shotts line article's
+# "Until Holytown Junction" quote (see the UDD comment above) covers this
+# station too, since it sits between Uddingston and Holytown. Holytown
+# (HLY, below) itself is not a `[[stations]]` entry in
+# `scotrail-glasgow-suburban.toml` today, so the shared segment does not
+# extend past Bellshill in that file for now.
 
 [[stations]]
 crs = "HLY"
@@ -308,6 +350,15 @@ segment = "scotrail-central-belt-edinburgh-throat"
 #     shared-throat segment decision.
 #   - Wikipedia "Curriehill railway station" (fetched fresh): independently
 #     confirms this station's own CRS code and Shotts Line membership.
+#   - (Task 3.1 of the station-catalogue-completeness plan, fix round 1)
+#     Wikipedia "Shotts line" (re-fetched): "The line follows the ...
+#     West Coast Main Line as far as Uddingston Junction where it branches
+#     off to the east. Until Holytown Junction the line [is] used by
+#     Argyle Line services" -- confirms genuine physical track sharing
+#     with `scotrail-glasgow-suburban.toml` through Uddingston and
+#     Bellshill, cross-checked against Uddingston's own succession box and
+#     Bellshill's own Services section (fetched fresh) -- see the UDD/BLH
+#     entries above for the segment-rename this produced.
 #
 # CRS codes: every code in `stations` above was verified against
 # railwaycodes.org.uk's own station-code listing pages
