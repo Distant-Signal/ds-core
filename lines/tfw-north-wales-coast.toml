@@ -58,25 +58,31 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # 105.5 miles, predominantly double track, matching the treatment
 # `west-coast-main-line.toml` gets for the same reason.
 #
-# Only principal calling points are listed, matching the "minor
-# intermediate calls omitted" pattern used in `xc-cardiff.toml` and
-# `northern-furness.toml` (and flagged as the applicable precedent for
-# this file specifically in `tfw-conwy-valley.toml`'s own comments).
-# Confirmed via the line's own Wikipedia route diagram (Template:North
-# Wales Coast Line), cross-checked station-by-station against each
-# omitted station's own Wikipedia infobox: the following are open,
-# currently-served stations omitted here as minor intermediate calls --
-# Shotton (SHT, also the Borderlands Line junction -- no line in this
-# catalogue reaches the Borderlands Line yet, so no shared-segment
-# question arises there), Conwy (CNW), Penmaenmawr (PMW),
-# Llanfairfechan (LLF), and, on Anglesey after Bangor, Llanfairpwll
-# (LPG), Bodorgan (BOR), Tŷ Croes (TYC), Rhosneigr (RHO) and Valley
-# (VAL). Separately, Queensferry, Connah's Quay, Bagillt, Mostyn,
-# Talacre, Llandulas, Llysfaen, Old Colwyn, Mochdre & Pabo, Menai
-# Bridge, Britannia Bridge and Gaerwen are not omissions -- each was
-# checked and is a closed/disused station (mostly closed in the 1966
-# Beeching cuts), confirmed via each one's own Wikipedia infobox
-# "Status: Disused" field, so they were never candidates for inclusion.
+# Station-catalogue completeness fill-in (Task 4.5,
+# `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`):
+# the 9 minor intermediate calls this file previously omitted -- Shotton
+# (SHT), Conwy (CNW), Penmaenmawr (PMW), Llanfairfechan (LLF), and, on
+# Anglesey after Bangor, Llanfairpwll (LPG), Bodorgan (BOR), Tŷ Croes
+# (TYC), Rhosneigr (RHO) and Valley (VAL) -- are now listed below at
+# their true geographic position. All 9 CRS codes were already confirmed
+# from each station's own Wikipedia infobox by this file's original
+# author (see the git history for this file's prior comment here); this
+# task added the second source, directly re-fetching
+# railwaycodes.org.uk's live per-letter CRS pages (crss/c/p/l/b/t/r/v.shtm)
+# via raw HTML (a direct `curl` fetch, not the WebFetch tool that hit the
+# truncation failure mode disclosed elsewhere in this batch), which
+# returned an exact CRS match for all 9 and additionally supplied a
+# TIPLOC for every one (SHOTTON, CONWY, PNMNMWR, LANFRFC, LFPW, BODORGN,
+# TYCROES, RHOSNGR, VALLEY respectively) -- none guessed. Order and
+# completeness of this list was independently re-confirmed against the
+# line's own Wikipedia route diagram (Chester-Holyhead), which also
+# re-confirmed that Queensferry, Connah's Quay, Bagillt, Mostyn,
+# Talacre, Abergele & Pensarn, Foryd, Old Colwyn, Llysfaen, Llandulas,
+# Mochdre & Pabo, Aber, Menai Bridge, Britannia Bridge and Gaerwen are
+# the *only* other stations on this route diagram -- all closed/disused
+# (mostly 1966 Beeching cuts; Aber and Foryd similarly disused per their
+# own Wikipedia infobox "Status: Disused" field), so no candidate beyond
+# the 9 added below was missed.
 #
 # Llandudno itself (the town, CRS LLD) is deliberately out of scope: per
 # the line's own route diagram, it sits on a short branch via Deganwy
@@ -155,6 +161,17 @@ segment = "tfw-north-wales-coast"
 # sharing a segment name with this file; see the cross-batch note above.
 
 [[stations]]
+crs = "SHT"
+tiploc = "SHOTTON"
+role = "junction"
+segment = "tfw-north-wales-coast"
+# Shotton is also the junction for the Borderlands Line (Wrexham
+# Central), per this station's own Wikipedia article -- no line in this
+# catalogue reaches the Borderlands Line yet, so no shared-segment
+# question arises here, and this file does not model or invent any
+# Borderlands Line segment/stations.
+
+[[stations]]
 crs = "FLN"
 tiploc = "FLINT"
 role = "major"
@@ -188,9 +205,57 @@ segment = "tfw-north-wales-coast"
 # the segment-sharing decision comment above the [[stations]] list.
 
 [[stations]]
+crs = "CNW"
+tiploc = "CONWY"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "PMW"
+tiploc = "PNMNMWR"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "LLF"
+tiploc = "LANFRFC"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
 crs = "BNG"
 tiploc = "BANGOR"
 role = "major"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "LPG"
+tiploc = "LFPW"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "BOR"
+tiploc = "BODORGN"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "TYC"
+tiploc = "TYCROES"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "RHO"
+tiploc = "RHOSNGR"
+role = "minor"
+segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "VAL"
+tiploc = "VALLEY"
+role = "minor"
 segment = "tfw-north-wales-coast"
 
 [[stations]]

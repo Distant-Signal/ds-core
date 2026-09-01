@@ -11,31 +11,29 @@ match_keywords = ["Marches Line", "Welsh Marches Line", "Shrewsbury to Chester L
 # curation standard established for tfw-cambrian.toml, tfw-heart-of-wales.toml,
 # tfw-conwy-valley.toml and tfw-north-wales-coast.toml): every CRS code below
 # was confirmed from that station's own Wikipedia infobox "Station code"
-# field. Of those, NWP, GOB, LEO, HFD, AGV and CTR were additionally
-# cross-checked against railwaycodes.org.uk's per-letter CRS pages, fetched
-# live, quoting each row in full (name | CRS | NLC | TIPLOC | STANME |
-# STANOX) to avoid a summarisation error this task hit once already (an
-# early fetch of the "L" page briefly misreported Ludlow as "LDW" instead of
-# LUD; a second, more targeted fetch of the same page showed the page
-# actually truncates before reaching Ludlow's row at all, i.e. that first
-# reading was a fabricated artefact of the fetch tool's own summarisation,
-# not a real second-source reading -- it has been discarded and is not used
-# anywhere in this file). CWM (Cwmbran) got one railwaycodes.org.uk fetch
-# that reported a full row (CRS CWM, TIPLOC CWMBRAN) and a second, repeat
-# fetch of the identical URL that reported the row absent -- an inconsistent
-# read, not a clean confirmation, so CWM's TIPLOC is omitted here and CWM is
-# treated as Wikipedia-only pending a clean re-fetch, same as PPL, LUD, CRV,
-# CTT, CRK, RUA and WRX, all of which railwaycodes.org.uk's per-letter pages
-# repeatedly truncated before reaching (the same failure mode disclosed in
-# the four sibling files). None of these are invented -- they're all
-# directly read from a live source -- but a future editor should treat the
-# Wikipedia-only subset as pending a full second-source pass. TIPLOCs are
-# included only where railwaycodes.org.uk gave one directly in a verbatim
-# row quote (NWP, GOB, LEO, HFD, AGV); CTR's TIPLOC (CHST) is carried over
-# unchanged from `tfw-north-wales-coast.toml`, itself already cross-checked
-# there, and was independently reconfirmed via a fresh verbatim-row fetch
-# during this task's research. TIPLOCs are omitted elsewhere rather than
-# guessed, matching every sibling file's convention.
+# field, AND independently cross-checked against railwaycodes.org.uk's
+# per-letter CRS pages, and matches exactly. TIPLOC-refresh pass (Task 4.4,
+# `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`):
+# the previous version of this note disclosed CWM, PPL, LUD, CRV, CTT, SHR,
+# CRK, RUA and WRX as still Wikipedia-only, either because
+# railwaycodes.org.uk's per-letter pages repeatedly truncated before
+# reaching the relevant row, or (CWM specifically) because two fetches of
+# the identical URL gave inconsistent results. A fresh session's direct
+# raw-HTML `curl` fetch of the same pages (bypassing the AI-summarized
+# WebFetch tool responsible for both the truncation and the "LDW"
+# misreading disclosed below) reached every row cleanly and consistently,
+# returning an exact CRS match for all 9 and a TIPLOC for every one of them
+# (now included below). NWP, GOB, LEO, HFD, AGV and CTR were already
+# cross-checked this way in the original session, quoting each row in full
+# (name | CRS | NLC | TIPLOC | STANME | STANOX) to avoid the same
+# summarisation error (an early fetch of the "L" page briefly misreported
+# Ludlow as "LDW" instead of LUD; a second, more targeted fetch of the same
+# page showed the page actually truncates before reaching Ludlow's row at
+# all, i.e. that first reading was a fabricated artefact of the fetch
+# tool's own summarisation, not a real second-source reading -- it was
+# discarded then and is not used anywhere in this file). CTR's TIPLOC
+# (CHST) remains carried over unchanged from `tfw-north-wales-coast.toml`.
+# TIPLOCs are now included for every station in this file.
 #
 # Category: "main-line", not "regional" -- the Welsh Marches line's own
 # Wikipedia article describes it as "an inter-regional main line" linking
@@ -121,15 +119,21 @@ segment = "tfw-marches-south"
 
 [[stations]]
 crs = "CWM"
+tiploc = "CWMBRAN"
 role = "major"
 segment = "tfw-marches-south"
+# TIPLOC confirmed during Task 4.4's TIPLOC-refresh pass: a fresh raw-HTML
+# curl fetch of railwaycodes.org.uk's "C" page reached this row cleanly and
+# consistently (resolving the earlier inconsistent-fetch disclosure in the
+# sourcing note above).
 
 [[stations]]
 crs = "PPL"
+tiploc = "PONTYPL"
 role = "major"
 segment = "tfw-marches-south"
-# Pontypool & New Inn. CRS confirmed via Wikipedia only -- see the sourcing
-# note above.
+# Pontypool & New Inn. TIPLOC added during Task 4.4's TIPLOC-refresh pass,
+# sourced from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "AGV"
@@ -156,19 +160,26 @@ segment = "tfw-marches-south"
 
 [[stations]]
 crs = "LUD"
+tiploc = "LUDLOW"
 role = "major"
 segment = "tfw-marches-south"
-# Ludlow. CRS confirmed via Wikipedia only -- see the sourcing note above
-# (including the discarded "LDW" misreading).
+# Ludlow. CRS confirmed via Wikipedia and (as of Task 4.4's TIPLOC-refresh
+# pass) railwaycodes.org.uk -- see the sourcing note above (including the
+# discarded "LDW" misreading). TIPLOC added during that same pass, sourced
+# from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "CRV"
+tiploc = "CRAVENA"
 role = "junction"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Craven Arms: physical junction with the Heart of Wales Line
-# (`tfw-heart-of-wales.toml`). CRS confirmed via Wikipedia only -- see the
-# sourcing note above; this matches the CRV value already used in
-# `tfw-heart-of-wales.toml`, itself sourced the same way there.
+# (`tfw-heart-of-wales.toml`). CRS confirmed via Wikipedia and (as of Task
+# 4.4's TIPLOC-refresh pass) railwaycodes.org.uk -- see the sourcing note
+# above; this matches the CRV value already used in
+# `tfw-heart-of-wales.toml`, itself sourced the same way there. TIPLOC
+# added during that same pass, matching the value `tfw-heart-of-wales.toml`'s
+# own Task 4.3 refresh independently confirmed.
 #
 # Segment-sharing decision (the call this file was asked to make -- see
 # `tfw-heart-of-wales.toml`'s comment, which deliberately left this open
@@ -204,15 +215,19 @@ segment = "tfw-heart-of-wales-shrewsbury"
 
 [[stations]]
 crs = "CTT"
+tiploc = "CSTR"
 role = "minor"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Church Stretton: an ordinary intermediate stop, not itself a junction --
 # included in the shared segment because it sits on the physically-shared
 # stretch between Craven Arms and Shrewsbury; see the sourcing/decision note
-# on Craven Arms above.
+# on Craven Arms above. TIPLOC added during Task 4.4's TIPLOC-refresh pass,
+# matching the value `tfw-heart-of-wales.toml`'s own Task 4.3 refresh
+# independently confirmed.
 
 [[stations]]
 crs = "SHR"
+tiploc = "SHRWBY"
 role = "junction"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Shrewsbury is also a junction with the Cambrian Line (`tfw-cambrian.toml`,
@@ -220,7 +235,9 @@ segment = "tfw-heart-of-wales-shrewsbury"
 # that file's own comment) and the Shrewsbury-Crewe route (no line file in
 # this catalogue yet). Per the shared-trunk rule of thumb, the junction
 # belongs to the shared segment; this line's own exclusive segment resumes
-# at the next station, Gobowen.
+# at the next station, Gobowen. TIPLOC added during Task 4.4's
+# TIPLOC-refresh pass, matching the value `tfw-heart-of-wales.toml`'s own
+# Task 4.3 refresh independently confirmed.
 
 [[stations]]
 crs = "GOB"
@@ -230,26 +247,35 @@ segment = "tfw-marches-north"
 
 [[stations]]
 crs = "CRK"
+tiploc = "CHIRK"
 role = "minor"
 segment = "tfw-marches-north"
-# Chirk. CRS confirmed via Wikipedia only -- see the sourcing note above.
+# Chirk. CRS confirmed via Wikipedia and (as of Task 4.4's TIPLOC-refresh
+# pass) railwaycodes.org.uk -- see the sourcing note above. TIPLOC added
+# during that same pass, sourced from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "RUA"
+tiploc = "RUABON"
 role = "major"
 segment = "tfw-marches-north"
 # Ruabon: "a combined rail and bus interchange" per its own Wikipedia
-# article. CRS confirmed via Wikipedia only -- see the sourcing note above.
+# article. CRS confirmed via Wikipedia and (as of Task 4.4's TIPLOC-refresh
+# pass) railwaycodes.org.uk -- see the sourcing note above. TIPLOC added
+# during that same pass, sourced from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "WRX"
+tiploc = "WREXHMG"
 role = "junction"
 segment = "tfw-marches-north"
 # Wrexham General: a live junction with the Borderlands Line (Wrexham
 # Central/Bidston), per this station's own Wikipedia article. No line file
 # in this catalogue reaches the Borderlands Line yet, so no shared-segment
-# question arises here today. CRS confirmed via Wikipedia only -- see the
-# sourcing note above.
+# question arises here today. CRS confirmed via Wikipedia and (as of Task
+# 4.4's TIPLOC-refresh pass) railwaycodes.org.uk -- see the sourcing note
+# above. TIPLOC added during that same pass, sourced from
+# railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "CTR"

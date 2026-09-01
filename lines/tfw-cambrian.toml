@@ -65,23 +65,39 @@ delay_threshold_minutes = 10
 # segment -- Task 11.5 (`tfw-marches.toml`, not yet written) is responsible
 # for deciding whether to reuse this segment name at Shrewsbury.
 #
-# Only principal calling points are listed. Numerous request-stop halts are
-# omitted for brevity: on the trunk, several closed intermediate stations
-# between Shrewsbury and Machynlleth are gone entirely; on the coast branch,
-# Penhelig, Tonfanau, Llangelynin, Llwyngwril, Llanaber, Talybont, Dyffryn
-# Ardudwy, Llanbedr, Pensarn, Llandanwg, Tygwyn, Talsarnau, Llandecwyn and
-# Penychain are all open request stops not listed here. Penhelig specifically
-# was flagged by the final whole-branch review as a possible undisclosed gap
-# (some sources describe it as the real first coast-branch calling point
-# after Dovey Junction, before Aberdovey) -- researched rather than left
-# undecided: its own Wikipedia article confirms it's a genuinely open,
-# currently passenger-served request stop (opened 1933, unstaffed, no
-# ticketing facilities, ~8 trains/day), but describes it as a minor halt on
-# "the eastern outskirts" of Aberdyfi/Aberdovey, opened only because of
-# historical complaints about the walk to Aberdovey's own station -- the
-# same character as the other minor request-stop halts already in this
-# omissions list, not a principal calling point in its own right, so it's
-# disclosed here rather than given its own station entry.
+# Station-catalogue completeness pass (Task 4.1, 2026-09-01): every coast-
+# branch request-stop halt this file previously omitted for brevity --
+# Penhelig, Tonfanau, Llwyngwril, Llanaber, Talybont, Dyffryn Ardudwy,
+# Llanbedr, Pensarn, Llandanwg, Tygwyn, Talsarnau, Llandecwyn and Penychain
+# -- is now confirmed open and listed below as its own `[[stations]]` entry
+# (role = "minor"), each cross-checked CRS-code-against-a-second-source per
+# this catalogue's sourcing bar (Wikipedia infobox/route-diagram, confirmed
+# against that CRS's own `nationalrail.co.uk/stations/<crs>/details.html`
+# page). `has_station`/`/stations/[crs]` lookups for any of these now
+# resolve correctly instead of silently returning an empty disruption list.
+#
+# One candidate from the prior omissions list is deliberately NOT added:
+# Llangelynin. Its own Wikipedia article states it is "Disused" -- closed
+# 25 October 1991, "the line is still open, but trains no longer call at
+# the station" -- corroborated by its absence from railwaycodes.org.uk's
+# open-station listing for its initial letter and a 404 on National Rail
+# Enquiries' station-details page for its former CRS. Unlike the other
+# dozen halts above, this one isn't a currently-open station a passenger
+# could look up, so adding it would be wrong, not merely incomplete.
+#
+# On the trunk, Shrewsbury-Machynlleth's several closed intermediate
+# stations are confirmed gone entirely, not a missed-station gap: per the
+# Cambrian Line's own Wikipedia route diagram, the only currently-open
+# stations between Shrewsbury and Machynlleth are Welshpool, Newtown and
+# Caersws (already listed below) -- every other former calling point on
+# that stretch (Forden, Abermule, Moat Lane Junction, Carno, Talerddig,
+# Llanbrynmair, Cemmes Road, and several more) closed in the 14 June 1965
+# Beeching cuts and remains closed today (individually spot-checked via
+# Abermule's and Carno's own Wikipedia articles); Carno has an active,
+# not-yet-realised reopening campaign (reached stage 3 of Network Rail's
+# New Stations Assessment Programme as of a September 2019 update) but
+# isn't a currently-open station, so it stays out per this catalogue's
+# "don't guess/anticipate" discipline.
 #
 # This file is "bundled": a shared trunk (Shrewsbury-Dovey Junction) plus
 # two branches (Aberystwyth; the coast to Pwllheli) concatenated in one
@@ -170,6 +186,15 @@ segment = "tfw-cambrian-aberystwyth"
 # --- Cambrian Coast Line (Dovey Junction to Pwllheli) ---
 
 [[stations]]
+crs = "PHG"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Penhelig: unstaffed request stop on the eastern outskirts of Aberdyfi/
+# Aberdovey, opened 1933. CRS confirmed via its own Wikipedia infobox
+# (code = PHG) and cross-checked against nationalrail.co.uk/stations/phg/
+# details.html ("Penhelig (PHG)").
+
+[[stations]]
 crs = "AVY"
 role = "minor"
 segment = "tfw-cambrian-coast"
@@ -179,6 +204,22 @@ crs = "TYW"
 role = "major"
 segment = "tfw-cambrian-coast"
 # Interchange with the heritage narrow-gauge Talyllyn Railway.
+
+[[stations]]
+crs = "TNF"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Tonfanau. Request stop. CRS confirmed via Wikipedia infobox (code = TNF),
+# cross-checked against nationalrail.co.uk/stations/tnf/details.html.
+
+[[stations]]
+crs = "LLW"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Llwyngwril. Request stop. CRS confirmed via Wikipedia infobox
+# (code = LLW), cross-checked against nationalrail.co.uk/stations/llw/
+# details.html. Llangelynin, the closed former station between Tonfanau
+# and here, is deliberately not listed -- see the sourcing note above.
 
 [[stations]]
 crs = "FRB"
@@ -198,9 +239,79 @@ role = "major"
 segment = "tfw-cambrian-coast"
 
 [[stations]]
+crs = "LLA"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Llanaber. Request stop. CRS confirmed via Wikipedia infobox (code = LLA),
+# cross-checked against nationalrail.co.uk/stations/lla/details.html.
+
+[[stations]]
+crs = "TLB"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Talybont (Gwynedd). Request stop. CRS confirmed via Wikipedia infobox
+# (code = TLB), cross-checked against nationalrail.co.uk/stations/tlb/
+# details.html.
+
+[[stations]]
+crs = "DYF"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Dyffryn Ardudwy. Request stop. CRS confirmed via Wikipedia infobox
+# (code = DYF), cross-checked against nationalrail.co.uk/stations/dyf/
+# details.html.
+
+[[stations]]
+crs = "LBR"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Llanbedr. Request stop. CRS confirmed via Wikipedia infobox (code = LBR),
+# cross-checked against nationalrail.co.uk/stations/lbr/details.html.
+
+[[stations]]
+crs = "PES"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Pensarn (Gwynedd) -- distinct from the other Pensarn near Abergele on the
+# North Wales Coast Line. Request stop. CRS confirmed via Wikipedia infobox
+# (code = PES), cross-checked against nationalrail.co.uk/stations/pes/
+# details.html ("Pensarn (Gwynedd) (PES)").
+
+[[stations]]
+crs = "LDN"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Llandanwg. Request stop. CRS confirmed via Wikipedia infobox
+# (code = LDN), cross-checked against nationalrail.co.uk/stations/ldn/
+# details.html.
+
+[[stations]]
 crs = "HRL"
 role = "major"
 segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "TYG"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Tygwyn. Request stop. CRS confirmed via Wikipedia infobox (code = TYG),
+# cross-checked against nationalrail.co.uk/stations/tyg/details.html.
+
+[[stations]]
+crs = "TAL"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Talsarnau. Request stop. CRS confirmed via Wikipedia infobox
+# (code = TAL), cross-checked against nationalrail.co.uk/stations/tal/
+# details.html.
+
+[[stations]]
+crs = "LLC"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Llandecwyn. Request stop. CRS confirmed via Wikipedia infobox
+# (code = LLC), cross-checked against nationalrail.co.uk/stations/llc/
+# details.html.
 
 [[stations]]
 crs = "PRH"
@@ -224,6 +335,14 @@ segment = "tfw-cambrian-coast"
 crs = "CCC"
 role = "minor"
 segment = "tfw-cambrian-coast"
+
+[[stations]]
+crs = "PNC"
+role = "minor"
+segment = "tfw-cambrian-coast"
+# Penychain. Request stop, near the former Butlins holiday camp. CRS
+# confirmed via Wikipedia infobox (code = PNC), cross-checked against
+# nationalrail.co.uk/stations/pnc/details.html.
 
 [[stations]]
 crs = "ABH"

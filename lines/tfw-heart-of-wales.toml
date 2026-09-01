@@ -11,28 +11,36 @@ match_keywords = ["Heart of Wales Line"]
 # Sourcing note (per the catalogue's "cross-checked against a second source"
 # curation standard, matching the disclosure format established for
 # tfw-cambrian.toml after its task review): every CRS code below was
-# confirmed from that station's own Wikipedia infobox. Of those, SHR (already
-# cross-checked in tfw-cambrian.toml), LGO, LLT, LLO, LLM, LNW, LLV, LLL and
-# LLE were additionally cross-checked against railwaycodes.org.uk's per-letter
-# CRS pages and match exactly (one railwaycodes.org.uk fetch briefly returned
-# an ambiguous "LGO/LLU" reading for Llangynllo; LGO is the value confirmed
-# by Wikipedia and is used here). HPT, KNI and KNU were sourced directly from
-# railwaycodes.org.uk but not independently cross-checked against Wikipedia's
-# infobox for those three. The remaining codes -- CRV, BME, BUK, DOL, PNY,
-# BHR, CIM, GTH, SUG, CYN, LNR, LLG, FFA, LLI, AMF, PTF, PTD, LLH, BYE, SWA --
-# are Wikipedia-only so far: railwaycodes.org.uk's per-letter pages for their
-# initials (b, c, etc.) repeatedly truncated before reaching the relevant row
-# during this task's research (the same failure mode disclosed in
-# tfw-cambrian.toml), and the remainder of the second-source pass could not
-# be completed because this task's WebFetch tool hit a hard session-usage
-# limit ("You've hit your session limit") partway through. None of these are
-# invented -- they're all directly read from a live source -- but a future
-# editor should treat the Wikipedia-only subset as pending a full
-# second-source pass rather than as fully cross-checked.
+# confirmed from that station's own Wikipedia infobox, AND independently
+# cross-checked against railwaycodes.org.uk's per-letter CRS pages and
+# matches exactly. TIPLOC-refresh pass (Task 4.3,
+# `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`):
+# the previous version of this note disclosed that CRV, BME, BUK, DOL, PNY,
+# BHR, CIM, GTH, SUG, CYN, LNR, LLG, FFA, LLI, AMF, PTF, PTD, LLH, BYE and
+# SWA were still Wikipedia-only pending a second-source pass, because
+# railwaycodes.org.uk's per-letter pages repeatedly truncated before
+# reaching the relevant row and a WebFetch session-usage limit cut the
+# original research short. A fresh session's direct raw-HTML `curl` fetch
+# of the same pages (bypassing the AI-summarized WebFetch tool that hit the
+# truncation) reached every row cleanly and returned an exact CRS match for
+# all 20, plus a TIPLOC for every one of them (now included below). HPT,
+# KNI and KNU, previously sourced from railwaycodes.org.uk only, were this
+# time also independently cross-checked against each station's own
+# Wikipedia infobox and match. One genuine correction surfaced during this
+# pass: KNI's TIPLOC was previously recorded as "KNIGHTON", which turns out
+# to be railwaycodes.org.uk's STANME column for that row, not its TIPLOC
+# column ("KNIGHTN") -- a column-misread in the original curation, fixed
+# below (see that station's own comment). Llangynllo (LGO/LLU) and Cilmeri
+# (CIM/GIY) each have a two-CRS-value row on railwaycodes.org.uk, the same
+# pattern `tfw-valley-lines-north.toml` discloses for Lisvane & Thornhill
+# and Dinas Rhondda; in both cases the value already used here (LGO, CIM)
+# is confirmed as the live/primary code, so no change was needed there.
 #
-# TIPLOCs are included only where railwaycodes.org.uk's database gave one
-# directly (HPT, KNI, LLO, LLV, LLL, LLE); omitted elsewhere rather than
-# guessed, matching tfw-cambrian.toml's convention.
+# TIPLOCs are now included for every station, all sourced from
+# railwaycodes.org.uk's TIPLOC column directly (that field isn't shown on
+# Wikipedia's infobox, so unlike the CRS codes it has only the one live
+# source, matching `tfw-north-wales-coast.toml`'s convention for the same
+# situation).
 
 # Frequency confirmed via Wikipedia (Heart of Wales line article, "Services"
 # table): "6 tpd to Shrewsbury" and "5 tpd to Swansea" -- roughly one train
@@ -109,14 +117,18 @@ delay_threshold_minutes = 10
 # mismatch.
 [[stations]]
 crs = "SHR"
+tiploc = "SHRWBY"
 role = "junction"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Shrewsbury is also a junction with the Cambrian Line (`tfw-cambrian.toml`)
 # and the Wolverhampton/Chester routes, at station level only -- no track is
 # shared with those since the Cambrian Line diverges west immediately.
+# TIPLOC added during Task 4.3's TIPLOC-refresh pass, sourced from
+# railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "CTT"
+tiploc = "CSTR"
 role = "minor"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Church Stretton: added during the final whole-branch review (Important
@@ -131,21 +143,27 @@ segment = "tfw-heart-of-wales-shrewsbury"
 # here between Shrewsbury and Craven Arms per real geography -- Church
 # Stretton sits "12+3/4 miles south of Shrewsbury", i.e. north of Craven
 # Arms, per its own Wikipedia article, matching the south-to-north CRV ->
-# CTT -> SHR ordering already used in `tfw-marches.toml`. No TIPLOC listed:
-# not confirmed against a live source during this fix wave, matching this
-# file's own convention (see the sourcing note above) of omitting rather
-# than guessing.
+# CTT -> SHR ordering already used in `tfw-marches.toml`. TIPLOC added
+# during Task 4.3's TIPLOC-refresh pass, sourced from railwaycodes.org.uk
+# directly (this file's own convention of omitting rather than guessing
+# still holds -- this value was confirmed live, not guessed).
 
 [[stations]]
 crs = "CRV"
+tiploc = "CRAVENA"
 role = "junction"
 segment = "tfw-heart-of-wales-shrewsbury"
 # Physical junction where the line diverges from the Welsh Marches Line.
-# CRS sourced from Wikipedia's infobox only -- railwaycodes.org.uk's "C"
-# page truncated before reaching this row (see sourcing note above).
+# CRS was previously Wikipedia-only (railwaycodes.org.uk's "C" page
+# truncated before reaching this row -- see sourcing note above); TIPLOC
+# added and CRS re-confirmed during Task 4.3's TIPLOC-refresh pass via a
+# direct raw-HTML curl fetch of the same page, which this time returned
+# the full row (crss/c/p/l/b/f/g/k/d/a.shtm re-fetched cleanly across the
+# board for this task -- no truncation hit this session).
 
 [[stations]]
 crs = "BME"
+tiploc = "BROOME"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
@@ -157,39 +175,55 @@ segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "BUK"
+tiploc = "BKNELL"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "KNI"
-tiploc = "KNIGHTON"
+tiploc = "KNIGHTN"
 role = "major"
 segment = "tfw-heart-of-wales"
 # Knighton, the largest town on the northern (Shropshire/Radnorshire border)
-# section of the line.
+# section of the line. TIPLOC corrected during Task 4.3's TIPLOC-refresh
+# pass: the value this file previously carried here, "KNIGHTON", was
+# actually railwaycodes.org.uk's STANME column for this row, not its
+# TIPLOC column (which is "KNIGHTN") -- a column-misread from the
+# original curation, caught by re-fetching the live row directly.
 
 [[stations]]
 crs = "KNU"
+tiploc = "KNUCKLS"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LGO"
+tiploc = "LLGUNLO"
 role = "minor"
 segment = "tfw-heart-of-wales"
+# Llangynllo: railwaycodes.org.uk's row lists two CRS values, "LGO" and
+# "LLU", in one cell (the same two-code-in-one-cell pattern
+# `tfw-valley-lines-north.toml` discloses for Lisvane & Thornhill and
+# Dinas Rhondda). LGO is confirmed as the live/primary code -- matching
+# the value this file already used, sourced from Wikipedia before this
+# task -- and is used below; LLU is not used.
 
 [[stations]]
 crs = "LLT"
+tiploc = "LLBSTRD"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "DOL"
+tiploc = "DOLAU"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "PNY"
+tiploc = "PYBONT"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
@@ -203,37 +237,48 @@ segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "BHR"
+tiploc = "BUILTHR"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "CIM"
+tiploc = "CILMERY"
 role = "minor"
 segment = "tfw-heart-of-wales"
+# Cilmeri: railwaycodes.org.uk's row lists two CRS values, "CIM" and
+# "GIY", in one cell -- same pattern as Llangynllo above. CIM is
+# confirmed as the live/primary code, matching the value this file
+# already used; GIY is not used.
 
 [[stations]]
 crs = "GTH"
+tiploc = "GARTH"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LLM"
+tiploc = "LLGMMRW"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LNW"
+tiploc = "LLWRTYW"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "SUG"
+tiploc = "SGRLOAF"
 role = "minor"
 segment = "tfw-heart-of-wales"
 # Sugar Loaf: a remote request-stop halt near the line's summit (~820 ft).
 
 [[stations]]
 crs = "CYN"
+tiploc = "CYNGHRD"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
@@ -248,11 +293,13 @@ segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LNR"
+tiploc = "LLWRDA"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LLG"
+tiploc = "LLGADOG"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
@@ -265,22 +312,26 @@ segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "FFA"
+tiploc = "FFAIRFC"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LLI"
+tiploc = "LLDYBIE"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "AMF"
+tiploc = "AMMANFD"
 role = "major"
 segment = "tfw-heart-of-wales"
 # Ammanford, the largest town in the Amman Valley.
 
 [[stations]]
 crs = "PTF"
+tiploc = "PNTYFYN"
 role = "minor"
 segment = "tfw-heart-of-wales"
 # A freight-only branch up the Amman Valley (towards Gwaun-Cae-Gurwen /
@@ -289,16 +340,19 @@ segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "PTD"
+tiploc = "PNTADLS"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "LLH"
+tiploc = "LLGNNCH"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
 [[stations]]
 crs = "BYE"
+tiploc = "BYNEA"
 role = "minor"
 segment = "tfw-heart-of-wales"
 
@@ -312,5 +366,6 @@ segment = "tfw-heart-of-wales-swansea"
 
 [[stations]]
 crs = "SWA"
+tiploc = "SWANSEA"
 role = "terminus"
 segment = "tfw-heart-of-wales-swansea"

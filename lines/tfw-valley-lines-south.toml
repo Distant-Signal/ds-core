@@ -22,24 +22,27 @@ match_keywords = ["Cardiff City Line", "Coryton Line", "Cardiff Bay Line"]
 # were fetched from that station's own Wikipedia infobox. Of those, CDF, CDQ
 # and RDR are reused unchanged from `tfw-valley-lines-north.toml`, which
 # already cross-checked them there -- not re-derived here. Of the remaining
-# 11, eight (HLL, NNP, WNG, FRW, DCT, BCG, RHI, CDB) were additionally
-# cross-checked against a live, verbatim-quoted railwaycodes.org.uk row and
-# matched exactly (each row: location name, CRS, NLC, TIPLOC, STANME,
-# STANOX). Three (TGS, WHT, COY) could not be cross-checked: railwaycodes.org.uk
-# groups locations onto one page per the first letter of the location's own
-# name, and each of the relevant per-letter pages (T, W, C) truncated well
-# before reaching these three alphabetically -- e.g. the "T" page's fetched
-# content ran only as far as "Trafford Park" (Ty Glas sorts after Trafford
-# alphabetically), the "W" page only as far as "West Thurrock" (Whitchurch
-# sorts after that), and the "C" page only as far as "Chetti" (Coryton sorts
-# after that). This is the identical truncation failure mode
-# `tfw-marches.toml` already disclosed for CWM/PPL/LUD/CRV/CTT/CRK/RUA/WRX --
-# a live fetch tool limitation, not a fabricated or guessed reading. TGS,
-# WHT and COY's CRS codes below are Wikipedia-only pending a clean
-# second-source re-fetch; their TIPLOCs are omitted rather than guessed.
-# TIPLOCs for the eight cross-checked stations are the exact values
-# railwaycodes.org.uk returned; CDF/CDQ/RDR's TIPLOCs are carried over
-# unchanged from `tfw-valley-lines-north.toml`.
+# 11, eight (HLL, NNP, WNG, FRW, DCT, BCG, RHI, CDB) were cross-checked
+# against a live, verbatim-quoted railwaycodes.org.uk row in the original
+# session and matched exactly (each row: location name, CRS, NLC, TIPLOC,
+# STANME, STANOX). The remaining three (TGS, WHT, COY) could not be
+# cross-checked in that session: railwaycodes.org.uk groups locations onto
+# one page per the first letter of the location's own name, and each of the
+# relevant per-letter pages (T, W, C) truncated well before reaching these
+# three alphabetically under the WebFetch tool used then -- the identical
+# truncation failure mode `tfw-marches.toml` disclosed for
+# CWM/PPL/LUD/CRV/CTT/CRK/RUA/WRX. TIPLOC-refresh pass (Task 4.7,
+# `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`): a
+# fresh session's direct raw-HTML `curl` fetch of the same three pages
+# (bypassing WebFetch) reached every row cleanly, confirming all three CRS
+# codes exactly and supplying a TIPLOC for each (TYGLAS, WHCH, CORYTON --
+# now included below). Note railwaycodes.org.uk's own location-name column
+# reads "Whitchurch (Cardiff)" for WHT, not "Whitchurch (Glamorgan)" -- a
+# display-name variance only, with no bearing on the CRS/TIPLOC values,
+# same kind of variance `tfw-valley-lines-north.toml` discloses for
+# Treforest/Trefforest. TIPLOCs for all 14 stations in this file are now
+# populated; CDF/CDQ/RDR's remain carried over unchanged from
+# `tfw-valley-lines-north.toml`.
 #
 # Only currently open, passenger-served stations are listed. Tongwynlais,
 # which sits geographically between Coryton and points further
@@ -248,9 +251,12 @@ segment = "tfw-valley-coryton"
 
 [[stations]]
 crs = "TGS"
+tiploc = "TYGLAS"
 role = "minor"
 segment = "tfw-valley-coryton"
-# Ty Glas. CRS confirmed via Wikipedia only -- see the sourcing note above.
+# Ty Glas. CRS confirmed via Wikipedia and (as of Task 4.7's TIPLOC-refresh
+# pass) railwaycodes.org.uk -- see the sourcing note above. TIPLOC added
+# during that same pass, sourced from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "BCG"
@@ -268,18 +274,24 @@ segment = "tfw-valley-coryton"
 
 [[stations]]
 crs = "WHT"
+tiploc = "WHCH"
 role = "minor"
 segment = "tfw-valley-coryton"
-# Whitchurch (Glamorgan). CRS confirmed via Wikipedia only -- see the
-# sourcing note above.
+# Whitchurch (Glamorgan). CRS confirmed via Wikipedia and (as of Task 4.7's
+# TIPLOC-refresh pass) railwaycodes.org.uk, whose own location-name column
+# reads "Whitchurch (Cardiff)" -- see the sourcing note above. TIPLOC added
+# during that same pass, sourced from railwaycodes.org.uk directly.
 
 [[stations]]
 crs = "COY"
+tiploc = "CORYTON"
 role = "terminus"
 segment = "tfw-valley-coryton"
 # Coryton: the line's northern terminus, confirmed via its own Wikipedia
 # article ("the terminus of the Coryton Line"). CRS confirmed via Wikipedia
-# only -- see the sourcing note above.
+# and (as of Task 4.7's TIPLOC-refresh pass) railwaycodes.org.uk -- see the
+# sourcing note above. TIPLOC added during that same pass, sourced from
+# railwaycodes.org.uk directly.
 
 # --- Cardiff Bay Line (Butetown branch line): Cardiff Queen Street to
 # Cardiff Bay, a single-track 1.7 km shuttle with no intermediate open
