@@ -19,8 +19,6 @@ delay_threshold_minutes = 10
 # route continues beyond Barrow to Whitehaven and Carlisle and belongs in its
 # own definition.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
-#
 # Segment split, added when `lines/northern-cumbrian-coast.toml` was merged:
 # only BIF (Barrow-in-Furness) is the real shared-trunk junction with that
 # line, per SCHEMA.md's shared-trunk rule of thumb -- Batch 8's own final
@@ -32,6 +30,31 @@ delay_threshold_minutes = 10
 # LAN/CNF/ULV now sit on their own exclusive `northern-furness-branch`
 # segment instead; only BIF keeps `northern-furness` as the genuine shared
 # trunk.
+#
+# --- [FILL-IN] resolved (Task 2.6, 2026-09-01): intermediate halts researched ---
+# The old "only principal stations are listed" framing does not hold up
+# against SCHEMA.md's full-coverage mandate. A fresh Wikipedia route-diagram
+# read (Furness line article) plus a WebSearch cross-check of the current
+# Community Rail-published station list turned up 7 real, currently-open,
+# Northern-operated intermediate stations not previously listed: Silverdale,
+# Arnside, Grange-over-Sands, Kents Bank, Cark & Cartmel (between Carnforth
+# and Ulverston), and Dalton, Roose (between Ulverston and Barrow). Each CRS
+# cross-checked against two independent sources: the station's own Wikipedia
+# infobox/article, and nationalrail.co.uk/stations/<crs>/details.html
+# (which also confirmed current Northern operation). No `tiploc` confirmed
+# to a second source for any of the 7, so none is included.
+#
+# Two candidates on the Lancaster-Carnforth stretch (Hest Bank, Bolton-le-
+# Sands) were checked and are correctly NOT added: both closed to passengers
+# in February 1969 per their own Wikipedia articles ("closed to passengers
+# in February 1969" / "The station closed on 3 February 1969"), and are
+# disused with no current CRS/nationalrail.co.uk entry. Wraysholme Halt
+# (between Cark & Cartmel and Kents Bank) is likewise correctly excluded:
+# never open to the public (a WWI-era Territorial Force rifle-range halt),
+# last used c.1922, disused since. Lindal and Furness Abbey (both near
+# Barrow) are also correctly excluded: closed 1 October 1951 and 25
+# September 1950 respectively, both confirmed via their own Wikipedia
+# infoboxes. Fetched 2026-09-01.
 [[stations]]
 crs = "LAN"
 tiploc = "LANCSTR"
@@ -44,9 +67,51 @@ role = "junction"
 segment = "northern-furness-branch"
 
 [[stations]]
+crs = "SVR"
+role = "minor"
+segment = "northern-furness-branch"
+# Silverdale.
+
+[[stations]]
+crs = "ARN"
+role = "minor"
+segment = "northern-furness-branch"
+# Arnside.
+
+[[stations]]
+crs = "GOS"
+role = "minor"
+segment = "northern-furness-branch"
+# Grange-over-Sands.
+
+[[stations]]
+crs = "KBK"
+role = "minor"
+segment = "northern-furness-branch"
+# Kents Bank.
+
+[[stations]]
+crs = "CAK"
+role = "minor"
+segment = "northern-furness-branch"
+# Cark & Cartmel.
+
+[[stations]]
 crs = "ULV"
 role = "minor"
 segment = "northern-furness-branch"
+
+[[stations]]
+crs = "DLT"
+role = "minor"
+segment = "northern-furness-branch"
+# Dalton (Cumbria).
+
+[[stations]]
+crs = "ROO"
+role = "minor"
+segment = "northern-furness-branch"
+# Roose.
 
 [[stations]]
 crs = "BIF"

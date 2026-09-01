@@ -19,8 +19,20 @@ delay_threshold_minutes = 10
 # the CrossCountry spine at Newcastle, but shares no segment with either — the
 # route between them is its own.
 #
-# Minor intermediate calls (Haltwhistle, Prudhoe and the Northumberland
-# stops) are omitted pending CRS verification.
+# --- [FILL-IN] resolved (Task 2.9, 2026-09-01): intermediate halts researched ---
+# Both originally-named candidates (Haltwhistle, Prudhoe) plus the
+# previously-unnamed "Northumberland stops" are real, currently-open,
+# Northern-operated stations, found via a fresh Wikipedia route-diagram
+# read (Tyne Valley line article, which states 16 stations total
+# Carlisle-Newcastle - the 4 already listed plus these 12 accounts for all
+# 16): Wetheral, Brampton (Cumbria), Haltwhistle, Bardon Mill, Haydon
+# Bridge (all Cumbria/west-of-Hexham); Corbridge, Riding Mill, Stocksfield,
+# Prudhoe, Wylam, Blaydon, Dunston (all Northumberland/Tyneside,
+# east-of-Hexham). Each CRS cross-checked against two independent sources:
+# the station's own Wikipedia infobox/article, and
+# nationalrail.co.uk/stations/<crs>/details.html (which also confirmed
+# current Northern operation). No `tiploc` confirmed to a second source for
+# any of the 12, so none is included. Fetched 2026-09-01.
 [[stations]]
 crs = "CAR"
 tiploc = "CARLILE"
@@ -28,14 +40,86 @@ role = "junction"
 segment = "northern-tyne-valley"
 
 [[stations]]
+crs = "WRL"
+role = "minor"
+segment = "northern-tyne-valley"
+# Wetheral.
+
+[[stations]]
+crs = "BMP"
+role = "minor"
+segment = "northern-tyne-valley"
+# Brampton (Cumbria).
+
+[[stations]]
+crs = "HWH"
+role = "minor"
+segment = "northern-tyne-valley"
+# Haltwhistle.
+
+[[stations]]
+crs = "BLL"
+role = "minor"
+segment = "northern-tyne-valley"
+# Bardon Mill.
+
+[[stations]]
+crs = "HDB"
+role = "minor"
+segment = "northern-tyne-valley"
+# Haydon Bridge.
+
+[[stations]]
 crs = "HEX"
 role = "major"
 segment = "northern-tyne-valley"
 
 [[stations]]
+crs = "CRB"
+role = "minor"
+segment = "northern-tyne-valley"
+# Corbridge.
+
+[[stations]]
+crs = "RDM"
+role = "minor"
+segment = "northern-tyne-valley"
+# Riding Mill.
+
+[[stations]]
+crs = "SKS"
+role = "minor"
+segment = "northern-tyne-valley"
+# Stocksfield.
+
+[[stations]]
+crs = "PRU"
+role = "minor"
+segment = "northern-tyne-valley"
+# Prudhoe.
+
+[[stations]]
+crs = "WYM"
+role = "minor"
+segment = "northern-tyne-valley"
+# Wylam.
+
+[[stations]]
+crs = "BLO"
+role = "minor"
+segment = "northern-tyne-valley"
+# Blaydon.
+
+[[stations]]
 crs = "MCE"
 role = "minor"
 segment = "northern-tyne-valley"
+
+[[stations]]
+crs = "DOT"
+role = "minor"
+segment = "northern-tyne-valley"
+# Dunston.
 
 [[stations]]
 crs = "NCL"

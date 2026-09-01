@@ -20,8 +20,16 @@ delay_threshold_minutes = 10
 # the WCML at Oxenholme; the branch itself is exclusively Northern's, and no
 # segment is shared with `wcml`.
 #
-# Minor intermediate calls (Burneside, Staveley) are omitted pending CRS
-# verification.
+# --- [FILL-IN] resolved (Task 2.8, 2026-09-01): intermediate halts researched ---
+# Burneside and Staveley are both real, currently-open, Northern-operated
+# stations on this line, added below between Kendal and Windermere. Each CRS
+# cross-checked against two independent sources: the station's own Wikipedia
+# infobox/article, and nationalrail.co.uk/stations/<crs>/details.html (which
+# also confirmed current Northern operation). Order confirmed via
+# Wikipedia's Windermere branch line article: Oxenholme, Kendal, Burneside,
+# Staveley, Windermere - 5 stations total, matching what's now listed below.
+# No `tiploc` confirmed to a second source for either, so none is included.
+# Fetched 2026-09-01.
 [[stations]]
 crs = "OXN"
 tiploc = "OXENHLM"
@@ -32,6 +40,20 @@ segment = "northern-lakes"
 crs = "KEN"
 role = "major"
 segment = "northern-lakes"
+
+[[stations]]
+crs = "BUD"
+role = "minor"
+segment = "northern-lakes"
+# Burneside.
+
+[[stations]]
+crs = "SVL"
+role = "minor"
+segment = "northern-lakes"
+# Staveley (Cumbria) - not to be confused with the four differently-named
+# Staveley stations in Derbyshire (Staveley Town/Central/Works, "The
+# Lakes").
 
 [[stations]]
 crs = "WNE"

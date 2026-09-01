@@ -104,16 +104,36 @@ match_keywords = ["Wharfedale Line"]
 # Wharfedale/Ilkley services - listing it here would misrepresent which
 # line's trains actually call there. Its omission is consistent with the
 # "only principal stations" precedent set by `xc-manchester.toml` and
-# `northern-cumbrian-coast.toml`, and with Manningham and Frizinghall being
-# omitted as intermediate halts on the Bradford approach for the same
-# reason (matching `northern-airedale.toml`'s treatment of that same
-# approach). Esholt Junction, where the two approaches physically meet, is
-# also not a served station (closed) and so has no entry.
+# `northern-cumbrian-coast.toml`. Esholt Junction, where the two approaches
+# physically meet, is also not a served station (closed) and so has no
+# entry.
+#
+# --- [FILL-IN] resolved (Task 2.10, 2026-09-01): Manningham/Frizinghall ---
+# Per `northern-airedale.toml`'s own Task 2.1 "RESOLUTION for Task 2.10"
+# comment (already committed): Frizinghall is a genuine shared-trunk station
+# on `northern-shipley-trunk` - its own Wikipedia article confirms trains
+# call there "to Leeds, Skipton, and Ilkley", i.e. both Airedale-family and
+# Wharfedale services genuinely stop, not just pass through
+# (https://en.wikipedia.org/wiki/Frizinghall_railway_station). Added below,
+# between BDQ and SHY, tagged `northern-shipley-trunk` (reused, not a new
+# segment name) per that resolution - this file does not independently
+# re-derive the decision. Manningham, by contrast, is NOT added: it's
+# closed, not merely unconfirmed - Wikipedia's own Manningham railway
+# station article states it "was closed following the Beeching Axe on 20
+# March 1965 ... has not reopened"
+# (https://en.wikipedia.org/wiki/Manningham_railway_station), matching
+# `northern-airedale.toml`'s finding for the same station. This corrects
+# this file's previous comment, which claimed both stations were "omitted
+# as intermediate halts... matching northern-airedale.toml's treatment" -
+# that framing is now stale for Frizinghall specifically, since Airedale's
+# own treatment changed when Task 2.1 added it there.
 #
 # CRS codes cross-checked against two independent sources each (Wikipedia
 # station infoboxes and nationalrail.co.uk station detail pages), fetched
 # 2026-08-30; LDS, BDQ and SHY were already verified in-repo via
-# `northern-airedale.toml`.
+# `northern-airedale.toml`. FZH likewise already verified in-repo via
+# `northern-airedale.toml`'s Task 2.1 (no `tiploc`: not confirmed to a
+# second source there either).
 [[stations]]
 crs = "LDS"
 tiploc = "LEEDS"
@@ -126,6 +146,13 @@ role = "terminus"
 segment = "northern-shipley-trunk"
 # Bradford Forster Square - the other parallel starting terminus, shared
 # with `northern-airedale.toml` as far as Shipley.
+
+[[stations]]
+crs = "FZH"
+role = "minor"
+segment = "northern-shipley-trunk"
+# Frizinghall - between Bradford Forster Square and Shipley on the shared
+# approach; see the "[FILL-IN] resolved (Task 2.10)" comment above.
 
 [[stations]]
 crs = "SHY"

@@ -45,7 +45,11 @@ match_keywords = ["Airedale Line"]
 # different name.
 #
 # The exclusive `northern-airedale` segment starts at the next station after
-# the junction, Keighley, per the same rule of thumb.
+# the junction, per the same rule of thumb. At the time this comment was
+# first written that next station was thought to be Keighley; Task 2.1
+# (2026-09-01, see the "[FILL-IN] resolved" comment further down) added
+# Saltaire as an intermediate stop between Shipley and Keighley, so Saltaire
+# is the actual first station on the exclusive segment now.
 #
 # --- LNER overlap (flagging for a future, not-yet-written LNER batch) ---
 # The gap analysis also notes "both LNER and Northern services use parts of
@@ -78,17 +82,89 @@ match_keywords = ["Airedale Line"]
 # and not yet present in this catalogue), Skipton is kept as this line's
 # terminus rather than extending the station list further.
 #
-# Only principal/town stations are listed; intermediate halts (Manningham,
-# Frizinghall on the Bradford approach; Saltaire, Bingley, Crossflatts on
-# the Shipley-Keighley stretch; Steeton & Silsden, Kildwick & Crosshills,
-# Cononley on the Keighley-Skipton stretch) are omitted, matching the
-# "only principal stations" precedent set by `xc-manchester.toml` and
-# `northern-cumbrian-coast.toml`.
+# --- [FILL-IN] resolved (Task 2.1, 2026-09-01): intermediate halts researched ---
+# The "only principal stations" framing above (the old exclusion rationale
+# for Manningham, Frizinghall, Saltaire, Bingley, Crossflatts, Steeton &
+# Silsden, Kildwick & Crosshills, Cononley) does not hold up against
+# SCHEMA.md, which requires every real, currently-open, currently-served
+# station, not just principal/town ones. Each of the 8 named candidates was
+# checked individually:
 #
-# CRS codes cross-checked against two independent sources each (Wikipedia
-# station infoboxes and nationalrail.co.uk station detail pages), fetched
-# 2026-08-29; LDS was already verified in-repo via `northern.toml` and
-# `northern-calder-valley.toml`.
+#   - Saltaire (SAE), Bingley (BIY), Crossflatts (CFL) on the
+#     Shipley-Keighley stretch, and Steeton & Silsden (SON), Cononley (CEY)
+#     on the Keighley-Skipton stretch, and Frizinghall (FZH) on the Bradford
+#     approach, are all real, currently-open, currently-served stations.
+#     Added below at their correct geographic positions. Each CRS
+#     cross-checked against two independent sources: Wikipedia's own station
+#     article/infobox, and National Rail Enquiries'
+#     nationalrail.co.uk/stations/<crs>/details.html page (which also
+#     confirms current Northern operation); BIY additionally cross-checked
+#     against railwaycodes.org.uk's CRS/TIPLOC listing, which supplied
+#     BIY=BINGLEY as a TIPLOC (a real 7-character code). FZH and SAE do NOT
+#     carry a `tiploc` here: an initial pass entered FRIZINHAL/SALTAIRE, but
+#     those are 9/8 characters - too long for a real TIPLOC (a fixed
+#     7-character Network Rail CIF/TOPS field) - so they were station-name
+#     guesses, not looked-up codes, and were removed rather than left in
+#     place or replaced with another guess. CFL, SON and CEY likewise carry
+#     no `tiploc` - not confirmed against a second source this session.
+#     Fetched 2026-09-01 (TIPLOC correction 2026-09-01).
+#
+#   - Manningham is CLOSED, not open: Wikipedia's own Manningham railway
+#     station article states it "was closed following the Beeching Axe on 20
+#     March 1965; unlike the next station on the line, Frizinghall, it has
+#     not reopened" (https://en.wikipedia.org/wiki/Manningham_railway_station).
+#     A 2008 reopening bid is mentioned but the article gives no indication
+#     it went ahead, and there is no current CRS/TIPLOC/nationalrail.co.uk
+#     entry for it. Not added - fails the "currently open" bar outright, not
+#     a sourcing-confidence or segment question.
+#
+#   - Kildwick & Crosshills is likewise CLOSED, not open: Wikipedia's own
+#     article for it states "The station was closed on 22 March 1965" and
+#     describes it as a "Disused railway station", with platforms and
+#     buildings since removed
+#     (https://en.wikipedia.org/wiki/Kildwick_and_Crosshills_railway_station).
+#     Unlike Cononley and Steeton & Silsden (both reopened in the 1980s),
+#     Kildwick & Crosshills never reopened. Not added, same reasoning as
+#     Manningham.
+#
+#   - Completeness check of the two named stretches turned up one more
+#     historical candidate not on the plan's list: Thwaites, a former halt
+#     between Crossflatts and Keighley, closed by the Midland Railway in
+#     1909 and never reopened
+#     (https://en.wikipedia.org/wiki/Thwaites_railway_station). Not added,
+#     same "not currently open" reasoning. No other currently-open station
+#     was found on either the Shipley-Keighley or Keighley-Skipton stretch
+#     beyond what's listed below. (The Leeds-Shipley stretch - Kirkstall
+#     Forge, Apperley Bridge, etc. - was out of scope for this task's
+#     completeness check per the task brief, which scoped it to
+#     Shipley-Keighley/Keighley-Skipton plus the two named Bradford-approach
+#     halts; not evaluated here.)
+#
+# --- RESOLUTION for Task 2.10 (`northern-wharfedale.toml`) ---
+# Frizinghall (FZH) sits strictly between BDQ and SHY, which are both
+# already tagged `northern-shipley-trunk` in this file - extending SCHEMA.md's
+# shared-trunk rule of thumb (a junction belongs to the shared segment, the
+# exclusive segment starts after it) to its natural corollary, a station
+# strictly between two already-shared-segment stations on the same stretch
+# inherits that segment too, no new name needed - it is tagged
+# `northern-shipley-trunk` below, not a new segment.
+# This is also independently confirmed as correct rather than merely
+# defaulted: Frizinghall's own Wikipedia article states trains call there
+# "to Leeds, Skipton, and Ilkley" - i.e. both Airedale-family (Leeds/Skipton)
+# and Wharfedale (Ilkley) services genuinely call at this station, not just
+# pass through (https://en.wikipedia.org/wiki/Frizinghall_railway_station).
+# RESOLUTION: Frizinghall is a genuine shared-trunk station on
+# `northern-shipley-trunk`, the segment already shared by this file and
+# `northern-wharfedale.toml` at BDQ/SHY - Task 2.10 should add it to
+# `northern-wharfedale.toml` too, with CRS FZH and segment
+# `northern-shipley-trunk` (not a new segment name), between BDQ and SHY in
+# that file's own station list. Manningham, by contrast, is not a segment
+# question at all for Task 2.10 either - it's closed (see above) and should
+# not be added to `northern-wharfedale.toml` for the same reason it isn't
+# added here. Task 2.10: please also correct that file's existing comment
+# (currently claiming Manningham and Frizinghall are both "omitted as
+# intermediate halts... matching northern-airedale.toml's treatment") since
+# this file's treatment has now changed for Frizinghall specifically.
 [[stations]]
 crs = "LDS"
 tiploc = "LEEDS"
@@ -105,6 +181,16 @@ segment = "northern-shipley-trunk"
 # different corridor.
 
 [[stations]]
+crs = "FZH"
+role = "minor"
+segment = "northern-shipley-trunk"
+# Frizinghall - between Bradford Forster Square and Shipley on the shared
+# approach; inherits `northern-shipley-trunk` from its neighbours BDQ/SHY -
+# see the RESOLUTION comment above for the full sourcing and the note for
+# Task 2.10. No `tiploc`: not confirmed to the two-source bar this session
+# (see the top-of-file note on the FRIZINHAL/SALTAIRE correction).
+
+[[stations]]
 crs = "SHY"
 role = "junction"
 segment = "northern-shipley-trunk"
@@ -113,9 +199,42 @@ segment = "northern-shipley-trunk"
 # Ilkley. See the shared-trunk naming decision above.
 
 [[stations]]
+crs = "SAE"
+role = "minor"
+segment = "northern-airedale"
+# Saltaire - first station after the Shipley junction on the exclusive
+# Airedale segment, per SCHEMA.md's shared-trunk rule of thumb. No `tiploc`:
+# see the top-of-file note on the FRIZINHAL/SALTAIRE correction.
+
+[[stations]]
+crs = "BIY"
+tiploc = "BINGLEY"
+role = "minor"
+segment = "northern-airedale"
+# Bingley.
+
+[[stations]]
+crs = "CFL"
+role = "minor"
+segment = "northern-airedale"
+# Crossflatts.
+
+[[stations]]
 crs = "KEI"
 role = "major"
 segment = "northern-airedale"
+
+[[stations]]
+crs = "SON"
+role = "minor"
+segment = "northern-airedale"
+# Steeton & Silsden.
+
+[[stations]]
+crs = "CEY"
+role = "minor"
+segment = "northern-airedale"
+# Cononley.
 
 [[stations]]
 crs = "SKI"

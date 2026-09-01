@@ -13,7 +13,21 @@ match_keywords = ["Blackpool line", "Blackpool North"]
 # `northern` trunk. Preston is also a WCML station, but the two routes only
 # meet there — no segment is shared with `wcml`.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
+# Salford Crescent to Bolton is run non-stop by this service. The stations
+# in between (Clifton, Kearsley, Farnworth, Moses Gate) are real and open,
+# but per their own Wikipedia service-pattern sections they're only called
+# at by the separate Manchester Victoria/Stalybridge <-> Bolton <-> Southport
+# (via Wigan Wallgate) stopping service, not this line — left out.
+#
+# Bolton to Preston (via Chorley) now lists its full local calling pattern.
+# Farington (closed 1960, demolished) and Euxton Balshaw Lane (a real open
+# station, but on the parallel WCML Wigan-Preston stretch served by the
+# separate Blackpool North <-> Liverpool Lime Street line, not this one)
+# were checked and left out as not served by this line's trains.
+#
+# TIPLOCs for the newly added stations below couldn't be independently
+# confirmed to the strict 7-character format from available sources, so
+# they're left unset rather than guessed.
 [[stations]]
 crs = "MCV"
 role = "terminus"
@@ -28,6 +42,48 @@ segment = "northern-blackpool"
 crs = "BON"
 role = "major"
 segment = "northern-blackpool"
+
+[[stations]]
+crs = "LOT"
+role = "minor"
+segment = "northern-blackpool"
+# Lostock
+
+[[stations]]
+crs = "HWI"
+role = "minor"
+segment = "northern-blackpool"
+# Horwich Parkway
+
+[[stations]]
+crs = "BLK"
+role = "minor"
+segment = "northern-blackpool"
+# Blackrod
+
+[[stations]]
+crs = "ADL"
+role = "minor"
+segment = "northern-blackpool"
+# Adlington (Lancashire)
+
+[[stations]]
+crs = "CRL"
+role = "major"
+segment = "northern-blackpool"
+# Chorley
+
+[[stations]]
+crs = "BSV"
+role = "minor"
+segment = "northern-blackpool"
+# Buckshaw Parkway
+
+[[stations]]
+crs = "LEY"
+role = "major"
+segment = "northern-blackpool"
+# Leyland
 
 [[stations]]
 crs = "PRE"
@@ -45,6 +101,12 @@ crs = "PFY"
 role = "junction"
 segment = "northern-blackpool"
 # Blackpool South services diverge here
+
+[[stations]]
+crs = "LAY"
+role = "minor"
+segment = "northern-blackpool"
+# Layton
 
 [[stations]]
 crs = "BPN"

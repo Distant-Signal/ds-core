@@ -22,12 +22,28 @@ delay_threshold_minutes = 10
 # comment flags this route as the gap this file fills). The exclusive
 # stretch beyond Barrow starts at the next station north-west.
 #
-# Only principal/town stations are listed; the many intermediate halts
-# (Askam, Kirkby-in-Furness, Foxfield, Green Road, Silecroft, Bootle,
-# Ravenglass, Drigg, Seascale, Sellafield, Braystones, Nethertown, St Bees,
-# Corkickle, Parton, Harrington, Flimby, Aspatria, Wigton, Dalston, etc.)
-# are omitted pending CRS verification, matching the precedent set by
-# `northern-furness.toml` and `northern-lakes.toml`.
+# --- [FILL-IN] resolved (Task 2.4, 2026-09-01): intermediate halts researched ---
+# The "only principal/town stations" framing this file used to carry here
+# does not hold up against SCHEMA.md, which requires every real,
+# currently-open, currently-served station, not just principal/town ones.
+# All 20 named candidates (Askam, Kirkby-in-Furness, Foxfield, Green Road,
+# Silecroft, Bootle, Ravenglass, Drigg, Seascale, Sellafield, Braystones,
+# Nethertown, St Bees, Corkickle, Parton, Harrington, Flimby, Aspatria,
+# Wigton, Dalston) are real, currently-open, Northern-operated stations,
+# added below at their correct geographic position. Each CRS was
+# cross-checked against two independent sources: each station's own
+# Wikipedia infobox/article, and National Rail Enquiries'
+# nationalrail.co.uk/stations/<crs>/details.html page (which also confirmed
+# current Northern operation). A WebSearch summary of Wikipedia's Cumbrian
+# Coast Line article (26 stations total, Barrow-Carlisle) matches exactly:
+# the 6 already listed below plus these 20 named candidates, so the old
+# comment's trailing "etc." does not hide any further currently-open
+# station beyond this list. Only Bootle's TIPLOC (BOOTLE) was confirmed to
+# a second source; the other 19 carry no `tiploc` rather than a guessed
+# one. All 20 inherit the `northern-cumbrian-coast` segment already
+# covering this stretch, per SCHEMA.md's "no new segment for a station
+# strictly between two already-modelled stations" rule — none of them is a
+# junction to another line in this catalogue. Fetched 2026-09-01.
 [[stations]]
 crs = "BIF"
 tiploc = "BARROW"
@@ -35,9 +51,95 @@ role = "junction"
 segment = "northern-furness"
 
 [[stations]]
+crs = "ASK"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Askam.
+
+[[stations]]
+crs = "KBF"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Kirkby-in-Furness.
+
+[[stations]]
+crs = "FOX"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Foxfield.
+
+[[stations]]
+crs = "GNR"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Green Road.
+
+[[stations]]
 crs = "MLM"
 role = "minor"
 segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "SIC"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Silecroft.
+
+[[stations]]
+crs = "BOC"
+tiploc = "BOOTLE"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Bootle (Cumbria) - not to be confused with the Merseyrail stations of the
+# same name (Bootle Oriel Road / Bootle New Strand).
+
+[[stations]]
+crs = "RAV"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Ravenglass for Eskdale.
+
+[[stations]]
+crs = "DRI"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Drigg.
+
+[[stations]]
+crs = "SSC"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Seascale.
+
+[[stations]]
+crs = "SEL"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Sellafield.
+
+[[stations]]
+crs = "BYS"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Braystones.
+
+[[stations]]
+crs = "NRT"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Nethertown.
+
+[[stations]]
+crs = "SBS"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# St Bees.
+
+[[stations]]
+crs = "CKL"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Corkickle.
 
 [[stations]]
 crs = "WTH"
@@ -46,14 +148,50 @@ role = "major"
 segment = "northern-cumbrian-coast"
 
 [[stations]]
+crs = "PRN"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Parton.
+
+[[stations]]
+crs = "HRR"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Harrington.
+
+[[stations]]
 crs = "WKG"
 role = "major"
 segment = "northern-cumbrian-coast"
 
 [[stations]]
+crs = "FLM"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Flimby.
+
+[[stations]]
 crs = "MRY"
 role = "minor"
 segment = "northern-cumbrian-coast"
+
+[[stations]]
+crs = "ASP"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Aspatria.
+
+[[stations]]
+crs = "WGT"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Wigton.
+
+[[stations]]
+crs = "DLS"
+role = "minor"
+segment = "northern-cumbrian-coast"
+# Dalston.
 
 [[stations]]
 crs = "CAR"

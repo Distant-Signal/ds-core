@@ -52,22 +52,103 @@ match_keywords = ["Calder Valley Line"]
 # physically contiguous route (Leeds services reach Bradford Interchange via
 # that initial stretch before joining the Calder Valley line proper
 # westbound) since this catalogue models user-facing lines, not the
-# underlying route-naming conventions; minor intermediate calls on both the
-# Leeds-Bradford stretch and the Calder Valley proper (e.g. Bramley, New
-# Pudsey, Laisterdyke, Low Moor, Brighouse, Mytholmroyd, Hebden Bridge,
-# Littleborough, Castleton) are omitted, matching the "only principal
-# stations" precedent set by `xc-manchester.toml` and `northern-cumbrian-
-# coast.toml`. Some through services continue beyond Manchester Victoria
-# towards Blackpool North; that's a separate corridor and out of scope here.
+# underlying route-naming conventions. Some through services continue beyond
+# Manchester Victoria towards Blackpool North; that's a separate corridor and
+# out of scope here.
 #
 # CRS codes cross-checked against two independent sources each (Wikipedia
 # station infoboxes and nationalrail.co.uk station detail pages), fetched
 # 2026-08-29; LDS and MCV were already verified in-repo via `northern.toml`.
+#
+# --- [FILL-IN] resolved (Task 2.3, 2026-09-01): intermediate halts researched ---
+# The old "only principal stations" exclusion rationale (matching
+# `xc-manchester.toml`/`northern-cumbrian-coast.toml`) doesn't hold up against
+# SCHEMA.md, which requires every real, currently-open, currently-served
+# station, not just principal/town ones. The 9 originally-named candidates
+# were checked individually, plus a completeness sweep of both stretches
+# turned up 4 more not on the original list. CRS codes cross-checked against
+# two independent sources each (Wikipedia station infobox/article and
+# nationalrail.co.uk/stations/<crs>/details.html), fetched 2026-09-01. No
+# `tiploc` is given for any of them - none were confirmed to the two-source
+# bar this session (see `northern-airedale.toml`'s FRIZINHAL/SALTAIRE
+# TIPLOC-guessing correction for why this matters).
+#
+#   - Added, real/open/served, on the Leeds-Bradford Interchange stretch:
+#     Bramley (BLE) and New Pudsey (NPD).
+#   - Added, real/open/served, on the Bradford Interchange-Halifax stretch:
+#     Low Moor (LMR) - note its own closed-1965/reopened-2017 history.
+#   - Added, real/open/served, on the Halifax-Manchester Victoria stretch:
+#     Mytholmroyd (MYT), Hebden Bridge (HBD), Walsden (WDN), Littleborough
+#     (LTL), Smithy Bridge (SMB), Castleton (CAS), Mills Hill (MIH) and
+#     Moston (MSO) - the last two not on the original named list, found
+#     during the completeness sweep of the Todmorden-Rochdale-Manchester
+#     Victoria stretch (Wikipedia's Calder Valley line article lists the
+#     full run "Todmorden, Walsden, Littleborough, Smithy Bridge, Rochdale,
+#     Castleton, Mills Hill, Moston, Newton Heath, Miles Platting, Manchester
+#     Victoria"; Newton Heath and Miles Platting are closed - see below).
+#
+#   - Laisterdyke (on the Leeds-Bradford Interchange stretch) is CLOSED, not
+#     open, despite being on the originally-named candidate list: Wikipedia's
+#     own Laisterdyke railway station article states it "was closed to
+#     passengers on 4 July 1966"; platforms demolished, only the former
+#     station house remains. Not added.
+#   - Bowling, Wyke and Norwood Green, Lightcliffe and Hipperholme (the
+#     remaining stops on the historical Bradford Interchange-Halifax route
+#     per Wikipedia's Calder Valley line article) are all CLOSED (1895, 1953,
+#     1965 and 1953 respectively) - Hipperholme has an active reopening
+#     campaign but is not open today. None added.
+#   - Greetland (closed 1962, demolished by 2009) and Elland (closed 1962;
+#     Wikipedia's own Elland railway station article states preparatory
+#     access works began in 2026 but "the station itself is not expected to
+#     open until 2029") are both CLOSED, not open, on the Halifax-Sowerby
+#     Bridge stretch. Neither added - Elland fails the "currently open" bar
+#     specifically, not a sourcing-confidence question; whoever revisits this
+#     file after 2029 should re-check it.
+#   - Luddendenfoot (Sowerby Bridge-Mytholmroyd stretch) is CLOSED (1962).
+#     Not added.
+#   - Newton Heath and Miles Platting (Moston-Manchester Victoria stretch)
+#     are both CLOSED (1966 and 1995 respectively); Newton Heath's own
+#     Wikipedia article notes the area is now served only by a Metrolink tram
+#     stop, not heavy rail. Neither added.
+#
+#   - Brighouse: researched and deliberately OMITTED, despite being on the
+#     originally-named candidate list. Brighouse is real, open, and
+#     Northern-operated, but it is NOT on either stretch this file models.
+#     Wikipedia's Calder Valley line article places the triangular junction
+#     for "the line via Mirfield to Dewsbury" on the Halifax-Manchester
+#     stretch (west of Halifax, near Salterhebble/Greetland), stating
+#     "Brighouse station is on this line" - i.e. Brighouse sits on a branch
+#     that runs Leeds-Dewsbury-Mirfield-Brighouse and rejoins this file's
+#     modelled corridor via that junction, never passing through Bradford
+#     Interchange or Low Moor at all. Brighouse's own Wikipedia article
+#     confirms this from the other end: its preceding station towards Leeds
+#     is Mirfield, not Bradford Interchange or Halifax. Modelling this
+#     correctly would mean adding a genuine third branch (at minimum Dewsbury
+#     and Mirfield, neither of which is on either named stretch and neither
+#     of which was researched this session) rather than a simple insertion
+#     into the existing ordered list, and picking a defensible junction
+#     insertion point - out of scope for this task, which is limited to the
+#     two named stretches. Flagging for a future task if this corridor is
+#     ever modelled; do not insert Brighouse into this file's flat station
+#     order without also resolving that branch structure.
 [[stations]]
 crs = "LDS"
 tiploc = "LEEDS"
 role = "terminus"
 segment = "northern-calder-valley"
+
+[[stations]]
+crs = "BLE"
+role = "minor"
+segment = "northern-calder-valley"
+# Bramley (West Yorkshire) - not to be confused with Bramley in Hampshire or
+# Bramley & Wonersh in Surrey, both disambiguated on Wikipedia.
+
+[[stations]]
+crs = "NPD"
+role = "minor"
+segment = "northern-calder-valley"
+# New Pudsey.
 
 [[stations]]
 crs = "BDI"
@@ -76,6 +157,12 @@ segment = "northern-calder-valley"
 # Where the Calder Valley line proper begins per Wikipedia's own framing;
 # also where the Leeds approach and any independent Bradford-originating
 # services converge.
+
+[[stations]]
+crs = "LMR"
+role = "minor"
+segment = "northern-calder-valley"
+# Low Moor - closed 1965, reopened April 2017.
 
 [[stations]]
 crs = "HFX"
@@ -91,14 +178,62 @@ role = "minor"
 segment = "northern-calder-valley"
 
 [[stations]]
+crs = "MYT"
+role = "minor"
+segment = "northern-calder-valley"
+# Mytholmroyd.
+
+[[stations]]
+crs = "HBD"
+role = "minor"
+segment = "northern-calder-valley"
+# Hebden Bridge.
+
+[[stations]]
 crs = "TOD"
 role = "minor"
 segment = "northern-calder-valley"
 
 [[stations]]
+crs = "WDN"
+role = "minor"
+segment = "northern-calder-valley"
+# Walsden.
+
+[[stations]]
+crs = "LTL"
+role = "minor"
+segment = "northern-calder-valley"
+# Littleborough.
+
+[[stations]]
+crs = "SMB"
+role = "minor"
+segment = "northern-calder-valley"
+# Smithy Bridge.
+
+[[stations]]
 crs = "RCD"
 role = "major"
 segment = "northern-calder-valley"
+
+[[stations]]
+crs = "CAS"
+role = "minor"
+segment = "northern-calder-valley"
+# Castleton (Greater Manchester) - not the Castleton in Derbyshire.
+
+[[stations]]
+crs = "MIH"
+role = "minor"
+segment = "northern-calder-valley"
+# Mills Hill.
+
+[[stations]]
+crs = "MSO"
+role = "minor"
+segment = "northern-calder-valley"
+# Moston.
 
 [[stations]]
 crs = "MCV"

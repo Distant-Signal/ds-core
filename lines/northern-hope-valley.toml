@@ -19,8 +19,42 @@ delay_threshold_minutes = 10
 # Piccadilly. Sheffield is also a CrossCountry station, but only the station
 # is common.
 #
-# Minor intermediate calls (Chinley, Hathersage, Grindleford) are omitted
-# pending CRS verification.
+# --- [FILL-IN] resolved (Task 2.7, 2026-09-01): intermediate halts researched ---
+# The 3 originally-named candidates (Chinley, Hathersage, Grindleford) plus
+# Bamford (named in the research spec's combined Hope Valley tally, but not
+# yet in this file's own comment) are all real, currently-open,
+# Northern-operated stations on this line - added below. Edale (EDL) and
+# Dore & Totley (DOR) were already listed before this task; only Bamford was
+# missing alongside the 3 originally-named stations. Each CRS cross-checked
+# against two independent sources: the station's own Wikipedia
+# infobox/article, and nationalrail.co.uk/stations/<crs>/details.html
+# (which also confirmed current Northern operation). No `tiploc` confirmed
+# to a second source for any of the 4, so none is included.
+#
+# Geographic order confirmed via Wikipedia's Hope Valley line article and a
+# WebSearch cross-check of Northern's published stopping pattern: Chinley
+# comes immediately before Edale; Bamford, Hathersage and Grindleford come
+# in that order between Hope and Dore & Totley (Hope -> Bamford ->
+# Hathersage -> Grindleford -> Dore & Totley -> Sheffield).
+#
+# Important distinction from `emr-regional.toml` (Task 7.3): EMR's own Hope
+# Valley Line service genuinely runs fast between Manchester
+# Piccadilly/Stockport and Sheffield and does not call at these stations
+# (a correct, deliberate exclusion for that operator, confirmed via EMR's
+# own services table) - but Northern's own service here is an all-stations
+# stopper, so these are real gaps on this file specifically, not there. Do
+# not add these stations to `emr-regional.toml`.
+#
+# Not re-litigated by this task (out of scope, pre-existing before Task
+# 2.7): whether SPT (Stockport) is itself correctly positioned as the
+# second stop after MAN. Some research surfaced during this task suggests
+# the Northern Manchester Piccadilly-Sheffield stopper may physically run
+# via Ashburys/Reddish North/Bredbury/Romiley/Marple/New Mills Central
+# rather than via Stockport, which would imply a different, larger set of
+# intermediate stations upstream of Chinley than this task's named scope
+# covers - `destination_crs_filter`/`sample_stations` already reference SPT
+# and predate this task, so that decision is left as-is; flagging here for
+# a future task rather than silently re-deriving it. Fetched 2026-09-01.
 [[stations]]
 crs = "MAN"
 role = "terminus"
@@ -32,6 +66,12 @@ role = "junction"
 segment = "northern-hope-valley"
 
 [[stations]]
+crs = "CLY"
+role = "minor"
+segment = "northern-hope-valley"
+# Chinley.
+
+[[stations]]
 crs = "EDL"
 role = "minor"
 segment = "northern-hope-valley"
@@ -40,6 +80,24 @@ segment = "northern-hope-valley"
 crs = "HOP"
 role = "minor"
 segment = "northern-hope-valley"
+
+[[stations]]
+crs = "BAM"
+role = "minor"
+segment = "northern-hope-valley"
+# Bamford.
+
+[[stations]]
+crs = "HSG"
+role = "minor"
+segment = "northern-hope-valley"
+# Hathersage.
+
+[[stations]]
+crs = "GRN"
+role = "minor"
+segment = "northern-hope-valley"
+# Grindleford.
 
 [[stations]]
 crs = "DOR"

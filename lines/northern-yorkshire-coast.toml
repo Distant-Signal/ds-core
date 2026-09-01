@@ -16,7 +16,25 @@ delay_threshold_minutes = 10
 # run through from Leeds, so it shares the `northern-yorkshire` trunk with the
 # `northern` corridor; the exclusive section starts east of York.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
+# --- [FILL-IN] researched (Task 2.11, 2026-09-01): no real gap found ---
+# The old "only principal stations are listed" framing turned out not to
+# hide any real gap on this file's own exclusive York-Scarborough stretch.
+# A fresh Wikipedia route-diagram read (York-Scarborough line article)
+# confirms Malton and Seamer (both already listed below) are the only two
+# intermediate stations still open: "most of the intermediate stations on
+# the line were closed to passengers in September 1930" for capacity
+# reasons. The two most-discussed reopening candidates, Haxby and
+# Strensall, are each individually confirmed still closed as of this
+# fetch - Haxby's own article: "construction of the new station is now
+# expected to begin in April 2027" (not yet open); Strensall's own article:
+# "closed on 22 September 1930" with the former station building "now a
+# private residence" and no confirmed reopening date
+# (https://en.wikipedia.org/wiki/Haxby_railway_station,
+# https://en.wikipedia.org/wiki/Strensall_railway_station). Neither is
+# added. The Leeds-York stretch (LDS/YRK) is shared-trunk track modelled
+# identically (no intermediate stations either) in `lines/northern.toml`'s
+# own `northern-yorkshire` segment - out of scope for this file to
+# re-derive independently; not touched here. Fetched 2026-09-01.
 [[stations]]
 crs = "LDS"
 tiploc = "LEEDS"
