@@ -21,11 +21,75 @@ delay_threshold_minutes = 10
 # line's segments are far coarser than the shared section, and an incident on
 # the shared stretch matches both lines by station anyway.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
+# Task 9.5 fill-in (2026-09-01, fresh route-diagram pass, no named starting
+# list in the plan): the "minor intermediate calls are omitted" boilerplate
+# below is this file's OWN original convention, cited by several other
+# tasks in this plan as precedent -- filling this file's own gap doesn't
+# invalidate that precedent for those other, already-completed files, per
+# the plan's own note on this task. Each candidate station was confirmed to
+# the two-source bar (Wikipedia infobox/article cross-checked against
+# nationalrail.co.uk's `/stations/<crs>/details.html`), fetched live
+# 2026-09-01:
+#   - Manchester Piccadilly-Stockport: Levenshulme (LVM), Heaton Chapel
+#     (HTC). Both confirmed, via each station's own Wikipedia infobox, to
+#     sit on the "Crewe-Manchester line" proper, strictly between MAN and
+#     SPT. Deliberately NOT added: Longsight (closed 1958, confirmed via its
+#     own Wikipedia infobox); Ardwick, Burnage, Heaton Mersey, Heaton
+#     Norris, Mauldeth Road, East Didsbury, Heald Green, Gatley, Manchester
+#     Airport, Styal -- all confirmed (via Burnage's own infobox, which
+#     explicitly names its line) to sit on the separate, parallel "Styal
+#     line" branch via Manchester Airport, which rejoins this route at
+#     Wilmslow -- a genuinely different physical route, not "between"
+#     Manchester Piccadilly and Stockport on this line, so out of scope for
+#     this fill-in.
+#   - Stockport-Wilmslow: Cheadle Hulme (CHU), Handforth (HTH). Both
+#     confirmed strictly between SPT and WML on the direct Crewe-Manchester
+#     line (not the Styal branch) via each station's own infobox route
+#     diagram.
+#   - Wilmslow-Crewe: Alderley Edge (ALD), Chelford (CEL), Goostrey (GTR),
+#     Holmes Chapel (HCH), Sandbach (SDB) -- confirmed strictly between WML
+#     and CRE, each station's infobox chaining directly to the next.
+#   - Crewe-Stafford: no currently-open intermediate station found. Madeley
+#     and Whitmore (Staffordshire) were both investigated and confirmed
+#     closed historical stations on this stretch -- correctly stay out.
+#   - Stafford-Wolverhampton: Penkridge (PKG), the only intermediate station,
+#     confirmed via its own infobox and nationalrail.co.uk.
+#   - Wolverhampton-Birmingham New Street (the Stour Valley line): Coseley
+#     (CSY), Tipton (TIP), Dudley Port (DDP), Sandwell & Dudley (SAD),
+#     Smethwick Galton Bridge (SGB), Smethwick Rolfe Street (SMR) -- all
+#     confirmed strictly between WVH and BHM via each station's own infobox
+#     and nationalrail.co.uk. Smethwick Galton Bridge is a genuine
+#     split-level interchange also serving `wmr-snow-hill.toml`'s Snow Hill
+#     route (high-level platforms) -- reusing that file's own SGB CRS code
+#     verbatim; station-level overlap only, no segment shared between the
+#     two files, matching this whole plan's established
+#     xc-cardiff.toml/gwr-south-wales.toml overlap-without-segment-sharing
+#     precedent (see the regression test added for this in matcher.rs).
+#     Per `lines/SCHEMA.md`'s shared-trunk rule of thumb, BHM (the junction
+#     where this arm joins the `cross-country` spine) stays the boundary of
+#     the shared-trunk `xc-birmingham` segment; all six new Wolverhampton-
+#     Birmingham stations inherit this file's own exclusive `xc-manchester`
+#     segment from their immediate neighbour WVH, same as before.
 [[stations]]
 crs = "MAN"
 role = "terminus"
 segment = "xc-manchester"
+
+[[stations]]
+crs = "LVM"
+role = "minor"
+segment = "xc-manchester"
+# Levenshulme: strictly between Manchester Piccadilly and Heaton Chapel on
+# the Crewe-Manchester line. Confirmed via Wikipedia's infobox, cross-checked
+# against nationalrail.co.uk/stations/lvm/details.html.
+
+[[stations]]
+crs = "HTC"
+role = "minor"
+segment = "xc-manchester"
+# Heaton Chapel: strictly between Levenshulme and Stockport on the
+# Crewe-Manchester line. Confirmed via Wikipedia's infobox, cross-checked
+# against nationalrail.co.uk/stations/htc/details.html.
 
 [[stations]]
 crs = "SPT"
@@ -33,9 +97,66 @@ role = "major"
 segment = "xc-manchester"
 
 [[stations]]
+crs = "CHU"
+role = "minor"
+segment = "xc-manchester"
+# Cheadle Hulme: strictly between Stockport and Handforth. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/chu/details.html.
+
+[[stations]]
+crs = "HTH"
+role = "minor"
+segment = "xc-manchester"
+# Handforth: strictly between Cheadle Hulme and Wilmslow. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/hth/details.html.
+
+[[stations]]
 crs = "WML"
 role = "minor"
 segment = "xc-manchester"
+
+[[stations]]
+crs = "ALD"
+role = "minor"
+segment = "xc-manchester"
+# Alderley Edge: strictly between Wilmslow and Chelford. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/ald/details.html.
+
+[[stations]]
+crs = "CEL"
+role = "minor"
+segment = "xc-manchester"
+# Chelford: strictly between Alderley Edge and Goostrey. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/cel/details.html.
+
+[[stations]]
+crs = "GTR"
+role = "minor"
+segment = "xc-manchester"
+# Goostrey: strictly between Chelford and Holmes Chapel. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/gtr/details.html.
+
+[[stations]]
+crs = "HCH"
+role = "minor"
+segment = "xc-manchester"
+# Holmes Chapel: strictly between Goostrey and Sandbach. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/hch/details.html.
+
+[[stations]]
+crs = "SDB"
+role = "minor"
+segment = "xc-manchester"
+# Sandbach: strictly between Holmes Chapel and Crewe, on the direct route via
+# Wilmslow (not the alternate Stoke-on-Trent route). Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/sdb/details.html.
 
 [[stations]]
 crs = "CRE"
@@ -50,9 +171,68 @@ role = "junction"
 segment = "xc-manchester"
 
 [[stations]]
+crs = "PKG"
+role = "minor"
+segment = "xc-manchester"
+# Penkridge: strictly between Stafford and Wolverhampton. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/pkg/details.html.
+
+[[stations]]
 crs = "WVH"
 role = "major"
 segment = "xc-manchester"
+
+[[stations]]
+crs = "CSY"
+role = "minor"
+segment = "xc-manchester"
+# Coseley: strictly between Wolverhampton and Tipton on the Stour Valley
+# line. Confirmed via Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/csy/details.html.
+
+[[stations]]
+crs = "TIP"
+role = "minor"
+segment = "xc-manchester"
+# Tipton: strictly between Coseley and Dudley Port. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/tip/details.html.
+
+[[stations]]
+crs = "DDP"
+role = "minor"
+segment = "xc-manchester"
+# Dudley Port: strictly between Tipton and Sandwell & Dudley. Confirmed via
+# Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/ddp/details.html.
+
+[[stations]]
+crs = "SAD"
+role = "minor"
+segment = "xc-manchester"
+# Sandwell & Dudley: strictly between Dudley Port and Smethwick Galton
+# Bridge. Confirmed via Wikipedia's infobox, cross-checked against
+# nationalrail.co.uk/stations/sad/details.html.
+
+[[stations]]
+crs = "SGB"
+role = "minor"
+segment = "xc-manchester"
+# Smethwick Galton Bridge: strictly between Sandwell & Dudley and Smethwick
+# Rolfe Street on the Stour Valley line's low-level platforms (this station
+# is a split-level interchange; its high-level platforms carry
+# `wmr-snow-hill.toml`'s Snow Hill route, a genuinely different physical
+# line -- station-level overlap only, no segment shared). CRS reused
+# verbatim from `wmr-snow-hill.toml`.
+
+[[stations]]
+crs = "SMR"
+role = "minor"
+segment = "xc-manchester"
+# Smethwick Rolfe Street: strictly between Smethwick Galton Bridge and
+# Birmingham New Street. Confirmed via Wikipedia's infobox, cross-checked
+# against nationalrail.co.uk/stations/smr/details.html.
 
 [[stations]]
 crs = "BHM"

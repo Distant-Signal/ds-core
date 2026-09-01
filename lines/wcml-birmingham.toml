@@ -40,15 +40,59 @@ sample_stations = ["COV", "BHM"]
 # Rugby stays on the shared segment and the exclusive `wcml-birmingham-branch`
 # segment starts at the next station, Coventry.
 #
-# Minor intermediate calls between Coventry and Birmingham New Street
-# (Canley, Tile Hill, Berkswell, Hampton-in-Arden, Marston Green, Lea Hall,
-# Stechford, Adderley Park -- all confirmed via the Rugby-Birmingham-Stafford
-# line article) are West Midlands Trains local stops that the same source
-# does not show Avanti calling at, so they're omitted; only principal
-# stations are listed, same convention as `xc-manchester.toml` and
-# `northern-furness.toml`. Some Avanti Birmingham services continue beyond
-# New Street to Wolverhampton -- not modelled here, out of this file's
-# researched scope (Euston-Birmingham only).
+# TASK 9.3 ADDITION (fetched live 2026-09-01): the eight minor intermediate
+# calls between Coventry and Birmingham New Street named in this task's
+# brief -- Canley, Tile Hill, Berkswell, Hampton-in-Arden, Marston Green,
+# Lea Hall, Stechford, Adderley Park -- were previously omitted here on the
+# reasoning that Avanti's own service doesn't call at them. Per this plan's
+# full-coverage mandate (same precedent `gwr-cotswold.toml`'s Task 1.2 set:
+# a low/limited calling frequency isn't grounds for exclusion, only genuine
+# closure or non-existence is), that reasoning doesn't hold: these are real,
+# currently-open, currently-served stations and belong in `stations`
+# regardless of whether this file's own modelled operator (Avanti) is one of
+# the services that calls there. All eight independently two-source
+# verified here (Wikipedia's own station article per station, cross-checked
+# against nationalrail.co.uk's live /stations/<crs>/details.html page for
+# each) as open and in current use, all West Midlands Trains local stops
+# (LNR/WMR-branded, 1-2 tph):
+#   - Canley (CNL), Tile Hill (THL), Berkswell (BKW), Hampton-in-Arden (HIA):
+#     CRS codes reused verbatim from `lnwr-birmingham-crewe.toml`, which
+#     already curates these same four stations on its own exclusive
+#     `lnwr-birmingham` segment (different segment name, same
+#     station-overlap-without-segment-sharing pattern this file's header
+#     comment above already establishes for COV/BHI/BHM against that file).
+#   - Marston Green (MGN), Lea Hall (LEH), Stechford (SCF), Adderley Park
+#     (ADD): investigated but left OUT of `lnwr-birmingham-crewe.toml` by
+#     that file's own Task 9.2 (a sibling task in this batch) as below its
+#     bar for that file's specific Euston-Birmingham semi-fast pattern --
+#     that finding was about which *line* they belong on, not whether
+#     they're real open stations, and doesn't apply to this file's
+#     different, full-coverage station-catalogue purpose. Fresh Wikipedia +
+#     nationalrail.co.uk verification here confirms all four are open,
+#     current, West Midlands Trains-served stations between Birmingham
+#     International and Birmingham New Street.
+# Geographic order for all eight (Coventry through Birmingham New Street)
+# confirmed via a fresh fetch of Wikipedia's "Rugby-Birmingham-Stafford
+# line" article (the same source this file's header already cites for the
+# Rugby-Coventry-Birmingham routing): Coventry, Canley, Tile Hill,
+# Berkswell, Hampton-in-Arden, Birmingham International, Marston Green, Lea
+# Hall, Stechford, Adderley Park, Birmingham New Street -- matching the
+# insertion order below exactly. All eight sit strictly between
+# already-modelled stations on the single `wcml-birmingham-branch` segment
+# (Coventry through Birmingham New Street), so per `lines/SCHEMA.md`'s
+# curation rules and this task's own constraints, none gets a new segment
+# name -- they inherit `wcml-birmingham-branch` from their immediate
+# neighbours. `wcml-birmingham-branch` remains exclusive to this file (not
+# shared with `lnwr-birmingham-crewe.toml`'s differently-named
+# `lnwr-birmingham` segment over the same physical track, nor with any other
+# `lines/*.toml` file -- checked via grep), so no shared-trunk `MatchScope`
+# assertion applies to this addition; see the regression test added to
+# `crates/aggregator/src/matcher.rs` for the has_station coverage this task's
+# testing convention requires instead.
+#
+# Some Avanti Birmingham services continue beyond New Street to
+# Wolverhampton -- not modelled here, out of this file's researched scope
+# (Euston-Birmingham only).
 [[stations]]
 crs = "EUS"
 tiploc = "EUSTON"
@@ -91,8 +135,48 @@ role = "major"
 segment = "wcml-birmingham-branch"
 
 [[stations]]
+crs = "CNL"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "THL"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "BKW"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "HIA"
+role = "major"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
 crs = "BHI"
 role = "major"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "MGN"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "LEH"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "SCF"
+role = "minor"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "ADD"
+role = "minor"
 segment = "wcml-birmingham-branch"
 
 [[stations]]

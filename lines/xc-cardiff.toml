@@ -17,7 +17,38 @@ delay_threshold_minutes = 10
 # Cheltenham Spa, where it diverges for Gloucester while spine services carry
 # on via Standish Junction to Bristol.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
+# Task 9.4 fresh route-diagram pass (2026-09-01): re-verified the whole
+# corridor against live Wikipedia route/infobox articles ("Gloucester-Newport
+# line", plus each candidate station's own article) cross-checked against
+# nationalrail.co.uk/stations/<crs>/details.html. Two real, currently-open,
+# currently-served stations were missing from the exclusive `xc-cardiff`
+# segment between Chepstow and Newport -- Caldicot (CDT) and Severn Tunnel
+# Junction (STJ) -- added below at their true geographic position (confirmed
+# order: Chepstow -> Caldicot -> Severn Tunnel Junction -> Newport). XC itself
+# runs a limited Severn Tunnel Junction call (confirmed on that station's own
+# Wikipedia article), so this isn't even a frequency-only add. All other
+# candidate stations on this stretch (Oakle Street, Grange Court,
+# Westbury-on-Severn Halt, Newnham, Ruddle Road Halt, Awre for Blakeney,
+# Gatcombe, Severn Bridge, Tutshill for Beachley Halt, Chepstow East,
+# Portskewett x2, Undy Halt) are genuinely closed/disused (Beeching-era or
+# earlier); Llanwern is a proposed reopening, not yet open, so also stays
+# out. Churchdown (between Cheltenham Spa and Gloucester) was also checked
+# and confirmed still closed since 1964 (Wikipedia), not reopened.
+#
+# The shared `xc-birmingham`/`xc-west` stretch (BHM/UNI/CNM) was
+# deliberately left untouched even though the same fresh pass turned up
+# real, open, currently-served candidates there too (Barnt Green, Bromsgrove,
+# Ashchurch for Tewkesbury, Worcestershire Parkway) -- those stations sit on
+# a segment shared verbatim with `cross-country.toml`'s own `xc-birmingham`/
+# `xc-west` entries (byte-identical BHM/UNI/CNM today), which is out of this
+# task's single-file scope to edit. Flagging for a follow-up task scoped to
+# `cross-country.toml` (or a coordinated multi-file task) rather than forking
+# the shared trunk unilaterally here.
+#
+# Remaining minor intermediate calls on the shared `xc-birmingham`/`xc-west`
+# stretch (see above) are omitted for that reason; the exclusive
+# `xc-cardiff` segment below is now a fully re-verified stopping pattern,
+# not boilerplate.
 [[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
@@ -48,6 +79,27 @@ segment = "xc-cardiff"
 crs = "CPW"
 role = "minor"
 segment = "xc-cardiff"
+
+[[stations]]
+crs = "CDT"
+role = "minor"
+segment = "xc-cardiff"
+# Caldicot. Opened 1932 as Caldicot Halt, renamed 1969. Verified open via its
+# own Wikipedia article and nationalrail.co.uk/stations/cdt/details.html
+# (both fetched live 2026-09-01); not on any other line file's station list.
+
+[[stations]]
+crs = "STJ"
+role = "junction"
+segment = "xc-cardiff"
+# Severn Tunnel Junction: where the Gloucester-Newport Line meets the South
+# Wales Main Line via the Severn Tunnel. Verified open, and that CrossCountry
+# itself makes a limited call here, via Wikipedia's own station article
+# cross-checked against nationalrail.co.uk/stations/stj/details.html (both
+# fetched live 2026-09-01). Not on gwr-south-wales.toml's own station list
+# (that file's own comment already documents genuine physical track sharing
+# "further up the corridor at Severn Tunnel Junction", deliberately not
+# modelled there) -- no cross-file segment-name collision here.
 
 [[stations]]
 crs = "NWP"

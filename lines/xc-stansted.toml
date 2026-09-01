@@ -17,13 +17,73 @@ delay_threshold_minutes = 10
 # Leicester. Nuneaton is also a WCML station, but the two routes only cross
 # there — no segment is shared.
 #
-# Minor intermediate calls (Melton Mowbray, Oakham, Stamford, March, Audley
-# End) are omitted pending CRS verification; only principal stations are listed.
+# Task 9.7 fill-in (2026-09-01): the five named minor intermediate calls
+# (Melton Mowbray, Oakham, Stamford, March, Audley End) all cleared CRS
+# verification (Wikipedia infobox cross-checked against
+# nationalrail.co.uk's `/stations/<crs>/details.html`, fetched live
+# 2026-09-01) and are added below. Per the Recipe, this starting list was
+# then confirmed against a fresh route-diagram pass of the line's real
+# current stopping pattern end to end, which found several more real,
+# currently-open, currently-served gaps the original "pending CRS
+# verification" comment didn't name:
+#   - Birmingham New Street-Nuneaton: Water Orton (WTO) and Coleshill
+#     Parkway (CEH), both on the Birmingham-Peterborough line, the former
+#     served exclusively by CrossCountry.
+#   - Nuneaton-Leicester: Hinckley (HNK, served exclusively by CrossCountry
+#     per its own Wikipedia article), Narborough (NBR), South Wigston (SWS).
+#   - Leicester-Peterborough: Melton Mowbray (MMO), Oakham (OKM), Stamford
+#     (SMD) -- the three named stations. Every other historical stopping
+#     point on this stretch's route-diagram template (Syston, Rearsby,
+#     Brooksby, Frisby, Asfordby, Saxby, Whissendine, Manton, Luffenham,
+#     Ketton and Collyweston, Uffington and Barnack, and more) was
+#     spot-checked and confirmed closed -- Syston specifically is currently
+#     open but its own Wikipedia article states plainly "trains on the line
+#     to and from Peterborough do not call at the station", so it stays out
+#     as genuinely not on this line's real calling pattern despite being
+#     physically nearby (it sits on the parallel Midland Main
+#     Line/Ivanhoe Line slow platforms instead).
+#   - Peterborough-Ely (Fen Line): Whittlesea (WLE, explicitly served by
+#     "CrossCountry (three daily trains Monday-Saturday)" per its own
+#     Wikipedia article) and Manea (MNE, "additional CrossCountry services
+#     on the Stansted Airport to Birmingham route" per its own article),
+#     either side of March (MCH), the named station.
+#   - Cambridge-Stansted Mountfitchet (the shared West Anglia Main Line
+#     stretch `greater-anglia-west-anglia.toml` already documents this
+#     line traversing -- "Cambridge to the Stansted Mountfitchet junction,
+#     via Audley End" per that file's own comment): Cambridge South (CMS,
+#     opened 28 June 2026, "All passenger trains call at the station" per
+#     that file's own comment), Shelford (SED), Whittlesford Parkway (WLF),
+#     Great Chesterford (GRC), Audley End (AUD, the named station), Newport
+#     (NWE), Elsenham (ESM), Stansted Mountfitchet (SST) -- all reused
+#     verbatim (CRS) from `greater-anglia-west-anglia.toml`'s own
+#     two-source-verified station list. That file's own comment already
+#     explains why this stays station-level overlap rather than a shared
+#     segment name (this file tags its entire Birmingham-Nuneaton-
+#     Leicester-Peterborough-Ely-Cambridge-Stansted route with the single
+#     `xc-stansted` segment, so reusing `waml-mainline`/`waml-trunk-london`
+#     here would incorrectly file-wide-reclassify unrelated parts of this
+#     line as sharing track with Greater Anglia) -- all new stations here
+#     inherit this file's own exclusive `xc-stansted` segment from their
+#     immediate neighbours, per the Global Constraint's default rule; no new
+#     segment name is introduced.
 [[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
 role = "junction"
 segment = "xc-birmingham"
+
+[[stations]]
+crs = "WTO"
+role = "minor"
+segment = "xc-stansted"
+# Water Orton: strictly between Birmingham New Street and Coleshill
+# Parkway, served exclusively by CrossCountry.
+
+[[stations]]
+crs = "CEH"
+role = "minor"
+segment = "xc-stansted"
+# Coleshill Parkway: strictly between Water Orton and Nuneaton.
 
 [[stations]]
 crs = "NUN"
@@ -32,14 +92,69 @@ role = "junction"
 segment = "xc-stansted"
 
 [[stations]]
+crs = "HNK"
+role = "minor"
+segment = "xc-stansted"
+# Hinckley: strictly between Nuneaton and Narborough, served exclusively by
+# CrossCountry.
+
+[[stations]]
+crs = "NBR"
+role = "minor"
+segment = "xc-stansted"
+# Narborough: strictly between Hinckley and South Wigston.
+
+[[stations]]
+crs = "SWS"
+role = "minor"
+segment = "xc-stansted"
+# South Wigston: strictly between Narborough and Leicester.
+
+[[stations]]
 crs = "LEI"
 role = "major"
 segment = "xc-stansted"
 
 [[stations]]
+crs = "MMO"
+role = "minor"
+segment = "xc-stansted"
+# Melton Mowbray: strictly between Leicester and Oakham.
+
+[[stations]]
+crs = "OKM"
+role = "minor"
+segment = "xc-stansted"
+# Oakham: strictly between Melton Mowbray and Stamford.
+
+[[stations]]
+crs = "SMD"
+role = "minor"
+segment = "xc-stansted"
+# Stamford: strictly between Oakham and Peterborough.
+
+[[stations]]
 crs = "PBO"
 role = "junction"
 segment = "xc-stansted"
+
+[[stations]]
+crs = "WLE"
+role = "minor"
+segment = "xc-stansted"
+# Whittlesea: strictly between Peterborough and March.
+
+[[stations]]
+crs = "MCH"
+role = "minor"
+segment = "xc-stansted"
+# March: strictly between Whittlesea and Manea.
+
+[[stations]]
+crs = "MNE"
+role = "minor"
+segment = "xc-stansted"
+# Manea: strictly between March and Ely.
 
 [[stations]]
 crs = "ELY"
@@ -50,6 +165,63 @@ segment = "xc-stansted"
 crs = "CBG"
 role = "major"
 segment = "xc-stansted"
+
+[[stations]]
+crs = "CMS"
+role = "minor"
+segment = "xc-stansted"
+# Cambridge South: opened 28 June 2026, strictly between Cambridge and
+# Shelford. CRS reused verbatim from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "SED"
+role = "minor"
+segment = "xc-stansted"
+# Shelford: strictly between Cambridge South and Whittlesford Parkway. CRS
+# reused verbatim from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "WLF"
+role = "minor"
+segment = "xc-stansted"
+# Whittlesford Parkway: strictly between Shelford and Great Chesterford.
+# CRS reused verbatim from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "GRC"
+role = "minor"
+segment = "xc-stansted"
+# Great Chesterford: strictly between Whittlesford Parkway and Audley End.
+# CRS reused verbatim from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "AUD"
+role = "minor"
+segment = "xc-stansted"
+# Audley End: strictly between Great Chesterford and Newport.
+
+[[stations]]
+crs = "NWE"
+role = "minor"
+segment = "xc-stansted"
+# Newport: strictly between Audley End and Elsenham. CRS reused verbatim
+# from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "ESM"
+role = "minor"
+segment = "xc-stansted"
+# Elsenham: strictly between Newport and Stansted Mountfitchet. CRS reused
+# verbatim from `greater-anglia-west-anglia.toml`.
+
+[[stations]]
+crs = "SST"
+role = "junction"
+segment = "xc-stansted"
+# Stansted Mountfitchet: strictly between Elsenham and Stansted Airport;
+# last station of the shared West Anglia Main Line trunk before the
+# dedicated non-stop airport branch. CRS reused verbatim from
+# `greater-anglia-west-anglia.toml`.
 
 [[stations]]
 crs = "SSD"

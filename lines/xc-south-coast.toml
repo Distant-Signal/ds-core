@@ -23,7 +23,55 @@ delay_threshold_minutes = 10
 # `elizabeth-west` on to Paddington). Incidents on the shared track still
 # match both lines by station.
 #
-# Minor intermediate calls are omitted; only principal stations are listed.
+# Task 9.6 fill-in (2026-09-01, fresh route-diagram pass, no named starting
+# list in the plan): the "minor intermediate calls are omitted" boilerplate
+# below is this file's own original convention. Every candidate station was
+# confirmed to the two-source bar (Wikipedia infobox/article cross-checked
+# against nationalrail.co.uk's `/stations/<crs>/details.html`), fetched live
+# 2026-09-01, leg by leg along this whole Birmingham-Bournemouth corridor:
+#   - Coventry-Leamington Spa (Coventry to Leamington Line): Kenilworth
+#     (KNW), reopened 2018, confirmed strictly between COV and LMS. "Warwick
+#     (Milverton)" is a closed historical station on this same corridor;
+#     today's open "Warwick" station is on the unrelated Chiltern Main Line
+#     via Warwick Parkway, not this line -- correctly stays out.
+#   - Leamington Spa-Banbury: no intermediate station found (confirmed via
+#     Banbury's own infobox route diagram).
+#   - Banbury-Oxford (Cherwell Valley Line): Kings Sutton (KGS), Heyford
+#     (HYD), Tackley (TAC).
+#   - Oxford-Reading: this file's own OXF-RDG adjacency runs via Didcot
+#     Parkway, the only physical route. Radley (RAD), Culham (CUM),
+#     Appleford (APF) and Didcot Parkway (DID) itself are reused verbatim
+#     (CRS/TIPLOC) from `gwr-thames-valley.toml`'s own Didcot-Oxford branch,
+#     which already curates and two-source-verifies these four --
+#     station-level overlap only, no segment shared (matching this whole
+#     plan's established xc-cardiff/gwr-south-wales overlap precedent).
+#     South of Didcot: Cholsey (CHO), Goring & Streatley (GOR), Pangbourne
+#     (PAN), Tilehurst (TLH), freshly verified here.
+#   - Reading-Basingstoke (Reading to Basingstoke Line, the only physical
+#     route connecting the two): Reading West (RDW, reused verbatim from
+#     `gwr-thames-valley.toml` -- genuinely shared trackage with that file's
+#     own Reading-Newbury branch as far as Southcote Junction, confirmed via
+#     Reading West's own infobox listing both lines; station-level overlap
+#     only, same pattern as the Didcot-Oxford stations above), Reading Green
+#     Park (RGP, opened 2023), Mortimer (MOR), Bramley (BMY).
+#   - Basingstoke-Winchester-Southampton-Bournemouth (South Western Main
+#     Line, "runs over SWML metals" per the header comment above): Micheldever
+#     (MIC), Shawford (SHW), Eastleigh (ESL), Southampton Airport Parkway
+#     (SOA), Swaythling (SWG), St Denys (SDN), Millbrook (MBK), Redbridge
+#     (RDB), Totton (TTN), Ashurst New Forest (ANF), Beaulieu Road (BEU),
+#     Brockenhurst (BCU, also the Lymington branch junction -- that branch
+#     itself is not modelled in this catalogue yet), Sway (SWY), New Milton
+#     (NWM), Hinton Admiral (HNA), Christchurch (CHR), Pokesdown (POK). None
+#     of these are claimed on `swr-south-west-main.toml`'s own
+#     `swr-swml-south` segment (that file independently uses the same
+#     "principal only" convention over this exact stretch) -- this task adds
+#     them only to this file's own exclusive `xc-south-coast` segment, per
+#     the Global Constraint that a station's real-world existence, not this
+#     file's named operator's calling pattern, is the bar. All 30 new
+#     stations sit strictly between two already-modelled stations on the
+#     existing `xc-south-coast` segment (or, for BHM->COV's Kenilworth, the
+#     exclusive segment starting immediately after the `xc-birmingham`
+#     junction), so all inherit `xc-south-coast` -- no new segment name.
 [[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
@@ -36,6 +84,12 @@ role = "major"
 segment = "xc-south-coast"
 
 [[stations]]
+crs = "KNW"
+role = "minor"
+segment = "xc-south-coast"
+# Kenilworth: reopened 2018, strictly between Coventry and Leamington Spa.
+
+[[stations]]
 crs = "LMS"
 role = "minor"
 segment = "xc-south-coast"
@@ -46,9 +100,85 @@ role = "minor"
 segment = "xc-south-coast"
 
 [[stations]]
+crs = "KGS"
+role = "minor"
+segment = "xc-south-coast"
+# Kings Sutton: strictly between Banbury and Heyford.
+
+[[stations]]
+crs = "HYD"
+role = "minor"
+segment = "xc-south-coast"
+# Heyford (Lower Heyford): strictly between Kings Sutton and Tackley.
+
+[[stations]]
+crs = "TAC"
+role = "minor"
+segment = "xc-south-coast"
+# Tackley: strictly between Heyford and Oxford.
+
+[[stations]]
 crs = "OXF"
 role = "major"
 segment = "xc-south-coast"
+
+[[stations]]
+crs = "RAD"
+tiploc = "RDLEY"
+role = "minor"
+segment = "xc-south-coast"
+# Radley: strictly between Oxford and Culham. CRS/TIPLOC reused verbatim
+# from `gwr-thames-valley.toml`'s own Didcot-Oxford branch.
+
+[[stations]]
+crs = "CUM"
+tiploc = "CULHAM"
+role = "minor"
+segment = "xc-south-coast"
+# Culham: strictly between Radley and Appleford. CRS/TIPLOC reused verbatim
+# from `gwr-thames-valley.toml`.
+
+[[stations]]
+crs = "APF"
+tiploc = "APPLEFD"
+role = "minor"
+segment = "xc-south-coast"
+# Appleford: strictly between Culham and Didcot Parkway. CRS/TIPLOC reused
+# verbatim from `gwr-thames-valley.toml`.
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "xc-south-coast"
+# Didcot Parkway: strictly between Appleford and Cholsey. Also served by
+# `gwr-main-line.toml`/`gwr-cotswold.toml`/`gwr-south-wales.toml`/
+# `gwr-thames-valley.toml` -- station-level overlap only, no segment shared,
+# already-established pattern for this station across this catalogue.
+
+[[stations]]
+crs = "CHO"
+role = "minor"
+segment = "xc-south-coast"
+# Cholsey: strictly between Didcot Parkway and Goring & Streatley.
+
+[[stations]]
+crs = "GOR"
+role = "minor"
+segment = "xc-south-coast"
+# Goring & Streatley: strictly between Cholsey and Pangbourne.
+
+[[stations]]
+crs = "PAN"
+role = "minor"
+segment = "xc-south-coast"
+# Pangbourne: strictly between Goring & Streatley and Tilehurst.
+
+[[stations]]
+crs = "TLH"
+role = "minor"
+segment = "xc-south-coast"
+# Tilehurst: strictly between Pangbourne and Reading.
 
 [[stations]]
 crs = "RDG"
@@ -58,9 +188,44 @@ segment = "xc-south-coast"
 # Some services terminate here; the rest continue to Southampton/Bournemouth
 
 [[stations]]
+crs = "RDW"
+tiploc = "REDGWST"
+role = "minor"
+segment = "xc-south-coast"
+# Reading West: strictly between Reading and Reading Green Park on the
+# Reading-Basingstoke line. CRS/TIPLOC reused verbatim from
+# `gwr-thames-valley.toml`'s own Reading-Newbury branch -- genuinely shared
+# trackage as far as Southcote Junction, station-level overlap only.
+
+[[stations]]
+crs = "RGP"
+role = "minor"
+segment = "xc-south-coast"
+# Reading Green Park: opened 2023, strictly between Reading West and
+# Mortimer.
+
+[[stations]]
+crs = "MOR"
+role = "minor"
+segment = "xc-south-coast"
+# Mortimer: strictly between Reading Green Park and Bramley.
+
+[[stations]]
+crs = "BMY"
+role = "minor"
+segment = "xc-south-coast"
+# Bramley: strictly between Mortimer and Basingstoke.
+
+[[stations]]
 crs = "BSK"
 role = "junction"
 segment = "xc-south-coast"
+
+[[stations]]
+crs = "MIC"
+role = "minor"
+segment = "xc-south-coast"
+# Micheldever: strictly between Basingstoke and Winchester.
 
 [[stations]]
 crs = "WIN"
@@ -68,9 +233,106 @@ role = "minor"
 segment = "xc-south-coast"
 
 [[stations]]
+crs = "SHW"
+role = "minor"
+segment = "xc-south-coast"
+# Shawford: strictly between Winchester and Eastleigh.
+
+[[stations]]
+crs = "ESL"
+role = "major"
+segment = "xc-south-coast"
+# Eastleigh: strictly between Shawford and Southampton Airport Parkway.
+
+[[stations]]
+crs = "SOA"
+role = "minor"
+segment = "xc-south-coast"
+# Southampton Airport Parkway: strictly between Eastleigh and Swaythling.
+
+[[stations]]
+crs = "SWG"
+role = "minor"
+segment = "xc-south-coast"
+# Swaythling: strictly between Southampton Airport Parkway and St Denys.
+
+[[stations]]
+crs = "SDN"
+role = "minor"
+segment = "xc-south-coast"
+# St Denys: strictly between Swaythling and Southampton Central.
+
+[[stations]]
 crs = "SOU"
 role = "major"
 segment = "xc-south-coast"
+
+[[stations]]
+crs = "MBK"
+role = "minor"
+segment = "xc-south-coast"
+# Millbrook: strictly between Southampton Central and Redbridge.
+
+[[stations]]
+crs = "RDB"
+role = "minor"
+segment = "xc-south-coast"
+# Redbridge: strictly between Millbrook and Totton.
+
+[[stations]]
+crs = "TTN"
+role = "minor"
+segment = "xc-south-coast"
+# Totton: strictly between Redbridge and Ashurst New Forest.
+
+[[stations]]
+crs = "ANF"
+role = "minor"
+segment = "xc-south-coast"
+# Ashurst New Forest: strictly between Totton and Beaulieu Road.
+
+[[stations]]
+crs = "BEU"
+role = "minor"
+segment = "xc-south-coast"
+# Beaulieu Road: strictly between Ashurst New Forest and Brockenhurst.
+
+[[stations]]
+crs = "BCU"
+role = "junction"
+segment = "xc-south-coast"
+# Brockenhurst: strictly between Beaulieu Road and Sway; also the Lymington
+# branch junction (that branch is not modelled in this catalogue yet).
+
+[[stations]]
+crs = "SWY"
+role = "minor"
+segment = "xc-south-coast"
+# Sway: strictly between Brockenhurst and New Milton.
+
+[[stations]]
+crs = "NWM"
+role = "minor"
+segment = "xc-south-coast"
+# New Milton: strictly between Sway and Hinton Admiral.
+
+[[stations]]
+crs = "HNA"
+role = "minor"
+segment = "xc-south-coast"
+# Hinton Admiral: strictly between New Milton and Christchurch.
+
+[[stations]]
+crs = "CHR"
+role = "minor"
+segment = "xc-south-coast"
+# Christchurch: strictly between Hinton Admiral and Pokesdown.
+
+[[stations]]
+crs = "POK"
+role = "minor"
+segment = "xc-south-coast"
+# Pokesdown: strictly between Christchurch and Bournemouth.
 
 [[stations]]
 crs = "BMH"

@@ -176,6 +176,71 @@ operators = [
 # (it's aggregator logic, not line data) -- flagged here as a known
 # follow-up, not fixed, same as `wcml-manchester.toml`'s own caveat.
 
+# TASK 9.2 FRESH VERIFICATION (fetched live 2026-09-01, per the plan's own
+# station-catalogue-completeness batch): this task's brief carried no named
+# starting list and asked for a from-scratch route-diagram pass to find any
+# real, currently-open, currently-served stations still missing from this
+# file's own modelled route (the WMT/LM-branded Euston-Birmingham/Crewe
+# semi-fast pattern). Conclusion: NONE found. No `[[stations]]` entries were
+# added or reordered by this task. Sources and reasoning:
+#   1. Re-fetched Wikipedia's "London Northwestern Railway" Services section,
+#      the "Northampton Loop Line" article and the "Trent Valley Line"
+#      article (same three sources the file's existing header comment
+#      already cites) -- the calling-point lists they give for the
+#      Euston-Birmingham and Euston-Crewe-via-Trent-Valley patterns match
+#      this file's existing station list exactly, station for station,
+#      Polesworth's exclusion included. Nothing new surfaced.
+#   2. Cross-checked against London Northwestern Railway's own official
+#      network map PDF (West Midlands Trains, filename metadata
+#      "WMT240621 LNR Vertical 190225 V1.4", printed date "vLNR_A3_03_2026"
+#      -- i.e. current as of March 2026), fetched live from
+#      westmidlandsrailway.co.uk's own "network-maps" page. This is a
+#      stronger, more current primary source than Wikipedia's prose and
+#      independently corroborates every station already in this file (incl.
+#      Polesworth's continued absence) with no additions on either branch.
+#   3. Investigated one candidate cluster closely: Marston Green (MGN), Lea
+#      Hall (LEH), Stechford (SCF) and Adderley Park (ADD), the West
+#      Midlands Railway local stops between Birmingham International and
+#      Birmingham New Street. Wikipedia's own station articles for all four
+#      confirm some London Northwestern Railway-branded workings do call
+#      there, but consistently describe this as a "limited service" running
+#      "mainly at peak times and the start/end of service" (WMR's standard
+#      Birmingham International-Rugeley Trent Valley local occasionally
+#      extended under the LNR brand) -- not the 2tph Euston-Birmingham
+#      semi-fast this file models, and not shown as a stop on the official
+#      March-2026 LNR network map from source 2. Same "not a genuine regular
+#      calling point" bar Polesworth already fails on. Also confirmed via
+#      this batch's own `task-9.3-brief.md` (`lines/wcml-birmingham.toml`)
+#      that these same four stations, plus CNL/THL/BKW/HIA already modelled
+#      here, are that file's named starting list -- i.e. they're the West
+#      Midlands Trains local calls Task 9.3's Avanti-only file needs to
+#      research adding or excluding, not a gap in this one. Left OUT of
+#      this file for both reasons; not this task's to add even if the bar
+#      were read more loosely.
+#   4. Two adjacent "whole different route" discoveries, flagged rather than
+#      folded in per this task's own constraints: (a) the Nuneaton-Bedworth-
+#      Coventry Arena-Coventry "Elephant & Bear Line" is a distinct
+#      West-Midlands-Railway-only stopping service on different metals to
+#      this file's Rugby-Coventry Birmingham branch, confirmed via
+#      Wikipedia's "Coventry to Nuneaton line" article; (b) Stafford-Crewe
+#      via Stoke-on-Trent (Stone, Stoke-on-Trent, Longport, Kidsgrove,
+#      Alsager) is a separate, longer diversionary alignment shown as its
+#      own branch (pink) on the official LNR map, distinct from the direct/
+#      fast Trent Valley alignment this file's Crewe branch already models
+#      (confirmed also by `west-coast-main-line.toml`, which models STA and
+#      CRE as directly adjacent on `wcml-northwest`/`wcml-midlands` with no
+#      intermediate station). Neither is a minor-infill gap in this file's
+#      existing route; both are out of scope for this FILL-IN task.
+#   5. Also spot-checked and ruled out five more candidates as historically
+#      closed (not currently open, so outside this plan's scope regardless
+#      of any historical route diagram placement): Roade, Castlethorpe and
+#      Kilsby and Crick on the Northampton Loop (closed 1964, 1964 and 1960
+#      respectively), and Colwich and Milford & Brocton on the Trent Valley
+#      Line (closed 1958 and 1950 respectively).
+# Net effect: this file's station list, `sample_stations`, and segments are
+# unchanged by Task 9.2 -- only this note was added, recording that the
+# fresh verification pass was done and came back negative.
+
 destination_crs_filter = ["BHM", "CRE"]
 # One sample station on the shared trunk, one at the internal reconvergence
 # point, and one per branch terminus. EUS and NMP were added in the

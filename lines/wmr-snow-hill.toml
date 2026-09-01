@@ -92,14 +92,60 @@ match_keywords = ["Snow Hill lines"]
 # either, so no segment-sharing decision is needed here, unlike
 # `wcml-birmingham.toml`/`swr-alton.toml`'s trunk-sharing pattern.
 #
-# Minor intermediate calls (Jewellery Quarter, The Hawthorns, Langley
-# Green, Rowley Regis, Old Hill, Cradley Heath, Lye, Hagley, Blakedown,
-# Fernhill Heath on the Worcester side; Bordesley, Small Heath, Spring
-# Road, Hall Green, Yardley Wood, Wythall, Earlswood, Wood End, Danzey,
-# Wootton Wawen, Wilmcote, Stratford-upon-Avon Parkway on the branches;
-# Acocks Green, Olton, Widney Manor towards Dorridge) are omitted, same
-# convention as `wcml-birmingham.toml`/`xc-manchester.toml`/
-# `northern-furness.toml`; only principal/interchange stations are listed.
+# Task 9.1 (2026-09-01) fill-in: the "minor calls" previously omitted here
+# were re-checked, station by station, against two independent live
+# sources each (Wikipedia infobox/article cross-checked against
+# nationalrail.co.uk's `/stations/<crs>/details.html`) and are now listed
+# in full geographic position, since all of them are real, currently-open,
+# currently-served stations on this route:
+#   - Worcester/Stourbridge trunk: Blakedown, Hagley (between Kidderminster
+#     and Stourbridge Junction), Lye, Cradley Heath, Old Hill, Rowley
+#     Regis, Langley Green (between Stourbridge Junction and Smethwick
+#     Galton Bridge), The Hawthorns, Jewellery Quarter (between Smethwick
+#     Galton Bridge and Birmingham Snow Hill).
+#   - Bordesley, Small Heath: both sit geographically between Birmingham
+#     Moor Street and Tyseley on the North Warwickshire Line's own quoted
+#     calling pattern (see Route research above) and on Chiltern Main
+#     Line's independent confirmation of the same stretch -- i.e. still
+#     *before* the Tyseley diverging point, so both stay on the shared
+#     `wmr-snow-hill-trunk` segment rather than either exclusive branch,
+#     even though an earlier draft of this comment lumped them in with
+#     "the branches." (Bordesley's passenger service is minimal -- one
+#     Saturdays-only northbound "parliamentary" train a week plus
+#     Birmingham City matchday services -- but it is a real, currently
+#     open, timetabled stop, not a closed station.)
+#   - Dorridge branch: Acocks Green, Olton (between Tyseley and Solihull),
+#     Widney Manor (between Solihull and Dorridge). Acocks Green, Olton,
+#     Widney Manor, Small Heath and Bordesley also carry Chiltern Main
+#     Line services over the same physical track (see
+#     `chiltern-main-line.toml`'s own `chiltern-birmingham-approach`
+#     segment and comment) -- per that file's own documented precedent
+#     ("station-level overlap only... no segment shared... per the
+#     xc-manchester.toml/xc-south-coast.toml convention"), this stays
+#     station-level overlap: Acocks Green, Olton and Widney Manor are
+#     folded into this file's own pre-existing `wmr-snow-hill-dorridge`
+#     segment (already covering Solihull/Dorridge) rather than inventing a
+#     new shared segment name with `chiltern-main-line.toml`.
+#   - North Warwickshire branch: Spring Road, Hall Green, Yardley Wood
+#     (between Tyseley and Shirley), Wythall, Earlswood (between Shirley
+#     and Wood End), Wood End, Danzey (between Earlswood and
+#     Henley-in-Arden), Wootton Wawen, Wilmcote, Stratford-upon-Avon
+#     Parkway (between Henley-in-Arden and Stratford-upon-Avon). None of
+#     these carry Chiltern services, so they stay on the pre-existing
+#     exclusive `wmr-snow-hill-stratford` segment.
+#
+# Deliberately NOT added, despite appearing adjacent in route sources
+# during this research pass:
+#   - Fernhill Heath: named in this task's brief, but both sources agree
+#     it closed on 5 April 1965 (Beeching) and has never reopened --
+#     current-day proposals to reinstate it are unbuilt as of 2026. Fails
+#     the "currently-open, currently-served" bar, so it stays OUT.
+#   - Whitlocks End, The Lakes (North Warwickshire branch), Hartlebury
+#     (Worcester trunk), Smethwick Galton Bridge's other closed
+#     neighbours (Smethwick West, Rood End, Handsworth & Smethwick, Soho &
+#     Winson Green, Hockley): none of these were named in this task's
+#     brief/starting list, so they weren't independently researched here
+#     and are left for a future pass rather than guessed at.
 [[stations]]
 crs = "WOS"
 role = "terminus"
@@ -121,13 +167,58 @@ role = "major"
 segment = "wmr-snow-hill-trunk"
 
 [[stations]]
+crs = "BKD"  # Blakedown
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "HAG"  # Hagley
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
 crs = "SBJ"
 role = "major"
 segment = "wmr-snow-hill-trunk"
 
 [[stations]]
+crs = "LYE"  # Lye
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "CRA"  # Cradley Heath
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "OHL"  # Old Hill
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "ROW"  # Rowley Regis
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "LGG"  # Langley Green
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
 crs = "SGB"
 role = "major"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "THW"  # The Hawthorns
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "JEQ"  # Jewellery Quarter
+role = "minor"
 segment = "wmr-snow-hill-trunk"
 
 [[stations]]
@@ -141,6 +232,16 @@ role = "major"
 segment = "wmr-snow-hill-trunk"
 
 [[stations]]
+crs = "BBS"  # Bordesley -- minimal (Saturdays-only parliamentary + matchday) but open and timetabled
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "SMA"  # Small Heath
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
 crs = "TYS"
 role = "junction"
 segment = "wmr-snow-hill-trunk"
@@ -148,10 +249,30 @@ segment = "wmr-snow-hill-trunk"
 # Branch 1: WMR's own local short working towards Dorridge, over the same
 # metals as Chiltern Railways' Leamington Spa/Marylebone services beyond
 # Tyseley -- exclusive to this file since Chiltern's own line isn't
-# modelled in this catalogue yet.
+# modelled in this catalogue yet. Acocks Green, Olton and Widney Manor
+# physically overlap with `chiltern-main-line.toml`'s
+# `chiltern-birmingham-approach` segment (station-level overlap only, per
+# that file's own precedent -- see comment above), so they're folded into
+# this file's pre-existing `wmr-snow-hill-dorridge` segment rather than a
+# new shared name.
+[[stations]]
+crs = "ACG"  # Acocks Green
+role = "minor"
+segment = "wmr-snow-hill-dorridge"
+
+[[stations]]
+crs = "OLT"  # Olton
+role = "minor"
+segment = "wmr-snow-hill-dorridge"
+
 [[stations]]
 crs = "SOL"
 role = "major"
+segment = "wmr-snow-hill-dorridge"
+
+[[stations]]
+crs = "WMR"  # Widney Manor
+role = "minor"
 segment = "wmr-snow-hill-dorridge"
 
 [[stations]]
@@ -162,12 +283,62 @@ segment = "wmr-snow-hill-dorridge"
 # Branch 2: the North Warwickshire ("Shakespeare") Line to Stratford-upon-
 # Avon.
 [[stations]]
+crs = "SRI"  # Spring Road
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "HLG"  # Hall Green
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "YRD"  # Yardley Wood
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
 crs = "SRL"
 role = "major"
 segment = "wmr-snow-hill-stratford"
 
 [[stations]]
+crs = "WYT"  # Wythall
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "EWD"  # Earlswood
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "WDE"  # Wood End
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "DZY"  # Danzey
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
 crs = "HNL"
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "WWW"  # Wootton Wawen
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "WMC"  # Wilmcote
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "STY"  # Stratford-upon-Avon Parkway
 role = "minor"
 segment = "wmr-snow-hill-stratford"
 
