@@ -250,21 +250,73 @@ segment = "emr-robin-hood"
 # Intermediate stations between Nottingham and Grantham on the real service
 # (per the same "Nottingham-Grantham line" article's places-served list:
 # Netherfield & Colwick, Radcliffe-on-Trent, Bingham, Aslockton & Whatton,
-# Elton & Orston, Bottesford) are only partially included here: Bingham
-# (BIN) is independently verified two-source (Wikipedia infobox + national
-# rail.co.uk) and is specifically named in the Poacher Line's own express
-# calling-pattern description, so it is included. Netherfield & Colwick,
-# Radcliffe-on-Trent, Aslockton & Whatton, Elton & Orston and Bottesford
-# were not individually cross-checked to this task's two-source standard
-# within this session and are omitted pending CRS verification, matching
-# `northern-hope-valley.toml`'s "minor intermediate calls...are omitted
-# pending CRS verification" pattern.
+# Elton & Orston, Bottesford) are now ALL included below, in that exact
+# geographic order, each independently confirmed two-source (Wikipedia
+# infobox, cross-checked against nationalrail.co.uk/stations/<crs>/details.html)
+# during this task. Bingham (BIN) was already verified in an earlier session
+# (see its own comment below); the other five were verified in this task -
+# see each station's own comment for specifics. (Earlier revisions of this
+# file carried a note that these five were "omitted pending CRS
+# verification" - that gap is now closed, hence this comment's rewrite.)
+[[stations]]
+crs = "NET"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Netherfield. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/net (address "Chaworth Road, Colwick,
+# Nottinghamshire" on the National Rail page confirms this is the same
+# station the Wikipedia places-served list calls "Netherfield & Colwick" -
+# that was the station's own name until a 6 May 1974 rename to plain
+# "Netherfield" per the Wikipedia article's history section; current
+# National Rail branding is "Netherfield" without the "& Colwick" suffix.
+
+[[stations]]
+crs = "RDF"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Radcliffe-on-Trent. CRS confirmed via Wikipedia infobox, cross-checked
+# against nationalrail.co.uk/stations/rdf (page header "Radcliffe
+# (Nottinghamshire) (RDF)"). Wikipedia's own article title is "Radcliffe
+# railway station", noting it is "also known as Radcliffe-on-Trent and
+# Radcliffe (Notts)" - same station as this task's named "Radcliffe-on-Trent".
+
 [[stations]]
 crs = "BIN"
 role = "minor"
 segment = "emr-poacher-skegness"
 # Bingham. CRS confirmed via Wikipedia infobox, cross-checked against
 # nationalrail.co.uk/stations/bin.
+
+[[stations]]
+crs = "ALK"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Aslockton. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/alk (page header "Aslockton (ALK)"). This
+# task's named-station list calls it "Aslockton & Whatton" (it serves the
+# neighbouring village of Whatton-in-the-Vale too), but neither source
+# uses that longer form for the station's own name - Wikipedia and
+# National Rail both call it plainly "Aslockton"; no evidence found of an
+# "& Whatton" suffix ever being part of the station's official name
+# (contrast Netherfield above, which genuinely was "Netherfield & Colwick"
+# until 1974). Included as the same real, currently-open station either way.
+
+[[stations]]
+crs = "ELO"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Elton & Orston. CRS confirmed via Wikipedia infobox, cross-checked
+# against nationalrail.co.uk/stations/elo (page header "Elton & Orston
+# (ELO)"). "Now provides minimal rail services" per the Wikipedia article
+# (one train to Nottingham and one to Skegness on a typical weekday) but
+# is still a currently-open, currently-served station.
+
+[[stations]]
+crs = "BTF"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Bottesford. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/btf (page header "Bottesford (BTF)").
 
 [[stations]]
 crs = "GRA"
