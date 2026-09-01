@@ -332,6 +332,8 @@ pub struct LineStatus {
     pub data_quality: DataQuality,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_stats: Option<SampleStats>,
+    #[serde(default = "SampleAvailability::no_coverage_default")]
+    pub sample_availability: SampleAvailability,
 }
 
 /// Top-level object returned by the API for one line.
@@ -678,6 +680,79 @@ pub struct SampleStats {
     pub cancelled: usize,
     pub skipped: usize,
     pub avg_delay_minutes: f64,
+}
+
+/// Why a line's `sample_stats` is (or isn't) populated this cycle -- see
+/// docs/superpowers/specs/2026-09-01-line-status-sample-coverage-design.md
+/// Decision 2. Answers only the single-cycle "did any configured sample
+/// station have live departure data to look at at all" question --
+/// deliberately does NOT distinguish "genuinely quiet" from "structurally
+/// under-sampled" (both collapse into `BelowThreshold`; that distinction
+/// needs a pattern over many cycles, which is `line_status_daily_stats`'s
+/// `sample_cycles`'s job, not a single cycle's -- see this plan's Not in
+/// this plan section), and does NOT distinguish "no row" from "row present
+/// but stale" (that is 2026-08-31-sample-data-availability-design.md's
+/// still-open, separate `stationSamples`-on-`/public/freshness` proposal).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum SampleAvailability {
+    /// None of this line's `sample_stations` had a `StationSample` row in
+    /// this cycle's load at all (`samples.get(crs).is_none()` for every
+    /// configured station). A real, currently-invisible signal -- a
+    /// polling gap, a brand-new custom line never yet polled, or a
+    /// widespread LDBWS outage.
+    NoCoverage,
+    /// At least one configured station had a row, but the operator-filtered
+    /// relevant-departure count fell below `min_sample_size`.
+    BelowThreshold { observed: usize, required: i64 },
+    /// At or above threshold; the real `SampleStats` this cycle produced is
+    /// also carried, unchanged, on `LineStatus.sample_stats` -- not
+    /// duplicated a second time on the wire (see `crates/api/src/render.rs`,
+    /// Task 4).
+    Available(SampleStats),
+}
+
+impl SampleAvailability {
+    /// `#[serde(default = ...)]` shim for deserializing `line_status_history`
+    /// rows written before this field existed. `write_line_status` itself
+    /// always writes a freshly computed value -- this default is a
+    /// read-compat fallback, not a real "unknown" state.
+    pub fn no_coverage_default() -> Self {
+        SampleAvailability::NoCoverage
+    }
+
+    /// Extracts the `Available` payload, if any -- kept for the two call
+    /// sites below that still want the old `Option<SampleStats>` shape
+    /// internally, so `relevant_departures`/`stats_from_departures` don't
+    /// need a second return channel added just for this.
+    pub fn sample_stats(&self) -> Option<SampleStats> {
+        match self {
+            SampleAvailability::Available(stats) => Some(stats.clone()),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod sample_availability_tests {
+    use super::*;
+
+    #[test]
+    fn wire_tags_match_the_design_spec() {
+        assert_eq!(serde_json::to_value(SampleAvailability::NoCoverage).unwrap(), serde_json::json!({"state": "no-coverage"}));
+        assert_eq!(
+            serde_json::to_value(SampleAvailability::BelowThreshold { observed: 2, required: 3 }).unwrap(),
+            serde_json::json!({"state": "below-threshold", "observed": 2, "required": 3})
+        );
+    }
+
+    #[test]
+    fn sample_stats_accessor_extracts_only_the_available_variant() {
+        assert_eq!(SampleAvailability::NoCoverage.sample_stats(), None);
+        assert_eq!(SampleAvailability::BelowThreshold { observed: 0, required: 3 }.sample_stats(), None);
+        let stats = SampleStats { total: 5, delayed: 1, cancelled: 0, skipped: 0, avg_delay_minutes: 2.0 };
+        assert_eq!(SampleAvailability::Available(stats.clone()).sample_stats(), Some(stats));
+    }
 }
 
 /// A user-defined line (see the `custom_lines` table in the `api` crate).
