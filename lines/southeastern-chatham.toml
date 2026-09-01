@@ -55,14 +55,71 @@ excluded_keywords = ["Hastings line"]
 # reality continues on round the coast via Minster/Sandwich/Deal/Walmer/
 # Martin Mill to rejoin the direct route at Dover, and (b) the direct
 # inland route via Canterbury East/Bekesbourne/Adisham/Aylesham/Snowdown/
-# Shepherds Well/Kearsney to Dover Priory. The Minster-to-Martin Mill leg
-# of the coastal loop (Ramsgate onward to Dover) could not be confirmed to
-# this file's sourcing standard in the time available - no second source
-# was cross-checked for that stretch's exact station list/CRS codes - so
-# it is omitted; this file treats Ramsgate as the confirmed limit of the
-# coastal branch rather than guess at the remainder of the loop. This
-# matches the plan's own "Ramsgate/Dover" phrasing without inventing the
-# unconfirmed middle section.
+# Shepherds Well/Kearsney to Dover Priory.
+#
+# BRANCH-RESEARCH (Task 5.1 of the station-catalogue-completeness plan):
+# the Ramsgate-onward stretch is now confirmed. Minster (MSR) is a
+# junction where this route meets the separate Ashford - Canterbury West
+# - Ramsgate line (not covered by this catalogue); from there the route
+# continues Minster -> Sandwich (SDW) -> Deal (DEA) -> Walmer (WAM) ->
+# Martin Mill (MTM), each confirmed via that station's own Wikipedia
+# infobox cross-checked against a second source (nationalrail.co.uk's
+# /stations/<crs>/details.html for MSR, SDW and WAM; railwaycodes.org.uk's
+# crsd.shtm/crsm.shtm tables for DEA and MTM). These five stations are
+# tagged with a new `chatham-deal` segment rather than continuing
+# `chatham-coastal`: past Minster the route leaves the North Sea/Thames
+# Estuary coast that WHI-through-RAM front and instead runs inland then
+# down to the Dover Strait coast, historically the separate Dover and
+# Deal Joint Railway rather than the LCDR coastal alignment north of
+# Ramsgate - a genuine physical-character change, not a station strictly
+# between two already-`chatham-coastal` stations. Grepped `lines/*.toml`
+# first to confirm no other file already uses `chatham-deal`.
+#
+# What's still NOT modelled: Martin Mill's own Wikipedia infobox confirms
+# its next station towards Dover is Dover Priory itself (DVP), so the
+# loop does physically rejoin the direct route there. DVP is not
+# duplicated as a second `[[stations]]` entry for this branch, though:
+# `stations_between()` in crates/common/src/lib.rs resolves "between A
+# and B" by array index, and this file already lists DVP once, as
+# `chatham-dover`'s terminus after Kearsney (see that segment below). A
+# second DVP entry positioned after Martin Mill would make
+# `stations_between` ambiguous for any query mentioning DVP - `.position`
+# only finds the first match, so one of the two branches' own
+# "between ... and Dover Priory" slicing would silently include the
+# other branch's stations. Rather than risk that silent corruption, this
+# file keeps a single DVP entry (unchanged, still `chatham-dover`) and
+# ends `chatham-deal` at Martin Mill, the last new station confirmed.
+# This is the right call between two imperfect options - it preserves
+# correctness for the pre-existing, more important `chatham-dover`
+# CBE-to-DVP resolution - but it does NOT make the MTM-to-DVP pair
+# safe: with the single DVP entry positioned at the very end of the
+# file (after the whole `chatham-dover` branch), a hypothetical
+# `stations_between("MTM", "DVP")` call would not return nothing, it
+# would silently return MTM plus the entire unrelated `chatham-dover`
+# branch (CBE, BKS, ADM, AYH, SWO, SPH, KSN) plus DVP - the same
+# "silently wrong branch" failure mode described above, just landing on
+# the pair that was deliberately left broken rather than the pair that
+# was deliberately kept correct. DVP itself was already
+# `has_station() == true` for this file before this task via the
+# existing `chatham-dover` entry, so no station goes unrepresented -
+# only `stations_between` queries naming both MTM (or any `chatham-deal`
+# station) and DVP together are unsafe, and that risk is disclosed here
+# rather than left for a future reader to discover the hard way. (This
+# flat-array/branching-index limitation isn't new to this task - the
+# same ambiguity already existed pre-task at the FAV divergence point
+# between `chatham-coastal` and `chatham-dover`.)
+#
+# southeastern-highspeed.toml's own header comment (around lines 70-79)
+# says it deliberately left this same stretch out too, "for consistency"
+# with this file's then-unconfirmed state. That stretch is now confirmed
+# here through Martin Mill (see above) - a future task extending
+# southeastern-highspeed.toml's own North Kent pattern coverage should
+# treat Minster/Sandwich/Deal/Walmer/Martin Mill as independently
+# verified now, not still an open gap, and can decide its own
+# segment/station-overlap treatment the same way it already did for
+# `chatham-medway`/`chatham-coastal` (station overlap, not shared
+# segment - see hs1_northkent_station_overlap_matches_both_chatham_and_hs1_as_independent_exclusive_segments
+# in crates/aggregator/src/matcher.rs).
 #
 # Both eastern branches are covered in this ONE file (unlike Task 5.1's
 # Hastings-line exclusion) because Wikipedia's own "Chatham Main Line"
@@ -76,11 +133,20 @@ excluded_keywords = ["Hastings line"]
 # the Catford Loop Line alternative Victoria routing (from Shortlands, via
 # Catford/Peckham Rye rather than Herne Hill/Brixton).
 #
-# Suburban/slow-line stopping-pattern stations between Herne Hill and
-# Bromley South (West Dulwich, Sydenham Hill, Penge East, Kent House) are
-# omitted, same reasoning as southeastern-main-line.toml's LBG-Orpington
-# omission: unconfirmed fast/slow calling pattern, and they sit more
-# naturally with this batch's forthcoming Southeastern metro files.
+# FILL-IN (Task 5.1 of the station-catalogue-completeness plan): the four
+# suburban/slow-line stations between Herne Hill and Bromley South (West
+# Dulwich, Sydenham Hill, Penge East, Kent House) are now confirmed and
+# inserted below at their true geographic position, in `chatham-london`
+# (they sit on the same physical stretch as the rest of that segment - no
+# new segment-boundary judgment needed). Order confirmed via each
+# station's own Wikipedia infobox ("preceding station"/"following
+# station" service-table fields): Herne Hill -> West Dulwich -> Sydenham
+# Hill -> Penge East -> Kent House -> Beckenham Junction. CRS codes:
+# WDU, PNE and KTH cross-checked against railwaycodes.org.uk's crsw.shtm/
+# crsp.shtm/crsk.shtm tables; SYH's crss.shtm fetch truncated before
+# reaching it (same truncation issue noted above for other S-prefixed
+# codes), so SYH was instead cross-checked against nationalrail.co.uk's
+# own /stations/syh/details.html page ("Sydenham Hill (SYH)").
 #
 # DVP (Dover Priory) is also the southeastern-main-line.toml terminus, but
 # the two lines approach it from physically different directions (this
@@ -108,6 +174,26 @@ role = "major"
 segment = "chatham-london"
 # Also reachable via the Catford Loop Line (Shortlands - Catford - Peckham
 # Rye), an alternative Victoria routing not covered by this catalogue.
+
+[[stations]]
+crs = "WDU"
+role = "minor"
+segment = "chatham-london"
+
+[[stations]]
+crs = "SYH"
+role = "minor"
+segment = "chatham-london"
+
+[[stations]]
+crs = "PNE"
+role = "minor"
+segment = "chatham-london"
+
+[[stations]]
+crs = "KTH"
+role = "minor"
+segment = "chatham-london"
 
 [[stations]]
 crs = "BKJ"
@@ -242,9 +328,42 @@ segment = "chatham-coastal"
 crs = "RAM"
 role = "major"
 segment = "chatham-coastal"
-# Not a physical terminus - the coastal loop continues to Dover Priory via
-# Deal/Sandwich (omitted; see the route-geography comment above). Treated
-# as this branch's confirmed limit for this file.
+# Not a physical terminus - the coastal loop continues on toward Dover via
+# Minster/Sandwich/Deal/Walmer/Martin Mill, confirmed below on the new
+# `chatham-deal` segment (see the route-geography comment above).
+
+[[stations]]
+crs = "MSR"
+role = "junction"
+segment = "chatham-deal"
+# Junction with the separate Ashford - Canterbury West - Ramsgate line;
+# not covered by this catalogue.
+
+[[stations]]
+crs = "SDW"
+role = "minor"
+segment = "chatham-deal"
+
+[[stations]]
+crs = "DEA"
+role = "major"
+segment = "chatham-deal"
+
+[[stations]]
+crs = "WAM"
+role = "minor"
+segment = "chatham-deal"
+
+[[stations]]
+crs = "MTM"
+role = "minor"
+segment = "chatham-deal"
+# Last station confirmed on this branch. Its own Wikipedia infobox
+# confirms Dover Priory (DVP) as the next station, physically rejoining
+# `chatham-dover`, but DVP is deliberately not re-listed here - see the
+# route-geography comment above for why a second DVP entry would corrupt
+# `stations_between()`'s index-based slicing for the existing
+# `chatham-dover` branch.
 
 [[stations]]
 crs = "CBE"

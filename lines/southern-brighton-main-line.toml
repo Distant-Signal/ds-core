@@ -154,6 +154,40 @@ match_keywords = ["Brighton Main Line", "Gatwick Express"]
 # just before East Croydon (see above). Only principal/interchange stations
 # are listed, matching xc-south-coast.toml's precedent ("minor intermediate
 # calls are omitted; only principal stations are listed").
+#
+# TASK 5.4 FILL-IN (station-catalogue-completeness plan): a fresh
+# route-diagram pass added two genuinely missing, currently-open, currently-
+# Southern-served stations below - Clapham Junction (CLJ, Victoria approach)
+# and Wivelsfield (WVF, between Haywards Heath and Burgess Hill) - see each
+# entry's own comment for sourcing. Several other candidate stations
+# surfaced during this research and were deliberately NOT added, each for a
+# specific, checked reason rather than a blanket "principal only" omission:
+#   - Purley, Coulsdon South, Merstham, Redhill, Earlswood, Salfords, Horley:
+#     these sit on a genuinely different physical stopping pattern - per
+#     Wikipedia's own Salfords/Earlswood station articles, the local service
+#     calling at all of these runs London Bridge - Norwood Junction - East
+#     Croydon - Purley - Coulsdon South - Merstham - Redhill - Earlswood -
+#     Salfords - Horley - Gatwick Airport - Three Bridges - onward to
+#     Horsham, i.e. via Norwood Junction and the "slow"/Redhill alignment,
+#     not this file's own Clapham Junction/Windmill Bridge Jn or Quarry Line
+#     fast alignment. That's a separate, not-yet-modelled Redhill/Arun
+#     Valley stopping line, not a fill-in gap in this file - adding it here
+#     would be new-line-scope work per this plan's Global Constraints, not
+#     routine infill.
+#   - Balcombe (between Three Bridges and Haywards Heath): confirmed via its
+#     own Wikipedia infobox as Thameslink-only ("Thameslink operates all
+#     services at the station") - this file's operators are Southern/Gatwick
+#     Express only, so Balcombe genuinely isn't served by any service this
+#     file models.
+#   - South Croydon: already deliberately modelled in
+#     southern-oxted-uckfield.toml instead (that file's own header comment
+#     explicitly confirms it as "NOT a station in
+#     southern-brighton-main-line.toml's own list" and takes ownership of
+#     it as the Oxted line's own junction point) - not re-added here.
+#   - London Road (Brighton) (between Preston Park and Brighton): already
+#     modelled in southern-coastway-east.toml as the East Coastway line's
+#     own first stop out of Brighton, a physically different route from this
+#     file's own main-line approach into Brighton - not re-added here.
 # ============================================================================
 [[stations]]
 crs = "VIC"
@@ -163,6 +197,26 @@ segment = "southern-bml-victoria"
 # not call here at all (it's a different, cross-London-core route via St
 # Pancras/Blackfriars/London Bridge) - so this approach is Southern/GX-only,
 # unlike the London Bridge approach below.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "southern-bml-victoria"
+# Clapham Junction. TASK 5.4 FILL-IN: confirmed via Wikipedia's "Brighton
+# Main Line" article and independent web-search corroboration that "the
+# fastest services from Brighton to Victoria call only at East Croydon and
+# Clapham Junction" - i.e. it is a genuine, principal calling point on this
+# line's own Victoria approach, not a minor/non-principal stop that was
+# correctly excluded. CRS code CLJ (TIPLOC CLPHMJC) reused unchanged from
+# swr-south-west-main.toml, where it's already independently confirmed -
+# also cross-checked directly here against nationalrail.co.uk's own
+# stations/clj/details.html page. Sits strictly between VIC and East Croydon
+# on the Victoria approach only (the London Bridge approach below does not
+# touch it), so it inherits `southern-bml-victoria` rather than needing a
+# new segment. Station overlap only with swr-south-west-main.toml's own
+# `swr-trunk-waterloo` segment and the Overground files' own segments at
+# this station (different physical lines/platforms converging only at the
+# station building) - not a shared segment.
 
 [[stations]]
 crs = "LBG"
@@ -208,6 +262,19 @@ crs = "HHE"
 role = "major"
 segment = "southern-bml-south"
 # Haywards Heath.
+
+[[stations]]
+crs = "WVF"
+role = "minor"
+segment = "southern-bml-south"
+# Wivelsfield. TASK 5.4 FILL-IN: confirmed via its own Wikipedia infobox/
+# article ("situated between Haywards Heath and Burgess Hill stations on
+# the main line"; "managed by Southern, which is one of two companies
+# serving Wivelsfield, the other being Thameslink") and independently
+# cross-checked against nationalrail.co.uk's own stations/wvf/details.html
+# page (CRS WVF, operator Southern). Genuinely Southern-served, unlike
+# Balcombe (the Three Bridges-Haywards Heath stretch's own Thameslink-only
+# station - see header comment) - not a candidate for the same exclusion.
 
 [[stations]]
 crs = "BUG"

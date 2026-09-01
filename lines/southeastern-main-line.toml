@@ -56,13 +56,70 @@ excluded_keywords = ["Hastings line"]
 # one file (the swr-south-west-main.toml precedent this task's brief points
 # to is for a same-direction Bournemouth/Weymouth fork, not this case).
 #
-# Suburban stopping-pattern stations between London Bridge and Orpington
-# (New Cross, Hither Green, Grove Park, Chislehurst, Petts Wood, etc.) are
-# omitted pending CRS verification of the exact fast-line calling order,
-# and because they sit more naturally with this batch's forthcoming
-# Southeastern metro files (southeastern-metro-north-kent.toml /
-# southeastern-metro-south-london.toml, Tasks 5.4/5.5) than with this
-# main-line spine.
+# TASK 5.3 FOLLOW-UP: the suburban stopping-pattern stations between London
+# Bridge and Orpington named in the paragraph this replaces have now been
+# researched and added below (as of this pass, southeastern-metro-north-
+# kent.toml, Task 5.4, exists; southeastern-metro-south-london.toml, Task
+# 5.5, does not yet).
+#
+# The full LBG-ORP slow-line calling pattern confirmed via a fresh
+# route-diagram pass turned out to be seven stations, not the five
+# originally named - New Cross's and Hither Green's own neighbouring
+# stations, St Johns and Lewisham, also sit on this exact stretch and were
+# missing from the original "etc.": London Bridge - New Cross - St Johns -
+# Lewisham - Hither Green - Grove Park - Chislehurst - Petts Wood -
+# Orpington. All seven are added below on `seml-london`, since each sits
+# strictly between the already-modelled LBG and ORP entries.
+#
+# New Cross/St Johns/Lewisham/Hither Green determination: these four
+# already appear in southeastern-metro-north-kent.toml, on its own
+# `southeastern-lewisham-corridor` segment (CHX/CST/LBG/NWX/SAJ/LEW) and,
+# for Hither Green, its own `senk-dartford-loop` segment. Checked whether
+# they sit on THIS line's own physical alignment toward Orpington or only
+# on the Dartford Loop/Bexleyheath corridor's physically distinct tracks:
+# Hither Green's own Wikipedia article states it is served by "the South
+# Eastern Main Line (to Charing Cross and Cannon Street via New Cross)"
+# AND the Dartford Loop Line, with the Dartford Loop diverging AT Hither
+# Green while the main line continues on to Grove Park/Orpington - i.e.
+# Hither Green itself is the shared station before the fork, not a
+# Dartford-Loop-exclusive stop. St Johns' own Wikipedia article confirms
+# it sits "on the slow lines" of the South Eastern Main Line with New
+# Cross as its immediate neighbour toward London and Lewisham as its
+# immediate neighbour south - the same chain southeastern-metro-north-
+# kent.toml's own `southeastern-lewisham-corridor` segment already
+# documents. So all four sit on this line's own alignment and are added
+# here too, as station overlap with southeastern-metro-north-kent.toml
+# (not a shared segment - no new segment name, following the
+# xc-south-coast.toml/xc-manchester.toml precedent and this file's own
+# DVP/Thameslink-LBG precedent below).
+#
+# Grove Park/Chislehurst/Petts Wood are new to the catalogue - no other
+# file models them.
+#
+# Sourcing: every CRS code below (NWX, SAJ, LEW, HGR, GRP, CIT, PET) was
+# cross-checked against a second, non-Wikipedia source (railwaycodes.org.uk's
+# crs*.shtm tables for GRP/PET/HGR/SAJ; nationalrail.co.uk's own
+# stations/<crs>/details.html pages for NWX/CIT, after railwaycodes.org.uk's
+# CRSc.shtm page truncated before reaching Chislehurst's entry). The
+# LBG-ORP calling ORDER, however, is confirmed only via each station's own
+# Wikipedia infobox, cross-checked station-to-station (New Cross's
+# southward neighbour is St Johns per St Johns' own article; St Johns'
+# southward neighbour is Lewisham; Lewisham's is Hither Green; Hither
+# Green's is Grove Park per Grove Park's own article; Grove Park's is
+# Chislehurst; Chislehurst's is Petts Wood; Petts Wood's is Orpington per
+# Orpington's own article) - a mutually self-consistent chain across seven
+# independent articles, but all seven are still Wikipedia. Non-Wikipedia
+# corroboration of the order specifically (not just the codes) was
+# attempted and failed: railwaycodes.org.uk's ELR/mileage index and
+# CRSc.shtm page both 429'd or truncated, and nationalrail.co.uk's live
+# departure boards, Southeastern's own site, RealTimeTrains and
+# traintimes.org.uk all returned JS-rendered/bot-protected pages this
+# fetch tooling couldn't read. Disclosing this plainly per the
+# southern-brighton-main-line.toml precedent for a Wikipedia-only fact,
+# rather than asserting the order as fully cross-source-confirmed - though
+# note this is uncontroversial, extensively-documented London commuter-line
+# geography with no competing ordering found anywhere in the sources
+# checked.
 #
 # LBG is also served by Thameslink (`thameslink-core.toml`, whose own
 # segment ends at LBG) but via a physically different route (the Thameslink
@@ -92,6 +149,67 @@ segment = "seml-london"
 crs = "LBG"
 role = "major"
 segment = "seml-london"
+
+[[stations]]
+crs = "NWX"
+role = "junction"
+segment = "seml-london"
+# New Cross. Station overlap with southeastern-metro-north-kent.toml's own
+# `southeastern-lewisham-corridor` segment (see header comment above) - a
+# differently-aligned North Kent Line route (via the Surrey Canal curve
+# toward Greenwich/Woolwich) diverges near here; not covered by this
+# catalogue.
+
+[[stations]]
+crs = "SAJ"
+role = "minor"
+segment = "seml-london"
+# St Johns. Station overlap with southeastern-metro-north-kent.toml's own
+# `southeastern-lewisham-corridor` segment (see header comment above).
+
+[[stations]]
+crs = "LEW"
+role = "junction"
+segment = "seml-london"
+# Lewisham. Station overlap with southeastern-metro-north-kent.toml's own
+# `southeastern-lewisham-corridor` segment (see header comment above); the
+# Bexleyheath line diverges here (toward Blackheath), and the Hayes line
+# and North Kent Line also diverge/join here - none covered by this file.
+
+[[stations]]
+crs = "HGR"
+role = "junction"
+segment = "seml-london"
+# Hither Green. Station overlap with southeastern-metro-north-kent.toml's
+# own `senk-dartford-loop` segment (see header comment above) - the
+# Dartford Loop line's own exclusive tracks diverge here; this line's own
+# alignment continues on to Grove Park.
+
+[[stations]]
+crs = "GRP"
+role = "junction"
+segment = "seml-london"
+# Grove Park. The Bromley North line (a short shuttle branch to Bromley
+# North) diverges here; not covered by this catalogue.
+
+[[stations]]
+crs = "CIT"
+role = "minor"
+segment = "seml-london"
+# Chislehurst. Up/down loop lines here give a physical connection to the
+# Chatham Main Line (southeastern-chatham.toml), but per Chislehurst's own
+# Wikipedia article there are normally no direct passenger services
+# between Chislehurst and St Mary Cray over those curves - trains using
+# them typically run non-stop between London Bridge and Rochester/West
+# Malling - so this is noted, not treated as a everyday shared trunk.
+
+[[stations]]
+crs = "PET"
+role = "minor"
+segment = "seml-london"
+# Petts Wood. Petts Wood Junction, just north of the station, links the
+# up/down loop lines from Charing Cross and Victoria; not covered by this
+# catalogue.
 
 [[stations]]
 crs = "ORP"

@@ -67,16 +67,55 @@ match_keywords = ["Javelin", "High Speed 1"]
 # via each station's own Wikipedia infobox. GRV (Gravesend) was confirmed
 # via both its Wikipedia infobox and railwaycodes.org.uk's crsg.shtm table.
 #
-# NOT included, omitted rather than guessed: the "one train" Ashford -
-# Canterbury West - Thanet Parkway - Ramsgate/Broadstairs pattern the
-# Southeastern TOC article also mentions (Canterbury West and Thanet
-# Parkway CRS codes were not cross-checked against a second source in the
-# time available), and the Dover Priory - Martin Mill - Walmer - Deal -
-# Sandwich coastal-loop continuation onward to Ramsgate (this is the exact
-# same stretch southeastern-chatham.toml's own header comment already
-# flagged as unconfirmed and omitted - not filling that gap here either,
-# for consistency, since it wasn't independently 2-source-verified here).
-# Both are coverage gaps for a future task, not this one.
+# BRANCH-RESEARCH (Task 5.2 of the station-catalogue-completeness plan):
+# the "one train" Ashford International - Canterbury West - Thanet Parkway
+# - Ramsgate - Broadstairs pattern is investigated but NOT added, because
+# the claim that matters most here - that this is a genuine,
+# currently-running Southeastern High Speed pattern, not a historical/
+# launch-era-only or proposed one - does not clear this catalogue's
+# two-source bar. Every source found for that specific claim is Wikipedia:
+# the "Southeastern (train operating company)" article's High Speed
+# service-pattern table (dated December 2024, naming the route "London St
+# Pancras International to Margate via Canterbury West" and calling at
+# Stratford International, Ebbsfleet International, Ashford International,
+# Canterbury West, Thanet Parkway, Ramsgate and Broadstairs before
+# Margate), the "Ashford-Ramsgate line" article (an off-peak service list
+# dated November 2021 describing the same Ashford International ->
+# Canterbury West leg), the "British Rail Class 395" article's 2009
+# launch-history text, and Canterbury West's and Ashford International's
+# own station infoboxes. All five are the same site. Thanet Parkway only
+# opened 31 July 2023, so its presence in a December-2024-dated table is
+# suggestive of currency, but "several Wikipedia articles agree with each
+# other" is one source type, not the two independent sources
+# (railwaycodes.org.uk, nationalrail.co.uk, a TOC's own site) this
+# catalogue requires - and unlike the CRS-code checks below, no
+# non-Wikipedia source could be reached to corroborate the pattern itself:
+# nationalrail.co.uk's own station pages didn't surface timetable content,
+# Realtime Trains sat behind a Cloudflare challenge, and traintimes.org.uk
+# returned 403 in the time available. Per the sourcing bar, that's a
+# reason to leave the whole pattern out, not a reason to guess: CBW
+# (Canterbury West) and THP (Thanet Parkway) are NOT added as
+# `[[stations]]` entries here, even though their own CRS codes were
+# independently confirmed (CBW via its own Wikipedia infobox and
+# railwaycodes.org.uk's crsc.shtm table; THP via its own Wikipedia infobox
+# and railwaycodes.org.uk's crst.shtm table) - CRS-code confirmation alone
+# doesn't justify adding two brand-new stations to the catalogue when the
+# underlying claim that they belong on this line at all isn't confirmed to
+# the same bar. This is a coverage gap for a future task with either more
+# time or a working non-Wikipedia source, not this one.
+#
+# Still NOT included here either, and unrelated to the above (a different
+# pattern, the OTHER way round the coastal loop): the Dover Priory -
+# Martin Mill - Walmer - Deal - Sandwich stretch this file's own comment
+# previously flagged alongside the above as unconfirmed. That stretch is
+# now independently confirmed and modelled in southeastern-chatham.toml as
+# its `chatham-deal` segment (Task 5.1) - see that file's own header
+# comment, which explicitly notes a future task extending this file's own
+# North Kent pattern (`hs1-northkent`'s RAM terminus) onward through
+# Minster/Sandwich/Deal/Walmer/Martin Mill can now treat those five
+# stations as independently verified. That extension is not this task
+# (this task is the separate Ashford - Canterbury West pattern above, per
+# the brief) and is not done here.
 #
 # Segment-sharing decision (station overlap only, everywhere - no shared
 # segment in this file):
@@ -156,7 +195,8 @@ segment = "hs1-ashford"
 # station overlap with southeastern-main-line.toml's AFK (on `seml-weald`),
 # not a shared segment; see header comment. The sparser Ashford - Canterbury
 # West - Thanet Parkway - Ramsgate/Broadstairs pattern also reported for
-# this service is not covered here; see header comment.
+# this service was researched (Task 5.2) but not added; see header comment
+# for why it doesn't clear the two-source bar.
 
 [[stations]]
 crs = "FKW"
@@ -175,11 +215,14 @@ crs = "DVP"
 role = "terminus"
 segment = "hs1-ashford"
 # Confirmed limit of this branch; the coastal-loop continuation onward to
-# Ramsgate via Martin Mill/Walmer/Deal/Sandwich is not covered here (same
-# unconfirmed stretch southeastern-chatham.toml's own comment already
-# flags and omits). Also on southeastern-main-line.toml's `seml-coast` and
-# southeastern-chatham.toml's `chatham-dover` - three-way station overlap,
-# no shared segment; see header comment.
+# Ramsgate via Martin Mill/Walmer/Deal/Sandwich is still not covered here.
+# That stretch is no longer unconfirmed catalogue-wide, though: it's now
+# independently confirmed and modelled in southeastern-chatham.toml as its
+# `chatham-deal` segment (Task 5.1) - see the header comment's
+# BRANCH-RESEARCH note for why extending this branch to reuse it is a
+# separate future task, not done here. Also on southeastern-main-line.
+# toml's `seml-coast` and southeastern-chatham.toml's `chatham-dover` -
+# three-way station overlap, no shared segment; see header comment.
 
 [[stations]]
 crs = "GRV"
