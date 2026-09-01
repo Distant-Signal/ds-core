@@ -67,14 +67,61 @@ match_keywords = ["South Wales Main Line", "Severn Tunnel"]
 # not Wootton Bassett) as the westbound-facing calling point on the 2tph
 # Paddington service.
 #
-# Patchway, Pilning and Severn Tunnel Junction (all real intermediate
-# stations between Bristol Parkway and Newport, per Wikipedia's South Wales
-# Main Line route diagram) are omitted as non-principal: none of the
-# station-level Wikipedia "Services" sources checked for this file name them
-# as calling points on the London Paddington-Swansea pattern (Newport's own
-# "Services" section lists only Bristol Parkway/Swindon/Didcot
-# Parkway/Reading eastbound), matching gwr-cotswold.toml's precedent for
-# omitting non-principal intermediate halts.
+# Patchway, Pilning and Severn Tunnel Junction (station-catalogue-
+# completeness task, 2026-09-01): these three real, currently-open,
+# currently-served intermediate stations between Bristol Parkway and Newport
+# were previously omitted here as non-principal (none of them are calling
+# points on the London Paddington-Swansea express pattern). Per the
+# station-catalogue-completeness plan's rationale (a station missing from
+# `stations` makes the `/stations/[crs]` lookup silently look "fine" for a
+# station the catalogue never listed), they are included below regardless of
+# service frequency, following the same precedent already applied to
+# gwr-cornish-main-line.toml's Plymouth-area halts and gwr-cotswold.toml's
+# minor halts.
+#
+# CRS codes cross-checked Wikipedia infobox vs. railwaycodes.org.uk's own
+# crsp.shtm/crss.shtm CRS/TIPLOC tables (fetched directly via curl, same
+# methodology as this file's own PAD/RDG/DID/SWI/BPW/etc. rows above): PWY
+# (NLC 321300, TIPLOC PATCHWY, STANOX 81116), PIL (NLC 321400, TIPLOC
+# PILNING, STANOX 81118), STJ (NLC 367900, TIPLOC SEVTNLJ, STANOX 76090) —
+# all agree with their respective Wikipedia infobox `code` fields.
+#
+# Geographic order (Bristol Parkway - Patchway - Pilning - Severn Tunnel
+# Junction - Newport) confirmed via each station's own Wikipedia route-
+# diagram previous/next chain (raw wikitext, not AI-summarized — see below):
+# Patchway's current GWR Taunton-Cardiff Central diagram shows previous =
+# Filton Abbey Wood, next = Severn Tunnel Junction; Pilning's shows previous
+# = Severn Tunnel Junction, next = Patchway (Saturdays-only eastbound
+# working, i.e. same westbound order); Severn Tunnel Junction's shows
+# next = Patchway or Pilning westbound and Newport eastbound.
+#
+# Completeness re-check beyond the brief's named 3, per this task's own
+# instruction to verify against a fresh route-diagram read rather than
+# stop at the starting list — found nothing further to add:
+# - Filton Abbey Wood: real and open, but its own Wikipedia article (raw
+#   wikitext, not the AI-summarized read which incorrectly placed it on
+#   this route) confirms it sits on the Filton Bank spur towards Bristol
+#   Temple Meads, not on the Bristol Parkway-Severn Tunnel alignment this
+#   line uses. Out of scope for this file.
+# - Rogiet: en.wikipedia.org/wiki/Rogiet_railway_station is a redirect to
+#   Severn Tunnel Junction — same station, not a separate stop.
+# - Caldicot: real and open (CDT), but its own Wikipedia article states
+#   plainly it is "on the Gloucester line... The line to Bristol via the
+#   Severn Tunnel runs just to the north but there are no platforms here" —
+#   it belongs to the Gloucester to Newport Line (xc-cardiff.toml territory
+#   per this file's own Overlap 2 comment above), not this line's physical
+#   route.
+# - Undy: no current Wikipedia article/station exists under this name.
+# - Magor and Llanwern: both former South Wales Railway stations, closed to
+#   passengers in 1964 and 1960 respectively, still disused today (both
+#   pages confirm no reopening has occurred as of this task).
+#
+# An earlier AI-summarized WebFetch read of this article's route diagram
+# incorrectly included Filton Abbey Wood, Caldicot, Undy and Magor/Llanwern
+# in the Bristol Parkway-Newport sequence; this comment's actual research
+# used raw wikitext (curl) for every claim above precisely because of that
+# unreliability — matching the warning already on record in this file's own
+# PAD/RDG/DID/SWI-era comment about AI-summarized table reads.
 #
 # --- Overlap 1: Bristol Parkway (BPW) with cross-country.toml ---
 #
@@ -157,6 +204,14 @@ match_keywords = ["South Wales Main Line", "Severn Tunnel"]
 # a non-passenger/generic entry) — the real station row is "Newport (South
 # Wales)" (CRS NWP, TIPLOC NWPTRTG), used below. PAD/RDG/DID/SWI rows are
 # copied verbatim from gwr-main-line.toml rather than re-derived.
+#
+# Patchway (PWY), Pilning (PIL) and Severn Tunnel Junction (STJ), inserted
+# between BPW and NWP below, are the exception to the "principal/express-
+# pattern only" framing above: they're real, currently-open, currently-
+# served stations that don't carry the express London-Swansea pattern, added
+# for station-catalogue-completeness rather than principal-station status
+# (see the dedicated research comment further above, in the segment-naming
+# block, for full sourcing).
 [[stations]]
 crs = "PAD"
 tiploc = "PADTON"
@@ -191,6 +246,37 @@ segment = "gwr-south-wales"
 # This line's own exclusive segment starts here (see segment-naming comment
 # above). Also served by cross-country.toml (its `xc-bristol` segment) —
 # station overlap only, no segment shared (see above).
+
+[[stations]]
+crs = "PWY"
+tiploc = "PATCHWY"
+role = "minor"
+segment = "gwr-south-wales"
+# Station-catalogue-completeness infill (see research comment above): DfT
+# category F1, served by the local GWR Cardiff Central-Taunton stopping
+# pattern rather than the express London-Swansea one.
+
+[[stations]]
+crs = "PIL"
+tiploc = "PILNING"
+role = "minor"
+segment = "gwr-south-wales"
+# Station-catalogue-completeness infill (see research comment above): DfT
+# category F2, a "parliamentary" service of two trains per week (Saturdays
+# only, eastbound only — westbound passengers use a fares easement via
+# Severn Tunnel Junction). Still a real, currently-open, currently-served
+# station, so included per this task's scope.
+
+[[stations]]
+crs = "STJ"
+tiploc = "SEVTNLJ"
+role = "junction"
+segment = "gwr-south-wales"
+# Station-catalogue-completeness infill (see research comment above): a real
+# interchange point (Gloucester to Newport Line converges here — see
+# Overlap 2 comment above), DfT category E, quadruple track begins just west
+# of here through Newport to Cardiff Central. `role = "junction"` per
+# SCHEMA.md, mirroring RDG/DID/SWI above.
 
 [[stations]]
 crs = "NWP"

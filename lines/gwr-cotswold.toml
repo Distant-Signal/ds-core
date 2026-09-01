@@ -86,21 +86,38 @@ delay_threshold_minutes = 10
 # `xc-south-coast` — the two lines diverge in different directions beyond
 # this shared calling point.
 
-# Ordered London to Worcester. Principal/express-pattern stations only, per
-# the gap-analysis section this task is grounded in
-# (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, "Great
-# Western Railway (GWR)"). Several intermediate Cotswold Line halts (Combe,
-# Finstock, Ascott-under-Wychwood, Shipton) exist between Oxford and Kingham
-# but were independently confirmed (Wikipedia, per-station "Services"
-# sections) to carry only a minimal local service (2-3 trains/day, no
+# Ordered London to Worcester. Originally scoped to principal/express-
+# pattern stations only, per the gap-analysis section this task is grounded
+# in (docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "Great Western Railway (GWR)"). Station Catalogue Completeness Task 1.2
+# revisited that scoping: Combe, Finstock, Ascott-under-Wychwood and Shipton
+# — the minor Cotswold Line halts between Oxford and Kingham previously
+# omitted here for carrying only a minimal local service (2-3 trains/day, no
 # regular through-Paddington service) rather than the broadly-hourly London
-# pattern the stations below carry, so they are omitted as non-principal.
-# Blockley, Chipping Campden and Littleton & Badsey stations closed in 1966
-# and no longer exist. All CRS/NLC/TIPLOC/STANME/STANOX values below were
-# read directly from railwaycodes.org.uk's own CRS/TIPLOC HTML tables
-# (crso/crsc/crsk/crsm/crsh/crse/crsp/crsw.shtm — the authoritative primary
-# source), and cross-checked against each station's Wikipedia infobox CRS
-# code, which all agree. PAD/RDG/DID rows are copied verbatim from
+# pattern — are real, currently-open, currently-served stations, so under
+# this plan's full-coverage mandate they belong in `stations` regardless of
+# how thin their service pattern is (this is a catalogue-completeness call
+# only, and says nothing about severity tuning for this stretch, which is
+# untouched here). A fresh read of the line's route diagram for this task
+# (en.wikipedia.org/wiki/Cotswold_Line) also surfaced a fifth omission not
+# named in the task's starting list: Hanborough, between Oxford and Combe.
+# Unlike the other four, Hanborough in fact carries the same broadly-hourly
+# "1 tph to London Paddington" pattern as the principal stations already
+# listed here (en.wikipedia.org/wiki/Hanborough_railway_station's "Services"
+# section) — added for the same completeness reason. Wolvercot Platform and
+# Yarnton, the two other halts that appear on the line's historical route
+# diagram between Oxford and Hanborough, are both long closed (Yarnton:
+# closed 18 June 1962, en.wikipedia.org/wiki/Yarnton_railway_station;
+# Wolvercot Platform: no current Wikipedia article, and already discussed
+# above as an unstaffed ex-junction with no CRS/TIPLOC of its own) and
+# correctly stay out. Blockley, Chipping Campden and Littleton & Badsey
+# stations closed in 1966 and no longer exist. All CRS/NLC/TIPLOC/STANME/
+# STANOX values below were read directly from railwaycodes.org.uk's own
+# CRS/TIPLOC HTML tables (crsa/crsc/crse/crsf/crsh/crsk/crsm/crso/crsp/crss/
+# crsw.shtm — the authoritative primary source), and cross-checked against
+# each station's Wikipedia infobox CRS code (also against National Rail
+# Enquiries' nationalrail.co.uk/stations/hnd/details.html for Hanborough),
+# which all agree. PAD/RDG/DID rows are copied verbatim from
 # gwr-main-line.toml rather than re-derived.
 [[stations]]
 crs = "PAD"
@@ -132,8 +149,38 @@ segment = "gwr-cotswold"
 # only, no segment shared (see above).
 
 [[stations]]
+crs = "HND"
+tiploc = "HANDBRO"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "CME"
+tiploc = "COMBE"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "FIN"
+tiploc = "FINSTCK"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
 crs = "CBY"
 tiploc = "CHBURY"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "AUW"
+tiploc = "ASCTUWD"
+role = "minor"
+segment = "gwr-cotswold"
+
+[[stations]]
+crs = "SIP"
+tiploc = "SPTN"
 role = "minor"
 segment = "gwr-cotswold"
 

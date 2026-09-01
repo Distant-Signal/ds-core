@@ -105,15 +105,75 @@ delay_threshold_minutes = 10
 # real calling pattern between Paddington and Twyford is exactly Slough and
 # Maidenhead, and nothing else — the inner-suburban stations further east
 # (Ealing Broadway, Southall, Hayes & Harlington, West Drayton, Iver,
-# Langley, Burnham, Taplow) are not part of this pattern.
+# Langley, Burnham, Taplow) are not part of this 2tph semi-fast pattern.
 # en.wikipedia.org/wiki/West_Drayton_railway_station corroborates this from
 # the other direction: "the station is also served by a small number of
 # early morning and late evening Great Western Railway services between
 # London Paddington and Reading" — i.e. GWR's own presence there today is a
 # minor exception to an otherwise Elizabeth-line-only pattern, not a
-# principal calling point, so West Drayton (and the other inner-suburban
-# stations) are deliberately omitted here, matching gwr-cotswold.toml's
-# precedent for omitting non-principal halts.
+# principal calling point. This originally read as grounds to omit West
+# Drayton (and the other inner-suburban stations) from `stations` entirely,
+# matching gwr-cotswold.toml's precedent for omitting non-principal halts —
+# see the Station Catalogue Completeness Task 1.4 update immediately below,
+# which supersedes that omission for six of these seven stations.
+#
+# --- Station Catalogue Completeness Task 1.4 (2026-09) update ---
+#
+# The reasoning above conflated the same two judgment calls Task 1.1 already
+# untangled for gwr-cornish-main-line.toml: "principal enough for
+# `sample_stations`/this line's own service-pattern framing" versus "a real,
+# currently-open, currently-served GWR calling point that belongs in
+# `stations` regardless." West Drayton's own thin "a small number of early
+# morning and late evening" GWR calling pattern is exactly the kind of
+# thin-but-real service Task 1.2 already established belongs in `stations`
+# (gwr-cotswold.toml's Ascott-under-Wychwood/Finstock/Shipton halts), so it —
+# and six of its seven listed neighbours — are added below at their true
+# geographic position, between PAD and SLO.
+#
+# Each was re-verified two-source (own Wikipedia "Services" section +
+# nationalrail.co.uk's `stations/<crs>/details.html`) and each independently
+# repeats wording matching West Drayton's own "a small number of early
+# morning and late evening Great Western Railway services between London
+# Paddington and Reading": Southall (STL), Hayes & Harlington (HAY), West
+# Drayton (WDT), Iver (IVR), Langley (LNY — not LGL; confirmed via
+# nationalrail.co.uk's own page heading "Langley (Berks) (LNY)"), Burnham
+# (BNM), Taplow (TAP). Geographic order (Paddington - Southall - Hayes &
+# Harlington - West Drayton - Iver - Langley - Slough - Burnham - Taplow -
+# Maidenhead) confirmed via each station's own Wikipedia infobox
+# preceding/following-station chain. All seven stay `role = "minor"`,
+# reflecting the same thin calling pattern already documented above for West
+# Drayton, and inherit this line's one `gwr-thames-valley` segment — PAD and
+# SLO, the file's own bracketing stations for this stretch, both already
+# carry that segment, and this task's own research (below) found no genuine
+# reason for these six mid-stretch insertions to differ.
+#
+# Ealing Broadway, the eighth station in this task's starting candidate
+# list, does NOT clear the same bar and stays deliberately excluded: its own
+# Wikipedia "Services" section lists only the Elizabeth line, Central line
+# and District line, with no Great Western Railway mention at all — unlike
+# the other seven, which all explicitly describe thin GWR calling service.
+# nationalrail.co.uk's own `eal/details.html` corroborates this, naming only
+# the Elizabeth line. Ealing Broadway's own "Layout" section explains why:
+# its fast-line platforms are "only used by Great Western Railway (GWR)
+# trains between Didcot Parkway and London Paddington, except during
+# engineering works or a disruption" — i.e. GWR trains pass through Ealing
+# Broadway non-stop on the fast lines rather than calling there, the
+# opposite of West Drayton's situation. This is not the same "real station
+# overlap, no segment share" case already established below for MAI/SLO/TWY
+# (and now STL/HAY/WDT) against elizabeth-line.toml: GWR genuinely does not
+# call at Ealing Broadway today, so there is no segment question to resolve
+# for it, and per this plan's own two-source bar ("a station that can't be
+# confirmed stays OUT") it stays out of `stations` entirely.
+#
+# STL, HAY and WDT are each a real, additional station overlap with
+# elizabeth-line.toml (STL/HAY on its own `elizabeth-trunk-west` segment,
+# WDT on its own `elizabeth-west` segment — checked directly in that file) —
+# the same "different service class, same physical station, station overlap
+# only" shape already established below for MAI/SLO/TWY, so all three stay
+# on `gwr-thames-valley`, not either Elizabeth-line segment. IVR, LNY, BNM
+# and TAP are not currently in elizabeth-line.toml's own station list at all
+# (checked directly), so there is no sibling-segment overlap to flag for
+# those four.
 #
 # --- Branch 1: Didcot Parkway - Oxford (via Appleford, Culham, Radley) ---
 #
@@ -235,6 +295,48 @@ tiploc = "PADTON"
 role = "terminus"
 segment = "gwr-thames-valley"
 
+# Station Catalogue Completeness Task 1.4: Southall, Hayes & Harlington,
+# West Drayton and Iver, inserted here at their true geographic position
+# (see the Task 1.4 update in the segment-naming comment above for full
+# sourcing). Ealing Broadway, between PAD and here, is deliberately not
+# added — GWR does not currently call there (see above).
+[[stations]]
+crs = "STL"
+role = "minor"
+segment = "gwr-thames-valley"
+# Southall. Also served by elizabeth-line.toml (`elizabeth-trunk-west`) —
+# station overlap only, no segment shared (see the Task 1.4 update above).
+
+[[stations]]
+crs = "HAY"
+role = "minor"
+segment = "gwr-thames-valley"
+# Hayes & Harlington. Also served by elizabeth-line.toml
+# (`elizabeth-trunk-west`) — station overlap only, no segment shared (see
+# the Task 1.4 update above).
+
+[[stations]]
+crs = "WDT"
+role = "minor"
+segment = "gwr-thames-valley"
+# West Drayton. Also served by elizabeth-line.toml (`elizabeth-west`) —
+# station overlap only, no segment shared (see the Task 1.4 update above).
+
+[[stations]]
+crs = "IVR"
+role = "minor"
+segment = "gwr-thames-valley"
+# Iver. Not currently in elizabeth-line.toml's own station list, so no
+# sibling-segment overlap to flag here.
+
+[[stations]]
+crs = "LNY"
+role = "minor"
+segment = "gwr-thames-valley"
+# Langley (CRS is LNY, not LGL — confirmed via nationalrail.co.uk's own page
+# heading "Langley (Berks) (LNY)"). Not currently in elizabeth-line.toml's
+# own station list, so no sibling-segment overlap to flag here.
+
 [[stations]]
 crs = "SLO"
 tiploc = "SLOUGH"
@@ -242,6 +344,23 @@ role = "major"
 segment = "gwr-thames-valley"
 # Also served by elizabeth-line.toml (`elizabeth-west`) — station overlap
 # only, no segment shared (see above).
+
+# Station Catalogue Completeness Task 1.4: Burnham and Taplow, inserted here
+# at their true geographic position (see the Task 1.4 update in the
+# segment-naming comment above for full sourcing).
+[[stations]]
+crs = "BNM"
+role = "minor"
+segment = "gwr-thames-valley"
+# Burnham. Not currently in elizabeth-line.toml's own station list, so no
+# sibling-segment overlap to flag here.
+
+[[stations]]
+crs = "TAP"
+role = "minor"
+segment = "gwr-thames-valley"
+# Taplow. Not currently in elizabeth-line.toml's own station list, so no
+# sibling-segment overlap to flag here.
 
 [[stations]]
 crs = "MAI"

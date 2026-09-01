@@ -76,8 +76,21 @@ match_keywords = ["Cornish Main Line", "Cornish Riviera", "Night Riviera"]
 # beyond its own modelled scope — it does not list any station west of
 # Plymouth. This line's own exclusive segment (`gwr-cornish-main-line`,
 # following the established line-id-as-exclusive-segment-name convention)
-# therefore starts at the next real station past Plymouth: Liskeard (LSK),
-# per the shared-trunk rule of thumb (SCHEMA.md).
+# therefore starts at the next real station past Plymouth, per the
+# shared-trunk rule of thumb (SCHEMA.md): a junction station (PLY) keeps
+# the shared-trunk tag, and the exclusive segment starts immediately past
+# it. At the time this comment was first written that next station was
+# Liskeard (LSK); Station Catalogue Completeness Task 1.1 (2026-09)
+# subsequently confirmed seven real, currently-open, currently-served
+# Plymouth-area halts sitting geographically between PLY and LSK
+# (Devonport, Dockyard, Keyham, St Budeaux Ferry Road, Saltash, St
+# Germans, Menheniot — see that task's own note below the
+# principal-station list) that had been missing from the catalogue. None
+# of them share track with any other line's own segment (cross-country.toml's
+# `xc-south-west` still ends at PLY, unchanged) — they sit strictly
+# between the shared-trunk junction and LSK, so they take this same
+# exclusive `gwr-cornish-main-line` segment. The exclusive segment's first
+# real station is now Devonport (DPT).
 #
 # --- Principal-station verification for the exclusive segment ---
 #
@@ -116,10 +129,48 @@ match_keywords = ["Cornish Main Line", "Cornish Riviera", "Night Riviera"]
 #   By contrast, St Germans (between Plymouth and Liskeard, on the same
 #   line) was checked and found to be "mostly local stopping trains... but
 #   a few run through to/from London Paddington" — a materially thinner
-#   pattern than every station above, so it (and the other Plymouth-area
-#   suburban halts: Devonport, Keyham, St Budeaux Ferry Road, Saltash,
-#   Menheniot) are omitted as non-principal, matching gwr-cotswold.toml's
-#   precedent for omitting minor local-only halts.
+#   pattern than every station above. This file originally omitted St
+#   Germans and the other Plymouth-area suburban halts (Devonport, Keyham,
+#   St Budeaux Ferry Road, Saltash, Menheniot) as non-principal, matching
+#   gwr-cotswold.toml's precedent for omitting minor local-only halts.
+#
+#   --- Station Catalogue Completeness Task 1.1 (2026-09) update ---
+#
+#   That precedent conflated two different judgment calls: which stations
+#   are principal enough for a line's `sample_stations`/service-pattern
+#   framing, versus which stations physically exist and are currently
+#   served on this line at all. Omitting the latter for non-principal
+#   reasons left `/stations/<crs>` lookups for these six real stations
+#   silently unresolved rather than correctly "not on this line" — a
+#   catalogue-completeness gap this task closes. Each of the six named
+#   above was individually re-confirmed two-source (own Wikipedia article,
+#   cross-checked against nationalrail.co.uk's
+#   `stations/<crs>/details.html`) and added below at its true geographic
+#   position, still tagged `role = "minor"` to reflect the same thin
+#   calling pattern documented here.
+#
+#   A seventh station, Dockyard (DOC), was found during this task's own
+#   completeness re-check of the stretch — it was not in the task's
+#   starting candidate list. Its own Wikipedia article and
+#   nationalrail.co.uk's `stations/doc/details.html` (CRS DOC, "Dockyard
+#   (Devonport)", GWR-managed request stop) confirm it sits geographically
+#   between Devonport and Keyham on the same original Plymouth-Saltash
+#   alignment, with the same "a few trains... to and from Penzance, some
+#   of which continue eastwards... towards Exeter St Davids" GWR calling
+#   pattern as its Devonport/Keyham neighbours (near-identical wording
+#   across all three stations' own Wikipedia articles) — genuinely real
+#   and currently served, so two-source confirmed and added the same way.
+#
+#   All seven remain non-principal by the standard applied above (most are
+#   primarily Tamar Valley Line stops with only a handful of daily Cornish
+#   Main Line workings; Devonport/Dockyard/Keyham/St Budeaux Ferry Road
+#   share track with the Tamar Valley Line as far as St Budeaux, where the
+#   Tamar Valley Line's own St Budeaux Victoria Road stop, CRS SBV,
+#   diverges — out of this line's scope, not claimed here) — but
+#   catalogue completeness for real, open, served stations takes priority
+#   over the principal-only curation judgment. All seven share this file's
+#   exclusive `gwr-cornish-main-line` segment; see the segment-naming
+#   comment above for why.
 [[stations]]
 crs = "EXD"
 role = "major"
@@ -143,12 +194,98 @@ segment = "xc-south-west"
 # that GWR/XC services continue to Penzance from here.
 
 [[stations]]
+crs = "DPT"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# This line's own exclusive segment starts here (see segment-naming
+# comment above and its Station Catalogue Completeness Task 1.1 note).
+# Devonport: a request stop with "a few [GWR Cornish Main Line] trains...
+# to and from Penzance, some of which continue eastwards beyond Plymouth
+# towards Exeter St Davids or London Paddington", primarily served by
+# Tamar Valley Line trains to/from Gunnislake (Devonport's own Wikipedia
+# article). Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/dpt/details.html ("Devonport (DPT)").
+
+[[stations]]
+crs = "DOC"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# Dockyard — not in Task 1.1's original starting candidate list, found
+# during that task's own completeness re-check of this stretch: sits
+# geographically between Devonport and Keyham on the same original
+# Plymouth-Saltash alignment, with the same thin "a few trains... to and
+# from Penzance" GWR calling pattern as its neighbours (Dockyard's own
+# Wikipedia article). Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/doc/details.html ("Dockyard (Devonport)", CRS DOC, GWR-managed
+# request stop).
+
+[[stations]]
+crs = "KEY"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# Keyham: same thin GWR Cornish Main Line calling pattern as
+# Devonport/Dockyard, primarily a Tamar Valley Line stop (Keyham's own
+# Wikipedia article). Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/key/details.html ("Keyham (KEY)").
+
+[[stations]]
+crs = "SBF"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# St Budeaux Ferry Road — the Cornish Main Line's own St Budeaux stop,
+# distinct from St Budeaux Victoria Road (CRS SBV) a short distance away
+# on the separate Tamar Valley Line (out of this line's scope, not
+# claimed here; St Budeaux Ferry Road's own Wikipedia article: "For the
+# station on the [Tamar Valley Line]... see St Budeaux Victoria Road").
+# Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/sbf/details.html ("St Budeaux Ferry Road (SBF)").
+
+[[stations]]
+crs = "STS"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# Saltash, immediately west of the Royal Albert Bridge over the Tamar —
+# materially better served than its Plymouth-side neighbours above:
+# "served by most Great Western Railway trains on the Cornish Main Line
+# between Penzance and Plymouth including several that run to or from
+# London Paddington... typically one train per hour in each direction
+# with additional services in some hours" (Saltash's own Wikipedia
+# article), but still omitted by this file's original principal-only
+# judgment call (see the note below the principal-station verification
+# list above). Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/sts/details.html ("Saltash (STS)").
+
+[[stations]]
+crs = "SGM"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# St Germans: "served by about half the trains on the Cornish Main Line
+# between Penzance and Plymouth - these are mostly local stopping trains,
+# but a few run through to/from London Paddington" (its own Wikipedia
+# article, quoted in the principal-station verification note above).
+# Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/sgm/details.html ("St Germans (SGM)").
+
+[[stations]]
+crs = "MEN"
+role = "minor"
+segment = "gwr-cornish-main-line"
+# Menheniot: "served by eight Great Western Railway trains between
+# Penzance and Plymouth in each direction on weekdays, mainly at peak
+# periods, one of which goes to London Paddington" (its own Wikipedia
+# article). Two-source confirmed: Wikipedia + nationalrail.co.uk
+# stations/men/details.html ("Menheniot (MEN)").
+
+[[stations]]
 crs = "LSK"
 tiploc = "LISKARD"
 role = "minor"
 segment = "gwr-cornish-main-line"
-# This line's own exclusive segment starts here (see segment-naming
-# comment above).
+# Previously the first station of this line's own exclusive segment;
+# Station Catalogue Completeness Task 1.1 (2026-09) inserted seven
+# Plymouth-area stations ahead of it (Devonport through Menheniot above),
+# so the segment now starts at Devonport (DPT) — see the segment-naming
+# comment above.
 
 [[stations]]
 crs = "BOD"

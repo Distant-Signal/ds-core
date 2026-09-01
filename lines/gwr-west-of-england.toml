@@ -91,15 +91,55 @@ match_keywords = ["Reading to Taunton line", "Berks and Hants line"]
 # segment-name convention) starts at the first real passenger station
 # reached only by this route: Newbury (NBY). Reading-area local halts
 # between Reading and Newbury (Reading West, Theale, Aldermaston, Midgham,
-# Thatcham, Newbury Racecourse) and further west (Kintbury, Hungerford,
-# Bedwyn, Savernake Low Level, Pewsey, Woodborough, Patney and Chirton,
-# Lavington, Edington and Bratton) are omitted as non-principal: Bedwyn's
-# own Wikipedia "Services" section confirms it is "served by local services
-# operated by Great Western Railway between here and Newbury" with only "a
-# limited number" of services continuing further west, and none of the
-# other listed halts were found to carry a broadly-hourly London-through
-# pattern — matching gwr-cotswold.toml's precedent for omitting minor
-# stopping-only halts.
+# Thatcham, Newbury Racecourse) sit on a genuinely different, Reading-based
+# local service and are catalogued on gwr-thames-valley.toml's own "Branch
+# 2: Reading-Newbury" section instead (CRS RDW/THE/AMT/MDG/THA/NRC) — not
+# duplicated here.
+#
+# --- Station-catalogue-completeness task: Kintbury/Hungerford/Bedwyn/Pewsey
+#     added; Savernake/Woodborough/Patney and Chirton/Lavington/Edington and
+#     Bratton confirmed closed and stay excluded ---
+#
+# Further west of Newbury, Kintbury (CRS KIT), Hungerford (CRS HGD) and
+# Bedwyn (CRS BDW) are real, currently-open, currently-served stations
+# carrying a genuine GWR local shuttle between Newbury and Bedwyn
+# (en.wikipedia.org/wiki/Bedwyn_railway_station: "served by local services
+# operated by Great Western Railway between here and Newbury", with only "a
+# limited number" of services continuing further west). Pewsey (CRS PEW)
+# additionally carries a genuine long-distance calling pattern
+# (en.wikipedia.org/wiki/Pewsey_railway_station: "Off-peak there is
+# generally a train every 2 hours between London Paddington and Exeter St
+# Davids" calling here). All four CRS codes cross-checked against a second,
+# independent source (nationalrail.co.uk's own station-detail pages, which
+# each self-report the matching CRS in their page heading) and TIPLOCs
+# additionally cross-checked against railwaycodes.org.uk's CRS/TIPLOC
+# tables (KIT/KNTBRY, HGD/HUNGRFD, BDW/BEDYN, PEW/PEWSEY) — all four listed
+# there as live, CRS-bearing stations. Added below.
+#
+# Between Bedwyn and Westbury, five further named halts on the historic
+# route were checked to the same two-source bar and found CLOSED, not
+# merely non-principal, so they are deliberately NOT added:
+#   - Savernake (Low Level): en.wikipedia.org/wiki/Savernake_Low_Level_
+#     railway_station confirms closure to passengers on 18 April 1966 (it
+#     was also, in turn, the junction for the Marlborough branch, which had
+#     already closed earlier). railwaycodes.org.uk's crss.shtm lists a
+#     location code/TIPLOC (SAVERNK) retained for infrastructure purposes,
+#     but its CRS column is explicitly blank ("noshow") — the standard
+#     signal a station no longer takes fare-paying passengers.
+#   - Woodborough, Patney and Chirton, and Lavington: all three closed to
+#     passengers on the same date, 18 April 1966, per their own Wikipedia
+#     articles; railwaycodes.org.uk's crsw.shtm/crsp.shtm/crsl.shtm entries
+#     for each likewise carry a TIPLOC/STANOX for infrastructure purposes
+#     but no CRS code.
+#   - Edington and Bratton: en.wikipedia.org/wiki/Edington_and_Bratton_
+#     railway_station and en.wikipedia.org/wiki/Bratton,_Wiltshire (the
+#     latter: "the station closed to passengers in 1952 and to goods in
+#     1963") confirm this was always a single combined station serving both
+#     villages, closed earlier still (3 November 1952) — no separate
+#     "Edington" station or "Bratton" station ever existed. It has no
+#     current CRS/TIPLOC entry at all in railwaycodes.org.uk's crse.shtm.
+# All five stay OUT per this task's sourcing bar, matching gwr-cotswold.
+# toml's precedent for excluding stations that don't clear it.
 #
 # Frome is also omitted: en.wikipedia.org/wiki/Reading_to_Taunton_line
 # describes it as reached via a branch diverging at Clink Road Junction,
@@ -228,6 +268,45 @@ segment = "gwr-west-of-england"
 # above). Newbury racecourse and market town; Wikipedia's route description
 # notes "some long-distance trains also call here" in addition to the local
 # Reading-Bedwyn stopping service.
+
+[[stations]]
+crs = "KIT"
+tiploc = "KNTBRY"
+role = "minor"
+segment = "gwr-west-of-england"
+# Real, currently-open, currently-served station on this line's own
+# exclusive segment — see segment-naming comment above (GWR local shuttle
+# stop between Newbury and Bedwyn).
+
+[[stations]]
+crs = "HGD"
+tiploc = "HUNGRFD"
+role = "minor"
+segment = "gwr-west-of-england"
+# Real, currently-open, currently-served station on this line's own
+# exclusive segment — see segment-naming comment above (GWR local shuttle
+# stop between Newbury and Bedwyn).
+
+[[stations]]
+crs = "BDW"
+tiploc = "BEDYN"
+role = "minor"
+segment = "gwr-west-of-england"
+# Practical current limit of the Newbury-Bedwyn local shuttle, though a
+# limited number of GWR services continue further west — see segment-naming
+# comment above.
+
+[[stations]]
+crs = "PEW"
+tiploc = "PEWSEY"
+role = "minor"
+segment = "gwr-west-of-england"
+# Also carries a genuine roughly-2-hourly London Paddington-Exeter St
+# Davids long-distance calling pattern, not just local shuttle traffic —
+# see segment-naming comment above. Savernake (Low Level), Woodborough,
+# Patney and Chirton, and Lavington — the historic intermediate halts
+# between Bedwyn and here, and between here and Westbury — were checked
+# and found closed; see segment-naming comment above for sourcing.
 
 [[stations]]
 crs = "WSB"
