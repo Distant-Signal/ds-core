@@ -1,0 +1,31 @@
+-- -------------------------------------------------------------------------
+-- Lets a ticket be uploaded/entered BEFORE a specific tracked train exists
+-- for it, per docs/superpowers/specs/2026-08-29-journey-ticket-tracking-design.md's
+-- extraction limits: `ticket_extraction.rs` never recovers a date or time
+-- from a `.pkpass`/PDF (see that module's own doc comment), so extraction
+-- alone can never uniquely identify a specific tracked train. Today's
+-- `tracked_train_id BIGINT NOT NULL` (see
+-- `20260829090000_journey_ticket_tracking.sql`) forces a user to already
+-- have a tracked train before they can even start a ticket upload, which
+-- doesn't match that reality. This migration drops the `NOT NULL` so a
+-- ticket can be created standalone (`tracked_train_id IS NULL`) and later
+-- attached to a tracked train once the user finds/creates the right one
+-- (`crates/api/src/data/train_tracking.rs`'s `attach_ticket_to_tracked_train`).
+--
+-- The `ON DELETE CASCADE` foreign key is untouched and needs no migration
+-- of its own: a FK constraint simply isn't evaluated for a NULL value, so a
+-- standalone ticket has nothing to cascade from until it's attached, and an
+-- attached ticket keeps exactly the same cascade-on-delete behavior it
+-- always had.
+--
+-- LEGAL/PRIVACY AUDIT (carried forward verbatim from
+-- `20260829090000_journey_ticket_tracking.sql` -- see this plan's Global
+-- Constraints): this table deliberately stores ONLY tracked_train_id,
+-- user_id, operator, ticket_type, origin_crs, destination_crs, source, and
+-- timestamps. It must NEVER gain a column for payment/price data, any
+-- barcode payload (raw or decoded), any ITSO data, passenger name, or the
+-- uploaded .pkpass/PDF file itself. Diff any future migration touching
+-- this table against this list before merging it.
+-- -------------------------------------------------------------------------
+
+ALTER TABLE tracked_train_tickets ALTER COLUMN tracked_train_id DROP NOT NULL;
