@@ -17,14 +17,30 @@ delay_threshold_minutes = 4
 
 # Standalone line: nationalised (previously franchised) c2c operates a
 # single, largely self-contained route between Fenchurch Street and
-# Shoeburyness. Per the 2026-08-29 line-coverage gap analysis, no segment
-# here is shared with any other file in the catalogue — no other line in
-# the catalogue touches Barking at all (confirmed via `grep -h 'crs = "BKG"'
-# lines/*.toml`: CRS `BKG` appears only in this file). Both segments below
-# (`c2c-main-line`, `c2c-ockendon-loop`) are therefore exclusive to this
-# file — no shared-trunk regression test is included, only the
-# exclusive-segment assertion (see the plan's Global Constraints:
-# "Skip this assertion only for a genuinely standalone line ... e.g. c2c").
+# Shoeburyness. No segment here is shared with any other file in the
+# catalogue: all three segments below (`c2c-main-line`,
+# `c2c-rainham-branch`, `c2c-ockendon-loop`) are exclusive to this file, so
+# no shared-trunk regression test is included, only the exclusive-segment
+# assertion (see the plan's Global Constraints: "Skip this assertion only
+# for a genuinely standalone line ... e.g. c2c").
+#
+# Correction to an earlier version of this comment: it claimed "no other
+# line in the catalogue touches Barking at all". That was true of the
+# 2026-08-29 gap analysis but is stale — `overground-suffragette.toml`
+# (Gospel Oak to Barking Riverside) also lists CRS `BKG`, re-confirmed
+# 2026-09-01 via `grep -l 'crs = "BKG"' lines/*.toml` (hits: this file and
+# `overground-suffragette.toml`). This is a *station-level* overlap only,
+# not a shared trunk: the Suffragette line reaches Barking over the former
+# Gospel Oak–Barking ("Goblin") route and continues on its own Barking
+# Riverside branch, on its own running lines, to a station (`BGV`) c2c does
+# not serve. The two files use distinct segment names, so the matcher
+# classifies an incident at Barking as ExclusiveSegment for both — the same
+# pattern as the Upminster (`UPM`) overlap with `overground-liberty.toml`
+# already covered by
+# `overground_liberty_exclusive_segment_incident_does_not_propagate` in
+# crates/aggregator/src/matcher.rs. Re-checked the same way for every CRS
+# added by the Rainham-branch pass below (`DDK`, `RNM`, `PFL`): each appears
+# only in this file.
 #
 # Main line, Fenchurch Street to Shoeburyness via Basildon, ordered west to
 # east. Route/order verified against Wikipedia's "London, Tilbury and
@@ -60,8 +76,19 @@ segment = "c2c-main-line"
 
 [[stations]]
 crs = "BKG"
-role = "major"
+role = "junction"
 segment = "c2c-main-line"
+# The Rainham branch (see below) diverges here: c2c's "Fenchurch Street to
+# Grays via Rainham" services leave the Basildon main line east of Barking
+# for Dagenham Dock. Per SCHEMA.md's shared-trunk rule of thumb the junction
+# station stays on the shared trunk (`c2c-main-line`); the branch's
+# exclusive segment starts at the next station, Dagenham Dock. Divergence
+# point confirmed against Wikipedia's Barking station article ("eight trains
+# per hour to Fenchurch Street, four to Shoeburyness via Basildon, two to
+# Southend Central via Ockendon and two to Grays via Rainham"; eastbound
+# next station is Upminster via the main line, Dagenham Dock via Rainham)
+# and Wikipedia's Dagenham Dock article, whose preceding station is Barking
+# with no station between the two.
 
 [[stations]]
 crs = "UPM"
@@ -131,6 +158,88 @@ crs = "SRY"
 role = "terminus"
 segment = "c2c-main-line"
 
+# Rainham branch (`c2c-rainham-branch`): the western half of what Wikipedia
+# calls the LTS "loop line" — c2c's third route, Fenchurch Street to Grays
+# *via Rainham*, diverging from the Basildon main line at Barking (above)
+# and converging with the Ockendon branch at Grays (below). Real, current
+# and c2c's own: Wikipedia's "c2c (train operating company)" article lists
+# it as one of three May-2025 service patterns ("Fenchurch Street to Grays
+# via Rainham", 2 tph, calling at Limehouse, West Ham, Barking, Dagenham
+# Dock, Rainham, Purfleet), Wikipedia's "London, Tilbury and Southend line"
+# article describes the same alignment as "an alternative route via Rainham
+# (Essex), Grays and Tilbury", and c2c's own website
+# (c2c-online.co.uk/stations-and-services/before-your-journey/
+# our-routes-and-stations/) lists Dagenham Dock, Rainham (Essex) and
+# Purfleet among its 26 stations. Current *passenger* service, not freight
+# or historic. An earlier version of this file omitted the branch as "out of
+# scope ... rather than guessed at"; that gap is now closed by research
+# rather than by guessing.
+#
+# Ordered west to east, Barking -> Grays. Placed here, ahead of the Ockendon
+# block, deliberately: SCHEMA.md's "Lines blocked between A and B" parse
+# reads the `[[stations]]` sequence in order, and this branch's own
+# west-to-east run must stay monotonic through to its convergence point
+# (DDK < RNM < PFL < GRY). Appending it after the Ockendon block would put
+# GRY *before* PFL and reverse "between Purfleet and Grays". It also matches
+# divergence order along the trunk: Rainham leaves at Barking, Ockendon at
+# Upminster.
+#
+# Every CRS below was confirmed twice: Wikipedia's individual station
+# article and nationalrail.co.uk's own /stations/<crs>/details.html page,
+# which additionally confirms each is "managed by c2c". Same discipline as
+# the main-line block above, for the same reason (the `SOU`/`SOC` and
+# `SED`/`SOE` near-misses recorded there).
+#
+# No station is omitted between Barking and Grays: the Wikipedia adjacency
+# chains of the Barking, Dagenham Dock, Rainham and Purfleet articles close
+# without a gap (Barking -> Dagenham Dock -> Rainham -> Purfleet -> Grays),
+# and Grays' own article gives Purfleet as its westbound neighbour on this
+# route. Beam Park, the planned infill station between Dagenham Dock and
+# Rainham, is deliberately NOT listed: as of March 2026 it is still unbuilt,
+# government support is "subject to final funding details being approved",
+# and it has no CRS code assigned. Add it when it opens and gets one.
+[[stations]]
+crs = "DDK"
+role = "minor"
+segment = "c2c-rainham-branch"
+# Dagenham Dock. CRS `DDK` per Wikipedia's "Dagenham Dock railway station"
+# and nationalrail.co.uk/stations/DDK/details.html ("Dagenham Dock (DDK)",
+# managed by c2c).
+
+[[stations]]
+crs = "RNM"
+role = "minor"
+segment = "c2c-rainham-branch"
+# Rainham (Essex) — the London Borough of Havering station on this route,
+# NOT Rainham (Kent), which is a different station on Southeastern's Chatham
+# main line. The two are a genuine, long-standing naming collision, so both
+# codes were checked: nationalrail.co.uk/stations/RNM/details.html returns
+# "Rainham (Essex) (RNM)", Ferry Lane, Rainham, Essex RM13 9JA, managed by
+# c2c; nationalrail.co.uk/stations/RAI/details.html returns "Rainham (Kent)
+# (RAI)", Station Road, Rainham, Kent ME8 7SF, managed by Southeastern.
+# Wikipedia's "Rainham railway station (London)" independently gives station
+# code RNM and notes the Kent namesake. `RAI` must never appear in this
+# file.
+
+[[stations]]
+crs = "PFL"
+role = "minor"
+segment = "c2c-rainham-branch"
+# Purfleet. CRS `PFL` per Wikipedia's "Purfleet railway station" and
+# nationalrail.co.uk/stations/PFL/details.html ("Purfleet (PFL)", managed by
+# c2c). The town was renamed Purfleet-on-Thames in 2020 and a 2023 planning
+# application proposes re-siting and renaming the station to match, but the
+# station's official National Rail name is still "Purfleet" and the CRS is
+# unaffected either way. If it is renamed, `PFL` stays; only the display
+# name changes.
+#
+# The branch's next station east is Grays (`GRY`), which already has its
+# single entry in the Ockendon-loop block below and is NOT duplicated here.
+# Per SCHEMA.md's shared-trunk rule of thumb applied at the far end of the
+# branch, the convergence station belongs to the segment that runs *through*
+# it (`c2c-ockendon-loop`, which continues Grays -> Tilbury Town -> Pitsea),
+# and this branch's exclusive segment stops at the station before it.
+
 # Ockendon loop: a short single-track branch connecting the main line at
 # Upminster (above) to the Tilbury loop line at Grays via Ockendon, then
 # continuing via the Tilbury loop stations back to rejoin the main line at
@@ -142,8 +251,8 @@ segment = "c2c-main-line"
 # (each confirms its neighbours), with every CRS code individually
 # confirmed against nationalrail.co.uk. The separate Rainham branch
 # (Barking–Dagenham Dock–Rainham–Purfleet–Grays) is a third, distinct
-# route to Grays and is out of scope for this file — omitted rather than
-# guessed at.
+# route to Grays; it is now modelled above as `c2c-rainham-branch` and
+# converges with this segment at Grays.
 [[stations]]
 crs = "OCK"
 tiploc = "OCKENDN"
@@ -157,8 +266,20 @@ segment = "c2c-ockendon-loop"
 
 [[stations]]
 crs = "GRY"
-role = "major"
+role = "junction"
 segment = "c2c-ockendon-loop"
+# Promoted from `major` to `junction` by the Rainham-branch pass: Grays is a
+# genuine topological junction, not just a busy station. Wikipedia's Grays
+# article: "a branch line from Upminster via Ockendon rejoins the route from
+# Rainham", with 2 tph westbound to Fenchurch Street via Rainham *and* 2 tph
+# westbound via Ockendon (its two westbound adjacent stations are Purfleet
+# and Chafford Hundred), plus 2 tph eastbound to Southend Central — six off
+# peak trains per hour over two physically distinct approaches. Applying
+# SCHEMA.md's rule of thumb consistently with Barking above and with UPM/PSE:
+# the junction station stays on the segment that runs through it, so Grays
+# keeps its single entry on `c2c-ockendon-loop` (the segment continuing east
+# to Tilbury Town and Pitsea) and `c2c-rainham-branch` ends at Purfleet.
+# Grays is deliberately not duplicated as a second `[[stations]]` block.
 
 [[stations]]
 crs = "TIL"

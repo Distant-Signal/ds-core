@@ -20,17 +20,40 @@ delay_threshold_minutes = 10
 # section. Sources: Wikipedia's "Chiltern Main Line" and "Leamington–
 # Stratford line" articles, cross-checked station-by-station against
 # Wikidata/railwaydata.co.uk/journeyplanner.tfwm.org.uk entries for each
-# CRS code. Only principal stations are listed; minor intermediate calls
-# (Sudbury & Harrow Road, Denham, Beaconsfield, Princes Risborough, etc.)
-# are omitted, matching the xc-manchester.toml/xc-south-coast.toml
-# convention.
+# CRS code.
+#
+# UPDATED (Task 10.2, catalogue-completeness pass): a fresh route-diagram
+# check against Wikipedia station-succession boxes, railwaycodes.org.uk's
+# CRS/TIPLOC tables and nationalrail.co.uk's per-station `details.html`
+# pages (two-source bar, every station below) found that the "minor
+# intermediate calls are omitted" framing above had gone stale — this
+# catalogue's purpose (answering "does this line serve station X" /
+# resolving "incident between A and B") needs the full real calling
+# pattern, not just principal stops, so every currently-open station
+# confirmed to sit on this exact route has now been added in true
+# geographic order. What's below is the now-complete Marylebone ->
+# Banbury list: Wembley Stadium, Sudbury & Harrow Road, Sudbury Hill
+# Harrow, Northolt Park, South Ruislip, West Ruislip, Denham Golf Club,
+# Denham, Gerrards Cross, Beaconsfield, Seer Green & Jordans, Saunderton,
+# Princes Risborough, Haddenham & Thame Parkway — all confirmed served,
+# currently open, and genuinely on the Marylebone-Bicester North-Banbury
+# route (not only the separate Aylesbury route modelled in
+# `chiltern-aylesbury.toml`). See the Princes Risborough station block
+# below for that station's own determination, which needed extra care.
+# Nothing is knowingly still omitted on this stretch.
 #
 # Chiltern's own gap-analysis text described the Birmingham approach as
 # "via Solihull/Dorridge" — confirmed correct by the live sources above,
 # which give the order Hatton -> Dorridge -> Lapworth -> Widney Manor ->
 # Solihull -> Olton -> Acocks Green -> Tyseley -> Small Heath -> Bordesley
-# -> Birmingham Moor Street -> Birmingham Snow Hill (minor calls omitted
-# here too).
+# -> Birmingham Moor Street -> Birmingham Snow Hill. UPDATED (Task 10.2):
+# all of these were previously omitted as "minor calls"; Lapworth, Widney
+# Manor, Olton, Acocks Green, Tyseley, Small Heath and Bordesley are now
+# added below at their confirmed positions (two-source bar: Wikipedia
+# succession boxes cross-checked against railwaycodes.org.uk/
+# nationalrail.co.uk for each CRS code). See the Widney Manor station
+# block below for the cross-file coordination note on station overlap
+# with `wmr-snow-hill.toml`.
 #
 # The Marylebone->Hatton stretch runs on to Birmingham Snow Hill via
 # Dorridge/Solihull *or* to Stratford-upon-Avon via Claverdon/Bearley/
@@ -56,9 +79,114 @@ segment = "chiltern-marylebone"
 # own comment for its side of this, around its Marylebone station block).
 
 [[stations]]
+crs = "WCX"
+role = "minor"
+segment = "chiltern-main-line"
+# Wembley Stadium: regular Chiltern stop (2 tph off-peak to Marylebone per
+# nationalrail.co.uk), not just an event-day call. Confirmed via
+# Wikipedia's succession box (Marylebone -> Wembley Stadium -> Sudbury &
+# Harrow Road) and nationalrail.co.uk/stations/wcx/details.html.
+
+[[stations]]
+crs = "SUD"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "SDH"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "NLT"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "SRU"
+role = "minor"
+segment = "chiltern-main-line"
+# South Ruislip: nationalrail.co.uk lists the station as "managed by
+# London Underground" (it's a joint LU/National Rail site), but Chiltern
+# Railways' own Marylebone-High Wycombe services call here per
+# Wikipedia's succession box (Northolt Park -> South Ruislip -> West
+# Ruislip) — managing operator isn't the same thing as which TOC's
+# trains stop here.
+
+[[stations]]
+crs = "WRU"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "DGC"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "DNM"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "GER"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "BCF"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "SRG"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
 crs = "HWY"
 role = "major"
 segment = "chiltern-main-line"
+
+[[stations]]
+crs = "SDR"
+role = "minor"
+segment = "chiltern-main-line"
+
+[[stations]]
+crs = "PRR"
+role = "minor"
+segment = "chiltern-main-line"
+# Princes Risborough: genuinely on this route, not only the Oxford branch
+# or the Aylesbury branch. Geographically it sits on the shared Chiltern
+# Main Line trunk between High Wycombe and Bicester, before the 2015
+# "Bicester chord" curve that lets Marylebone-Oxford services peel off
+# towards Bicester Village/Islip/Oxford — that split happens at/near
+# Bicester, well after Princes Risborough and Haddenham & Thame Parkway
+# (next station), not here. Confirmed via nationalrail.co.uk/stations/
+# prr/details.html (station managed by Chiltern Railways) and Wikipedia's
+# Princes Risborough and Haddenham & Thame Parkway articles, whose
+# succession boxes show Princes Risborough as a genuine Chiltern Main
+# Line call (Wikipedia's own note: "two trains per hour eastbound to
+# London Marylebone and two trains per hour westbound to Oxford, plus
+# occasional peak-time calls from services to Banbury and Birmingham
+# Snow Hill"). Most Marylebone-Birmingham fast services run non-stop
+# through here — matching this file's existing WRW/WRP "minor" precedent
+# for stations most trains skip but which are still real, currently-open,
+# currently-served, geographically-on-route stops — so it's included as
+# `minor` rather than omitted. This resolves the brief's open question:
+# Princes Risborough DOES belong on this file's route.
+
+[[stations]]
+crs = "HDM"
+role = "minor"
+segment = "chiltern-main-line"
+# Haddenham & Thame Parkway: last station on the shared trunk before the
+# Bicester chord split (see Princes Risborough comment above). Next
+# station BCS (Bicester North) below is the Birmingham-bound fork;
+# Bicester Village/Islip/Oxford Parkway/Oxford are the separate
+# Oxford-bound fork and aren't part of this line (not in this catalogue
+# as a separate file at time of writing).
 
 [[stations]]
 crs = "BCS"
@@ -127,9 +255,105 @@ segment = "chiltern-birmingham-approach"
 # split at Hatton, above, not here) — no "junction" role asserted.
 
 [[stations]]
+crs = "LPW"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Lapworth: confirmed via railwaycodes.org.uk's crsl.shtm CRS table
+# (LPW) cross-checked against nationalrail.co.uk/stations/lpw/details.html
+# ("managed by Chiltern Railways").
+
+[[stations]]
+crs = "WMR"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Widney Manor: CRS code confirmed via Wikipedia's infobox and
+# nationalrail.co.uk/stations/wmr/details.html (both agree: WMR).
+#
+# Cross-file coordination (per the Task 10.2 controller ruling — not
+# re-derived here): Widney Manor, Olton (below) and Acocks Green (below)
+# also appear in `wmr-snow-hill.toml`'s own "omitted" list, which is
+# being independently extended right now in this same plan's Batch 9, in
+# an isolated worktree this task cannot see or coordinate with live.
+# Live sources make it very likely these are the same physical stations
+# on a shared physical approach into Birmingham Snow Hill/Moor Street —
+# both Chiltern and West Midlands Railway's Snow Hill-line local services
+# call at the same platforms here (WMR's short-working service pattern
+# runs Birmingham Snow Hill - Solihull - Dorridge over these same
+# metals, per that file's own Task 9.1-era comments). Station-level
+# overlap between two files is expected and fine in this catalogue (see
+# the Banbury/Leamington Spa comments above, and the xc-manchester.toml/
+# xc-south-coast.toml precedent) — segment-sharing is a separate,
+# deliberate choice, and this file cannot safely guess at whatever
+# segment name `wmr-snow-hill.toml`'s concurrent, unreachable agent picks
+# for its own Dorridge branch. So these three stations stay tagged with
+# this file's own existing `chiltern-birmingham-approach` segment (the
+# same one already used for Dorridge/Solihull/Moor Street/Snow Hill
+# above), not a new or guessed cross-file name. Flag for a future
+# cross-file segment-naming review, once both files have settled, to
+# decide whether `chiltern-birmingham-approach` and whatever
+# `wmr-snow-hill.toml` ends up calling its Dorridge branch should
+# actually be reconciled into one shared-trunk segment name.
+
+[[stations]]
 crs = "SOL"
 role = "major"
 segment = "chiltern-birmingham-approach"
+
+[[stations]]
+crs = "OLT"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Olton: same likely-shared-physical-station situation as Widney Manor
+# above (also present in `wmr-snow-hill.toml`'s independently-worked
+# list) — same reasoning, same deliberate choice to keep this file's own
+# `chiltern-birmingham-approach` segment rather than guess a shared name.
+# CRS confirmed via railwaycodes.org.uk's crso.shtm table (OLT)
+# cross-checked against nationalrail.co.uk/stations/olt/details.html.
+
+[[stations]]
+crs = "ACG"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Acocks Green: same likely-shared-physical-station situation as Widney
+# Manor above (also present in `wmr-snow-hill.toml`'s independently-
+# worked list) — same reasoning, same deliberate choice. CRS confirmed
+# via railwaycodes.org.uk's crsa.shtm table (ACG) cross-checked against
+# nationalrail.co.uk/stations/acg/details.html.
+
+[[stations]]
+crs = "TYS"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Tyseley: a genuine multi-line interchange (also junction for the
+# Birmingham-Worcester line and the North Warwickshire/Stratford line in
+# wmr-snow-hill.toml, where it's tagged "junction" for that file's own
+# branch split) but no route diverges here on THIS line's own modelled
+# stretch, so it stays "minor" rather than "junction" in this file.
+# Confirmed via Wikipedia's infobox/succession box and
+# nationalrail.co.uk/stations/tys/details.html (both agree: TYS).
+
+[[stations]]
+crs = "SMA"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Small Heath: confirmed via Wikipedia's infobox and
+# nationalrail.co.uk/stations/sma/details.html (both agree: SMA).
+
+[[stations]]
+crs = "BBS"
+role = "minor"
+segment = "chiltern-birmingham-approach"
+# Bordesley: currently open and technically served, but only by an
+# extremely token West Midlands Railway "parliamentary" service
+# (nationalrail.co.uk: "one train a week, Saturdays only... northbound
+# towards Birmingham", plus matchday extras for Birmingham City at
+# nearby St Andrew's) — included per this file's "currently open,
+# currently served" bar and because it's genuinely on the physical route
+# between Small Heath and Birmingham Moor Street (needed for correct
+# "incident between A and B" resolution), but flagged here as an outlier
+# service level compared to its neighbours. CRS confirmed via Wikipedia's
+# infobox and nationalrail.co.uk/stations/bbs/details.html (both agree:
+# BBS).
 
 [[stations]]
 crs = "BMO"
