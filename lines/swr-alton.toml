@@ -4,8 +4,8 @@ mode = "national-rail"
 category = "regional"
 operators = ["SW"]
 
-destination_crs_filter = ["AON", "BTL", "FRM", "AHT"]
-sample_stations = ["AHT", "FRM", "AON"]
+destination_crs_filter = ["AON", "BTL", "FNH", "AHT"]
+sample_stations = ["AHT", "FNH", "AON"]
 match_keywords = ["Alton line", "Alton branch"]
 
 # Shares Waterloo->Woking trunk; diverges at Woking via Aldershot.
@@ -52,7 +52,7 @@ role = "major"
 segment = "swr-alton-branch"
 
 [[stations]]
-crs = "FRM"
+crs = "FNH"
 tiploc = "FARNHAM"
 role = "minor"
 segment = "swr-alton-branch"
