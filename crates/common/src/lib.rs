@@ -318,6 +318,19 @@ pub struct Disruption {
     /// e.g. `"knowledgebase-incident-12345"`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// `rail_replacement_bus` | `no_scheduled_service` | `diversion` | `null`
+    /// -- the currently-governing period's `impact_type`, per
+    /// `aggregator::governing_impact_type`. `None` for a disruption with no
+    /// currently-Active period stating one of these facts (the overwhelming
+    /// majority), and unconditionally `None` for a TfL- or LDBWS-derived
+    /// disruption, which never runs the enricher's extraction pipeline at
+    /// all. `#[serde(default, ...)]` matches `source`'s own attribute --
+    /// load-bearing for deserializing `line_status_history` rows written
+    /// before this field existed (see `crates/api/src/data/queries.rs`'s
+    /// `line_status_history_for_range`, which reads this struct back from
+    /// stored JSONB).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact_type: Option<String>,
 }
 
 /// One status entry on a line. A line may have several simultaneously.
@@ -931,6 +944,38 @@ mod defaults_tests {
         overrides.insert("not_a_real_field".to_string(), 42.0);
         let merged = thresholds_for(&defaults, &overrides);
         assert_eq!(merged, defaults);
+    }
+}
+
+#[cfg(test)]
+mod disruption_impact_type_tests {
+    use super::*;
+
+    #[test]
+    fn a_pre_change_disruption_json_with_no_impact_type_key_deserializes_to_none() {
+        let json = serde_json::json!({
+            "category": "RealTime",
+            "description": "Signal failure",
+            "affected_stops": [],
+            "affected_routes": [],
+            "source": null
+        });
+        let disruption: Disruption = serde_json::from_value(json).expect("pre-change row must still parse");
+        assert_eq!(disruption.impact_type, None);
+    }
+
+    #[test]
+    fn impact_type_is_omitted_from_serialized_json_when_none() {
+        let disruption = Disruption {
+            category: "RealTime".to_string(),
+            description: "Signal failure".to_string(),
+            affected_stops: vec![],
+            affected_routes: vec![],
+            source: None,
+            impact_type: None,
+        };
+        let value = serde_json::to_value(&disruption).unwrap();
+        assert!(value.get("impact_type").is_none());
     }
 }
 
