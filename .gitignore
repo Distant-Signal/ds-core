@@ -22,9 +22,3 @@ mise.local.toml
 # dev.env.example for the one-time `ssh-keygen` setup step) -- a
 # developer's own local dev host key must never be committed.
 /schedule-sftp-host-keys/
-
-# vault/install.sh's saved `bao operator init` output (unseal key + root
-# token) -- a cluster-admin credential for whatever dev OpenBao it was
-# generated against, never something to commit. Matches
-# OPENBAO_INIT_OUTPUT_FILE's default of vault/openbao-init.<namespace>.json.
-/vault/openbao-init.*.json
