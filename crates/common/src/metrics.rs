@@ -90,7 +90,9 @@ pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> R
             .set_buckets_for_metric(Matcher::Full((*name).to_string()), buckets)
             .context("failed to set histogram bucket overrides")?;
     }
-    builder.install().context("failed to install the Prometheus metrics exporter")?;
+    builder
+        .install()
+        .context("failed to install the Prometheus metrics exporter")?;
     Ok(())
 }
 
@@ -100,7 +102,10 @@ mod tests {
 
     #[test]
     fn metric_name_adds_the_shared_prefix() {
-        assert_eq!(metric_name("poller_cycle_total"), "distant_signal_poller_cycle_total");
+        assert_eq!(
+            metric_name("poller_cycle_total"),
+            "distant_signal_poller_cycle_total"
+        );
     }
 
     #[test]

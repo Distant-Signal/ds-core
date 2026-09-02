@@ -465,7 +465,7 @@ impl LineDefinition {
 
     pub fn from_dir(dir_path: &Path) -> Result<Vec<Self>> {
         let paths = glob(&format!("{}/*.toml", dir_path.display()))?;
-        paths.map(|path| { Self::from_file(&path?) }).collect()
+        paths.map(|path| Self::from_file(&path?)).collect()
     }
 
     pub fn has_station(&self, crs: &str) -> bool {
@@ -771,9 +771,16 @@ mod sample_availability_tests {
 
     #[test]
     fn wire_tags_match_the_design_spec() {
-        assert_eq!(serde_json::to_value(SampleAvailability::NoCoverage).unwrap(), serde_json::json!({"state": "no-coverage"}));
         assert_eq!(
-            serde_json::to_value(SampleAvailability::BelowThreshold { observed: 2, required: 3 }).unwrap(),
+            serde_json::to_value(SampleAvailability::NoCoverage).unwrap(),
+            serde_json::json!({"state": "no-coverage"})
+        );
+        assert_eq!(
+            serde_json::to_value(SampleAvailability::BelowThreshold {
+                observed: 2,
+                required: 3
+            })
+            .unwrap(),
             serde_json::json!({"state": "below-threshold", "observed": 2, "required": 3})
         );
     }
@@ -781,9 +788,25 @@ mod sample_availability_tests {
     #[test]
     fn sample_stats_accessor_extracts_only_the_available_variant() {
         assert_eq!(SampleAvailability::NoCoverage.sample_stats(), None);
-        assert_eq!(SampleAvailability::BelowThreshold { observed: 0, required: 3 }.sample_stats(), None);
-        let stats = SampleStats { total: 5, delayed: 1, cancelled: 0, skipped: 0, avg_delay_minutes: 2.0 };
-        assert_eq!(SampleAvailability::Available(stats.clone()).sample_stats(), Some(stats));
+        assert_eq!(
+            SampleAvailability::BelowThreshold {
+                observed: 0,
+                required: 3
+            }
+            .sample_stats(),
+            None
+        );
+        let stats = SampleStats {
+            total: 5,
+            delayed: 1,
+            cancelled: 0,
+            skipped: 0,
+            avg_delay_minutes: 2.0,
+        };
+        assert_eq!(
+            SampleAvailability::Available(stats.clone()).sample_stats(),
+            Some(stats)
+        );
     }
 }
 
@@ -880,7 +903,8 @@ pub struct Defaults {
 
 impl Default for Defaults {
     fn default() -> Self {
-        toml::from_str("").expect("Defaults must deserialize from an empty TOML table via serde_inline_default")
+        toml::from_str("")
+            .expect("Defaults must deserialize from an empty TOML table via serde_inline_default")
     }
 }
 
@@ -979,7 +1003,8 @@ mod disruption_impact_type_tests {
             "affected_routes": [],
             "source": null
         });
-        let disruption: Disruption = serde_json::from_value(json).expect("pre-change row must still parse");
+        let disruption: Disruption =
+            serde_json::from_value(json).expect("pre-change row must still parse");
         assert_eq!(disruption.impact_type, None);
     }
 
@@ -1021,7 +1046,10 @@ mod custom_line_tests {
         assert_eq!(line.stations.len(), 2);
         assert_eq!(line.stations[0].crs, "WOK");
         assert!(line.stations[0].segment.is_none());
-        assert_eq!(line.sample_stations, vec!["WOK".to_string(), "AON".to_string()]);
+        assert_eq!(
+            line.sample_stations,
+            vec!["WOK".to_string(), "AON".to_string()]
+        );
         assert!(line.match_keywords.is_empty());
         assert!(line.severity_overrides.is_empty());
         assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
@@ -1138,12 +1166,18 @@ mod tfl_nr_merge_tests {
 
     #[test]
     fn overground_mildmay_tfl_id_maps_to_its_nr_counterpart() {
-        assert_eq!(nr_line_id_for_tfl("tfl-mildmay"), Some("overground-mildmay"));
+        assert_eq!(
+            nr_line_id_for_tfl("tfl-mildmay"),
+            Some("overground-mildmay")
+        );
     }
 
     #[test]
     fn overground_mildmay_nr_id_maps_back_to_its_tfl_counterpart() {
-        assert_eq!(tfl_line_id_for_nr("overground-mildmay"), Some("tfl-mildmay"));
+        assert_eq!(
+            tfl_line_id_for_nr("overground-mildmay"),
+            Some("tfl-mildmay")
+        );
     }
 
     #[test]

@@ -124,7 +124,11 @@ async fn fetch_last_fetched(
 /// future) *and* the process were crash-looping, every restart would
 /// re-arm a full-interval delay before ever reaching a real poll. Two
 /// simultaneous faults, not a risk from this function in isolation.
-fn duration_until_next_poll(fetched_at: Option<DateTime<Utc>>, now: DateTime<Utc>, poll_interval: Duration) -> Duration {
+fn duration_until_next_poll(
+    fetched_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+    poll_interval: Duration,
+) -> Duration {
     let Some(fetched_at) = fetched_at else {
         return Duration::ZERO;
     };
