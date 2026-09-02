@@ -22,3 +22,8 @@ mise.local.toml
 # dev.env.example for the one-time `ssh-keygen` setup step) -- a
 # developer's own local dev host key must never be committed.
 /schedule-sftp-host-keys/
+
+# The repo owner's own personal Helm-values scratch file (contains a real
+# SSO client secret) -- anchored to the repo root only, so this does NOT
+# match charts/distant-signal/values.yaml, the real tracked chart values.
+/values.yaml
