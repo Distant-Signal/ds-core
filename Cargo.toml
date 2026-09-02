@@ -13,4 +13,5 @@ members = [
     "crates/trust-consumer",
     "crates/schedule-ingest",
     "crates/schedule-reference",
+    "crates/notifier",
 ]
