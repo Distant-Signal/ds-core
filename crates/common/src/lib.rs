@@ -670,6 +670,25 @@ pub struct StationReference {
     pub accessibility: serde_json::Value,
 }
 
+/// One resolved STANOX->CRS row, as `crates/schedule-reference` derives it
+/// from a CIF SCHEDULE delivery's `TI`/`A` records and POSTs it to
+/// `api`'s `/private/stanox-crs`, and as `trust-consumer` GETs the full
+/// current table back. See
+/// docs/superpowers/specs/2026-09-01-schedule-ingest-stanox-crs-table-design.md
+/// Decision 2 for the schema and the disambiguation policy that produced
+/// each row.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StanoxCrsRecord {
+    pub stanox: String,
+    pub crs: String,
+    pub tiploc: String,
+    pub station_name: String,
+    /// Which `schedule_feed_ingests.sequence` this row was last derived
+    /// from -- provenance a live source benefits from that the static CSV
+    /// never needed.
+    pub source_sequence: i32,
+}
+
 /// Reference data for a Train Operating Company, as published by the
 /// TOC-reference feed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
