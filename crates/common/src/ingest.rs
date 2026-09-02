@@ -5,43 +5,48 @@
 //! crate's `/private/*` endpoints (`crates/api/src/routes/ingest.rs`, gated
 //! by `crates/api/src/auth.rs`).
 //!
-//! Single source of truth for the two header names both sides must agree
-//! on, plus the POST-batch-and-log pattern every poller repeats once per
-//! poll cycle. Previously each poller (and `api`, for the internal-token
-//! header) independently redefined these constants/logic; this module is
-//! the one place that changes if either header name or the POST contract
-//! ever needs to.
+//! Single source of truth for the POST-batch-and-log pattern every real
+//! caller repeats once per poll/reload cycle. Every request carries a
+//! standard `Authorization: Bearer <token>` header (RFC 6750), the token
+//! obtained from `crate::oauth_client::OAuthTokenCache` -- see
+//! docs/superpowers/specs/2026-09-02-internal-service-oauth2-design.md
+//! Decision 5. Previously this carried a bespoke shared-secret custom
+//! header; that scheme is retired, not kept alongside this one (no
+//! dual-acceptance window -- see that document's Decision 5 and this
+//! plan's own Global Constraints).
 
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// Shared-secret header every poller sends and `api`'s
-/// `require_internal_token` middleware (`crates/api/src/auth.rs`) checks.
-pub const INTERNAL_TOKEN_HEADER: &str = "x-internal-token";
+use crate::oauth_client::OAuthTokenCache;
 
 /// Header RDM uses for API-key auth, per RSPS5050 P-03-00 Rev A. How
 /// confidently this is corroborated varies per poller/product — see each
-/// poller's `main.rs` module docs for the specific gap, if any.
+/// poller's `main.rs` module docs for the specific gap, if any. Unrelated
+/// to internal-service auth (this is RDM's own upstream credential, not a
+/// credential DS's own `/private/*` routes check).
 pub const RDM_AUTH_HEADER_NAME: &str = "x-apikey";
 
-/// POSTs `items` as a JSON array to `url` with the internal-token header,
-/// then logs and returns `Ok(())` on a 2xx response, or bails with an
-/// `anyhow::Error` (including status + response body) otherwise.
+/// POSTs `items` as a JSON array to `url` with a fresh
+/// `Authorization: Bearer` token from `tokens`, then logs and returns
+/// `Ok(())` on a 2xx response, or bails with an `anyhow::Error` (including
+/// status + response body) otherwise.
 ///
 /// `noun` is used only in the success log line (e.g. `"incidents"`,
 /// `"stations"`, `"tocs"`) — callers pass their own plural label.
 pub async fn post_batch<T: Serialize>(
     client: &reqwest::Client,
     url: &str,
-    internal_token: &str,
+    tokens: &OAuthTokenCache,
     items: &[T],
     noun: &str,
 ) -> anyhow::Result<()> {
+    let token = tokens.get_token(client).await?;
     let response = client
         .post(url)
-        .header(INTERNAL_TOKEN_HEADER, internal_token)
+        .bearer_auth(&token)
         .json(items)
         .send()
         .await?;
@@ -83,10 +88,10 @@ pub struct LastFetchedResponse {
 pub async fn time_until_next_poll(
     client: &reqwest::Client,
     url: &str,
-    internal_token: &str,
+    tokens: &OAuthTokenCache,
     poll_interval: Duration,
 ) -> Duration {
-    let fetched_at = match fetch_last_fetched(client, url, internal_token).await {
+    let fetched_at = match fetch_last_fetched(client, url, tokens).await {
         Ok(fetched_at) => fetched_at,
         Err(err) => {
             tracing::warn!(error = ?err, "could not determine last-fetch time; polling immediately");
@@ -99,11 +104,12 @@ pub async fn time_until_next_poll(
 async fn fetch_last_fetched(
     client: &reqwest::Client,
     url: &str,
-    internal_token: &str,
+    tokens: &OAuthTokenCache,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
+    let token = tokens.get_token(client).await?;
     let response = client
         .get(url)
-        .header(INTERNAL_TOKEN_HEADER, internal_token)
+        .bearer_auth(&token)
         .send()
         .await?
         .error_for_status()?;
