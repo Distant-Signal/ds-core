@@ -1,0 +1,20 @@
+-- Adds the Authentik-native access-group names asserted by the OIDC
+-- provider's `groups` claim (see crates/api/src/auth/oidc.rs's
+-- AccessGroupClaims, added alongside this migration) -- see
+-- docs/superpowers/specs/2026-09-02-mcp-server-oauth-access-groups-design.md
+-- Decision 2.
+--
+-- NOT NULL DEFAULT '{}' rather than the design doc's own "nullable"
+-- phrasing: this app never needs to distinguish "no groups claim was
+-- ever asserted" from "the claim was asserted empty" -- both mean
+-- "no access groups," so a non-nullable empty-array default avoids an
+-- Option<Vec<String>> at the SQL layer for zero behavioural difference,
+-- matching the same "never trust absence as something colder than empty"
+-- posture identity_from_claims already takes for email_verified
+-- (crates/api/src/auth/oidc.rs).
+--
+-- Overwritten wholesale on every login by upsert_user (Task 3), never
+-- merged/unioned -- a group removed in Authentik is reflected on the
+-- user's very next login, matching how email/name already re-sync every
+-- return visit.
+ALTER TABLE users ADD COLUMN groups TEXT[] NOT NULL DEFAULT '{}';
