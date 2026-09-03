@@ -1,0 +1,471 @@
+id = "swr-kingston-loop"
+name = "Kingston Loop Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]  # South Western Railway, same ATOC code as the three
+# existing SWR files (swr-south-west-main, swr-portsmouth-direct,
+# swr-alton). SWR is now publicly owned, but the operator-of-record ATOC
+# code is unchanged - see docs/superpowers/specs/2026-08-29-line-coverage-
+# gap-analysis.md's own nationalisation section, which explicitly keeps
+# `SW` in use.
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Before this file, the catalogue's SWR coverage was three files that model
+# only the FAST trunk out of Waterloo (Waterloo - Clapham Junction -
+# Wimbledon - Surbiton - Woking) plus the two exclusive branches beyond
+# Woking. SWR's suburban SLOW-line network out of Waterloo had no line file
+# at all, so Raynes Park (RAY), New Malden (NEM), Norbiton (NBT), Kingston
+# (KNG), Earlsfield (EAD), Vauxhall (VXH) and the whole Richmond-side return
+# leg were absent from every line definition in `lines/` - meaning a user
+# looking at any of them saw "no disruptions" indistinguishable from genuine
+# good service. This file covers the Kingston Loop; its sibling
+# `swr-chessington.toml` (added in the same pass) covers the Chessington
+# branch off the same corridor.
+#
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Calling patterns: read directly off South Western Railway's own published
+# timetable PDFs - Timetable 1 (listed on SWR's timetables index as "Kingston
+# Loop and Shepperton to London Waterloo"; the PDF's own per-direction table
+# headings are longer), both the current edition and the from-20-Sep-2026
+# edition. The station list and off-peak frequencies are IDENTICAL across the
+# two editions, so this file is stable across the September 2026 timetable
+# change.
+#   https://www.southwesternrailway.com/plan-my-journey/timetables
+# Route shape and junction geography cross-checked against Wikipedia's
+# "Kingston loop line" article and the individual station articles for
+# Raynes Park, New Malden, Barnes, Barnes Bridge and Queenstown Road.
+#
+# CRS codes: verified against railwaycodes.org.uk's CRS/NLC/TIPLOC/STANOX
+# tables (site last updated 31 Aug / 1 Sep 2026), cross-checked against each
+# station's own Wikipedia infobox "Station code" field.
+#
+# Three assumptions carried into this task were WRONG and are corrected here
+# (each verified off the SWR timetable itself, not from memory):
+#   - Surbiton (SUR) is NOT on the Kingston Loop. It is on the SWML fast
+#     lines and is absent from Timetable 1 entirely. It stays where it
+#     already is, in the three existing swr-*.toml files.
+#   - Berrylands (BRS) is NOT on the Kingston Loop and NOT on the
+#     Chessington branch. It sits on the SWML between New Malden and
+#     Surbiton, served by other (still uncovered) SWR slow-line services.
+#     See the SCOPE BOUNDARIES section below.
+#   - Barnes Bridge (BNI) is NOT on this route. It is on the Hounslow Loop
+#     (Barnes -> Chiswick). Loop trains run Barnes -> Mortlake.
+# Also corrected: the clockwise order past Kingston is Hampton Wick ->
+# TEDDINGTON -> STRAWBERRY HILL -> Twickenham, not the other way round.
+#
+# ============================================================================
+# THE LOOP, AND HOW IT IS ORDERED BELOW
+# ============================================================================
+# This is a genuine loop: trains run Waterloo -> Waterloo, out one way and
+# back the other, roughly 79 minutes for a full circuit.
+#
+#   Clockwise:     Waterloo -> Vauxhall -> Clapham Jn -> Earlsfield ->
+#                  Wimbledon -> Raynes Park -> New Malden -> Norbiton ->
+#                  Kingston -> Hampton Wick -> Teddington -> Strawberry Hill
+#                  -> Twickenham -> St Margarets -> Richmond -> North Sheen
+#                  -> Mortlake -> Barnes -> Putney -> Wandsworth Town ->
+#                  Clapham Jn -> Queenstown Road -> Vauxhall -> Waterloo
+#   Anticlockwise: the exact reverse.
+#
+# A station can only appear once in a `stations` list, so the ordering below
+# is the CLOCKWISE circuit with Waterloo, Vauxhall and Clapham Junction
+# listed once, at the start. The list therefore ends at Queenstown Road,
+# which is physically adjacent to the Waterloo/Vauxhall end of the list -
+# the loop closes between the last entry and the first.
+#
+# Note on Queenstown Road (QRB) and Vauxhall (VXH): they are NOT
+# interchangeable halves of the same stretch, and each appears exactly once
+# per circuit, but for different reasons. Queenstown Road's two in-use
+# platforms are on the WINDSOR lines only, so it is called at on the
+# Richmond leg and never on the via-Wimbledon leg. Vauxhall is called at on
+# BOTH legs because it has platforms on both pairs - its eight platforms
+# split into 1-4 on the Windsor (Waterloo-Reading) lines, 5/6 on the SWML
+# fast lines and 7/8 on the SWML slow lines. The two formations do not
+# merge before Waterloo; they run in parallel into separate platform groups.
+#
+# CAVEAT for any future "lines blocked between A and B" range parser (per
+# lines/SCHEMA.md's own ordering rule, and the same caveat
+# overground-mildmay.toml already records for its two-branch list): a loop
+# cannot be linearised without loss. Ranges that run clockwise (e.g.
+# "between Wimbledon and Richmond") resolve correctly here; a range that
+# crosses the Queenstown Road/Waterloo closure point (e.g. "between Clapham
+# Junction and Putney") will resolve the long way round the loop. There is
+# no ordering that avoids this for a circular route.
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# `swr-trunk-waterloo` is reused VERBATIM from the three existing swr-*.toml
+# files - this is the shared trunk the README's "Adding a complex operator"
+# section is describing, and reusing the name is what makes an incident here
+# propagate to every SWR line.
+#
+# Which stations belong on it: Waterloo, Clapham Junction and Wimbledon are
+# already on `swr-trunk-waterloo` in all three sibling files. Vauxhall,
+# Earlsfield, Raynes Park and New Malden are added to it here. All four sit
+# on the SAME Waterloo-Surbiton formation the sibling files already model
+# (Raynes Park and New Malden are physically BETWEEN that trunk's own WIM
+# and SUR entries) - the sibling files simply omit them because their fast
+# services run through without calling.
+#
+# This is deliberately NOT the situation great-northern-suburban.toml's own
+# header warns about. There, reusing a sibling's segment name would have
+# mislabelled the SIBLING's matches, because both files listed the same
+# stations with different calling patterns. Here the sibling files do not
+# list VXH/EAD/RAY/NEM at all, and the matcher looks segments up per
+# `(line_id, crs)` pair (see `SegmentRegistry::segments_touched_by`), so an
+# incident at Earlsfield can only ever match THIS file and its Chessington
+# sibling. No sibling match can be mislabelled. What the shared name buys is
+# the correct annotation on this file's own matches: a blockage at
+# Earlsfield or Raynes Park genuinely IS a shared-trunk event, because every
+# SWR service into Waterloo runs over that formation.
+#
+# One honest caveat on that last point, found in review. `is_shared()` is
+# keyed on the segment NAME globally (crates/aggregator/src/segments.rs),
+# and aggregation.rs appends "(shared trunk - also affects other lines)" to
+# every SharedSegment reason. NEM (New Malden) is on `swr-trunk-waterloo`
+# but appears in no other file, so an incident at New Malden ALONE gets that
+# annotation while matching exactly one line. VXH/EAD/RAY don't have this
+# problem (both suburban files list them). It is defensible - New Malden
+# genuinely is on the South West Main Line, and a blockage there really does
+# stop the fast services that run through it; the catalogue simply has no
+# file listing NEM for them yet - and it is a pre-existing pattern several
+# other files already carry the same caveat for (see the notes on it in
+# crates/aggregator/src/matcher.rs). Recorded rather than papered over.
+#
+# The exclusive segments follow the README's junction rule exactly:
+#   - RAY (Raynes Park) is the junction where the Epsom/Mole Valley line -
+#     and with it swr-chessington.toml - leaves the SWML. It stays on the
+#     shared trunk; Chessington's exclusive coverage starts at the NEXT
+#     station (Motspur Park, in that file).
+#   - NEM (New Malden) is the junction where the Kingston Loop leaves the
+#     SWML (a grade-separated junction, built when the main line was
+#     quadrupled in 1884). It stays on the shared trunk; this line's own
+#     exclusive segment starts at the NEXT station, Norbiton.
+#
+#   WAT - VXH - CLJ - EAD - WIM - RAY - NEM | NBT - KNG - HMW - TED - STW |
+#   [--------------- swr-trunk-waterloo ---------|-- swr-kingston-loop --|
+#        TWI - SMG - RMD - NSH - MTL - BNS - PUT - WNT - QRB
+#        |-------------- swr-windsor-lines ---------------]
+#
+# `swr-windsor-lines` is a separate segment from `swr-kingston-loop` because
+# it is physically different infrastructure: the loop rejoins the Windsor
+# lines at Twickenham, and that Twickenham-Waterloo stretch also carries
+# SWR's Reading, Windsor & Eton Riverside and Weybridge-via-Staines
+# services (plus, from Barnes inward only, the Hounslow Loop, which
+# diverges there). None of those have a line file yet, so the segment
+# is exclusive to this line TODAY - it is named for what the track actually
+# is so that a future file for any of them can reuse the name verbatim and
+# get correct shared-trunk propagation, the same forward-looking naming
+# southeastern-metro-north-kent.toml uses for `southeastern-lewisham-corridor`.
+#
+# One nuance deliberately NOT modelled as its own segment: SWR's Shepperton
+# services share this line as far as Teddington, then diverge at Shacklegate
+# Junction (between Teddington and Strawberry Hill) and, off-peak, do not
+# serve Strawberry Hill, Twickenham or Richmond. So NBT-KNG-HMW-TED runs at
+# 4 tph (2 loop + 2 Shepperton) while STW-TWI runs at 2 tph. Splitting a
+# one-station `swr-kingston-loop`/Strawberry Hill segment out of this would
+# add a segment with no behavioural effect today (nothing else uses either
+# name). Recorded here instead: if a `swr-shepperton.toml` is ever added, it
+# should reuse `swr-kingston-loop` for NBT/KNG/HMW/TED ONLY, and this file's
+# STW entry must move to its own segment at that point.
+
+# ============================================================================
+# MATCH KEYWORDS
+# ============================================================================
+# "Kingston loop" is the route's own standard name (it is the title of its
+# own Wikipedia article) and is specific enough not to false-match. A bare
+# "Kingston" is deliberately NOT included: it would also match Kingston upon
+# Hull and Kingston Park (Tyne and Wear Metro) content.
+#
+# ONE keyword only. Matching is a plain lowercased substring test
+# (`is_excluded`/`match_one` in crates/aggregator/src/matcher.rs), so a
+# second entry of "Kingston Loop Line" could never add a match that
+# "Kingston loop" does not already make - it is a strict substring of it.
+# SCHEMA.md's "don't overload match_keywords" rule cuts against carrying
+# dead entries.
+match_keywords = ["Kingston loop"]
+
+# All four sample stations are on this line's own exclusive segments, past
+# the New Malden junction - the same "sample on the exclusive segment for a
+# clean read" approach swr-south-west-main.toml and swr-alton.toml use. No
+# OTHER line file in this catalogue lists any of them.
+#
+# Precision about what "exclusive" means here, because it is not the same
+# claim at all four: Strawberry Hill is served by the loop service alone
+# (2 tph). Norbiton, Kingston and Teddington are served by the loop service
+# AND by SWR's Shepperton services, which run over this line's own metals
+# as far as Teddington before diverging at Shacklegate Junction (4 tph
+# combined). Those Shepperton trains are not contamination - they are
+# running on this corridor, so a delay to them IS a delay on this line, and
+# counting them is the behaviour we want. What no sample station carries is
+# a service running on DIFFERENT track, which is the thing a sample station
+# on a shared trunk would suffer from.
+sample_stations = ["KNG", "NBT", "TED", "STW"]
+
+# ============================================================================
+# NO `destination_crs_filter` / `headcode_prefixes` - deliberate, see below
+# ============================================================================
+# The sibling swr-*.toml files all set `destination_crs_filter`. This file
+# does not, and that is a considered decision, not an omission.
+#
+# `belongs_to_line` in crates/aggregator/src/aggregation.rs applies the
+# filter to EVERY sampled departure at EVERY sample station - it is not
+# scoped to shared-trunk stations. So a whitelist that misses a real
+# destination silently drops the whole sample, and the line then reports
+# Good forever: precisely the "no disruptions is indistinguishable from good
+# service" failure this file was written to fix.
+#
+# A circular route has no natural "destination" to whitelist. A full circuit
+# is a Waterloo -> Waterloo working, and the loop is advertised to
+# passengers against an intermediate station rather than its actual
+# terminus: the consistent pattern across the station articles checked
+# (Vauxhall, Earlsfield, Norbiton, Hampton Wick, Strawberry Hill,
+# Twickenham, New Malden, Barnes) is "2 tph to Teddington via Kingston" /
+# "2 tph to Teddington via Richmond", i.e. TED in BOTH directions - though
+# the Kingston loop line article instead describes clockwise trains as
+# advertised "Strawberry Hill" and anticlockwise as "Teddington", switching
+# en route, and that claim is unsourced. On top of that the corridor also
+# carries Shepperton workings (SHP) and Sunday short workings that
+# terminate at Kingston or Teddington. So the plausible `destination_crs`
+# set spans at least TED, WAT, STW, SHP and KNG, and depends on Darwin's
+# own advertised-destination handling for a route where the advertised
+# destination is deliberately not the terminus.
+#
+# The filter's only job is disambiguation at stations shared with a
+# DIFFERENT route. This line has none in its sample: every sample station is
+# past the New Malden junction, on track carrying only this corridor's own
+# services (see the sample_stations note above). The mandatory operator
+# filter (`SW`) therefore already scopes the sample correctly, and a guessed
+# whitelist would carry real downside for no gain. That downside is not
+# hypothetical - an earlier draft of the sibling swr-chessington.toml
+# shipped a whitelist that would have silently dropped that branch's
+# early-morning and late-evening Wimbledon-terminating workings; see that
+# file's own note.
+
+# Commuter line: tighter thresholds, the same values every other
+# `category = "commuter"` file uses (southeastern-hayes-line.toml,
+# southeastern-metro-north-kent.toml, thameslink-core.toml,
+# great-northern-suburban.toml). The core of this loop runs 4 tph off-peak,
+# so a 4-minute delay is far more disruptive here than on an hourly
+# long-distance service.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - what this file deliberately does NOT cover
+# ============================================================================
+# Named explicitly rather than left as a silent half-model, because each is
+# a real remaining gap in the same corridor:
+#   - Epsom / Mole Valley (Motspur Park - Worcester Park - Stoneleigh -
+#     Ewell West - Epsom - Ashtead - Leatherhead - Dorking) and the New
+#     Guildford line. Raynes Park is modelled as the junction for these
+#     (it is on the shared trunk, per the rule above), and
+#     swr-chessington.toml covers the first stretch as far as Motspur Park,
+#     but nothing beyond Motspur Park is covered by any file yet.
+#   - Berrylands (BRS), Thames Ditton and the Hampton Court branch, and the
+#     SWML slow-line stoppers to Surbiton/Woking generally. Berrylands in
+#     particular was verified to be on neither of this pass's two routes.
+#     (It is also physically CLOSED from 11 May 2026 to late September 2026
+#     for platform replacement, with replacement buses New Malden -
+#     Berrylands - Surbiton - so a future file covering it must not read
+#     zero calls there as a fault.)
+#   - The Shepperton branch beyond Teddington (see the segment notes above).
+#   - SWR's Reading / Windsor & Eton Riverside / Weybridge-via-Staines
+#     services, which share this file's whole `swr-windsor-lines` stretch
+#     from Twickenham inward, and the Hounslow Loop, which diverges at
+#     Barnes and so shares only the Barnes-to-Waterloo end of it.
+#
+# ============================================================================
+# STATIONS - clockwise round the loop from Waterloo; see "THE LOOP, AND HOW
+# IT IS ORDERED BELOW" above for why Queenstown Road is last.
+# ============================================================================
+
+# --- Shared SWR trunk out of Waterloo. Reused verbatim from the three
+# existing swr-*.toml files; see the SEGMENTS section above. ---
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+# London Waterloo. Note for anyone adding `tiploc` here later: Waterloo has
+# several TIPLOCs under CRS WAT, and a Kingston Loop circuit uses TWO of
+# them - the main-lines platforms on the via-Wimbledon leg and the Windsor-
+# lines platforms on the via-Richmond leg. Any TRUST/SCHEDULE correlation
+# for this line must accept both, or a single loop working will look like it
+# starts and ends at different stations.
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+# Vauxhall. Has platforms on both the Windsor lines and the SWML, so it is
+# called at on BOTH legs of the circuit (unlike Queenstown Road, which is
+# Windsor-lines only - see the header note). Major London Underground
+# (Victoria line) interchange. Not listed in the three sibling swr-*.toml
+# files: their fast services run through platforms 5/6 without calling.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Clapham Junction. Already `swr-trunk-waterloo` in all three sibling files.
+# Both legs of this circuit call here.
+
+[[stations]]
+crs = "EAD"
+role = "minor"
+segment = "swr-trunk-waterloo"
+# Earlsfield. Slow-lines-only calling point; not in the sibling files.
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+# Wimbledon. Already `swr-trunk-waterloo` in all three sibling files, with
+# role "major" - kept identical here. This is the station where this file's
+# shared-trunk reuse does its real work: an incident at Wimbledon now
+# propagates as a shared-trunk event across all FIVE SWR lines, not three.
+# No edit to the sibling files was needed to achieve that; the shared-
+# segment mechanism is name-based and WIM already carries the right name
+# there.
+
+[[stations]]
+crs = "RAY"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Raynes Park. The junction where the Epsom / Mole Valley line (and with it
+# the Chessington branch, via Motspur Park) leaves the South West Main Line.
+# Per the README's single most important authoring rule, the junction
+# station belongs to the SHARED trunk - so swr-chessington.toml also carries
+# RAY on `swr-trunk-waterloo`, and its own exclusive coverage starts at the
+# next station along its route (Motspur Park).
+
+[[stations]]
+crs = "NEM"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# New Malden. The junction where the Kingston Loop itself leaves the SWML,
+# via a grade-separated junction built when the main line was quadrupled in
+# 1884. Same rule: the junction stays on the shared trunk, and this line's
+# exclusive segment starts at Norbiton. Note swr-chessington.toml does NOT
+# list New Malden - Chessington services leave the main line one station
+# earlier, at Raynes Park, and never pass through here.
+
+# --- Kingston branch proper, New Malden to Twickenham. Exclusive to this
+# file today; SWR's Shepperton services share it as far as Teddington (see
+# the SEGMENTS section). ---
+[[stations]]
+crs = "NBT"
+role = "minor"
+segment = "swr-kingston-loop"
+# Norbiton.
+
+[[stations]]
+crs = "KNG"
+role = "major"
+segment = "swr-kingston-loop"
+# Kingston. The route's principal intermediate station; full-circuit
+# workings have a booked dwell here in both directions.
+
+[[stations]]
+crs = "HMW"
+role = "minor"
+segment = "swr-kingston-loop"
+# Hampton Wick.
+
+[[stations]]
+crs = "TED"
+role = "minor"
+segment = "swr-kingston-loop"
+# Teddington. Last station shared with SWR's Shepperton services, which
+# diverge at Shacklegate Junction just beyond here. 4 tph off-peak to this
+# point; 2 tph onward.
+
+[[stations]]
+crs = "STW"
+role = "junction"
+segment = "swr-kingston-loop"
+# Strawberry Hill. Sits inside the Strawberry Hill / Shacklegate / Fulwell
+# junction triangle (with the depot in the middle), which is how the
+# Shepperton branch connects to this line. Off-peak Shepperton services cut
+# the corner via Shacklegate Junction and do not call here, so this is the
+# one sample station served by the loop service alone; a handful of peak
+# Shepperton workings are routed via Twickenham and do call.
+
+# --- Windsor lines, Twickenham inward to Waterloo. Named for the track
+# rather than for this service, so a future Reading / Windsor & Eton
+# Riverside / Hounslow Loop file can reuse the name and get correct
+# shared-trunk propagation. ---
+[[stations]]
+crs = "TWI"
+role = "junction"
+segment = "swr-windsor-lines"
+# Twickenham. Where the Kingston Loop rejoins the Windsor lines (which
+# continue west toward Feltham, Staines, Windsor and Reading). Junction
+# station, so it belongs to the shared/onward segment rather than to the
+# Kingston branch - same rule applied at Raynes Park and New Malden above.
+
+[[stations]]
+crs = "SMG"
+role = "minor"
+segment = "swr-windsor-lines"
+# St Margarets.
+
+[[stations]]
+crs = "RMD"
+role = "major"
+segment = "swr-windsor-lines"
+# Richmond. Also overground-mildmay.toml's own western terminus (on that
+# file's own `overground-mildmay-west` segment). Station overlap only, NOT a
+# shared segment: the Mildmay line approaches Richmond from Gunnersbury over
+# separate infrastructure. This is the same treatment overground-mildmay.toml
+# itself already documents for its other National Rail overlaps, and the
+# xc-south-coast.toml / Reading precedent. An incident at Richmond correctly
+# matches both files independently, each scoped to its own segment.
+
+[[stations]]
+crs = "NSH"
+role = "minor"
+segment = "swr-windsor-lines"
+# North Sheen.
+
+[[stations]]
+crs = "MTL"
+role = "minor"
+segment = "swr-windsor-lines"
+# Mortlake.
+
+[[stations]]
+crs = "BNS"
+role = "junction"
+segment = "swr-windsor-lines"
+# Barnes. Junction with the Hounslow Loop (which runs Barnes -> Barnes
+# Bridge -> Chiswick and is not covered by this catalogue). Barnes Bridge
+# (BNI) is on that loop, NOT on this route - loop trains run Barnes ->
+# Mortlake.
+
+[[stations]]
+crs = "PUT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Putney.
+
+[[stations]]
+crs = "WNT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Wandsworth Town.
+
+[[stations]]
+crs = "QRB"
+role = "minor"
+segment = "swr-windsor-lines"
+# Queenstown Road (Battersea). LAST entry in this list but physically
+# adjacent to the Vauxhall/Waterloo end of it - this is where the loop
+# closes. Windsor-lines platforms only, so it is called at on the Richmond
+# leg of the circuit and never on the via-Wimbledon leg.

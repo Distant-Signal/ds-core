@@ -1,0 +1,270 @@
+id = "swr-chessington"
+name = "Chessington Branch Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]  # South Western Railway, same ATOC code as the other
+# swr-*.toml files. See swr-kingston-loop.toml's own note on why
+# nationalisation does not change the code.
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Companion to swr-kingston-loop.toml, added in the same pass. Between them
+# they give SWR's suburban slow-line corridor out of Waterloo its first line
+# coverage: before this pass, Raynes Park (RAY), Motspur Park (MOT), Malden
+# Manor (MAL), Tolworth (TOL) and both Chessington stations appeared in no
+# line definition at all, so users at any of them saw "no disruptions"
+# indistinguishable from genuine good service.
+#
+# Split into its own file rather than folded into swr-kingston-loop.toml
+# because the two are genuinely different passenger routes that leave the
+# main line at DIFFERENT junctions - Chessington at Raynes Park, the Kingston
+# Loop one station further on at New Malden - and share no track beyond the
+# trunk. That is the same granularity swr-alton.toml uses against
+# swr-portsmouth-direct.toml (both leave the trunk at Woking, each gets its
+# own file), and SCHEMA.md's "one line per file" curation rule.
+#
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Calling pattern: read directly off South Western Railway's own Timetable 5
+# ("Guildford, Dorking & Chessington"), both the 17 May - 19 Sep 2026 edition
+# and the from-20-Sep-2026 edition. The station list and frequency are
+# IDENTICAL across the two editions, so this file is stable across the
+# September 2026 timetable change.
+#   https://www.southwesternrailway.com/plan-my-journey/timetables
+# Route shape and junction geography cross-checked against Wikipedia's
+# "Chessington branch line" article and the Raynes Park and Motspur Park
+# station articles (Motspur Park's own article independently confirms the
+# 2 tph Chessington South service and the Worcester Park / Malden Manor
+# southbound split).
+#
+# CRS codes: verified against railwaycodes.org.uk's CRS/NLC/TIPLOC/STANOX
+# tables (site last updated 31 Aug / 1 Sep 2026), cross-checked against each
+# station's own Wikipedia infobox "Station code" field.
+#
+# Verified down-direction calling pattern, in full:
+#   London Waterloo - Vauxhall - Clapham Junction - Earlsfield - Wimbledon -
+#   Raynes Park - Motspur Park - Malden Manor - Tolworth - Chessington North
+#   - Chessington South
+# Up direction is the exact reverse. Two corrections to assumptions carried
+# into this task, both confirmed against the timetable itself:
+#   - Chessington services do NOT call at New Malden. They leave the South
+#     West Main Line one station earlier, at Raynes Park. New Malden belongs
+#     to swr-kingston-loop.toml, not here.
+#   - Berrylands, Surbiton and Worcester Park are NOT on this branch either.
+#     Berrylands and Surbiton are on the SWML; Worcester Park, Stoneleigh and
+#     Ewell West are on the Epsom / Mole Valley line BEYOND Motspur Park.
+#     See SCOPE BOUNDARIES below.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   WAT - VXH - CLJ - EAD - WIM - RAY | MOT | MAL - TOL - CSN - CSS
+#   [------- swr-trunk-waterloo ------|-----|--- swr-chessington-branch ---]
+#                             junction  swr-epsom-line
+#                                         junction
+#
+# `swr-trunk-waterloo` is reused verbatim from the three existing swr-*.toml
+# files and from swr-kingston-loop.toml - the shared trunk the README's
+# "Adding a complex operator" section describes. See swr-kingston-loop.toml's
+# own SEGMENTS section for the full reasoning on why VXH/EAD/RAY are added to
+# that trunk name (short version: they sit on the same Waterloo-Surbiton
+# formation the sibling files already model, the sibling files simply do not
+# call there, and the matcher resolves segments per `(line_id, crs)` so no
+# sibling match can be mislabelled).
+#
+# Raynes Park is where this branch's route leaves the SWML. Per the README's
+# single most important authoring rule, the junction station belongs to the
+# shared trunk and the exclusive segment starts at the NEXT station - so RAY
+# is on `swr-trunk-waterloo` and this file's own coverage starts at Motspur
+# Park.
+#
+# `swr-epsom-line` covers the ONE station between the two junctions. The
+# Raynes Park - Motspur Park stretch is the Epsom / Mole Valley line's first
+# section, and SWR's Epsom - Dorking and Epsom - Guildford services run over
+# it alongside this branch's trains (Motspur Park's own article: 2 tph
+# Chessington South, 1 tph Dorking via Epsom, 1 tph Guildford via Epsom).
+# None of those has a line file yet, so the segment is exclusive to this line
+# TODAY; it is named for the track rather than for this service so a future
+# `swr-epsom.toml` / `swr-new-guildford.toml` can reuse the name verbatim and
+# get correct shared-trunk propagation. Same forward-looking naming
+# southeastern-metro-north-kent.toml uses for `southeastern-lewisham-corridor`.
+#
+# Motspur Park is itself the junction for the Chessington branch proper (the
+# physical divergence is at Motspur Park Junction, 766 yards south of the
+# station), so the same rule applies again: MOT sits on the upstream
+# `swr-epsom-line` segment, and `swr-chessington-branch` starts at Malden
+# Manor.
+#
+# ============================================================================
+# MATCH KEYWORDS
+# ============================================================================
+# Both phrases are specific to this route; "Chessington" has no ambiguous
+# namesake elsewhere on the network. Kept to two per SCHEMA.md's "don't
+# overload match_keywords" rule. No `excluded_keywords`: this file's keywords
+# are narrow enough that no KeywordOnly false positive is possible, and
+# southeastern-metro-north-kent.toml's own review finding shows adding a
+# sibling line's name as an exclusion is a HARD VETO that can suppress
+# exactly the multi-line incidents these files exist to model.
+match_keywords = ["Chessington branch", "Chessington line"]
+
+# All four sample stations are on this line's own exclusive branch. No
+# service other than this one calls at any of them, giving a clean read -
+# the same approach swr-alton.toml and swr-south-west-main.toml use.
+sample_stations = ["CSS", "CSN", "TOL", "MAL"]
+
+# ============================================================================
+# NO `destination_crs_filter` / `headcode_prefixes` - deliberate, see below
+# ============================================================================
+# An earlier draft of this file set `destination_crs_filter = ["CSS", "WAT"]`
+# on the reasoning that "every booked working is Waterloo <-> Chessington
+# South". Review checked that against SWR's Timetable 5 PDF cell by cell and
+# it is FALSE: several timetabled up workings terminate at WIMBLEDON, not
+# Waterloo - the 0028 SO and the 2308 FX / 2342 FO late services (Waterloo
+# shown as "change at Wimbledon"), plus the Saturday and Sunday first
+# departures, which start from Wimbledon. Those departures carry
+# `destination_crs = WIM`.
+#
+# That matters because `belongs_to_line` in
+# crates/aggregator/src/aggregation.rs applies the filter to EVERY sampled
+# departure at EVERY sample station - it is not scoped to shared-trunk
+# stations. A whitelist missing WIM would therefore have silently dropped
+# every early-morning and late-evening sample and reported Good regardless:
+# exactly the "no disruptions is indistinguishable from good service"
+# failure this file was written to fix.
+#
+# Rather than patch WIM into the list, the filter is dropped entirely, for
+# the same reason swr-kingston-loop.toml drops its own: all four sample
+# stations (Malden Manor, Tolworth, Chessington North, Chessington South)
+# are on this line's own exclusive branch, and no service other than this
+# one calls at any of them - grepped against every other file in lines/.
+# The mandatory operator filter (`SW`) already scopes the sample correctly,
+# so the whitelist was buying nothing while carrying a real downside.
+
+# Commuter line: the same thresholds every other `category = "commuter"`
+# file uses (southeastern-hayes-line.toml - itself a comparable 2-4 tph
+# London suburban branch - southeastern-metro-north-kent.toml,
+# thameslink-core.toml, great-northern-suburban.toml).
+#
+# Noted but deliberately NOT acted on: this branch runs a flat 2 tph with no
+# redundancy, so one cancellation is a 30-minute gap and half of that hour's
+# service, where the Kingston Loop's 4 tph core absorbs the same cancellation
+# as a 25% loss. That argues for a tighter `reduced_service_pct` here than
+# the 0.50 default. But of the 25 files in this catalogue that set
+# `reduced_service_pct` at all (23 at 0.35, tpe-borders.toml at 0.30), NOT
+# ONE is `category = "commuter"` - they are all regional/rural branch files.
+# Inventing a value for the first commuter file to carry one would be an
+# unreviewed one-off. Recorded here for a future tuning pass with real
+# sample data behind it.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - what this file deliberately does NOT cover
+# ============================================================================
+# Stated explicitly rather than left as a silent half-model of the Raynes
+# Park junction:
+#   - The Epsom / Mole Valley line beyond Motspur Park (Worcester Park,
+#     Stoneleigh, Ewell West, Epsom, Ashtead, Leatherhead, Dorking) and the
+#     New Guildford line. This file models the junction end of that route
+#     correctly - RAY on the shared trunk, MOT on a reusable
+#     `swr-epsom-line` segment - so a future file can be added cleanly, but
+#     nothing beyond Motspur Park is covered today.
+#   - Berrylands (BRS), Surbiton's slow-line stoppers, Thames Ditton and the
+#     Hampton Court branch. Berrylands was specifically checked and is on
+#     neither of this pass's two routes. (It is also physically CLOSED from
+#     11 May 2026 to late September 2026 for platform replacement - a future
+#     file covering it must not read zero calls there as a fault.)
+#   - The Kingston Loop and the Shepperton branch: swr-kingston-loop.toml.
+#
+# ============================================================================
+# STATIONS - ordered London to Chessington South.
+# ============================================================================
+
+# --- Shared SWR trunk out of Waterloo. Reused verbatim from the sibling
+# swr-*.toml files; see the SEGMENTS section above. ---
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+# London Waterloo. Unlike the Kingston Loop, every working on this branch
+# uses the MAIN-line platforms only, so there is no two-TIPLOC complication
+# here (see swr-kingston-loop.toml's WAT note).
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+# Vauxhall. Slow-lines calling point, not listed in the three fast-line
+# swr-*.toml files.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Clapham Junction. Already `swr-trunk-waterloo` in every sibling file.
+
+[[stations]]
+crs = "EAD"
+role = "minor"
+segment = "swr-trunk-waterloo"
+# Earlsfield. Slow-lines-only calling point.
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+# Wimbledon. Already `swr-trunk-waterloo` in every sibling file, with role
+# "major" - kept identical.
+
+[[stations]]
+crs = "RAY"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Raynes Park. THE junction for this line: the Epsom / Mole Valley line
+# leaves the South West Main Line here and this branch's trains with it.
+# Stays on the shared trunk per the README's junction rule; this file's own
+# coverage starts at the next station, Motspur Park. swr-kingston-loop.toml
+# carries the identical RAY entry, so an incident at Raynes Park is a
+# genuine cross-line shared-trunk event between the two.
+
+# --- Epsom / Mole Valley line, first section. Shared in reality with SWR's
+# (still uncovered) Epsom-Dorking and Epsom-Guildford services; see the
+# SEGMENTS section on why the name is chosen for the track, not the
+# service. ---
+[[stations]]
+crs = "MOT"
+role = "junction"
+segment = "swr-epsom-line"
+# Motspur Park. The Chessington branch proper diverges just south of here at
+# Motspur Park Junction; the Epsom / Mole Valley line continues to Worcester
+# Park. Junction station, so it belongs to the upstream segment and this
+# line's exclusive segment starts at Malden Manor.
+
+# --- Chessington branch proper. Exclusive to this line; opened 1938-39 and
+# never extended beyond Chessington South. ---
+[[stations]]
+crs = "MAL"
+role = "minor"
+segment = "swr-chessington-branch"
+# Malden Manor.
+
+[[stations]]
+crs = "TOL"
+role = "minor"
+segment = "swr-chessington-branch"
+# Tolworth.
+
+[[stations]]
+crs = "CSN"
+role = "minor"
+segment = "swr-chessington-branch"
+# Chessington North.
+
+[[stations]]
+crs = "CSS"
+role = "terminus"
+segment = "swr-chessington-branch"
+# Chessington South. Terminus; roughly 36 minutes from Waterloo.
