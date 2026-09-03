@@ -284,6 +284,22 @@ pub enum DataQuality {
     #[default]
     Knowledgebase,
     LdbwsInferred,
+    /// Reserved for a future full-coverage TRUST-vs-schedule consumer
+    /// ("Option B" — see
+    /// `docs/superpowers/specs/2026-08-29-trust-schedule-delay-inference-design.md`
+    /// and
+    /// `docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md`).
+    /// **Not constructed anywhere in this codebase today** — Option B has
+    /// not been built, and its own go/no-go decision gate
+    /// (`docs/superpowers/specs/2026-08-29-trust-schedule-delay-validation-findings.md`,
+    /// Task 8) has been re-run three times and has not reached "go" as of
+    /// this comment. When it does, this would be set by the same narrow
+    /// rule `LdbwsInferred` already follows: only when a full-coverage
+    /// status determines a line's severity with no active Knowledgebase
+    /// incident present, never when full-coverage data merely escalates an
+    /// incident-derived status's severity (which keeps its original
+    /// `Knowledgebase`/`Planned` provenance, mirroring
+    /// `escalate_from_sample_stats`'s existing behavior for LDBWS).
     TrustInferred,
     Planned,
     /// Published by TfL as line status, not inferred by this app from
