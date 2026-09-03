@@ -948,6 +948,47 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
     merged
 }
 
+/// Shared delayed/cancelled/skipped/avg-delay arithmetic underlying every
+/// `SampleStats` computation in this app. `is_skip` is a caller-supplied
+/// predicate rather than a fixed membership check, because "skip" means
+/// two different, both legitimate things depending on the caller: the
+/// line-level caller means "skips a stop somewhere on the line's route"
+/// (`line.stations`); the per-(station, operator) caller
+/// (docs/superpowers/specs/2026-09-03-per-station-stats-design.md
+/// Decision 4) means "skips calling at this specific station"
+/// (`skipped_stations.contains(this_crs)`). Only ever evaluated for a
+/// non-cancelled departure, matching every existing caller.
+pub fn compute_sample_stats(
+    departures: &[&StationDeparture],
+    delay_threshold_minutes: i64,
+    is_skip: impl Fn(&StationDeparture) -> bool,
+) -> SampleStats {
+    let total = departures.len();
+    let cancelled = departures.iter().filter(|d| d.is_cancelled).count();
+    let delayed = departures
+        .iter()
+        .filter(|d| !d.is_cancelled && d.delay_minutes as i64 >= delay_threshold_minutes)
+        .count();
+    let skipped = departures
+        .iter()
+        .filter(|d| !d.is_cancelled && is_skip(d))
+        .count();
+    let running: Vec<&&StationDeparture> = departures.iter().filter(|d| !d.is_cancelled).collect();
+    let avg_delay_minutes = if running.is_empty() {
+        0.0
+    } else {
+        running.iter().map(|d| d.delay_minutes as f64).sum::<f64>() / running.len() as f64
+    };
+
+    SampleStats {
+        total,
+        delayed,
+        cancelled,
+        skipped,
+        avg_delay_minutes,
+    }
+}
+
 #[cfg(test)]
 mod defaults_tests {
     use super::*;
@@ -1004,6 +1045,104 @@ mod defaults_tests {
         overrides.insert("not_a_real_field".to_string(), 42.0);
         let merged = thresholds_for(&defaults, &overrides);
         assert_eq!(merged, defaults);
+    }
+}
+
+#[cfg(test)]
+mod compute_sample_stats_tests {
+    use super::*;
+
+    fn departure(
+        delay_minutes: i32,
+        is_cancelled: bool,
+        skipped_stations: Vec<&str>,
+    ) -> StationDeparture {
+        StationDeparture {
+            service_id: "svc".to_string(),
+            operator: "SW".to_string(),
+            destination_crs: "WAT".to_string(),
+            scheduled: "10:00".to_string(),
+            estimated: "10:00".to_string(),
+            is_cancelled,
+            delay_minutes,
+            cancel_reason: if is_cancelled {
+                Some("fault".to_string())
+            } else {
+                None
+            },
+            delay_reason: None,
+            headcode: None,
+            skipped_stations: skipped_stations.into_iter().map(str::to_string).collect(),
+        }
+    }
+
+    #[test]
+    fn empty_input_gives_zeroed_stats_not_nan() {
+        let departures: Vec<&StationDeparture> = vec![];
+        let stats = compute_sample_stats(&departures, 5, |_| false);
+        assert_eq!(stats.total, 0);
+        assert_eq!(stats.delayed, 0);
+        assert_eq!(stats.cancelled, 0);
+        assert_eq!(stats.skipped, 0);
+        assert_eq!(stats.avg_delay_minutes, 0.0);
+    }
+
+    #[test]
+    fn average_delay_excludes_cancelled_departures() {
+        // A cancelled departure with a huge delay_minutes value; if it were
+        // included in the average, the result would be much higher than 5.0.
+        let on_time = departure(0, false, vec![]);
+        let ten_late = departure(10, false, vec![]);
+        let cancelled_with_huge_delay = departure(500, true, vec![]);
+        let departures = vec![&on_time, &ten_late, &cancelled_with_huge_delay];
+        let stats = compute_sample_stats(&departures, 5, |_| false);
+
+        assert_eq!(stats.total, 3);
+        assert_eq!(stats.cancelled, 1);
+        assert_eq!(stats.delayed, 1); // only ten_late clears the threshold
+        // average over the two running (non-cancelled) departures: (0 + 10) / 2
+        assert_eq!(stats.avg_delay_minutes, 5.0);
+    }
+
+    #[test]
+    fn cancelled_departure_matching_is_skip_does_not_count_as_skipped() {
+        let cancelled_and_skipping = departure(0, true, vec!["EDB"]);
+        let departures = vec![&cancelled_and_skipping];
+        let stats = compute_sample_stats(&departures, 5, |d| {
+            d.skipped_stations.iter().any(|c| c == "EDB")
+        });
+
+        assert_eq!(stats.cancelled, 1);
+        assert_eq!(stats.skipped, 0);
+    }
+
+    #[test]
+    fn non_cancelled_departure_matching_is_skip_counts_as_skipped() {
+        let skipping = departure(0, false, vec!["EDB"]);
+        let departures = vec![&skipping];
+        let stats = compute_sample_stats(&departures, 5, |d| {
+            d.skipped_stations.iter().any(|c| c == "EDB")
+        });
+
+        assert_eq!(stats.skipped, 1);
+    }
+
+    #[test]
+    fn delay_exactly_at_threshold_counts_as_delayed() {
+        let exactly_at_threshold = departure(5, false, vec![]);
+        let departures = vec![&exactly_at_threshold];
+        let stats = compute_sample_stats(&departures, 5, |_| false);
+
+        assert_eq!(stats.delayed, 1);
+    }
+
+    #[test]
+    fn delay_below_threshold_does_not_count_as_delayed() {
+        let below_threshold = departure(4, false, vec![]);
+        let departures = vec![&below_threshold];
+        let stats = compute_sample_stats(&departures, 5, |_| false);
+
+        assert_eq!(stats.delayed, 0);
     }
 }
 
