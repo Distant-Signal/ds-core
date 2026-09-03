@@ -3708,6 +3708,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "schedule-query"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+]
+
+[[package]]
 name = "schedule-reference"
 version = "0.1.0"
 dependencies = [
