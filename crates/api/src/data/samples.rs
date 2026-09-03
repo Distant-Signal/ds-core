@@ -37,6 +37,7 @@ mod tests {
             exclusive_segments: vec![],
             destination_crs_filter: vec![],
             headcode_prefixes: vec![],
+            full_coverage_enabled: false,
         }
     }
 

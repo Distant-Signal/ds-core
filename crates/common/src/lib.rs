@@ -364,6 +364,16 @@ pub struct LineStatus {
     pub sample_stats: Option<SampleStats>,
     #[serde(default = "SampleAvailability::no_coverage_default")]
     pub sample_availability: SampleAvailability,
+    /// Full-coverage analog of `sample_stats` -- see `FullCoverageAvailability`'s
+    /// own doc comment and
+    /// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
+    /// Decision 1. `None` for every line today (nothing produces this yet);
+    /// permanent, additive scaffolding, not a replacement for `sample_stats`
+    /// -- see that design doc's Decision 3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_coverage_stats: Option<SampleStats>,
+    #[serde(default = "FullCoverageAvailability::not_enabled_default")]
+    pub full_coverage_availability: FullCoverageAvailability,
 }
 
 /// Top-level object returned by the API for one line.
@@ -473,6 +483,19 @@ pub struct LineDefinition {
     /// Headcode prefix filters used during LDBWS inference.
     #[serde(default)]
     pub headcode_prefixes: Vec<String>,
+    /// Opt-in per line, catalogue-authored -- mirrors `severity_overrides`'s
+    /// existing per-line-TOML-field precedent. Gates whether a future
+    /// full-coverage (TRUST-vs-schedule) consumer even attempts this line,
+    /// not merely whether its result is shown once resolved -- so a
+    /// line's `LineStatus.full_coverage_availability` genuinely stays
+    /// `NotEnabled` (not `Pending` forever) until this flag is set,
+    /// distinguishing "not rolled out to yet" from "rolled out, still
+    /// resolving." See
+    /// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
+    /// Decision 3. `false` for every line in this repo's catalogue today
+    /// -- nothing consumes this yet (see `crates/aggregator::merge_full_coverage`).
+    #[serde(default)]
+    pub full_coverage_enabled: bool,
 }
 
 impl LineDefinition {
@@ -782,6 +805,160 @@ impl SampleAvailability {
     }
 }
 
+/// Why `full_coverage_stats` is (or isn't) populated -- the full-coverage
+/// analog of `SampleAvailability`, deliberately a SIBLING type, not a
+/// reuse of it. `SampleAvailability::BelowThreshold` encodes an
+/// LDBWS-specific station-count threshold with no honest full-coverage
+/// analog: a dedicated TRUST/schedule consumer either has resolved this
+/// line's service population for the current window, or it hasn't --
+/// there is no "too few observed, raise the threshold" state once every
+/// scheduled service is structurally in view. See
+/// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
+/// Decision 1 for the full reasoning (this repo already forced one
+/// structurally different producer -- the DLR pilot's per-trip resolution
+/// warm-up -- into `SampleAvailability::BelowThreshold` once; this type
+/// exists so a second, wider-blast-radius producer doesn't repeat that
+/// compromise).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum FullCoverageAvailability {
+    /// No full-coverage producer exists for this line at all -- either
+    /// Option B has never shipped, or it has shipped but this specific
+    /// line has not been enabled for it yet (see `LineDefinition::full_coverage_enabled`).
+    /// The default, and the ONLY value this type can take until both are
+    /// true.
+    NotEnabled,
+    /// Enabled for this line, but the consumer has not yet resolved a
+    /// population for the current window this cycle -- a fresh
+    /// deployment, a consumer outage, or (structurally different from
+    /// LDBWS's per-cycle immediacy) TRUST resolution lag: a scheduled
+    /// service with no Activation/Movement event seen yet, which this
+    /// cycle cannot distinguish from "hasn't run yet."
+    Pending,
+    /// Resolved: every scheduled service on this line for the current
+    /// window has been matched against real TRUST movement data. The
+    /// payload is NOT duplicated a second time on the wire -- see
+    /// `crates/api/src/render.rs`, mirroring `SampleAvailability::Available`'s
+    /// own established precedent.
+    Available(SampleStats),
+}
+
+impl FullCoverageAvailability {
+    /// `#[serde(default = ...)]` shim for deserializing `LineStatus` rows
+    /// written before this field existed -- the exact same read-compat
+    /// role `SampleAvailability::no_coverage_default` plays for its
+    /// sibling field. Every real writer computes a fresh value; this
+    /// default is a read-compat fallback, not a real "unknown" state.
+    pub fn not_enabled_default() -> Self {
+        FullCoverageAvailability::NotEnabled
+    }
+
+    /// Extracts the `Available` payload, if any -- mirrors
+    /// `SampleAvailability::sample_stats`'s own accessor shape.
+    pub fn full_coverage_stats(&self) -> Option<SampleStats> {
+        match self {
+            FullCoverageAvailability::Available(stats) => Some(stats.clone()),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod full_coverage_availability_tests {
+    use super::*;
+
+    #[test]
+    fn wire_tags_match_the_design_spec() {
+        assert_eq!(
+            serde_json::to_value(FullCoverageAvailability::NotEnabled).unwrap(),
+            serde_json::json!({"state": "not-enabled"})
+        );
+        assert_eq!(
+            serde_json::to_value(FullCoverageAvailability::Pending).unwrap(),
+            serde_json::json!({"state": "pending"})
+        );
+    }
+
+    #[test]
+    fn available_case_tags_as_available() {
+        // Unlike render.rs's hand-built wire JSON (which deliberately omits
+        // the SampleStats payload -- see full_coverage_availability_json's
+        // own test), this crate's raw internally-tagged serde
+        // representation DOES flatten SampleStats's fields into the same
+        // object alongside "state": "available" -- that's how serde's
+        // `#[serde(tag = ...)]` works for a newtype variant, and matches
+        // `SampleAvailability::Available`'s identical raw shape. The
+        // no-duplication guarantee is a render.rs wire-shape property, not
+        // a raw-serialization one -- asserted there instead.
+        let stats = SampleStats {
+            total: 5,
+            delayed: 1,
+            cancelled: 0,
+            skipped: 0,
+            avg_delay_minutes: 2.0,
+        };
+        let value = serde_json::to_value(FullCoverageAvailability::Available(stats)).unwrap();
+        assert_eq!(value["state"], "available");
+        assert_eq!(value["total"], 5);
+    }
+
+    #[test]
+    fn not_enabled_default_returns_not_enabled() {
+        assert_eq!(
+            FullCoverageAvailability::not_enabled_default(),
+            FullCoverageAvailability::NotEnabled
+        );
+    }
+
+    #[test]
+    fn full_coverage_stats_accessor_extracts_only_the_available_variant() {
+        assert_eq!(
+            FullCoverageAvailability::NotEnabled.full_coverage_stats(),
+            None
+        );
+        assert_eq!(
+            FullCoverageAvailability::Pending.full_coverage_stats(),
+            None
+        );
+        let stats = SampleStats {
+            total: 5,
+            delayed: 1,
+            cancelled: 0,
+            skipped: 0,
+            avg_delay_minutes: 2.0,
+        };
+        assert_eq!(
+            FullCoverageAvailability::Available(stats.clone()).full_coverage_stats(),
+            Some(stats)
+        );
+    }
+
+    #[test]
+    fn a_pre_change_line_status_json_with_no_full_coverage_keys_deserializes_with_defaults() {
+        // Read-compat: a LineStatus JSON blob recorded before these two
+        // fields existed (line_status_history rows, most concretely) must
+        // still deserialize, with full_coverage_availability defaulting to
+        // NotEnabled and full_coverage_stats to None -- the same
+        // read-compat contract SampleAvailability::no_coverage_default
+        // documents for its sibling field, exercised here for real against
+        // the whole LineStatus struct.
+        let json = serde_json::json!({
+            "severity": 10,
+            "reason": "Good Service",
+            "validity": {"from_date": "2026-09-03T00:00:00Z", "to_date": null, "is_now": true},
+            "data_quality": "knowledgebase",
+            "sample_availability": {"state": "no-coverage"}
+        });
+        let status: LineStatus =
+            serde_json::from_value(json).expect("pre-change LineStatus row must still parse");
+        assert_eq!(status.full_coverage_stats, None);
+        assert_eq!(
+            status.full_coverage_availability,
+            FullCoverageAvailability::NotEnabled
+        );
+    }
+}
+
 #[cfg(test)]
 mod sample_availability_tests {
     use super::*;
@@ -872,6 +1049,10 @@ impl From<CustomLine> for LineDefinition {
             exclusive_segments: vec![],
             destination_crs_filter: c.destination_crs_filter,
             headcode_prefixes: c.headcode_prefixes,
+            // A user-defined line is never a full-coverage rollout
+            // candidate -- that catalogue is curated by this repo, not by
+            // an end user picking arbitrary stations.
+            full_coverage_enabled: false,
         }
     }
 }
@@ -1210,6 +1391,7 @@ mod custom_line_tests {
         assert!(line.severity_overrides.is_empty());
         assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
         assert_eq!(line.destination_crs_filter, vec!["AON".to_string()]);
+        assert!(!line.full_coverage_enabled);
     }
 }
 
