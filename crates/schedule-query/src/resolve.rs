@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, NaiveTime};
 
 use crate::records::{CallingPoint, RawSchedule, StpIndicator};
 use crate::tiploc::normalize_tiploc;
@@ -95,6 +95,71 @@ pub fn schedules_touching(
         .collect()
 }
 
+/// Every non-cancelled, resolved schedule's departure-bearing calling
+/// points (`Origin`/`Intermediate`, i.e. `booked_departure.is_some()` --
+/// `Terminate` never has one, see [`crate::records::CallingPointKind::Terminate`]'s
+/// own doc), bucketed by CRS via `tiploc_to_crs` (normalized-TIPLOC keyed,
+/// built by the caller from the SAME cycle's already-resolved
+/// `stanox_crs` rows -- no second lookup table, no new parse). A calling
+/// point whose TIPLOC has no `tiploc_to_crs` entry is dropped, not guessed
+/// at -- a real, if rare, honest gap (see the design doc's Open Question
+/// 4), not a silent one: the caller simply never sees that departure
+/// rather than seeing it filed under a wrong or fabricated CRS. A calling
+/// point that IS kept but whose *destination* TIPLOC has no
+/// `tiploc_to_crs` entry gets `destination_crs: None`, not dropped -- see
+/// the design doc's Decision 1 wire-type doc comment.
+///
+/// `now`: only calling points with `booked_departure >= now` are kept --
+/// this is what keeps a station's bucket naturally small AND naturally
+/// forward-looking without an arbitrary unbounded "whole day" list (see
+/// the design doc's Decision 4). One O(all UIDs) resolve pass + O(total
+/// calling points) bucketing -- the same complexity class
+/// [`schedules_touching`] already pays per line, done once for the whole
+/// network instead of once per line.
+pub fn departures_by_crs(
+    index: &ScheduleIndex,
+    date: NaiveDate,
+    now: NaiveTime,
+    tiploc_to_crs: &HashMap<String, String>,
+) -> HashMap<String, Vec<crate::records::ScheduleDeparture>> {
+    let mut by_crs: HashMap<String, Vec<crate::records::ScheduleDeparture>> = HashMap::new();
+
+    for uid in index.uids() {
+        let Some(resolved) = index.schedule_for_uid(uid, date) else {
+            continue;
+        };
+        if resolved.cancelled {
+            continue;
+        }
+        for cp in &resolved.calling_points {
+            let Some(departure) = cp.booked_departure else {
+                continue;
+            };
+            if departure < now {
+                continue;
+            }
+            let Some(crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
+                continue;
+            };
+            let destination_crs = resolved
+                .calling_points
+                .last()
+                .and_then(|last| tiploc_to_crs.get(normalize_tiploc(&last.tiploc)))
+                .cloned();
+            by_crs
+                .entry(crs.clone())
+                .or_default()
+                .push(crate::records::ScheduleDeparture {
+                    uid: resolved.uid.clone(),
+                    scheduled: departure,
+                    destination_crs,
+                });
+        }
+    }
+
+    by_crs
+}
+
 /// A thin wrapper grouping `Vec<RawSchedule>` by `uid`, built once, so
 /// [`ScheduleIndex::schedule_for_uid`]/[`schedules_touching`] aren't
 /// re-scanning a flat `Vec` on every call.
@@ -163,6 +228,28 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
         }
+    }
+
+    fn calling_point_with_departure(
+        tiploc: &str,
+        kind: CallingPointKind,
+        departure: &str,
+    ) -> CallingPoint {
+        CallingPoint {
+            tiploc: tiploc.to_string(),
+            kind,
+            booked_arrival: None,
+            booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
+            is_half_minute_arrival: false,
+            is_half_minute_departure: false,
+        }
+    }
+
+    fn tiploc_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(tiploc, crs)| (tiploc.to_string(), crs.to_string()))
+            .collect()
     }
 
     const WEEKDAYS: [bool; 7] = [true, true, true, true, true, false, false];
@@ -244,5 +331,209 @@ mod tests {
         let via_index = index.schedule_for_uid("C11052", date).unwrap();
         let via_free_fn = resolve_for_date(&c11052_raw(), "C11052", date).unwrap();
         assert_eq!(via_index, via_free_fn);
+    }
+
+    #[test]
+    fn departures_by_crs_buckets_an_origin_departure_under_its_crs_with_destination_resolved() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate), // no booked_departure
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(
+            by_crs.len(),
+            1,
+            "only EUS gets a bucket -- CREWE's Terminate has no booked_departure"
+        );
+        let euston = &by_crs["EUS"];
+        assert_eq!(euston.len(), 1);
+        assert_eq!(euston[0].uid, "C11052");
+        assert_eq!(
+            euston[0].scheduled,
+            NaiveTime::from_hms_opt(8, 22, 0).unwrap()
+        );
+        assert_eq!(euston[0].destination_crs, Some("CRE".to_string()));
+        assert!(!by_crs.contains_key("CRE"));
+    }
+
+    #[test]
+    fn departures_by_crs_excludes_a_departure_already_before_now() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "08:22",
+            )],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(9, 0, 0).unwrap(); // after 08:22
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+        assert!(by_crs.is_empty());
+    }
+
+    #[test]
+    fn departures_by_crs_excludes_a_cancelled_schedule_even_though_its_time_has_not_passed() {
+        // Same real UID/date/days shape as this file's own `c11052_raw`
+        // fixture (a base P pattern plus a real STP=C override on 2026-08-31).
+        let raw = c11052_with_departures();
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 8, 31).unwrap(); // the cancelled date
+        let now = NaiveTime::from_hms_opt(0, 0, 0).unwrap(); // well before any booked time
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+        assert!(
+            by_crs.is_empty(),
+            "the STP=C override must suppress this date's bucket entirely"
+        );
+    }
+
+    #[test]
+    fn departures_by_crs_drops_a_calling_point_whose_own_tiploc_is_unresolved() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "08:22",
+            )],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = HashMap::new(); // EUSTON not resolved at all
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+        assert!(
+            by_crs.is_empty(),
+            "an unresolved origin TIPLOC drops the whole calling point, never a fabricated CRS"
+        );
+    }
+
+    #[test]
+    fn departures_by_crs_keeps_a_calling_point_with_an_unresolved_destination_as_none() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]); // CREWE deliberately absent
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+        assert_eq!(by_crs["EUS"][0].destination_crs, None);
+    }
+
+    #[test]
+    fn departures_by_crs_buckets_an_intermediate_calling_point_departure_under_its_own_crs() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+        assert_eq!(
+            by_crs.len(),
+            2,
+            "both EUSTON (Origin) and CREWE (Intermediate) get their own bucket entry"
+        );
+        assert_eq!(
+            by_crs["EUS"][0].scheduled,
+            NaiveTime::from_hms_opt(8, 22, 0).unwrap()
+        );
+        assert_eq!(
+            by_crs["CRE"][0].scheduled,
+            NaiveTime::from_hms_opt(10, 5, 0).unwrap()
+        );
+        assert_eq!(by_crs["CRE"][0].destination_crs, Some("MAN".to_string()));
+    }
+
+    /// Same real UID/STP/date-range/days values as this file's own `c11052_raw`
+    /// (a real Bank Holiday cross-check, see that fixture's own comment), but
+    /// with a real `booked_departure` added to the base pattern's Origin
+    /// calling point so `departures_by_crs` has something to (correctly) NOT
+    /// return on the cancelled date.
+    fn c11052_with_departures() -> Vec<RawSchedule> {
+        vec![
+            RawSchedule {
+                basic: basic(
+                    "C11052",
+                    StpIndicator::Permanent,
+                    "2026-05-18",
+                    "2026-12-11",
+                    WEEKDAYS,
+                ),
+                calling_points: vec![calling_point_with_departure(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "08:22",
+                )],
+            },
+            RawSchedule {
+                basic: basic(
+                    "C11052",
+                    StpIndicator::Cancellation,
+                    "2026-08-31",
+                    "2026-08-31",
+                    MONDAY_ONLY,
+                ),
+                calling_points: Vec::new(),
+            },
+        ]
     }
 }

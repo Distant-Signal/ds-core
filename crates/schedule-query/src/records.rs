@@ -168,6 +168,25 @@ impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
     }
 }
 
+/// One CIF-derived departure -- the whole-network trip-search fallback
+/// picker's wire shape between `crates/schedule-reference` (writer, via
+/// `POST /private/schedule-network-departures`) and `crates/api` (reader,
+/// opaque-JSONB storage only -- `api` does NOT depend on this crate, see
+/// docs/superpowers/plans/2026-09-04-whole-network-trip-search-plan.md's
+/// own Corrections section). Deliberately narrower than
+/// [`LinePopulationEntry`]: no `calling_points`, no full stopping pattern
+/// -- see
+/// docs/superpowers/specs/2026-09-04-whole-network-trip-search-design.md's
+/// Explicitly out of scope section for why a full pattern per departure
+/// per station was ruled out (row-size blowup for a feature this slice
+/// doesn't need).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduleDeparture {
+    pub uid: String,
+    pub scheduled: NaiveTime,
+    pub destination_crs: Option<String>,
+}
+
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
 ///
 /// A [`StpIndicator::Cancellation`] `RawSchedule` has an empty
