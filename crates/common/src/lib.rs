@@ -568,6 +568,25 @@ pub struct StationSample {
     pub departures: Vec<StationDeparture>,
 }
 
+/// One resolved `(crs, operator)` full-coverage row, mirroring
+/// `StationSample`'s own per-station shape one level finer. Written
+/// directly by a future `full-coverage-consumer` to `POST
+/// /private/station-full-coverage-samples` (not built by this plan — see
+/// docs/superpowers/specs/2026-09-04-option-b-live-consumer-design.md
+/// Decision 2h/3, converged on
+/// docs/superpowers/specs/2026-09-04-per-station-full-coverage-stats-design.md
+/// Decision 2's own guess verbatim), read at request time by
+/// `queries::latest_station_full_coverage_samples`. `stats` stores
+/// serialized JSONB in `station_full_coverage_samples.stats` -- same
+/// storage posture as `StationSample.departures`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StationFullCoverageSample {
+    pub crs: String,
+    pub operator: String,
+    pub resolved_at: DateTime<Utc>,
+    pub stats: SampleStats,
+}
+
 /// Pin-creation payload for `POST /Train/track` (`crates/api/src/routes/train.rs`).
 /// Deliberately does NOT include `train_uid` -- per the design doc's
 /// Tracking semantics, the pinned service is only ever known by what a
