@@ -659,6 +659,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "glob",
  "metrics-exporter-prometheus",
  "reqwest 0.13.4",
@@ -1367,6 +1368,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "full-coverage-consumer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "clap",
+ "common",
+ "dotenv",
+ "metrics",
+ "rdkafka",
+ "reqwest 0.13.4",
+ "schedule-query",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "trust-schema",
 ]
 
 [[package]]
@@ -3720,11 +3744,13 @@ name = "schedule-reference"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "common",
  "dotenv",
  "metrics",
  "reqwest 0.13.4",
+ "schedule-query",
  "serde",
  "serde_json",
  "tempfile",
@@ -4875,10 +4901,21 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "trust-schema",
+]
+
+[[package]]
+name = "trust-schema"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tracing",
 ]
 
 [[package]]

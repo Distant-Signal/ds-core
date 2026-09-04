@@ -11,6 +11,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 pub mod ingest;
 pub mod metrics;
 pub mod oauth_client;
+pub mod rail_day;
 
 /// Status severity scale. Mirrors TfL's `statusSeverity` codes 0–14 where the
 /// meanings carry over, with NR-specific extensions above 14. Lower is worse,
@@ -880,6 +881,24 @@ impl FullCoverageAvailability {
             _ => None,
         }
     }
+}
+
+/// One `full_coverage_line_stats` row -- the per-line counterpart of
+/// `common::StationFullCoverageSample` (owned by a different plan). Posted
+/// by `full-coverage-consumer` to `POST /private/full-coverage-stats`;
+/// read by `aggregator` via a direct SQL query
+/// (`crates/aggregator/src/queries.rs::load_full_coverage_line_stats`,
+/// NOT over HTTP -- see
+/// docs/superpowers/plans/2026-09-04-option-b-live-consumer-plan.md's
+/// Correction 1). snake_case field names -- a private producer payload
+/// between this app's own crates, not a public wire type (see that plan's
+/// Global Constraints).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullCoverageLineStatsRow {
+    pub line_id: String,
+    pub service_date: chrono::NaiveDate,
+    pub availability: String, // "pending" | "available"
+    pub stats: SampleStats,
 }
 
 #[cfg(test)]

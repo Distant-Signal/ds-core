@@ -144,6 +144,30 @@ pub struct CallingPoint {
     pub is_half_minute_departure: bool,
 }
 
+/// One UID's resolved calling points, as published over the wire between
+/// `crates/schedule-reference` (writer, via `POST
+/// /private/schedule-line-population`) and `crates/full-coverage-consumer`
+/// (reader, via `GET /private/schedule-line-population`) -- see
+/// docs/superpowers/specs/2026-09-04-option-b-live-consumer-design.md
+/// Decision 2a/2b. Deliberately NOT `ResolvedSchedule` itself (which
+/// carries `stp_indicator`/`cancelled`, neither of which either producer
+/// or consumer needs on the wire -- `schedules_touching` already filters
+/// to non-cancelled results before this type is ever constructed).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinePopulationEntry {
+    pub uid: String,
+    pub calling_points: Vec<CallingPoint>,
+}
+
+impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
+    fn from(resolved: crate::resolve::ResolvedSchedule) -> Self {
+        Self {
+            uid: resolved.uid,
+            calling_points: resolved.calling_points,
+        }
+    }
+}
+
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
 ///
 /// A [`StpIndicator::Cancellation`] `RawSchedule` has an empty
@@ -154,4 +178,30 @@ pub struct CallingPoint {
 pub struct RawSchedule {
     pub basic: BasicSchedule,
     pub calling_points: Vec<CallingPoint>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resolve::ResolvedSchedule;
+
+    #[test]
+    fn line_population_entry_from_resolved_schedule_drops_stp_fields() {
+        let resolved = ResolvedSchedule {
+            uid: "C11052".to_string(),
+            stp_indicator: StpIndicator::Permanent,
+            cancelled: false,
+            calling_points: vec![CallingPoint {
+                tiploc: "EUSTON ".to_string(),
+                kind: CallingPointKind::Origin,
+                booked_arrival: None,
+                booked_departure: chrono::NaiveTime::from_hms_opt(8, 22, 0),
+                is_half_minute_arrival: false,
+                is_half_minute_departure: false,
+            }],
+        };
+        let entry: LinePopulationEntry = resolved.clone().into();
+        assert_eq!(entry.uid, "C11052");
+        assert_eq!(entry.calling_points, resolved.calling_points);
+    }
 }
