@@ -131,6 +131,70 @@ pub fn parse_batch(raw: &str) -> anyhow::Result<Vec<TrustMessage>> {
     Ok(envelopes.into_iter().filter_map(parse_envelope).collect())
 }
 
+/// The `movement-relay` filtering primitive
+/// (docs/superpowers/specs/2026-09-04-movement-relay-design.md Decision 1):
+/// classifies each envelope in `raw` by `header.msg_type` alone against
+/// the same five confirmed types `parse_envelope` already encodes, and
+/// re-serializes each SURVIVING envelope's own `serde_json::Value`
+/// verbatim, byte-faithful, even in the rare multi-envelope-array case.
+/// Returns `(msg_type, payload)` pairs -- `msg_type` is re-derived cheaply
+/// here (rather than making every caller re-parse the returned payload
+/// just to extract it again) since `movement-relay`'s own `EventSink`
+/// needs it as a separate, redundant introspection field alongside the
+/// raw payload (design doc Decision 2's field-layout choice) -- see
+/// docs/superpowers/plans/2026-09-04-movement-relay-plan.md Task 7's own
+/// note for why this deviates from this function's originally-sketched
+/// `Vec<String>` signature.
+///
+/// Deliberately does NOT attempt to deserialize `body` into any typed
+/// struct -- an envelope with a confirmed `msg_type` but a body that would
+/// fail `parse_envelope`'s own typed deserialization (missing/malformed
+/// fields) still survives here unchanged. That validation job stays where
+/// it already lives, inside each downstream consumer's own `parse_batch`
+/// call -- this function only ever looks at `header.msg_type`.
+///
+/// Shares `parse_batch`'s error behavior for a structurally malformed
+/// payload (e.g. an envelope missing `header` entirely): that's a hard
+/// `Err`, not a per-envelope skip, because `Vec<Envelope>`/`Envelope`
+/// deserialization itself fails before per-envelope classification ever
+/// runs -- same as `parse_batch` today.
+pub fn confirmed_envelope_bodies(raw: &str) -> anyhow::Result<Vec<(String, String)>> {
+    const CONFIRMED: [&str; 5] = ["0001", "0002", "0003", "0006", "0007"];
+
+    let value: serde_json::Value = serde_json::from_str(raw)?;
+    let envelopes: Vec<serde_json::Value> = if value.is_array() {
+        serde_json::from_value(value)?
+    } else {
+        vec![value]
+    };
+
+    // Deliberately NOT a `filter_map` over a `?`-chained `Option` walk: that
+    // shape (the plan's original sketch) conflates two different outcomes
+    // that must stay distinct -- "structurally malformed envelope" (missing
+    // `header`/`msg_type` entirely, a hard `Err` for the whole payload, same
+    // as `parse_batch`'s own behavior on this exact input) versus
+    // "well-formed envelope, unconfirmed msg_type" (a soft, per-envelope
+    // skip). A bare `?` inside `filter_map`'s closure turns BOTH into a
+    // silent `None`, which would make a genuinely malformed payload return
+    // `Ok(vec![])` instead of `Err` -- confirmed by hand against
+    // `confirmed_envelope_bodies_errors_on_a_payload_missing_header_entirely`'s
+    // fixture while implementing this.
+    let mut survivors = Vec::with_capacity(envelopes.len());
+    for envelope in envelopes {
+        let msg_type = envelope
+            .get("header")
+            .and_then(|header| header.get("msg_type"))
+            .and_then(|msg_type| msg_type.as_str())
+            .ok_or_else(|| anyhow::anyhow!("envelope missing header.msg_type"))?
+            .to_string();
+        if CONFIRMED.contains(&msg_type.as_str()) {
+            let payload = serde_json::to_string(&envelope)?;
+            survivors.push((msg_type, payload));
+        }
+    }
+    Ok(survivors)
+}
+
 fn parse_envelope(envelope: Envelope) -> Option<TrustMessage> {
     let parsed = match envelope.header.msg_type.as_str() {
         "0001" => serde_json::from_value(envelope.body)
@@ -256,5 +320,86 @@ mod tests {
         assert!(matches!(&messages[0], TrustMessage::Cancellation(_)));
         assert!(matches!(&messages[1], TrustMessage::ChangeOfOrigin(_)));
         assert!(matches!(&messages[2], TrustMessage::ChangeOfIdentity(_)));
+    }
+
+    #[test]
+    fn confirmed_envelope_bodies_keeps_confirmed_types_and_drops_unknown() {
+        let raw = r#"[
+            {"header":{"msg_type":"0001"},"body":{
+                "train_id":"221832406","train_uid":"C21373","toc_id":"SW",
+                "train_service_code":"22345000","schedule_wtt_id":"WTT1",
+                "schedule_start_date":"2026-08-28","schedule_end_date":"2026-08-28"
+            }},
+            {"header":{"msg_type":"0005"},"body":{"anything":"goes"}},
+            {"header":{"msg_type":"0003"},"body":{
+                "train_id":"221832406","event_type":"DEPARTURE",
+                "planned_timestamp":"1756400000000","actual_timestamp":"1756400060000",
+                "loc_stanox":"87701","variation_status":"LATE"
+            }}
+        ]"#;
+        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        assert_eq!(survivors.len(), 2);
+        assert_eq!(survivors[0].0, "0001");
+        assert_eq!(survivors[1].0, "0003");
+        for (msg_type, payload) in &survivors {
+            let value: serde_json::Value = serde_json::from_str(payload).unwrap();
+            assert_eq!(value["header"]["msg_type"].as_str().unwrap(), msg_type);
+        }
+    }
+
+    /// The one the design doc's Decision 1 rationale exists to prove:
+    /// `confirmed_envelope_bodies` never inspects the body, so a confirmed
+    /// `msg_type` with a malformed body still survives, unlike `parse_batch`,
+    /// which drops it. Both are asserted side by side against the identical
+    /// input, since the two functions' different behavior on it is the point.
+    #[test]
+    fn confirmed_envelope_bodies_does_not_filter_on_body_shape() {
+        let raw = r#"{"header":{"msg_type":"0001"},"body":{"not_the_right_shape":true}}"#;
+
+        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        assert_eq!(survivors.len(), 1, "malformed body still survives");
+        assert_eq!(survivors[0].0, "0001");
+
+        let parsed = parse_batch(raw).unwrap();
+        assert_eq!(
+            parsed.len(),
+            0,
+            "parse_batch drops the same envelope, since its body doesn't parse"
+        );
+    }
+
+    #[test]
+    fn confirmed_envelope_bodies_on_a_bare_single_envelope_object() {
+        let raw = r#"{"header":{"msg_type":"0003"},"body":{
+            "train_id":"221832406","event_type":"DEPARTURE",
+            "planned_timestamp":"1756400000000","actual_timestamp":"1756400060000",
+            "loc_stanox":"87701","variation_status":"LATE"
+        }}"#;
+        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        assert_eq!(survivors.len(), 1);
+        assert_eq!(survivors[0].0, "0003");
+    }
+
+    #[test]
+    fn confirmed_envelope_bodies_errors_on_a_payload_missing_header_entirely() {
+        let raw = r#"{"not_an_envelope": true}"#;
+        assert!(confirmed_envelope_bodies(raw).is_err());
+    }
+
+    #[test]
+    fn confirmed_envelope_bodies_is_byte_faithful() {
+        let raw = r#"{"header":{"msg_type":"0003"},"body":{
+            "train_id":"221832406","event_type":"DEPARTURE",
+            "planned_timestamp":"1756400000000","actual_timestamp":"1756400060000",
+            "loc_stanox":"87701","variation_status":"LATE",
+            "an_unmodeled_field":"some real RDM data no struct declares"
+        }}"#;
+        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        assert_eq!(survivors.len(), 1);
+        let value: serde_json::Value = serde_json::from_str(&survivors[0].1).unwrap();
+        assert_eq!(
+            value["body"]["an_unmodeled_field"].as_str().unwrap(),
+            "some real RDM data no struct declares"
+        );
     }
 }

@@ -1382,6 +1382,7 @@ dependencies = [
  "common",
  "dotenv",
  "metrics",
+ "movement-feed",
  "rdkafka",
  "reqwest 0.13.4",
  "schedule-query",
@@ -2504,6 +2505,37 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "num-traits",
+]
+
+[[package]]
+name = "movement-feed"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "redis",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "movement-relay"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "clap",
+ "common",
+ "dotenv",
+ "metrics",
+ "rdkafka",
+ "redis",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "trust-schema",
 ]
 
 [[package]]
@@ -4898,6 +4930,8 @@ dependencies = [
  "clap",
  "common",
  "dotenv",
+ "metrics",
+ "movement-feed",
  "rdkafka",
  "reqwest 0.13.4",
  "serde",
