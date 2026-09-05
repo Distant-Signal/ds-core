@@ -18,6 +18,7 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::oauth_client::OAuthTokenCache;
@@ -29,13 +30,70 @@ use crate::oauth_client::OAuthTokenCache;
 /// credential DS's own `/private/*` routes check).
 pub const RDM_AUTH_HEADER_NAME: &str = "x-apikey";
 
+/// GET + bearer-token + deserialize -- the shape every "fetch one typed
+/// resource from `api`'s `/private/*` routes" caller repeats. Previously
+/// duplicated with no shared logic beyond this (already trivial) shape
+/// across `poller-ldbws::fetch_sample_stations`,
+/// `trust_consumer::queries::{fetch_active_tracked_trains,fetch_stanox_crs}`,
+/// and `full_coverage_consumer::queries::fetch_stanox_crs`.
+pub async fn get_json<T: DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+) -> anyhow::Result<T> {
+    let token = tokens.get_token(client).await?;
+    let response = client
+        .get(url)
+        .bearer_auth(&token)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(response.json().await?)
+}
+
+/// Single-object POST + bearer-token -- deliberately distinct from
+/// `post_batch`'s array-wrapping shape (wrapping a single record in a
+/// one-element slice would change the wire shape, not match it).
+/// Previously duplicated across `schedule-ingest::main::post_ingest` and
+/// `schedule-reference::main::post_schedule_line_population`.
+pub async fn post_json<T: Serialize>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    body: &T,
+) -> anyhow::Result<()> {
+    let token = tokens.get_token(client).await?;
+    let response = client
+        .post(url)
+        .bearer_auth(&token)
+        .json(body)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        anyhow::bail!("POST failed: {status} {text}");
+    }
+}
+
 /// POSTs `items` as a JSON array to `url` with a fresh
 /// `Authorization: Bearer` token from `tokens`, then logs and returns
 /// `Ok(())` on a 2xx response, or bails with an `anyhow::Error` (including
 /// status + response body) otherwise.
 ///
 /// `noun` is used only in the success log line (e.g. `"incidents"`,
-/// `"stations"`, `"tocs"`) — callers pass their own plural label.
+/// `"stations"`, `"tocs"`) — callers pass their own plural label. Left as
+/// its own inline implementation rather than delegating to [`post_json`]:
+/// doing so would route this function's failure path through
+/// `post_json`'s own error message (`"POST failed: ..."`) instead of this
+/// function's existing `"ingestion POST failed: ..."`, a real (if narrow)
+/// log-text change for every existing caller — see
+/// docs/superpowers/plans/2026-09-05-rust-service-deduplication-plan.md
+/// Task F1 Step 2 for the full analysis. This keeps `post_batch`'s
+/// existing behavior byte-for-byte unchanged.
 pub async fn post_batch<T: Serialize>(
     client: &reqwest::Client,
     url: &str,
@@ -106,14 +164,7 @@ async fn fetch_last_fetched(
     url: &str,
     tokens: &OAuthTokenCache,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
-    let token = tokens.get_token(client).await?;
-    let response = client
-        .get(url)
-        .bearer_auth(&token)
-        .send()
-        .await?
-        .error_for_status()?;
-    let body: LastFetchedResponse = response.json().await?;
+    let body: LastFetchedResponse = get_json(client, url, tokens).await?;
     Ok(body.fetched_at)
 }
 
@@ -145,6 +196,92 @@ fn duration_until_next_poll(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn get_json_deserializes_a_successful_response() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "fake-jwt",
+                "expires_in": 300,
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/thing"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "value": 42
+            })))
+            .mount(&server)
+            .await;
+
+        let tokens =
+            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+                token_url: format!("{}/token/", server.uri()),
+                client_id: "c".to_string(),
+                scope: "groups".to_string(),
+                username: "u".to_string(),
+                password: "p".to_string(),
+            });
+        let client = reqwest::Client::new();
+
+        #[derive(serde::Deserialize)]
+        struct Thing {
+            value: u32,
+        }
+        let thing: Thing = get_json(&client, &format!("{}/thing", server.uri()), &tokens)
+            .await
+            .unwrap();
+        assert_eq!(thing.value, 42);
+    }
+
+    #[tokio::test]
+    async fn post_json_posts_the_body_and_returns_ok_on_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "fake-jwt",
+                "expires_in": 300,
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/thing"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let tokens =
+            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+                token_url: format!("{}/token/", server.uri()),
+                client_id: "c".to_string(),
+                scope: "groups".to_string(),
+                username: "u".to_string(),
+                password: "p".to_string(),
+            });
+        let client = reqwest::Client::new();
+
+        #[derive(serde::Serialize)]
+        struct Thing {
+            value: u32,
+        }
+        post_json(
+            &client,
+            &format!("{}/thing", server.uri()),
+            &tokens,
+            &Thing { value: 1 },
+        )
+        .await
+        .unwrap();
+    }
 
     #[test]
     fn no_prior_fetch_means_poll_now() {
