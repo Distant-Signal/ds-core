@@ -639,6 +639,22 @@ fn default_ticket_source() -> String {
     "manual".to_string()
 }
 
+/// Shared bound for a tracked train's or ticket's `custom_name` (see
+/// `docs/superpowers/specs/2026-09-05-custom-tracking-names-design.md`'s
+/// Decision 1) -- one source of truth so `crates/api`'s validator
+/// (`train_tracking::validate_custom_name`) never drifts from whatever a
+/// future frontend character-counter would also need to know, the same
+/// reasoning `TFL_OPERATOR`/`TFL_LINE_ID_PREFIX` above already establish
+/// for a cross-cutting constant living here rather than as a private
+/// literal in one crate. Counts Unicode scalar values (`str::chars().count()`),
+/// not bytes -- "100 characters" is the user-facing wording
+/// (`validate_custom_name`'s own error message), so the bound should match
+/// what a human would count, not UTF-8 byte length. A reasonable-sounding,
+/// not researched or load-tested figure, same posture
+/// `crates/api/src/data/train_tracking.rs`'s own `MAX_PIN_AGE`/
+/// `MINE_LIST_LIMIT` are flagged with -- revisit once real usage exists.
+pub const CUSTOM_NAME_MAX_LENGTH: usize = 100;
+
 /// One TRUST-derived event for a tracked train, as `trust-consumer` posts
 /// it to `POST /private/train-events`. Carries both the raw event (for the
 /// immutable log, `train_movement_events`) and trust-consumer's own

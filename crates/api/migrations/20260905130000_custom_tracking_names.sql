@@ -1,0 +1,41 @@
+-- -------------------------------------------------------------------------
+-- Custom display names for tracked trains and tickets, per
+-- docs/superpowers/specs/2026-09-05-custom-tracking-names-design.md.
+--
+-- Both nullable, no DEFAULT: NULL means "no custom name set, render the
+-- computed default" -- see that spec's Decision 3 for why the default
+-- (origin/destination/date derived from data already on the row) is
+-- computed client-side at render time and deliberately never stored here.
+-- This mirrors the `Option<String>`-typed nullable columns already on both
+-- tables (`pin_destination_crs`, `pin_operator`, `train_uid`, every ticket
+-- field except `id`/`user_id`/`source`/`created_at`), rather than
+-- introducing a new "empty string means unset" convention this schema
+-- doesn't otherwise use -- an empty-after-trim value is normalized to NULL
+-- server-side on write (`train_tracking::validate_custom_name`), never
+-- stored as `''`.
+--
+-- Capped at common::CUSTOM_NAME_MAX_LENGTH (100) characters, enforced in
+-- Rust (train_tracking::validate_custom_name), not a DB CHECK constraint --
+-- see the design spec's Decision 1: no precedent in this schema uses a
+-- DB-level CHECK for string length on a free-text column
+-- (custom_lines.name has none), and a CHECK failure would surface as an
+-- opaque 500 rather than this app's usual human-readable 400.
+-- -------------------------------------------------------------------------
+
+ALTER TABLE tracked_trains ADD COLUMN custom_name TEXT;
+
+-- LEGAL/PRIVACY AUDIT ADDENDUM (see 20260829090000_journey_ticket_tracking.sql's
+-- and 20260901140000_standalone_tickets.sql's own audit comments): this
+-- migration adds `custom_name`, a nullable, user-authored display label
+-- the tracking user types for their OWN list entry (e.g. "Mum's ticket to
+-- Leeds"). This is NOT "passenger name" in the sense that comment bans --
+-- that ban targets PII *extracted from the ticket document itself*
+-- (barcode/ITSO/pkpass payload), never anything a user types about their
+-- own record. `custom_name` is never populated by `ticket_extraction.rs`
+-- and carries no connection to a third party's identity. See
+-- docs/superpowers/specs/2026-09-05-custom-tracking-names-design.md's
+-- Decision 2 for the full reasoning. The audit list itself is unchanged --
+-- this table still must never gain payment/price data, any barcode
+-- payload, ITSO data, passenger name (as extracted from a document), or
+-- the uploaded file itself.
+ALTER TABLE tracked_train_tickets ADD COLUMN custom_name TEXT;
