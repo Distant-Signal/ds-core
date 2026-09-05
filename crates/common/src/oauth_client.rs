@@ -132,6 +132,45 @@ impl OAuthTokenCache {
     }
 }
 
+/// Every real caller's own copy of the 5 `internal_oauth_*` CLI/env flags
+/// (identical field names, types, and the one real default --
+/// `internal_oauth_scope`'s `"groups"` -- across all 9 real callers,
+/// confirmed byte-for-byte identical in
+/// docs/superpowers/specs/2026-09-05-rust-service-deduplication-design.md
+/// §3.2). `#[command(flatten)]` this into a `Config` struct to gain these
+/// 5 flags with their existing `--internal-oauth-*`/`INTERNAL_OAUTH_*`
+/// names unchanged.
+#[derive(Debug, Clone, clap::Args)]
+pub struct InternalOAuthArgs {
+    #[arg(long, env)]
+    pub internal_oauth_token_url: String,
+    #[arg(long, env)]
+    pub internal_oauth_client_id: String,
+    #[arg(long, env, default_value = "groups")]
+    pub internal_oauth_scope: String,
+    /// This service's own Authentik service-account credential --
+    /// per-service, distinct from every other caller's.
+    #[arg(long, env)]
+    pub internal_oauth_username: String,
+    #[arg(long, env)]
+    pub internal_oauth_password: String,
+}
+
+impl InternalOAuthArgs {
+    /// Builds the `OAuthTokenCache` every real caller previously
+    /// hand-constructed identically at its own call site (9 byte-for-byte
+    /// copies of `OAuthTokenCache::new(OAuthCredentials { ... })`).
+    pub fn token_cache(&self) -> OAuthTokenCache {
+        OAuthTokenCache::new(OAuthCredentials {
+            token_url: self.internal_oauth_token_url.clone(),
+            client_id: self.internal_oauth_client_id.clone(),
+            scope: self.internal_oauth_scope.clone(),
+            username: self.internal_oauth_username.clone(),
+            password: self.internal_oauth_password.clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use wiremock::matchers::{method, path};
@@ -147,6 +186,23 @@ mod tests {
             username: "svc-poller-incidents".to_string(),
             password: "app-password".to_string(),
         }
+    }
+
+    #[test]
+    fn token_cache_builds_from_the_flattened_args_unchanged() {
+        let args = InternalOAuthArgs {
+            internal_oauth_token_url: "http://auth.invalid/token".to_string(),
+            internal_oauth_client_id: "distant-signal-internal".to_string(),
+            internal_oauth_scope: "groups".to_string(),
+            internal_oauth_username: "svc-test".to_string(),
+            internal_oauth_password: "app-password".to_string(),
+        };
+        // token_cache() itself has no externally observable state beyond
+        // constructing an OAuthTokenCache -- this just confirms it doesn't
+        // panic and produces a real cache (get_token's own network-hitting
+        // behavior is already covered by OAuthTokenCache's existing tests
+        // above, which this method threads through unchanged).
+        let _cache = args.token_cache();
     }
 
     async fn mock_token_endpoint(server: &MockServer, expires_in: u64, expect_calls: u64) {

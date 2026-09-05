@@ -8,11 +8,14 @@ use serde::{Deserialize, Serialize};
 use serde_inline_default::serde_inline_default;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+pub mod config;
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod metrics;
 pub mod oauth_client;
+pub mod poller_loop;
 pub mod rail_day;
+pub mod service_args;
 
 /// Status severity scale. Mirrors TfL's `statusSeverity` codes 0–14 where the
 /// meanings carry over, with NR-specific extensions above 14. Lower is worse,

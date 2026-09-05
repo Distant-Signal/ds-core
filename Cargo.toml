@@ -18,6 +18,7 @@ members = [
     "crates/notifier",
     "crates/trust-schema",
     "crates/full-coverage-consumer",
+    "crates/health-http",
     "crates/movement-feed",
     "crates/movement-relay",
 ]
