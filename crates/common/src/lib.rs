@@ -9,6 +9,7 @@ use serde_inline_default::serde_inline_default;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub mod ingest;
+pub mod island_of_ireland;
 pub mod metrics;
 pub mod oauth_client;
 pub mod rail_day;
