@@ -3307,6 +3307,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "poller-irish-rail-live"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "common",
+ "dotenv",
+ "metrics",
+ "quick-xml",
+ "reqwest 0.13.4",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wiremock",
+]
+
+[[package]]
 name = "poller-ldbws"
 version = "0.1.0"
 dependencies = [
