@@ -354,6 +354,22 @@ pub async fn attempt_backlog_match(
     }
 
     replay_backlog_history(pool, tracked_train_id, train_uid.as_deref(), history).await?;
+
+    // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
+    // §2 Step A): only possible when this backlog carried an Activation for
+    // this train_id (train_uid is Some) -- a Movement/Cancellation-only
+    // backfill has no natural key to create a trains row against, matching
+    // Step B's own accepted gap.
+    if let Some(train_uid) = &train_uid {
+        let trains_id = crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
+        crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
+        sqlx::query("UPDATE tracked_trains SET trains_id = $2 WHERE id = $1")
+            .bind(tracked_train_id)
+            .bind(trains_id)
+            .execute(pool)
+            .await?;
+    }
+
     Ok(true)
 }
 
@@ -524,5 +540,80 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_backlog_match_with_an_activation_also_dual_writes_the_shared_trains_row -- --ignored --test-threads=1`"]
+    async fn a_backlog_match_with_an_activation_also_dual_writes_the_shared_trains_row() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-DUAL-WRITE-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-dual-write@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        let scheduled: DateTime<Utc> = "2026-09-06T18:15:00Z".parse().unwrap();
+
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4), \
+                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'ON TIME', $7)",
+        )
+        .bind("TEST-DW-BACKLOG-UID")
+        .bind("TEST-DW-BACKLOG-TRAIN-ID")
+        .bind(service_date)
+        .bind("test-dw-backlog-dedup-activation")
+        .bind("EUS")
+        .bind(scheduled)
+        .bind("test-dw-backlog-dedup-movement")
+        .execute(&pool)
+        .await
+        .expect("seed backlog rows");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        let matched = attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+            .await
+            .expect("attempt_backlog_match");
+        assert!(matched);
+
+        let (trains_id,): (Option<i64>,) =
+            sqlx::query_as("SELECT trains_id FROM tracked_trains WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back trains_id");
+        let trains_id = trains_id.expect("a backlog match with a found Activation must set trains_id");
+
+        let (train_uid,): (String,) = sqlx::query_as("SELECT train_uid FROM trains WHERE id = $1")
+            .bind(trains_id)
+            .fetch_one(&pool)
+            .await
+            .expect("read back the shared trains row");
+        assert_eq!(train_uid, "TEST-DW-BACKLOG-UID");
+
+        sqlx::query("DELETE FROM tracked_trains WHERE id = $1").bind(tracked_train_id).execute(&pool).await.ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-BACKLOG-UID'").execute(&pool).await.ok();
+        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-DW-BACKLOG-TRAIN-ID'").execute(&pool).await.ok();
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&pool).await.ok();
     }
 }
