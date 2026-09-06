@@ -140,7 +140,7 @@ pub async fn attempt_schedule_match(
             None => None,
         };
 
-        return train_tracking::apply_schedule_match(
+        let matched_ok = train_tracking::apply_schedule_match(
             pool,
             tracked_train_id,
             &matched.uid,
@@ -148,7 +148,31 @@ pub async fn attempt_schedule_match(
             &calling_points_json,
             destination_crs.as_deref(),
         )
-        .await;
+        .await?;
+
+        if matched_ok {
+            // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
+            // §2 Step A): mirror this schedule match onto the shared `trains`
+            // row too, and point this subscription at it.
+            let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
+                pool,
+                &matched.uid,
+                service_date,
+                pin_origin_crs,
+                pin_scheduled_departure,
+                destination_crs.as_deref(),
+                line_id,
+                &calling_points_json,
+            )
+            .await?;
+            sqlx::query("UPDATE tracked_trains SET trains_id = $2 WHERE id = $1")
+                .bind(tracked_train_id)
+                .bind(trains_id)
+                .execute(pool)
+                .await?;
+        }
+
+        return Ok(matched_ok);
     }
 
     Ok(false)
@@ -453,5 +477,114 @@ mod db_tests {
             .execute(&pool)
             .await
             .expect("cleanup user");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_also_dual_writes_the_shared_trains_row -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_also_dual_writes_the_shared_trains_row() {
+        let pool = connect().await;
+        let user_id = "TEST-SCHEDULE-MATCH-DUAL-WRITE";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("dual-write@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-DW-STANOX', 'EUS', 'EUSTON', 'LONDON EUSTON', 1) \
+             ON CONFLICT (stanox) DO NOTHING",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('west-coast-main-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json("TEST-DW-UID", "EUSTON ", "19:15"))
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-06T19:15:00+01:00".parse().unwrap();
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled_departure)
+        .fetch_one(&pool)
+        .await
+        .expect("seed fixture tracked_trains row");
+
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("EUS".to_string(), vec!["west-coast-main-line".to_string()]);
+
+        let matched = attempt_schedule_match(
+            &pool,
+            tracked_train_id,
+            "EUS",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt schedule match");
+        assert!(matched);
+
+        let (trains_id,): (Option<i64>,) =
+            sqlx::query_as("SELECT trains_id FROM tracked_trains WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back trains_id");
+        let trains_id = trains_id.expect("a successful schedule match must set trains_id");
+
+        let (train_uid, matched_line_id): (String, Option<String>) =
+            sqlx::query_as("SELECT train_uid, matched_line_id FROM trains WHERE id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back the shared trains row");
+        assert_eq!(train_uid, "TEST-DW-UID");
+        assert_eq!(matched_line_id, Some("west-coast-main-line".to_string()));
+
+        sqlx::query("DELETE FROM schedule_line_population WHERE line_id = 'west-coast-main-line' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-DW-STANOX'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM tracked_trains WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-UID'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
     }
 }
