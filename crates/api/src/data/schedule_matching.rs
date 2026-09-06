@@ -411,6 +411,22 @@ mod db_tests {
             .execute(&pool)
             .await
             .expect("cleanup tracked_trains");
+        // Step A's dual-write (attempt_schedule_match's own
+        // find_or_create_train_with_schedule_match call) creates a shared
+        // `trains` row for this identity too -- discovered as a real
+        // cross-test leak during Task 8's own end-to-end verification: this
+        // C99999/2026-09-05 identity is shared with
+        // `trust_event_backlog_match::db_tests`'s own EUS fixture, and
+        // neither test used to clean up its `trains` row, so whichever ran
+        // second inherited the first's leftover `train_id`. Now that Step C
+        // reads `train_id` through this row, an uncleaned leftover silently
+        // corrupts an unrelated test's assertion. See the same fix applied
+        // to `trust_event_backlog_match.rs`.
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'C99999' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .expect("cleanup trains");
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
             .execute(&pool)

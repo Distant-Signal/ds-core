@@ -484,6 +484,20 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+        // Same class of leak as the tracked_trains one documented just
+        // above, discovered the same way (Task 8's own end-to-end
+        // verification): `attempt_backlog_match`'s own Step A dual-write
+        // creates a shared `trains` row for this C99999/2026-09-05 identity
+        // too, and this test never cleaned it up. That identity is also
+        // used by `schedule_matching::db_tests`'s own EUS fixture -- an
+        // uncleaned row here corrupted that unrelated test's `train_id`
+        // assertion once Step C started reading `train_id` through the
+        // joined `trains` row instead of `tracked_trains`' own column.
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'C99999' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .ok();
     }
 
     #[tokio::test]
