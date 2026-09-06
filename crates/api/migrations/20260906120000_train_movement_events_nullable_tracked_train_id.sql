@@ -1,0 +1,26 @@
+-- -------------------------------------------------------------------------
+-- Shared Train Identity, Step D (re-point), part 2 -- completes what
+-- 20260906110000_train_movement_trains_id.sql's own comment called "purely
+-- additive" for train_movement_events. That was accurate for THAT
+-- migration's own scope (adding trains_id/its partial unique index
+-- alongside the existing tracked_train_id column), but Task 11
+-- (docs/superpowers/sdd/2026-09-06-shared-train-identity-implementation-plan/task-11-brief.md)
+-- introduces upsert_train_movement(pool, trains_id, event), a write path
+-- explicitly required to be "callable for ANY trains_id, regardless of
+-- whether a subscription exists at all" -- i.e. it must be able to INSERT a
+-- train_movement_events row with NO tracked_trains row to reference at all.
+-- A NOT NULL tracked_train_id can never accommodate that (there is no
+-- sentinel tracked_trains row to point it at), so it has to become nullable
+-- here, exactly the same restructuring 20260906110000 already performed for
+-- train_current_state.tracked_train_id, and for the same reason.
+--
+-- Safe to drop NOT NULL without touching the existing
+-- UNIQUE (tracked_train_id, dedup_key) table constraint: Postgres treats
+-- every NULL as distinct from every other NULL for uniqueness purposes, so
+-- any number of rows with tracked_train_id IS NULL (each still uniquely
+-- keyed by (trains_id, dedup_key) via the partial index the prior migration
+-- already added) can coexist without ever colliding against that
+-- constraint. The tracked_train_id -> tracked_trains(id) foreign key is
+-- likewise untouched -- a NULL foreign-key value trivially satisfies it,
+-- same as train_current_state.tracked_train_id already relies on.
+ALTER TABLE train_movement_events ALTER COLUMN tracked_train_id DROP NOT NULL;
