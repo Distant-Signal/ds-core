@@ -10,6 +10,7 @@ members = [
     "crates/poller-tfl",
     "crates/poller-irish-rail-gtfs",
     "crates/poller-irish-rail-live",
+    "crates/poller-nir-stations",
     "crates/aggregator",
     "crates/enricher",
     "crates/trust-consumer",

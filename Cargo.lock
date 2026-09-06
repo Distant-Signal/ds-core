@@ -3345,6 +3345,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "poller-nir-stations"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "common",
+ "csv",
+ "dotenv",
+ "metrics",
+ "reqwest 0.13.4",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wiremock",
+]
+
+[[package]]
 name = "poller-stations"
 version = "0.1.0"
 dependencies = [
