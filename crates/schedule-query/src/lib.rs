@@ -83,6 +83,7 @@ pub use records::{
     ScheduleDeparture, StpIndicator,
 };
 pub use resolve::{
-    ResolvedSchedule, ScheduleIndex, departures_by_crs, resolve_for_date, schedules_touching,
+    ResolvedSchedule, ScheduleIndex, departures_by_crs, match_pin, resolve_for_date,
+    schedules_touching,
 };
 pub use tiploc::normalize_tiploc;

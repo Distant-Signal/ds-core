@@ -233,6 +233,20 @@ pub fn severity_from_tfl_code(code: u8) -> Option<Severity> {
 /// constant rather than anything derived from the feed.
 pub const TFL_OPERATOR: &str = "TfL";
 
+/// How far apart a scheduled departure and a candidate departure (a live
+/// TRUST Movement, or a CIF-booked calling point) can be and still be
+/// considered the same real-world service. Shared by
+/// `trust_consumer::matching::resolve_origin_departure` (live TRUST
+/// Movement matching) and `api`'s `schedule_matching::attempt_schedule_match`
+/// (CIF schedule matching) -- hoisted here, rather than duplicated with a
+/// cross-reference comment, per Decision 3 step 3 of
+/// docs/superpowers/specs/2026-09-05-schedule-first-train-tracking-design.md,
+/// so the two matching paths can never silently drift onto different
+/// tolerance values. The VALUE (20 minutes) is unchanged from
+/// `trust-consumer`'s original constant -- this is a hoist, not a
+/// behavior change.
+pub const MATCH_TOLERANCE: chrono::Duration = chrono::Duration::minutes(20);
+
 /// Prefix on every TfL line id. `line_status.line_id` is a primary key and
 /// TfL's tube line id is `northern`, which is also the id in
 /// `lines/northern.toml`; without this prefix the two railways would fight

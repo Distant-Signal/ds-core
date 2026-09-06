@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 
-use chrono::{Datelike, NaiveDate, NaiveTime};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 
-use crate::records::{CallingPoint, RawSchedule, StpIndicator};
+use crate::records::{CallingPoint, LinePopulationEntry, RawSchedule, StpIndicator};
 use crate::tiploc::normalize_tiploc;
 
 /// A schedule resolved for one specific `(UID, date)`, after STP-overlay
@@ -93,6 +93,61 @@ pub fn schedules_touching(
                 .any(|cp| normalized_targets.contains(&normalize_tiploc(&cp.tiploc)))
         })
         .collect()
+}
+
+/// Finds the best schedule match for a tracked-train pin (Decision 3 of
+/// docs/superpowers/specs/2026-09-05-schedule-first-train-tracking-design.md):
+/// among every `population` entry with a calling point whose TIPLOC
+/// (compared via [`normalize_tiploc`]) is one of `crs_tiplocs` and whose
+/// `booked_departure` resolves -- via caller-supplied `to_utc`, so this
+/// pure crate never grows a `chrono-tz` dependency of its own; the real
+/// caller passes a closure wrapping `crates/api/src/data/eta_blend.rs`'s
+/// existing DST-aware `london_to_utc` -- to within `tolerance` of
+/// `scheduled`, returns the entry whose matching calling point is
+/// CLOSEST in time to `scheduled`.
+///
+/// Tie-break (the plan's Open Question 4): on an exact equal delta
+/// between two candidates, the one encountered FIRST in `population`'s
+/// own order wins -- the scan below only replaces `best` on a strictly
+/// smaller delta, never an equal one. This is deterministic for one call
+/// but not guaranteed stable across a `schedule-reference` republish that
+/// reorders the underlying JSONB array; accepted as a rare-edge-case
+/// limitation, not fixed here (see the plan's own writeup).
+///
+/// `None` if nothing in `population` has any calling point at any of
+/// `crs_tiplocs` within `tolerance` of `scheduled`.
+pub fn match_pin<'a>(
+    population: &'a [LinePopulationEntry],
+    crs_tiplocs: &[&str],
+    scheduled: DateTime<Utc>,
+    tolerance: Duration,
+    to_utc: impl Fn(NaiveTime) -> Option<DateTime<Utc>>,
+) -> Option<&'a LinePopulationEntry> {
+    let normalized_targets: Vec<&str> = crs_tiplocs.iter().map(|t| normalize_tiploc(t)).collect();
+
+    let mut best: Option<(&'a LinePopulationEntry, Duration)> = None;
+    for entry in population {
+        for cp in &entry.calling_points {
+            if !normalized_targets.contains(&normalize_tiploc(&cp.tiploc)) {
+                continue;
+            }
+            let Some(booked) = cp.booked_departure else {
+                continue;
+            };
+            let Some(candidate_utc) = to_utc(booked) else {
+                continue;
+            };
+            let delta = (scheduled - candidate_utc).abs();
+            if delta > tolerance {
+                continue;
+            }
+            match &best {
+                Some((_, best_delta)) if *best_delta <= delta => {}
+                _ => best = Some((entry, delta)),
+            }
+        }
+    }
+    best.map(|(entry, _)| entry)
 }
 
 /// Every non-cancelled, resolved schedule's departure-bearing calling
@@ -535,5 +590,114 @@ mod tests {
                 calling_points: Vec::new(),
             },
         ]
+    }
+
+    fn population_entry(uid: &str, calling_points: Vec<CallingPoint>) -> LinePopulationEntry {
+        LinePopulationEntry {
+            uid: uid.to_string(),
+            calling_points,
+        }
+    }
+
+    // Identity closure: every test below constructs `booked_departure` values
+    // already meant to be read as UTC instants directly, so `to_utc` just
+    // pairs a bare NaiveTime with a fixed date -- exercising `match_pin`'s
+    // arithmetic without pulling in a real Europe/London conversion (that's
+    // `eta_blend::london_to_utc`'s own, separately-tested job).
+    fn utc_on(date: &str) -> impl Fn(NaiveTime) -> Option<DateTime<Utc>> {
+        let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
+        move |t| Some(DateTime::<Utc>::from_naive_utc_and_offset(date.and_time(t), Utc))
+    }
+
+    #[test]
+    fn match_pin_matches_a_departure_within_tolerance() {
+        let population = vec![population_entry(
+            "C11052",
+            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+        )];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
+        let matched = match_pin(
+            &population,
+            &["EUSTON"],
+            scheduled,
+            Duration::minutes(20),
+            utc_on("2026-09-05"),
+        );
+        assert_eq!(matched.map(|e| e.uid.as_str()), Some("C11052"));
+    }
+
+    #[test]
+    fn match_pin_rejects_a_departure_outside_tolerance() {
+        let population = vec![population_entry(
+            "C11052",
+            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+        )];
+        let scheduled: DateTime<Utc> = "2026-09-05T20:00:00Z".parse().unwrap(); // 45m away
+        assert_eq!(
+            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            None
+        );
+    }
+
+    #[test]
+    fn match_pin_rejects_a_tiploc_not_in_crs_tiplocs() {
+        let population = vec![population_entry(
+            "C11052",
+            vec![calling_point_with_departure("CREWE  ", CallingPointKind::Origin, "19:15")],
+        )];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
+        assert_eq!(
+            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            None
+        );
+    }
+
+    #[test]
+    fn match_pin_ignores_a_calling_point_with_no_booked_departure() {
+        let population = vec![population_entry(
+            "C11052",
+            vec![calling_point("EUSTON ", CallingPointKind::Terminate)], // no booked_departure
+        )];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
+        assert_eq!(
+            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            None
+        );
+    }
+
+    #[test]
+    fn match_pin_nearest_time_wins_between_two_in_tolerance_candidates() {
+        let population = vec![
+            population_entry("FAR", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:05")]), // 10m away
+            population_entry("NEAR", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:12")]), // 3m away
+        ];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
+        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05"));
+        assert_eq!(matched.map(|e| e.uid.as_str()), Some("NEAR"));
+    }
+
+    #[test]
+    fn match_pin_on_an_exact_tie_the_first_in_population_order_wins() {
+        let population = vec![
+            population_entry("FIRST", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:10")]),
+            population_entry("SECOND", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:20")]),
+        ];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap(); // exactly 5m from both
+        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05"));
+        assert_eq!(matched.map(|e| e.uid.as_str()), Some("FIRST"));
+    }
+
+    #[test]
+    fn match_pin_skips_a_candidate_whose_to_utc_conversion_fails() {
+        // Simulates a nonexistent-local-time DST edge case: to_utc returns
+        // None for every candidate, so nothing can match even though the
+        // TIPLOC/tolerance checks would otherwise pass.
+        let population = vec![population_entry(
+            "C11052",
+            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+        )];
+        let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
+        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), |_| None);
+        assert_eq!(matched, None);
     }
 }

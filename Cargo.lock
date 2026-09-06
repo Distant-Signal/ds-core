@@ -193,6 +193,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.12.28",
+ "schedule-query",
  "serde",
  "serde-inline-default",
  "serde_json",
