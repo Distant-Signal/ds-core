@@ -606,14 +606,23 @@ mod tests {
     // `eta_blend::london_to_utc`'s own, separately-tested job).
     fn utc_on(date: &str) -> impl Fn(NaiveTime) -> Option<DateTime<Utc>> {
         let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
-        move |t| Some(DateTime::<Utc>::from_naive_utc_and_offset(date.and_time(t), Utc))
+        move |t| {
+            Some(DateTime::<Utc>::from_naive_utc_and_offset(
+                date.and_time(t),
+                Utc,
+            ))
+        }
     }
 
     #[test]
     fn match_pin_matches_a_departure_within_tolerance() {
         let population = vec![population_entry(
             "C11052",
-            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+            vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "19:15",
+            )],
         )];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
         let matched = match_pin(
@@ -630,11 +639,21 @@ mod tests {
     fn match_pin_rejects_a_departure_outside_tolerance() {
         let population = vec![population_entry(
             "C11052",
-            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+            vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "19:15",
+            )],
         )];
         let scheduled: DateTime<Utc> = "2026-09-05T20:00:00Z".parse().unwrap(); // 45m away
         assert_eq!(
-            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            match_pin(
+                &population,
+                &["EUSTON"],
+                scheduled,
+                Duration::minutes(20),
+                utc_on("2026-09-05")
+            ),
             None
         );
     }
@@ -643,11 +662,21 @@ mod tests {
     fn match_pin_rejects_a_tiploc_not_in_crs_tiplocs() {
         let population = vec![population_entry(
             "C11052",
-            vec![calling_point_with_departure("CREWE  ", CallingPointKind::Origin, "19:15")],
+            vec![calling_point_with_departure(
+                "CREWE  ",
+                CallingPointKind::Origin,
+                "19:15",
+            )],
         )];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
         assert_eq!(
-            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            match_pin(
+                &population,
+                &["EUSTON"],
+                scheduled,
+                Duration::minutes(20),
+                utc_on("2026-09-05")
+            ),
             None
         );
     }
@@ -660,7 +689,13 @@ mod tests {
         )];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
         assert_eq!(
-            match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05")),
+            match_pin(
+                &population,
+                &["EUSTON"],
+                scheduled,
+                Duration::minutes(20),
+                utc_on("2026-09-05")
+            ),
             None
         );
     }
@@ -668,22 +703,62 @@ mod tests {
     #[test]
     fn match_pin_nearest_time_wins_between_two_in_tolerance_candidates() {
         let population = vec![
-            population_entry("FAR", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:05")]), // 10m away
-            population_entry("NEAR", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:12")]), // 3m away
+            population_entry(
+                "FAR",
+                vec![calling_point_with_departure(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "19:05",
+                )],
+            ), // 10m away
+            population_entry(
+                "NEAR",
+                vec![calling_point_with_departure(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "19:12",
+                )],
+            ), // 3m away
         ];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
-        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05"));
+        let matched = match_pin(
+            &population,
+            &["EUSTON"],
+            scheduled,
+            Duration::minutes(20),
+            utc_on("2026-09-05"),
+        );
         assert_eq!(matched.map(|e| e.uid.as_str()), Some("NEAR"));
     }
 
     #[test]
     fn match_pin_on_an_exact_tie_the_first_in_population_order_wins() {
         let population = vec![
-            population_entry("FIRST", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:10")]),
-            population_entry("SECOND", vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:20")]),
+            population_entry(
+                "FIRST",
+                vec![calling_point_with_departure(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "19:10",
+                )],
+            ),
+            population_entry(
+                "SECOND",
+                vec![calling_point_with_departure(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "19:20",
+                )],
+            ),
         ];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap(); // exactly 5m from both
-        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), utc_on("2026-09-05"));
+        let matched = match_pin(
+            &population,
+            &["EUSTON"],
+            scheduled,
+            Duration::minutes(20),
+            utc_on("2026-09-05"),
+        );
         assert_eq!(matched.map(|e| e.uid.as_str()), Some("FIRST"));
     }
 
@@ -694,10 +769,20 @@ mod tests {
         // TIPLOC/tolerance checks would otherwise pass.
         let population = vec![population_entry(
             "C11052",
-            vec![calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "19:15")],
+            vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "19:15",
+            )],
         )];
         let scheduled: DateTime<Utc> = "2026-09-05T19:15:00Z".parse().unwrap();
-        let matched = match_pin(&population, &["EUSTON"], scheduled, Duration::minutes(20), |_| None);
+        let matched = match_pin(
+            &population,
+            &["EUSTON"],
+            scheduled,
+            Duration::minutes(20),
+            |_| None,
+        );
         assert_eq!(matched, None);
     }
 }
