@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use serde_inline_default::serde_inline_default;
@@ -722,6 +722,40 @@ pub struct TrainMovementEventMessage {
                                     // "darwin-estimated" is only ever
                                     // produced at read time (Task 6), never
                                     // written back by trust-consumer.
+}
+
+/// One row's worth of data for `trust_event_backlog`
+/// (docs/superpowers/plans/2026-09-05-trust-event-backlog-plan.md) --
+/// the wire shape `trust-backlog-consumer` POSTs in batches to `api`'s
+/// `/private/trust-event-backlog` route. Deliberately NOT
+/// `TrainMovementEventMessage`: that type carries `tracked_train_id`/
+/// `resolved_train_uid`/`resolved_train_id`/derived-current-state
+/// fields this table has no equivalent of (it isn't scoped to any one
+/// pin), and this type carries `crs`/`service_date` fields
+/// `TrainMovementEventMessage` has no use for. Sharing one struct
+/// between two genuinely different wire shapes would mean every field
+/// on it is `Option`-everything and meaningless for whichever message
+/// kind doesn't use it -- two distinct types are clearer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustBacklogEventMessage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crs: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub train_uid: Option<String>,
+    pub train_id: String,
+    pub service_date: NaiveDate,
+    pub msg_type: String, // "0001" | "0002" | "0003" only, see the plan's Global Constraints
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_type: Option<String>, // "ARRIVAL" | "DEPARTURE" only, Movement rows
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planned_timestamp: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actual_timestamp: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variation_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_minutes: Option<i32>,
+    pub dedup_key: String,
 }
 
 /// What `trust-consumer` needs to know about each active tracked train:

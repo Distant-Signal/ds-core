@@ -13,6 +13,7 @@ members = [
     "crates/poller-nir-stations",
     "crates/aggregator",
     "crates/enricher",
+    "crates/trust-backlog-consumer",
     "crates/trust-consumer",
     "crates/schedule-ingest",
     "crates/schedule-reference",
