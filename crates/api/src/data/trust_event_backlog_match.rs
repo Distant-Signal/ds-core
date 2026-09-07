@@ -388,7 +388,8 @@ pub async fn attempt_backlog_match(
     // backfill has no natural key to create a trains row against, matching
     // Step B's own accepted gap.
     if let Some(train_uid) = &train_uid {
-        let trains_id = crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
+        let trains_id =
+            crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
         crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
         sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
             .bind(tracked_train_id)
@@ -638,9 +639,10 @@ mod db_tests {
         .await
         .expect("seed tracked_trains row");
 
-        let matched = attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
-            .await
-            .expect("attempt_backlog_match");
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
         assert!(matched);
 
         let (trains_id,): (Option<i64>,) =
@@ -649,7 +651,8 @@ mod db_tests {
                 .fetch_one(&pool)
                 .await
                 .expect("read back trains_id");
-        let trains_id = trains_id.expect("a backlog match with a found Activation must set trains_id");
+        let trains_id =
+            trains_id.expect("a backlog match with a found Activation must set trains_id");
 
         let (train_uid,): (String,) = sqlx::query_as("SELECT train_uid FROM trains WHERE id = $1")
             .bind(trains_id)
@@ -658,10 +661,24 @@ mod db_tests {
             .expect("read back the shared trains row");
         assert_eq!(train_uid, "TEST-DW-BACKLOG-UID");
 
-        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1").bind(tracked_train_id).execute(&pool).await.ok();
-        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-BACKLOG-UID'").execute(&pool).await.ok();
-        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-DW-BACKLOG-TRAIN-ID'").execute(&pool).await.ok();
-        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&pool).await.ok();
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-BACKLOG-UID'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-DW-BACKLOG-TRAIN-ID'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
     }
 
     #[tokio::test]

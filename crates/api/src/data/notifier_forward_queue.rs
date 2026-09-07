@@ -11,11 +11,13 @@ pub async fn insert_forward_signals(
 ) -> anyhow::Result<u64> {
     let mut inserted = 0u64;
     for signal in signals {
-        sqlx::query("INSERT INTO notifier_forward_queue (trains_id, event_summary) VALUES ($1, $2)")
-            .bind(signal.trains_id)
-            .bind(&signal.event_summary)
-            .execute(pool)
-            .await?;
+        sqlx::query(
+            "INSERT INTO notifier_forward_queue (trains_id, event_summary) VALUES ($1, $2)",
+        )
+        .bind(signal.trains_id)
+        .bind(&signal.event_summary)
+        .execute(pool)
+        .await?;
         inserted += 1;
     }
     Ok(inserted)
