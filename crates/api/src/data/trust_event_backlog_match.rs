@@ -390,7 +390,7 @@ pub async fn attempt_backlog_match(
     if let Some(train_uid) = &train_uid {
         let trains_id = crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
         crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
-        sqlx::query("UPDATE tracked_trains SET trains_id = $2 WHERE id = $1")
+        sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
             .bind(tracked_train_id)
             .bind(trains_id)
             .execute(pool)
@@ -464,7 +464,7 @@ mod db_tests {
         .expect("seed backlog rows");
 
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -486,7 +486,7 @@ mod db_tests {
         // the shared `trains` row, joined via `trains_id`.
         let (resolution_status, train_uid): (String, Option<String>) = sqlx::query_as(
             "SELECT tt.resolution_status, tr.train_uid \
-             FROM tracked_trains tt LEFT JOIN trains tr ON tr.id = tt.trains_id \
+             FROM train_subscriptions tt LEFT JOIN trains tr ON tr.id = tt.trains_id \
              WHERE tt.id = $1",
         )
         .bind(tracked_train_id)
@@ -508,7 +508,7 @@ mod db_tests {
         // (both resolve to the same train_uid=C99999/service_date). Delete
         // it here too so this test is idempotent across repeated runs, not
         // just its own single first execution.
-        sqlx::query("DELETE FROM tracked_trains WHERE id = $1")
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
             .bind(tracked_train_id)
             .execute(&pool)
             .await
@@ -552,7 +552,7 @@ mod db_tests {
         let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T09:00:00Z".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -575,14 +575,14 @@ mod db_tests {
         assert!(!matched);
 
         let (resolution_status,): (String,) =
-            sqlx::query_as("SELECT resolution_status FROM tracked_trains WHERE id = $1")
+            sqlx::query_as("SELECT resolution_status FROM train_subscriptions WHERE id = $1")
                 .bind(tracked_train_id)
                 .fetch_one(&pool)
                 .await
                 .expect("read back tracked_trains");
         assert_eq!(resolution_status, "pending");
 
-        sqlx::query("DELETE FROM tracked_trains WHERE id = $1")
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
             .bind(tracked_train_id)
             .execute(&pool)
             .await
@@ -627,7 +627,7 @@ mod db_tests {
         .expect("seed backlog rows");
 
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -644,7 +644,7 @@ mod db_tests {
         assert!(matched);
 
         let (trains_id,): (Option<i64>,) =
-            sqlx::query_as("SELECT trains_id FROM tracked_trains WHERE id = $1")
+            sqlx::query_as("SELECT trains_id FROM train_subscriptions WHERE id = $1")
                 .bind(tracked_train_id)
                 .fetch_one(&pool)
                 .await
@@ -658,7 +658,7 @@ mod db_tests {
             .expect("read back the shared trains row");
         assert_eq!(train_uid, "TEST-DW-BACKLOG-UID");
 
-        sqlx::query("DELETE FROM tracked_trains WHERE id = $1").bind(tracked_train_id).execute(&pool).await.ok();
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1").bind(tracked_train_id).execute(&pool).await.ok();
         sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-BACKLOG-UID'").execute(&pool).await.ok();
         sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-DW-BACKLOG-TRAIN-ID'").execute(&pool).await.ok();
         sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&pool).await.ok();

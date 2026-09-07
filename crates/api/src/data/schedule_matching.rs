@@ -157,7 +157,7 @@ pub async fn attempt_schedule_match(
                 &calling_points_json,
             )
             .await?;
-            sqlx::query("UPDATE tracked_trains SET trains_id = $2 WHERE id = $1")
+            sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
                 .bind(tracked_train_id)
                 .bind(trains_id)
                 .execute(pool)
@@ -355,7 +355,7 @@ mod db_tests {
         let scheduled_departure: chrono::DateTime<chrono::Utc> =
             "2026-09-05T19:15:00+01:00".parse().unwrap(); // BST -> 18:15 UTC
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -398,7 +398,7 @@ mod db_tests {
             .execute(&pool)
             .await
             .expect("cleanup stanox_crs");
-        sqlx::query("DELETE FROM tracked_trains WHERE user_id = $1")
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
             .bind(user_id)
             .execute(&pool)
             .await
@@ -445,7 +445,7 @@ mod db_tests {
 
         let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -475,7 +475,7 @@ mod db_tests {
         assert_eq!(state.resolution_status, "pending");
         assert_eq!(state.train_uid, None);
 
-        sqlx::query("DELETE FROM tracked_trains WHERE user_id = $1")
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
             .bind(user_id)
             .execute(&pool)
             .await
@@ -528,7 +528,7 @@ mod db_tests {
         let scheduled_departure: chrono::DateTime<chrono::Utc> =
             "2026-09-06T19:15:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO tracked_trains (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
         )
         .bind(user_id)
@@ -555,7 +555,7 @@ mod db_tests {
         assert!(matched);
 
         let (trains_id,): (Option<i64>,) =
-            sqlx::query_as("SELECT trains_id FROM tracked_trains WHERE id = $1")
+            sqlx::query_as("SELECT trains_id FROM train_subscriptions WHERE id = $1")
                 .bind(tracked_train_id)
                 .fetch_one(&pool)
                 .await
@@ -580,7 +580,7 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
-        sqlx::query("DELETE FROM tracked_trains WHERE user_id = $1")
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
             .bind(user_id)
             .execute(&pool)
             .await
