@@ -779,8 +779,15 @@ pub struct TrustBacklogEventMessage {
 pub struct TrackedTrainRef {
     pub id: i64,
     pub service_date: chrono::NaiveDate,
-    pub pin_origin_crs: String,
-    pub pin_scheduled_departure: DateTime<Utc>,
+    /// `None` for an NR-primary subscription (Task 20's
+    /// `POST /Train/by-uid/{uid}/{date}/track`) whose `trains` row has no
+    /// schedule data yet -- the design spec's own accepted §1 gap. A
+    /// legacy CRS+time pin (`POST /Train/track`) always has `Some` here;
+    /// `validate_pin` still enforces that upstream, unchanged.
+    pub pin_origin_crs: Option<String>,
+    /// See `pin_origin_crs`'s own doc comment -- same `None`-for-NR-primary,
+    /// `Some`-for-legacy contract.
+    pub pin_scheduled_departure: Option<DateTime<Utc>>,
     pub resolution_status: String,
     pub train_uid: Option<String>,
     pub train_id: Option<String>,
