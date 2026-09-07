@@ -784,6 +784,22 @@ pub struct TrackedTrainRef {
     pub resolution_status: String,
     pub train_uid: Option<String>,
     pub train_id: Option<String>,
+    /// The shared `trains` row this subscription points at, if any (Task
+    /// 1's `tracked_trains.trains_id`). Lets trust-consumer key its new
+    /// forwarding-queue writes (Task 17) without a second round-trip.
+    pub trains_id: Option<i64>,
+}
+
+/// A lightweight forwarding signal from trust-consumer to notifier
+/// (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md §3)
+/// -- deliberately minimal, a signal not a data store: notifier's own
+/// unchanged cooldown/escalation logic (`train_current_state`,
+/// `train_notification_state`) is still the sole gatekeeper for whether a
+/// push is actually sent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainForwardSignalMessage {
+    pub trains_id: i64,
+    pub event_summary: String,
 }
 
 /// Reference data for a station, as published by the station-reference feed.
