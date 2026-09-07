@@ -481,12 +481,18 @@ mod db_tests {
                 .expect("attempt_backlog_match");
         assert!(matched);
 
-        let (resolution_status, train_uid): (String, Option<String>) =
-            sqlx::query_as("SELECT resolution_status, train_uid FROM tracked_trains WHERE id = $1")
-                .bind(tracked_train_id)
-                .fetch_one(&pool)
-                .await
-                .expect("read back tracked_trains");
+        // `tracked_trains` no longer has its own `train_uid` column (Task
+        // 22 dropped it) -- the resolved identity now lives exclusively on
+        // the shared `trains` row, joined via `trains_id`.
+        let (resolution_status, train_uid): (String, Option<String>) = sqlx::query_as(
+            "SELECT tt.resolution_status, tr.train_uid \
+             FROM tracked_trains tt LEFT JOIN trains tr ON tr.id = tt.trains_id \
+             WHERE tt.id = $1",
+        )
+        .bind(tracked_train_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back tracked_trains joined to its resolved trains row");
         assert_eq!(resolution_status, "resolved");
         assert_eq!(train_uid, Some("C99999".to_string()));
 
