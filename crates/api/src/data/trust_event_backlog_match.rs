@@ -147,6 +147,33 @@ async fn find_backlog_match(
     Ok(Some((train_id, activation_uid.map(|(uid,)| uid))))
 }
 
+/// Resolves a bare `(train_uid, service_date)` to TRUST's own `train_id`,
+/// via the one row type in this table that ever carries a `train_uid` at
+/// all -- an Activation (`msg_type = '0001'`). Unlike `find_backlog_match`
+/// above (a CRS+time lookup that discovers an unknown `train_id`), this is
+/// the inverse direction: identity is already known, and the caller wants
+/// TRUST's own daily identifier to key a `fetch_backlog_history`-style
+/// lookup by. `None` covers both "no Activation for this identity is in
+/// the backlog's retention window" and "never existed" uniformly -- this
+/// table has no way to distinguish them, same posture as every other
+/// lookup in this module.
+pub async fn find_train_id_by_uid(
+    pool: &PgPool,
+    train_uid: &str,
+    service_date: NaiveDate,
+) -> anyhow::Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT train_id FROM trust_event_backlog \
+         WHERE train_uid = $1 AND service_date = $2 AND msg_type = '0001' \
+         LIMIT 1",
+    )
+    .bind(train_uid)
+    .bind(service_date)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(train_id,)| train_id))
+}
+
 /// Decision 3 step 3: every backlog row for `train_id`/`service_date`, in
 /// `received_at` order -- the entire observed history for this train.
 ///
@@ -629,5 +656,39 @@ mod db_tests {
         sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-DW-BACKLOG-UID'").execute(&pool).await.ok();
         sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-DW-BACKLOG-TRAIN-ID'").execute(&pool).await.ok();
         sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&pool).await.ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api find_train_id_by_uid_resolves_via_the_activation_row -- --ignored --test-threads=1`"]
+    async fn find_train_id_by_uid_resolves_via_the_activation_row() {
+        let pool = connect().await;
+        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', $4)",
+        )
+        .bind("TEST-FIND-BY-UID")
+        .bind("TEST-FIND-BY-UID-TRAIN-ID")
+        .bind(service_date)
+        .bind("test-find-by-uid-dedup-activation")
+        .execute(&pool)
+        .await
+        .expect("seed an Activation row");
+
+        let train_id = find_train_id_by_uid(&pool, "TEST-FIND-BY-UID", service_date)
+            .await
+            .expect("find_train_id_by_uid");
+        assert_eq!(train_id, Some("TEST-FIND-BY-UID-TRAIN-ID".to_string()));
+
+        let miss = find_train_id_by_uid(&pool, "TEST-FIND-BY-UID-NO-SUCH-ROW", service_date)
+            .await
+            .expect("find_train_id_by_uid miss");
+        assert_eq!(miss, None);
+
+        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-FIND-BY-UID-TRAIN-ID'")
+            .execute(&pool)
+            .await
+            .ok();
     }
 }
