@@ -99,13 +99,82 @@ pub async fn attempt_schedule_match(
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
 ) -> anyhow::Result<bool> {
-    let Some(candidate_lines) = crs_line_index.get(&pin_origin_crs.to_uppercase()) else {
+    let Some(matched) = find_schedule_match(
+        pool,
+        pin_origin_crs,
+        pin_scheduled_departure,
+        service_date,
+        crs_line_index,
+    )
+    .await?
+    else {
         return Ok(false);
+    };
+
+    let matched_ok = train_tracking::apply_schedule_match(pool, tracked_train_id).await?;
+
+    if matched_ok {
+        // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
+        // §2 Step A): mirror this schedule match onto the shared `trains`
+        // row too, and point this subscription at it.
+        let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
+            pool,
+            &matched.uid,
+            service_date,
+            pin_origin_crs,
+            pin_scheduled_departure,
+            matched.destination_crs.as_deref(),
+            &matched.line_id,
+            &matched.calling_points_json,
+        )
+        .await?;
+        sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
+            .bind(tracked_train_id)
+            .bind(trains_id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(matched_ok)
+}
+
+/// What a successful `schedule_query::match_pin` lookup produced, already
+/// resolved into the exact shapes the two writers below need. Extracted so
+/// the read half of a schedule match (which is entirely a function of
+/// `(origin CRS, departure time, date)`) is reusable by the shared-`trains`
+/// writer as well as the per-subscription one, rather than being welded
+/// into `attempt_schedule_match`'s own `train_subscriptions`-guarded write.
+#[derive(Debug, Clone)]
+pub struct ScheduleMatch {
+    /// CIF's own identifier for the matched schedule. The caller of
+    /// [`attempt_schedule_match_for_shared_train`] already knows the real
+    /// `train_uid`, so it can (and does) reject a match whose `uid`
+    /// disagrees -- a stronger check than the +/-20-minute CRS+time
+    /// heuristic can make on its own.
+    pub uid: String,
+    pub line_id: String,
+    pub destination_crs: Option<String>,
+    pub calling_points_json: serde_json::Value,
+}
+
+/// The pure read half of a schedule match: no writes of any kind. Same
+/// candidate-line iteration, same `MATCH_TOLERANCE`, same
+/// first-line-that-matches-wins rule `attempt_schedule_match` has always
+/// had -- this IS that code, lifted out unchanged.
+async fn find_schedule_match(
+    pool: &PgPool,
+    pin_origin_crs: &str,
+    pin_scheduled_departure: DateTime<Utc>,
+    service_date: NaiveDate,
+    crs_line_index: &HashMap<String, Vec<String>>,
+) -> anyhow::Result<Option<ScheduleMatch>> {
+    let Some(candidate_lines) = crs_line_index.get(&pin_origin_crs.to_uppercase()) else {
+        return Ok(None);
     };
 
     let origin_tiplocs = queries::list_stanox_crs_for_crs(pool, pin_origin_crs).await?;
     if origin_tiplocs.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
     let tiplocs: Vec<&str> = origin_tiplocs.iter().map(|r| r.tiploc.as_str()).collect();
 
@@ -140,34 +209,90 @@ pub async fn attempt_schedule_match(
             None => None,
         };
 
-        let matched_ok = train_tracking::apply_schedule_match(pool, tracked_train_id).await?;
-
-        if matched_ok {
-            // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
-            // §2 Step A): mirror this schedule match onto the shared `trains`
-            // row too, and point this subscription at it.
-            let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
-                pool,
-                &matched.uid,
-                service_date,
-                pin_origin_crs,
-                pin_scheduled_departure,
-                destination_crs.as_deref(),
-                line_id,
-                &calling_points_json,
-            )
-            .await?;
-            sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
-                .bind(tracked_train_id)
-                .bind(trains_id)
-                .execute(pool)
-                .await?;
-        }
-
-        return Ok(matched_ok);
+        return Ok(Some(ScheduleMatch {
+            uid: matched.uid.clone(),
+            line_id: line_id.clone(),
+            destination_crs,
+            calling_points_json,
+        }));
     }
 
-    Ok(false)
+    Ok(None)
+}
+
+/// Fills in the SHARED `trains` row's schedule columns for a train whose
+/// identity is already known -- the NR-primary path
+/// (`POST /Train/by-uid/{uid}/{date}/track`), which starts from a real
+/// `train_uid` and therefore never goes through the per-subscription
+/// `pending -> schedule_matched` dance [`attempt_schedule_match`] drives.
+///
+/// This exists because [`attempt_schedule_match`] cannot serve that path at
+/// all: its write is gated on `train_tracking::apply_schedule_match`, whose
+/// `WHERE ... trains_id IS NULL AND resolution_status = 'pending'` is false
+/// by construction for a subscription created by
+/// `create_subscription_for_train` (which sets `trains_id` immediately).
+/// The result was that an NR-primary subscription never acquired origin,
+/// destination or calling points from ANY path -- review finding I1.
+///
+/// `origin_crs`/`scheduled_departure` are not the caller's own pin (there
+/// isn't one); they come from the train's replayed TRUST history -- see
+/// `trust_event_backlog_match::attempt_backlog_match_by_uid`'s
+/// `origin_departure`.
+///
+/// Refuses a match whose `uid` isn't the `train_uid` we already know. The
+/// CRS+time heuristic can legitimately land on a different service at a
+/// busy terminus; for this path that is not an acceptable outcome, because
+/// the write below would attach another train's calling points to THIS
+/// train's shared row, visible to every subscriber of it. Returns
+/// `Ok(false)` for that, same as for "no match at all".
+///
+/// Writes through `find_or_create_train_with_schedule_match`, whose every
+/// column is `COALESCE`d against the existing value -- so this can never
+/// clobber schedule data an earlier match already wrote, and is safe to
+/// call repeatedly.
+pub async fn attempt_schedule_match_for_shared_train(
+    pool: &PgPool,
+    train_uid: &str,
+    origin_crs: &str,
+    scheduled_departure: DateTime<Utc>,
+    service_date: NaiveDate,
+    crs_line_index: &HashMap<String, Vec<String>>,
+) -> anyhow::Result<bool> {
+    let Some(matched) = find_schedule_match(
+        pool,
+        origin_crs,
+        scheduled_departure,
+        service_date,
+        crs_line_index,
+    )
+    .await?
+    else {
+        return Ok(false);
+    };
+
+    if matched.uid != train_uid {
+        tracing::warn!(
+            train_uid,
+            matched_uid = matched.uid,
+            origin_crs,
+            "schedule match for a known-identity train resolved a DIFFERENT uid; \
+             discarding rather than writing another train's schedule onto this shared row"
+        );
+        return Ok(false);
+    }
+
+    crate::data::trains::find_or_create_train_with_schedule_match(
+        pool,
+        train_uid,
+        service_date,
+        origin_crs,
+        scheduled_departure,
+        matched.destination_crs.as_deref(),
+        &matched.line_id,
+        &matched.calling_points_json,
+    )
+    .await?;
+    Ok(true)
 }
 
 /// The periodic sweep's own entry point (Decision 3's "also run this same

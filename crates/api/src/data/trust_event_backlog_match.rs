@@ -401,6 +401,119 @@ pub async fn attempt_backlog_match(
     Ok(true)
 }
 
+/// What a successful [`attempt_backlog_match_by_uid`] replay recovered.
+#[derive(Debug, Clone)]
+pub struct BacklogReplayOutcome {
+    /// TRUST's own daily identifier for this train, recovered from the
+    /// backlog's Activation row.
+    pub train_id: String,
+    /// How many backlog rows were replayed through `upsert_train_event`.
+    pub replayed_rows: usize,
+    /// The `(CRS, planned departure)` of the earliest origin-shaped
+    /// DEPARTURE in the replayed history, when there was one.
+    ///
+    /// This is the whole reason a bare-`train_uid` subscription can get
+    /// schedule data at all. `schedule_query::match_pin` -- and therefore
+    /// every schedule lookup in this codebase -- is keyed on
+    /// `(origin CRS, departure time)`, which a `train_uid` alone does not
+    /// give you (the design spec's own §1 accepted gap). The backlog's own
+    /// first DEPARTURE row supplies exactly that pair for a train that has
+    /// already run, so the caller can hand it to
+    /// `schedule_matching::attempt_schedule_match_for_shared_train`.
+    /// `None` when the retained history holds no located DEPARTURE (an
+    /// Activation-only window, or one that starts mid-journey).
+    pub origin_departure: Option<(String, DateTime<Utc>)>,
+}
+
+/// The identity-first counterpart to [`attempt_backlog_match`]: replays a
+/// train's retained TRUST history when its `(train_uid, service_date)` is
+/// ALREADY known, rather than discovering it from a CRS+time pin.
+///
+/// This is what `POST /Train/by-uid/{uid}/{date}/track` needs and what
+/// review finding I1 found missing entirely. `find_train_id_by_uid` (Task
+/// 15) was built for exactly this and, until this fix, had no production
+/// caller anywhere -- so a subscription created via that endpoint after the
+/// train's live TRUST window had closed received nothing at all: no
+/// movement history, no `train_id`, no `resolved_at`, and (via the
+/// `origin_departure` this returns) no route to schedule data either.
+///
+/// Everything below the lookup is deliberately the SAME machinery
+/// [`attempt_backlog_match`] uses -- `fetch_backlog_history` +
+/// `replay_backlog_history` + the Step A dual-write -- so a backlog replay
+/// leaves the database in one shape, reached two ways, rather than two
+/// subtly different ones. The only differences are the first step (a
+/// `train_uid` lookup instead of a CRS+time one, which also means
+/// `train_uid` is always `Some` here and the dual-write is unconditional)
+/// and the `origin_departure` this returns for the caller's schedule
+/// match.
+///
+/// Idempotent: `replay_backlog_history`'s writes are
+/// `ON CONFLICT ... DO NOTHING`/`DO UPDATE` on the shared tables, and
+/// `find_or_create_train`/`mark_train_resolved` are both re-runnable, so
+/// calling this again for the same subscription is a no-op beyond the
+/// re-read. `Ok(None)` means the backlog holds no Activation for this
+/// identity (never emitted, or already pruned past its retention window) --
+/// an honest, expected outcome, exactly as `Ok(false)` is for
+/// [`attempt_backlog_match`].
+pub async fn attempt_backlog_match_by_uid(
+    pool: &PgPool,
+    tracked_train_id: i64,
+    train_uid: &str,
+    service_date: NaiveDate,
+) -> anyhow::Result<Option<BacklogReplayOutcome>> {
+    let Some(train_id) = find_train_id_by_uid(pool, train_uid, service_date).await? else {
+        return Ok(None);
+    };
+
+    let history = fetch_backlog_history(pool, &train_id, service_date).await?;
+    if history.is_empty() {
+        return Ok(None);
+    }
+
+    // Captured BEFORE the replay consumes `history`. `planned_timestamp`,
+    // not `actual_timestamp`: a schedule lookup matches against the BOOKED
+    // departure time, and a delayed train's actual time can easily fall
+    // outside `MATCH_TOLERANCE` of it. Falls back to `actual_timestamp`
+    // only when TRUST sent no planned time at all.
+    let origin_departure = history
+        .iter()
+        .find(|row| {
+            row.msg_type == "0003"
+                && row.event_type.as_deref() == Some("DEPARTURE")
+                && row.crs.is_some()
+                && (row.planned_timestamp.is_some() || row.actual_timestamp.is_some())
+        })
+        .map(|row| {
+            (
+                row.crs.clone().expect("filtered on crs.is_some()"),
+                row.planned_timestamp
+                    .or(row.actual_timestamp)
+                    .expect("filtered on one of the two being present"),
+            )
+        });
+
+    let replayed_rows = history.len();
+    replay_backlog_history(pool, tracked_train_id, Some(train_uid), history).await?;
+
+    // Step A dual-write, same as `attempt_backlog_match` above -- but
+    // unconditional here, because this path's `train_uid` is an input, not
+    // something that may or may not have been discovered.
+    let trains_id =
+        crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
+    crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
+    sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
+        .bind(tracked_train_id)
+        .bind(trains_id)
+        .execute(pool)
+        .await?;
+
+    Ok(Some(BacklogReplayOutcome {
+        train_id,
+        replayed_rows,
+        origin_departure,
+    }))
+}
+
 #[cfg(test)]
 mod db_tests {
     use super::*;
