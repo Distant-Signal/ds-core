@@ -302,6 +302,14 @@ pub async fn attempt_schedule_match_for_shared_train(
 /// skipped, not propagated -- one bad row must never stop the sweep from
 /// making progress on every other row. Returns the count of rows this
 /// call actually matched, for the caller's own logging.
+///
+/// `PendingSchedulePin`'s `pin_origin_crs`/`pin_scheduled_departure` are
+/// `Option`, not bare `String`/`DateTime<Utc>` (see that struct's own doc
+/// comment for why -- a pruned NR-primary subscription can reach this
+/// query with NULL pin columns). `list_pending_pins_for_schedule_match`'s
+/// own `WHERE` already excludes such rows, so the `None` arm below should
+/// never actually run; it exists so a row that somehow slips through is
+/// skipped rather than panicking this whole sweep.
 pub async fn run_schedule_match_sweep(
     pool: &PgPool,
     crs_line_index: &HashMap<String, Vec<String>>,
@@ -309,11 +317,21 @@ pub async fn run_schedule_match_sweep(
     let rows = train_tracking::list_pending_pins_for_schedule_match(pool).await?;
     let mut matched = 0u64;
     for row in rows {
+        let (Some(pin_origin_crs), Some(pin_scheduled_departure)) =
+            (row.pin_origin_crs.as_deref(), row.pin_scheduled_departure)
+        else {
+            tracing::warn!(
+                tracked_train_id = row.id,
+                "pending schedule pin missing origin CRS or scheduled departure; skipping \
+                 (list_pending_pins_for_schedule_match should have already excluded this row)"
+            );
+            continue;
+        };
         match attempt_schedule_match(
             pool,
             row.id,
-            &row.pin_origin_crs,
-            row.pin_scheduled_departure,
+            pin_origin_crs,
+            pin_scheduled_departure,
             row.service_date,
             crs_line_index,
         )
