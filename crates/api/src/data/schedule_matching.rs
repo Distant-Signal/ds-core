@@ -140,15 +140,7 @@ pub async fn attempt_schedule_match(
             None => None,
         };
 
-        let matched_ok = train_tracking::apply_schedule_match(
-            pool,
-            tracked_train_id,
-            &matched.uid,
-            line_id,
-            &calling_points_json,
-            destination_crs.as_deref(),
-        )
-        .await?;
+        let matched_ok = train_tracking::apply_schedule_match(pool, tracked_train_id).await?;
 
         if matched_ok {
             // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
