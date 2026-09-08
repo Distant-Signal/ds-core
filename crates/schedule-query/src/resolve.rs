@@ -219,7 +219,10 @@ pub fn departures_by_crs(
 /// non-cancelled, resolved schedule's `now`-forward, departure-bearing
 /// calling points, bucketed by the CRS of that schedule's own TERMINATING
 /// calling point rather than by each calling point's own CRS. Backs the
-/// destination-first whole-network train search
+/// calling-point-first whole-network train search (this function itself is
+/// unchanged and still literally buckets by destination; the
+/// calling-point-first framing is what the read side built on top of its
+/// output does with the result)
 /// (docs/superpowers/specs/2026-09-07-train-listing-page-design.md,
 /// Approach B).
 ///
@@ -280,6 +283,16 @@ pub fn departures_by_destination_crs(
         else {
             continue;
         };
+        // Computed once per schedule, exactly like destination_crs above,
+        // and attached unchanged to every entry this schedule contributes
+        // -- NOT recomputed per calling point, which is what would make it
+        // just a duplicate of `origin_crs` instead of the schedule's own
+        // true first stop.
+        let true_origin_crs = resolved
+            .calling_points
+            .first()
+            .and_then(|first| tiploc_to_crs.get(normalize_tiploc(&first.tiploc)))
+            .cloned();
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -297,6 +310,7 @@ pub fn departures_by_destination_crs(
                     uid: resolved.uid.clone(),
                     origin_crs: origin_crs.clone(),
                     scheduled: departure,
+                    true_origin_crs: true_origin_crs.clone(),
                 });
         }
     }
@@ -723,6 +737,88 @@ mod tests {
         let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
         origins.sort();
         assert_eq!(origins, vec!["CRE", "EUS"]);
+    }
+
+    #[test]
+    fn departures_by_destination_crs_attaches_the_schedules_true_origin_to_every_one_of_its_entries()
+    {
+        // The load-bearing distinction from `origin_crs`: EVERY entry of
+        // this schedule carries the SAME true_origin_crs (EUS), even the
+        // entry whose own origin_crs (the calling point it represents) is
+        // CRE, not EUS.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        let manchester = &by_destination["MAN"];
+        assert_eq!(manchester.len(), 2);
+        for entry in manchester {
+            assert_eq!(entry.true_origin_crs, Some("EUS".to_string()));
+        }
+        let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
+        origins.sort();
+        assert_eq!(origins, vec!["CRE", "EUS"]);
+    }
+
+    #[test]
+    fn departures_by_destination_crs_keeps_a_row_with_true_origin_crs_none_when_the_schedules_first_calling_point_is_unresolved()
+    {
+        // Contrast with departures_by_destination_crs_drops_a_schedule_whose_destination_tiploc_is_unresolved
+        // (a bucket-KEY unresolved -> drop the whole schedule). true_origin_crs
+        // is a plain FILTER field, so it follows departures_by_crs's own
+        // softer "degrade to None, keep the row" precedent instead.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        // EUSTON (the schedule's true origin) deliberately absent; CREWE
+        // and MNCRPIC both resolve.
+        let tiploc_to_crs = tiploc_map(&[("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(
+            by_destination["MAN"].len(),
+            1,
+            "EUSTON's own row is still dropped -- its origin_crs can't resolve either, same as \
+             departures_by_crs_drops_a_calling_point_whose_own_tiploc_is_unresolved"
+        );
+        assert_eq!(by_destination["MAN"][0].origin_crs, "CRE");
+        assert_eq!(
+            by_destination["MAN"][0].true_origin_crs, None,
+            "the schedule's true origin TIPLOC never resolved, so this filter field degrades to \
+             None -- it does NOT drop the row the way an unresolved destination_crs would"
+        );
     }
 
     #[test]

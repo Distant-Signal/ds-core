@@ -199,9 +199,25 @@ pub struct ScheduleDeparture {
 /// entry, an `Intermediate` one for every later entry of the same
 /// schedule. It is NOT necessarily the schedule's own first station, and
 /// is deliberately not the same concept as `trains.origin_crs` in
-/// `crates/api`, which always is. A caller filtering by "origin" on the
-/// train-search route (`GET /public/trains/search?origin=`) is asking
-/// "departing from here", which is exactly this field.
+/// `crates/api`, which always is. This is the field the calling-point-first
+/// train search (`GET /public/trains/search?station=`) filters its
+/// PRIMARY, required key on.
+///
+/// `true_origin_crs` is the schedule's REAL first calling point's CRS --
+/// the one this struct's own `origin_crs` field doc explicitly says
+/// `origin_crs` is NOT. It is computed once per schedule (via
+/// `resolved.calling_points.first()`, the exact mirror of how the bucket
+/// key is computed via `.last()`) and is IDENTICAL across every entry that
+/// schedule contributes, unlike `origin_crs` which varies per entry. `None`
+/// when the schedule's first calling point's TIPLOC doesn't resolve via
+/// `tiploc_to_crs` -- a plain filter-field degrade, not a dropped row (see
+/// [`crate::resolve::departures_by_destination_crs`]'s own doc comment for
+/// why this differs from how an unresolved bucket-key destination is
+/// treated). Backs the OPTIONAL "originating at" filter on
+/// `GET /public/trains/search?origin=`, which is deliberately independent
+/// of `station=`/`origin_crs` above -- see
+/// docs/superpowers/specs/2026-09-08-calling-point-train-search-design.md
+/// §0.2 for why these needed to become two different columns.
 ///
 /// `scheduled` is Europe/London LOCAL civil time, straight off the CIF
 /// body, same as [`ScheduleDeparture::scheduled`] -- never UTC. See
@@ -212,6 +228,7 @@ pub struct DestinationDeparture {
     pub uid: String,
     pub origin_crs: String,
     pub scheduled: NaiveTime,
+    pub true_origin_crs: Option<String>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
