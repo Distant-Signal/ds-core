@@ -229,6 +229,21 @@ pub struct DestinationDeparture {
     pub origin_crs: String,
     pub scheduled: NaiveTime,
     pub true_origin_crs: Option<String>,
+    /// `destination_arrival` is the schedule's REAL final calling point's
+    /// (the `Terminate` one) `booked_arrival` -- the mirror of
+    /// `true_origin_crs` above, but reading the LAST calling point's
+    /// arrival instead of the FIRST's departure, because
+    /// `CallingPointKind::Terminate` is "arrival only, no departure"
+    /// (this crate's own `records.rs`). Computed once per schedule and
+    /// IDENTICAL across every entry that schedule contributes, exactly
+    /// like `true_origin_crs`. `None` when the terminating calling
+    /// point's own `booked_arrival` is absent from a real published
+    /// schedule -- a plain filter-field degrade, not a dropped row.
+    /// Backs the OPTIONAL "arriving between" filter on
+    /// `GET /public/trains/search?destination_from=&destination_to=`,
+    /// which only applies when `destination` is also set -- see
+    /// docs/superpowers/specs/2026-09-08-destination-arrival-time-filter-design.md.
+    pub destination_arrival: Option<NaiveTime>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.

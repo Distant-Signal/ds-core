@@ -1,0 +1,26 @@
+-- Adds the destination's own arrival time as a second, independent
+-- optional time filter on GET /public/trains/search, distinct from the
+-- existing from/to (which stay scoped to the searched `station`'s own
+-- `scheduled` time). See
+-- docs/superpowers/specs/2026-09-08-destination-arrival-time-filter-design.md.
+--
+-- Mirrors true_origin_crs's own addition in the prior migration exactly:
+-- computed once per schedule from the Terminate calling point (`.last()`),
+-- here using its booked_arrival rather than booked_departure, since
+-- CallingPointKind::Terminate is "arrival only, no departure"
+-- (crates/schedule-query/src/records.rs). Nullable for the same reason
+-- true_origin_crs is: the terminating calling point's own booked_arrival
+-- can be absent from a real published schedule, and that degrades this
+-- filter field to NULL rather than dropping the row.
+ALTER TABLE schedule_destination_departures ADD COLUMN destination_arrival TIME;
+
+-- No new index. destination_from/destination_to become two more AND
+-- predicates evaluated against rows already narrowed by
+-- schedule_destination_departures_calling_point_idx's equality/range scan
+-- on (service_date, origin_crs, scheduled, train_uid) -- the same
+-- after-the-narrowing-scan shape destination_crs already has. This filter
+-- is also only ever usable together with destination (enforced at the API
+-- layer as a 400 otherwise), which is itself already a non-leading
+-- predicate on that same scan. Per the prior migration's own comment ("Do
+-- not add a second index without a measured reason"), this doesn't add
+-- one speculatively; a future measurement can revisit this.

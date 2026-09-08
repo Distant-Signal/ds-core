@@ -293,6 +293,14 @@ pub fn departures_by_destination_crs(
             .first()
             .and_then(|first| tiploc_to_crs.get(normalize_tiploc(&first.tiploc)))
             .cloned();
+        // The mirror of true_origin_crs directly above, but from the
+        // LAST calling point's booked_arrival (Terminate: arrival only,
+        // no departure) instead of the FIRST's booked_departure.
+        // Computed once per schedule, attached unchanged to every entry.
+        let destination_arrival = resolved
+            .calling_points
+            .last()
+            .and_then(|last| last.booked_arrival);
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -311,6 +319,7 @@ pub fn departures_by_destination_crs(
                     origin_crs: origin_crs.clone(),
                     scheduled: departure,
                     true_origin_crs: true_origin_crs.clone(),
+                    destination_arrival,
                 });
         }
     }
@@ -398,6 +407,21 @@ mod tests {
             kind,
             booked_arrival: None,
             booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
+            is_half_minute_arrival: false,
+            is_half_minute_departure: false,
+        }
+    }
+
+    fn calling_point_with_arrival(
+        tiploc: &str,
+        kind: CallingPointKind,
+        arrival: &str,
+    ) -> CallingPoint {
+        CallingPoint {
+            tiploc: tiploc.to_string(),
+            kind,
+            booked_arrival: Some(NaiveTime::parse_from_str(arrival, "%H:%M").unwrap()),
+            booked_departure: None,
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
         }
@@ -965,6 +989,76 @@ mod tests {
             by_destination["CRE"][0].origin_crs, "EUS",
             "CRE must not appear as its own bucket's origin"
         );
+    }
+
+    #[test]
+    fn departures_by_destination_crs_attaches_the_terminating_calling_points_arrival_to_every_entry()
+     {
+        // The load-bearing mirror of
+        // departures_by_destination_crs_attaches_the_schedules_true_origin_to_every_one_of_its_entries,
+        // but for the LAST calling point's booked_arrival instead of the
+        // FIRST's booked_departure.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point_with_arrival("MNCRPIC", CallingPointKind::Terminate, "11:30"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        let manchester = &by_destination["MAN"];
+        assert_eq!(manchester.len(), 2);
+        for entry in manchester {
+            assert_eq!(
+                entry.destination_arrival,
+                Some(NaiveTime::from_hms_opt(11, 30, 0).unwrap()),
+                "every entry for this schedule must carry the SAME terminating arrival time"
+            );
+        }
+    }
+
+    #[test]
+    fn departures_by_destination_crs_degrades_destination_arrival_to_none_when_the_terminating_calling_point_has_no_booked_arrival()
+     {
+        // A Terminate calling point built with the plain `calling_point`
+        // helper (no booked_arrival) -- a real-world gap in the CIF data,
+        // not a test bug. Must degrade this filter field to None, not
+        // drop the row or panic.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(by_destination["CRE"].len(), 1);
+        assert_eq!(by_destination["CRE"][0].destination_arrival, None);
     }
 
     /// Same real UID/STP/date-range/days values as this file's own `c11052_raw`
