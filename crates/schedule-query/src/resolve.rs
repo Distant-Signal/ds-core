@@ -215,6 +215,95 @@ pub fn departures_by_crs(
     by_crs
 }
 
+/// The destination-keyed sibling of [`departures_by_crs`]: every
+/// non-cancelled, resolved schedule's `now`-forward, departure-bearing
+/// calling points, bucketed by the CRS of that schedule's own TERMINATING
+/// calling point rather than by each calling point's own CRS. Backs the
+/// destination-first whole-network train search
+/// (docs/superpowers/specs/2026-09-07-train-listing-page-design.md,
+/// Approach B).
+///
+/// Runs against the SAME already-built, transient, per-cycle
+/// [`ScheduleIndex`] as [`departures_by_crs`] -- one extra O(all UIDs)
+/// resolve pass plus O(total calling points) bucketing per cycle, no second
+/// parse and no resident index (that constraint is restated verbatim in the
+/// design doc's §6).
+///
+/// Two deliberate asymmetries with [`departures_by_crs`], both about the
+/// "drop, never fabricate" rule applied to a value that is now a bucket
+/// KEY rather than a field:
+///
+/// * A schedule whose terminating TIPLOC has no `tiploc_to_crs` entry is
+///   dropped **entirely** -- there is no honest bucket to file it under.
+///   `departures_by_crs` can degrade the same case to
+///   `destination_crs: None` because there the destination is only a
+///   field; here it is the key.
+/// * A calling point whose OWN TIPLOC has no `tiploc_to_crs` entry drops
+///   just that entry, leaving the schedule's other entries in the bucket --
+///   identical to `departures_by_crs`'s own per-calling-point drop.
+///
+/// **There is no cap, here or anywhere downstream.** This function returns
+/// every matching calling point, unsorted, exactly like
+/// `departures_by_crs`, and its caller
+/// (`crates/schedule-reference/src/main.rs`'s
+/// `schedule_destination_departures_rows`) merely flattens the result --
+/// it does not sort, truncate, or bucket it. An earlier design capped each
+/// bucket at a constant; that was measured and rejected, because the
+/// busiest destination holds ~9,634 entries for one day and the next
+/// several busiest are within the same order of magnitude, so no cap value
+/// truncates honestly. See
+/// docs/superpowers/specs/2026-09-07-train-listing-destination-search-sizing-design.md
+/// (§1 for the measurement, §3 Approach C for what replaced it): the whole
+/// day is published uncapped and the `now`-forward filter and pagination
+/// happen at READ time instead, as an indexed range scan with a keyset
+/// cursor. Do not reintroduce a cap in this function's caller.
+pub fn departures_by_destination_crs(
+    index: &ScheduleIndex,
+    date: NaiveDate,
+    now: NaiveTime,
+    tiploc_to_crs: &HashMap<String, String>,
+) -> HashMap<String, Vec<crate::records::DestinationDeparture>> {
+    let mut by_destination: HashMap<String, Vec<crate::records::DestinationDeparture>> =
+        HashMap::new();
+
+    for uid in index.uids() {
+        let Some(resolved) = index.schedule_for_uid(uid, date) else {
+            continue;
+        };
+        if resolved.cancelled {
+            continue;
+        }
+        let Some(destination_crs) = resolved
+            .calling_points
+            .last()
+            .and_then(|last| tiploc_to_crs.get(normalize_tiploc(&last.tiploc)))
+        else {
+            continue;
+        };
+        for cp in &resolved.calling_points {
+            let Some(departure) = cp.booked_departure else {
+                continue;
+            };
+            if departure < now {
+                continue;
+            }
+            let Some(origin_crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
+                continue;
+            };
+            by_destination
+                .entry(destination_crs.clone())
+                .or_default()
+                .push(crate::records::DestinationDeparture {
+                    uid: resolved.uid.clone(),
+                    origin_crs: origin_crs.clone(),
+                    scheduled: departure,
+                });
+        }
+    }
+
+    by_destination
+}
+
 /// A thin wrapper grouping `Vec<RawSchedule>` by `uid`, built once, so
 /// [`ScheduleIndex::schedule_for_uid`]/[`schedules_touching`] aren't
 /// re-scanning a flat `Vec` on every call.
@@ -556,6 +645,230 @@ mod tests {
             NaiveTime::from_hms_opt(10, 5, 0).unwrap()
         );
         assert_eq!(by_crs["CRE"][0].destination_crs, Some("MAN".to_string()));
+    }
+
+    #[test]
+    fn departures_by_destination_crs_buckets_an_origin_departure_under_the_schedules_destination() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(
+            by_destination.len(),
+            1,
+            "the ONLY bucket key is the schedule's destination (CRE), never its origin"
+        );
+        assert!(
+            !by_destination.contains_key("EUS"),
+            "this function must not also bucket by origin -- that is departures_by_crs's job"
+        );
+        let crewe = &by_destination["CRE"];
+        assert_eq!(crewe.len(), 1);
+        assert_eq!(crewe[0].uid, "C11052");
+        assert_eq!(crewe[0].origin_crs, "EUS");
+        assert_eq!(
+            crewe[0].scheduled,
+            NaiveTime::from_hms_opt(8, 22, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn departures_by_destination_crs_buckets_every_departure_bearing_calling_point_under_one_destination() {
+        // The load-bearing difference from departures_by_crs: a train from
+        // EUSTON to MNCRPIC calling at CREWE contributes TWO entries to the
+        // SAME (MAN) bucket -- "next train to Manchester from anywhere"
+        // must find it whether the searcher is at Euston or at Crewe. This
+        // is also exactly why this bucket's cardinality needed its own
+        // sizing pass (Task 1) rather than reusing the origin-keyed cap.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(by_destination.len(), 1, "one destination, one bucket");
+        let manchester = &by_destination["MAN"];
+        assert_eq!(manchester.len(), 2);
+        let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
+        origins.sort();
+        assert_eq!(origins, vec!["CRE", "EUS"]);
+    }
+
+    #[test]
+    fn departures_by_destination_crs_excludes_a_departure_already_before_now() {
+        // Same `now`-forward posture as departures_by_crs (resolve.rs:193):
+        // the 08:22 EUSTON departure is gone by 10:00, but the 10:05 CREWE
+        // one is still ahead -- the bucket keeps only the latter.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(by_destination["MAN"].len(), 1);
+        assert_eq!(by_destination["MAN"][0].origin_crs, "CRE");
+    }
+
+    #[test]
+    fn departures_by_destination_crs_excludes_a_cancelled_schedule_even_though_its_time_has_not_passed() {
+        // Real UID/STP/date-range/days values (a base P pattern plus a real
+        // STP=C override on 2026-08-31), reusing this module's own
+        // c11052_with_departures fixture and its Bank Holiday cross-check.
+        let index = ScheduleIndex::build(c11052_with_departures());
+        let date = NaiveDate::from_ymd_opt(2026, 8, 31).unwrap(); // the cancelled date
+        let now = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+        assert!(
+            by_destination.is_empty(),
+            "the STP=C override must suppress this date's bucket entirely"
+        );
+    }
+
+    #[test]
+    fn departures_by_destination_crs_drops_a_schedule_whose_destination_tiploc_is_unresolved() {
+        // The asymmetry with departures_by_crs, and it is deliberate: THERE,
+        // an unresolved destination degrades to `destination_crs: None` and
+        // the row is still returned under its own origin. HERE the
+        // destination IS the bucket key, so there is no honest bucket to
+        // file this schedule under -- it is dropped entirely rather than
+        // guessed at or filed under a fabricated key.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]); // CREWE deliberately absent
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+        assert!(
+            by_destination.is_empty(),
+            "an unresolved DESTINATION tiploc drops the whole schedule -- there is no bucket key"
+        );
+    }
+
+    #[test]
+    fn departures_by_destination_crs_drops_only_the_calling_point_whose_own_tiploc_is_unresolved() {
+        // Complementary to the test above: an unresolved INTERMEDIATE
+        // tiploc drops just that one entry, not the schedule -- the
+        // destination bucket still exists and still holds the resolvable
+        // calling points. Same "drop, never fabricate" rule as
+        // departures_by_crs (resolve.rs:196-198), applied per entry.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_departure("CREWE  ", CallingPointKind::Intermediate, "10:05"),
+                calling_point("MNCRPIC", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        // CREWE deliberately absent; EUSTON and MNCRPIC both resolve.
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(by_destination["MAN"].len(), 1);
+        assert_eq!(by_destination["MAN"][0].origin_crs, "EUS");
+    }
+
+    #[test]
+    fn departures_by_destination_crs_never_buckets_the_terminating_calling_point_itself() {
+        // A Terminate calling point has no booked_departure by
+        // construction (CallingPointKind::Terminate's own doc), so a train
+        // must never appear as "departing from X" in X's own arrivals
+        // bucket. Guards against a future refactor that starts reading
+        // booked_arrival here.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point("CREWE  ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+        assert_eq!(by_destination["CRE"].len(), 1);
+        assert_eq!(
+            by_destination["CRE"][0].origin_crs, "EUS",
+            "CRE must not appear as its own bucket's origin"
+        );
     }
 
     /// Same real UID/STP/date-range/days values as this file's own `c11052_raw`

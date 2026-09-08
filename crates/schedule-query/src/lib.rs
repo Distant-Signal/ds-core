@@ -79,11 +79,11 @@ pub mod tiploc;
 
 pub use parse::parse_schedule_records;
 pub use records::{
-    BasicSchedule, CallingPoint, CallingPointKind, LinePopulationEntry, RawSchedule,
-    ScheduleDeparture, StpIndicator,
+    BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture, LinePopulationEntry,
+    RawSchedule, ScheduleDeparture, StpIndicator,
 };
 pub use resolve::{
-    ResolvedSchedule, ScheduleIndex, departures_by_crs, match_pin, resolve_for_date,
-    schedules_touching,
+    ResolvedSchedule, ScheduleIndex, departures_by_crs, departures_by_destination_crs, match_pin,
+    resolve_for_date, schedules_touching,
 };
 pub use tiploc::normalize_tiploc;

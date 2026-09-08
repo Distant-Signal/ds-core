@@ -187,6 +187,33 @@ pub struct ScheduleDeparture {
     pub destination_crs: Option<String>,
 }
 
+/// One departure-bearing calling point of a schedule that TERMINATES at
+/// some destination CRS, as bucketed by
+/// [`crate::resolve::departures_by_destination_crs`]. The destination CRS
+/// itself is deliberately absent from this struct: it is the bucket key
+/// (identical for every entry in a bucket), exactly as the origin CRS is
+/// the bucket key for [`ScheduleDeparture`]/`departures_by_crs`.
+///
+/// `origin_crs` means "the station this train departs FROM", which is the
+/// calling point's own CRS -- an `Origin` calling point for the first
+/// entry, an `Intermediate` one for every later entry of the same
+/// schedule. It is NOT necessarily the schedule's own first station, and
+/// is deliberately not the same concept as `trains.origin_crs` in
+/// `crates/api`, which always is. A caller filtering by "origin" on the
+/// train-search route (`GET /public/trains/search?origin=`) is asking
+/// "departing from here", which is exactly this field.
+///
+/// `scheduled` is Europe/London LOCAL civil time, straight off the CIF
+/// body, same as [`ScheduleDeparture::scheduled`] -- never UTC. See
+/// `crates/schedule-reference/src/main.rs`'s `london_local_time_at` for
+/// the one place that distinction is handled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DestinationDeparture {
+    pub uid: String,
+    pub origin_crs: String,
+    pub scheduled: NaiveTime,
+}
+
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
 ///
 /// A [`StpIndicator::Cancellation`] `RawSchedule` has an empty
