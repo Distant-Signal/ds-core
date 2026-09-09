@@ -1,0 +1,26 @@
+-- Supports the journey-timetable-overlay fallback source
+-- (docs/superpowers/specs/2026-09-08-journey-timetable-overlay-design.md
+-- §0.2/§3.2): `crates/api/src/data/queries.rs`'s
+-- `list_calling_point_departures_for_train` runs
+-- `SELECT ... FROM schedule_destination_departures WHERE train_uid = $1
+-- AND service_date = $2 ORDER BY scheduled` to reconstruct a train's
+-- booked stop list whenever `trains.calling_points` isn't populated (the
+-- live-TRUST-only resolution path). Neither existing index leads with
+-- `train_uid`: the primary key is
+-- `(service_date, destination_crs, scheduled, train_uid, origin_crs)`
+-- (upsert-idempotency shaped, per that table's own migration header) and
+-- `schedule_destination_departures_calling_point_idx` is
+-- `(service_date, origin_crs, scheduled, train_uid)` (the calling-point
+-- search's own leading shape, added by
+-- 20260908120000_schedule_destination_departures_calling_point_search.sql).
+-- Neither can range-scan on `train_uid` alone -- both would require a
+-- full index scan filtering every row for a match, on a table documented
+-- at ~377,000 rows for one service date
+-- (20260907130000_schedule_destination_departures.sql's own header).
+-- This query is reachable from the PUBLIC, unauthenticated,
+-- 30-second-auto-refreshed `/train/{uid}/{date}` route (via
+-- `attach_journey_stops_public`, `crates/api/src/routes/train.rs`) for
+-- any train whose `trains.calling_points` is unset, so the cost is real
+-- and repeats on every page view, not a one-off.
+CREATE INDEX schedule_destination_departures_train_uid_idx
+    ON schedule_destination_departures (train_uid, service_date, scheduled);
