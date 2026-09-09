@@ -5,22 +5,29 @@
 -- `SELECT ... FROM schedule_destination_departures WHERE train_uid = $1
 -- AND service_date = $2 ORDER BY scheduled` to reconstruct a train's
 -- booked stop list whenever `trains.calling_points` isn't populated (the
--- live-TRUST-only resolution path). Neither existing index leads with
--- `train_uid`: the primary key is
--- `(service_date, destination_crs, scheduled, train_uid, origin_crs)`
--- (upsert-idempotency shaped, per that table's own migration header) and
--- `schedule_destination_departures_calling_point_idx` is
--- `(service_date, origin_crs, scheduled, train_uid)` (the calling-point
--- search's own leading shape, added by
--- 20260908120000_schedule_destination_departures_calling_point_search.sql).
--- Neither can range-scan on `train_uid` alone -- both would require a
--- full index scan filtering every row for a match, on a table documented
--- at ~377,000 rows for one service date
--- (20260907130000_schedule_destination_departures.sql's own header).
--- This query is reachable from the PUBLIC, unauthenticated,
--- 30-second-auto-refreshed `/train/{uid}/{date}` route (via
--- `attach_journey_stops_public`, `crates/api/src/routes/train.rs`) for
--- any train whose `trains.calling_points` is unset, so the cost is real
--- and repeats on every page view, not a one-off.
-CREATE INDEX schedule_destination_departures_train_uid_idx
+-- live-TRUST-only resolution path). This query is reachable from the
+-- PUBLIC, unauthenticated, 30-second-auto-refreshed `/train/{uid}/{date}`
+-- route (via `attach_journey_stops_public`,
+-- `crates/api/src/routes/train.rs`) for any train whose
+-- `trains.calling_points` is unset, so the cost is real and repeats on
+-- every page view, not a one-off.
+--
+-- SUPERSEDES `schedule_destination_departures_train_uid_idx` from
+-- 20260908140000_schedule_destination_departures_train_uid_idx.sql
+-- (added concurrently, by a different feature branch, for a narrower
+-- `(service_date, train_uid)` equality lookup in
+-- `reconciliation::true_origin_departure` and
+-- `trains::is_known_scheduled_train`). `(train_uid, service_date,
+-- scheduled)` serves that same equality lookup equally well -- Postgres
+-- doesn't require query-side predicate order to match the leading
+-- columns of a composite index for a pure equality match -- and
+-- additionally provides the `ORDER BY scheduled` this migration's own
+-- query needs, which the narrower index can't. Rather than carry two
+-- overlapping indexes (double the write amplification on every publish
+-- for no read benefit), this migration drops the now-redundant one and
+-- creates the broader one under a name that reflects its full column
+-- set, avoiding the identical-name collision the two branches would
+-- otherwise hit.
+DROP INDEX IF EXISTS schedule_destination_departures_train_uid_idx;
+CREATE INDEX schedule_destination_departures_train_uid_service_date_scheduled_idx
     ON schedule_destination_departures (train_uid, service_date, scheduled);
