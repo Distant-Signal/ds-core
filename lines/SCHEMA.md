@@ -27,10 +27,21 @@ named `<id>.toml`.
 ```toml
 [[stations]]
 crs = "EUS"        # required
-tiploc = "EUSTON"  # optional, helps with TRUST/SCHEDULE correlation
+tiploc = "EUSTON"  # optional, documentation/display only -- see note below
 role = "terminus"  # optional: terminus | major | minor | junction
 segment = "swr-trunk-waterloo"  # optional but strongly recommended
 ```
+
+`tiploc` is **purely documentation/display metadata**. It is not required
+for correctness and does not gate whether a station (or its whole line)
+participates in schedule matching or `schedule_line_population` publishing
+-- both of those now resolve real TIPLOCs from the CIF-derived `stanox_crs`
+table at runtime, independent of this field (fixed 2026-09-09; previously a
+station or even an entire line with no `tiploc` set here was silently
+excluded from schedule matching, which is why this field used to be
+described as more important than it is). Feel free to add it for a human
+reader's benefit, but there is no need to add or backfill it just to make a
+new station or line "work."
 
 ## Segments
 

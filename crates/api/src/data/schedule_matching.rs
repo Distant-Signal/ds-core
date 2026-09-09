@@ -18,25 +18,33 @@ use crate::data::eta_blend::london_to_utc;
 use crate::data::{queries, train_tracking};
 
 /// `CRS -> Vec<line_id>` (Decision 2 of the design spec), built from the
-/// static `lines/*.toml` catalogue -- mirrors
-/// `crates/schedule-reference/src/main.rs`'s own `lines_to_publish`
-/// predicate exactly (a line qualifies if it has at least one
-/// `tiploc`-bearing station), then further filters to only the
-/// TIPLOC-bearing stations themselves, since a station with no TIPLOC has
-/// no way to ever appear in a CIF calling-point list anyway. Built once
+/// static `lines/*.toml` catalogue. Indexes EVERY catalogued station's CRS
+/// to its line(s) regardless of whether that station's TOML `tiploc` field
+/// is set, and regardless of whether any OTHER station on the same line has
+/// one either -- as of the 2026-09-09 tiploc-schedule-matching-gap fix, the
+/// TOML `tiploc` field is purely documentation/display metadata (see
+/// `lines/SCHEMA.md`) and is never load-bearing for this index or for
+/// whether a line participates in schedule matching at all.
+///
+/// This index only ever needs to answer "which line(s) claim this CRS," not
+/// "what is this CRS's real TIPLOC" -- `find_schedule_match`, below,
+/// resolves the actual TIPLOC(s) to match against from the real,
+/// CIF-derived `stanox_crs` table via `queries::list_stanox_crs_for_crs`,
+/// which does not depend on this TOML catalogue at all. Gating this index
+/// on the TOML `tiploc` field used to make it an inaccurate proxy for "does
+/// this station appear in real CIF data" -- ~83% of catalogued CRS codes
+/// have no TOML `tiploc` set (39 of 109 `lines/*.toml` files have none at
+/// all), so that gate silently excluded the vast majority of stations from
+/// ever schedule-matching, producing a permanently-stuck "Waiting to hear
+/// from Network Rail" status for any pin at one of them even though the
+/// real `stanox_crs` table had everything needed to match it. Built once
 /// at `AppState::init` from `app.config.lines` (already loaded there for
 /// `full_coverage_enabled_for`'s own use -- this is a pure re-keying of
 /// data already in memory, no new I/O).
 pub fn crs_to_line_ids(lines: &[LineDefinition]) -> HashMap<String, Vec<String>> {
     let mut index: HashMap<String, Vec<String>> = HashMap::new();
     for line in lines {
-        if !line.stations.iter().any(|s| s.tiploc.is_some()) {
-            continue;
-        }
         for station in &line.stations {
-            if station.tiploc.is_none() {
-                continue;
-            }
             let crs = station.crs.to_uppercase();
             let ids = index.entry(crs).or_default();
             if !ids.contains(&line.id) {
@@ -390,10 +398,16 @@ mod tests {
     }
 
     #[test]
-    fn a_crs_with_no_tiploc_on_its_station_entry_is_not_indexed() {
+    fn a_crs_with_no_tiploc_on_its_station_entry_is_indexed_anyway() {
+        // The bug this rewritten test now guards against: the TOML `tiploc`
+        // field is documentation/display metadata only, never load-bearing
+        // for whether a station participates in schedule matching. A
+        // station with no TOML `tiploc` set must still be indexed -- its
+        // real TIPLOC(s), if any, are resolved separately from the
+        // CIF-derived `stanox_crs` table (see `find_schedule_match`).
         let lines = vec![line("wcml", vec![("EUS", Some("EUSTON")), ("ZZZ", None)])];
         let index = crs_to_line_ids(&lines);
-        assert_eq!(index.get("ZZZ"), None);
+        assert_eq!(index.get("ZZZ"), Some(&vec!["wcml".to_string()]));
     }
 
     #[test]
@@ -409,10 +423,15 @@ mod tests {
     }
 
     #[test]
-    fn a_line_with_no_tiploc_bearing_station_at_all_is_excluded_entirely() {
+    fn a_line_with_no_tiploc_bearing_station_at_all_is_included_anyway() {
+        // Previously this line was dropped from the index entirely -- the
+        // exact bug that left every station on a fully tiploc-less line
+        // (39 of 109 `lines/*.toml` files, e.g. all of ScotRail,
+        // Southeastern, Merseyrail) permanently unable to schedule-match.
         let lines = vec![line("no-tiploc-line", vec![("ZZA", None), ("ZZB", None)])];
         let index = crs_to_line_ids(&lines);
-        assert!(index.is_empty());
+        assert_eq!(index.get("ZZA"), Some(&vec!["no-tiploc-line".to_string()]));
+        assert_eq!(index.get("ZZB"), Some(&vec!["no-tiploc-line".to_string()]));
     }
 
     #[test]
@@ -558,6 +577,161 @@ mod db_tests {
         // corrupts an unrelated test's assertion. See the same fix applied
         // to `trust_event_backlog_match.rs`.
         sqlx::query("DELETE FROM trains WHERE train_uid = 'C99999' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .expect("cleanup trains");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup user");
+    }
+
+    fn fixture_line_with_no_toml_tiploc(id: &str, crs: &str) -> LineDefinition {
+        LineDefinition {
+            id: id.to_string(),
+            name: id.to_string(),
+            mode: "rail".to_string(),
+            category: "national-rail".to_string(),
+            operators: vec![],
+            stations: vec![common::Station {
+                crs: crs.to_string(),
+                tiploc: None, // the exact scenario the 2026-09-09 fix covers
+                role: "minor".to_string(),
+                segment: None,
+            }],
+            sample_stations: vec![],
+            match_keywords: vec![],
+            excluded_keywords: vec![],
+            severity_overrides: std::collections::HashMap::new(),
+            exclusive_segments: vec![],
+            destination_crs_filter: vec![],
+            headcode_prefixes: vec![],
+            full_coverage_enabled: false,
+        }
+    }
+
+    /// The actual regression test for the tiploc-schedule-matching-gap bug
+    /// (2026-09-09): a station whose TOML entry carries no `tiploc` at all
+    /// -- exactly the ~83% CRS-code case the live-production investigation
+    /// found -- must still schedule-match, because its `crs_line_index`
+    /// entry now comes from `crs_to_line_ids` itself (not hand-built, unlike
+    /// the sibling tests above) and the real TIPLOC is resolved separately
+    /// from the CIF-derived `stanox_crs` table. Before this fix,
+    /// `crs_to_line_ids` would have produced an EMPTY index for this line
+    /// (no station has a TOML `tiploc`), so `find_schedule_match` would
+    /// have returned `Ok(None)` immediately, without ever touching
+    /// `stanox_crs` -- permanently stuck "Waiting to hear from Network
+    /// Rail" for any pin at this CRS.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_matches_a_station_with_no_toml_tiploc_via_real_stanox_crs_data()
+     {
+        let pool = connect().await;
+        let user_id = "TEST-SCHEDULE-MATCH-NO-TOML-TIPLOC";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("no-toml-tiploc@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        // Real, CIF-derived data -- entirely independent of the TOML
+        // catalogue below, and the only place a real TIPLOC comes from now.
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-NTT-STANOX', 'ZNT', 'ZNOTIPLOC', 'TEST NO TIPLOC STATION', 1) \
+             ON CONFLICT (stanox) DO NOTHING",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        let service_date: chrono::NaiveDate = "2026-09-09".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-no-toml-tiploc-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json("C88888", "ZNOTIPLOC", "19:15"))
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-09T19:15:00+01:00".parse().unwrap();
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("ZNT")
+        .bind(scheduled_departure)
+        .fetch_one(&pool)
+        .await
+        .expect("seed fixture tracked_trains row");
+
+        // The load-bearing bit: this line's ONLY station has no TOML
+        // `tiploc` set, and the index is built via the real
+        // `crs_to_line_ids` function under test -- not hand-constructed
+        // like the sibling tests above -- so this genuinely exercises the
+        // fixed indexing behavior end to end.
+        let lines = vec![fixture_line_with_no_toml_tiploc(
+            "test-no-toml-tiploc-line",
+            "ZNT",
+        )];
+        let crs_line_index = crs_to_line_ids(&lines);
+        assert_eq!(
+            crs_line_index.get("ZNT"),
+            Some(&vec!["test-no-toml-tiploc-line".to_string()]),
+            "sanity check: the fixed crs_to_line_ids must index a no-toml-tiploc station"
+        );
+
+        let matched = attempt_schedule_match(
+            &pool,
+            tracked_train_id,
+            "ZNT",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt schedule match");
+        assert!(
+            matched,
+            "a station with no TOML tiploc must still schedule-match via real stanox_crs data"
+        );
+
+        let state = train_tracking::get_by_tracking_id(&pool, tracked_train_id)
+            .await
+            .expect("read tracked train")
+            .expect("tracked train exists");
+        assert_eq!(state.resolution_status, "schedule_matched");
+        assert_eq!(state.train_uid, Some("C88888".to_string()));
+
+        sqlx::query("DELETE FROM schedule_line_population WHERE line_id = 'test-no-toml-tiploc-line' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .expect("cleanup population");
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-NTT-STANOX'")
+            .execute(&pool)
+            .await
+            .expect("cleanup stanox_crs");
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup tracked_trains");
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'C88888' AND service_date = $1")
             .bind(service_date)
             .execute(&pool)
             .await

@@ -460,6 +460,16 @@ pub struct HealthStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Station {
     pub crs: String,
+    /// Purely documentation/display metadata (see `lines/SCHEMA.md`) --
+    /// NOT load-bearing for whether this station (or its line) participates
+    /// in schedule matching or `schedule_line_population` publishing. Both
+    /// of those resolve real TIPLOCs from the CIF-derived `stanox_crs`
+    /// table at runtime instead (see
+    /// `api::data::schedule_matching::crs_to_line_ids` and
+    /// `schedule-reference`'s `lines_to_publish`/`crs_to_tiploc_map`).
+    /// Fixed 2026-09-09: this field used to gate both of those, which
+    /// meant a station -- or an entire line, if none of its stations had
+    /// this set -- with no `tiploc` here could never schedule-match.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiploc: Option<String>,
     #[serde(default = "Station::default_role")]
