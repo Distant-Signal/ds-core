@@ -228,6 +228,7 @@ async fn replay_backlog_history(
     pool: &PgPool,
     tracked_train_id: i64,
     train_uid: Option<&str>,
+    destination_crs: Option<&str>,
     history: Vec<BacklogRow>,
 ) -> anyhow::Result<()> {
     let mut previous = DerivedState::awaiting_activation();
@@ -251,7 +252,12 @@ async fn replay_backlog_history(
                     toc_id: None,
                     variation_status: row.variation_status.clone(),
                 };
-                let mut derived = journey::apply_movement(&previous, &movement, row.crs.as_deref());
+                let mut derived = journey::apply_movement(
+                    &previous,
+                    &movement,
+                    row.crs.as_deref(),
+                    destination_crs,
+                );
                 // Mirrors trust-consumer::process.rs's own post-apply_movement
                 // override exactly: apply_movement's own delay_minutes is a
                 // coarse variation_status-only estimate; a real timestamp
@@ -380,7 +386,27 @@ pub async fn attempt_backlog_match(
         return Ok(false);
     }
 
-    replay_backlog_history(pool, tracked_train_id, train_uid.as_deref(), history).await?;
+    // Read-only precheck, same posture as `shared_train_enrichment_state`:
+    // only possible when this backlog carried an Activation for this
+    // train_id (`train_uid` is `Some`) -- without one there's no natural
+    // key to look a `trains` row up by, so `destination_crs` stays `None`
+    // (the honest "unknown", not a bug) and every replayed ARRIVAL in this
+    // history falls back to the existing "may have finished" inference.
+    let destination_crs = match &train_uid {
+        Some(train_uid) => {
+            crate::data::trains::destination_crs_for_train(pool, train_uid, service_date).await?
+        }
+        None => None,
+    };
+
+    replay_backlog_history(
+        pool,
+        tracked_train_id,
+        train_uid.as_deref(),
+        destination_crs.as_deref(),
+        history,
+    )
+    .await?;
 
     // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
     // §2 Step A): only possible when this backlog carried an Activation for
@@ -546,8 +572,22 @@ pub async fn attempt_backlog_match_by_uid(
             )
         });
 
+    // Same read-only precheck as `attempt_backlog_match` -- `train_uid` is
+    // always known here (it's this function's own input), so this only
+    // ever reports "unknown" when no schedule has ever matched this
+    // identity, never for a missing-Activation reason.
+    let destination_crs =
+        crate::data::trains::destination_crs_for_train(pool, train_uid, service_date).await?;
+
     let replayed_rows = history.len();
-    replay_backlog_history(pool, tracked_train_id, Some(train_uid), history).await?;
+    replay_backlog_history(
+        pool,
+        tracked_train_id,
+        Some(train_uid),
+        destination_crs.as_deref(),
+        history,
+    )
+    .await?;
 
     // Step A dual-write, same as `attempt_backlog_match` above -- but
     // unconditional here, because this path's `train_uid` is an input, not

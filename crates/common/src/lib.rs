@@ -805,6 +805,15 @@ pub struct TrackedTrainRef {
     /// 1's `tracked_trains.trains_id`). Lets trust-consumer key its new
     /// forwarding-queue writes (Task 17) without a second round-trip.
     pub trains_id: Option<i64>,
+    /// The shared `trains` row's own known final/terminus CRS
+    /// (`trains.destination_crs`), if a schedule has ever matched it.
+    /// `None` whenever `trains_id` is `None`, or the matched schedule's
+    /// terminus TIPLOC never resolved to a CRS. Lets `trust-consumer`
+    /// recognize a confirmed terminus ARRIVAL
+    /// (`trust_schema::journey::apply_movement`'s `destination_crs` param)
+    /// without a second round-trip, mirroring `trains_id`'s own reasoning
+    /// above.
+    pub destination_crs: Option<String>,
 }
 
 /// A lightweight forwarding signal from trust-consumer to notifier
