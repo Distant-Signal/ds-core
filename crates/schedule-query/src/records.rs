@@ -273,6 +273,20 @@ pub struct DestinationDeparture {
     #[serde(default)]
     pub day_offset: u8,
     pub true_origin_crs: Option<String>,
+    /// This entry's OWN calling point's `booked_arrival` -- NOT the
+    /// schedule's true destination's arrival (see `destination_arrival`
+    /// below for that). Read per-calling-point, unlike `true_origin_crs`/
+    /// `destination_arrival`/`destination_arrival_day_offset`, which are
+    /// all computed once per schedule and copied verbatim onto every entry
+    /// -- this one genuinely varies entry to entry, exactly like
+    /// `scheduled`/`origin_crs`/`day_offset` above. `None` for the
+    /// schedule's own true origin (an `Origin` calling point has no
+    /// `booked_arrival` at all -- see `CallingPointKind::Origin`), `Some`
+    /// for a genuine `Intermediate` calling point. Backs
+    /// `GET /public/trains/search`'s `arrival_from`/`arrival_to` filter,
+    /// which only applies when `stops_at` names exactly one station --
+    /// see docs/superpowers/specs/2026-09-09-stops-at-search-filter-design.md.
+    pub calling_point_arrival: Option<NaiveTime>,
     /// `destination_arrival` is the schedule's REAL final calling point's
     /// (the `Terminate` one) `booked_arrival` -- the mirror of
     /// `true_origin_crs` above, but reading the LAST calling point's
@@ -283,10 +297,12 @@ pub struct DestinationDeparture {
     /// like `true_origin_crs`. `None` when the terminating calling
     /// point's own `booked_arrival` is absent from a real published
     /// schedule -- a plain filter-field degrade, not a dropped row.
-    /// Backs the OPTIONAL "arriving between" filter on
-    /// `GET /public/trains/search?destination_from=&destination_to=`,
-    /// which only applies when `destination` is also set -- see
-    /// docs/superpowers/specs/2026-09-08-destination-arrival-time-filter-design.md.
+    /// Rendered on every `GET /public/trains/search` row as
+    /// `destinationArrival`/`destinationArrivalDayOffset` -- informational
+    /// only; it is NOT used as a filter any more (superseded by
+    /// `calling_point_arrival` above, since `stops_at`'s single-entry
+    /// arrival filter is scoped to whichever calling point was searched
+    /// for, not necessarily the schedule's true destination).
     pub destination_arrival: Option<NaiveTime>,
     /// How many calendar days past `service_date` `destination_arrival`
     /// actually falls on -- the TERMINATING calling point's own

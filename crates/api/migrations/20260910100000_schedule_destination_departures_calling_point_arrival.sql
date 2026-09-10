@@ -1,0 +1,28 @@
+-- Backs the "Stops at (optional)" multi-station calling-point filter's
+-- single-entry arrival-time bound (`GET /public/trains/search?arrival_from=
+-- &arrival_to=`), replacing "Terminating at" + "Earliest/Latest arrival" --
+-- see docs/superpowers/specs/2026-09-09-stops-at-search-filter-design.md.
+--
+-- Deliberately NOT the same value as the existing `destination_arrival`
+-- column (20260908130000_schedule_destination_departures_destination_arrival.sql):
+-- that one is the schedule's TRUE final destination's own arrival,
+-- computed once per schedule and copied onto every row. `stops_at`'s
+-- single-entry arrival filter needs the arrival AT THE SPECIFIC CALLING
+-- POINT the caller named, which is frequently an INTERMEDIATE stop, not
+-- the schedule's true destination -- a genuinely different, per-row value.
+-- Mirrors `true_origin_crs`/`destination_arrival`'s own nullable-column
+-- precedent: NULL for the schedule's own true origin (an `Origin` calling
+-- point has no `booked_arrival` at all -- see
+-- `schedule_query::records::CallingPointKind::Origin`), a real value for a
+-- genuine `Intermediate` calling point.
+ALTER TABLE schedule_destination_departures ADD COLUMN calling_point_arrival TIME;
+
+-- No new index, same reasoning as `destination_arrival`'s own migration:
+-- this is evaluated as an EXISTS lookup keyed on (service_date, train_uid,
+-- origin_crs), all three of which are already covered by
+-- schedule_destination_departures_calling_point_idx
+-- (service_date, origin_crs, scheduled, train_uid) and
+-- schedule_destination_departures_train_uid_service_date_scheduled_idx
+-- (train_uid, service_date, scheduled) -- a full row is then fetched and
+-- calling_point_arrival compared in-place. Do not add a speculative index;
+-- revisit only with a measured reason.

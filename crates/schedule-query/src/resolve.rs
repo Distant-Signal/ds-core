@@ -404,6 +404,12 @@ pub fn departures_by_destination_crs(
                     scheduled: departure,
                     day_offset: cp.day_offset,
                     true_origin_crs: true_origin_crs.clone(),
+                    // THIS calling point's own arrival -- recomputed per
+                    // entry, unlike destination_arrival below, which is
+                    // computed once per schedule and copied onto every
+                    // entry. `None` for the schedule's true origin (an
+                    // Origin calling point never has a booked_arrival).
+                    calling_point_arrival: cp.booked_arrival,
                     destination_arrival,
                     destination_arrival_day_offset,
                 });
@@ -941,6 +947,70 @@ mod tests {
         let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
         origins.sort();
         assert_eq!(origins, vec!["CRE", "EUS"]);
+    }
+
+    #[test]
+    fn departures_by_destination_crs_attaches_each_entrys_own_calling_point_arrival_not_the_schedules()
+     {
+        // The load-bearing distinction from destination_arrival/
+        // true_origin_crs: calling_point_arrival varies PER ENTRY. EUSTON
+        // is the schedule's Origin (no booked_arrival at all, by
+        // definition), so its entry's calling_point_arrival is None even
+        // though the schedule DOES have a real destination_arrival at
+        // MNCRPIC. CREWE is a genuine Intermediate stop with its own
+        // booked_arrival (09:58), distinct from both its own departure
+        // (10:05) and the schedule's destination_arrival (11:30).
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+                calling_point_with_both(
+                    "CREWE  ",
+                    CallingPointKind::Intermediate,
+                    "09:58",
+                    "10:05",
+                ),
+                calling_point_with_arrival("MNCRPIC", CallingPointKind::Terminate, "11:30"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        let manchester = &by_destination["MAN"];
+        let eus_entry = manchester
+            .iter()
+            .find(|d| d.origin_crs == "EUS")
+            .expect("EUS entry present");
+        assert_eq!(
+            eus_entry.calling_point_arrival, None,
+            "the schedule's true origin has no booked_arrival of its own"
+        );
+        assert_eq!(
+            eus_entry.destination_arrival,
+            Some(NaiveTime::from_hms_opt(11, 30, 0).unwrap()),
+            "destination_arrival is still the SCHEDULE's true-destination arrival, unaffected"
+        );
+
+        let cre_entry = manchester
+            .iter()
+            .find(|d| d.origin_crs == "CRE")
+            .expect("CRE entry present");
+        assert_eq!(
+            cre_entry.calling_point_arrival,
+            Some(NaiveTime::from_hms_opt(9, 58, 0).unwrap()),
+            "an intermediate calling point's own booked_arrival, NOT its departure (10:05) and \
+             NOT the schedule's destination_arrival (11:30)"
+        );
     }
 
     #[test]
