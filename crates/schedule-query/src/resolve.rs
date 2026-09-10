@@ -276,6 +276,7 @@ pub fn departures_by_crs(
                 .push(crate::records::ScheduleDeparture {
                     uid: resolved.uid.clone(),
                     scheduled: departure,
+                    day_offset: cp.day_offset,
                     destination_crs,
                 });
         }
@@ -667,6 +668,40 @@ mod tests {
 
         let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
         assert!(by_crs.is_empty());
+    }
+
+    #[test]
+    fn departures_by_crs_carries_each_calling_points_own_day_offset_through() {
+        // The exact real live-confirmed overnight working
+        // (`f49687_raw`, see its own doc comment) this whole day_offset
+        // fix targets: Liverpool Street 23:48 (day_offset 0) and Barking
+        // 00:06/00:07 (day_offset 1, the real next calendar day) both flow
+        // through `departures_by_crs` -- this is the exact bucket that
+        // backs `GET /public/stations/{crs}/schedule-departures`, the CIF
+        // fallback picker `TrackTrainForm.tsx::pickCifDeparture` reads.
+        // Before this fix, `ScheduleDeparture` had no `day_offset` field at
+        // all, so Barking's entry silently claimed "same day as
+        // Liverpool Street" on the wire.
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let now = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[
+            ("LIVST", "LST"),
+            ("STFD", "SRA"),
+            ("BARKING", "BKG"),
+            ("SHENFLD", "SNF"),
+        ]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(
+            by_crs["LST"][0].day_offset, 0,
+            "Liverpool Street 23:48 is still 2026-09-05"
+        );
+        assert_eq!(
+            by_crs["BKG"][0].day_offset, 1,
+            "Barking 00:06/00:07 is really 2026-09-06 -- the exact live-confirmed regression"
+        );
     }
 
     #[test]

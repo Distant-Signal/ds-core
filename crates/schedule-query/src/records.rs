@@ -206,6 +206,19 @@ impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
 pub struct ScheduleDeparture {
     pub uid: String,
     pub scheduled: NaiveTime,
+    /// The departing calling point's own [`CallingPoint::day_offset`] --
+    /// how many calendar days past `service_date` `scheduled` actually
+    /// falls on. Copied verbatim from the calling point this entry
+    /// represents (see [`crate::resolve::departures_by_crs`]), never
+    /// recomputed -- the exact same "copy, don't recompute" posture
+    /// [`DestinationDeparture::day_offset`] already documents for its own
+    /// sibling bucket. `#[serde(default)]` for the same deploy-in-flight/
+    /// pre-existing-row reason [`CallingPoint::day_offset`] documents: a
+    /// `schedule_network_departures` row published before this field
+    /// existed still deserializes, as `0` ("assume same day", the previous
+    /// -- buggy -- behavior).
+    #[serde(default)]
+    pub day_offset: u8,
     pub destination_crs: Option<String>,
 }
 
