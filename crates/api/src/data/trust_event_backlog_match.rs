@@ -401,6 +401,60 @@ pub async fn attempt_backlog_match(
     Ok(true)
 }
 
+/// The periodic backlog-match sweep's own entry point -- the fix for the
+/// gap this module's own top-level doc comment does NOT (and, until this
+/// function, never did) name: `attempt_backlog_match` above was, in
+/// production, only ever reached once, synchronously, from
+/// `routes::train::post_track` at pin-creation time. A pin created before
+/// the tracked train has departed sees an empty (or merely
+/// not-yet-relevant) `trust_event_backlog` at that single attempt, and
+/// `trust-consumer::matching::resolve_origin_departure`'s own live match
+/// only succeeds within `common::MATCH_TOLERANCE` of the pin's scheduled
+/// departure -- so a train that departs more than 20 minutes early or late
+/// (routine under disruption) has no path left to resolve at all, despite
+/// the exact backlog row a retry would match filling in over the next few
+/// hours as TRUST movements actually arrive. Mirrors
+/// `schedule_matching::run_schedule_match_sweep`'s own shape closely: same
+/// "list candidates, attempt each independently, one bad row logs and
+/// moves on, return the count matched" structure, same
+/// `train_tracking`-owned candidate query pattern.
+pub async fn run_backlog_match_sweep(pool: &PgPool) -> anyhow::Result<u64> {
+    let rows = train_tracking::list_pending_pins_for_backlog_match(pool).await?;
+    let mut matched = 0u64;
+    for row in rows {
+        let (Some(pin_origin_crs), Some(pin_scheduled_departure)) =
+            (row.pin_origin_crs.as_deref(), row.pin_scheduled_departure)
+        else {
+            tracing::warn!(
+                tracked_train_id = row.id,
+                "pending backlog pin missing origin CRS or scheduled departure; skipping \
+                 (list_pending_pins_for_backlog_match should have already excluded this row)"
+            );
+            continue;
+        };
+        match attempt_backlog_match(
+            pool,
+            row.id,
+            pin_origin_crs,
+            pin_scheduled_departure,
+            row.service_date,
+        )
+        .await
+        {
+            Ok(true) => matched += 1,
+            Ok(false) => {}
+            Err(err) => {
+                tracing::warn!(
+                    error = ?err,
+                    tracked_train_id = row.id,
+                    "backlog match attempt failed for this pin; will retry next sweep"
+                );
+            }
+        }
+    }
+    Ok(matched)
+}
+
 /// What a successful [`attempt_backlog_match_by_uid`] replay recovered.
 #[derive(Debug, Clone)]
 pub struct BacklogReplayOutcome {
@@ -823,6 +877,132 @@ mod db_tests {
         assert_eq!(miss, None);
 
         sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = 'TEST-FIND-BY-UID-TRAIN-ID'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// `run_backlog_match_sweep`'s own headline scenario, proven
+    /// end-to-end: the exact regression this sweep exists to fix. A pin is
+    /// created (and, per `routes::train::post_track`'s real sequencing,
+    /// `attempt_backlog_match` is tried once) BEFORE the matching backlog
+    /// row ever lands -- exactly what happens when a pin is created before
+    /// its train has departed, or when the live departure falls outside
+    /// `resolve_origin_departure`'s `MATCH_TOLERANCE` window and TRUST's
+    /// own backlog only fills in afterwards. That first attempt must fail
+    /// honestly (`Ok(false)`), leaving the pin `'pending'` with no retry
+    /// mechanism prior to this fix. Once the backlog row exists, a later
+    /// call to `run_backlog_match_sweep` -- exactly what `main.rs`'s
+    /// periodic loop performs -- must find and resolve it, proving the
+    /// sweep (not just `attempt_backlog_match` in isolation) closes this
+    /// gap.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                run_backlog_match_sweep_resolves_a_pin_the_backlog_had_nothing_for_at_creation_time \
+                -- --ignored --test-threads=1`"]
+    async fn run_backlog_match_sweep_resolves_a_pin_the_backlog_had_nothing_for_at_creation_time() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-SWEEP-E2E-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-sweep-e2e@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let service_date: chrono::NaiveDate = chrono::Utc::now().date_naive();
+        let scheduled: DateTime<Utc> = service_date
+            .and_hms_opt(18, 15, 0)
+            .expect("valid time")
+            .and_utc();
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        // Step 1: the pin-creation-time attempt, before any backlog data
+        // exists -- must honestly fail and leave the pin 'pending', same as
+        // `no_matching_backlog_rows_leaves_the_pin_untouched` above.
+        let first_attempt =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+                .await
+                .expect("first attempt_backlog_match, before any backlog data exists");
+        assert!(
+            !first_attempt,
+            "no backlog row exists yet; the pin-creation-time attempt must honestly fail"
+        );
+
+        // Step 2: the delayed/early departure's TRUST movement now lands in
+        // the backlog, minutes to hours later -- exactly what the real
+        // trust-backlog-consumer does continuously.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4), \
+                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'LATE', $7)",
+        )
+        .bind("TEST-BACKLOG-SWEEP-E2E-UID")
+        .bind("TEST-BACKLOG-SWEEP-E2E-TRAIN-ID")
+        .bind(service_date)
+        .bind("test-backlog-sweep-e2e-dedup-activation")
+        .bind("EUS")
+        .bind(scheduled)
+        .bind("test-backlog-sweep-e2e-dedup-movement")
+        .execute(&pool)
+        .await
+        .expect("seed backlog rows arriving after pin creation");
+
+        // Step 3: the periodic sweep -- not a second direct call to
+        // attempt_backlog_match -- is what must find and resolve it now.
+        let matched = run_backlog_match_sweep(&pool)
+            .await
+            .expect("run_backlog_match_sweep");
+        assert!(
+            matched >= 1,
+            "at least this fixture's pin must be matched by the sweep"
+        );
+
+        let resolution_status: String =
+            sqlx::query_scalar("SELECT resolution_status FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back resolution_status");
+        assert_eq!(
+            resolution_status, "resolved",
+            "the sweep must resolve a pin the backlog had nothing for at pin-creation time, \
+             once the matching backlog row later exists"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id = 'TEST-BACKLOG-SWEEP-E2E-TRAIN-ID'",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-BACKLOG-SWEEP-E2E-UID'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
             .execute(&pool)
             .await
             .ok();
