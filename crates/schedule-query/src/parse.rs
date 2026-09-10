@@ -179,6 +179,13 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
         booked_departure,
         is_half_minute_arrival,
         is_half_minute_departure,
+        // Always 0 here: a single BS(+BX)/LO/LI*/LT block is decoded in
+        // isolation and has no reason to own cross-calling-point
+        // day-rollover bookkeeping. The real value is computed once, over
+        // the WINNING resolved schedule's whole calling-point sequence, by
+        // `crate::resolve::assign_day_offsets` -- see `CallingPoint::day_offset`'s
+        // own doc comment.
+        day_offset: 0,
     })
 }
 

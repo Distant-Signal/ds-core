@@ -29,6 +29,54 @@ pub struct ResolvedSchedule {
     pub calling_points: Vec<CallingPoint>,
 }
 
+/// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
+/// walking them in schedule order and incrementing a running offset every
+/// time a calling point's own time regresses against the previous one --
+/// the standard CIF convention for a bare `HH:MM` time with no day marker
+/// of its own (this module's own doc comment; see
+/// [`CallingPoint::day_offset`] for the real live-confirmed example this
+/// fixes).
+///
+/// Per calling point, the EARLIEST time it carries (`booked_arrival` if
+/// present, else `booked_departure`) is compared against the LATEST time
+/// the previous calling point carried (`booked_departure` if present, else
+/// `booked_arrival`) -- so a same-stop arrival/departure pair is only ever
+/// compared against its own NEIGHBORS, never against itself. A regression
+/// increments the running offset by exactly one and every subsequent
+/// calling point inherits it (compounding again on a further regression,
+/// e.g. a schedule that crosses two midnights) -- it never decrements,
+/// since a real schedule's calling points are always chronological once
+/// day-of-week is fixed.
+///
+/// **Known, accepted limitation** (same posture as this crate's other
+/// documented rare-edge-case gaps, e.g. `match_pin`'s tie-break): a single
+/// calling point that itself dwells across midnight (arrival 23:59,
+/// departure 00:05 at the SAME stop) still gets only one `day_offset` for
+/// both fields, so its `booked_departure` would be mis-dated by this
+/// scheme alone. Not fixed here -- no real CIF calling point this deep
+/// dive found actually does this (a stop dwelling into the next calendar
+/// day), and modeling two independent day offsets per calling point would
+/// double `CallingPoint`'s footprint for a case with no known real
+/// instance.
+fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
+    let mut offset: u8 = 0;
+    let mut last_time: Option<NaiveTime> = None;
+
+    for cp in calling_points.iter_mut() {
+        let first_time = cp.booked_arrival.or(cp.booked_departure);
+        if let (Some(last), Some(first)) = (last_time, first_time)
+            && first < last
+        {
+            offset += 1;
+        }
+        cp.day_offset = offset;
+
+        if let Some(latest) = cp.booked_departure.or(cp.booked_arrival) {
+            last_time = Some(latest);
+        }
+    }
+}
+
 /// Resolves `uid`'s schedule for `date` out of `raw`: filters to records
 /// matching `uid` whose date range (`date_from..=date_to`) and
 /// days-of-week bitmask cover `date`, then picks the one with the lowest
@@ -39,6 +87,13 @@ pub struct ResolvedSchedule {
 /// Returns `None` if no record in `raw` covers `uid`/`date` at all.
 /// Returns `Some` with `cancelled: true` and empty `calling_points` when
 /// the winning record's indicator is [`StpIndicator::Cancellation`].
+///
+/// The non-cancelled `calling_points` returned here always have
+/// [`CallingPoint::day_offset`] freshly computed via [`assign_day_offsets`],
+/// regardless of whatever placeholder value `winner.calling_points` carried
+/// (the parser always writes `0` -- see that field's own doc comment) --
+/// this is the one place that computation happens, exactly once per
+/// resolved `(uid, date)`.
 pub fn resolve_for_date(
     raw: &[RawSchedule],
     uid: &str,
@@ -57,15 +112,18 @@ pub fn resolve_for_date(
         .min_by_key(|schedule| schedule.basic.stp_indicator)?;
 
     let cancelled = winner.basic.stp_indicator == StpIndicator::Cancellation;
+    let calling_points = if cancelled {
+        Vec::new()
+    } else {
+        let mut calling_points = winner.calling_points.clone();
+        assign_day_offsets(&mut calling_points);
+        calling_points
+    };
     Some(ResolvedSchedule {
         uid: winner.basic.uid.clone(),
         stp_indicator: winner.basic.stp_indicator,
         cancelled,
-        calling_points: if cancelled {
-            Vec::new()
-        } else {
-            winner.calling_points.clone()
-        },
+        calling_points,
     })
 }
 
@@ -116,12 +174,23 @@ pub fn schedules_touching(
 ///
 /// `None` if nothing in `population` has any calling point at any of
 /// `crs_tiplocs` within `tolerance` of `scheduled`.
+///
+/// `to_utc`'s second parameter is the candidate calling point's own
+/// [`CallingPoint::day_offset`] -- REQUIRED, not optional, because
+/// `population`'s entries span every calling point of every schedule, not
+/// just each schedule's origin, and a real overnight service's later
+/// calling points fall on the calendar day AFTER the schedule's own
+/// `service_date` (see that field's own doc comment for the live-confirmed
+/// example). A caller building `to_utc` around
+/// `eta_blend::london_to_utc(service_date.and_time(t))` must add
+/// `day_offset` days to `service_date` first -- ignoring this parameter
+/// reproduces exactly the bug this signature exists to prevent.
 pub fn match_pin<'a>(
     population: &'a [LinePopulationEntry],
     crs_tiplocs: &[&str],
     scheduled: DateTime<Utc>,
     tolerance: Duration,
-    to_utc: impl Fn(NaiveTime) -> Option<DateTime<Utc>>,
+    to_utc: impl Fn(NaiveTime, u8) -> Option<DateTime<Utc>>,
 ) -> Option<&'a LinePopulationEntry> {
     let normalized_targets: Vec<&str> = crs_tiplocs.iter().map(|t| normalize_tiploc(t)).collect();
 
@@ -134,7 +203,7 @@ pub fn match_pin<'a>(
             let Some(booked) = cp.booked_departure else {
                 continue;
             };
-            let Some(candidate_utc) = to_utc(booked) else {
+            let Some(candidate_utc) = to_utc(booked, cp.day_offset) else {
                 continue;
             };
             let delta = (scheduled - candidate_utc).abs();
@@ -318,6 +387,7 @@ pub fn departures_by_destination_crs(
                     uid: resolved.uid.clone(),
                     origin_crs: origin_crs.clone(),
                     scheduled: departure,
+                    day_offset: cp.day_offset,
                     true_origin_crs: true_origin_crs.clone(),
                     destination_arrival,
                 });
@@ -394,6 +464,7 @@ mod tests {
             booked_departure: None,
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
+            day_offset: 0,
         }
     }
 
@@ -409,6 +480,7 @@ mod tests {
             booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
+            day_offset: 0,
         }
     }
 
@@ -424,6 +496,24 @@ mod tests {
             booked_departure: None,
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
+            day_offset: 0,
+        }
+    }
+
+    fn calling_point_with_both(
+        tiploc: &str,
+        kind: CallingPointKind,
+        arrival: &str,
+        departure: &str,
+    ) -> CallingPoint {
+        CallingPoint {
+            tiploc: tiploc.to_string(),
+            kind,
+            booked_arrival: Some(NaiveTime::parse_from_str(arrival, "%H:%M").unwrap()),
+            booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
+            is_half_minute_arrival: false,
+            is_half_minute_departure: false,
+            day_offset: 0,
         }
     }
 
@@ -436,6 +526,7 @@ mod tests {
 
     const WEEKDAYS: [bool; 7] = [true, true, true, true, true, false, false];
     const MONDAY_ONLY: [bool; 7] = [true, false, false, false, false, false, false];
+    const ALL_DAYS: [bool; 7] = [true, true, true, true, true, true, true];
 
     // Real UID/STP/date-range/days values, transcribed from the findings
     // doc's own (paraphrased, not raw-byte) real Bank Holiday cross-check
@@ -727,7 +818,8 @@ mod tests {
     }
 
     #[test]
-    fn departures_by_destination_crs_buckets_every_departure_bearing_calling_point_under_one_destination() {
+    fn departures_by_destination_crs_buckets_every_departure_bearing_calling_point_under_one_destination()
+     {
         // The load-bearing difference from departures_by_crs: a train from
         // EUSTON to MNCRPIC calling at CREWE contributes TWO entries to the
         // SAME (MAN) bucket -- "next train to Manchester from anywhere"
@@ -765,7 +857,7 @@ mod tests {
 
     #[test]
     fn departures_by_destination_crs_attaches_the_schedules_true_origin_to_every_one_of_its_entries()
-    {
+     {
         // The load-bearing distinction from `origin_crs`: EVERY entry of
         // this schedule carries the SAME true_origin_crs (EUS), even the
         // entry whose own origin_crs (the calling point it represents) is
@@ -803,7 +895,7 @@ mod tests {
 
     #[test]
     fn departures_by_destination_crs_keeps_a_row_with_true_origin_crs_none_when_the_schedules_first_calling_point_is_unresolved()
-    {
+     {
         // Contrast with departures_by_destination_crs_drops_a_schedule_whose_destination_tiploc_is_unresolved
         // (a bucket-KEY unresolved -> drop the whole schedule). true_origin_crs
         // is a plain FILTER field, so it follows departures_by_crs's own
@@ -876,7 +968,8 @@ mod tests {
     }
 
     #[test]
-    fn departures_by_destination_crs_excludes_a_cancelled_schedule_even_though_its_time_has_not_passed() {
+    fn departures_by_destination_crs_excludes_a_cancelled_schedule_even_though_its_time_has_not_passed()
+     {
         // Real UID/STP/date-range/days values (a base P pattern plus a real
         // STP=C override on 2026-08-31), reusing this module's own
         // c11052_with_departures fixture and its Bank Holiday cross-check.
@@ -1104,14 +1197,17 @@ mod tests {
 
     // Identity closure: every test below constructs `booked_departure` values
     // already meant to be read as UTC instants directly, so `to_utc` just
-    // pairs a bare NaiveTime with a fixed date -- exercising `match_pin`'s
-    // arithmetic without pulling in a real Europe/London conversion (that's
-    // `eta_blend::london_to_utc`'s own, separately-tested job).
-    fn utc_on(date: &str) -> impl Fn(NaiveTime) -> Option<DateTime<Utc>> {
+    // pairs a bare NaiveTime (shifted by `day_offset` days past the fixed
+    // date) -- exercising `match_pin`'s arithmetic without pulling in a real
+    // Europe/London conversion (that's `eta_blend::london_to_utc`'s own,
+    // separately-tested job). Takes `day_offset` as its second parameter,
+    // exactly like the real `to_utc` closures `schedule_matching::find_schedule_match`
+    // and `eta_blend`/`journey` build around `london_to_utc`.
+    fn utc_on(date: &str) -> impl Fn(NaiveTime, u8) -> Option<DateTime<Utc>> {
         let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
-        move |t| {
+        move |t, day_offset| {
             Some(DateTime::<Utc>::from_naive_utc_and_offset(
-                date.and_time(t),
+                (date + Duration::days(day_offset as i64)).and_time(t),
                 Utc,
             ))
         }
@@ -1284,8 +1380,198 @@ mod tests {
             &["EUSTON"],
             scheduled,
             Duration::minutes(20),
-            |_| None,
+            |_, _| None,
         );
         assert_eq!(matched, None);
+    }
+
+    #[test]
+    fn match_pin_passes_each_calling_points_own_day_offset_to_to_utc() {
+        // The exact shape of the live-confirmed midnight-crossing bug
+        // (2026-09-09 investigation, c2c UID F49687): a calling point whose
+        // `day_offset` is 1 (i.e. really the day AFTER the schedule's own
+        // `service_date`) must have that offset handed to `to_utc`, not
+        // silently dropped. `to_utc` here (`utc_on`) adds `day_offset` days
+        // to its fixed base date before pairing it with the time -- so a
+        // pin timed for the REAL next-calendar-day instant only matches
+        // when this plumbing is correct.
+        let population = vec![population_entry(
+            "F49687",
+            vec![CallingPoint {
+                tiploc: "BARKING".to_string(),
+                kind: CallingPointKind::Intermediate,
+                booked_arrival: NaiveTime::from_hms_opt(0, 6, 0),
+                booked_departure: NaiveTime::from_hms_opt(0, 7, 0),
+                is_half_minute_arrival: false,
+                is_half_minute_departure: false,
+                day_offset: 1,
+            }],
+        )];
+        // service_date is 2026-09-05, but Barking's real booked_departure
+        // (00:07, day_offset 1) is really 2026-09-06 00:07.
+        let scheduled: DateTime<Utc> = "2026-09-06T00:07:00Z".parse().unwrap();
+        let matched = match_pin(
+            &population,
+            &["BARKING"],
+            scheduled,
+            Duration::minutes(1),
+            utc_on("2026-09-05"),
+        );
+        assert_eq!(
+            matched.map(|e| e.uid.as_str()),
+            Some("F49687"),
+            "day_offset must shift the base date forward, or this pin (dated the REAL next \
+             calendar day) can never match a candidate still stamped with the schedule's own \
+             service_date"
+        );
+
+        // The old, buggy behavior: ignoring day_offset and treating Barking's
+        // 00:07 as if it were still 2026-09-05T00:07Z leaves no candidate
+        // within tolerance of the real 2026-09-06T00:07Z pin.
+        let stuck_on_service_date = |t: NaiveTime, _day_offset: u8| {
+            Some(DateTime::<Utc>::from_naive_utc_and_offset(
+                NaiveDate::from_ymd_opt(2026, 9, 5).unwrap().and_time(t),
+                Utc,
+            ))
+        };
+        assert_eq!(
+            match_pin(
+                &population,
+                &["BARKING"],
+                scheduled,
+                Duration::minutes(1),
+                stuck_on_service_date,
+            ),
+            None,
+            "sanity check: ignoring day_offset really does reproduce the reported bug"
+        );
+    }
+
+    // ---- assign_day_offsets / resolve_for_date day-offset tests ----
+
+    /// The real live-confirmed c2c overnight working (2026-09-09
+    /// investigation), UID F49687, service_date 2026-09-05: Liverpool
+    /// Street 23:48 -> Stratford 23:54/23:55 -> Barking 00:06/00:07 ->
+    /// Shoeburyness 01:01. Every stop from Barking onward is really
+    /// 2026-09-06 wall-clock.
+    fn f49687_raw() -> Vec<RawSchedule> {
+        vec![RawSchedule {
+            basic: basic(
+                "F49687",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                ALL_DAYS, // 2026-09-05, this test's own date, is a Saturday
+            ),
+            calling_points: vec![
+                calling_point_with_departure("LIVST  ", CallingPointKind::Origin, "23:48"),
+                calling_point_with_both(
+                    "STFD   ",
+                    CallingPointKind::Intermediate,
+                    "23:54",
+                    "23:55",
+                ),
+                calling_point_with_both(
+                    "BARKING",
+                    CallingPointKind::Intermediate,
+                    "00:06",
+                    "00:07",
+                ),
+                calling_point_with_arrival("SHENFLD", CallingPointKind::Terminate, "01:01"),
+            ],
+        }]
+    }
+
+    #[test]
+    fn assign_day_offsets_leaves_a_same_day_schedule_entirely_at_zero() {
+        let index = ScheduleIndex::build(c11052_with_departures());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let resolved = index.schedule_for_uid("C11052", date).unwrap();
+        assert!(resolved.calling_points.iter().all(|cp| cp.day_offset == 0));
+    }
+
+    #[test]
+    fn resolve_for_date_assigns_day_offset_zero_before_and_one_at_and_after_the_midnight_crossing()
+    {
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let resolved = index.schedule_for_uid("F49687", date).unwrap();
+
+        assert_eq!(resolved.calling_points.len(), 4);
+        assert_eq!(
+            resolved.calling_points[0].day_offset, 0,
+            "Liverpool Street 23:48 is still 2026-09-05"
+        );
+        assert_eq!(
+            resolved.calling_points[1].day_offset, 0,
+            "Stratford 23:54/23:55 is still 2026-09-05"
+        );
+        assert_eq!(
+            resolved.calling_points[2].day_offset, 1,
+            "Barking 00:06/00:07 is really 2026-09-06 -- the exact live-confirmed regression"
+        );
+        assert_eq!(
+            resolved.calling_points[3].day_offset, 1,
+            "Shenfield 01:01 stays on the crossed-into day, not a second crossing"
+        );
+    }
+
+    #[test]
+    fn resolve_for_date_assigns_a_second_day_offset_increment_on_a_second_midnight_crossing() {
+        // Synthetic (no real 2-midnight CIF service confirmed live), but a
+        // schedule can in principle cross midnight twice; the algorithm
+        // must not cap at 1.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "Z00000",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                ALL_DAYS, // 2026-09-05, this test's own date, is a Saturday
+            ),
+            calling_points: vec![
+                calling_point_with_departure("AAA    ", CallingPointKind::Origin, "23:00"),
+                calling_point_with_both(
+                    "BBB    ",
+                    CallingPointKind::Intermediate,
+                    "01:00",
+                    "23:30",
+                ),
+                calling_point_with_arrival("CCC    ", CallingPointKind::Terminate, "00:30"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let resolved = index.schedule_for_uid("Z00000", date).unwrap();
+
+        assert_eq!(resolved.calling_points[0].day_offset, 0);
+        assert_eq!(
+            resolved.calling_points[1].day_offset, 1,
+            "01:00 < 23:00 -- first crossing"
+        );
+        assert_eq!(
+            resolved.calling_points[2].day_offset, 2,
+            "00:30 < 23:30 -- second crossing"
+        );
+    }
+
+    #[test]
+    fn schedules_touching_carries_the_computed_day_offset_through_to_the_published_line_population()
+    {
+        // Line-population publishing (schedule-reference's own
+        // publish_schedule_line_population) goes through schedules_touching,
+        // not schedule_for_uid directly -- this proves that path also
+        // carries day_offset, since LinePopulationEntry::from(ResolvedSchedule)
+        // just moves calling_points verbatim.
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let touching = schedules_touching(&index, &["BARKING"], date);
+        assert_eq!(touching.len(), 1);
+        let barking = touching[0]
+            .calling_points
+            .iter()
+            .find(|cp| normalize_tiploc(&cp.tiploc) == "BARKING")
+            .unwrap();
+        assert_eq!(barking.day_offset, 1);
     }
 }

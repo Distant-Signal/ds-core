@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use common::LineDefinition;
 use schedule_query::LinePopulationEntry;
 use serde::Serialize;
@@ -68,6 +68,13 @@ struct ScheduleCallingPointDto {
     booked_departure: Option<chrono::NaiveTime>,
     is_half_minute_arrival: bool,
     is_half_minute_departure: bool,
+    /// Carried through verbatim from `schedule_query::CallingPoint::day_offset`
+    /// -- see that field's own doc comment. Stored on `trains.calling_points`
+    /// so `journey::JourneyStop::from_calling_point` (the only reader of
+    /// this JSONB blob) can correctly date a post-midnight calling point of
+    /// an overnight schedule instead of unconditionally stamping every stop
+    /// with the schedule's own `service_date`.
+    day_offset: u8,
 }
 
 impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
@@ -79,6 +86,7 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
             booked_departure: cp.booked_departure,
             is_half_minute_arrival: cp.is_half_minute_arrival,
             is_half_minute_departure: cp.is_half_minute_departure,
+            day_offset: cp.day_offset,
         }
     }
 }
@@ -198,7 +206,18 @@ async fn find_schedule_match(
             &tiplocs,
             pin_scheduled_departure,
             common::MATCH_TOLERANCE,
-            |t| london_to_utc(service_date.and_time(t)),
+            // day_offset (see `schedule_query::CallingPoint::day_offset`)
+            // shifts the base date forward for a calling point that falls
+            // on a calendar day AFTER the schedule's own `service_date` --
+            // required for a real overnight service (2026-09-09
+            // investigation: c2c UID F49687 crosses midnight between
+            // Stratford and Barking). Without this, every calling point
+            // after a midnight crossing matched against the WRONG day,
+            // permanently stuck "Waiting to hear from Network Rail" for any
+            // pin on one of them.
+            |t, day_offset| {
+                london_to_utc((service_date + Duration::days(day_offset as i64)).and_time(t))
+            },
         ) else {
             continue;
         };
@@ -588,6 +607,152 @@ mod db_tests {
             .expect("cleanup user");
     }
 
+    /// The exact live-confirmed midnight-crossing bug (2026-09-09
+    /// investigation: c2c UID F49687, service_date 2026-09-05, Liverpool
+    /// Street 23:48 -> Stratford 23:54/55 -> Barking 00:06/00:07 -> ... ->
+    /// Shoeburyness 01:01 -- every calling point from Barking onward is
+    /// really 2026-09-06 wall-clock), reproduced end to end through
+    /// `attempt_schedule_match`: a pin dated with Barking's REAL actual
+    /// calendar day (2026-09-06) must schedule-match against a population
+    /// entry whose Barking calling point carries `day_offset: 1` relative
+    /// to the schedule's own `service_date` (2026-09-05). Before this fix,
+    /// `find_schedule_match`'s `to_utc` closure ignored `day_offset`
+    /// entirely, so this pin -- correctly dated a full day after
+    /// `service_date` -- would never land within `MATCH_TOLERANCE` of a
+    /// candidate silently mis-stamped a day earlier, permanently stuck
+    /// "Waiting to hear from Network Rail".
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_matches_a_post_midnight_calling_point_via_its_day_offset() {
+        let pool = connect().await;
+        let user_id = "TEST-SCHEDULE-MATCH-MIDNIGHT";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("schedule-match-midnight@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-BKG-STANOX', 'ZBK', 'BARKING', 'BARKING', 1) \
+             ON CONFLICT (stanox) DO NOTHING",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let population = serde_json::json!([{
+            "uid": "TEST-F49687",
+            "calling_points": [
+                {
+                    "tiploc": "LIVST  ",
+                    "kind": "Origin",
+                    "booked_arrival": null,
+                    "booked_departure": "23:48:00",
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 0
+                },
+                {
+                    "tiploc": "BARKING",
+                    "kind": "Intermediate",
+                    "booked_arrival": "00:06:00",
+                    "booked_departure": "00:07:00",
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 1
+                }
+            ]
+        }]);
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-c2c-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(&population)
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        // Barking's REAL booked_departure is 2026-09-06 00:07 Europe/London
+        // (BST) = 2026-09-05T23:07:00Z -- a full calendar day after the
+        // schedule's own service_date (2026-09-05), which is exactly what
+        // day_offset: 1 says. The pin is dated with this REAL, correct
+        // instant, as a genuine tracked-train pin would be.
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-06T00:07:00+01:00".parse().unwrap();
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("ZBK")
+        .bind(scheduled_departure)
+        .fetch_one(&pool)
+        .await
+        .expect("seed fixture tracked_trains row");
+
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("ZBK".to_string(), vec!["test-c2c-line".to_string()]);
+
+        let matched = attempt_schedule_match(
+            &pool,
+            tracked_train_id,
+            "ZBK",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt schedule match");
+        assert!(
+            matched,
+            "a pin correctly dated on Barking's REAL calendar day must schedule-match against \
+             TEST-F49687's day_offset: 1 calling point"
+        );
+
+        let state = train_tracking::get_by_tracking_id(&pool, tracked_train_id)
+            .await
+            .expect("read tracked train")
+            .expect("tracked train exists");
+        assert_eq!(state.resolution_status, "schedule_matched");
+        assert_eq!(state.train_uid, Some("TEST-F49687".to_string()));
+
+        sqlx::query("DELETE FROM schedule_line_population WHERE line_id = 'test-c2c-line' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .expect("cleanup population");
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-BKG-STANOX'")
+            .execute(&pool)
+            .await
+            .expect("cleanup stanox_crs");
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup tracked_trains");
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-F49687' AND service_date = $1")
+            .bind(service_date)
+            .execute(&pool)
+            .await
+            .expect("cleanup trains");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup user");
+    }
+
     fn fixture_line_with_no_toml_tiploc(id: &str, crs: &str) -> LineDefinition {
         LineDefinition {
             id: id.to_string(),
@@ -629,7 +794,7 @@ mod db_tests {
                 DATABASE_URL incantation, then run with `cargo test -p api \
                 attempt_schedule_match -- --ignored --test-threads=1`"]
     async fn attempt_schedule_match_matches_a_station_with_no_toml_tiploc_via_real_stanox_crs_data()
-     {
+    {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-NO-TOML-TIPLOC";
         sqlx::query(

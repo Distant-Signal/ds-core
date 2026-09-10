@@ -1,0 +1,24 @@
+-- Fixes the midnight-crossing service_date bug for the journey-timetable
+-- fallback source: a real overnight service's calling points AFTER a
+-- midnight crossing were unconditionally stamped with the schedule's own
+-- `service_date`, producing a `scheduled_departure` a full day in the past
+-- (live-confirmed: c2c UID F49687, service_date 2026-09-05, Barking's real
+-- 2026-09-06 00:07 departure was rendered as 2026-09-05T00:07).
+--
+-- `day_offset` mirrors `schedule_query::CallingPoint::day_offset` /
+-- `schedule_query::DestinationDeparture::day_offset` -- how many calendar
+-- days past `service_date` this row's `scheduled` time actually falls on,
+-- computed once by `schedule_query::resolve::assign_day_offsets` and
+-- carried through verbatim to this row by `schedule-reference`'s
+-- `schedule_destination_departures_rows`.
+--
+-- NOT NULL DEFAULT 0: every existing row (published before this column
+-- existed) is retroactively treated as "same day as service_date" -- the
+-- previous, buggy behavior for those rows, but a safe, non-panicking
+-- default rather than leaving the column nullable. `schedule-reference`
+-- republishes this whole table on every CIF delivery (roughly daily; see
+-- `upsert_schedule_destination_departures`'s own "wholesale replace"
+-- doc comment), so every row gets a real, correctly-computed `day_offset`
+-- again within one delivery cycle regardless of this default.
+ALTER TABLE schedule_destination_departures
+    ADD COLUMN day_offset SMALLINT NOT NULL DEFAULT 0;

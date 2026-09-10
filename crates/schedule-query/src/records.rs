@@ -142,6 +142,28 @@ pub struct CallingPoint {
     pub booked_departure: Option<NaiveTime>,
     pub is_half_minute_arrival: bool,
     pub is_half_minute_departure: bool,
+    /// How many calendar days past the SCHEDULE'S OWN `service_date`
+    /// (never past this calling point's own local midnight -- there is no
+    /// such concept here) this calling point's `booked_arrival`/
+    /// `booked_departure` actually fall on. CIF times are bare `HH:MM` with
+    /// no day marker of their own; a real overnight service (e.g. a real
+    /// c2c Liverpool Street -> Shoeburyness working confirmed live on
+    /// 2026-09-05, UID `F49687`: `23:48` at Liverpool Street, `23:54/23:55`
+    /// at Stratford, then `00:06/00:07` at Barking and `01:01` at
+    /// Shoeburyness) genuinely crosses midnight mid-schedule, so every
+    /// calling point from Barking onward is really the NEXT calendar day.
+    /// Set once, for every non-cancelled resolved schedule, by
+    /// [`crate::resolve::assign_day_offsets`] -- NOT by this crate's parser
+    /// (`crate::parse::parse_calling_point`), which only ever writes `0`
+    /// here, since a single `BS`(+`BX`)/`LO`/`LI`*/`LT` block is decoded in
+    /// isolation and has no reason to own this cross-calling-point
+    /// bookkeeping itself; see that resolver's own doc comment for the
+    /// algorithm. `#[serde(default)]` so a `schedule_line_population`/
+    /// `trains.calling_points` JSONB blob published before this field
+    /// existed still deserializes (as `0`, i.e. "assume same day", the
+    /// previous -- buggy -- behavior, never a hard failure).
+    #[serde(default)]
+    pub day_offset: u8,
 }
 
 /// One UID's resolved calling points, as published over the wire between
@@ -228,6 +250,15 @@ pub struct DestinationDeparture {
     pub uid: String,
     pub origin_crs: String,
     pub scheduled: NaiveTime,
+    /// The departing calling point's own [`CallingPoint::day_offset`] --
+    /// i.e. how many calendar days past `service_date` `scheduled` actually
+    /// falls on. Copied verbatim from the calling point this entry
+    /// represents (see [`crate::resolve::departures_by_destination_crs`]),
+    /// never recomputed. `#[serde(default)]` for the same
+    /// deploy-in-flight/pre-existing-row reason [`CallingPoint::day_offset`]
+    /// documents.
+    #[serde(default)]
+    pub day_offset: u8,
     pub true_origin_crs: Option<String>,
     /// `destination_arrival` is the schedule's REAL final calling point's
     /// (the `Terminate` one) `booked_arrival` -- the mirror of
@@ -276,6 +307,7 @@ mod tests {
                 booked_departure: chrono::NaiveTime::from_hms_opt(8, 22, 0),
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
+                day_offset: 0,
             }],
         };
         let entry: LinePopulationEntry = resolved.clone().into();
