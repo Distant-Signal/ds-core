@@ -371,6 +371,20 @@ pub fn departures_by_destination_crs(
             .calling_points
             .last()
             .and_then(|last| last.booked_arrival);
+        // The terminating calling point's OWN day_offset -- already
+        // computed for every calling point (including the last one) by
+        // `assign_day_offsets` inside `resolve_for_date`, just not
+        // previously read for this purpose. Deliberately NOT this row's
+        // own `cp.day_offset` below, which describes the DEPARTING calling
+        // point -- a real overnight schedule's departure and terminus can
+        // genuinely be on two different calendar days (see
+        // `DestinationDeparture::destination_arrival_day_offset`'s own doc
+        // comment).
+        let destination_arrival_day_offset = resolved
+            .calling_points
+            .last()
+            .map(|last| last.day_offset)
+            .unwrap_or(0);
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -391,6 +405,7 @@ pub fn departures_by_destination_crs(
                     day_offset: cp.day_offset,
                     true_origin_crs: true_origin_crs.clone(),
                     destination_arrival,
+                    destination_arrival_day_offset,
                 });
         }
     }
@@ -1156,6 +1171,63 @@ mod tests {
                 "every entry for this schedule must carry the SAME terminating arrival time"
             );
         }
+    }
+
+    #[test]
+    fn departures_by_destination_crs_attaches_the_terminating_calling_points_own_day_offset_distinct_from_the_departures()
+     {
+        // The exact real live-confirmed overnight working (`f49687_raw`,
+        // see its own doc comment) this fix targets: Liverpool Street
+        // departs on `service_date` itself (day_offset 0), but the
+        // terminating calling point (Shenfield) is really the day AFTER
+        // `service_date` (day_offset 1) -- `destination_arrival_day_offset`
+        // must reflect the TERMINATING calling point's own day_offset, not
+        // be copied from the departing calling point's, and the two must
+        // genuinely differ on this row. Before this fix,
+        // `DestinationDeparture` had no `destination_arrival_day_offset`
+        // field at all, so a real overnight schedule's `destination_arrival`
+        // silently had no day of its own on the wire.
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let now = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[
+            ("LIVST", "LST"),
+            ("STFD", "SRA"),
+            ("BARKING", "BKG"),
+            ("SHENFLD", "SNF"),
+        ]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+
+        let snf = &by_destination["SNF"];
+        let livst_entry = snf
+            .iter()
+            .find(|e| e.origin_crs == "LST")
+            .expect("Liverpool Street's own departure entry");
+        assert_eq!(
+            livst_entry.day_offset, 0,
+            "Liverpool Street 23:48 is still 2026-09-05"
+        );
+        assert_eq!(
+            livst_entry.destination_arrival_day_offset, 1,
+            "Shenfield's terminating calling point is really 2026-09-06"
+        );
+        assert_ne!(
+            livst_entry.day_offset, livst_entry.destination_arrival_day_offset,
+            "the departure's own day_offset and the terminus's day_offset are two DIFFERENT \
+             calling points on a genuine overnight schedule -- they must not collapse to the \
+             same value"
+        );
+
+        let barking_entry = snf
+            .iter()
+            .find(|e| e.origin_crs == "BKG")
+            .expect("Barking's own departure entry");
+        assert_eq!(
+            barking_entry.destination_arrival_day_offset, 1,
+            "every entry for this schedule carries the SAME terminating day_offset, regardless \
+             of which calling point it represents"
+        );
     }
 
     #[test]

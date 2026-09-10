@@ -288,6 +288,28 @@ pub struct DestinationDeparture {
     /// which only applies when `destination` is also set -- see
     /// docs/superpowers/specs/2026-09-08-destination-arrival-time-filter-design.md.
     pub destination_arrival: Option<NaiveTime>,
+    /// How many calendar days past `service_date` `destination_arrival`
+    /// actually falls on -- the TERMINATING calling point's own
+    /// [`CallingPoint::day_offset`], read via `resolved.calling_points.last()`
+    /// exactly like `destination_arrival` itself, NOT copied from this row's
+    /// own [`day_offset`](Self::day_offset) above (that field describes the
+    /// DEPARTING calling point this row represents, a different calling
+    /// point on a genuine overnight schedule -- see
+    /// [`crate::resolve::assign_day_offsets`]'s own doc comment for the
+    /// live-confirmed c2c UID `F49687` example both fields ultimately trace
+    /// back to). Computed once per schedule and IDENTICAL across every
+    /// entry that schedule contributes, exactly like `destination_arrival`.
+    /// NOT guaranteed to be `0` when `destination_arrival` itself is `None`:
+    /// this is still the terminating calling point's own `day_offset` from
+    /// `assign_day_offsets`, which reflects whichever day that stop is
+    /// genuinely on regardless of whether it has a `booked_arrival`/
+    /// `booked_departure` recorded at all -- a terminus with no arrival time
+    /// that sits after an earlier midnight crossing in the same schedule
+    /// still carries that crossing's nonzero offset. Added after
+    /// `destination_arrival` itself shipped with no day-offset of its own --
+    /// the same architectural gap `day_offset` above was added to close on
+    /// the DEPARTURE side.
+    pub destination_arrival_day_offset: u8,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.

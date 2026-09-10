@@ -1,0 +1,29 @@
+-- Closes the exact same architectural gap the prior migration
+-- (20260909160000_schedule_destination_departures_day_offset.sql) closed for
+-- the DEPARTURE side, but for `destination_arrival` instead.
+--
+-- `destination_arrival` (added by
+-- 20260908130000_schedule_destination_departures_destination_arrival.sql) is
+-- the schedule's TERMINATING calling point's own `booked_arrival` -- a bare
+-- `TIME` with no day marker of its own. This row's existing `day_offset`
+-- column describes the DEPARTING calling point this row represents, not the
+-- terminating one: on a genuine overnight schedule (live-confirmed: c2c UID
+-- F49687, service_date 2026-09-05, Liverpool Street 23:48 -> ... ->
+-- Shenfield 01:01) the departure and the terminus can be on two different
+-- calendar days, and only the departure's offset was previously captured.
+--
+-- `destination_arrival_day_offset` mirrors
+-- `schedule_query::DestinationDeparture::destination_arrival_day_offset` --
+-- the TERMINATING calling point's own `day_offset`, computed once by
+-- `schedule_query::resolve::assign_day_offsets` (already computes this for
+-- EVERY calling point, including the last one) and carried through verbatim
+-- by `schedule-reference`'s `schedule_destination_departures_rows`.
+--
+-- NOT NULL DEFAULT 0, same reasoning as `day_offset`'s own migration: every
+-- existing row (published before this column existed) is retroactively
+-- treated as "same day as the departure" -- a safe, non-panicking default,
+-- corrected for every row within one CIF delivery cycle since this table is
+-- wholesale-replaced on every publish (see
+-- `upsert_schedule_destination_departures`'s own doc comment).
+ALTER TABLE schedule_destination_departures
+    ADD COLUMN destination_arrival_day_offset SMALLINT NOT NULL DEFAULT 0;
