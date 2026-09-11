@@ -16,6 +16,7 @@ pub mod oauth_client;
 pub mod poller_loop;
 pub mod rail_day;
 pub mod service_args;
+pub mod trust_timestamp;
 
 /// Status severity scale. Mirrors TfL's `statusSeverity` codes 0–14 where the
 /// meanings carry over, with NR-specific extensions above 14. Lower is worse,
