@@ -97,10 +97,32 @@ struct BacklogRow {
 /// `train_id` is also present somewhere in the backlog (it may not be --
 /// see this module's own doc comment and this plan's "Dependency on the
 /// schedule-first plan" section on why that's an accepted, named gap, not
-/// a bug). Arbitrary among ties -- this table has no equivalent of
-/// `resolve_origin_departure`'s own "only a DEPARTURE may claim"
-/// refinement, since by construction this table already excludes PASS and
-/// only Activation/Cancellation/Movement rows exist here at all.
+/// a bug). Arbitrary among ties among genuine DEPARTURE candidates.
+///
+/// **`event_type = 'DEPARTURE'` is required in the SQL below, mirroring
+/// `trust-consumer::process.rs`'s own live-matching guard
+/// (`if movement.event_type != "DEPARTURE" { return Vec::new(); }`).**
+/// An earlier version of this function's own doc comment claimed this
+/// table "already excludes PASS and only Activation/Cancellation/Movement
+/// rows exist here at all", and treated that as reason enough to skip
+/// `resolve_origin_departure`'s "only a DEPARTURE may claim" refinement --
+/// but excluding PASS does nothing about ARRIVAL, which this table DOES
+/// store (see `trust_event_backlog`'s own migration: `event_type CHECK
+/// (event_type IS NULL OR event_type IN ('ARRIVAL', 'DEPARTURE'))`, and
+/// `trust-backlog-consumer::process::process_message`'s own Movement arm,
+/// which keeps a Movement "only if its `event_type` is `ARRIVAL` or
+/// `DEPARTURE`"). Without this filter, a pin's scheduled departure could
+/// match an UNRELATED train's ARRIVAL event at the same CRS inside the
+/// same `MATCH_TOLERANCE` window -- a routine occurrence at any
+/// turnback/interchange station -- and that wrong train's entire movement
+/// history would then get replayed onto the pin's `trains_id` via
+/// `fetch_backlog_history`/`replay_backlog_history` below. Confirmed as a
+/// real, live-production data-correctness bug (a correctly schedule-matched
+/// `trains_id` received 29 movement events belonging to the wrong,
+/// opposite-direction train this exact way) -- see
+/// `an_unrelated_arrival_event_never_falsely_matches_a_pins_scheduled_departure`
+/// and `a_real_departure_is_still_found_despite_a_more_favorably_sorted_unrelated_arrival`
+/// below for the regression coverage.
 ///
 /// Deliberately does NOT look at this matching row's own `train_uid`
 /// column: a Movement/Cancellation row's `train_uid` is always NULL as
@@ -154,6 +176,7 @@ async fn find_backlog_match(
     let query = format!(
         "SELECT train_id FROM trust_event_backlog \
          WHERE UPPER(crs) = UPPER($1) AND planned_timestamp BETWEEN $2 AND $3 \
+         AND event_type = 'DEPARTURE' \
          AND (actual_timestamp IS NULL \
               OR actual_timestamp <= received_at + INTERVAL '{} minutes') \
          ORDER BY planned_timestamp LIMIT 1",
@@ -1321,6 +1344,237 @@ mod db_tests {
         .await
         .ok();
         sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-BACKLOG-SWEEP-E2E-UID'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// Regression test for the confirmed live-production bug: `find_backlog_match`'s
+    /// own SQL had no `event_type` filter, unlike the live-matching path
+    /// (`trust-consumer::process.rs`'s `if movement.event_type != "DEPARTURE"
+    /// { return Vec::new(); }` guard). A pin's scheduled departure could
+    /// therefore match an UNRELATED train's ARRIVAL event at the same CRS,
+    /// inside the same `MATCH_TOLERANCE` window -- a routine occurrence at
+    /// any turnback/interchange station. Once matched, the wrong train's
+    /// entire movement history gets replayed onto the pin's already-correct
+    /// `trains_id` (confirmed real-world instance: `trains_id=713729`,
+    /// correctly identified as `train_uid=C17876`, received 29 movement
+    /// events belonging to `C18017`, the opposite-direction service, this
+    /// exact way).
+    ///
+    /// Here only the unrelated train's ARRIVAL row exists in the window --
+    /// no DEPARTURE anywhere -- so the honest outcome is `Ok(false)`/pin
+    /// left `'pending'`, never a match manufactured from the ARRIVAL row.
+    /// Confirmed this test would have caught the bug: reverting the
+    /// `event_type = 'DEPARTURE'` filter in `find_backlog_match` and
+    /// re-running this test fails it (`matched` becomes `true` and the pin
+    /// resolves against the ARRIVAL row's `train_id`), exactly the
+    /// production failure mode above.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                an_unrelated_arrival_event_never_falsely_matches_a_pins_scheduled_departure \
+                -- --ignored --test-threads=1`"]
+    async fn an_unrelated_arrival_event_never_falsely_matches_a_pins_scheduled_departure() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-ARRIVAL-GUARD-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-arrival-guard@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
+
+        // An unrelated train's ARRIVAL at the pin's own origin CRS, exactly
+        // on the pin's scheduled departure time -- well inside
+        // MATCH_TOLERANCE, and (before this fix) the only row
+        // `find_backlog_match`'s CRS+time WHERE clause needed to match.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES ($1, NULL, $2, $3, '0003', 'ARRIVAL', $4, $4, 'ON TIME', $5)",
+        )
+        .bind("EUS")
+        .bind("TEST-BACKLOG-ARRIVAL-GUARD-TRAIN-ID")
+        .bind(service_date)
+        .bind(scheduled)
+        .bind("test-backlog-arrival-guard-dedup-arrival")
+        .execute(&pool)
+        .await
+        .expect("seed the unrelated ARRIVAL row");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            !matched,
+            "an ARRIVAL-only backlog must never resolve a pin's scheduled DEPARTURE match"
+        );
+
+        let (resolution_status,): (String,) =
+            sqlx::query_as("SELECT resolution_status FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back tracked_trains");
+        assert_eq!(
+            resolution_status, "pending",
+            "the pin must be left untouched, not bound to the unrelated ARRIVAL's train_id"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id = 'TEST-BACKLOG-ARRIVAL-GUARD-TRAIN-ID'",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// Companion to the test above, proving the fix does more than just
+    /// reject a match -- it must still find the CORRECT DEPARTURE match when
+    /// one genuinely exists alongside an unrelated ARRIVAL that sorts more
+    /// favorably (`ORDER BY planned_timestamp LIMIT 1` would otherwise pick
+    /// the ARRIVAL row first, exactly as `an_implausible_actual_timestamp...`'s
+    /// sibling test proved for the plausibility guard). The unrelated
+    /// train's ARRIVAL lands exactly on the pin's scheduled time (sorts
+    /// first); the real train's own DEPARTURE lands 5 minutes later (sorts
+    /// second, still inside MATCH_TOLERANCE). Only the DEPARTURE may resolve
+    /// the pin.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_real_departure_is_still_found_despite_a_more_favorably_sorted_unrelated_arrival \
+                -- --ignored --test-threads=1`"]
+    async fn a_real_departure_is_still_found_despite_a_more_favorably_sorted_unrelated_arrival() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-ARRIVAL-FALLTHROUGH-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-arrival-fallthrough@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
+
+        // Unrelated train: ARRIVAL, sorts FIRST by planned_timestamp
+        // (exactly on the pin's scheduled time).
+        // Real train: DEPARTURE, sorts SECOND (5 minutes later, still
+        // within MATCH_TOLERANCE), plus its own Activation so identity can
+        // be verified via the dual-written `trains` row.
+        let departure_planned: DateTime<Utc> = "2026-09-05T18:20:00Z".parse().unwrap();
+
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES \
+                ($1, NULL, $2, $3, '0003', 'ARRIVAL', $4, $4, 'ON TIME', $5), \
+                ($1, NULL, $6, $3, '0003', 'DEPARTURE', $7, $7, 'ON TIME', $8), \
+                (NULL, $9, $6, $3, '0001', NULL, NULL, NULL, NULL, $10)",
+        )
+        .bind("EUS")
+        .bind("TEST-BACKLOG-ARRIVAL-FALLTHROUGH-UNRELATED-TRAIN-ID")
+        .bind(service_date)
+        .bind(scheduled)
+        .bind("test-backlog-arrival-fallthrough-dedup-arrival")
+        .bind("TEST-BACKLOG-ARRIVAL-FALLTHROUGH-REAL-TRAIN-ID")
+        .bind(departure_planned)
+        .bind("test-backlog-arrival-fallthrough-dedup-departure")
+        .bind("TEST-DW-ARRIVAL-FALLTHROUGH-UID")
+        .bind("test-backlog-arrival-fallthrough-dedup-activation")
+        .execute(&pool)
+        .await
+        .expect("seed both the unrelated ARRIVAL and the real train's DEPARTURE+Activation");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            matched,
+            "the real DEPARTURE must still resolve the pin even though an unrelated ARRIVAL \
+             sorts first"
+        );
+
+        let (trains_id, train_id): (i64, String) = sqlx::query_as(
+            "SELECT tr.id, tr.train_id FROM train_subscriptions tt \
+             JOIN trains tr ON tr.id = tt.trains_id \
+             WHERE tt.id = $1",
+        )
+        .bind(tracked_train_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the resolved train_id");
+        assert_eq!(
+            train_id, "TEST-BACKLOG-ARRIVAL-FALLTHROUGH-REAL-TRAIN-ID",
+            "must resolve to the real DEPARTURE's train_id, never the unrelated ARRIVAL's"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id IN \
+             ('TEST-BACKLOG-ARRIVAL-FALLTHROUGH-UNRELATED-TRAIN-ID', \
+              'TEST-BACKLOG-ARRIVAL-FALLTHROUGH-REAL-TRAIN-ID')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM trains WHERE id = $1")
+            .bind(trains_id)
             .execute(&pool)
             .await
             .ok();
