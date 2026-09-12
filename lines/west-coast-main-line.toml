@@ -43,7 +43,7 @@ segment = "wcml-london"
 
 [[stations]]
 crs = "HMP"
-tiploc = "HMPSTDH"
+tiploc = "HAMPTON"
 role = "minor"
 segment = "wcml-london"
 
@@ -67,19 +67,19 @@ segment = "wcml-midlands"
 
 [[stations]]
 crs = "NUN"
-tiploc = "NUNEATN"
+tiploc = "NNTN"
 role = "minor"
 segment = "wcml-midlands"
 
 [[stations]]
 crs = "TAM"
-tiploc = "TAMWRTH"
+tiploc = "TMWTHLL"
 role = "minor"
 segment = "wcml-midlands"
 
 [[stations]]
 crs = "LTV"
-tiploc = "LCHTNJ"
+tiploc = "LCHTTVL"
 role = "minor"
 segment = "wcml-midlands"
 
@@ -97,7 +97,7 @@ segment = "wcml-northwest"
 
 [[stations]]
 crs = "WBQ"
-tiploc = "WARRBQ"
+tiploc = "WRGTNBQ"
 role = "minor"
 segment = "wcml-northwest"
 
@@ -109,7 +109,7 @@ segment = "wcml-northwest"
 
 [[stations]]
 crs = "PRE"
-tiploc = "PRSTON"
+tiploc = "PRST"
 role = "major"
 segment = "wcml-northwest"
 
@@ -127,7 +127,7 @@ segment = "wcml-north"
 
 [[stations]]
 crs = "PNR"
-tiploc = "PENRITH"
+tiploc = "PNTH"
 role = "minor"
 segment = "wcml-north"
 

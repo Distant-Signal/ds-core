@@ -107,7 +107,7 @@ segment = "wcml-london"
 
 [[stations]]
 crs = "HMP"
-tiploc = "HMPSTDH"
+tiploc = "HAMPTON"
 role = "minor"
 segment = "wcml-london"
 

@@ -87,7 +87,7 @@ segment = "xc-stansted"
 
 [[stations]]
 crs = "NUN"
-tiploc = "NUNEATN"
+tiploc = "NNTN"
 role = "junction"
 segment = "xc-stansted"
 

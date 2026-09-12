@@ -458,7 +458,7 @@ segment = "emr-poacher-skegness"
 # there, same physical station; TIPLOC also reused - see that file).
 [[stations]]
 crs = "DBY"
-tiploc = "DERBY"  # reused from emr-midland-main-line.toml/cross-country.toml
+tiploc = "DRBY"  # reused from emr-midland-main-line.toml/cross-country.toml
 role = "junction"
 segment = "emr-mml-derby"
 # Derby: junction for this branch, reusing `emr-midland-main-line.toml`'s

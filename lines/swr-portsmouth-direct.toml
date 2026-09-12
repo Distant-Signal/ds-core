@@ -18,13 +18,13 @@ segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "CLJ"
-tiploc = "CLPHMJC"
+tiploc = "CLPHMJ1"
 role = "junction"
 segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "WIM"
-tiploc = "WIMBLDN"
+tiploc = "WDON"
 role = "major"
 segment = "swr-trunk-waterloo"
 
@@ -48,13 +48,13 @@ segment = "swr-portsmouth-direct"
 
 [[stations]]
 crs = "HSL"
-tiploc = "HSLEMRE"
+tiploc = "HASLEMR"
 role = "minor"
 segment = "swr-portsmouth-direct"
 
 [[stations]]
 crs = "PTR"
-tiploc = "PETRSFD"
+tiploc = "PTRSFLD"
 role = "minor"
 segment = "swr-portsmouth-direct"
 
@@ -66,12 +66,12 @@ segment = "swr-portsmouth-direct"
 
 [[stations]]
 crs = "PMS"
-tiploc = "PMSEA"
+tiploc = "PSEA"
 role = "major"
 segment = "swr-portsmouth-direct"
 
 [[stations]]
 crs = "PMH"
-tiploc = "PMSHRBR"
+tiploc = "PHBR"
 role = "terminus"
 segment = "swr-portsmouth-direct"

@@ -92,7 +92,7 @@ segment = "tpe-anglo-scottish-nw"
 
 [[stations]]
 crs = "WGN"
-tiploc = "WGNNW"
+tiploc = "WIGANNW"
 role = "minor"
 segment = "tpe-anglo-scottish-nw"
 
@@ -134,7 +134,7 @@ segment = "tpe-anglo-scottish-nw"
 # preferring already-verified in-repo facts.
 [[stations]]
 crs = "PRE"
-tiploc = "PRSTON"
+tiploc = "PRST"
 role = "major"
 segment = "tpe-anglo-scottish-wcml"
 
@@ -152,7 +152,7 @@ segment = "tpe-anglo-scottish-wcml"
 
 [[stations]]
 crs = "PNR"
-tiploc = "PENRITH"
+tiploc = "PNTH"
 role = "minor"
 segment = "tpe-anglo-scottish-wcml"
 

@@ -46,7 +46,7 @@ delay_threshold_minutes = 10
 # junction to another line in this catalogue. Fetched 2026-09-01.
 [[stations]]
 crs = "BIF"
-tiploc = "BARROW"
+tiploc = "BAROW"
 role = "junction"
 segment = "northern-furness"
 

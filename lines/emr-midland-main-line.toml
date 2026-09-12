@@ -195,7 +195,7 @@ segment = "emr-mml-central"
 # for the fuller explanation of that distinction. ---
 [[stations]]
 crs = "DBY"
-tiploc = "DERBY"  # reused from cross-country.toml - already verified in this repo
+tiploc = "DRBY"  # reused from cross-country.toml - already verified in this repo
 role = "major"
 segment = "emr-mml-derby"
 

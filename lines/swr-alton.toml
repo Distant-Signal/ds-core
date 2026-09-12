@@ -17,13 +17,13 @@ segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "CLJ"
-tiploc = "CLPHMJC"
+tiploc = "CLPHMJ1"
 role = "junction"
 segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "WIM"
-tiploc = "WIMBLDN"
+tiploc = "WDON"
 role = "major"
 segment = "swr-trunk-waterloo"
 
@@ -41,7 +41,7 @@ segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "BCE"
-tiploc = "BRKMERE"
+tiploc = "BRACKNL"
 role = "minor"
 segment = "swr-alton-branch"
 
@@ -59,7 +59,7 @@ segment = "swr-alton-branch"
 
 [[stations]]
 crs = "BTL"
-tiploc = "BENTLEY"
+tiploc = "BATLEY"
 role = "minor"
 segment = "swr-alton-branch"
 

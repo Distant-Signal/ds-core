@@ -208,7 +208,7 @@ segment = "northern-airedale"
 
 [[stations]]
 crs = "BIY"
-tiploc = "BINGLEY"
+tiploc = "BNGY"
 role = "minor"
 segment = "northern-airedale"
 # Bingley.

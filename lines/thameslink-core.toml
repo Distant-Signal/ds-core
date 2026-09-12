@@ -25,25 +25,25 @@ segment = "thameslink-core"
 
 [[stations]]
 crs = "ZFD"
-tiploc = "FARNGDN"
+tiploc = "FRNDNLT"
 role = "major"
 segment = "thameslink-core"
 
 [[stations]]
 crs = "CTK"
-tiploc = "CTRLDCK"
+tiploc = "CTMSLNK"
 role = "major"
 segment = "thameslink-core"
 
 [[stations]]
 crs = "BFR"
-tiploc = "BLCKFRS"
+tiploc = "BLFR"
 role = "major"
 segment = "thameslink-core"
 
 [[stations]]
 crs = "LBG"
-tiploc = "LNDNBDG"
+tiploc = "LNDNBDC"
 role = "major"
 segment = "thameslink-core"
 # Trains diverge south of London Bridge — handled by branch line definitions

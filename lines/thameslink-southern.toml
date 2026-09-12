@@ -124,7 +124,7 @@ delay_threshold_minutes = 4
 # rather than exclusively one.
 [[stations]]
 crs = "BFR"
-tiploc = "BLCKFRS"
+tiploc = "BLFR"
 role = "junction"
 segment = "thameslink-southern-trunk"
 # Blackfriars. Station overlap only with thameslink-core.toml's own
@@ -591,7 +591,7 @@ segment = "thameslink-sutton-loop"
 # code and is not listed here, matching that file's own treatment.
 [[stations]]
 crs = "LBG"
-tiploc = "LNDNBDG"
+tiploc = "LNDNBDC"
 role = "junction"
 segment = "thameslink-brighton"
 # London Bridge. Also thameslink-core.toml's own terminus (station overlap

@@ -27,7 +27,7 @@ delay_threshold_minutes = 4
 # risk correlating against the wrong platforms.
 [[stations]]
 crs = "RDG"
-tiploc = "READING"
+tiploc = "RDNGSTN"
 role = "terminus"
 segment = "elizabeth-west"
 

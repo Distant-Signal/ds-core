@@ -376,7 +376,7 @@ segment = "lnwr-birmingham"
 # working, not a genuine regular calling point.
 [[stations]]
 crs = "NUN"
-tiploc = "NUNEATN"
+tiploc = "NNTN"
 role = "minor"
 segment = "lnwr-crewe"
 
@@ -387,13 +387,13 @@ segment = "lnwr-crewe"
 
 [[stations]]
 crs = "TAM"
-tiploc = "TAMWRTH"
+tiploc = "TMWTHLL"
 role = "minor"
 segment = "lnwr-crewe"
 
 [[stations]]
 crs = "LTV"
-tiploc = "LCHTNJ"
+tiploc = "LCHTTVL"
 role = "minor"
 segment = "lnwr-crewe"
 

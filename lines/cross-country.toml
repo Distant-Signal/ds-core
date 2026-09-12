@@ -68,7 +68,7 @@ segment = "xc-yorkshire"
 
 [[stations]]
 crs = "DBY"
-tiploc = "DERBY"
+tiploc = "DRBY"
 role = "junction"
 segment = "xc-midlands"
 

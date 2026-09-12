@@ -161,7 +161,7 @@ segment = "wcml-london"
 
 [[stations]]
 crs = "HMP"
-tiploc = "HMPSTDH"
+tiploc = "HAMPTON"
 role = "minor"
 segment = "wcml-london"
 
@@ -185,19 +185,19 @@ segment = "wcml-midlands"
 
 [[stations]]
 crs = "NUN"
-tiploc = "NUNEATN"
+tiploc = "NNTN"
 role = "minor"
 segment = "wcml-midlands"
 
 [[stations]]
 crs = "TAM"
-tiploc = "TAMWRTH"
+tiploc = "TMWTHLL"
 role = "minor"
 segment = "wcml-midlands"
 
 [[stations]]
 crs = "LTV"
-tiploc = "LCHTNJ"
+tiploc = "LCHTTVL"
 role = "minor"
 segment = "wcml-midlands"
 

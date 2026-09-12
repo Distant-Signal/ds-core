@@ -182,7 +182,7 @@ segment = "xc-south-coast"
 
 [[stations]]
 crs = "RDG"
-tiploc = "READING"
+tiploc = "RDNGSTN"
 role = "junction"
 segment = "xc-south-coast"
 # Some services terminate here; the rest continue to Southampton/Bournemouth

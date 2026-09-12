@@ -87,7 +87,7 @@ segment = "northern-blackpool"
 
 [[stations]]
 crs = "PRE"
-tiploc = "PRSTON"
+tiploc = "PRST"
 role = "junction"
 segment = "northern-blackpool"
 

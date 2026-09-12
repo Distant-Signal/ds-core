@@ -29,13 +29,13 @@ segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "CLJ"
-tiploc = "CLPHMJC"
+tiploc = "CLPHMJ1"
 role = "junction"
 segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "WIM"
-tiploc = "WIMBLDN"
+tiploc = "WDON"
 role = "major"
 segment = "swr-trunk-waterloo"
 
@@ -53,7 +53,7 @@ segment = "swr-trunk-waterloo"
 
 [[stations]]
 crs = "BSK"
-tiploc = "BSNGSTK"
+tiploc = "BSNGSEB"
 role = "junction"
 segment = "swr-swml-south"
 
@@ -71,7 +71,7 @@ segment = "swr-swml-south"
 
 [[stations]]
 crs = "BMH"
-tiploc = "BMTH"
+tiploc = "BOMO"
 role = "major"
 segment = "swr-swml-south"
 
