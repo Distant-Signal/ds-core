@@ -1,0 +1,22 @@
+-- -------------------------------------------------------------------------
+-- users.username: the `preferred_username` claim, persisted.
+--
+-- Until now `users` held exactly one non-email identifier for a person --
+-- `name` -- and `id` is the opaque OIDC subject, not something to show
+-- anyone. So when an identity provider had no name on file for a user (a
+-- blank or absent `name` claim), the only thing left to label them with in
+-- a shared group was their email address, which must never be shown to the
+-- other members of a group somebody can join with nothing but a link.
+--
+-- `preferred_username` needs no new scope and no IdP reconfiguration: it is
+-- a standard claim of the `profile` scope this app already requests
+-- (crates/api/src/auth/oidc.rs), and Authentik's stock `profile` scope
+-- mapping already emits it. Storing it gives every display site a real
+-- fallback that is not an email -- see data::users::display_label.
+--
+-- Nullable with no backfill possible: the claim only arrives at login, so
+-- existing rows fill in as their users next sign in, and every read site
+-- already copes with NULL by falling through to a generic placeholder.
+-- -------------------------------------------------------------------------
+
+ALTER TABLE users ADD COLUMN username TEXT;
