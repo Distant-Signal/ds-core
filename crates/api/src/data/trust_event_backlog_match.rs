@@ -1259,11 +1259,22 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = chrono::Utc::now().date_naive();
-        let scheduled: DateTime<Utc> = service_date
-            .and_hms_opt(18, 15, 0)
-            .expect("valid time")
-            .and_utc();
+        // Deliberately NOT a fixed wall-clock time (e.g. "today at 18:15") --
+        // `find_backlog_match`'s plausibility guard below rejects any
+        // `actual_timestamp` more than
+        // `common::trust_timestamp::MAX_TIMESTAMP_SKEW_AHEAD_OF_RECEIPT`
+        // (10 minutes) ahead of `received_at`, which the backlog row below
+        // defaults to `NOW()` at INSERT time. A fixed future-or-past-
+        // depending-on-when-CI-runs wall-clock time made this test's outcome
+        // depend on what time of day it happened to run, and it did in fact
+        // fail in CI outside a ~10-minute-wide window around that hour --
+        // see the incident this comment now documents. Anchoring to "30
+        // minutes before whenever this test actually runs" keeps
+        // `actual_timestamp` safely behind `received_at` regardless of the
+        // clock, the same way every fixed-date sibling test in this file
+        // (e.g. "2026-09-05T18:15:00Z") is safely in the past by construction.
+        let scheduled: DateTime<Utc> = chrono::Utc::now() - chrono::Duration::minutes(30);
+        let service_date: chrono::NaiveDate = scheduled.date_naive();
 
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
