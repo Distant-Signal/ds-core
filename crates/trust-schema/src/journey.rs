@@ -59,6 +59,29 @@ impl DerivedState {
 /// case (an ARRIVAL elsewhere, any DEPARTURE/PASS, or no known destination
 /// at all) leaves status as `"en_route"` until an explicit Cancellation
 /// ends it.
+///
+/// WHAT THIS DELIBERATELY CANNOT DO, and what backstops it. This function
+/// sees one event at a time and knows nothing about the journey's shape, so
+/// "the destination" can only ever be a CRS code here. On a service that
+/// calls at its own destination CRS more than once -- every circular
+/// working, e.g. South Western Railway's Kingston Loop, which departs
+/// London Waterloo and terminates back at London Waterloo -- that is not
+/// enough on its own to identify the FINAL calling point. The
+/// requirement that only an `ARRIVAL` counts already covers the common
+/// shape of that problem (a loop's first call at its own terminus CRS is a
+/// DEPARTURE from the origin, never an arrival), but a mid-journey ARRIVAL
+/// at a station the service later terminates at would still read as
+/// completion here, and a genuine terminus arrival ingested before any
+/// schedule supplied `destination_crs` is missed entirely and never
+/// re-derived.
+///
+/// Both are backstopped on the read side, where the ordered calling-point
+/// list actually exists: `api::data::journey::confirmed_final_arrival`
+/// anchors the same rule to `stops.last()` -- the final scheduled calling
+/// point BY POSITION, whatever CRS it carries and however many times that
+/// CRS appears earlier -- and `apply_confirmed_arrival` folds the result
+/// into the status the API serves. Keep the two rules ("only an ARRIVAL",
+/// "at the final calling point") in step if either is ever changed.
 pub fn apply_movement(
     previous: &DerivedState,
     movement: &Movement,
@@ -275,6 +298,38 @@ mod tests {
             Some("WOK"),
         );
         assert_eq!(state.status, "completed");
+    }
+
+    /// A circular working whose origin and terminus are the SAME station
+    /// (South Western Railway's Kingston Loop: London Waterloo round via
+    /// Kingston and Richmond, terminating back at London Waterloo). Both
+    /// ends report `loc_crs == "WAT" == destination_crs`, so only the event
+    /// type separates them -- the origin's DEPARTURE must leave the train
+    /// running, and the terminus's ARRIVAL must finish it. See this
+    /// function's own "WHAT THIS DELIBERATELY CANNOT DO" note for the
+    /// sequence-anchored backstop that covers the shapes this rule can't.
+    #[test]
+    fn a_loop_service_completes_on_its_return_arrival_not_its_outbound_departure() {
+        let previous = DerivedState::awaiting_activation();
+
+        let leaving_waterloo = apply_movement(
+            &previous,
+            &movement("DEPARTURE", Some("ON TIME")),
+            Some("WAT"),
+            Some("WAT"),
+        );
+        assert_eq!(
+            leaving_waterloo.status, "en_route",
+            "the loop has only just started -- it is at its destination CRS, not its destination"
+        );
+
+        let back_at_waterloo = apply_movement(
+            &leaving_waterloo,
+            &movement("ARRIVAL", Some("LATE")),
+            Some("WAT"),
+            Some("WAT"),
+        );
+        assert_eq!(back_at_waterloo.status, "completed");
     }
 
     #[test]
