@@ -31,8 +31,25 @@ impl std::ops::Deref for LineCatalogue {
     }
 }
 
+/// Rejects a catalogue containing a `custom-`-prefixed line id, loudly, at
+/// startup. That prefix is the ONLY thing distinguishing a private,
+/// user-owned line from a public one at every privacy gate in `crates/api`
+/// (`data::custom_lines::CUSTOM_LINE_ID_PREFIX` and its callers), and those
+/// gates all assume the converse too: that anything without the prefix is
+/// safe to serve anonymously. A catalogue file that claimed such an id
+/// would quietly invert one of those checks. Nothing in `lines/*.toml` does
+/// this today -- this makes it an enforced invariant rather than an
+/// observed one, since the gates themselves cannot detect the violation.
 pub fn parse_lines(path: &str) -> anyhow::Result<LineCatalogue> {
-    LineDefinition::from_dir(&PathBuf::from(path)).map(LineCatalogue)
+    let catalogue = LineDefinition::from_dir(&PathBuf::from(path)).map(LineCatalogue)?;
+    if let Some(offender) = catalogue.iter().find(|l| l.id.starts_with("custom-")) {
+        anyhow::bail!(
+            "catalogue line id {:?} uses the `custom-` prefix, which is reserved for private \
+             user-created lines -- rename it in {path}",
+            offender.id
+        );
+    }
+    Ok(catalogue)
 }
 
 #[cfg(test)]
@@ -51,6 +68,34 @@ mod tests {
         let result = parse_lines("/nonexistent/path/that/should/not/exist");
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn parse_lines_rejects_a_catalogue_file_claiming_a_custom_prefixed_id() {
+        let dir =
+            std::env::temp_dir().join(format!("parse-lines-custom-prefix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        let file = dir.join("impostor.toml");
+        std::fs::write(
+            &file,
+            "id = \"custom-impostor\"\nname = \"Impostor\"\nmode = \"national-rail\"\n\
+             category = \"main-line\"\noperators = [\"SW\"]\n\n\
+             [[stations]]\ncrs = \"WOK\"\nrole = \"principal\"\n",
+        )
+        .expect("write fixture line file");
+
+        let result = parse_lines(dir.to_str().expect("utf8 temp path"));
+
+        std::fs::remove_file(&file).ok();
+        std::fs::remove_dir(&dir).ok();
+
+        let err = result
+            .expect_err("a `custom-` catalogue id must not load")
+            .to_string();
+        assert!(
+            err.contains("custom-impostor") && err.contains("reserved"),
+            "the error must name the offending id and why it's rejected: {err}"
+        );
     }
 
     #[test]
