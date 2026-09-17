@@ -1,0 +1,37 @@
+[package]
+name = "schedule-query-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Deliberately its own workspace, NOT a member of the repo root's: it needs
+# a nightly toolchain (`-Zsanitizer=address`) that the rest of the
+# workspace does not, so `cargo build`/`cargo test`/`cargo clippy` at the
+# repo root must never try to build it. Run it explicitly instead -- see
+# `fuzz_targets/parse_schedule_records.rs`'s own doc comment for the full
+# command and for how to read its result:
+#
+#   cargo +nightly fuzz run parse_schedule_records -- -max_total_time=60
+#
+# The price of that isolation is that CI never sees this crate either:
+# `.github/workflows/ci.yml`'s `--workspace` clippy/fmt/build/test steps
+# all stop at the root workspace's members, so this target can rot
+# (compile break, fmt drift, an API change in the crate it fuzzes) without
+# anything going red. Re-run it by hand when `../src/parse.rs` changes.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.schedule-query]
+path = ".."
+
+[[bin]]
+name = "parse_schedule_records"
+path = "fuzz_targets/parse_schedule_records.rs"
+test = false
+doc = false
+bench = false
