@@ -1,11 +1,22 @@
 //! Decide which lines a Knowledgebase incident affects, and classify the
 //! scope of each match. Ported from `src/matcher.py`.
+//!
+//! This module lived in `crates/aggregator` until 2026-09-17. It moved here
+//! so `api` can run the *same* matcher over an incident at ingest time and
+//! persist the answer in `incidents.affected_lines` — the incident archive's
+//! Line filter had been asking "which lines?" a second, different way
+//! (station overlap against `incidents.affected_stations`, a column no
+//! production writer ever populates) and therefore returned zero rows for
+//! every line. See
+//! `docs/superpowers/specs/2026-09-16-tfl-incident-archive-design.md` §1c.
+//! Nothing about the matching logic itself changed in the move; the one
+//! addition is [`LineMatcher`], a thin owner of the catalogue + segment
+//! index for callers that do not already hold both.
 
 use std::collections::{HashMap, HashSet};
 
-use common::{IncidentMessage, LineDefinition};
-
 use crate::segments::SegmentRegistry;
+use crate::{IncidentMessage, LineDefinition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatchScope {
@@ -36,6 +47,19 @@ pub struct Match<'a> {
 }
 
 /// Return all lines the incident could plausibly affect, classified.
+///
+/// # Reads exactly four fields of `IncidentMessage`
+///
+/// `summary`, `description`, `operators`, `affected_stations` -- and
+/// nothing else, through `match_one` and `is_excluded` alike.
+/// `api::data::incident_line_backfill` relies on that: it loads only those
+/// four columns and fabricates the rest of the struct, precisely so that
+/// one unparseable archived `validity_periods` cannot abort a backfill over
+/// a field this function never consults. **If you make this function (or
+/// anything it calls) read a fifth field -- `is_planned` is the plausible
+/// one -- update `load_batch` there in the same change, or backfilled rows
+/// will silently get answers computed from fabricated values, with no
+/// compile error to warn you.**
 pub fn lines_affected_by<'a>(
     incident: &IncidentMessage,
     lines: &'a HashMap<String, LineDefinition>,
@@ -83,6 +107,67 @@ pub fn lines_affected_by<'a>(
     });
 
     out
+}
+
+/// Owns a line catalogue and its derived [`SegmentRegistry`] so a caller
+/// that does not already hold both (i.e. anything other than the
+/// aggregator's poll loop) can build the pair once and reuse it.
+///
+/// The point of this type is that there is exactly ONE answer in this
+/// codebase to "which catalogue lines does this incident affect" —
+/// [`lines_affected_by`] — and both the live status pipeline and the
+/// incident archive's stored `affected_lines` go through it. Anything that
+/// re-derives that answer by a different route (the archive's original
+/// `affected_stations &&` filter, for instance) will disagree with what the
+/// user sees on the live status pages.
+pub struct LineMatcher {
+    lines: HashMap<String, LineDefinition>,
+    registry: SegmentRegistry,
+}
+
+impl LineMatcher {
+    pub fn new(lines: &[LineDefinition]) -> Self {
+        let lines: HashMap<String, LineDefinition> = lines
+            .iter()
+            .map(|line| (line.id.clone(), line.clone()))
+            .collect();
+        let registry = SegmentRegistry::new(&lines);
+        Self { lines, registry }
+    }
+
+    /// Every catalogue line id this incident matches, sorted and deduped.
+    ///
+    /// Sorted because `lines_affected_by` iterates a `HashMap`'s values and
+    /// so returns matches in an arbitrary, run-to-run-varying order; the
+    /// result of this function is written to a database column and compared
+    /// in tests, both of which want a stable array. (The matcher's own
+    /// cross-line `OperatorOnly` post-filter is order-independent — it
+    /// collects every match first, then retains — so sorting afterwards
+    /// cannot change *which* lines come back, only their order.)
+    pub fn affected_line_ids(&self, incident: &IncidentMessage) -> Vec<String> {
+        let mut ids: Vec<String> = lines_affected_by(incident, &self.lines, &self.registry)
+            .into_iter()
+            .map(|m| m.line.id.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    /// True if `line_id` is in this catalogue. Lets a caller reject an
+    /// unknown line id without reaching for the catalogue separately.
+    pub fn knows_line(&self, line_id: &str) -> bool {
+        self.lines.contains_key(line_id)
+    }
+
+    /// How many lines this matcher was built from. Exists so a caller can
+    /// refuse to act on a matcher built from an empty catalogue: such a
+    /// matcher returns no lines for every incident, which is
+    /// indistinguishable from a real answer and would silently erase stored
+    /// attribution (see `api::data::incident_line_backfill`).
+    pub fn line_count(&self) -> usize {
+        self.lines.len()
+    }
 }
 
 fn match_one<'a>(
@@ -9213,5 +9298,146 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].line.id, "cross-country");
         assert_eq!(matches[0].scope, MatchScope::KeywordOnly);
+    }
+
+    // ---------------------------------------------------------------
+    // `LineMatcher` -- the wrapper `api` uses to fill
+    // `incidents.affected_lines` at ingest. These tests are the pure,
+    // database-free half of the incident archive's Line-filter regression
+    // (the other half, `search_incidents` actually returning the row, is
+    // an `#[ignore]`d database test in
+    // `api::data::queries::incident_search_query_tests`).
+    // ---------------------------------------------------------------
+
+    fn full_catalogue_matcher() -> LineMatcher {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lines");
+        let lines = LineDefinition::from_dir(&dir).expect("lines/ directory should parse");
+        LineMatcher::new(&lines)
+    }
+
+    /// The exact incident this defect was found with: a real production
+    /// Elizabeth line row (`10D1F12529CA43BAB244C131D3087FD8`) that the
+    /// archive's Line filter could not find, because the filter matched on
+    /// `affected_stations` and RDM's feed gives no station codes at all.
+    /// Its text and operator list are copied verbatim from the live
+    /// `GET /public/incidents?operator=XR` response of 2026-09-17.
+    #[test]
+    fn affected_line_ids_finds_the_elizabeth_line_from_a_real_incident_with_no_station_codes() {
+        let matcher = full_catalogue_matcher();
+        let inc = incident(
+            "10D1F12529CA43BAB244C131D3087FD8",
+            "Residual disruption to Elizabeth line services between Shenfield and Romford",
+            "Following an earlier fault with the signalling system between Shenfield and \
+             Romford, all lines have now reopened. Residual delays of up to 15 minutes are \
+             expected.",
+            &["XR"],
+            // The point of the whole exercise: no CRS codes, because the
+            // Knowledgebase Incidents schema has no field to carry them.
+            &[],
+        );
+
+        assert_eq!(
+            matcher.affected_line_ids(&inc),
+            vec!["elizabeth-line".to_string()],
+            "the matcher attributes this to the Elizabeth line by keyword, with no station \
+             codes involved -- and to the Elizabeth line ONLY: its two branch lines share the \
+             XR operator code but got no keyword hit, so the cross-line OperatorOnly filter \
+             correctly drops them rather than claiming a Shenfield-branch-specific incident \
+             affects Heathrow too"
+        );
+    }
+
+    /// The false-positive direction. `lines/elizabeth-line.toml`'s
+    /// `match_keywords` contains "Elizabeth line", which appears verbatim
+    /// in the ticket-acceptance boilerplate other operators' incidents
+    /// routinely carry. The feed's own structured operator list is what
+    /// stops that becoming a match -- the same gate
+    /// `decision2_*` above cover for `lines_affected_by`, asserted here at
+    /// the level the archive actually stores.
+    #[test]
+    fn affected_line_ids_does_not_attribute_a_ticket_acceptance_mention_to_the_named_line() {
+        let matcher = full_catalogue_matcher();
+        let inc = incident(
+            "TICKET-ACCEPTANCE",
+            "Disruption between Woking and Basingstoke",
+            "A fault with the signalling system is causing delays. Your ticket is also valid \
+             on Elizabeth line services between Paddington and Reading.",
+            &["SW"],
+            &[],
+        );
+
+        let ids = matcher.affected_line_ids(&inc);
+        assert!(
+            !ids.contains(&"elizabeth-line".to_string()),
+            "an Elizabeth line mention inside a South Western incident's ticket-acceptance \
+             clause must not put this incident in the Elizabeth line's archive: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|id| id.starts_with("swr-")),
+            "it must still be attributed to South Western's own lines: {ids:?}"
+        );
+    }
+
+    /// The boundary of the test above, stated explicitly so nobody reads
+    /// that one as proof of more than it shows. The keyword tier's only
+    /// guard against a ticket-acceptance mention is the feed's own
+    /// structured operator list (`match_one`'s `contradicted` check), so
+    /// with an EMPTY `operators` list there is no guard and the mention
+    /// does match. That is pre-existing live-status behaviour, unchanged by
+    /// storing the answer; this test exists so the next person to look at a
+    /// surprising archive row finds the reason here rather than rediscovering
+    /// it. Fixing it means narrowing the keyword tier in `match_one`, which
+    /// would change live status too and belongs in its own change.
+    #[test]
+    fn affected_line_ids_has_no_guard_against_a_ticket_mention_when_the_feed_names_no_operator() {
+        let matcher = full_catalogue_matcher();
+        let inc = incident(
+            "TICKET-ACCEPTANCE-NO-OPERATORS",
+            "Disruption between Woking and Basingstoke",
+            "Your ticket is also valid on Elizabeth line services between Paddington and \
+             Reading.",
+            &[],
+            &[],
+        );
+
+        assert!(
+            matcher.affected_line_ids(&inc).contains(&"elizabeth-line".to_string()),
+            "documenting the known gap: with no structured operator list there is nothing to \
+             contradict a bare keyword hit, so the mention matches"
+        );
+    }
+
+    /// Sorted and deduped, because the value is written to a database
+    /// column and compared for equality by the backfill's "did anything
+    /// change" check -- `lines_affected_by` itself iterates a `HashMap`
+    /// and so returns an arbitrary order.
+    #[test]
+    fn affected_line_ids_is_sorted_and_free_of_duplicates() {
+        let matcher = full_catalogue_matcher();
+        let inc = incident(
+            "SORTED",
+            "South Western Railway disruption",
+            "Delays to South Western Railway services.",
+            &["SW"],
+            &[],
+        );
+
+        let ids = matcher.affected_line_ids(&inc);
+        assert!(ids.len() > 1, "expected several SWR lines: {ids:?}");
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(ids, sorted, "must come back sorted and deduped: {ids:?}");
+    }
+
+    #[test]
+    fn knows_line_accepts_a_catalogue_id_and_rejects_anything_else() {
+        let matcher = full_catalogue_matcher();
+        assert!(matcher.knows_line("elizabeth-line"));
+        assert!(!matcher.knows_line("not-a-line"));
+        // Guards the archive route's 400-vs-empty-page distinction against
+        // a caller passing a TfL line id, which this catalogue does not
+        // contain (see the 2026-09-16 TfL archive spec).
+        assert!(!matcher.knows_line("tfl-elizabeth"));
     }
 }

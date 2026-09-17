@@ -11,10 +11,12 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 pub mod config;
 pub mod ingest;
 pub mod island_of_ireland;
+pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;
 pub mod poller_loop;
 pub mod rail_day;
+pub mod segments;
 pub mod service_args;
 pub mod trust_timestamp;
 
@@ -583,7 +585,14 @@ pub struct IncidentMessage {
     pub summary: String,
     pub description: String,
     pub operators: Vec<String>, // ATOC codes, flattened from Affects.Operators.AffectedOperator[].OperatorRef
-    pub affected_stations: Vec<String>, // left empty by pollers — no CRS field exists in the Incidents schema, only free-text RoutesAffected
+    // Left empty by pollers — no CRS field exists in the Incidents schema,
+    // only free-text RoutesAffected. Nothing downstream may assume this is
+    // populated: which lines an incident affects is answered by
+    // `matcher::lines_affected_by` from the prose and `operators`, and
+    // persisted as `incidents.affected_lines`. (`match_one`'s station tier
+    // reads this field, so a future CRS extractor would improve matching
+    // by filling it — but no production incident reaches that tier today.)
+    pub affected_stations: Vec<String>,
     pub priority: i32, // raw IncidentPriority integer — no documented enum, do not re-invent "major"/"minor"
     pub validity: Vec<ValidityPeriod>, // schema allows repeated ValidityPeriod, not a single from/to pair
     pub is_planned: bool,              // maps Planned

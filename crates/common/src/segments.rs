@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use common::LineDefinition;
+use crate::LineDefinition;
 
 /// Indexes segment usage across all known lines.
 pub struct SegmentRegistry {
