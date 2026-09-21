@@ -40,6 +40,70 @@ match_keywords = ["Conwy Valley Line", "Llandudno branch line"]
 # job -- a future editor is free to simplify it once satisfied nothing else
 # will ever need to reuse it).
 
+# --- Full-coverage pilot (2026-09-21) ---
+#
+# `full_coverage_enabled = true`: this line is the first (and, as of this
+# change, only) real line opted into `crates/full-coverage-consumer`'s
+# TRUST-vs-schedule output actually being merged into its live
+# severity/DataQuality by `aggregator::merge_full_coverage`, rather than
+# staying in the shadow-only posture every catalogued line has had since
+# `full-coverage-consumer` started running in production
+# (docs/superpowers/specs/2026-09-04-option-b-live-consumer-design.md's
+# binding shadow-mode condition, this file's own prior state confirmed
+# unset). No other `lines/*.toml` file sets this field yet -- this is the
+# first precedent for the syntax (a bare top-level boolean, matching
+# `LineDefinition.full_coverage_enabled`'s `#[serde(default)]` deserialize
+# shape in `crates/common/src/lib.rs`).
+#
+# Picked as the pilot line for two reasons, both checked directly against
+# this repo's code and catalogue rather than assumed:
+#   1. Low traffic, so a wrong full-coverage result has low user-facing
+#      blast radius: six trains each way Mon-Sat (see this file's own
+#      service-pattern note above), a single-track branch with only one
+#      passing loop, no other line sharing any segment with this one (see
+#      the "Sourcing note"/Llandudno Junction discussion above -- confirmed
+#      via `grep -n segment lines/tfw-north-wales-coast.toml` that it uses
+#      its own distinct segment name at LLJ, station-overlap-only).
+#   2. TIPLOC-complete for what actually matters to correlation: as of the
+#      2026-09-09 tiploc-schedule-matching-gap fix,
+#      `crates/schedule-reference/src/main.rs`'s `lines_to_publish`/
+#      `line_tiplocs` (and `crates/api/src/data/schedule_matching.rs`'s
+#      `crs_to_line_ids`) resolve every station's real TIPLOC from the
+#      live, CIF-derived `stanox_crs` table by CRS code at runtime -- this
+#      file's own TOML `tiploc` field (below) is documentation/display
+#      metadata only, never load-bearing for that resolution (see
+#      `common::Station::tiploc`'s own doc comment). All stations below
+#      carry a real, currently-operating CRS code cross-checked against
+#      nationalrail.co.uk. This pilot was originally authored against an
+#      11-station version of this file; the 2026-09-21 real-world-sanity
+#      review (see the top-of-file CORRECTION note) has since added
+#      Llandudno (LLD) and Deganwy (DGY) as this line's real northern
+#      terminus and its immediate neighbour, bringing the total to 13.
+#      9 of the original 11 stations have a TOML `tiploc` that was
+#      cross-checked against a second independent source
+#      (railwaycodes.org.uk) at authoring time -- still the
+#      best-documented TIPLOC coverage of any rural branch line in this
+#      catalogue for the stretch this pilot was actually reasoned about.
+#      LLD and DGY were reused verbatim from the now-deleted
+#      `tfw-llandudno-branch.toml` and carry no TOML `tiploc` either
+#      (that file never sourced one), so the real, current count is 9 of
+#      13 with a documented TOML tiploc -- four without: PYP and RMB (real
+#      stations, Wikipedia-only CRS sourcing, see the sourcing note below)
+#      plus LLD and DGY (real stations, tiploc simply never sourced). This
+#      doesn't change the underlying risk assessment: the TOML `tiploc`
+#      field is documentation/display metadata only, never load-bearing
+#      for schedule-matching (see above), and all 13 stations -- including
+#      LLD and DGY -- carry a real, currently-operating CRS code.
+#
+# See docs/superpowers/specs/2026-09-04-option-b-live-consumer-design.md
+# and docs/superpowers/plans/2026-09-04-option-b-live-consumer-plan.md for
+# the consumer this flag now actually gates the output of, and this
+# branch's own comparison tool (`crates/api/src/bin/compare_full_coverage.rs`,
+# backed by `crates/api/src/data/full_coverage_comparison.rs`) for how this
+# pilot's real-vs-sampled agreement is meant to be checked before any
+# second line is ever added here.
+full_coverage_enabled = true
+
 # Sourcing note (per the catalogue's "cross-checked against a second source"
 # curation standard, matching the disclosure format established for
 # tfw-cambrian.toml and tfw-heart-of-wales.toml): every CRS code below was
