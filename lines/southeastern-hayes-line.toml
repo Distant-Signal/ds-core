@@ -164,6 +164,19 @@ segment = "hayes-london"
 # terminus - station overlap only, not a shared segment; see header comment.
 
 [[stations]]
+crs = "WAE"
+role = "minor"
+segment = "hayes-london"
+# Waterloo East: the first stop out of Charing Cross, confirmed by this
+# file's own header sourcing (Wikipedia's calling-point list, "Charing
+# Cross, Waterloo East, London Bridge, Lewisham...") but never actually
+# added as a station entry until this fix -- a data-driven audit against
+# real scheduled trains found 99% of confirmed hayes-line services touch
+# it. Also on southeastern-main-line.toml's and
+# southeastern-metro-north-kent.toml's own London ends - station overlap
+# only, same as CHX/LBG above.
+
+[[stations]]
 crs = "LBG"
 role = "major"
 segment = "hayes-london"

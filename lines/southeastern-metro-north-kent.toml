@@ -182,6 +182,17 @@ role = "terminus"
 segment = "southeastern-lewisham-corridor"
 
 [[stations]]
+crs = "WAE"
+role = "minor"
+segment = "southeastern-lewisham-corridor"
+# Waterloo East: the first stop out of Charing Cross specifically (not
+# reachable from the separate CST approach below) -- a data-driven audit
+# against real scheduled trains found 58% of confirmed
+# metro/north-kent-via-Charing-Cross services touch it; never previously
+# tagged in any of this catalogue's three Charing-Cross-sharing files. See
+# southeastern-hayes-line.toml's matching fix for the fuller sourcing note.
+
+[[stations]]
 crs = "CST"
 role = "terminus"
 segment = "southeastern-lewisham-corridor"

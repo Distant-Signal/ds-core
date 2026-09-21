@@ -119,9 +119,43 @@ role = "major"
 segment = "xc-south-west"
 
 [[stations]]
+crs = "DWW"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish Warren: real, currently-open sea-wall-route station between EXD
+# and NTA -- never previously tagged; found by a data-driven audit and
+# added here in sync with gwr-cornish-main-line.toml's own copy of this
+# shared-trunk row (see that file's matching entries for the fuller note).
+
+[[stations]]
+crs = "DWL"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish: see DWW's note above.
+
+[[stations]]
+crs = "TGM"
+role = "minor"
+segment = "xc-south-west"
+# Teignmouth: see DWW's note above.
+
+[[stations]]
 crs = "NTA"
 role = "minor"
 segment = "xc-south-west"
+
+[[stations]]
+crs = "TOT"
+role = "minor"
+segment = "xc-south-west"
+# Totnes: real, currently-open station between NTA and PLY -- never
+# previously tagged; see DWW's note above for the audit that found this.
+
+[[stations]]
+crs = "IVY"
+role = "minor"
+segment = "xc-south-west"
+# Ivybridge: see Totnes's note above.
 
 [[stations]]
 crs = "PLY"

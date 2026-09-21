@@ -180,11 +180,48 @@ segment = "xc-south-west"
 # cross-country.toml (no tiploc set there either).
 
 [[stations]]
+crs = "DWW"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish Warren: real, currently-open sea-wall-route station between EXD
+# and NTA -- a data-driven audit against real scheduled trains found 80%
+# of confirmed gwr-cornish-main-line services touch it (also DWL/TGM below,
+# and separately TOT/IVY between NTA/PLY). Never previously tagged despite
+# being adjacent to two already-tagged stations; also added to
+# cross-country.toml's copy of this same shared-trunk row.
+
+[[stations]]
+crs = "DWL"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish: see DWW's note above.
+
+[[stations]]
+crs = "TGM"
+role = "minor"
+segment = "xc-south-west"
+# Teignmouth: see DWW's note above.
+
+[[stations]]
 crs = "NTA"
 role = "minor"
 segment = "xc-south-west"
 # Row copied verbatim from cross-country.toml. Also the real junction for
 # the Riviera/Paignton branch (out of this task's scope, not claimed here).
+
+[[stations]]
+crs = "TOT"
+role = "minor"
+segment = "xc-south-west"
+# Totnes: real, currently-open station between NTA and PLY -- 41% of
+# confirmed services touch it (also IVY below). Never previously tagged;
+# see DWW's note above for the audit that found this.
+
+[[stations]]
+crs = "IVY"
+role = "minor"
+segment = "xc-south-west"
+# Ivybridge: see Totnes's note above.
 
 [[stations]]
 crs = "PLY"
