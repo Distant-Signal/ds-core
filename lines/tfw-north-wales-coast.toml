@@ -77,12 +77,15 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # completeness of this list was independently re-confirmed against the
 # line's own Wikipedia route diagram (Chester-Holyhead), which also
 # re-confirmed that Queensferry, Connah's Quay, Bagillt, Mostyn,
-# Talacre, Abergele & Pensarn, Foryd, Old Colwyn, Llysfaen, Llandulas,
-# Mochdre & Pabo, Aber, Menai Bridge, Britannia Bridge and Gaerwen are
-# the *only* other stations on this route diagram -- all closed/disused
-# (mostly 1966 Beeching cuts; Aber and Foryd similarly disused per their
-# own Wikipedia infobox "Status: Disused" field), so no candidate beyond
-# the 9 added below was missed.
+# Talacre, Foryd, Old Colwyn, Llysfaen, Llandulas, Mochdre & Pabo, Aber,
+# Menai Bridge, Britannia Bridge and Gaerwen are the *only* other closed
+# stations on this route diagram (mostly 1966 Beeching cuts; Aber and
+# Foryd similarly disused per their own Wikipedia infobox "Status:
+# Disused" field). Abergele & Pensarn was originally, incorrectly,
+# included in this same "closed" list -- it is real and currently open
+# (see its own `[[stations]]` entry below, added by a later data-driven
+# audit that caught the mistake against real scheduled trains) -- so the
+# candidate set below is 10 stations, not 9.
 #
 # Llandudno itself (the town, CRS LLD) is deliberately out of scope: per
 # the line's own route diagram, it sits on a short branch via Deganwy
@@ -188,6 +191,23 @@ crs = "RHL"
 tiploc = "RHYL"
 role = "major"
 segment = "tfw-north-wales-coast"
+
+[[stations]]
+crs = "AGL"
+tiploc = "ABGLELE"
+role = "minor"
+segment = "tfw-north-wales-coast"
+# Abergele & Pensarn: this file's own sourcing note above (the "all
+# closed/disused" list) incorrectly grouped this station with genuinely
+# closed Beeching-era stops on the same route diagram. It is real and
+# currently open -- confirmed via a data-driven audit against real
+# scheduled trains (dozens of 2026-09-17 Liverpool-Llandudno workings
+# show real booked arrival/departure times here) and independently via
+# Wikipedia, which lists it as open on the North Wales Coast Line with
+# Rhyl and Colwyn Bay as its immediate neighbours, exactly matching the
+# schedule data. The other 14 names in that "closed" list were
+# individually re-checked and are all correctly excluded (none have a
+# live CRS code).
 
 [[stations]]
 crs = "CWB"

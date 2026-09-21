@@ -343,7 +343,7 @@ segment = "scotrail-west-highland-glasgow-crianlarich"
 # reservation this leaves for Task 10.9.
 
 [[stations]]
-crs = "AUT"
+crs = "UTY"
 role = "major"
 segment = "scotrail-west-highland-fort-william-exclusive"
 # Upper Tyndrum: first station past the Crianlarich split that is
@@ -542,7 +542,7 @@ segment = "scotrail-west-highland-mallaig"
 # Enquiries' own live station page (nationalrail.co.uk/stations/<crs>/
 # details.html, confirmed via each page's own "<Name> (<CRS>)" heading,
 # fetched directly during this task). All matched with no discrepancies:
-# GLQ, DMR, DBC, HLU, GCH, ART, AUI, CNR, AUT, BRO, RAN, CRR, TUL, RYB, SBR,
+# GLQ, DMR, DBC, HLU, GCH, ART, AUI, CNR, UTY, BRO, RAN, CRR, TUL, RYB, SBR,
 # FTW, BNV, CPA, LHE, LCS, GLF, LCL, BSL, ARG, MRR, MLG.
 #
 # TIPLOCs are omitted throughout: none were confirmed against a live
