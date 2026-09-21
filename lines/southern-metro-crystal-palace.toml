@@ -1,0 +1,308 @@
+id = "southern-metro-crystal-palace"
+name = "Crystal Palace Line"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "SN",  # Southern
+]
+
+# ============================================================================
+# WHY THIS FILE EXISTS - Southern Metro coverage gap (review2-se-southern)
+# ============================================================================
+# Southern's own dense inner-London "Metro" service group (Balham, Streatham
+# Hill, Selhurst, Norwood Junction, Wallington, Carshalton Beeches, Gipsy
+# Hill, Norbury, West Croydon and the routes that connect them) was entirely
+# absent from this catalogue before this task, despite being real,
+# high-frequency, high-passenger-volume territory. This file is the first of
+# (at least) two covering that gap - see lines/southern-metro-sutton.toml
+# for the sibling file covering the Selhurst/Wallington/Carshalton
+# Beeches/Sutton side. The wider Southern Metro network (South London Line,
+# Sutton/Wimbledon loop, Tulse Hill-Herne Hill-Wimbledon, etc.) is a larger
+# scope than either file and remains a documented, still-open gap - see
+# REMAINING GAPS at the end of this file.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Service patterns and calling points confirmed via Wikipedia's "Southern
+# (train operating company)" article, which lists this operator's own
+# current Metro services with full calling points. This file models two of
+# those real, current services that share a physical West Norwood-Gipsy
+# Hill-Crystal Palace trunk:
+#   - "London Victoria - West Croydon": "Battersea Park, Clapham Junction,
+#     Balham, Streatham Hill, West Norwood, Gipsy Hill, Crystal Palace,
+#     Norwood Junction" (then West Croydon).
+#   - "London Bridge - Beckenham Junction": "South Bermondsey, Queens Road
+#     Peckham, Peckham Rye, East Dulwich, North Dulwich, Tulse Hill, West
+#     Norwood, Gipsy Hill, Crystal Palace, Birkbeck" (then Beckenham
+#     Junction).
+# Every CRS code below was independently re-verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>. Key junction stations
+# were additionally cross-checked against their own Wikipedia articles:
+# Crystal Palace's own article confirms it is served by "Southern" with
+# routes "to London Victoria, London Bridge... West Croydon, and Beckenham
+# Junction"; Norwood Junction's own article confirms it as "an interchange
+# station between the Windrush line of the London Overground and National
+# Rail services operated by Southern and Thameslink"; West Croydon's own
+# article confirms Southern trains run "to London Victoria, London Bridge...
+# and Sutton" from there (the Sutton-bound continuation is
+# southern-metro-sutton.toml's own territory, not this file's).
+#
+# A THIRD real Wikipedia-listed service ("London Victoria - London Bridge"
+# via Crystal Palace, "Battersea Park, Clapham Junction, Wandsworth Common,
+# Balham, Streatham Hill, West Norwood, Gipsy Hill, Crystal Palace,
+# Sydenham, Forest Hill, Honor Oak Park, Brockley, New Cross Gate") is
+# DELIBERATELY NOT modelled here: every station past Crystal Palace on that
+# specific service (Sydenham, Forest Hill, Honor Oak Park, Brockley, New
+# Cross Gate) already exists in overground-windrush.toml's own
+# `overground-windrush-new-cross-gate-trunk` segment - this Southern service
+# runs over the same physical alignment London Overground's Windrush line
+# already models, so including it here would add station-overlap comments
+# without adding a single new station to the catalogue. Left out rather than
+# padding this file with already-covered track; noted here as a real,
+# sourced, deliberately-excluded service (not a gap that was missed).
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   VIC - BAK - CLJ - WSW - BAL | SRH | WNW - GIP - CYP | NWD - WCY
+#   [--- southern-metro-victoria-trunk ---][excl.][-- trunk --][-- branch --]
+#
+#   LBG - SBM - QRP - PMR - EDW - NDL - TUH | WNW - GIP - CYP | BIK - BKJ
+#   [------- southern-metro-beckenham-approach -------][trunk][-- branch --]
+#
+# `southern-metro-victoria-trunk` (VIC through BAL): this file's own name,
+# but deliberately reused VERBATIM by southern-metro-sutton.toml - a genuine
+# same-operator (SN) shared trunk out of Victoria via Battersea Park/Clapham
+# Junction/Wandsworth Common to Balham, where the Streatham Hill (this file)
+# and Streatham Common (southern-metro-sutton.toml) branches diverge. Per
+# the shared-trunk rule of thumb (SCHEMA.md), Balham itself (the junction)
+# stays on this shared segment; each file's own exclusive branch starts at
+# the next station past it.
+#
+# `southern-metro-crystal-palace-trunk` (WNW - GIP - CYP): this file's own
+# internal shared trunk between its two London approaches (Victoria via
+# Streatham Hill; London Bridge via Peckham Rye/Dulwich/Tulse Hill), which
+# genuinely converge at West Norwood per the sourcing above and continue
+# together to Crystal Palace, where they split again toward West Croydon
+# vs Beckenham Junction. West Norwood and Crystal Palace (the two junctions)
+# both stay on this shared segment; each branch's own exclusive segment
+# starts at the next station past the relevant junction.
+#
+# ============================================================================
+# STATION OVERLAP
+# ============================================================================
+# Per the xc-south-coast.toml/xc-manchester.toml precedent used throughout
+# this catalogue ("station overlap is fine, segment-sharing is a deliberate
+# choice"), none of the following reuse another file's segment name - all
+# use this file's own segment names, even where genuine physical
+# track-sharing is plausible, because the other operator involved is not a
+# sibling Southern Metro line of this same branching network:
+#   - BAK (Battersea Park), CLJ (Clapham Junction): also
+#     overground-windrush.toml's own `overground-windrush-clapham-branch`
+#     stations (CLJ also swr-*/southern-brighton-main-line.toml's own
+#     terminus/junction in several other files).
+#   - QRP, PMR (Queens Road Peckham, Peckham Rye): also
+#     overground-windrush.toml's own `overground-windrush-clapham-branch`
+#     stations. PMR is additionally thameslink-southern.toml's own station.
+#   - TUH (Tulse Hill): also thameslink-southern.toml's own
+#     `thameslink-sutton-loop` station.
+#   - CYP, NWD, WCY (Crystal Palace, Norwood Junction, West Croydon): also
+#     overground-windrush.toml's own West Croydon branch stations
+#     (`overground-windrush-crystal-palace`/`overground-windrush-west-
+#     croydon` segments) - different operator (LO), same precedent.
+#   - BKJ (Beckenham Junction): also southeastern-chatham.toml's and
+#     southeastern-maidstone-east.toml's own station, approached from a
+#     different direction (via Bromley South) - station overlap only.
+# No other CRS code below (WSW, BAL, SRH, WNW, GIP, SBM, EDW, NDL, BIK)
+# appears in any other `lines/*.toml` file (grepped catalogue-wide before
+# drafting).
+#
+# ============================================================================
+# REMAINING GAPS (documented, not modelled here)
+# ============================================================================
+# - The Victoria-London Bridge-via-Crystal Palace service's own New Cross
+#   Gate-ward stretch: see ROUTE AND SOURCING above - deliberately excluded,
+#   already fully covered by overground-windrush.toml.
+# - The wider South London Line / Sutton & Mole Valley network beyond what
+#   this file and southern-metro-sutton.toml cover (Wimbledon loop, further
+#   Thameslink Sutton Loop territory already in thameslink-southern.toml):
+#   real, but out of scope for this task's budget - a still-open gap.
+# ============================================================================
+sample_stations = ["VIC", "CYP", "WCY", "BKJ"]
+destination_crs_filter = ["WCY", "BKJ"]
+# VIC is also southern-brighton-main-line.toml's/southeastern-chatham.toml's/
+# southern-oxted-uckfield.toml's own sample station - the filter disambig-
+# uates this file's own West Croydon/Beckenham Junction-bound services from
+# theirs, mirroring scotrail-ayrshire.toml's identical use of the field at
+# Glasgow Central for the same reason. LBG is not included in
+# sample_stations (it's already densely sampled by several other files); CYP
+# and the two branch termini give this file its own distinct sampling
+# footprint.
+
+[severity_overrides]
+minor_delays_pct = 0.25
+delay_threshold_minutes = 5
+# Dense inner-London commuter service, same defaults as this catalogue's
+# baseline commuter tuning (no evidence found of unusually sparse service on
+# this corridor the way southern-epsom-downs.toml's/swr-chessington.toml's
+# own short single-branch commuter lines warranted tighter overrides).
+
+# ============================================================================
+# STATIONS - two London approaches (Victoria, London Bridge) converging on
+# a shared West Norwood-Gipsy Hill-Crystal Palace trunk, then splitting
+# again toward West Croydon and Beckenham Junction. NOTE: like
+# overground-windrush.toml, this file models more than one physical branch
+# in a single `stations` list - see SEGMENTS above for the real shape.
+# ============================================================================
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "southern-metro-victoria-trunk"
+# London Victoria. Also southern-brighton-main-line.toml's/southeastern-
+# chatham.toml's/southern-oxted-uckfield.toml's own station - station
+# overlap only, see STATION OVERLAP above.
+
+[[stations]]
+crs = "BAK"
+role = "minor"
+segment = "southern-metro-victoria-trunk"
+# Battersea Park.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "southern-metro-victoria-trunk"
+# Clapham Junction. Major interchange, also southern-brighton-main-line.
+# toml's/overground-windrush.toml's/several swr-*.toml files' own station -
+# station overlap only, see STATION OVERLAP above.
+
+[[stations]]
+crs = "WSW"
+role = "minor"
+segment = "southern-metro-victoria-trunk"
+# Wandsworth Common.
+
+[[stations]]
+crs = "BAL"
+role = "junction"
+segment = "southern-metro-victoria-trunk"
+# Balham. Junction per the shared-trunk rule of thumb: the Streatham Hill
+# (this file) and Streatham Common (southern-metro-sutton.toml) branches
+# diverge here - see SEGMENTS above.
+
+[[stations]]
+crs = "SRH"
+role = "minor"
+segment = "southern-metro-crystal-palace-victoria-approach"
+# Streatham Hill. Exclusive to this file's own Victoria approach, one
+# station past the Balham junction.
+
+[[stations]]
+crs = "LBG"
+role = "terminus"
+segment = "southern-metro-beckenham-approach"
+# London Bridge. Also thameslink-core.toml's/several southeastern-*.toml
+# files'/southern-brighton-main-line.toml's/southern-oxted-uckfield.toml's
+# own terminus - station overlap only.
+
+[[stations]]
+crs = "SBM"
+role = "minor"
+segment = "southern-metro-beckenham-approach"
+# South Bermondsey.
+
+[[stations]]
+crs = "QRP"
+role = "minor"
+segment = "southern-metro-beckenham-approach"
+# Queens Road Peckham. Also overground-windrush.toml's own
+# `overground-windrush-clapham-branch` station - station overlap only, see
+# STATION OVERLAP above.
+
+[[stations]]
+crs = "PMR"
+role = "major"
+segment = "southern-metro-beckenham-approach"
+# Peckham Rye. Also overground-windrush.toml's and thameslink-southern.
+# toml's own station - station overlap only, see STATION OVERLAP above.
+
+[[stations]]
+crs = "EDW"
+role = "minor"
+segment = "southern-metro-beckenham-approach"
+# East Dulwich.
+
+[[stations]]
+crs = "NDL"
+role = "minor"
+segment = "southern-metro-beckenham-approach"
+# North Dulwich.
+
+[[stations]]
+crs = "TUH"
+role = "minor"
+segment = "southern-metro-beckenham-approach"
+# Tulse Hill. Also thameslink-southern.toml's own `thameslink-sutton-loop`
+# station - station overlap only, see STATION OVERLAP above. Exclusive
+# segment ends here; the next station (West Norwood) is where this
+# approach converges with the Victoria approach - see SEGMENTS above.
+
+[[stations]]
+crs = "WNW"
+role = "junction"
+segment = "southern-metro-crystal-palace-trunk"
+# West Norwood. Junction per the shared-trunk rule of thumb: this file's
+# two London approaches (Victoria via Streatham Hill, London Bridge via
+# Peckham Rye/Dulwich/Tulse Hill) converge here - see SEGMENTS above.
+
+[[stations]]
+crs = "GIP"
+role = "minor"
+segment = "southern-metro-crystal-palace-trunk"
+# Gipsy Hill.
+
+[[stations]]
+crs = "CYP"
+role = "junction"
+segment = "southern-metro-crystal-palace-trunk"
+# Crystal Palace. Junction per the shared-trunk rule of thumb: the West
+# Croydon and Beckenham Junction branches diverge here - see SEGMENTS
+# above. Also overground-windrush.toml's own terminus (Windrush line) -
+# station overlap only, see STATION OVERLAP above.
+
+[[stations]]
+crs = "NWD"
+role = "major"
+segment = "southern-metro-west-croydon-branch"
+# Norwood Junction. Major interchange (London Overground's Windrush line,
+# Thameslink) - station overlap only with overground-windrush.toml, see
+# STATION OVERLAP above. Exclusive segment starts here, one station past
+# the Crystal Palace junction.
+
+[[stations]]
+crs = "WCY"
+role = "terminus"
+segment = "southern-metro-west-croydon-branch"
+# West Croydon. Also overground-windrush.toml's own terminus (Windrush
+# line) and served by Tramlink - station overlap only, see STATION OVERLAP
+# above. This is a genuinely different Southern approach into West Croydon
+# from the one southern-metro-sutton.toml's own Selhurst-branch station
+# list reaches via a different alignment - see that file's own header for
+# why the two are treated as station overlap, not a shared segment, at
+# this station.
+
+[[stations]]
+crs = "BIK"
+role = "minor"
+segment = "southern-metro-beckenham-branch"
+# Birkbeck. Exclusive segment starts here, one station past the Crystal
+# Palace junction.
+
+[[stations]]
+crs = "BKJ"
+role = "terminus"
+segment = "southern-metro-beckenham-branch"
+# Beckenham Junction. Also southeastern-chatham.toml's/southeastern-
+# maidstone-east.toml's own station, approached from a different direction
+# (via Bromley South) - station overlap only, see STATION OVERLAP above.

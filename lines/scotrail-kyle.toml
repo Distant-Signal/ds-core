@@ -1,5 +1,5 @@
 id = "scotrail-kyle"
-name = "ScotRail Kyle of Lochalsh Line (Dingwall - Kyle of Lochalsh via Inverness)"
+name = "ScotRail Inverness - Kyle of Lochalsh Line"
 mode = "national-rail"
 category = "regional"
 operators = ["SR"]
@@ -8,6 +8,18 @@ operators = ["SR"]
 # source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
 # "ScotRail" section (a): "Kyle of Lochalsh Line (Dingwall-Kyle, via
 # Inverness)".
+#
+# NAME CORRECTION (real-world-sanity review, 2026-09-21): the original
+# `name` field, "Kyle of Lochalsh Line (Dingwall - Kyle of Lochalsh via
+# Inverness)", was geographically backwards -- Inverness is this line's
+# real eastern terminus (see the INV station comment below: "this line's
+# eastern terminus (via Dingwall)"), not a "via" waypoint on the way to
+# Dingwall. Dingwall is merely the Kyle Line's own zero-mileage point for
+# distance measurement (a Kyle-Line-specific convention, not the terminus
+# real trains start/end at); real-world usage (National Rail Enquiries,
+# ScotRail) calls this "Inverness to Kyle of Lochalsh". Renamed
+# accordingly; `id` is left unchanged per SCHEMA.md ("Never change once
+# published").
 #
 # Category: "regional", per the brief's own steer, confirmed rather than
 # assumed. Per Wikipedia's "Kyle of Lochalsh Line" article, this is an

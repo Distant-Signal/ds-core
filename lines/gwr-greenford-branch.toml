@@ -1,0 +1,105 @@
+id = "gwr-greenford-branch"
+name = "Greenford Branch Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. en.wikipedia.org/wiki/Greenford_branch_line: "The
+# passenger service is provided by Great Western Railway."
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Real-world sanity review of the GWR catalogue: GWR's own small branded
+# branch line from West Ealing to Greenford (Drayton Green, Castle Bar Park
+# and South Greenford, all real, currently-open, currently-served stations)
+# was entirely absent from this catalogue before this task (grepped clean
+# before starting).
+
+destination_crs_filter = ["GFD"]
+# en.wikipedia.org/wiki/Greenford_branch_line: "Trains typically operate
+# between Greenford and West Ealing, except for one early morning service
+# from Paddington and one evening return to Paddington" — GFD is this
+# branch's own real, near-universal destination; the one daily Paddington
+# exception each way is deliberately not added to this filter (too thin to
+# treat as this branch's own defining pattern, matching this batch's usual
+# judgment call for a single daily exception).
+
+# Exclusive-segment stations only, for a clean read of this branch's own
+# service (mirrors the other GWR siblings' sample_stations rationale).
+sample_stations = ["DRG", "CBP", "GFD"]
+
+match_keywords = ["Greenford branch"]
+# The line's own current name (also its Wikipedia article title, "Greenford
+# branch line"). Grepped clean against every other file's own
+# match_keywords before adding — no collision.
+
+# A short (2 miles 40 chains), single-track branch with no diversionary
+# alternative, short (two-car-max) platforms throughout most of its length
+# and no Sunday service (en.wikipedia.org/wiki/Greenford_branch_line) — the
+# same isolated-branch reasoning as gwr-marlow-branch.toml's/
+# gwr-henley-branch.toml's own overrides.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# en.wikipedia.org/wiki/Greenford_branch_line: this branch diverges from
+# the Great Western Main Line at West Ealing via a triangular junction, and
+# separately connects to the Acton-Northolt line (London Underground
+# Central line infrastructure) near Greenford, with a "cross-platform
+# interchange to the London Underground's Central line" at Greenford
+# station itself (not modelled here — a different mode, out of this
+# catalogue's National Rail scope).
+#
+# --- West Ealing: real shared waypoint, kept as station overlap only ---
+#
+# West Ealing (WEA) is already elizabeth-line.toml's and
+# elizabeth-heathrow.toml's own `elizabeth-trunk-west` segment — neither of
+# which reaches Drayton Green, Castle Bar Park, South Greenford or
+# Greenford. Following this catalogue's established "single-waypoint
+# overlap against a differently-scoped sibling segment" treatment (see
+# gwr-marlow-branch.toml's MAI note, gwr-henley-branch.toml's TWY note),
+# WEA is tagged with this line's own exclusive segment below rather than
+# either sibling's.
+#
+# CRS codes verified live against ds.cursed.solutions/api/stations
+# (West Ealing=WEA, Drayton Green=DRG, Castle Bar Park=CBP, South
+# Greenford=SGN, Greenford=GFD).
+[[stations]]
+crs = "WEA"
+role = "junction"
+segment = "gwr-greenford-branch"
+# West Ealing. Real shared waypoint with elizabeth-line.toml/
+# elizabeth-heathrow.toml, kept as station overlap only — see comment
+# above. This branch's own exclusive line begins here.
+
+[[stations]]
+crs = "DRG"
+role = "minor"
+segment = "gwr-greenford-branch"
+# Drayton Green. Short platforms limit trains here to two coaches
+# (en.wikipedia.org/wiki/Greenford_branch_line).
+
+[[stations]]
+crs = "CBP"
+role = "minor"
+segment = "gwr-greenford-branch"
+# Castle Bar Park. Same short-platform restriction as Drayton Green.
+
+[[stations]]
+crs = "SGN"
+role = "minor"
+segment = "gwr-greenford-branch"
+# South Greenford. Same short-platform restriction as Drayton Green/
+# Castle Bar Park.
+
+[[stations]]
+crs = "GFD"
+role = "terminus"
+segment = "gwr-greenford-branch"
+# Greenford. This branch's own terminus; also a London Underground Central
+# line station (cross-platform interchange, per the segment-naming comment
+# above) and the eastern end of the separate Acton-Northolt line — neither
+# modelled here (different mode / out of this task's scope).

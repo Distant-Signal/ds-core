@@ -62,11 +62,13 @@ match_keywords = ["Shenfield-Southend line", "Southend Victoria line"]
 # incorrectly widen the claim onto Liverpool Street/Stratford/Romford,
 # none of which this line touches.
 #
-# ## Overlap 2: Wickford (WIC) with `greater-anglia-essex-branches.toml` --
-# a junction this catalogue was already waiting on
+# ## Overlap 2: Wickford (WIC) with `greater-anglia-crouch-valley.toml`
+# (the former `greater-anglia-essex-branches.toml`, split by brand --
+# real-world sanity review) -- a junction this catalogue was already
+# waiting on
 #
 # WIC is already a `crouch-valley-line`-tagged junction in
-# `greater-anglia-essex-branches.toml`, whose own comment states the exact
+# `greater-anglia-crouch-valley.toml`, whose own comment states the exact
 # situation this file now resolves: "Wickford: junction with the
 # Shenfield-Southend line (not itself a GEML station)... the intervening
 # Shenfield-Southend Victoria line is not covered by any file or task in

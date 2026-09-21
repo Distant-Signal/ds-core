@@ -1,5 +1,5 @@
 id = "emr-regional"
-name = "EMR Regional (Liverpool - Norwich)"
+name = "Liverpool - Norwich"
 mode = "national-rail"
 category = "regional"
 # "regional" chosen over "main-line": real-world frequency is roughly hourly,
@@ -9,6 +9,18 @@ category = "regional"
 # service) more closely than the MML spine, despite the gap analysis calling
 # it "EMR Regional intercity" - "intercity" here describes the journey
 # length, not the frequency/rolling-stock tier that `category` is meant to key.
+#
+# REVIEW CORRECTION (2026-09-21, Midlands EMR/WMR/LNWR sanity review):
+# `name` previously read "EMR Regional (Liverpool - Norwich)". "EMR
+# Regional" is EMR's own brand for its entire regional-diesel network (the
+# Poacher Line, Robin Hood Line, Derwent Valley Line, this route and
+# several others all fall under that umbrella per EMR's own services
+# table), not a name specific to this one Liverpool-Norwich route -- using
+# it as this file's display name wrongly implied this was *the* "EMR
+# Regional" line. Renamed to "Liverpool - Norwich" to match this file's own
+# `match_keywords` below, which already correctly target the route by its
+# own end-to-end description rather than the brand umbrella. "EMR Regional"
+# is retained here only as background/provenance, per the brief.
 operators = ["EM"]  # East Midlands Railway
 
 destination_crs_filter = ["LIV", "NRW"]  # the line's two ultimate termini

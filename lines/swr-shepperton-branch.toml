@@ -1,0 +1,224 @@
+id = "swr-shepperton-branch"
+name = "Shepperton Branch Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# swr-kingston-loop.toml's own header has flagged this exact gap since it
+# was written: "if a swr-shepperton.toml is ever added, it should reuse
+# swr-kingston-loop for NBT/KNG/HMW/TED ONLY, and this file's STW entry must
+# move to its own segment at that point." This file is that addition -
+# Fulwell, Hampton, Kempton Park, Sunbury, Upper Halliford and Shepperton
+# were absent from every line definition in `lines/` before it. The
+# companion edit to swr-kingston-loop.toml (renaming its own Strawberry
+# Hill entry to `swr-strawberry-hill`) was made in the same pass - see that
+# file's own UPDATE note.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Shepperton branch line" infobox and station
+# table, in order from the junction: Fulwell - Hampton - Kempton Park -
+# Sunbury - Upper Halliford - Shepperton (terminus). The infobox states the
+# line runs "from its western terminus at Shepperton to a triangular
+# junction with the Kingston loop line east of Fulwell", confirming this is
+# the same junction swr-kingston-loop.toml's own header already describes
+# (Shacklegate Junction, between Teddington and Strawberry Hill) - "On 1
+# July 1894, the LSWR opened a new section of track, enabling trains from
+# Fulwell to reach Twickenham without reversal", the 24-chain curve that is
+# this file's own STW/TWI-avoiding, Teddington-side approach.
+# Electrification (750 V DC third rail) and service pattern ("two trains
+# per hour in each direction" off-peak, "additional peak services run via
+# Twickenham") also from the same infobox/lead, matching
+# swr-kingston-loop.toml's own STW note about a "handful of peak Shepperton
+# workings... routed via Twickenham."
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Fulwell=FLW, Hampton (London)=HMP (distinct from Hampton Court=HMC and
+# Hampton Wick=HMW, both unrelated/different stations - HMW is already
+# swr-kingston-loop.toml's own station, confirmed not the same place),
+# Kempton Park=KMP, Sunbury=SUU, Upper Halliford=UPH, Shepperton=SHP.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Fulwell, Hampton (London), Kempton Park, Sunbury, Upper Halliford or
+# Shepperton.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   WAT - VXH - CLJ - EAD - WIM - RAY - NEM - NBT - KNG - HMW - TED | FLW - HMP - KMP - SUU - UPH - SHP
+#   [--------------- swr-trunk-waterloo ----------|-- swr-kingston-loop --|-- swr-shepperton-branch --]
+#                                                                junction
+#
+# `swr-trunk-waterloo` and `swr-kingston-loop` (as far as Teddington) are
+# reused verbatim, rows copied directly, from swr-kingston-loop.toml - this
+# line's own trains run over the exact same Waterloo-Teddington formation
+# before diverging. Per the shared-trunk rule of thumb, Shacklegate
+# Junction (where the branch actually leaves, between Teddington and
+# Strawberry Hill) has no CRS code of its own, so the split is drawn at the
+# last shared real station, Teddington - this file's own exclusive coverage
+# starts at the next station, Fulwell. Strawberry Hill itself is NOT listed
+# here (off-peak Shepperton services "cut the corner via Shacklegate
+# Junction" per swr-kingston-loop.toml's own STW note) - see that file's
+# own renamed `swr-strawberry-hill` segment, now exclusive to it.
+#
+# `swr-shepperton-branch` (this file's own new, exclusive segment) covers
+# Fulwell through Shepperton - no other file in the catalogue touches any
+# of these six stations.
+
+match_keywords = ["Shepperton branch"]
+# The line's own Wikipedia article name. Grepped clean against every other
+# file's match_keywords before adding - no collision. A bare "Shepperton"
+# was considered and kept out per the same "avoid an ambiguous bare place
+# name" reasoning swr-kingston-loop.toml/swr-hounslow-loop.toml already
+# apply to "Kingston"/"Hounslow" (Shepperton, Victoria, Australia and
+# Shepperton Studios coverage are both plausible false-match risks for a
+# Knowledgebase search).
+
+sample_stations = ["KMP", "SUU", "UPH"]
+# Kempton Park, Sunbury and Upper Halliford - all on this line's own wholly
+# exclusive segment, past the Teddington junction. No other line in the
+# catalogue touches any of them, giving a clean read.
+
+# No `destination_crs_filter`: the real advertised off-peak pattern is a
+# clean Waterloo <-> Shepperton working (2 tph), but peak services are
+# documented to run via a different physical approach (via Twickenham
+# rather than this file's own Teddington-side trunk) while still carrying
+# the same advertised destination - a whitelist would not help disambiguate
+# anything here, since all three sample stations are exclusive to this
+# line regardless of which approach a given working used to reach
+# Shepperton. Matches swr-hounslow-loop.toml's own reasoning for the
+# identical situation.
+
+# Commuter line, same tuning as its sibling swr-kingston-loop.toml (a
+# comparable frequent inner/outer London suburban corridor off the same
+# Teddington-area junction).
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Kingston Loop itself (Norbiton, Kingston, Hampton Wick, Teddington,
+#   Strawberry Hill and the Richmond-side return leg): swr-kingston-loop.toml.
+# - The peak "via Twickenham" approach some Shepperton services use instead
+#   of this file's own Teddington-side trunk: a real, sourced variation
+#   (see SOURCING above), but it runs over track already modelled by
+#   swr-windsor-lines.toml/swr-kingston-loop.toml under their own segment
+#   names, and does not change which stations this file's own sample
+#   stations see - not separately modelled here.
+
+# ============================================================================
+# STATIONS - Waterloo to Shepperton
+# ============================================================================
+
+# --- Shared SWR trunk out of Waterloo. Reused verbatim from
+# swr-kingston-loop.toml. ---
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "EAD"
+role = "minor"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "RAY"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "NEM"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+# --- Kingston Loop, New Malden to Teddington. Reused verbatim from
+# swr-kingston-loop.toml - genuinely the same trains as far as Shacklegate
+# Junction. ---
+[[stations]]
+crs = "NBT"
+role = "minor"
+segment = "swr-kingston-loop"
+# Norbiton.
+
+[[stations]]
+crs = "KNG"
+role = "major"
+segment = "swr-kingston-loop"
+# Kingston.
+
+[[stations]]
+crs = "HMW"
+role = "minor"
+segment = "swr-kingston-loop"
+# Hampton Wick.
+
+[[stations]]
+crs = "TED"
+role = "minor"
+segment = "swr-kingston-loop"
+# Teddington. Shacklegate Junction, where this line's own exclusive
+# coverage begins, is just beyond here and has no CRS code of its own - per
+# the shared-trunk rule of thumb, this file's own exclusive segment starts
+# at the next real station, Fulwell.
+
+# --- Shepperton branch proper. Exclusive to this file. ---
+[[stations]]
+crs = "FLW"
+role = "junction"
+segment = "swr-shepperton-branch"
+# Fulwell. Sits inside the same Strawberry Hill / Shacklegate / Fulwell
+# junction triangle swr-kingston-loop.toml's own STW entry describes - role
+# "junction" to record that, even though no other file's own station list
+# reaches this far.
+
+[[stations]]
+crs = "HMP"
+role = "minor"
+segment = "swr-shepperton-branch"
+# Hampton (London). Distinct from Hampton Court (HMC) and Hampton Wick
+# (HMW, already swr-kingston-loop.toml's own station) - see CRS sourcing
+# note above.
+
+[[stations]]
+crs = "KMP"
+role = "minor"
+segment = "swr-shepperton-branch"
+# Kempton Park.
+
+[[stations]]
+crs = "SUU"
+role = "minor"
+segment = "swr-shepperton-branch"
+# Sunbury.
+
+[[stations]]
+crs = "UPH"
+role = "minor"
+segment = "swr-shepperton-branch"
+# Upper Halliford.
+
+[[stations]]
+crs = "SHP"
+role = "terminus"
+segment = "swr-shepperton-branch"
+# Shepperton. This line's own terminus.

@@ -1,5 +1,5 @@
 id = "northern-wigan-kirkby"
-name = "Kirkby Branch Line"
+name = "Wigan – Kirkby / Headbolt Lane Line"
 mode = "national-rail"
 category = "regional"
 operators = ["NT"]
@@ -33,6 +33,43 @@ operators = ["NT"]
 # prose states plainly "the service frequency has been unchanged since the
 # 1980s" -- an hourly diesel service, same character as
 # `northern-furness.toml`/`northern-clitheroe.toml`.
+#
+# === KNOWN GAP (real-world-sanity review, 2026-09-21): this file under-scopes
+#     the real service pattern ===
+# Fresh re-verification against Wikipedia's "Kirkby branch line" article (its
+# own Service section) shows the real, current Northern service does NOT
+# terminate/originate at Manchester Victoria as a standalone Wigan-Kirkby
+# working: "Trains operate between Blackburn and Headbolt Lane, via
+# Accrington, Burnley Manchester Road, Todmorden, Rochdale, Manchester
+# Victoria, Salford Central, Atherton and Wigan Wallgate" -- i.e. the genuine
+# through-service extends a further ~140 minutes end-to-end west of Blackburn,
+# well beyond this file's own MCV terminus, over the Copy Pit line (Todmorden
+# - Burnley Manchester Road - Accrington - Blackburn). (The article separately
+# notes a 2014-2019 industry-plan proposal to cut the service back to a bare
+# Wigan Wallgate-Kirkby shuttle -- that proposal was never implemented and is
+# NOT today's real pattern; this file's MCV-as-terminus modelling accidentally
+# matches the unimplemented proposal rather than the live service.)
+#
+# This is a real, sourced gap, documented here rather than silently
+# extended: the Blackburn-Todmorden stretch (Copy Pit line: Todmorden, Burnley
+# Manchester Road, Accrington, Blackburn) is not fully covered by any existing
+# `lines/*.toml` file at the time of writing -- `northern-calder-valley.toml`
+# models Leeds/Bradford Interchange-Halifax-Todmorden-Rochdale-Manchester
+# Victoria (the OTHER line out of Todmorden, towards Leeds, not this one), and
+# `northern-east-lancashire.toml` models a different Blackburn-adjacent
+# corridor (Preston-Blackburn-Accrington-Burnley-Nelson-Colne). Properly fixing
+# this would mean either extending this file's own `northern-atherton-line`
+# segment westward from MCV through Salford Central (already listed) to
+# Rochdale/Todmorden (reusing `northern-calder-valley.toml`'s own RCD/TOD
+# station overlap) and on to Blackburn via the un-modelled Copy Pit stretch,
+# or adding a dedicated Copy Pit line file -- both are real follow-up work,
+# left out of this pass rather than rushed: the Copy Pit intermediate-halt
+# CRS codes were not verified this session, and correctly re-terminating this
+# file at Blackburn instead of Manchester Victoria would also require
+# reworking `destination_crs_filter`/`sample_stations` and re-checking the
+# `northern-manchester-southport.toml` shared-trunk note above for knock-on
+# effects. Left as a documented gap per this task's own guidance rather than
+# guessed.
 
 sample_stations = ["MCV", "WGW", "RNF", "KIR", "HBL"]
 # Manchester Victoria (origin of the through service), Wigan Wallgate (the

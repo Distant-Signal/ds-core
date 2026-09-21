@@ -1,8 +1,21 @@
 id = "gwr-windsor-branch"
-name = "Slough to Windsor & Eton Line"
+name = "Windsor & Eton Central Branch"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["GW"]
+
+# Renamed from "Slough to Windsor & Eton Line" and recategorized from
+# "regional" to "commuter" (real-world sanity review). The old name was
+# lifted straight from the Wikipedia article title, not how the route is
+# referred to in real passenger/GWR usage — GWR's own name for it is
+# "Windsor Branch." This file names it "Windsor & Eton Central Branch"
+# specifically (rather than the plainer "Windsor Branch") to stay clearly
+# distinct from the separate SWR file's own "Windsor Lines" name
+# (`lines/swr-windsor-lines.toml`) covering the different Windsor & Eton
+# Riverside station — see the two-file split note below. Category: a
+# 20-minute-interval shuttle (see the severity_overrides sourcing below) is
+# a frequent commuter feeder, the same precedent `gwr-avocet-line.toml`
+# already established as "commuter" for a comparably frequent branch.
 # Great Western Railway, Class 165/166 diesel multiple units — the branch
 # remains unelectrified despite the electrified Great Western Main Line it
 # diverges from (en.wikipedia.org/wiki/Slough_to_Windsor_%26_Eton_Line).

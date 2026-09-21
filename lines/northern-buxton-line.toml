@@ -96,6 +96,18 @@ operators = ["NT"]
 #   (stopped again December 2022): a Manchester-side operational curiosity
 #   on some Buxton line electric services, not a Peak District junction; not
 #   modelled.
+# Category check (Yorkshire/real-world-sanity review, 2026-09-21): confirmed
+# "regional" is still correct, not a candidate for "commuter". Unlike
+# `northern-airedale.toml`/`northern-wharfedale.toml`/`northern-glossop-
+# hadfield.toml` (electrified throughout their own trunk, genuinely
+# commuter-frequency), this line is only electrified Manchester-Hazel Grove
+# -- the rest, Hazel Grove-Buxton, is diesel-only and just hourly (two-hourly
+# Sundays) to the terminus. Same split trunk+branch character this
+# catalogue already treats as "regional" elsewhere (`scotrail-ayrshire.
+# toml`'s frequent-electrified-trunk-plus-modest-branch precedent) rather
+# than "commuter", which this review reserves for lines electrified (and
+# frequent) end to end.
+
 sample_stations = ["MAN", "SPT", "HAZ", "NMN", "BUX"]
 destination_crs_filter = ["BUX"]
 match_keywords = ["Buxton line"]

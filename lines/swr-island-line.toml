@@ -29,14 +29,16 @@ sample_stations = ["RYD", "SAN", "SHN"]
 # "Island Line" is the current infrastructure/branding name
 # (en.wikipedia.org/wiki/Island_Line is the literal article title) and
 # grepped clean against every other file's own match_keywords before adding.
-# Flagged for the controller: `lines/tfw-valley-lines-south.toml`'s own
+# Flagged for the controller: `lines/tfw-vale-of-glamorgan.toml`'s own
 # comments mention (but do not add to its own match_keywords) the unrelated
 # "Barry Island Line" in south Wales — a different, real route that happens
 # to share the substring "Island Line". Neither file's current
-# match_keywords collides today (tfw-valley-lines-south.toml's own
-# match_keywords is ["Cardiff City Line", "Coryton Line", "Cardiff Bay
-# Line"], none of which contain "Island Line"), but if a future task adds
-# dedicated Barry Island Line coverage, its own match_keywords must not
+# match_keywords collides today (the former bundled `tfw-valley-lines-
+# south.toml`, since split into `tfw-city-line.toml`/`tfw-coryton-
+# line.toml`/`tfw-cardiff-bay-line.toml`, used ["Cardiff City Line",
+# "Coryton Line", "Cardiff Bay Line"], none of which contain "Island
+# Line"), but if a future task adds dedicated Barry Island Line coverage,
+# its own match_keywords must not
 # reuse the bare phrase "Island Line" without a qualifier, or it will
 # collide with this file's own keyword.
 match_keywords = ["Island Line"]

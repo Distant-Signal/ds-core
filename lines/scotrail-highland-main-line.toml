@@ -297,3 +297,39 @@ segment = "scotrail-highland-inverness-approach"
 #   line via Hilton Junction): real per the Perth station sourcing above,
 #   not named in this task's gap-analysis bullet and not covered by any
 #   task in this batch -- a genuine, documented gap left for future work.
+#
+# === DECISION (real-world-sanity review, 2026-09-21, Part B): this file
+#     is NOT extended south to Glasgow/Edinburgh -- separate files were
+#     written instead ===
+#
+# This review closed the "Perth's other junctions" gap flagged above with
+# two new files: `lines/scotrail-edinburgh-aberdeen.toml` (Edinburgh-
+# Kirkcaldy-Dundee-Aberdeen, not touching Perth at all) and `lines/
+# scotrail-glasgow-aberdeen.toml` (Glasgow Queen Street-Stirling-Perth-
+# Dundee-Aberdeen, which DOES reach Perth). The question this review's own
+# brief posed -- whether to extend THIS file south to Glasgow QS/Edinburgh
+# instead of creating a third file -- was considered and rejected, for a
+# sourced reason, not just precedent-following: a fresh fetch of
+# Wikipedia's "Perth railway station (Scotland)" article during this
+# review found that this file's own Highland Main Line and the new
+# Glasgow-Aberdeen file's own route are PLATFORM-SEPARATED at Perth, not
+# merely two service patterns sharing one file's worth of track: "Platforms
+# 1 and 2 lie on the eastern side (the old Dundee & Perth Railway part of
+# the station); they handle the Glasgow Queen Street to Dundee and
+# Aberdeen trains", while "Platforms 4-7 sit under the main train shed"
+# and are "the start point for the Highland Main Line." This is the same
+# category of direct, sourced platform-separation evidence `scotrail-
+# kyle.toml`'s own Highland Main Line investigation already used to rule
+# out a shared segment at Inverness (see that file's own "Highland Main
+# Line question" section) -- station overlap only, not a shared trunk, and
+# not the same physical route this file models even where they touch the
+# same station building. Extending this file south would mean grafting on
+# a physically distinct, differently-numbered-platform approach rather
+# than a genuine continuation of this file's own Perth-Inverness track,
+# so a separate file (matching `scotrail-shotts.toml`/`scotrail-
+# bathgate.toml`'s own precedent for a different-approach alternate route
+# rather than a same-track extension) is the more accurate model. `lines/
+# scotrail-glasgow-aberdeen.toml`'s own PTH entry documents this same
+# finding from its own side and keeps `role = "major"` (a through station
+# on that file's own route), not shared with this file's own PTH
+# `role = "terminus"` entry.

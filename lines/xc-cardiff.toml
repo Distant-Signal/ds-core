@@ -4,18 +4,109 @@ mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
 
-destination_crs_filter = ["CDF", "NWP", "GCR"]
-sample_stations = ["GCR", "NWP", "CDF"]
+destination_crs_filter = ["CDF", "NWP", "GCR", "NOT"]
+sample_stations = ["NOT", "GCR", "NWP", "CDF"]
 match_keywords = ["Gloucester to Newport"]
 
 [severity_overrides]
 minor_delays_pct = 0.30
 delay_threshold_minutes = 10
 
-# Birmingham New Street to Cardiff Central, ordered north-east to south-west.
-# Shares the spine's `xc-birmingham` hub and the `xc-west` trunk as far as
-# Cheltenham Spa, where it diverges for Gloucester while spine services carry
-# on via Standish Junction to Bristol.
+# Nottingham to Cardiff Central, ordered north-east to south-west. Shares the
+# spine's `xc-birmingham` hub and the `xc-west` trunk as far as Cheltenham
+# Spa, where it diverges for Gloucester while spine services carry on via
+# Standish Junction to Bristol.
+#
+# REVIEW2 FINDING (2026-09-21): this file previously started at Birmingham
+# New Street, but XC's own published route map names this line "Nottingham -
+# Cardiff", and XC runs an hourly Birmingham-Nottingham service over the same
+# Derby line `cross-country.toml`'s own spine already uses between Derby and
+# Birmingham. Confirmed live via Wikipedia: Nottingham's own station article
+# ("CrossCountry... 1 tph to Birmingham New Street via Derby" and "1 tph to
+# Cardiff Central via Derby, Birmingham New Street and Gloucester"), and each
+# intermediate station's own article/infobox, cross-checked independently:
+#   - Long Eaton: "CrossCountry: 1 tph to Nottingham; 1 tph to Cardiff
+#     Central, via Birmingham New Street."
+#   - Beeston: "CrossCountry... 1 tph to Nottingham; 1 tph to Birmingham New
+#     Street, via Derby; most services continue on to Cardiff Central."
+#   - Attenborough: "CrossCountry operates a small number of stopping
+#     services, in the early morning and late evening, on the route between
+#     Nottingham, Birmingham New Street and Cardiff Central" -- a genuine,
+#     if limited, XC calling point (included per this catalogue's existing
+#     precedent that low frequency alone isn't grounds for exclusion, e.g.
+#     `emr-midland-main-line.toml`'s own ATB entry).
+#   - East Midlands Parkway: confirmed CrossCountry does NOT call here
+#     ("East Midlands Railway operates all services that stop at East
+#     Midlands Parkway") -- correctly left out below, matching
+#     `emr-midland-main-line.toml`'s own DBY-LGE-EMD ordering (Long Eaton
+#     sits between Derby and the East Midlands Parkway junction, not on the
+#     Trent Junction chord itself).
+# Geographic order (Nottingham to Derby) confirmed against
+# `emr-midland-main-line.toml`'s own already-verified station sequence:
+# Derby - Long Eaton - [East Midlands Parkway junction, not an XC stop] -
+# Attenborough - Beeston - Nottingham.
+#
+# NOT/BEE/ATB/LGE are new to this file's exclusive `xc-cardiff-nottingham`
+# segment; DBY/BUT/TAM below now reuse `cross-country.toml`'s own
+# `xc-midlands` segment name VERBATIM (byte-identical station list: DBY,
+# BUT, TAM, same roles) -- a genuine shared trunk, since this is the exact
+# same Derby-Birmingham stretch that file's own Aberdeen/Edinburgh-Plymouth
+# spine already runs over with the same operator (XC), not a
+# station-overlap-only case. `cross-country.toml`'s own TAM comment already
+# documents "CrossCountry runs 2 tph to Nottingham via Derby calling here",
+# confirming this same fact from that file's side. CRS/TIPLOC for
+# NOT/BEE/ATB/LGE reused verbatim from `emr-midland-main-line.toml`'s own
+# Nottingham-spur entries (none of the four carry a confirmed TIPLOC there
+# either, so none is invented here); DBY/BUT/TAM reused verbatim from
+# `cross-country.toml`. Station-overlap-only (no segment shared) with
+# `emr-midland-main-line.toml`'s own `emr-mml-nottingham-spur`/
+# `emr-mml-central`/`emr-mml-derby` segments at NOT/BEE/ATB/LGE/DBY -- same
+# cross-operator convention this catalogue already applies everywhere else
+# (checked that file's own segment names before writing this).
+[[stations]]
+crs = "NOT"
+role = "terminus"
+segment = "xc-cardiff-nottingham"
+
+[[stations]]
+crs = "BEE"
+role = "minor"
+segment = "xc-cardiff-nottingham"
+
+[[stations]]
+crs = "ATB"
+role = "minor"
+segment = "xc-cardiff-nottingham"
+# Attenborough: early-morning/late-evening-only XC calls -- see the sourcing
+# note above.
+
+[[stations]]
+crs = "LGE"
+role = "minor"
+segment = "xc-cardiff-nottingham"
+# Long Eaton: strictly between Attenborough and Derby.
+
+[[stations]]
+crs = "DBY"
+tiploc = "DRBY"
+role = "junction"
+segment = "xc-midlands"
+# Derby: shared-trunk boundary with `cross-country.toml`'s own DBY entry --
+# see the sourcing note above. Per SCHEMA.md's shared-trunk rule of thumb,
+# this junction stays on the shared `xc-midlands` segment; this file's own
+# exclusive Nottingham branch above already ended at the previous station.
+
+[[stations]]
+crs = "BUT"
+role = "minor"
+segment = "xc-midlands"
+
+[[stations]]
+crs = "TAM"
+role = "minor"
+segment = "xc-midlands"
+# Tamworth (Low Level platforms) -- see `cross-country.toml`'s own TAM entry
+# for the High Level/Low Level CRS-overlap note; kept byte-identical here.
 #
 # Task 9.4 fresh route-diagram pass (2026-09-01): re-verified the whole
 # corridor against live Wikipedia route/infobox articles ("Gloucester-Newport

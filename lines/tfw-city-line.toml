@@ -1,0 +1,115 @@
+id = "tfw-city-line"
+name = "Cardiff City Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+sample_stations = ["CDF", "RDR"]
+match_keywords = ["Cardiff City Line"]
+
+# `destination_crs_filter` is deliberately omitted: neither end of this
+# line is a genuine unambiguous dead-end. Cardiff Central (CDF) is a shared
+# hub with real through-running onto other lines (see the Cardiff hub note
+# below), and Radyr (RDR) is a through-junction the Merthyr and Rhondda
+# lines' own services continue past, not a station exclusive to City Line
+# workings terminating there -- the same reasoning the pre-split
+# `tfw-valley-lines-south.toml` gave for omitting both from its own filter.
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-south.toml` (Batch 11, Task 11.7, later a bundled
+# "Cardiff Valley Lines: City Line, Coryton & Cardiff Bay" file), for
+# consistency with the same real-world-branding split already applied to
+# the former `tfw-valley-lines-north.toml` (now `tfw-valley-rhymney.toml`/
+# `tfw-valley-merthyr.toml`/`tfw-valley-rhondda.toml`). TfW's own service
+# table and Wikipedia both treat the City Line, Coryton Line and Cardiff
+# Bay Line as three separately-branded lines sharing only the Cardiff hub,
+# not one bundled line -- the same pattern that justified the north-side
+# split. The Coryton Line's own share of that split now lives in
+# `lines/tfw-coryton-line.toml`, and the Cardiff Bay Line's in
+# `lines/tfw-cardiff-bay-line.toml`. All content below (station list,
+# sourcing notes, segment names) is carried over unchanged from
+# `tfw-valley-lines-south.toml`'s own City Line material, not re-derived --
+# see that file's git history for the original disclosure.
+#
+# Sourcing note: CDF, NNP, WNG, FRW, DCT and RDR's CRS/TIPLOC values were
+# each independently confirmed from that station's own Wikipedia infobox
+# "Station code" field, AND cross-checked against a live, verbatim-quoted
+# railwaycodes.org.uk row (per the original file's own disclosed sourcing
+# pass); CDF and RDR are additionally reused unchanged from
+# `tfw-valley-rhymney.toml`/`tfw-valley-merthyr.toml`/`tfw-valley-
+# rhondda.toml`, which already cross-checked them there. Only currently
+# open, passenger-served stations are listed.
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+# Carried over unchanged from the pre-split `tfw-valley-lines-south.toml`:
+# tighter than this catalogue's default because this is a short-headway
+# urban Cardiff service where delays are proportionately more disruptive
+# than on an hourly regional line. Confirmed frequency (sourced from the
+# City Line's own Wikipedia article): "two trains per hour in each
+# direction" Monday-Saturday daytime (2 tph), independently confirmed at
+# Fairwater during the original sourcing pass.
+
+# --- Cardiff hub: shared with `tfw-valley-rhymney.toml`, `tfw-valley-
+# merthyr.toml` and `tfw-valley-rhondda.toml`. Not shared with
+# `tfw-coryton-line.toml`/`tfw-cardiff-bay-line.toml` here specifically --
+# those two both originate at Cardiff Queen Street (CDQ), not Cardiff
+# Central (CDF), which this line alone (of the three post-split files)
+# reaches. See `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Central: this line's own southern terminus.
+
+# --- City Line: Cardiff Central to Radyr via Fairwater, ordered south to
+# north. Diverges from the Taff Vale trunk only at Radyr itself -- see the
+# Radyr junction note below. Exclusive to this branch throughout its
+# intermediate stations.
+[[stations]]
+crs = "NNP"
+tiploc = "NINIANP"
+role = "minor"
+segment = "tfw-city-line"
+# Ninian Park.
+
+[[stations]]
+crs = "WNG"
+tiploc = "WAUNGRN"
+role = "minor"
+segment = "tfw-city-line"
+# Waun-gron Park.
+
+[[stations]]
+crs = "FRW"
+tiploc = "FRWATER"
+role = "minor"
+segment = "tfw-city-line"
+# Fairwater.
+
+[[stations]]
+crs = "DCT"
+tiploc = "DANESCT"
+role = "minor"
+segment = "tfw-city-line"
+# Danescourt.
+
+[[stations]]
+crs = "RDR"
+tiploc = "RADYR"
+role = "junction"
+segment = "tfw-valley-radyr-junction"
+# Radyr: this line's own northern terminus, and a genuine physical
+# junction with `tfw-valley-merthyr.toml`'s and `tfw-valley-rhondda.toml`'s
+# shared Taff Vale trunk (`tfw-valley-taff-trunk`) -- reuses their
+# dedicated `tfw-valley-radyr-junction` segment name (a single-station
+# junction segment, not the Taff trunk name itself, to avoid falsely
+# marking that trunk's other six stations as shared with this line too).
+# Radyr's own Wikipedia article confirms genuine physical junction: "the
+# station is on the Merthyr Line, and is also the northern terminus of the
+# City Line," with the City Line historically diverging "immediately south
+# of the station" via its own separate corridor (Waterhall Junction) rather
+# than via the Taff Vale trunk's Llandaf/Cathays route.

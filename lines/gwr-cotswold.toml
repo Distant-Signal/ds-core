@@ -10,15 +10,18 @@ operators = ["GW"]
 # articles) independently describes GWR as the operator of this service.
 
 # Deliberately unset. GWR's real Paddington-Oxford-Worcester service
-# continues past Worcester to Great Malvern (GMV) and, ~5 times/day, to
-# Hereford (HFD) (en.wikipedia.org/wiki/Cotswold_Line, "Services" section:
-# "about half the trains continue to/from Great Malvern and five trains a
-# day continue to and from Hereford"). Those stations are beyond this
-# task's scope (gap-analysis doc's "Cotswold Line (Didcot/Oxford-Worcester)"
-# wording) and not independently verified here, so a destination_crs_filter
-# naming only WOS/WOF would wrongly exclude most of this line's actual
-# through services rather than correctly scope them. Left unset rather than
-# invent or overclaim.
+# continues past Worcester to Great Malvern (GMV) and Hereford (HFD) — both
+# now full `stations` entries below (real-world sanity review's extension
+# of this file's own former Worcester-only scope; see the extension
+# comment further down). Malvern Link's own Wikipedia article states GWR
+# runs "hourly services westbound to Great Malvern and Hereford," while
+# Great Malvern's own article gives the real split more precisely: "some of
+# these run to/from Hereford" (i.e. not every Malvern-bound service
+# continues on to Hereford) "and every two hours to Bristol Temple Meads,
+# via Gloucester." A destination_crs_filter naming only GMV/HFD would still
+# misrepresent the real Bristol-bound minority and wasn't independently
+# verified service-by-service against the WOS/WOF pattern already
+# documented above either. Left unset rather than invent or overclaim.
 
 # Exclusive-segment stations only, for a clean read of Cotswold-only
 # services (mirrors swr-south-west-main.toml's / gwr-main-line.toml's
@@ -247,9 +250,77 @@ segment = "gwr-cotswold"
 [[stations]]
 crs = "WOF"
 tiploc = "WORCSFS"
+role = "junction"
+segment = "gwr-cotswold"
+# Role corrected terminus -> junction (real-world sanity review): this
+# file's own extension to Great Malvern/Hereford (below) continues from
+# here — see the extension comment below. Also a real station overlap with
+# wmr-snow-hill.toml's own `wmr-snow-hill-trunk` segment (West Midlands
+# Railway's separate Worcester-Birmingham route via Kidderminster) —
+# station overlap only, unaffected by this update.
+
+# --- Extension to Great Malvern and Hereford (real-world sanity review) ---
+#
+# ~half of this line's real trains continue past Worcester to Great
+# Malvern, and some of those on to Hereford (see the destination_crs_filter
+# comment above for the sourcing) — GWR's own real terminus for this
+# service, not an occasional extra, so this file's former Worcester-only
+# scope left a real gap. Malvern Link (MVL), Great Malvern (GMV), Colwall
+# (CWL) and Ledbury (LED) — all real, currently-open, currently-served
+# stations — were absent from every `lines/*.toml` file in this catalogue
+# before this task (grepped clean before starting). Geographic order
+# (Worcester Foregate Street - Malvern Link - Great Malvern - Colwall -
+# Ledbury - Hereford) confirmed via each station's own Wikipedia infobox
+# preceding/following-station chain (Malvern Link's own infobox: preceding
+# Worcester Foregate Street, following Great Malvern; Colwall's own
+# infobox: preceding Great Malvern, following Ledbury). CRS codes verified
+# live against ds.cursed.solutions/api/stations.
+#
+# --- Hereford: station overlap only with tfw-marches.toml, different
+#     physical approach ---
+#
+# Hereford (HFD) is already tfw-marches.toml's own exclusive segment, but
+# en.wikipedia.org/wiki/Hereford_railway_station confirms that file's own
+# Transport for Wales service reaches Hereford via the separate Welsh
+# Marches Line (north via Leominster, south via Abergavenny) — a genuinely
+# different physical approach from this line's own Cotswold-Line-via-
+# Worcester direction, the same "real station overlap, no shared segment"
+# shape already established elsewhere in this catalogue (e.g. EXD in
+# gwr-west-of-england.toml/swr-west-of-england.toml). HFD is tagged with
+# this line's own exclusive `gwr-cotswold` segment below accordingly.
+[[stations]]
+crs = "MVL"
+role = "minor"
+segment = "gwr-cotswold"
+# Malvern Link.
+
+[[stations]]
+crs = "GMV"
+role = "major"
+segment = "gwr-cotswold"
+# Great Malvern. This route's own real, regular terminus for most of this
+# line's London-through services beyond Worcester — see the extension
+# comment above.
+
+[[stations]]
+crs = "CWL"
+role = "minor"
+segment = "gwr-cotswold"
+# Colwall. en.wikipedia.org/wiki/Colwall_railway_station: "a limited
+# service between Hereford and London Paddington via Oxford" — short
+# platforms mean "passengers can only alight at Colwall from the front 4
+# carriages of the train."
+
+[[stations]]
+crs = "LED"
+role = "minor"
+segment = "gwr-cotswold"
+# Ledbury.
+
+[[stations]]
+crs = "HFD"
 role = "terminus"
 segment = "gwr-cotswold"
-# This task's scope ends here (gap-analysis "Didcot/Oxford-Worcester"
-# wording). Real GWR services continue past here to Great Malvern and
-# Hereford (see destination_crs_filter comment above) but those stations
-# belong to a line definition this task doesn't claim to cover.
+# Hereford. This file's own scope now ends here — see the extension
+# comment above for the Transport for Wales/Welsh Marches Line station
+# overlap with tfw-marches.toml.

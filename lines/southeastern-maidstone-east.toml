@@ -27,32 +27,40 @@ match_keywords = ["Maidstone East line"]
 # Ashford to Victoria via Bromley South and Swanley, stopping at all
 # intermediate stations" - i.e. this line's London approach is the exact
 # same Victoria-Bromley South-Swanley formation southeastern-chatham.toml
-# already models in full as its own `chatham-london` segment (VIC, HNH, WDU,
-# SYH, PNE, KTH, BKJ, SRT, BMS, BKL, SMY, SAY). All twelve of those stations
-# are therefore genuine station overlap with southeastern-chatham.toml here
-# too - not a shared segment (this file uses its own segment name, per the
-# xc-south-coast.toml/xc-manchester.toml precedent used throughout this
-# catalogue for exactly this kind of un-confirmed-to-bar or simply
-# not-yet-attempted track-sharing claim).
+# already models in full (VIC, HNH, WDU, SYH, PNE, KTH, BKJ, SRT, BMS, BKL,
+# SMY, SAY) - an IDENTICAL twelve-station list, confirmed station-by-station
+# against that file's own [[stations]] list.
 #
-# Past Swanley, per Wikipedia's own "Swanley railway station" article, "the
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# this was originally modelled as station overlap only (this file's own
+# segment name, per the xc-south-coast.toml/xc-manchester.toml precedent),
+# on the reasoning that no confirmed source cleared this batch's two-source
+# sourcing bar for the track-sharing claim specifically. A later cross-file
+# review found that reasoning too conservative here: an IDENTICAL
+# twelve-station list in the same order, for the same Victoria-Bromley
+# South-Swanley Southeastern service pattern, is itself strong structural
+# evidence of genuine shared running (every single station matches, not a
+# coincidental or differently-shaped subset). VIC through BKJ is therefore
+# now `chatham-maidstone-victoria`, reused verbatim from southeastern-
+# chatham.toml - a genuine SharedSegment, not station overlap.
+#
+# Past Bickley, per Wikipedia's own "Swanley railway station" article, "the
 # Maidstone Line branches from the main line east of Swanley" through
 # Eynsford, Shoreham (Kent) and Otford - the EXACT same three-station stretch
 # lines/thameslink-southern.toml already models (as its own
 # `thameslink-sevenoaks-shortlands-swanley`/`thameslink-sevenoaks-otford`
 # segments), because Thameslink's Blackfriars-Sevenoaks service runs via
-# Catford and this identical Eynsford/Shoreham/Otford stretch before
-# diverging onto its own Bat & Ball/Sevenoaks branch at Otford. That file's
-# own OTF comment independently confirms the Southeastern/Maidstone-line
-# split happens at Otford: "the lines to Bat & Ball and Maidstone diverge
-# here." Station overlap only against thameslink-southern.toml too, same
-# reasoning and same precedent - its own segment names are not reused, for
-# the identical "granularity mismatch" reason that file's own SEGMENT NAMING
-# comment gives for not reusing southeastern-chatham.toml's `chatham-london`
-# (this file's own Victoria approach touches VIC/HNH/BKJ, which
-# thameslink-southern's Sevenoaks branch never calls at - reusing either
-# sibling's name across the wrong-shaped set of stations would be actively
-# misleading).
+# Catford and rejoins this same Chatham Main Line track at Shortlands,
+# running it through Bromley South/Bickley/St Mary Cray/Swanley before
+# diverging again onto its own Bat & Ball/Sevenoaks branch at Otford. Per
+# the REVIEW FIX above, SRT through SAY is now `chatham-maidstone-
+# thameslink-swanley`, reused verbatim across this file, southeastern-
+# chatham.toml AND thameslink-southern.toml - a genuine three-line
+# SharedSegment for exactly the stretch all three share (thameslink-
+# southern.toml's own Sevenoaks branch never touches VIC/HNH/BKJ, so those
+# three stations correctly stay on the narrower, two-line
+# `chatham-maidstone-victoria` instead - see that file's own SEVENOAKS
+# BRANCH header comment, now updated to match).
 #
 # Past Otford, the Maidstone line's own exclusive stretch (confirmed via
 # Wikipedia's "Otford railway station", "Barming railway station" and "East
@@ -79,90 +87,100 @@ minor_delays_pct = 0.30
 delay_threshold_minutes = 8
 
 # ============================================================================
-# STATIONS - ordered London (Victoria) to Ashford International. Three
-# segments: the Victoria approach (station overlap with southeastern-
-# chatham.toml's `chatham-london`), the Swanley-Otford stretch (station
-# overlap with thameslink-southern.toml's own segments there), and this
-# line's own exclusive stretch from Kemsing onward.
+# STATIONS - ordered London (Victoria) to Ashford International. Four
+# segments: the Victoria approach (`chatham-maidstone-victoria`, a genuine
+# SharedSegment with southeastern-chatham.toml), the Shortlands-Swanley
+# stretch (`chatham-maidstone-thameslink-swanley`, a genuine three-line
+# SharedSegment also with thameslink-southern.toml), the Swanley-Otford
+# stretch (station overlap with thameslink-southern.toml's own segment
+# there), and this line's own exclusive stretch from Kemsing onward. See
+# REVIEW FIX above for why the first two are no longer named
+# `maidstone-east-victoria`.
 # ============================================================================
 [[stations]]
 crs = "VIC"
 role = "terminus"
-segment = "maidstone-east-victoria"
-# London Victoria. Also southeastern-chatham.toml's own terminus and
-# southern-brighton-main-line.toml's own terminus - station overlap only
-# with both, see ROUTE AND SOURCING above.
+segment = "chatham-maidstone-victoria"
+# London Victoria. Genuine SharedSegment with southeastern-chatham.toml's
+# own terminus - see REVIEW FIX above. Also southern-brighton-main-
+# line.toml's own terminus - station overlap only there (a different
+# physical route into Victoria).
 
 [[stations]]
 crs = "HNH"
 role = "major"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-victoria"
 # Herne Hill.
 
 [[stations]]
 crs = "WDU"
 role = "minor"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-victoria"
 # West Dulwich.
 
 [[stations]]
 crs = "SYH"
 role = "minor"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-victoria"
 # Sydenham Hill.
 
 [[stations]]
 crs = "PNE"
 role = "minor"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-victoria"
 # Penge East.
 
 [[stations]]
 crs = "KTH"
 role = "minor"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-victoria"
 # Kent House.
 
 [[stations]]
 crs = "BKJ"
 role = "major"
-segment = "maidstone-east-victoria"
-# Beckenham Junction.
+segment = "chatham-maidstone-victoria"
+# Beckenham Junction. `chatham-maidstone-victoria` ends here; the further,
+# three-line overlap with thameslink-southern.toml begins at the next
+# station, Shortlands - see REVIEW FIX above.
 
 [[stations]]
 crs = "SRT"
 role = "junction"
-segment = "maidstone-east-victoria"
-# Shortlands. Catford Loop Line diverges here (also thameslink-southern.toml's
+segment = "chatham-maidstone-thameslink-swanley"
+# Shortlands. Catford Loop Line diverges here. Also thameslink-southern.toml's
 # own station, approached from a physically different direction via
-# Blackfriars - station overlap only).
+# Blackfriars, but genuinely rejoining this exact track from here through
+# Swanley - genuine three-line SharedSegment (this file, southeastern-
+# chatham.toml, thameslink-southern.toml), see REVIEW FIX above.
 
 [[stations]]
 crs = "BMS"
 role = "major"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-thameslink-swanley"
 # Bromley South.
 
 [[stations]]
 crs = "BKL"
 role = "junction"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-thameslink-swanley"
 # Bickley. Bromley North branch diverges here (southeastern-bromley-
 # north.toml, part of this same batch).
 
 [[stations]]
 crs = "SMY"
 role = "junction"
-segment = "maidstone-east-victoria"
+segment = "chatham-maidstone-thameslink-swanley"
 # St Mary Cray.
 
 [[stations]]
 crs = "SAY"
 role = "junction"
-segment = "maidstone-east-victoria"
-# Swanley. This file's `maidstone-east-victoria` segment ends here; the
-# Maidstone line's own exclusive-to-this-corridor stretch (still shared with
-# Thameslink's Sevenoaks service, see below) begins at the next station.
+segment = "chatham-maidstone-thameslink-swanley"
+# Swanley. `chatham-maidstone-thameslink-swanley` ends here for all three
+# files that share it; the Maidstone line's own exclusive-to-this-corridor
+# stretch (still shared with Thameslink's Sevenoaks service via station
+# overlap only, see below) begins at the next station.
 
 [[stations]]
 crs = "EYN"

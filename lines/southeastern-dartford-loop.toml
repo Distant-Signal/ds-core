@@ -1,8 +1,21 @@
 id = "southeastern-dartford-loop"
-name = "Dartford Loop Line"
+name = "Sidcup Line (Dartford Loop)"
 mode = "national-rail"
 category = "commuter"
 operators = ["SE"]
+
+# REVIEW FIX (Southeastern real-world-sanity pass): renamed from "Dartford
+# Loop Line" to "Sidcup Line (Dartford Loop)". Southeastern's own TOC route
+# table lists this corridor as "Metro - Sidcup Line" (confirmed via a fresh
+# check of Wikipedia's "Southeastern (train operating company)" article's
+# Metro Services route list, which shows "Metro - Sidcup Line (also referred
+# to as 'Dartford Loop Line')" alongside the separate "Metro - North Kent
+# Line" and "Metro - Bexleyheath Line" entries), and Wikipedia's own
+# "Dartford loop line" article already states the line is "informally known
+# as the Sidcup line in the context of Southeastern Metro services" - this
+# was already noted in FINDING 1 below, just not reflected in `name` until
+# now. "Dartford Loop" is kept in `match_keywords` (already present, see
+# below) and in the id (stable, never changed per SCHEMA.md).
 
 # All three on this line's own exclusive branch (past the Hither Green
 # junction), the same "sample on the exclusive segment for a clean read"
@@ -174,6 +187,16 @@ delay_threshold_minutes = 4
 # FINDING 2 above and thameslink-southern.toml's own SEVENOAKS BRANCH header
 # comment, which independently re-verified the same negative finding and
 # kept its own separate segment names instead.
+#
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# this file and southeastern-bexleyheath.toml got this unification right
+# from the start - a later cross-file review found southeastern-main-
+# line.toml, southeastern-hayes-line.toml and southeastern-north-kent.toml
+# had NOT reused this name for their own genuinely-identical copy of this
+# same stretch. Those three files have now been fixed to reuse
+# `southeastern-lewisham-corridor` too (see each file's own header comment)
+# - no change needed here, this file's own segment naming was already
+# correct.
 #
 # Ordered London to Dartford: shared trunk to Lewisham, then this file's own
 # trunk continuing past Lewisham to Hither Green before this line's own

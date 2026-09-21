@@ -94,19 +94,21 @@ delay_threshold_minutes = 10
 # - Meadowhall (MHS): shared with `tpe-south.toml`. Station overlap only.
 #
 # --- Scope boundaries (documented, not modelled) ---
-# - Barnsley - Wakefield Kirkgate - Castleford - Leeds (the "Hallam Line"):
-#   per Elsecar and Wombwell's own Wikipedia station articles (surfaced via
-#   WebSearch), some services from Sheffield via this line's own Barnsley-
-#   Meadowhall-Sheffield stretch continue beyond Barnsley towards Leeds via
-#   Wakefield Kirkgate and Castleford rather than towards Huddersfield/
-#   Penistone -- e.g. Elsecar's own article: "two trains per hour to
-#   Barnsley (one continuing to Leeds via Castleford, the other to
-#   Huddersfield via Penistone)". This is a real, sourced, currently-
-#   unmodelled Northern service (grepped: no existing `lines/*.toml` file
-#   covers Wakefield Kirkgate or Castleford on this corridor) -- left as a
-#   documented gap for future work rather than folded into this file, since
-#   Barnsley-Sheffield is this line's own shared approach but Barnsley-Leeds
-#   is a genuinely different route this task was not scoped to cover.
+# - RESOLVED (Part B, Yorkshire real-world-sanity review, 2026-09-21):
+#   Barnsley - Wakefield Kirkgate - Castleford - Leeds (the "Hallam Line")
+#   is now modelled in `lines/northern-hallam-line.toml` -- see that file
+#   for the full route/CRS sourcing. Per Elsecar and Wombwell's own
+#   Wikipedia station articles (already cited when this gap was first
+#   flagged), the Hallam Line's own Sheffield-bound trains share this
+#   file's own Barnsley-Wombwell-Elsecar-Chapeltown-Meadowhall-Sheffield
+#   approach -- genuine physical track-sharing, not just both lines
+#   touching Barnsley/Sheffield. This file's own single `northern-penistone`
+#   segment has accordingly been split (see the segment-split note below):
+#   the Barnsley-Sheffield stretch now carries a new, narrower shared name,
+#   `northern-barnsley-sheffield`, reused verbatim by
+#   `northern-hallam-line.toml`; this file's own exclusive
+#   `northern-penistone` segment now covers only Huddersfield through
+#   Dodworth, its real exclusive stretch.
 # - Sheffield Victoria/Wednesday-era historical routings and any
 #   closed intermediate halts on this corridor: not modelled, per this
 #   catalogue's convention of covering current operation only.
@@ -179,39 +181,45 @@ segment = "northern-penistone"
 [[stations]]
 crs = "BNY"
 role = "junction"
-segment = "northern-penistone"
-# Barnsley -- the unmodelled Hallam Line towards Leeds via Wakefield
-# Kirkgate/Castleford splits off here; see the scope-boundaries note above.
+segment = "northern-barnsley-sheffield"
+# Barnsley -- the Hallam Line towards Leeds via Wakefield Kirkgate/
+# Castleford splits off here; see the scope-boundaries note above. Per
+# SCHEMA.md's shared-trunk rule of thumb the junction carries the shared
+# segment name; this file's own exclusive `northern-penistone` segment
+# ends at the previous station, Dodworth.
 
 [[stations]]
 crs = "WOM"
 role = "minor"
-segment = "northern-penistone"
-# Wombwell.
+segment = "northern-barnsley-sheffield"
+# Wombwell -- shared trunk with `northern-hallam-line.toml`; see the
+# scope-boundaries note above.
 
 [[stations]]
 crs = "ELR"
 role = "minor"
-segment = "northern-penistone"
+segment = "northern-barnsley-sheffield"
 # Elsecar.
 
 [[stations]]
 crs = "CLN"
 role = "minor"
-segment = "northern-penistone"
+segment = "northern-barnsley-sheffield"
 # Chapeltown (South Yorkshire) -- disambiguated from the unrelated West
 # Yorkshire place of the same name via ds.cursed.solutions/api/stations.
 
 [[stations]]
 crs = "MHS"
 role = "major"
-segment = "northern-penistone"
-# Meadowhall -- station-overlap only with `tpe-south.toml`; see the note
-# above.
+segment = "northern-barnsley-sheffield"
+# Meadowhall -- station-overlap only with `tpe-south.toml`/
+# `northern-wakefield-line.toml`; see the note above. Shared trunk (not
+# merely station overlap) with `northern-hallam-line.toml`.
 
 [[stations]]
 crs = "SHF"
 role = "terminus"
-segment = "northern-penistone"
+segment = "northern-barnsley-sheffield"
 # Sheffield -- station-overlap only with several other operators' own
-# lines; see the note above.
+# lines; see the note above. Shared trunk (not merely station overlap)
+# with `northern-hallam-line.toml`.

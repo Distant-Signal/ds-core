@@ -1,0 +1,119 @@
+id = "swr-lymington-branch"
+name = "Lymington Branch Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Flagged as a real, still-open gap by both swr-south-west-main.toml
+# (which lists Brockenhurst on its own exclusive `swr-swml-south` segment
+# with no mention of the branch) and xc-south-coast.toml's own comment on
+# its own BCU entry: "also the Lymington branch junction -- that branch is
+# not modelled in this catalogue yet." Lymington Town and Lymington Pier
+# were absent from every line definition in `lines/` before this file.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Lymington branch line" infobox (operator
+# "South Western Railway", termini "Brockenhurst" and "Lymington Pier",
+# "750 V DC third-rail" electrification, "a half-hourly shuttle passenger
+# service") and its own station list - Brockenhurst (junction) - Lymington
+# Town (opened 1858) - Lymington Pier (opened 1884, terminus, connects with
+# Wightlink ferry services to Yarmouth, Isle of Wight). Two historic
+# intermediate stops - Shirley Holms (closed 1888) and Ampress Works Halt
+# (closed 1989) - are excluded, per this catalogue's convention of covering
+# current operation only.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Lymington Town=LYT, Lymington Pier=LYP.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Lymington Town or Lymington Pier.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   ... - BCU | LYT - LYP
+#   [swr-brockenhurst-  [-- swr-lymington-branch --]
+#      junction]
+#     junction
+#
+# Brockenhurst (BCU) is the real junction where this branch leaves the
+# South West Main Line, per the shared-trunk rule of thumb. Rather than
+# reuse swr-south-west-main.toml's own `swr-swml-south` segment wholesale
+# (which would also mark that file's Winchester/Southampton/Bournemouth/
+# Poole/Weymouth stations as "shared", even though this branch never
+# reaches them), Brockenhurst alone carries a new, narrow
+# `swr-brockenhurst-junction` segment, reused verbatim from
+# swr-south-west-main.toml (see that file's own matching UPDATE note) - the
+# same precise-blast-radius approach used for Ash Vale/Aldershot in
+# swr-alton.toml/swr-ascot-aldershot.toml (this same batch).
+#
+# Also a station overlap (not a shared segment) with xc-south-coast.toml's
+# own exclusive `xc-south-coast` segment at the same station - that file's
+# own BCU comment already flags the branch as a documented gap this file
+# now fills, but its own approach into Brockenhurst is a different
+# physical/operator convergence (Cross Country's own long-distance service,
+# not this file's own SWR local branch), matching the established
+# precedent for this exact kind of overlap elsewhere in the catalogue (e.g.
+# swr-west-of-england.toml's own Basingstoke note).
+#
+# `swr-lymington-branch` (new, exclusive): covers Lymington Town and
+# Lymington Pier - no other file touches either.
+
+match_keywords = ["Lymington branch"]
+# The line's own Wikipedia article name. Grepped clean against every other
+# file's match_keywords before adding - no collision (xc-south-coast.toml's
+# own mentions of "Lymington branch" are plain-prose comments, never inside
+# a match_keywords array).
+
+sample_stations = ["LYT", "LYP"]
+# Both stations on this line's own wholly exclusive segment - no other line
+# in the catalogue touches either.
+
+destination_crs_filter = ["LYP"]
+# A short, clean there-and-back Brockenhurst <-> Lymington Pier shuttle per
+# the infobox's own termini and "half-hourly shuttle" description - both
+# sample stations are exclusive to this line, so the filter carries no risk
+# of dropping a real sample.
+
+# Commuter line: a frequent (half-hourly, 2 tph) shuttle service per the
+# infobox, matching this catalogue's other short, frequent SWR suburban
+# branches (swr-chessington.toml, swr-chertsey-loop.toml) rather than an
+# hourly-or-worse rural branch.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - Shirley Holms and Ampress Works Halt: both long closed (1888 and 1989
+#   respectively per the infobox/station list) - not modelled, per this
+#   catalogue's current-operation-only convention.
+# - The Wightlink Isle of Wight ferry connection at Lymington Pier: not
+#   National Rail, out of scope for this catalogue entirely.
+
+# ============================================================================
+# STATIONS - Brockenhurst to Lymington Pier
+# ============================================================================
+[[stations]]
+crs = "BCU"
+role = "junction"
+segment = "swr-brockenhurst-junction"
+# Brockenhurst. Reused verbatim from swr-south-west-main.toml - see
+# SEGMENTS above.
+
+[[stations]]
+crs = "LYT"
+role = "minor"
+segment = "swr-lymington-branch"
+# Lymington Town.
+
+[[stations]]
+crs = "LYP"
+role = "terminus"
+segment = "swr-lymington-branch"
+# Lymington Pier. This line's own terminus, connecting with Wightlink ferry
+# services to Yarmouth, Isle of Wight (not National Rail, out of scope).

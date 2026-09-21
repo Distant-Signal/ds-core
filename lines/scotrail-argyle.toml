@@ -184,9 +184,9 @@ segment = "scotrail-argyle-core"
 # article, and individual station infobox/succession-box pages, each CRS
 # code cross-checked live against National Rail Enquiries), replacing the
 # old "not independently verified" scope-boundary note. `grep`-checked
-# against every other `lines/*.toml` file first: none of the 17 CRS codes
-# below appear anywhere else in the catalogue, so this whole branch group
-# is exclusive to this file today.
+# against every other `lines/*.toml` file first: 15 of the 17 CRS codes
+# below (everything except Greenfaulds and Cumbernauld, added in the
+# CORRECTION note below) are exclusive to this file today.
 #
 # Topology (Wikipedia "Whifflet Line" infobox: start=Glasgow Central,
 # end=Motherwell, "stations = 7" -- matches Carmyle, Mount Vernon,
@@ -195,13 +195,65 @@ segment = "scotrail-argyle-core"
 # the count):
 #   - Whifflet spur (diverges at Rutherglen, per this file's own RUT
 #     comment below): Rutherglen -> Carmyle -> Mount Vernon -> Baillieston
-#     -> Bargeddie -> Kirkwood -> Whifflet -> Coatbridge Central
-#     (terminus). Whifflet's own succession box lists its "next" station
+#     -> Bargeddie -> Kirkwood -> Whifflet -> Coatbridge Central -> (real
+#     through continuation to Greenfaulds/Cumbernauld -- see the CORRECTION
+#     note below). Whifflet's own succession box lists its "next" station
 #     as "Motherwell or Terminus" with no intermediate station -- i.e.
-#     Whifflet is itself a junction: one direction is the short terminus
-#     spur to Coatbridge Central, the other rejoins this file's existing
-#     Rutherglen-Motherwell route (via Uddingston/Bellshill, below) with
-#     no additional stops.
+#     Whifflet is itself a junction: one direction is the through route to
+#     Coatbridge Central/Greenfaulds/Cumbernauld, the other rejoins this
+#     file's existing Rutherglen-Motherwell route (via Uddingston/Bellshill,
+#     below) with no additional stops.
+#
+# === CORRECTION (real-world-sanity review, 2026-09-21): Coatbridge Central
+#     is NOT a dead-end terminus ===
+#
+# The original pass above mis-modelled Coatbridge Central (CBC) as a
+# terminus of a short dead-end spur off Whifflet. A fresh Wikipedia fetch
+# during this review (station articles "Coatbridge Central", "Whifflet
+# Line", "Greenfaulds" and "Cumbernauld") establishes this is wrong:
+# Coatbridge Central is a through station, not a terminus -- its own
+# succession box gives Whifflet as the preceding station and Greenfaulds
+# as the following one, and its own Services section (as of 2023) states
+# "an hourly service to both Dalmuir and Cumbernauld with extra trains
+# running at peak times", confirming trains continue past it rather than
+# terminating. Greenfaulds' own article independently corroborates this
+# from the other side, describing a "Motherwell to Cumbernauld Line"
+# reaching it via Whifflet (11 miles north of Motherwell), distinct from
+# the electrified "Cumbernauld Line" reaching it via Glasgow Queen
+# Street/Springburn/Gartcosh (13.25 miles from Glasgow Queen Street) --
+# two physically different approaches converging at Greenfaulds and
+# continuing together into Cumbernauld, where Cumbernauld station's own
+# article confirms both a "Motherwell-Cumbernauld line" and the
+# "Cumbernauld Line" call, with Cumbernauld itself the southbound terminus
+# of the former.
+#
+# Greenfaulds (GRL) and Cumbernauld (CUB) both already have `[[stations]]`
+# entries in `lines/scotrail-cumbernauld.toml`. Per the sourcing above,
+# this file's own Whifflet-spur trains genuinely continue over that same
+# track from Coatbridge Central onward -- a real shared trunk, not mere
+# station-name overlap -- so this file's own Greenfaulds/Cumbernauld
+# entries below share a segment name with that file for just these two
+# stations.
+#
+# REVIEW2 FIX (2026-09-21): this originally reused `scotrail-cumbernauld.
+# toml`'s broader `scotrail-cumbernauld-branch` segment name verbatim
+# (which in that file also covers Barnhill/Robroyston/Stepps/Gartcosh on
+# its own unrelated Glasgow Queen Street/Springburn approach -- stations
+# this file's own trains never call at), which would have falsely
+# promoted those four stations to shared scope too and was wrongly
+# described as making it "a genuine three-way `SegmentRegistry`-shared
+# segment" (only two files, `scotrail-argyle` and `scotrail-cumbernauld`,
+# actually use it). Fixed by carving a new, narrower `scotrail-cumbernauld-
+# greenfaulds-trunk` segment name for just GRL/CUB, applied in both files;
+# `scotrail-cumbernauld.toml`'s own BNL/RRN/SPS/GRH stations stay on the
+# original `scotrail-cumbernauld-branch` name, unaffected. Coatbridge
+# Central itself is retagged `role = "major"`
+# (a through station, not a terminus) and stays on this file's own
+# exclusive `scotrail-argyle-coatbridge-spur` segment, since the Whifflet-
+# CBC stretch itself is not shared with any other file -- the shared
+# segment begins at the next station, Greenfaulds, per the shared-trunk
+# rule of thumb (Coatbridge Central is not itself a junction; nothing
+# diverges there).
 #   - Hamilton Circle (diverges at Motherwell): Motherwell -> Airbles ->
 #     Hamilton Central -> Hamilton West -> (Blantyre/East Kilbride Line,
 #     out of scope -- see the scope-boundaries note below).
@@ -275,12 +327,38 @@ segment = "scotrail-argyle-whifflet-branch"
 
 [[stations]]
 crs = "CBC"
-role = "terminus"
+role = "major"
 segment = "scotrail-argyle-coatbridge-spur"
-# Coatbridge Central: terminus of the short spur off Whifflet (Wikipedia
-# succession box: previous Whifflet, no further station). No through route
-# to Hamilton Central -- the real topology is the branch group described
-# in the Task 3.1 BRANCH-RESEARCH comment above.
+# Coatbridge Central: NOT a terminus -- a through station (Wikipedia
+# succession box: previous Whifflet, next Greenfaulds), with an hourly
+# service continuing to Cumbernauld. See the CORRECTION note above (this
+# file previously, incorrectly, modelled it as a dead-end spur terminus).
+# No through route to Hamilton Central -- that's a separate branch group,
+# described in the Task 3.1 BRANCH-RESEARCH comment above.
+
+[[stations]]
+crs = "GRL"
+role = "junction"
+segment = "scotrail-cumbernauld-greenfaulds-trunk"
+# Greenfaulds: genuine shared trunk with `scotrail-cumbernauld.toml` --
+# see the CORRECTION note above. Junction where this file's own
+# Coatbridge Central approach converges with that file's own Glasgow
+# Queen Street/Springburn/Gartcosh approach, both continuing together to
+# Cumbernauld.
+
+[[stations]]
+crs = "CUB"
+role = "terminus"
+segment = "scotrail-cumbernauld-greenfaulds-trunk"
+# Cumbernauld: terminus of this line's own Whifflet-spur service pattern
+# (Wikipedia "Cumbernauld railway station": the Motherwell-Cumbernauld
+# line terminates here southbound). `scotrail-cumbernauld.toml`'s own CUB
+# entry keeps its existing `role = "junction"` (the Croy Line divergence,
+# from that file's own service pattern) -- the two files' `role` values
+# intentionally differ, describing different real service patterns at the
+# same physical station, while sharing the same `segment` name because the
+# underlying track is genuinely the same (same convention as `scotrail-
+# bathgate.toml`'s ADR entry vs. `scotrail-north-clyde.toml`'s).
 
 [[stations]]
 crs = "UDD"

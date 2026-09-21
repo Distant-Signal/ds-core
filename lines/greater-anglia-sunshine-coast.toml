@@ -1,0 +1,161 @@
+id = "greater-anglia-sunshine-coast"
+name = "Sunshine Coast Line (Colchester - Clacton-on-Sea / Walton-on-the-Naze)"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml -- not re-derived here.
+
+# Split out of the former `greater-anglia-essex-branches.toml` (real-world
+# sanity review): that file bundled three unrelated, separately
+# community-rail-branded Greater Anglia branches (Sunshine Coast, Crouch
+# Valley, Braintree) under a single "Essex Branch Lines" umbrella that
+# nobody -- not NRE, not GA's own network map -- uses, and a single incident
+# on any one of them reported as a disruption on all three. Split one file
+# per real brand, matching this session's EMR (`emr-rural-branches` ->
+# `emr-robin-hood`/`emr-poacher`/`emr-derwent-valley`) and TfW
+# (`tfw-valley-lines-north` -> Rhymney/Merthyr/Rhondda) split precedent.
+# Station data, CRS codes and segment names below are reused verbatim from
+# the original file -- redistributed, not re-researched.
+
+sample_stations = ["CLT", "WON"]
+match_keywords = ["Sunshine Coast line"]
+
+# Hourly branch to each of the two outer arms (1tph Clacton-on-Sea, 1tph
+# Walton-on-the-Naze) -- unchanged from the original bundled file's
+# reasoning (northern-lakes.toml/northern-tyne-valley.toml branch-line
+# pattern): one cancellation is a large fraction of the hour's service, and
+# a 5-minute delay on a short branch journey isn't yet a story at
+# config.py's base thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Sunshine Coast line (Colchester-Clacton-on-Sea / Walton-on-the-Naze)
+#
+# Wikipedia's "Sunshine Coast Line" article (fetched raw 2026-08-30) -- the
+# current marketing name for the former Tendring Hundred Railway -- gives
+# `start = Colchester`, `end = Clacton-on-Sea / Walton-on-the-Naze` and an
+# explicit 12-station table split into "Main section to Thorpe-le-Soken,"
+# "Branch to Clacton-on-Sea" and "Branch to Walton-on-the-Naze" sections
+# (plus a fourth, short "Branch to Colchester Town" spur -- see the CET note
+# below). Thorpe-le-Soken (TLS) is the real fork point within this branch
+# itself, per the article's own services section: "1tph Clacton-on-Sea-
+# Liverpool Street... 1tph Walton-on-the-Naze-Colchester... This service
+# waits for the Clacton-on-Sea service to pass at Thorpe-le-Soken." CRS
+# codes independently verified from each station's own Wikipedia infobox
+# `code` field: Hythe/Essex (HYH), Wivenhoe (WIV), Alresford/Essex (ALR),
+# Great Bentley (GRB), Weeley (WEE), Thorpe-le-Soken (TLS), Clacton-on-Sea
+# (CLT), Kirby Cross (KBX), Frinton-on-Sea (FRI), Walton-on-the-Naze (WON).
+#
+# ## Colchester Town (CET) -- added by the real-world sanity review
+#
+# The original bundled file deliberately omitted the short "Branch to
+# Colchester Town" spur (Colchester to Colchester Town, 1tph shuttle) as
+# "a self-contained inner-city shuttle rather than part of the seaside/
+# branch topology" its three named branches described. Re-examined here:
+# it IS part of the Sunshine Coast Line's own infobox station count (the
+# fourth branch in its own stations table) and GA operates it as an hourly
+# Liverpool Street-Colchester Town through service, not merely a Colchester
+# shuttle -- a genuine, currently-operating Greater Anglia service this
+# catalogue had no coverage of at all. Added as its own short exclusive
+# branch off Colchester. CRS verified from Colchester Town's own Wikipedia
+# infobox `code` field: CET.
+#
+# ## Segment decision at Colchester: station-level overlap only with
+# `greater-anglia-main-line.toml`, NOT a shared segment name
+#
+# Colchester is already a `geml-mainline`-tagged junction in
+# `greater-anglia-main-line.toml` ("Sunshine Coast line ... diverges here").
+# Reusing that literal segment name here would (per that file's own
+# documented hazard: `segments.rs`'s `SegmentRegistry::is_shared` marks a
+# segment name shared globally by name, not scoped to the stations two
+# files actually have in common) incorrectly reclassify unrelated
+# `geml-mainline` stations (Diss, Norwich, etc.) as shared trunk too. So
+# Colchester keeps this file's own exclusive `sunshine-coast-main` segment
+# name, unchanged from the original bundled file. Station-level overlap
+# only -- an incident at Colchester matches both lines independently, each
+# as `MatchScope::ExclusiveSegment`.
+
+# --- Sunshine Coast line: Colchester to Thorpe-le-Soken (shared trunk of
+# both the Clacton-on-Sea and Walton-on-the-Naze arms) ---
+
+[[stations]]
+crs = "COL"
+role = "junction"
+segment = "sunshine-coast-main"
+# Colchester: also a `geml-mainline`-tagged junction in
+# greater-anglia-main-line.toml, and the junction for the Colchester Town
+# spur below. Station-level overlap only, not a shared segment name -- see
+# the segment-decision note above.
+
+[[stations]]
+crs = "HYH"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "WIV"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "ALR"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "GRB"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "WEE"
+role = "minor"
+segment = "sunshine-coast-main"
+
+[[stations]]
+crs = "TLS"
+role = "junction"
+segment = "sunshine-coast-main"
+# Thorpe-le-Soken: the line's own internal fork. Clacton-on-Sea trains and
+# Walton-on-the-Naze trains cross here ("the Walton service waits for the
+# Clacton-on-Sea service to pass") -- last station of the shared main
+# section; each arm's own exclusive segment starts at the next station.
+
+# Branch to Clacton-on-Sea:
+
+[[stations]]
+crs = "CLT"
+role = "terminus"
+segment = "sunshine-coast-clacton"
+
+# Branch to Walton-on-the-Naze:
+
+[[stations]]
+crs = "KBX"
+role = "minor"
+segment = "sunshine-coast-walton"
+
+[[stations]]
+crs = "FRI"
+role = "minor"
+segment = "sunshine-coast-walton"
+
+[[stations]]
+crs = "WON"
+role = "terminus"
+segment = "sunshine-coast-walton"
+
+# Branch to Colchester Town (added by the real-world sanity review -- see
+# the CET note above):
+
+[[stations]]
+crs = "CET"
+role = "terminus"
+segment = "sunshine-coast-colchester-town"
+# Colchester Town: hourly Liverpool Street-Colchester Town GA service, a
+# genuinely separate calling pattern from the Clacton/Walton arms above,
+# so given its own exclusive segment rather than folded into
+# `sunshine-coast-main`.

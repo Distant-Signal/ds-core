@@ -1,0 +1,111 @@
+id = "greater-anglia-crouch-valley"
+name = "Crouch Valley Line (Wickford - Southminster)"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml -- not re-derived here.
+
+# Split out of the former `greater-anglia-essex-branches.toml` (real-world
+# sanity review): that file bundled three unrelated, separately
+# community-rail-branded Greater Anglia branches (Sunshine Coast, Crouch
+# Valley, Braintree) under a single "Essex Branch Lines" umbrella that
+# nobody uses, and its own bundled name was doubly misleading for this
+# branch specifically -- the Crouch Valley line doesn't even diverge off
+# the Great Eastern Main Line (see the topology note below), so grouping it
+# under an "Essex Branch Lines" file alongside two genuine GEML branches
+# implied a shared trunk it doesn't have. Split one file per real brand,
+# matching this session's EMR/TfW split precedent. Station data and CRS
+# codes below are reused verbatim from the original file -- redistributed,
+# not re-researched.
+
+sample_stations = ["SMN"]
+match_keywords = ["Crouch Valley line"]
+
+# Rural, 2tph weekday / hourly Sunday branch -- unchanged from the original
+# bundled file's reasoning (northern-lakes.toml/northern-tyne-valley.toml
+# branch-line pattern): one cancellation is a large fraction of the hour's
+# service, and a 5-minute delay on a short branch journey isn't yet a story
+# at config.py's base thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Topology: a branch off the Shenfield-Southend line, NOT the GEML
+#
+# Wikipedia's "Crouch Valley line" article (fetched raw): "The Crouch
+# Valley line... is a branch line off the Shenfield-Southend line... It
+# links Wickford in the west to Southminster in the east... The line
+# diverges from the Shenfield-Southend line at Wickford." Wickford's own
+# station article (fetched raw) confirms the same thing from the other
+# side: "Wickford railway station is a junction stop on the Shenfield to
+# Southend Line and also the western terminus of the Crouch Valley Line...
+# Most Southend services connect to the Great Eastern Main Line at
+# Shenfield." So the real topology is two hops from the GEML, not one:
+# GEML -> (Shenfield-Southend line, diverging at Shenfield) -> (Crouch
+# Valley line, diverging at Wickford) -- this line is modelled starting at
+# its own real, verified junction (Wickford), not fabricated as a direct
+# GEML branch.
+#
+# ## Segment decision at Wickford: station-level overlap with
+# `greater-anglia-southend-victoria.toml`, NOT a shared segment name
+#
+# Wickford (WIC) is also a `greater-anglia-southend-victoria`-tagged
+# junction in `greater-anglia-southend-victoria.toml` (the Shenfield-
+# Southend line, catalogued after this branch was first drafted -- see that
+# file's own Overlap 2 note, which already anticipates and resolves this
+# exact relationship). This line's own trunk continues south to
+# Southminster while the Shenfield-Southend line continues east to
+# Rayleigh/Southend -- the two meet only at Wickford's own platforms, so
+# station-level overlap only, each line's own exclusive segment name kept
+# (this file's `crouch-valley-line`, that file's own). Peak
+# Southminster-Liverpool Street through-services exist per both articles,
+# but that's a service pattern over unmodelled/other-file track, not a
+# claim this file makes about segment sharing.
+#
+# CRS codes independently verified from each station's own Wikipedia
+# infobox `code` field: Wickford (WIC), Battlesbridge (BLB), South Woodham
+# Ferrers (SOF), North Fambridge (NFA), Althorne (ALN), Burnham-on-Crouch
+# (BUU), Southminster (SMN).
+
+[[stations]]
+crs = "WIC"
+role = "junction"
+segment = "crouch-valley-line"
+# Wickford: junction with the Shenfield-Southend line (see the topology
+# note above), also `greater-anglia-southend-victoria.toml`'s own junction
+# station -- station-level overlap only, see the segment-decision note
+# above.
+
+[[stations]]
+crs = "BLB"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "SOF"
+role = "major"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "NFA"
+role = "minor"
+segment = "crouch-valley-line"
+# North Fambridge: the line's midpoint, and its only passing loop on an
+# otherwise single-track branch.
+
+[[stations]]
+crs = "ALN"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "BUU"
+role = "minor"
+segment = "crouch-valley-line"
+
+[[stations]]
+crs = "SMN"
+role = "terminus"
+segment = "crouch-valley-line"

@@ -1,5 +1,11 @@
 id = "gwr-thames-valley"
-name = "Thames Valley suburban"
+name = "Thames Valley Local (Paddington – Didcot/Oxford/Newbury)"
+# Renamed from "Thames Valley suburban" (real-world sanity review): the old
+# name was a lowercase generic description, not a brand. GWR's own current
+# service-group name for this local/stopping network is "Thames Valley"
+# (see the match_keywords sourcing below, unchanged by this rename); this
+# name keeps that real branding and spells out the two branches (Oxford,
+# Newbury) this file actually covers.
 mode = "national-rail"
 category = "commuter"
 operators = ["GW"]

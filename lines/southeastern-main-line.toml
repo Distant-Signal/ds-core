@@ -80,8 +80,12 @@ match_keywords = ["South Eastern Main Line"]
 # stations, St Johns and Lewisham, also sit on this exact stretch and were
 # missing from the original "etc.": London Bridge - New Cross - St Johns -
 # Lewisham - Hither Green - Grove Park - Chislehurst - Petts Wood -
-# Orpington. All seven are added below on `seml-london`, since each sits
-# strictly between the already-modelled LBG and ORP entries.
+# Orpington. All seven are added below (New Cross/St Johns/Lewisham now on
+# `southeastern-lewisham-corridor`, Hither Green/Grove Park/Chislehurst/
+# Petts Wood on `seml-orpington-branch` - see REVIEW FIX further below for
+# why the segment naming here changed after this paragraph was first
+# written), since each sits strictly between the already-modelled LBG and
+# ORP entries.
 #
 # New Cross/St Johns/Lewisham/Hither Green determination: these four
 # already appear in the pre-split southeastern-metro-north-kent.toml (since
@@ -143,23 +147,44 @@ match_keywords = ["South Eastern Main Line"]
 # covers into LBG's south-eastern platforms) - station overlap only, no
 # segment sharing, per the xc-south-coast.toml/xc-manchester.toml precedent.
 #
-# No sibling Southeastern file exists yet in this catalogue (this is the
-# first), so none of this file's segments are shared with another line
-# today. AFK (Ashford International) is where HS1 domestic and the
+# AFK (Ashford International) is where HS1 domestic and the
 # Maidstone East line join, and the Canterbury West and Marshlink lines
 # diverge; it's kept on `seml-weald` (the segment ending there) rather than
 # `seml-coast`, following the junction-belongs-to-the-trunk convention in
 # SCHEMA.md, in case a future HS1/Chatham file wants to share a trunk
 # segment name up to and including AFK.
+#
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# CHX/WAE/CST/LBG/NWX/SAJ/LEW below were previously kept on this file's own
+# `seml-london` name, on the "own segment name unless proven otherwise"
+# reasoning common to most of this batch's Southeastern files. That
+# reasoning did not hold up under a later cross-file review: this exact
+# Charing Cross/Cannon Street-Waterloo East-London Bridge-New Cross-St
+# Johns-Lewisham stretch is the SAME physical four-track approach already
+# correctly modelled as a genuine shared trunk, under the identical name
+# `southeastern-lewisham-corridor`, by southeastern-bexleyheath.toml and
+# southeastern-dartford-loop.toml (see those files' own SEGMENT NAMING
+# comments) - this file simply hadn't been updated to reuse that name for
+# its own copy of the same stretch. southeastern-hayes-line.toml and
+# southeastern-north-kent.toml have the same fix applied for their own
+# subsets of this stretch (see each file's own updated header comment) - so
+# an incident here now correctly propagates as SharedSegment across all five
+# files instead of being modelled as five separately-named exclusive
+# segments. HGR/GRP/CIT/PET/ORP, past Lewisham, are this file's own
+# continuation toward Orpington - genuinely exclusive to this file (neither
+# the Bexleyheath line nor the Dartford Loop line runs this way past
+# Lewisham) - and have been moved off `seml-london` onto their own new name,
+# `seml-orpington-branch`, so that name is no longer conflated with the
+# genuinely shared CHX-LEW stretch.
 [[stations]]
 crs = "CHX"
 role = "terminus"
-segment = "seml-london"
+segment = "southeastern-lewisham-corridor"
 
 [[stations]]
 crs = "WAE"
 role = "minor"
-segment = "seml-london"
+segment = "southeastern-lewisham-corridor"
 # Waterloo East: the first stop out of Charing Cross specifically (not
 # reachable from the separate CST approach below) -- a data-driven audit
 # against real scheduled trains found 54% of confirmed
@@ -170,61 +195,65 @@ segment = "seml-london"
 [[stations]]
 crs = "CST"
 role = "terminus"
-segment = "seml-london"
+segment = "southeastern-lewisham-corridor"
 
 [[stations]]
 crs = "LBG"
 role = "major"
-segment = "seml-london"
+segment = "southeastern-lewisham-corridor"
 
 [[stations]]
 crs = "NWX"
 role = "junction"
-segment = "seml-london"
-# New Cross. Station overlap with southeastern-bexleyheath.toml's/
-# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
-# segment (see header comment above) - a differently-aligned North Kent
-# Line route (via the Surrey Canal curve toward Greenwich/Woolwich)
+segment = "southeastern-lewisham-corridor"
+# New Cross. Genuine SharedSegment with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's/southeastern-hayes-line.toml's/
+# southeastern-north-kent.toml's own stations here, all now on this exact
+# same segment name (see REVIEW FIX above) - a differently-aligned North
+# Kent Line route (via the Surrey Canal curve toward Greenwich/Woolwich)
 # diverges near here; not covered by this catalogue.
 
 [[stations]]
 crs = "SAJ"
 role = "minor"
-segment = "seml-london"
-# St Johns. Station overlap with southeastern-bexleyheath.toml's/
-# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
-# segment (see header comment above).
+segment = "southeastern-lewisham-corridor"
+# St Johns. Genuine SharedSegment with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's own stations here (see REVIEW FIX
+# above).
 
 [[stations]]
 crs = "LEW"
 role = "junction"
-segment = "seml-london"
-# Lewisham. Station overlap with southeastern-bexleyheath.toml's/
-# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
-# segment (see header comment above); the Bexleyheath line diverges here
+segment = "southeastern-lewisham-corridor"
+# Lewisham. Genuine SharedSegment with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's/southeastern-hayes-line.toml's own
+# stations here (see REVIEW FIX above); the Bexleyheath line diverges here
 # (toward Blackheath), and the Hayes line and North Kent Line also
-# diverge/join here - none covered by this file.
+# diverge/join here - none covered by this file past this point.
 
 [[stations]]
 crs = "HGR"
 role = "junction"
-segment = "seml-london"
-# Hither Green. Station overlap with southeastern-dartford-loop.toml's own
-# `dartford-loop-branch` segment (formerly `senk-dartford-loop`, see header
-# comment above) - the Dartford Loop line's own exclusive tracks diverge
-# here; this line's own alignment continues on to Grove Park.
+segment = "seml-orpington-branch"
+# Hither Green. This file's own exclusive continuation toward Orpington
+# starts here, one station past the Lewisham junction, per the shared-trunk
+# rule of thumb - `southeastern-lewisham-corridor` ends at LEW (see REVIEW
+# FIX above). Station overlap only (not a shared segment) with
+# southeastern-dartford-loop.toml's own `dartford-loop-branch` segment
+# (formerly `senk-dartford-loop`) - the Dartford Loop line's own exclusive
+# tracks diverge here; this line's own alignment continues on to Grove Park.
 
 [[stations]]
 crs = "GRP"
 role = "junction"
-segment = "seml-london"
+segment = "seml-orpington-branch"
 # Grove Park. The Bromley North line (a short shuttle branch to Bromley
 # North) diverges here; not covered by this catalogue.
 
 [[stations]]
 crs = "CIT"
 role = "minor"
-segment = "seml-london"
+segment = "seml-orpington-branch"
 # Chislehurst. Up/down loop lines here give a physical connection to the
 # Chatham Main Line (southeastern-chatham.toml), but per Chislehurst's own
 # Wikipedia article there are normally no direct passenger services
@@ -235,7 +264,7 @@ segment = "seml-london"
 [[stations]]
 crs = "PET"
 role = "minor"
-segment = "seml-london"
+segment = "seml-orpington-branch"
 # Petts Wood. Petts Wood Junction, just north of the station, links the
 # up/down loop lines from Charing Cross and Victoria; not covered by this
 # catalogue.
@@ -243,7 +272,7 @@ segment = "seml-london"
 [[stations]]
 crs = "ORP"
 role = "major"
-segment = "seml-london"
+segment = "seml-orpington-branch"
 
 [[stations]]
 crs = "SEV"

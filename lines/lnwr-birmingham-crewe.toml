@@ -230,7 +230,10 @@ operators = [
 #      (confirmed also by `west-coast-main-line.toml`, which models STA and
 #      CRE as directly adjacent on `wcml-northwest`/`wcml-midlands` with no
 #      intermediate station). Neither is a minor-infill gap in this file's
-#      existing route; both are out of scope for this FILL-IN task.
+#      existing route; both are out of scope for this FILL-IN task. UPDATE
+#      (2026-09-21, Midlands EMR/WMR/LNWR sanity review): (a) is now
+#      modelled in `lines/wmr-nuneaton-coventry.toml`; (b) is now modelled
+#      in `lines/lnwr-stafford-crewe.toml`.
 #   5. Also spot-checked and ruled out five more candidates as historically
 #      closed (not currently open, so outside this plan's scope regardless
 #      of any historical route diagram placement): Roade, Castlethorpe and

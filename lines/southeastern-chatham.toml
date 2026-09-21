@@ -66,14 +66,15 @@ excluded_keywords = ["Hastings line"]
 # infobox cross-checked against a second source (nationalrail.co.uk's
 # /stations/<crs>/details.html for MSR, SDW and WAM; railwaycodes.org.uk's
 # crsd.shtm/crsm.shtm tables for DEA and MTM). These five stations are
-# tagged with a new `chatham-deal` segment rather than continuing
-# `chatham-coastal`: past Minster the route leaves the North Sea/Thames
-# Estuary coast that WHI-through-RAM front and instead runs inland then
-# down to the Dover Strait coast, historically the separate Dover and
-# Deal Joint Railway rather than the LCDR coastal alignment north of
-# Ramsgate - a genuine physical-character change, not a station strictly
-# between two already-`chatham-coastal` stations. Grepped `lines/*.toml`
-# first to confirm no other file already uses `chatham-deal`.
+# tagged with a new `chatham-deal` segment rather than continuing the
+# WHI-through-RAM segment (renamed `strood-ramsgate-corridor` by a later
+# review - see REVIEW FIX above): past Minster the route leaves the North
+# Sea/Thames Estuary coast that WHI-through-RAM front and instead runs
+# inland then down to the Dover Strait coast, historically the separate
+# Dover and Deal Joint Railway rather than the LCDR coastal alignment north
+# of Ramsgate - a genuine physical-character change, not a station strictly
+# between two already-shared-corridor stations. Grepped `lines/*.toml` first
+# to confirm no other file already uses `chatham-deal`.
 #
 # What's still NOT modelled: Martin Mill's own Wikipedia infobox confirms
 # its next station towards Dover is Dover Priory itself (DVP), so the
@@ -107,7 +108,8 @@ excluded_keywords = ["Hastings line"]
 # rather than left for a future reader to discover the hard way. (This
 # flat-array/branching-index limitation isn't new to this task - the
 # same ambiguity already existed pre-task at the FAV divergence point
-# between `chatham-coastal` and `chatham-dover`.)
+# between the WHI-through-RAM segment (now `strood-ramsgate-corridor`) and
+# `chatham-dover`.)
 #
 # southeastern-highspeed.toml's own header comment (around lines 70-79)
 # says it deliberately left this same stretch out too, "for consistency"
@@ -115,11 +117,29 @@ excluded_keywords = ["Hastings line"]
 # here through Martin Mill (see above) - a future task extending
 # southeastern-highspeed.toml's own North Kent pattern coverage should
 # treat Minster/Sandwich/Deal/Walmer/Martin Mill as independently
-# verified now, not still an open gap, and can decide its own
-# segment/station-overlap treatment the same way it already did for
-# `chatham-medway`/`chatham-coastal` (station overlap, not shared
-# segment - see hs1_northkent_station_overlap_matches_both_chatham_and_hs1_as_independent_exclusive_segments
-# in crates/aggregator/src/matcher.rs).
+# verified now, not still an open gap.
+#
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# `chatham-medway`/`chatham-coastal` (below) WERE kept station-overlap-only
+# against southeastern-highspeed.toml's own `hs1-northkent`, on the
+# reasoning that reusing either name verbatim would incorrectly mark
+# stations the other file doesn't touch (e.g. Longfield/Meopham/Sole
+# Street, or Westenhanger/Sandling) as SharedSegment. A later cross-file
+# review found that reasoning was solving a real granularity problem the
+# wrong way - by declining to share at all, rather than by splitting the
+# segment at the actual physical boundary the way SCHEMA.md's own worked
+# example does. Both files' own comments already establish that the
+# Javelin's North Kent pattern rejoins classic Chatham Main Line metals at
+# Strood (SOO) and runs the same physical track all the way to Ramsgate
+# (RAM) - the genuinely exclusive part is each file's own APPROACH to
+# Strood (this file's own Swanley-to-Strood Medway Valley stretch via
+# Farningham Road/Longfield/Meopham/Sole Street; southeastern-highspeed's
+# own Ebbsfleet-to-Strood stretch via Gravesend/Higham), not the SOO-RAM
+# trunk itself. SOO through RAM (spanning what were `chatham-medway`'s tail
+# and the whole of `chatham-coastal`) is now `strood-ramsgate-corridor`,
+# reused verbatim by both files - see southeastern-highspeed.toml's own
+# updated header comment. `chatham-medway` is kept, but narrowed to just
+# this file's own exclusive FNR-SOR approach.
 #
 # Both eastern branches are covered in this ONE file (unlike Task 5.1's
 # Hastings-line exclusion) because Wikipedia's own "Chatham Main Line"
@@ -129,16 +149,25 @@ excluded_keywords = ["Hastings line"]
 #
 # Branches not covered by this catalogue, noted where they diverge:
 # Bromley North branch (from Bickley), Maidstone East line (from Swanley),
-# North Kent Line (from Strood), Sheerness Line (from Sittingbourne), and
-# the Catford Loop Line alternative Victoria routing (from Shortlands, via
-# Catford/Peckham Rye rather than Herne Hill/Brixton).
+# North Kent Line (from Strood), and the Catford Loop Line alternative
+# Victoria routing (from Shortlands, via Catford/Peckham Rye rather than
+# Herne Hill/Brixton). The Sheerness Line (from Sittingbourne) is no longer
+# an uncovered gap - see southeastern-sheerness-line.toml (Southeastern
+# real-world-sanity review), which reuses this file's own
+# `chatham-maidstone-victoria`/`chatham-maidstone-thameslink-swanley`/
+# `chatham-medway`/`strood-ramsgate-corridor` segment names verbatim for the
+# shared trunk as far as Sittingbourne (updated to match this file's own
+# shared-segments structural-review split, below) - see that file's own
+# SEGMENT NAMING comment.
 #
 # FILL-IN (Task 5.1 of the station-catalogue-completeness plan): the four
 # suburban/slow-line stations between Herne Hill and Bromley South (West
 # Dulwich, Sydenham Hill, Penge East, Kent House) are now confirmed and
-# inserted below at their true geographic position, in `chatham-london`
-# (they sit on the same physical stretch as the rest of that segment - no
-# new segment-boundary judgment needed). Order confirmed via each
+# inserted below at their true geographic position, in `chatham-maidstone-
+# victoria` (they sit on the same physical stretch as the rest of that
+# segment - no new segment-boundary judgment needed; see REVIEW FIX below
+# for why this segment is no longer called `chatham-london`). Order
+# confirmed via each
 # station's own Wikipedia infobox ("preceding station"/"following
 # station" service-table fields): Herne Hill -> West Dulwich -> Sydenham
 # Hill -> Penge East -> Kent House -> Beckenham Junction. CRS codes:
@@ -163,58 +192,92 @@ excluded_keywords = ["Hastings line"]
 # style, only internal consistency, and "chatham-" also matches this
 # catalogue's more common full-word-prefix convention (northern-*,
 # elizabeth-*, wcml-*, xc-*, swr-*).
+#
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# `chatham-london` (VIC through SAY, below) has been split into two names.
+# southeastern-maidstone-east.toml's own London approach (`maidstone-east-
+# victoria`) turned out, on cross-file review, to be the IDENTICAL
+# twelve-station VIC-SAY list this file already models - both lines run the
+# same Victoria-Herne Hill-Bromley South-Swanley service pattern, just
+# documented under two different names. VIC through BKJ (this file's own
+# stretch that only southeastern-maidstone-east.toml also uses) is now
+# `chatham-maidstone-victoria`. SRT through SAY is a further, THIRD-line
+# overlap: thameslink-southern.toml's own Sevenoaks branch rejoins this
+# exact track at Shortlands and runs it through to Swanley before diverging
+# again - previously modelled there under yet another name
+# (`thameslink-sevenoaks-shortlands-swanley`), for a "coarser segment,
+# different-shaped station list" reason that file's own header comment
+# explains at length (Thameslink never touches VIC/HNH/BKJ, so reusing
+# `chatham-london` verbatim there would have wrongly marked those untouched
+# stations as SharedSegment too). Splitting `chatham-london` at the SRT
+# boundary (SRT is the junction where the Catford Loop Line rejoins the
+# Chatham Main Line, so it belongs to the broader trunk per the shared-trunk
+# rule of thumb) resolves that granularity mismatch properly: SRT through
+# SAY is now `chatham-maidstone-thameslink-swanley`, reused verbatim by all
+# three files for exactly the stretch all three genuinely share, while VIC
+# through BKJ stays a clean two-line share that doesn't overreach into
+# Thameslink's own, narrower approach.
 [[stations]]
 crs = "VIC"
 role = "terminus"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
+# Genuine SharedSegment with southeastern-maidstone-east.toml's own,
+# identical VIC-BKJ approach - see REVIEW FIX above.
 
 [[stations]]
 crs = "HNH"
 role = "major"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
 # Also reachable via the Catford Loop Line (Shortlands - Catford - Peckham
 # Rye), an alternative Victoria routing not covered by this catalogue.
 
 [[stations]]
 crs = "WDU"
 role = "minor"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
 
 [[stations]]
 crs = "SYH"
 role = "minor"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
 
 [[stations]]
 crs = "PNE"
 role = "minor"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
 
 [[stations]]
 crs = "KTH"
 role = "minor"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
 
 [[stations]]
 crs = "BKJ"
 role = "major"
-segment = "chatham-london"
+segment = "chatham-maidstone-victoria"
+# `chatham-maidstone-victoria` ends here; the further, three-line overlap
+# with thameslink-southern.toml begins at the next station, Shortlands - see
+# REVIEW FIX above.
 
 [[stations]]
 crs = "SRT"
 role = "junction"
-segment = "chatham-london"
-# Catford Loop Line diverges here (alternative Victoria routing, above).
+segment = "chatham-maidstone-thameslink-swanley"
+# Shortlands. Catford Loop Line diverges here (alternative Victoria routing,
+# above) - this is also where thameslink-southern.toml's own Sevenoaks
+# branch rejoins this exact track (see REVIEW FIX above), so per the
+# shared-trunk rule of thumb this junction station belongs to the broader,
+# three-line trunk rather than `chatham-maidstone-victoria`.
 
 [[stations]]
 crs = "BMS"
 role = "major"
-segment = "chatham-london"
+segment = "chatham-maidstone-thameslink-swanley"
 
 [[stations]]
 crs = "BKL"
 role = "junction"
-segment = "chatham-london"
+segment = "chatham-maidstone-thameslink-swanley"
 # KENT/SUSSEX BATCH FIX: this comment previously claimed "Bromley North
 # branch diverges here" - that was a mistake. Confirmed while researching
 # southeastern-bromley-north.toml (part of this same batch): Wikipedia's own
@@ -229,19 +292,32 @@ segment = "chatham-london"
 [[stations]]
 crs = "SMY"
 role = "junction"
-segment = "chatham-london"
-# Cannon Street services diverge here onto the South Eastern Main Line
-# near Chislehurst (a different physical route - no segment shared).
+segment = "chatham-maidstone-thameslink-swanley"
+# St Mary Cray. Cannon Street services diverge here onto the South Eastern
+# Main Line near Chislehurst (a different physical route - no segment
+# shared with southeastern-main-line.toml here).
 
 [[stations]]
 crs = "SAY"
 role = "junction"
-segment = "chatham-london"
-# Maidstone East line diverges here; not covered by this catalogue.
+segment = "chatham-maidstone-thameslink-swanley"
+# Swanley. `chatham-maidstone-thameslink-swanley` ends here for all three
+# files that share it (this file, southeastern-maidstone-east.toml and
+# thameslink-southern.toml) - the Maidstone East line's own exclusive
+# stretch (southeastern-maidstone-east.toml's `maidstone-east-otford`/
+# `maidstone-east-line`) and thameslink-southern.toml's own Otford/Sevenoaks
+# spur (`thameslink-sevenoaks-otford`) both continue past here on their own
+# names - not covered by this catalogue's segment-naming scope for this
+# review (see REVIEW FIX above; those two files' own EYN/SEH/OTF overlap is
+# a related but out-of-scope finding, not acted on here).
 
 # DATA-AUDIT FIX: Farningham Road was missing between Swanley (SAY, above)
 # and Longfield. Real CIF data shows 62% of journeys on this stretch call
-# here.
+# here. FNR/LGF/MEP/SOR are this file's own exclusive Medway Valley approach
+# to Strood - southeastern-highspeed.toml's Javelin reaches Strood a
+# different way, via Gravesend (see REVIEW FIX above), so this short stretch
+# correctly keeps the `chatham-medway` name on its own, not the shared
+# corridor name that starts at Strood itself.
 [[stations]]
 crs = "FNR"
 role = "minor"
@@ -261,109 +337,132 @@ segment = "chatham-medway"
 crs = "SOR"
 role = "minor"
 segment = "chatham-medway"
+# `chatham-medway` ends here; the genuine two-way (this file plus
+# southeastern-highspeed.toml) shared corridor starts at the next station,
+# Strood, per the shared-trunk rule of thumb.
 
 [[stations]]
 crs = "SOO"
 role = "junction"
-segment = "chatham-medway"
-# North Kent Line joins here; not covered by this catalogue.
+segment = "strood-ramsgate-corridor"
+# Strood. North Kent Line joins here (a different, currently-uncovered
+# approach - not covered by this catalogue). Also where southeastern-
+# highspeed.toml's own Javelin North Kent pattern (reached via Gravesend)
+# rejoins this exact track - genuine SharedSegment, see REVIEW FIX above.
 
 [[stations]]
 crs = "RTR"
 role = "major"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "CTM"
 role = "major"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "GLM"
 role = "major"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "RAI"
 role = "minor"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 # DATA-AUDIT FIX: Newington was missing between Rainham and Sittingbourne.
 # It's a real, if low-frequency (1tph), Chatham Main Line stop - distinct
 # from southeastern-highspeed.toml's North Kent Javelin pattern, which does
-# not call here.
+# not call here (the Javelin passes over this exact track without stopping;
+# see REVIEW FIX above for why that still makes this station part of the
+# shared corridor by name, even though southeastern-highspeed.toml has no
+# station entry for it).
 [[stations]]
 crs = "NGT"
 role = "minor"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "SIT"
 role = "junction"
-segment = "chatham-medway"
-# Sheerness Line diverges here; not covered by this catalogue.
+segment = "strood-ramsgate-corridor"
+# Sheerness Line diverges here - now covered by
+# southeastern-sheerness-line.toml (Southeastern real-world-sanity review),
+# which reuses this exact `strood-ramsgate-corridor` segment name (the
+# shared-segments structural pass's own rename of what this file used to
+# call `chatham-medway` from Strood onward - see that segment's own SOO
+# entry above) for its own shared trunk as far as this station - a genuine
+# SharedSegment, not mere station overlap, since that file's real through
+# service runs London Victoria to Sheerness-on-Sea over this same track
+# before diverging here.
 
 [[stations]]
 crs = "TEY"
 role = "minor"
-segment = "chatham-medway"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "FAV"
 role = "junction"
-segment = "chatham-medway"
-# Route splits here: coastal loop toward Margate/Ramsgate (chatham-coastal)
-# and direct inland route toward Canterbury East/Dover (chatham-dover).
+segment = "strood-ramsgate-corridor"
+# Route splits here: coastal loop toward Margate/Ramsgate (still
+# `strood-ramsgate-corridor`, below) and direct inland route toward
+# Canterbury East/Dover (`chatham-dover`/`chatham-deal`, exclusive to this
+# file - southeastern-highspeed.toml's own approach to Dover is via HS1/
+# Ashford, a physically different route; see that file's own header
+# comment).
 
 [[stations]]
 crs = "WHI"
 role = "minor"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 # DATA-AUDIT FIX: Chestfield & Swalecliffe was missing between Whitstable
 # and Herne Bay. Real CIF data shows 65% of journeys call here. Also added
 # to southeastern-highspeed.toml's `hs1-northkent` segment (same physical
-# station, station overlap - not a shared segment, matching this
-# catalogue's existing convention for such overlaps).
+# station) - genuine SharedSegment now, not station overlap; see REVIEW FIX
+# above.
 [[stations]]
 crs = "CSW"
 role = "minor"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "HNB"
 role = "major"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "BCH"
 role = "minor"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "WGA"
 role = "minor"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "MAR"
 role = "major"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "BSR"
 role = "major"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "DMP"
 role = "minor"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
 
 [[stations]]
 crs = "RAM"
 role = "major"
-segment = "chatham-coastal"
+segment = "strood-ramsgate-corridor"
+# `strood-ramsgate-corridor` ends here for the two files that share it (this
+# file, southeastern-highspeed.toml) - see REVIEW FIX above.
 # Not a physical terminus - the coastal loop continues on toward Dover via
 # Minster/Sandwich/Deal/Walmer/Martin Mill, confirmed below on the new
 # `chatham-deal` segment (see the route-geography comment above).

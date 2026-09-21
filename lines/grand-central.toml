@@ -1,5 +1,5 @@
 id = "grand-central"
-name = "Grand Central"
+name = "Grand Central: North Eastern (Sunderland)"
 mode = "national-rail"
 category = "regional"
 operators = ["GC"]

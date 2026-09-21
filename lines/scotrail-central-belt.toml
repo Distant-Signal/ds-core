@@ -1,5 +1,5 @@
 id = "scotrail-central-belt"
-name = "ScotRail Central Belt (Edinburgh - Glasgow)"
+name = "ScotRail Edinburgh - Glasgow via Falkirk High"
 mode = "national-rail"
 category = "main-line"
 operators = ["SR"]
@@ -21,12 +21,20 @@ operators = ["SR"]
 # metro-frequency treatment.
 
 sample_stations = ["GLQ", "FKK", "HYM", "EDB"]
-match_keywords = ["Falkirk High"]
-# Kept to a single high-precision phrase per the curation rule against
-# padding match_keywords. "Edinburgh to Glasgow" alone was considered and
-# rejected: it also describes the Shotts and Bathgate routings (not
-# modelled as stations in this file -- see below), so it would produce
-# false precision once those routings get their own coverage.
+match_keywords = ["Falkirk High", "via Falkirk High", "Edinburgh to Glasgow via Falkirk"]
+# "Edinburgh to Glasgow" alone was considered and rejected: it also
+# describes the Shotts and Bathgate routings (not modelled as stations in
+# this file -- see below), so it would produce false precision once those
+# routings got their own coverage (now `scotrail-shotts.toml` and
+# `scotrail-bathgate.toml`). "via Falkirk High"/"Edinburgh to Glasgow via
+# Falkirk" ADDED (real-world-sanity review, 2026-09-21): this corridor's
+# real-world branding (ScotRail's own "Route 2a" name, cited above, is not
+# customer-facing) is "Edinburgh - Glasgow via Falkirk High", so these
+# phrases are how a real incident report is likely to describe it. Grepped
+# clean against every other file's own `match_keywords` before adding: no
+# collisions ("Falkirk" alone doesn't appear as a keyword anywhere else;
+# `scotrail-stirling-dunblane.toml` reaches Falkirk Grahamston, a
+# different station, and does not use "Falkirk High" in its own keywords).
 
 # === Three routings, one ordered station list: the modelling decision ===
 #
@@ -74,6 +82,25 @@ match_keywords = ["Falkirk High"]
 # source during this task, and the field is optional (per
 # `xc-manchester.toml`/`cross-country.toml`'s own convention of only
 # giving TIPLOCs where verified).
+
+# NOTE (real-world-sanity review, 2026-09-21, Part B): `lines/scotrail-
+# glasgow-aberdeen.toml` now models the Glasgow-Stirling-Perth-Aberdeen
+# inter-city corridor, which genuinely shares this file's own Glasgow
+# Queen Street-Bishopbriggs-Lenzie-Croy approach as far as Greenhill
+# Junction (just past Croy), per Wikipedia's "Croy Line" article. That
+# file deliberately does NOT reuse this file's own `scotrail-central-belt`
+# segment name for those four stations, because this file tags them
+# (along with Falkirk High, Polmont and Linlithgow) all under that one
+# undifferentiated segment name -- reusing it would incorrectly mark
+# Falkirk High/Polmont/Linlithgow as shared too, even though the
+# Glasgow-Aberdeen route diverges towards Larbert well before reaching any
+# of them. That file's own GLQ/BBG/LNZ/CRO entries get their own segment
+# name instead (station overlap only). Carving GLQ/BBG/LNZ/CRO out into
+# their own dedicated segment here -- mirroring how `scotrail-central-
+# belt-edinburgh-throat` was carved out from the start -- would let that
+# file reuse it cleanly; left as a flagged opportunity for whoever next
+# touches this file, not done as part of this review (out of scope: this
+# file is not otherwise being changed by this task).
 
 [[stations]]
 crs = "GLQ"

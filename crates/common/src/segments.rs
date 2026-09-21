@@ -129,17 +129,27 @@ mod tests {
         // swr-hounslow-loop.toml and swr-new-guildford.toml all also reuse
         // `swr-trunk-waterloo` verbatim for their own genuine Waterloo
         // approach.
+        // Updated again by the SWR suburban-gap batch: swr-waterloo-
+        // reading.toml, swr-shepperton-branch.toml, swr-hampton-court-
+        // branch.toml and swr-epsom-mole-valley.toml (four new files) all
+        // also reuse `swr-trunk-waterloo` verbatim for their own genuine
+        // Waterloo approach - each file's own SEGMENTS section documents
+        // exactly which trunk stations it shares.
         assert_eq!(
             users,
             vec![
                 "swr-alton",
                 "swr-chertsey-loop",
                 "swr-chessington",
+                "swr-epsom-mole-valley",
+                "swr-hampton-court-branch",
                 "swr-hounslow-loop",
                 "swr-kingston-loop",
                 "swr-new-guildford",
                 "swr-portsmouth-direct",
+                "swr-shepperton-branch",
                 "swr-south-west-main",
+                "swr-waterloo-reading",
                 "swr-west-of-england",
                 "swr-windsor-lines",
             ]
@@ -197,11 +207,20 @@ mod tests {
         assert!(!loop_line.has_station("BRS"));
         assert!(!chessington.has_station("BRS"));
 
-        // Each line's post-junction segments are exclusive to it.
-        assert!(registry.is_exclusive_to("swr-kingston-loop", "swr-kingston-loop"));
+        // Each line's post-junction segments are exclusive to it -- except
+        // `swr-kingston-loop` and `swr-epsom-line`, which the SWR
+        // suburban-gap batch's own swr-shepperton-branch.toml and
+        // swr-epsom-mole-valley.toml now genuinely reuse (both files'
+        // own headers document exactly this: Shepperton's trains run over
+        // this line's own NBT-KNG-HMW-TED stretch before diverging at
+        // Shacklegate Junction, and the Epsom/Mole Valley line continues
+        // past Motspur Park on the exact track `swr-epsom-line` was named
+        // for, per swr-chessington.toml's own forward-looking naming note).
+        assert!(!registry.is_exclusive_to("swr-kingston-loop", "swr-kingston-loop"));
+        assert!(registry.is_shared("swr-kingston-loop"));
         assert!(registry.is_exclusive_to("swr-chessington-branch", "swr-chessington"));
-        assert!(registry.is_exclusive_to("swr-epsom-line", "swr-chessington"));
-        assert!(!registry.is_shared("swr-kingston-loop"));
+        assert!(!registry.is_exclusive_to("swr-epsom-line", "swr-chessington"));
+        assert!(registry.is_shared("swr-epsom-line"));
         assert!(!registry.is_shared("swr-chessington-branch"));
 
         // `swr-windsor-lines` (Twickenham inward to Waterloo via Richmond)
@@ -220,12 +239,21 @@ mod tests {
         // Updated by the SE/SWR-loops batch: swr-chertsey-loop.toml and
         // swr-hounslow-loop.toml both also reuse `swr-windsor-lines`
         // verbatim for their own genuine shared stretch of this track.
+        // Updated again by the SWR suburban-gap batch's real-world-sanity
+        // review: swr-hounslow-loop.toml's/swr-chertsey-loop.toml's own
+        // WTN/FEL/AFS/SNS rows were retagged onto this same segment (fixing
+        // a mismatch against swr-windsor-lines.toml's own segment name for
+        // those stations - see swr-hounslow-loop.toml's own SEGMENTS note),
+        // and swr-waterloo-reading.toml (a new file in the same batch) also
+        // reuses this segment verbatim for its own Vauxhall/Richmond-side
+        // approach.
         assert_eq!(
             windsor_users,
             vec![
                 "swr-chertsey-loop",
                 "swr-hounslow-loop",
                 "swr-kingston-loop",
+                "swr-waterloo-reading",
                 "swr-windsor-lines",
             ]
         );
@@ -253,6 +281,87 @@ mod tests {
         assert!(!registry.is_shared("swr-alton-branch"));
         assert!(registry.is_exclusive_to("swr-alton-branch", "swr-alton"));
         assert!(!registry.is_exclusive_to("swr-alton-branch", "swr-south-west-main"));
+    }
+
+    // Ash Vale and Aldershot are genuine shared trackage between
+    // swr-alton.toml and the SWR suburban-gap batch's own
+    // swr-ascot-aldershot.toml (the latter's own trains join the Alton
+    // line's metals here for their final approach into Aldershot). Rather
+    // than reuse the whole `swr-alton-branch` name (which would also mark
+    // Farnham/Bentley/Alton as "shared" even though
+    // swr-ascot-aldershot.toml never reaches them), the two shared stations
+    // alone carry a new, narrower `swr-ash-vale-junction` segment -
+    // `swr-alton-branch` itself stays exclusive to swr-alton.toml (see the
+    // test immediately above).
+    #[test]
+    fn swr_ash_vale_junction_is_shared_between_alton_and_ascot_aldershot() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        assert!(registry.is_shared("swr-ash-vale-junction"));
+        let mut users = registry.lines_for_segment("swr-ash-vale-junction");
+        users.sort();
+        assert_eq!(users, vec!["swr-alton", "swr-ascot-aldershot"]);
+        assert_eq!(
+            registry.segment_at("swr-alton", "AHV"),
+            Some("swr-ash-vale-junction")
+        );
+        assert_eq!(
+            registry.segment_at("swr-alton", "AHT"),
+            Some("swr-ash-vale-junction")
+        );
+        assert_eq!(
+            registry.segment_at("swr-alton", "FNH"),
+            Some("swr-alton-branch")
+        );
+    }
+
+    // Same precise-blast-radius shape as `swr_ash_vale_junction_is_shared_
+    // between_alton_and_ascot_aldershot` above, for Brockenhurst: the SWR
+    // suburban-gap batch's own swr-lymington-branch.toml joins the South
+    // West Main Line here, so this one station carries a new, narrow
+    // `swr-brockenhurst-junction` segment rather than reusing the whole
+    // `swr-swml-south` segment (which would also mark Winchester/
+    // Southampton/Bournemouth/Poole/Weymouth as "shared").
+    #[test]
+    fn swr_brockenhurst_junction_is_shared_between_south_west_main_and_lymington_branch() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        assert!(registry.is_shared("swr-brockenhurst-junction"));
+        let mut users = registry.lines_for_segment("swr-brockenhurst-junction");
+        users.sort();
+        assert_eq!(users, vec!["swr-lymington-branch", "swr-south-west-main"]);
+        assert!(!registry.is_shared("swr-swml-south"));
+        assert_eq!(
+            registry.segment_at("swr-south-west-main", "WEY"),
+            Some("swr-swml-south")
+        );
+    }
+
+    // Same precise-blast-radius shape again, for Salisbury: the SWR
+    // suburban-gap batch's own swr-romsey-salisbury.toml genuinely shares
+    // this one station with gwr-wessex-main.toml (both run the real
+    // Salisbury-Southampton stretch that file's own header already flagged
+    // as a documented, out-of-scope gap), so a new, narrow
+    // `swr-wessex-main-south` segment covers Salisbury through Southampton
+    // Central - `gwr-wessex-main` itself (Bristol-Westbury-Salisbury)
+    // stays exclusive to gwr-wessex-main.toml except for its own
+    // already-established Westbury sharing.
+    #[test]
+    fn swr_wessex_main_south_is_shared_between_gwr_wessex_main_and_romsey_salisbury() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        assert!(registry.is_shared("swr-wessex-main-south"));
+        let mut users = registry.lines_for_segment("swr-wessex-main-south");
+        users.sort();
+        assert_eq!(users, vec!["gwr-wessex-main", "swr-romsey-salisbury"]);
+        assert_eq!(
+            registry.segment_at("gwr-wessex-main", "SAL"),
+            Some("swr-wessex-main-south")
+        );
+        assert_eq!(
+            registry.segment_at("gwr-wessex-main", "BTH"),
+            Some("gwr-wessex-main")
+        );
     }
 
     #[test]

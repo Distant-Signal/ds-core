@@ -1,0 +1,238 @@
+id = "southeastern-sheerness-line"
+name = "Sheerness Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SE"]
+
+sample_stations = ["KML", "QBR", "SSS"]
+match_keywords = ["Sheerness line"]
+
+# ============================================================================
+# REAL GAP (Southeastern real-world-sanity review): Sheerness-on-Sea,
+# Queenborough, Swale and Kemsley are real, currently-served Southeastern
+# stations on the Isle of Sheppey that were absent catalogue-wide before
+# this file. southeastern-chatham.toml's own SIT (Sittingbourne) comment
+# already flagged this: "Sheerness Line diverges here; not covered by this
+# catalogue" - that comment (and its "Branches not covered" list entry) is
+# updated alongside this file.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Sheerness line" article (lead: "connects
+# Sheerness-on-Sea on the Isle of Sheppey with Sittingbourne on the
+# mainland, and with the Chatham Main Line for trains towards London,
+# Ramsgate or Dover Priory"; Services section confirms Southeastern
+# operation and through running "to London Victoria via the Chatham Main
+# Line" - i.e. a genuine through service, not a Sittingbourne-only shuttle,
+# the same trunk+branch shape as swr-alton.toml's Waterloo-Woking-Alton
+# precedent, followed here). Opened 19 July 1860; electrified 1959 as part
+# of the Kent Coast electrification.
+#
+# Every new CRS code independently verified two ways: live against
+# https://ds.cursed.solutions/api/stations?q=<name>, and cross-checked
+# against each station's own Wikipedia infobox (preceding
+# station/following station fields, which also independently confirm the
+# station order below):
+#   - Sittingbourne -> Kemsley (KML) -> Swale (SWL) -> Queenborough (QBR)
+#     -> Sheerness-on-Sea (SSS, terminus).
+# One discrepancy resolved in favour of the live API over a secondary
+# summary source: an initial web-search summary suggested "SHE" for
+# Sheerness-on-Sea, but both the live CRS API and the station's own
+# Wikipedia infobox independently agree on "SSS" - used here as the
+# better-attested code from two sources against one, the same
+# resolution method scotrail-ayrshire.toml documents for its own
+# PRA/PTW mix-up risk.
+#
+# Swale (SWL) is not to be confused with Chestfield & Swalecliffe (CSW,
+# southeastern-chatham.toml's/southeastern-highspeed.toml's own coastal-loop
+# station near Whitstable) - completely different CRS codes and physically
+# unrelated stations roughly 20 miles apart, despite the name similarity;
+# checked deliberately, same spirit as southeastern-canterbury-west.toml's
+# own CRT/CTM disambiguation note.
+#
+# ============================================================================
+# SEGMENT NAMING - shared trunk with southeastern-chatham.toml
+# ============================================================================
+# This line's own real, physically-through service runs London Victoria to
+# Sheerness-on-Sea over the Chatham Main Line as far as Sittingbourne,
+# where the exclusive branch to Sheppey begins - the same shape
+# swr-alton.toml already models for Woking-Alton. `chatham-maidstone-
+# victoria` (VIC-BKJ), `chatham-maidstone-thameslink-swanley` (SRT-SAY),
+# `chatham-medway` (FNR-SOR) and `strood-ramsgate-corridor` (SOO-SIT) below
+# are reused VERBATIM from southeastern-chatham.toml, station-for-station
+# identical over the stretch this file also touches (roles copied from that
+# file too, for the same reason), so the matcher correctly treats an
+# incident anywhere on that shared stretch as a genuine SharedSegment event
+# for both files - per the shared-trunk rule of thumb, Sittingbourne (the
+# junction) stays on the shared `strood-ramsgate-corridor` segment, and this
+# file's own exclusive `southeastern-sheerness-line` segment starts at the
+# next station, Kemsley.
+#
+# UPDATE (shared-segments structural review): this file originally reused
+# `chatham-london` (VIC-SAY) and `chatham-medway` (FNR-SIT) verbatim, the
+# names those stretches carried in southeastern-chatham.toml at the time
+# this file was written. A later, parallel structural review of that file
+# split both names more finely (see southeastern-chatham.toml's own REVIEW
+# FIX comments): `chatham-london` into `chatham-maidstone-victoria`
+# (VIC-BKJ) and `chatham-maidstone-thameslink-swanley` (SRT-SAY), and
+# `chatham-medway` into a narrower `chatham-medway` (FNR-SOR only) plus
+# `strood-ramsgate-corridor` (SOO onward). This file's own segment names
+# below have been updated to match, station-for-station, so the reuse stays
+# genuinely verbatim rather than silently drifting from southeastern-
+# chatham.toml's own current names.
+#
+# category = "regional" (not "commuter"/"main-line"), matching
+# swr-alton.toml's precedent for an identical trunk+modest-branch shape -
+# this file's own exclusive branch is a low-frequency single-branch spur
+# onto the Isle of Sheppey, not a dense metro corridor, even though most of
+# its own station list is a frequent main line shared with
+# southeastern-chatham.toml. No severity_overrides: default thresholds are
+# appropriate for the shared-trunk majority of this file's own stations,
+# matching swr-alton.toml's identical choice not to override.
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "HNH"
+role = "major"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "WDU"
+role = "minor"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "SYH"
+role = "minor"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "PNE"
+role = "minor"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "KTH"
+role = "minor"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "BKJ"
+role = "major"
+segment = "chatham-maidstone-victoria"
+
+[[stations]]
+crs = "SRT"
+role = "junction"
+segment = "chatham-maidstone-thameslink-swanley"
+
+[[stations]]
+crs = "BMS"
+role = "major"
+segment = "chatham-maidstone-thameslink-swanley"
+
+[[stations]]
+crs = "BKL"
+role = "junction"
+segment = "chatham-maidstone-thameslink-swanley"
+
+[[stations]]
+crs = "SMY"
+role = "junction"
+segment = "chatham-maidstone-thameslink-swanley"
+
+[[stations]]
+crs = "SAY"
+role = "junction"
+segment = "chatham-maidstone-thameslink-swanley"
+
+[[stations]]
+crs = "FNR"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "LGF"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "MEP"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "SOR"
+role = "minor"
+segment = "chatham-medway"
+
+[[stations]]
+crs = "SOO"
+role = "junction"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "RTR"
+role = "major"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "CTM"
+role = "major"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "GLM"
+role = "major"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "RAI"
+role = "minor"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "NGT"
+role = "minor"
+segment = "strood-ramsgate-corridor"
+
+[[stations]]
+crs = "SIT"
+role = "junction"
+segment = "strood-ramsgate-corridor"
+# Sittingbourne. The Sheerness Line's own exclusive branch (below) diverges
+# here; per the shared-trunk rule of thumb the junction itself stays on the
+# shared `strood-ramsgate-corridor` segment, matching swr-alton.toml's
+# identical treatment of Woking.
+
+# --- Sheerness Line's own exclusive branch, diverging from the Chatham
+# Main Line at Sittingbourne (above) ---
+[[stations]]
+crs = "KML"
+role = "minor"
+segment = "southeastern-sheerness-line"
+# Kemsley.
+
+[[stations]]
+crs = "SWL"
+role = "minor"
+segment = "southeastern-sheerness-line"
+# Swale. Not to be confused with Chestfield & Swalecliffe (CSW) - see ROUTE
+# AND SOURCING above.
+
+[[stations]]
+crs = "QBR"
+role = "minor"
+segment = "southeastern-sheerness-line"
+# Queenborough.
+
+[[stations]]
+crs = "SSS"
+role = "terminus"
+segment = "southeastern-sheerness-line"
+# Sheerness-on-Sea - this line's own terminus. CRS confirmed as SSS, not
+# SHE - see ROUTE AND SOURCING above.

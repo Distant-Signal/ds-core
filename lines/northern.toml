@@ -11,13 +11,73 @@ sample_stations = ["LIV", "MCV", "HUD", "LDS", "YRK"]
 match_keywords = ["Northern Rail", "Northern Trains", "Northern services"]
 excluded_keywords = ["Northern line", "Northern City Line"]
 
-# Northern is a network rather than a single route. This definition covers the
-# operator's principal trans-Pennine corridor, ordered west to east; the other
-# arms are separate definitions sharing the NT operator code:
-# `northern-blackpool` (shares the `northern-manchester` hub),
-# `northern-yorkshire-coast` (shares the `northern-yorkshire` trunk from
-# Leeds), `northern-lakes`, `northern-furness`, `northern-hope-valley` and
-# `northern-tyne-valley`.
+# --- Restructuring review (Yorkshire real-world-sanity review, 2026-09-21)
+# ---
+# This file was found to be an incoherent catch-all: its own station list
+# stitches together four physically disconnected fragments (Liverpool-Huyton-
+# Newton-le-Willows; Manchester Victoria alone; Stalybridge-Huddersfield-
+# Dewsbury; Leeds-York) with no real through-service connecting any of them
+# to any other, under a stale comment claiming "6 sibling files" when the
+# catalogue now has 30+ Northern-family files. Two options were weighed for
+# fixing this (per this task's own brief): (a) reduce this file to an
+# empty/minimal operator-keyword matcher, or (b) split its genuinely coherent
+# fragments into their own properly-named files.
+#
+# DECISION: a hybrid of both, chosen for a concrete, checked reason rather
+# than by default. A full (a) -- emptying this file's own station list --
+# was rejected because every one of its four fragments' segment names
+# (`northern-merseyside`, `northern-manchester`, `northern-transpennine`,
+# `northern-yorkshire`) is either already a genuine shared trunk with
+# another file (`northern-manchester` with `northern-blackpool.toml`/
+# `northern-clitheroe.toml`; `northern-yorkshire` with `northern-yorkshire-
+# coast.toml`) or is exercised by name-specific `matcher.rs` regression
+# tests: removing the stations here would silently flip those other files'
+# own SharedSegment/ExclusiveSegment scope for no reason connected to this
+# task's actual bug (the incoherent framing, not the underlying segment
+# facts, which remain correct). So this file's own station list and
+# segments are left unchanged -- this IS (a) in substance: an operator hub
+# matcher whose station list exists to seed real shared-trunk facts for its
+# sibling files at Liverpool, Manchester Victoria, Huddersfield/Dewsbury and
+# Leeds/York, not to describe one single route someone could ride start to
+# end.
+#
+# (b) is applied ADDITIVELY on top: the two fragments with enough real
+# stations to deserve their own genuine, complete, correctly-named files
+# now have one each -- `lines/northern-huddersfield.toml` (the real
+# Huddersfield line's own Northern-operated extent, Huddersfield to Leeds,
+# filling in Deighton, Mirfield, Ravensthorpe, Batley, Morley and
+# Cottingley, none of which this file ever listed -- REVIEW2 FIX,
+# 2026-09-21: that file originally also extended west to Manchester
+# Victoria via Stalybridge/Mossley/Greenfield/Marsden/Slaithwaite, but
+# fresh research found Northern doesn't operate that stretch (transferred
+# to TransPennine Express in 2018, modelled in `tpe-north-wakefield.toml`),
+# so it was trimmed to Huddersfield-Leeds; see that file's own top-of-file
+# note) and `lines/northern-leeds-york.toml` (the real, separate Leeds-York
+# local stopper via Cross Gates/Micklefield/Church Fenton/Ulleskelf,
+# distinct from this file's own direct LDS-YRK working). Both
+# station-overlap with this file at their shared endpoints (SYB/HUD/DEW/
+# LDS/YRK) without segment-sharing, the same "station overlap is fine,
+# segment-sharing is a deliberate choice" precedent used throughout this
+# catalogue -- see each new file's own top-of-file comment for the full
+# reasoning.
+#
+# Northern is a network rather than a single route. This file's own four
+# fragments are each a real anchor/hub point that a genuine sibling file
+# forks from, not a route in themselves, ordered west to east below; the
+# other arms are separate definitions sharing the NT operator code -- by
+# 2026-09-21 that is 30+ files, not "6" as an earlier version of this
+# comment claimed (stale even at "6": always check `ls lines/northern-*.toml`
+# for the current count rather than trusting a number in this comment).
+# Notable siblings anchored at each of this file's own fragments:
+# `northern-blackpool`/`northern-clitheroe` (share the `northern-manchester`
+# hub), `northern-yorkshire-coast`/`northern-leeds-selby`/
+# `northern-leeds-york` (Leeds/York-area siblings), `northern-huddersfield`
+# (the real Huddersfield-Leeds route this file's own Stalybridge-
+# Huddersfield-Dewsbury fragment is a stub of -- Manchester Victoria is
+# NOT part of that file's own real, Northern-operated extent; see that
+# file's own REVIEW2 FIX note), plus `northern-lakes`,
+# `northern-furness`, `northern-hope-valley`, `northern-tyne-valley` and
+# many more sharing no station with this file at all.
 #
 # TIPLOCs are given only where verified; the field is optional and absent
 # values simply mean no TRUST/SCHEDULE correlation hint for that station.

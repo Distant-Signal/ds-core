@@ -1,5 +1,15 @@
 id = "gwr-cornish-main-line"
-name = "Cornish Main Line"
+name = "South Devon & Cornish Main Line"
+# Renamed from "Cornish Main Line" (real-world sanity review): the old name
+# buried Dawlish and the sea wall (GWR's most-reported disruption location
+# on this line, added to the exclusive segment above) under a name that
+# reads as Cornwall-only, even though this file's own scope starts at Exeter
+# St Davids. GWR's own real route-group name for this corridor is "South
+# Devon and Cornish Mainline" (per GWR's own published route list) — this
+# name matches it. `id` intentionally left unchanged: this file was already
+# published in a prior commit on this branch's history
+# (8c9c1a26/gwr-cornish-main-line.toml), and SCHEMA.md's own `id` field rule
+# ("stable... never change once published") applies.
 mode = "national-rail"
 category = "main-line"
 operators = ["GW"]
@@ -204,10 +214,13 @@ segment = "xc-south-west"
 
 [[stations]]
 crs = "NTA"
-role = "minor"
+role = "junction"
 segment = "xc-south-west"
-# Row copied verbatim from cross-country.toml. Also the real junction for
-# the Riviera/Paignton branch (out of this task's scope, not claimed here).
+# Role corrected minor -> junction (real-world sanity review), matching
+# cross-country.toml's own copy of this row: the real junction for the
+# Riviera/Paignton branch, now modelled in `lines/gwr-riviera-line.toml`
+# and cross-country.toml's own new `gwr-riviera-line` rows -- see that
+# file's segment-naming comment.
 
 [[stations]]
 crs = "TOT"

@@ -1,0 +1,159 @@
+id = "swr-ascot-aldershot"
+name = "Ascot to Ash Vale Line (Ascot - Aldershot)"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+
+# ============================================================================
+# CORRECTION TO THIS TASK'S OWN BRIEF - checked against Wikipedia, not assumed
+# ============================================================================
+# The brief describes this as "Ascot-Aldershot/Guildford (via Camberley)".
+# Checked against Wikipedia's actual "Ascot-Ash Vale line" article rather
+# than assumed: the line does NOT continue to Guildford. It "terminates at
+# Ash Vale Junction on the Alton line" - i.e. it joins swr-alton.toml's own
+# metals, not a separate route to Guildford. "Most trains on the line run
+# between Aldershot and Ascot" (the same article's own service section),
+# continuing over the Alton line's own Ash Vale-Aldershot stretch rather
+# than terminating at Ash Vale itself; "for much of the day, passengers for
+# London must change trains" at Ascot. Filed as
+# `swr-ascot-aldershot.toml` (rather than the brief's own suggested
+# `swr-ascot-guildford.toml`) so the filename/id don't misstate the real
+# termini - the same "verify rather than assume, name for reality" judgment
+# swr-new-guildford.toml's own header already applies to a comparable
+# brief/reality mismatch on a neighbouring route.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Ascot-Ash Vale line" infobox (operator
+# "South Western Railway", termini "Ascot and Ash Vale", stock "Class 450",
+# "750 V DC 3rd rail" electrification) and its own station list in order:
+# Ascot (28 mi 79 ch from Waterloo) - Bagshot (32 mi 8 ch) - Camberley
+# (35 mi 30 ch) - Frimley (37 mi 48 ch) - Ash Vale (40 mi 65 ch, junction
+# with the Alton line). Cross-checked against Ascot railway station
+# (Berkshire)'s own article, which independently confirms Ascot as the
+# northern end of "the Ascot-Ash Vale line - connecting toward Guildford"
+# (the article's own loose phrasing for the ultimate Aldershot-onward
+# connection, not a direct Ascot-Guildford routing - resolved by the
+# dedicated Ascot-Ash Vale line article's own more precise wording, quoted
+# above) with neighbours Sunningdale (north) and Bagshot (south).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Bagshot=BAG, Camberley=CAM, Frimley=FML. Ascot (ACT) and Ash Vale (AHV) /
+# Aldershot (AHT) are reused verbatim from swr-waterloo-reading.toml and
+# swr-alton.toml respectively - see SEGMENTS below.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Bagshot, Camberley or Frimley.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   ACT | BAG - CAM - FML | AHV - AHT
+#   [swr-waterloo-  [-- swr-ascot-aldershot-  [--- swr-alton-branch,
+#    reading-branch]        branch ---]            reused verbatim ---]
+#
+# Ascot (ACT) is reused verbatim from swr-waterloo-reading.toml's own
+# `swr-waterloo-reading-branch` segment - that file's own header already
+# names Ascot as the anticipated junction for this line. Per the
+# shared-trunk rule of thumb the junction stays on the shared name; this
+# line's own exclusive coverage starts at the next station, Bagshot.
+#
+# `swr-ascot-aldershot-branch` (new, exclusive): covers Bagshot, Camberley
+# and Frimley - the genuinely single-route middle stretch, touched by no
+# other file.
+#
+# Ash Vale (AHV) and Aldershot (AHT) are real shared trackage with
+# swr-alton.toml - this line's own single route joins the Alton line's own
+# double-track metals at Ash Vale for the final approach into Aldershot,
+# per the same Wikipedia article's own wording, quoted above. Rather than
+# reuse swr-alton.toml's own `swr-alton-branch` segment wholesale (which
+# would also mark that file's Farnham/Bentley/Alton stations as "shared",
+# even though this line's own trains never reach past Aldershot), both
+# stations carry a new, narrower `swr-ash-vale-junction` segment, reused
+# verbatim from swr-alton.toml (see that file's own matching UPDATE note).
+# Aldershot - this line's own real terminus for "most trains" per the
+# sourcing above - is marked "terminus" here for this line's own
+# perspective even though it is a pass-through station ("major") on
+# swr-alton.toml's own route, matching this catalogue's established
+# precedent of a station carrying different roles in different files
+# reusing the same segment name (e.g. Guildford is "terminus" in
+# swr-new-guildford.toml and "junction" in swr-north-downs.toml).
+
+match_keywords = ["Ascot to Ash Vale line"]
+# The line's own Wikipedia article title (rendered in prose form; the
+# article itself uses an en dash, "Ascot-Ash Vale line", in its title).
+# Grepped clean against every other file's match_keywords before adding -
+# no collision.
+
+sample_stations = ["BAG", "CAM", "FML"]
+# All three on this line's own wholly exclusive segment, between the Ascot
+# and Ash Vale junctions - no other line in the catalogue touches any of
+# them.
+
+destination_crs_filter = ["ACT", "AHT"]
+# Per the sourcing above, "most trains on the line run between Aldershot
+# and Ascot" - a clean, if not perfectly exhaustive (the source's own
+# hedge, "most", is noted rather than overstated), two-destination pattern.
+# All three sample stations are exclusive to this line, so the filter
+# carries no risk of dropping a real sample the way an unverified filter
+# did in an earlier draft of swr-chessington.toml.
+
+# Regional tuning, matching swr-alton.toml's own precedent for a comparable
+# 2 tph SWR branch that this line's own trains continue onto.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The rest of swr-alton.toml's own route (Farnham, Bentley, Alton) beyond
+#   Aldershot: already modelled, station overlap via the shared
+#   `swr-alton-branch` segment only where this line's own trains genuinely
+#   run (Ash Vale-Aldershot) - not beyond.
+# - The rest of swr-waterloo-reading.toml's own route beyond Ascot
+#   (Martins Heron, Bracknell, Wokingham, Reading): a different physical
+#   continuation, not this line.
+
+# ============================================================================
+# STATIONS - Ascot to Aldershot
+# ============================================================================
+[[stations]]
+crs = "ACT"
+role = "junction"
+segment = "swr-waterloo-reading-branch"
+# Ascot (Berks). Reused verbatim from swr-waterloo-reading.toml - see
+# SEGMENTS above.
+
+[[stations]]
+crs = "BAG"
+role = "minor"
+segment = "swr-ascot-aldershot-branch"
+# Bagshot.
+
+[[stations]]
+crs = "CAM"
+role = "minor"
+segment = "swr-ascot-aldershot-branch"
+# Camberley.
+
+[[stations]]
+crs = "FML"
+role = "minor"
+segment = "swr-ascot-aldershot-branch"
+# Frimley.
+
+[[stations]]
+crs = "AHV"
+role = "junction"
+segment = "swr-ash-vale-junction"
+# Ash Vale. Reused verbatim from swr-alton.toml - see SEGMENTS above.
+
+[[stations]]
+crs = "AHT"
+role = "terminus"
+segment = "swr-ash-vale-junction"
+# Aldershot. This line's own real terminus for "most trains" per the
+# sourcing above. Reused verbatim (segment name) from swr-alton.toml, where
+# it is a pass-through station ("major") on the continuing route to
+# Farnham/Bentley/Alton - see SEGMENTS above for why the role differs here.

@@ -160,40 +160,55 @@ delay_threshold_minutes = 4
 # exact segment name unchanged) names `southeastern-lewisham-corridor` for
 # its own CHX/CST/LBG/NWX/SAJ/LEW stretch and invites this file to reuse
 # that name verbatim if the Hayes line's own London-end route genuinely
-# matches that same trunk. It does NOT: the Southeastern TOC's own Wikipedia
-# article gives the Hayes line's calling points as "Waterloo East, London
-# Bridge, Lewisham" with no New Cross or St Johns stop, and St Johns railway
-# station's own Wikipedia article explicitly lists which Southeastern metro
-# routes call there (the Bexleyheath/Sidcup/North Kent group) while stating
-# the Hayes line is NOT among them. So this file's own London-end stations
-# (CHX, LBG, LEW) are a different, smaller set than the six-station corridor
-# senk (now split) documents, and no source available confirms the two runs
-# share the same physical tracks through New Cross/St Johns rather than
-# running on separate fast/local pairs that happen to pass through the same
-# station buildings - the same standard of evidence (or lack of it) that
-# senk's own FINDING 2 already applied to decline a Thameslink shared-trunk
-# claim through this exact area. So CHX, LBG and
-# LEW are treated as station overlap only, not a shared segment - given
-# this file's own name for its own short London-approach stretch:
-# `hayes-london`. Cannon Street (CST) is not included at all: every source
-# checked describes Hayes line services as starting from Charing Cross via
-# Waterloo East only, never Cannon Street.
+# matches that same trunk. This file originally declined: the Southeastern
+# TOC's own Wikipedia article gives the Hayes line's calling points as
+# "Waterloo East, London Bridge, Lewisham" with no New Cross or St Johns
+# stop, and St Johns railway station's own Wikipedia article explicitly
+# lists which Southeastern metro routes call there (the Bexleyheath/Sidcup/
+# North Kent group) while stating the Hayes line is NOT among them - so this
+# file's own London-end stations (CHX, LBG, LEW) are a different, smaller
+# set than the corridor's six/seven-station list, and this file's own
+# not-calling-at-New-Cross/St-Johns fact was read as evidence of running on
+# a physically separate pair of tracks rather than the same corridor.
+#
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# that reading does not hold up. The Charing Cross/Cannon Street-Waterloo
+# East-London Bridge-New Cross-St Johns-Lewisham approach is a single,
+# well-documented four-track railway (fast/through and slow/local line
+# pairs sharing the same formation and the same right-of-way) - the same
+# kind of multi-track-but-one-corridor infrastructure `swr-trunk-waterloo`
+# already models as one shared segment for SWR's own fast/slow services.
+# Not calling at New Cross/St Johns means Hayes line trains use the through
+# pair rather than the local pair between London Bridge and St Johns/
+# Lewisham - it does not mean a physically separate route: a genuine
+# incident on this stretch (a points failure, a fatality, overhead-line
+# damage) generally blocks the whole four-track formation regardless of
+# which pair a given service normally runs on. So CHX/WAE/LBG/LEW below now
+# reuse `southeastern-lewisham-corridor` verbatim - a genuine SharedSegment
+# with southeastern-main-line.toml/southeastern-bexleyheath.toml/
+# southeastern-dartford-loop.toml/southeastern-north-kent.toml, all five of
+# which now carry this same fix (see each file's own header comment).
+# Cannon Street (CST) is still not included at all: every source checked
+# describes Hayes line services as starting from Charing Cross via Waterloo
+# East only, never Cannon Street - this file genuinely has no CST station,
+# not a segment-naming question.
 #
 # Per the shared-trunk rule of thumb, LEW (the diverging junction) stays on
-# `hayes-london`; the exclusive `hayes-branch` segment starts at the next
-# station, Ladywell.
+# `southeastern-lewisham-corridor`; the exclusive `hayes-branch` segment
+# starts at the next station, Ladywell.
 [[stations]]
 crs = "CHX"
 role = "terminus"
-segment = "hayes-london"
+segment = "southeastern-lewisham-corridor"
 # Also southeastern-main-line.toml's and southeastern-bexleyheath.toml's/
-# southeastern-dartford-loop.toml's terminus - station overlap only, not a
-# shared segment; see header comment.
+# southeastern-dartford-loop.toml's/southeastern-north-kent.toml's terminus
+# - genuine SharedSegment, all five files now on this same segment name; see
+# header comment above.
 
 [[stations]]
 crs = "WAE"
 role = "minor"
-segment = "hayes-london"
+segment = "southeastern-lewisham-corridor"
 # Waterloo East: the first stop out of Charing Cross, confirmed by this
 # file's own header sourcing (Wikipedia's calling-point list, "Charing
 # Cross, Waterloo East, London Bridge, Lewisham...") but never actually
@@ -201,32 +216,34 @@ segment = "hayes-london"
 # real scheduled trains found 99% of confirmed hayes-line services touch
 # it. Also on southeastern-main-line.toml's and
 # southeastern-bexleyheath.toml's/southeastern-dartford-loop.toml's own
-# London ends - station overlap only, same as CHX/LBG above.
+# London ends - genuine SharedSegment, same as CHX above.
 
 [[stations]]
 crs = "LBG"
 role = "major"
-segment = "hayes-london"
-# Also on southeastern-main-line.toml's `seml-london`, thameslink-core.toml's
-# terminus, and southeastern-bexleyheath.toml's/
-# southeastern-dartford-loop.toml's `southeastern-lewisham-corridor` (that
-# last name is shared VERBATIM between those two files - a genuine
-# SharedSegment between the two of them specifically - but this file's own
-# `hayes-london` name is different, so this file's own match here stays
-# station overlap only, no shared segment, per the
-# xc-south-coast.toml/xc-manchester.toml precedent (and this batch's own
-# established practice for this exact station).
+segment = "southeastern-lewisham-corridor"
+# Also on southeastern-main-line.toml's, southeastern-bexleyheath.toml's,
+# southeastern-dartford-loop.toml's and southeastern-north-kent.toml's own
+# `southeastern-lewisham-corridor` (genuine SharedSegment across all five
+# files - see header comment above) and thameslink-core.toml's terminus
+# (different segment name there, station overlap only with that file, per
+# the xc-south-coast.toml/xc-manchester.toml precedent - Thameslink's core
+# tunnel through Blackfriars/Farringdon is a physically different route
+# into LBG).
 
 [[stations]]
 crs = "LEW"
 role = "junction"
-segment = "hayes-london"
+segment = "southeastern-lewisham-corridor"
 # Lewisham. Hayes line trains reach here fast from London Bridge without
-# calling at New Cross/St Johns (see header comment); the Dartford Loop/
-# Bexleyheath group's own trunk (southeastern-bexleyheath.toml/
-# southeastern-dartford-loop.toml) and the North Kent Line also diverge/join
-# here, neither sharing a segment name with this file - station overlap
-# only.
+# calling at New Cross/St Johns (see header comment - now understood as a
+# different pair of tracks on the same corridor, not a different corridor);
+# the Dartford Loop/Bexleyheath group's own trunk (southeastern-
+# bexleyheath.toml/southeastern-dartford-loop.toml) and southeastern-main-
+# line.toml all now share this exact segment name here too - genuine
+# SharedSegment, not station overlap; see header comment above. The North
+# Kent Line (southeastern-north-kent.toml) diverges earlier, at New Cross,
+# so it does not reach LEW at all.
 
 # --- Hayes line's own exclusive branch (diverges south from Lewisham via
 # the Courthill Loop) ---

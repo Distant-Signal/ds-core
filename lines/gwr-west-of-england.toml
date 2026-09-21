@@ -1,5 +1,16 @@
 id = "gwr-west-of-england"
-name = "Reading to Taunton Line"
+name = "Berks & Hants Line (Reading – Taunton)"
+# Renamed from "Reading to Taunton Line" (real-world sanity review): that
+# name, while technically the infrastructure name, sat confusingly close to
+# the unrelated sibling file `lines/swr-west-of-england.toml` (a different,
+# SWR-operated route with a near-identical id but an unrelated real name —
+# see that file's own naming note). What GWR/NRE/passengers actually call
+# this route day to day is "Berks & Hants" (the historic railway company
+# name, still current usage for the Reading-Westbury section — see the
+# "Berks and Hants line" match_keywords entry below and its sourcing note,
+# already present and unchanged by this rename). `id` and the
+# "West of England Line" keyword exclusion below are both left exactly as
+# documented — this is a display-name-only fix.
 mode = "national-rail"
 category = "main-line"
 operators = ["GW"]

@@ -4,6 +4,19 @@ mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
 
+# STRUCTURAL GAP, documented not fixed (review2 finding, 2026-09-21): the
+# South West Main Line stopping-halt stations this file carries end to end
+# (Swaythling, Millbrook, Redbridge, Sway, Pokesdown and the rest -- see the
+# Basingstoke-Bournemouth leg below) are ones XC itself never actually calls
+# at; they're here only because XC's real, limited-stop service happens to
+# run over the same SWML metals that `swr-south-west-main.toml` deliberately
+# keeps principal-stops-only. This file, not `swr-south-west-main.toml`, ends
+# up "owning" every SWML local halt for incident-matching purposes -- the
+# wrong operator's line owning these stations. `xc-manchester.toml` has the
+# identical shape at its own Wolverhampton-Birmingham Stour Valley stops.
+# Fixing this properly (adding an SWR Southampton-Bournemouth stopping-service
+# file) is a bigger task than this review's scope -- flagged here for a
+# future pass rather than attempted piecemeal.
 destination_crs_filter = ["BMH", "SOU", "RDG", "OXF", "BAN"]
 sample_stations = ["BAN", "OXF", "RDG", "SOU"]
 # No match_keywords: no route name the Knowledgebase uses consistently, and
@@ -302,7 +315,11 @@ crs = "BCU"
 role = "junction"
 segment = "xc-south-coast"
 # Brockenhurst: strictly between Beaulieu Road and Sway; also the Lymington
-# branch junction (that branch is not modelled in this catalogue yet).
+# branch junction. UPDATE (SWR suburban-gap batch): the branch is now
+# modelled in `lines/swr-lymington-branch.toml`, which reuses
+# swr-south-west-main.toml's own `swr-swml-south` segment for this exact
+# station - a different physical/operator approach from this file's own,
+# so still station overlap only here, not a shared segment.
 
 [[stations]]
 crs = "SWY"

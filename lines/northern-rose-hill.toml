@@ -76,6 +76,14 @@ operators = ["NT"]
 # - Guide Bridge's third, unrelated Stockport-Stalybridge parliamentary
 #   service: researched separately and found too sparse (one round trip a
 #   week) to catalogue as its own line; not part of this file either.
+# Category check (Yorkshire/real-world-sanity review, 2026-09-21): confirmed
+# "regional" is still correct, not a candidate for "commuter". Unlike
+# `northern-airedale.toml`/`northern-wharfedale.toml`/`northern-glossop-
+# hadfield.toml`, this line is diesel throughout (see above) and its own
+# Romiley-Rose Hill Marple spur is single-track with a sparse "three trains
+# every two hours" pattern and no Sunday service at all -- neither
+# electrified nor commuter-frequency.
+
 sample_stations = ["GUI", "HYC", "RML", "RSH"]
 destination_crs_filter = ["RSH"]
 match_keywords = ["Rose Hill Marple", "Hyde loop"]

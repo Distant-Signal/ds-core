@@ -18,9 +18,11 @@ operators = ["LE"]
 # - Saxmundham - Darsham - Halesworth - Brampton - Beccles - Oulton Broad
 # South - Lowestoft (12 stations, matching the infobox count exactly).
 #
-# Already partially anticipated by `greater-anglia-suffolk-branches.toml`,
-# which lists Westerfield (WFI) as "a station on the currently uncatalogued
-# East Suffolk Line" -- confirmed as the same line, now catalogued here.
+# Already partially anticipated by `greater-anglia-felixstowe-branch.toml`
+# (originally drafted as part of the bundled `greater-anglia-suffolk-
+# branches.toml`, since split by brand -- real-world sanity review), which
+# lists Westerfield (WFI) as "a station on the currently uncatalogued East
+# Suffolk Line" -- confirmed as the same line, now catalogued here.
 #
 # `category = "regional"`, matching the infobox's own "Rural branch line"
 # characterisation and a genuinely single-track-for-much-of-its-length,
@@ -42,14 +44,16 @@ delay_threshold_minutes = 10
 # Matches `greater-anglia-suffolk-branches.toml`'s own overrides for the
 # same reasoning: an hourly single-track branch where one cancellation is a
 # large fraction of the service and a short delay isn't yet a story at
-# config.py's base thresholds.
+# config.py's base thresholds. (The overrides originally cited from
+# `greater-anglia-suffolk-branches.toml` live on in that bundled file's
+# split successors, e.g. `greater-anglia-felixstowe-branch.toml`.)
 
 # All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
 # matching each station's own Wikipedia infobox. TIPLOCs are omitted
 # throughout except the two shared junction stations (IPS, WFI), reused
-# verbatim from `greater-anglia-main-line.toml`/`greater-anglia-suffolk-
-# branches.toml`, which already cross-checked them (WFI has none recorded
-# in that file, so none is added here either).
+# verbatim from `greater-anglia-main-line.toml`/`greater-anglia-
+# felixstowe-branch.toml`, which already cross-checked them (WFI has none
+# recorded in that file, so none is added here either).
 #
 # ## Overlap 1: Ipswich (IPS) and Westerfield (WFI) --
 # station-overlap only
@@ -57,7 +61,7 @@ delay_threshold_minutes = 10
 # IPS is already a `geml-mainline`-tagged junction in
 # `greater-anglia-main-line.toml` ("East Suffolk line (to Lowestoft) and the
 # Felixstowe branch line both diverge here") and a `felixstowe-branch`-
-# tagged junction in `greater-anglia-suffolk-branches.toml`. Reusing either
+# tagged junction in `greater-anglia-felixstowe-branch.toml`. Reusing either
 # literal segment name here would, per the hazard both of those files' own
 # comments already document (`segments.rs`'s `SegmentRegistry::is_shared`
 # marking a segment name shared globally by name, not scoped to the
@@ -67,15 +71,17 @@ delay_threshold_minutes = 10
 # is used at IPS instead.
 #
 # WFI is already a `felixstowe-branch`-tagged junction in
-# `greater-anglia-suffolk-branches.toml`, whose own comment already
+# `greater-anglia-felixstowe-branch.toml`, whose own comment already
 # describes it as "the branch's real physical fork... on the currently
 # uncatalogued East Suffolk Line. No overlap with any committed line" --
 # true when written, now resolved by this file. Same reasoning as IPS
 # above: this file's own segment name is used, not `felixstowe-branch`
 # (which also spans DBR/TRM/FLX, none of which this line touches).
 #
-# ## Overlap 2: Lowestoft (LWT) with `greater-anglia-norfolk-branches.toml`
-# -- station-overlap only, different physical approach
+# ## Overlap 2: Lowestoft (LWT) with `greater-anglia-wherry-lines.toml`
+# (the former `greater-anglia-norfolk-branches.toml`, split by brand --
+# real-world sanity review) -- station-overlap only, different physical
+# approach
 #
 # LWT is already that file's own Wherry Lines terminus, tagged
 # `wherry-lowestoft-branch` (reached from Norwich via Reedham, Haddiscoe,
@@ -162,7 +168,7 @@ crs = "OUS"
 role = "minor"
 segment = "greater-anglia-east-suffolk"
 # Oulton Broad South -- confirmed distinct from Oulton Broad North, on
-# `greater-anglia-norfolk-branches.toml`'s own Wherry Lines approach to the
+# `greater-anglia-wherry-lines.toml`'s own Wherry Lines approach to the
 # same terminus. See Overlap 2 above.
 
 [[stations]]
@@ -170,4 +176,4 @@ crs = "LWT"
 role = "terminus"
 segment = "greater-anglia-east-suffolk"
 # Lowestoft: this line's own terminus. See Overlap 2 above for the
-# station-overlap-only relationship with `greater-anglia-norfolk-branches.toml`.
+# station-overlap-only relationship with `greater-anglia-wherry-lines.toml`.

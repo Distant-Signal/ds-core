@@ -1,0 +1,169 @@
+id = "wmr-malvern-line"
+name = "West Midlands Railway: Malvern Line (Birmingham - Hereford)"
+mode = "national-rail"
+category = "regional"
+# "regional" per this catalogue's precedent for a roughly-hourly, medium-
+# distance cross-country stopping service (`wmr-nuneaton-coventry.toml`,
+# `emr-regional.toml`) -- not the dense, all-stations, short-hop suburban
+# character `wmr-cross-city.toml`/`wmr-camp-hill-line.toml` (category
+# "commuter") model for their own inner-Birmingham routes.
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution), reused verbatim by every other WMT-family file in this
+  # catalogue. Not re-verified again from scratch here.
+]
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): named
+# as a real coverage gap -- Great Malvern and Ledbury (both absent
+# catalogue-wide at the start of this task) had no line file; Hereford
+# itself only existed as a `tfw-marches.toml` station (that file's own
+# Newport-Shrewsbury route, a physically different, Wales-facing approach).
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, the "West Midlands Railway"
+# Wikipedia article's own Services route table, its "Malvern Line" row,
+# quoted near-verbatim): "Birmingham New Street - Hereford: 1 [tph],
+# calling at University, Bromsgrove, Droitwich Spa, Worcester Foregate
+# Street, Malvern Link, Great Malvern, Colwall, Ledbury. Some journeys
+# additionally call at Worcester Shrub Hill after Droitwich Spa."
+#
+# CRS codes: BHM, UNI and BMV reused verbatim from `wmr-cross-city.toml`
+# (already-verified facts; this line's own approach to Bromsgrove runs over
+# the same physical track as that file's own Bromsgrove branch -- see the
+# segment-sharing ruling below). DTW, WOF and WOS reused verbatim from
+# `wmr-snow-hill.toml`/`gwr-cotswold.toml` (already-verified facts; this
+# line's own approach into Worcester, via Bromsgrove/Droitwich Spa, is a
+# physically distinct route from both of those files' own Kidderminster-
+# or Oxford-facing approaches -- station-overlap only, see the ruling
+# below). HFD reused verbatim from `tfw-marches.toml` (a physically
+# distinct, Wales-facing approach -- station-overlap only). MVL, GMV, CWL
+# and LED independently confirmed live via this app's own production
+# station-lookup endpoint (ds.cursed.solutions/api/stations?q=<name>,
+# 2026-09-21), single unambiguous match for each, cross-checked against the
+# station names as given in the WMR services table. No TIPLOC confirmed for
+# any of these to the two-source standard, so `tiploc` is omitted
+# throughout.
+
+destination_crs_filter = ["BHM", "HFD"]
+sample_stations = ["BHM", "BMV", "WOF", "GMV", "HFD"]
+
+match_keywords = ["Malvern Line"]
+# The route's own branded name, per the WMR services table row heading.
+# Grep-checked against every other `lines/*.toml` file's `match_keywords`
+# before adding -- no collision.
+
+# Roughly hourly cross-country stopping service -- same frequency-driven
+# tuning `emr-regional.toml`/`wmr-nuneaton-coventry.toml` apply for
+# comparable hourly regional lines, reused verbatim.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Birmingham New Street to Hereford, ordered north-east to south-west.
+#
+# --- Segment-sharing ruling: this line's own Birmingham-Bromsgrove
+# approach IS genuine physical track-sharing with `wmr-cross-city.toml`'s
+# own Bromsgrove branch (both files' own station lists agree on University
+# and Bromsgrove, in the same order), but NOT a shared segment name -- that
+# file's own `wmr-cross-city-trunk`/`wmr-cross-city-bromsgrove` segments
+# span its entire 22-station-plus-branch route (Selly Oak, Bournville,
+# Kings Norton, Northfield, Longbridge, Barnt Green and more, none of which
+# the WMR services table names as a stop for THIS line's own service), the
+# same coarse-granularity mismatch this catalogue documents elsewhere (e.g.
+# `emr-regional.toml`'s Ruling 1, `wmr-chase-line.toml`'s New Street-Aston
+# ruling). This file's own new, exclusive `wmr-malvern-line` segment is
+# used throughout instead. Cost if wrong: bounded, as with every other
+# instance of this pattern in this catalogue -- an incident at University
+# or Bromsgrove still matches `wmr-cross-city.toml` independently via
+# StationHit regardless of segment name. Worcester Foregate Street/Shrub
+# Hill and Droitwich Spa are similarly station-overlap-only with
+# `wmr-snow-hill.toml` (a physically different Kidderminster-facing
+# approach into Worcester) and `gwr-cotswold.toml` (an Oxford-facing
+# approach) -- same reasoning, no segment shared with either. ---
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "wmr-malvern-line"
+# Reuses the TIPLOC already established for this physical station in
+# `wcml-birmingham.toml`/`cross-country.toml`/`wmr-cross-city.toml`/
+# `wmr-chase-line.toml`/`wmr-camp-hill-line.toml`. Station-overlap only
+# with every other Birmingham New Street-touching file in this catalogue.
+
+[[stations]]
+crs = "UNI"
+role = "minor"
+segment = "wmr-malvern-line"
+# University: also a `cross-country.toml`/`xc-cardiff.toml`/`wmr-cross-
+# city.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "BMV"
+role = "major"
+segment = "wmr-malvern-line"
+# Bromsgrove: also a `wmr-cross-city.toml` terminus (that file's own
+# Bromsgrove branch) -- see the ruling above.
+
+[[stations]]
+crs = "DTW"
+role = "minor"
+segment = "wmr-malvern-line"
+# Droitwich Spa: also a `wmr-snow-hill.toml` station -- see the ruling
+# above.
+
+[[stations]]
+crs = "WOS"
+role = "minor"
+segment = "wmr-malvern-line"
+# Worcester Shrub Hill: "some journeys additionally call" here per the WMR
+# services table -- a genuine, real, but minority-of-trains stop, not the
+# dominant calling pattern (which routes via Worcester Foregate Street
+# only). Included per this catalogue's established convention for
+# documenting minority-of-trains stops (see `emr-regional.toml`'s Ilkeston/
+# March/Attleborough comments), flagged honestly here rather than treated
+# as a full, every-train stop. Also a `wmr-snow-hill.toml`/`gwr-
+# cotswold.toml` station via other, physically distinct approaches --
+# station-overlap only.
+
+[[stations]]
+crs = "WOF"
+role = "major"
+segment = "wmr-malvern-line"
+# Worcester Foregate Street: also a `wmr-snow-hill.toml`/`gwr-
+# cotswold.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "MVL"
+role = "minor"
+segment = "wmr-malvern-line"
+# Malvern Link: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "GMV"
+role = "major"
+segment = "wmr-malvern-line"
+# Great Malvern: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "CWL"
+role = "minor"
+segment = "wmr-malvern-line"
+# Colwall: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "LED"
+role = "minor"
+segment = "wmr-malvern-line"
+# Ledbury: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "HFD"
+role = "terminus"
+segment = "wmr-malvern-line"
+# Hereford: also a `tfw-marches.toml` station (that file's own
+# Newport-Shrewsbury route, a physically distinct, Wales-facing approach) --
+# station-overlap only, matching that file's own precedent of not forcing
+# segment-sharing at a busy multi-line junction station without a
+# corroborated genuine track-sharing claim beyond the station itself.

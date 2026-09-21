@@ -93,14 +93,33 @@ minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
 # ============================================================================
+# UPDATE (review2-se-southern): Victoria-side approach now modelled
+# ============================================================================
+# The gap this header originally flagged - no file modelling the real
+# Victoria-side Southern Metro approach into Sutton - is now partly closed:
+# lines/southern-metro-sutton.toml models Victoria - Balham - Streatham
+# Common - Norbury - Thornton Heath - Selhurst - West Croydon - Waddon -
+# Wallington - Carshalton Beeches - Sutton, the real service that continues
+# onward as this file's own Belmont/Banstead/Epsom Downs branch (per
+# Wikipedia's "Southern (train operating company)" article's own "London
+# Victoria - Epsom Downs" calling-point list, which lists both this file's
+# own branch stations and that file's own approach stations as one
+# continuous service). This file's own SUO entry below now uses the shared
+# `southern-epsom-downs-sutton` segment name for that reason - see that
+# file's own SEGMENTS note for the full reasoning. The wider Wimbledon loop
+# and Sutton-Epsom-Dorking/Horsham Mole Valley network remains a documented,
+# still-open gap beyond what these two files and thameslink-southern.toml
+# already cover.
+#
+# ============================================================================
 # SCOPE BOUNDARIES - not modelled here
 # ============================================================================
-# - The wider "Sutton and Mole Valley lines" network (Wimbledon-Sutton loop,
-#   Sutton-Epsom-Dorking/Horsham Mole Valley services, and the Thameslink
-#   Sutton Loop already in thameslink-southern.toml): real, but a much
-#   larger scope than this one branch and not part of this task's
-#   assignment - a documented, still-open gap beyond what
-#   thameslink-southern.toml already covers.
+# - The wider "Sutton and Mole Valley lines" network beyond the UPDATE note
+#   above (Wimbledon-Sutton loop, Sutton-Epsom-Dorking/Horsham Mole Valley
+#   services, and the Thameslink Sutton Loop already in
+#   thameslink-southern.toml): real, but a much larger scope than this one
+#   branch and not part of this task's assignment - a documented, still-open
+#   gap.
 # - The Caterham and Tattenham Corner lines: genuinely separate, Purley-side
 #   branches - southern-caterham.toml and southern-tattenham-corner.toml.
 
@@ -113,7 +132,8 @@ role = "junction"
 segment = "southern-epsom-downs-sutton"
 # Sutton (London). Station overlap with thameslink-southern.toml's own
 # `thameslink-sutton-loop` segment (operator TL) - see STATION OVERLAP note
-# above.
+# above. SharedSegment (same name, same operator SN) with
+# southern-metro-sutton.toml's own SUO entry - see the UPDATE note above.
 
 [[stations]]
 crs = "BLM"

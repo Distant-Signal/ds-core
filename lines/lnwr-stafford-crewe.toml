@@ -1,0 +1,155 @@
+id = "lnwr-stafford-crewe"
+name = "London Northwestern Railway: Stafford - Crewe (via Stoke-on-Trent)"
+mode = "national-rail"
+category = "regional"
+# "regional" per this catalogue's precedent for an hourly, secondary,
+# diversionary-alignment stopping service (`emr-crewe-derby.toml`,
+# `northern-esk-valley.toml`) -- not the fast/frequent WCML-trunk character
+# `west-coast-main-line.toml`/`lnwr-birmingham-crewe.toml`'s own direct
+# Trent Valley Line service models.
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution), reused verbatim by every other WMT-family file in this
+  # catalogue. Not re-verified again from scratch here.
+]
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): a
+# lower-priority gap, named explicitly as an open question in
+# `lnwr-birmingham-crewe.toml`'s own Task 9.2 comment: "Stafford-Crewe via
+# Stoke-on-Trent (Stone, Stoke-on-Trent, Longport, Kidsgrove, Alsager) is a
+# separate, longer diversionary alignment shown as its own branch (pink) on
+# the official LNR map, distinct from the direct/fast Trent Valley
+# alignment this file's Crewe branch already models... out of scope for
+# this FILL-IN task." This file fills that named, deliberately-deferred gap.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, the "London Northwestern
+# Railway" Wikipedia article's own Services route table, its "Stafford -
+# Crewe" row, quoted near-verbatim): "1 [tph], calling at Stone, Stoke-on-
+# Trent, Longport, Kidsgrove, Alsager." Cross-checked against
+# `lnwr-birmingham-crewe.toml`'s own independent citation of the same
+# route (its own official West Midlands Railway/LNR network map research,
+# Task 9.2) naming the identical five intermediate stations in the same
+# order -- two independent sources agreeing.
+#
+# CRS codes: STA reused verbatim from `lnwr-birmingham-crewe.toml`/
+# `west-coast-main-line.toml` (already-verified fact; a well-established
+# multi-line junction in this catalogue). SOT, KDG, ASG and CRE reused
+# verbatim from `emr-crewe-derby.toml` (already-verified facts; this
+# line's own Stafford-facing approach is a physically distinct route from
+# that file's own Uttoxeter-facing approach beyond Stoke-on-Trent -- see
+# the segment-sharing ruling below). SNE (Stone) and LPT (Longport)
+# independently confirmed live via this app's own production station-
+# lookup endpoint (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21):
+# SNE required disambiguation from an unrelated "Stonehaven" (STN, already
+# used by `lner-ecml.toml`) and five other same-named "Stone*" stations
+# elsewhere in the country that a bare "Stone" query also returned --
+# "Stone (Staffs)" was the only one matching this route's own geography,
+# confirmed against the Wikipedia article's own station name. No TIPLOC
+# confirmed for SNE/LPT to the two-source standard, so `tiploc` is omitted
+# for both.
+
+destination_crs_filter = ["STA", "CRE"]
+sample_stations = ["STA", "SNE", "LPT", "CRE"]
+
+match_keywords = ["Stafford to Crewe line", "Stafford-Crewe line"]
+# A plausible Knowledgebase prose rendering of this route (no single
+# dedicated Wikipedia article title was found for this specific
+# diversionary alignment; the LNWR services table is the only source
+# citing it directly). Grep-checked against every other `lines/*.toml`
+# file's `match_keywords` before adding -- no collision.
+
+# Hourly diversionary-alignment stopping service -- same frequency-driven
+# tuning `emr-crewe-derby.toml`/`northern-esk-valley.toml` apply for
+# comparable hourly regional lines, reused verbatim.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# --- Segment-sharing ruling: Stoke-on-Trent, Kidsgrove, Alsager and Crewe
+# are ALL `emr-crewe-derby.toml` stations too, in the same relative order
+# (that file's own CRE-ASG-KDG-SOT approach, reversed) -- genuine physical
+# track-sharing, but NOT a shared segment name. That file's own
+# `emr-crewe-derby-west` segment also covers Longton, Blythe Bridge,
+# Uttoxeter and Tutbury & Hatton beyond Stoke-on-Trent (this line's own
+# route diverges towards Stafford instead), so the two files' station sets
+# under any shared name would not be byte-identical -- the same coarse-
+# granularity mismatch this catalogue documents elsewhere (e.g.
+# `emr-regional.toml`'s Ruling 1, `wmr-malvern-line.toml`'s Bromsgrove
+# ruling). This file's own new, exclusive `lnwr-stafford-crewe` segment is
+# used throughout instead. Cost if wrong: bounded, as with every other
+# instance of this pattern -- an incident at any of these four stations
+# still matches `emr-crewe-derby.toml` independently via StationHit
+# regardless of segment name. Stafford (STA) is separately a well-
+# established multi-line junction elsewhere in this catalogue
+# (`west-coast-main-line.toml` and others) -- station-overlap only there
+# too. ---
+[[stations]]
+crs = "STA"
+tiploc = "STAFFRD"  # reused from lnwr-birmingham-crewe.toml/west-coast-main-line.toml
+role = "terminus"
+segment = "lnwr-stafford-crewe"
+# Stafford: also a `west-coast-main-line.toml`/`lnwr-birmingham-
+# crewe.toml`/`wcml-manchester.toml`/`xc-manchester.toml`/`wcml-
+# liverpool.toml`/`wcml-north-wales.toml` station -- station-overlap only.
+
+[[stations]]
+crs = "SNE"
+role = "minor"
+segment = "lnwr-stafford-crewe"
+# Stone (Staffs): absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "SOT"
+role = "major"
+segment = "lnwr-stafford-crewe"
+# Stoke-on-Trent: also an `emr-crewe-derby.toml`/`wcml-manchester.toml`/
+# `xc-manchester.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "LPT"
+role = "minor"
+segment = "lnwr-stafford-crewe"
+# Longport: absent catalogue-wide before this file (grep-checked). Also
+# named in `emr-crewe-derby.toml`'s own route research as a real,
+# currently-open station that file deliberately left out for lack of
+# confirmation on ITS OWN service's calling pattern there -- this file's
+# own source (the LNWR services table) directly confirms it for THIS
+# service instead.
+
+[[stations]]
+crs = "KDG"
+role = "minor"
+segment = "lnwr-stafford-crewe"
+# Kidsgrove: also an `emr-crewe-derby.toml` station -- see the ruling
+# above.
+
+[[stations]]
+crs = "ASG"
+role = "minor"
+segment = "lnwr-stafford-crewe"
+# Alsager: also an `emr-crewe-derby.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "CRE"
+tiploc = "CREWE"
+role = "terminus"
+segment = "lnwr-stafford-crewe"
+# Crewe: also a `west-coast-main-line.toml`/`lnwr-birmingham-crewe.toml`/
+# `emr-crewe-derby.toml`/`wcml-liverpool.toml`/`wcml-north-wales.toml`/
+# `wcml-manchester.toml` station -- station-overlap only.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Birmingham - Liverpool via Crewe (also named in the same LNWR services
+#   table, "1 tph, calling at Smethwick Galton Bridge, Wolverhampton,
+#   Penkridge, Stafford, Crewe, Winsford, Hartford, Acton Bridge, Runcorn,
+#   Liverpool South Parkway", plus a related Coseley-Liverpool South
+#   Parkway-Mossley Hill working): a real, sourced, lower-priority gap this
+#   task's own brief flagged but did not require, deferred here for a
+#   future task given this session's research budget -- not modelled to
+#   avoid a rushed, thin treatment of a longer, multi-operator-overlap
+#   route (Wolverhampton, Stafford and Crewe are all already busy,
+#   multi-file junctions in this catalogue).

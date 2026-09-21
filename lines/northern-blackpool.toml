@@ -1,5 +1,5 @@
 id = "northern-blackpool"
-name = "Blackpool Line"
+name = "Manchester – Preston – Blackpool North Line"
 mode = "national-rail"
 category = "regional"
 operators = ["NT"]
@@ -8,6 +8,33 @@ destination_crs_filter = ["BPN", "PRE", "BON"]
 sample_stations = ["BPN", "PFY", "PRE"]
 match_keywords = ["Blackpool line", "Blackpool North"]
 
+# --- Naming correction (Yorkshire/real-world-sanity review, 2026-09-21) ---
+# "Blackpool Line" is not a real brand name used by Northern, the National
+# Rail route map or Wikipedia for this specific Manchester Victoria-Preston-
+# Blackpool North corridor -- renamed to a plain geographic description.
+# `id` kept unchanged (published, referenced by several `matcher.rs`
+# regression tests -- e.g. `northern_blackpool_chorley_has_station_and_
+# stays_exclusive`, `northern_blackpool_south.toml`'s own sibling tests --
+# and by SCHEMA.md's "never change once published" rule).
+#
+# Scope note, NOT fixed here (flagged, lower priority per this review's own
+# brief): since the December 2018 Manchester-Preston electrification and
+# the 2017 Ordsall Chord/Windsor Link works, Blackpool North's own principal
+# service group is no longer exclusively Manchester Victoria-based --
+# Northern now runs 2 trains/hour Manchester Airport/Manchester Piccadilly
+# to Blackpool North via the Windsor Link, Manchester Oxford Road and
+# Salford Crescent (converging with this file's own existing Salford
+# Crescent-Bolton-Preston stretch), alongside separate Liverpool Lime
+# Street and York through-services. This file's own Manchester Victoria
+# approach remains real and current, but is no longer the line's only or
+# even principal Manchester-end approach. Not modelled here for budget
+# reasons (this task's own brief marks it lower priority than the Part A
+# bugs fixed elsewhere in this review) -- a real, sourced, documented gap
+# for a future task: it would need CRS verification for Manchester Airport,
+# Manchester Oxford Road and Deansgate, added as a second parallel approach
+# converging with the existing MCV/SLD entries at Salford Crescent, mirroring
+# `northern-airedale.toml`'s LDS/BDQ dual-approach precedent.
+#
 # Manchester Victoria to Blackpool North via Bolton and Preston, ordered
 # south-east to north-west. Shares the `northern-manchester` hub with the
 # `northern` trunk. Preston is also a WCML station, but the two routes only

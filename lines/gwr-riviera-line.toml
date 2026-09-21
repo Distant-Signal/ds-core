@@ -1,0 +1,155 @@
+id = "gwr-riviera-line"
+name = "Riviera Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["GW", "XC"]
+# Great Western Railway (the line's own primary/branded operator) and
+# CrossCountry (real, sourced through-services — see the segment-naming
+# comment below). en.wikipedia.org/wiki/Torquay_railway_station and
+# .../Paignton_railway_station both independently confirm CrossCountry
+# calls at both stations, distinct from GWR's own local pattern.
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Real-world sanity review of the GWR catalogue's "Bristol"/coverage-gap
+# pass: "Riviera Line" is GWR's own current branded name for the Exeter-
+# Paignton route (DCRP, the Dartmoor Community Rail Partnership, also
+# promotes it under this name), and Torre (TRR), Torquay (TQY) and Paignton
+# (PGN) — all real, currently-open, currently-served stations — were absent
+# from every `lines/*.toml` file in this catalogue before this task
+# (grepped clean before starting).
+#
+# Category: "commuter" — en.wikipedia.org/wiki/Torre_railway_station and
+# .../Paignton_railway_station both describe an "approximately half-hourly"
+# GWR daytime calling pattern, the same turn-up-and-go frequency
+# `gwr-avocet-line.toml` already established as "commuter" rather than
+# "regional" for a comparable Exeter-fan branch (this line is in fact the
+# same real service in its northern half — see below).
+
+# Exclusive-segment stations only, for a clean read of this branch's own
+# service (mirrors the other GWR siblings' sample_stations rationale).
+sample_stations = ["TRR", "TQY", "PGN"]
+
+match_keywords = ["Riviera Line"]
+# The line's own current GWR/DCRP branding and Wikipedia article title.
+# Grepped clean against every other file's own match_keywords before
+# adding — no collision.
+
+# Half-hourly daytime frequency (see category sourcing above) over what is,
+# beyond Newton Abbot, a branch with no diversionary alternative — the same
+# judgment call gwr-avocet-line.toml applies to its own comparable
+# Exeter-fan branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 8
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# --- Exeter St Davids to Newton Abbot: genuine shared trunk with
+#     cross-country.toml and gwr-cornish-main-line.toml ---
+#
+# This branch's own approach from Exeter is the same physical South Devon
+# Main Line sea-wall route already modelled by cross-country.toml's and
+# gwr-cornish-main-line.toml's own `xc-south-west` segment (EXD - Dawlish
+# Warren - Dawlish - Teignmouth - Newton Abbot) — reused verbatim here
+# (rows copied directly from cross-country.toml, including its own role/
+# tiploc choices, matching gwr-cornish-main-line.toml's own identical
+# treatment of this exact stretch).
+#
+# --- Newton Abbot to Paignton: this branch's own exclusive territory,
+#     genuinely shared with cross-country.toml too ---
+#
+# en.wikipedia.org/wiki/Torquay_railway_station: CrossCountry provides
+# "limited services to and from Bristol Temple Meads and Birmingham New
+# Street" at Torquay — a real, sourced through-service, not just a
+# station-level coincidence, confirming this branch is genuinely shared
+# track with cross-country.toml too, not exclusive to GWR. New segment
+# `gwr-riviera-line` (following the established line-id-as-exclusive-
+# segment-name convention) is therefore reused verbatim in
+# cross-country.toml's own new copy of this same TRR/TQY/PGN stretch (added
+# in this same task, in sync — see that file's own comment for the fuller
+# sourcing), rather than treated as station-overlap-only. Newton Abbot
+# (NTA) itself stays on `xc-south-west`, per the shared-trunk rule of
+# thumb — it's the junction where this branch diverges from the Plymouth/
+# Penzance-bound continuation, not part of the exclusive branch itself; its
+# `role` was corrected minor -> junction in both `xc-south-west`-using
+# files as part of this same task.
+#
+# CRS codes verified live against ds.cursed.solutions/api/stations
+# (Torre=TRR, Torquay=TQY, Paignton=PGN). Kingskerswell and Preston
+# Platform, the line's two other historical intermediate stops, were
+# checked the same way and returned no current CRS — confirmed closed
+# (1964 and 1914 respectively, per their own Wikipedia articles) and
+# correctly excluded; per those articles, only five of this branch's
+# original eleven stations remain open, matching the five modelled here
+# (EXD, NTA, TRR, TQY, PGN).
+#
+# --- Exeter Central / Avocet Line: real onward through-running, no segment
+#     overlap needed ---
+#
+# gwr-avocet-line.toml's own sourcing states Avocet Line services "operate
+# twice an hour ... from Exmouth to Exeter St Davids (from where they
+# continue to Paignton)" — a genuine real-world through-working, but it
+# runs over that file's own separate `gwr-exeter-central-approach` segment
+# (EXD-EXC, the Exeter Central direction) before reaching this branch's own
+# EXD row on `xc-south-west`; the two files share only the EXD station
+# itself, not a physical segment, matching this catalogue's established
+# "station overlap only" convention for exactly this shape.
+[[stations]]
+crs = "EXD"
+role = "major"
+segment = "xc-south-west"
+# Exeter St Davids. Row copied verbatim from cross-country.toml/
+# gwr-cornish-main-line.toml — see segment-naming comment above.
+
+[[stations]]
+crs = "DWW"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish Warren. Row copied verbatim from cross-country.toml/
+# gwr-cornish-main-line.toml.
+
+[[stations]]
+crs = "DWL"
+role = "minor"
+segment = "xc-south-west"
+# Dawlish. Row copied verbatim from cross-country.toml/
+# gwr-cornish-main-line.toml.
+
+[[stations]]
+crs = "TGM"
+role = "minor"
+segment = "xc-south-west"
+# Teignmouth. Row copied verbatim from cross-country.toml/
+# gwr-cornish-main-line.toml.
+
+[[stations]]
+crs = "NTA"
+role = "junction"
+segment = "xc-south-west"
+# Newton Abbot. This branch's own exclusive segment (below) diverges here —
+# see segment-naming comment above.
+
+[[stations]]
+crs = "TRR"
+role = "minor"
+segment = "gwr-riviera-line"
+# Torre. This branch's own exclusive segment starts here.
+
+[[stations]]
+crs = "TQY"
+role = "major"
+segment = "gwr-riviera-line"
+# Torquay.
+
+[[stations]]
+crs = "PGN"
+role = "terminus"
+segment = "gwr-riviera-line"
+# Paignton. This line's own terminus (GWR local service and XC's own
+# limited through-services both end here). Also the independent terminus
+# of the heritage Dartmouth Steam Railway (services to Kingswear,
+# en.wikipedia.org/wiki/Paignton_railway_station) — a separate, non-National
+# Rail operation, not modelled here.

@@ -1,11 +1,28 @@
 id = "cross-country"
-name = "CrossCountry"
+name = "CrossCountry: North East - South West"
 mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
 
-# North, midpoint(s), south.
-sample_stations = ["NCL", "YRK", "BHM", "BRI", "EXD"]
+# Display name (review2 finding): "CrossCountry" alone is the operator's own
+# brand name doing double duty as a LINE name, which sits oddly next to
+# sibling files like `xc-cardiff.toml`'s "CrossCountry Cardiff Line" -- every
+# other line in the catalogue is named for its route, not its operator. XC's
+# own published route map describes this spine as its North East/Scotland -
+# South West corridor (the "CrossCountry Route"/Voyager network diagram,
+# cross-checked against the operator's own site), so the display name below
+# follows that route wording instead. `id` is left unchanged (`cross-country`
+# is a stable, published identifier per SCHEMA.md and isn't touched by a
+# display-name-only rename), and "CrossCountry"/"Cross Country" stay in
+# `match_keywords` below unchanged -- the brand name is still exactly what
+# Knowledgebase incident text uses.
+
+# North, midpoint(s), south. LDS added for the Leeds branch (review2
+# finding, see the YRK/DON/LDS/WKF comments below) -- one sample per
+# reconverging path either side of Sheffield. EDB added for the new
+# Edinburgh extension above NCL (also review2, lower priority) -- this
+# file's new true northern terminus for most Scotland-bound services.
+sample_stations = ["EDB", "NCL", "YRK", "LDS", "BHM", "BRI", "EXD"]
 match_keywords = ["CrossCountry", "Cross Country"]
 # No excluded_keywords: "Cross Country Route" (the Birmingham-Bristol
 # infrastructure name) shows up in messages that genuinely do affect XC, so
@@ -26,12 +43,105 @@ delay_threshold_minutes = 10
 #
 # TIPLOCs are given only where verified; the field is optional and absent
 # values simply mean no TRUST/SCHEDULE correlation hint for that station.
+#
+# Unlike those four arms, the York-Leeds-Wakefield Westgate-Sheffield branch
+# added below (review2 finding, 2026-09-21) is modelled INSIDE this file
+# rather than as a sibling file: it reconverges back onto this file's own
+# spine at Sheffield rather than reaching a distinct terminus, the same
+# "Y-shape" shape `wcml-manchester.toml` models in one file rather than two.
+# See that file's own caveat comment, which applies identically here:
+# `LineDefinition::stations_between` and `routes_from_stations` (in
+# `crates/aggregator/src/aggregation.rs`) do a flat, file-ordered index-range
+# lookup over `stations` and are NOT branch-aware -- calling either across
+# this file's two Sheffield-reconverging paths (e.g. `stations_between("DON",
+# "SHF")`, which would spuriously include LDS/WKF) would produce a
+# geographically wrong result. Not fixed here for the same reason
+# `wcml-manchester.toml` didn't fix it: aggregator logic, not line data,
+# out of this task's scope.
+# Edinburgh extension (review2 finding, lower priority, 2026-09-21): most XC
+# services terminate at Newcastle, but XC's own published route names this
+# corridor "Plymouth - Edinburgh Waverley" (confirmed live via Wikipedia's
+# "CrossCountry" article, 1 tph core service), with further 2-tpd extensions
+# to Glasgow Central and Aberdeen beyond Edinburgh -- those two are NOT
+# modelled below; see the scope-boundary note past EDB for why. Ordered here
+# north of Newcastle, i.e. listed above NCL in file order to keep the whole
+# file geographically ordered end to end per SCHEMA.md's curation rules.
+#
+# Calling pattern independently verified station-by-station via Wikipedia
+# (each station's own article/infobox, live 2026-09-21), not just transcribed
+# from the CrossCountry article's own route table:
+#   - Morpeth, Alnmouth, Berwick-upon-Tweed: confirmed by the CrossCountry
+#     article's own Newcastle-Edinburgh calling list ("Morpeth (1 tp2h),
+#     Alnmouth (1 tp2h), Berwick-upon-Tweed").
+#   - Dunbar: confirmed via its own Wikipedia article, which lists CrossCountry
+#     among its operators with an explicit "3 tpd to Edinburgh Waverley; 2 tpd
+#     to Plymouth; 1 tpd to Birmingham New Street" service pattern.
+#   - Reston: checked and explicitly excluded -- its own Wikipedia article
+#     states "as of 2026 the company [CrossCountry] provides no services to
+#     the station; all train services are run by TransPennine Express and
+#     LNER." Real, open, on this exact corridor, but not an XC calling point,
+#     so correctly left out of this XC-operator file.
+#
+# CRS codes reused verbatim from `lner-ecml.toml`'s own already-verified
+# `ecml-borders` entries (MPT, ALM, BWK, DUN) and `tpe-borders.toml`'s EDB
+# (itself reused from `tpe-anglo-scottish.toml`) -- none of those four carry
+# a confirmed TIPLOC in this catalogue today either, so none is invented
+# here. New exclusive segment `xc-borders`, starting at the first station
+# past the NCL junction below, per SCHEMA.md's shared-trunk rule of thumb.
+# Station-overlap-only with `lner-ecml.toml`'s `ecml-borders`/`ecml-edinburgh`
+# segments and `tpe-borders.toml`'s `tpe-borders` segment at MPT/ALM/BWK/
+# DUN/EDB -- no segment name shared, matching this catalogue's established
+# cross-operator convention (checked both files' own segment names for these
+# stations before writing this; same treatment `tpe-borders.toml` already
+# gives its own EDB overlap with `tpe-anglo-scottish.toml`).
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "xc-borders"
+# Real terminus for most Scotland-bound XC services; a further 2 tpd extend
+# to Glasgow Central and 2 tpd to Aberdeen beyond here (confirmed via the
+# CrossCountry Wikipedia article's own service table). NOT modelled: this
+# task's brief scoped the Edinburgh extension specifically
+# (Berwick/Alnmouth/Dunbar/Edinburgh) as its own lower-priority item, and
+# Glasgow/Aberdeen would need their own fresh station-by-station calling-
+# pattern research (matching HYM/ABD's own intermediate stations) that this
+# task's remaining budget didn't cover -- flagged here for a future pass
+# rather than guessed at, same "documented, not modelled" treatment
+# `lner-ecml.toml` already gives its own unmodelled Inverness extension.
+
+[[stations]]
+crs = "DUN"
+role = "minor"
+segment = "xc-borders"
+
+[[stations]]
+crs = "BWK"
+role = "major"
+segment = "xc-borders"
+
+[[stations]]
+crs = "ALM"
+role = "minor"
+segment = "xc-borders"
+
+[[stations]]
+crs = "MPT"
+role = "minor"
+segment = "xc-borders"
+# North-to-south order (review2 fix, 2026-09-21): this block runs
+# EDB/DUN/BWK/ALM/MPT so it reads geographically end-to-end into NCL below,
+# per SCHEMA.md -- Morpeth is the first stop north of Newcastle, Dunbar the
+# last before Edinburgh Waverley. Previously listed south-to-north (MPT..EDB)
+# then jumping back south to NCL, which broke the file's own ordering claim.
+
 [[stations]]
 crs = "NCL"
 tiploc = "NWCSTLE"
 role = "junction"
 segment = "xc-north-east"
-# Continues north to Edinburgh (EDB), Glasgow Central (GLC) and Aberdeen (ABD)
+# Continues north to Edinburgh Waverley (and beyond, to Glasgow Central and
+# Aberdeen on a handful of daily extensions) -- now modelled above as far as
+# Edinburgh; see the sourcing note there for what's covered and what isn't.
 
 [[stations]]
 crs = "DHM"
@@ -46,15 +156,56 @@ segment = "xc-north-east"
 [[stations]]
 crs = "YRK"
 tiploc = "YORK"
-role = "major"
+role = "junction"
 segment = "xc-north-east"
+# Real-world-sanity review finding (2026-09-21): York is where XC's NE-SW
+# spine genuinely forks in two towards Sheffield -- one path via Doncaster
+# (already modelled below), the other via Leeds and Wakefield Westgate
+# (previously entirely absent from every CrossCountry file; added below as
+# a second branch, the same reconverging "Y-shape" technique
+# `wcml-manchester.toml` already uses for its own Stafford-Stockport fork).
+# Confirmed via Wikipedia's "Wakefield Westgate railway station" article
+# (CrossCountry's Scotland/Aberdeen-Plymouth/Penzance service is explicitly
+# named as calling there) cross-checked against `lner-leeds.toml`'s own
+# already-verified LDS/WKF station data, reused verbatim below. Role
+# changed from "major" to "junction" to reflect the fork.
 
+# Branch 1: via Doncaster (the route this file already modelled). DON is
+# the sole station on this exclusive branch before the two paths reconverge
+# at Sheffield -- per SCHEMA.md's shared-trunk rule of thumb, the fork
+# point (YRK) stays on the shared `xc-north-east` trunk above, and this
+# branch's own exclusive segment starts here.
 [[stations]]
 crs = "DON"
 tiploc = "DONC"
-role = "junction"
-segment = "xc-yorkshire"
+role = "minor"
+segment = "xc-yorkshire-doncaster"
 
+# Branch 2: via Leeds and Wakefield Westgate. CRS/TIPLOC for both reused
+# verbatim from `lner-leeds.toml`'s own already-verified entries (LDS
+# tiploc "LEEDS"; WKF has no confirmed TIPLOC there either, so none is
+# invented here). Station-overlap-only with `lner-leeds.toml`,
+# `tpe-north.toml` and the various Northern West Yorkshire files that also
+# touch LDS/WKF -- no segment name shared, matching this catalogue's
+# established cross-operator convention (checked each of those files'
+# own LDS/WKF segment names before writing this; none is named
+# `xc-yorkshire-leeds`).
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "major"
+segment = "xc-yorkshire-leeds"
+
+[[stations]]
+crs = "WKF"
+role = "minor"
+segment = "xc-yorkshire-leeds"
+
+# Both branches reconverge here. New segment name (not a reuse of the old
+# `xc-yorkshire` name, which previously spanned DON through CHD as one flat
+# stretch) -- same "the merged continuation gets its own name" pattern
+# `wcml-manchester.toml` uses for its own `wcml-manchester-piccadilly`
+# segment after its Stafford-Stockport fork reconverges.
 [[stations]]
 crs = "SHF"
 tiploc = "SHEFFLD"
@@ -130,6 +281,65 @@ tiploc = "BRSTLTM"
 role = "junction"
 segment = "xc-bristol"
 
+# Bedminster, Parson Street, Nailsea & Backwell, Yatton, Highbridge &
+# Burnham and Bridgwater: real, currently-open, currently-served stations
+# on the same physical Bristol-Taunton double-track railway XC's own
+# non-stop expresses already run over between BRI and TAU (this file
+# previously jumped straight from one to the other) -- added by the
+# real-world sanity review's GWR "Bristol" service-group pass, in sync with
+# this same review's new `lines/gwr-weston-super-mare.toml` (a GWR local
+# stopping service over this same corridor), which copies these six rows
+# verbatim, mirroring the precedent already set by this file's own Dawlish
+# Warren/Dawlish/Teignmouth/Totnes/Ivybridge additions further down (added
+# "in sync with gwr-cornish-main-line.toml's own copy of this shared-trunk
+# row"). en.wikipedia.org/wiki/Bristol_to_Exeter_line's own route
+# description confirms this ordering (Bristol Temple Meads - Bedminster -
+# Parson Street - Nailsea and Backwell - Yatton - ... - Highbridge and
+# Burnham - ... - Bridgwater - ... - Taunton) and that these are today's
+# real intermediate calling points on this route, not historical ones.
+# CRS codes verified live against ds.cursed.solutions/api/stations
+# (Bedminster=BMT, Parson Street=PSN, Nailsea & Backwell=NLS, Yatton=YAT,
+# Highbridge & Burnham=HIG, Bridgwater=BWT).
+#
+# The Weston-super-Mare loop (Worle, Weston Milton, Weston-super-Mare
+# itself) is NOT added here: Wikipedia's own account of this route
+# describes a single-track loop diverging at Worle Junction and rejoining
+# the main line at Uphill Junction, distinct from the double-track through
+# route XC's own non-stop expresses use -- not the same "one physical
+# double-track railway, different calling pattern" shape as the six
+# stations above. Those three stations are exclusive to
+# `gwr-weston-super-mare.toml`'s own new segment; see that file's own
+# segment-naming comment for the full reasoning.
+[[stations]]
+crs = "BMT"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "PSN"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "NLS"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "YAT"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "HIG"
+role = "minor"
+segment = "xc-south-west"
+
+[[stations]]
+crs = "BWT"
+role = "major"
+segment = "xc-south-west"
+
 [[stations]]
 crs = "TAU"
 tiploc = "TAUNTON"
@@ -164,8 +374,46 @@ segment = "xc-south-west"
 
 [[stations]]
 crs = "NTA"
-role = "minor"
+role = "junction"
 segment = "xc-south-west"
+# Newton Abbot: role corrected minor -> junction (real-world sanity review)
+# -- this is where XC's own Torquay/Paignton branch (below) diverges from
+# its Plymouth/Penzance-bound continuation (TOT/IVY/PLY), per the
+# shared-trunk rule of thumb.
+
+# Torre, Torquay and Paignton: real, currently-open, currently-served
+# stations on the Riviera Line branch to Torbay, added by the real-world
+# sanity review's GWR "Bristol"/coverage-gap pass alongside this review's
+# new `lines/gwr-riviera-line.toml`. en.wikipedia.org/wiki/Torquay_railway_
+# station and .../Paignton_railway_station both confirm CrossCountry runs
+# genuine (if limited) through services here from Bristol Temple Meads/
+# Birmingham New Street -- a real, sourced shared corridor with
+# gwr-riviera-line.toml's own GWR local service, not just a station-level
+# coincidence, hence the new shared `gwr-riviera-line` segment name reused
+# verbatim in both files (see that file's own segment-naming comment for
+# the fuller reasoning). Kingskerswell and Preston Platform, the line's two
+# other historical intermediate stops, were checked live against
+# ds.cursed.solutions/api/stations and returned no current CRS -- both
+# confirmed closed (1964 and 1914 respectively per their own Wikipedia
+# articles) and correctly excluded.
+[[stations]]
+crs = "TRR"
+role = "minor"
+segment = "gwr-riviera-line"
+# Torre.
+
+[[stations]]
+crs = "TQY"
+role = "minor"
+segment = "gwr-riviera-line"
+# Torquay.
+
+[[stations]]
+crs = "PGN"
+role = "minor"
+segment = "gwr-riviera-line"
+# Paignton. XC's own branch terminus; the main XC route continues instead
+# via TOT/IVY/PLY below.
 
 [[stations]]
 crs = "TOT"

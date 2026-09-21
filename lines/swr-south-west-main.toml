@@ -46,6 +46,19 @@ match_keywords = [
 #   (6%), Redbridge (3%). Left for a future task to confirm (or model as a
 #   separate stopping-service line) with dedicated research, rather than
 #   guessed at here.
+#
+# REAL-WORLD-SANITY REVIEW ADDITION: this file previously jumped straight
+# from Poole to Weymouth, skipping Wareham and Dorchester South - both
+# real, currently-served stations on this exact stretch that were absent
+# catalogue-wide (grepped clean before adding). CRS codes verified live
+# against https://ds.cursed.solutions/api/stations: Wareham (Dorset) =
+# WRM, Dorchester South = DCH (distinct from Dorchester West, DCW, on the
+# separate Heart of Wessex line via Yeovil - gwr-heart-of-wessex.toml, not
+# this route). Station order Poole - Wareham - Dorchester South - Weymouth
+# matches the line's own well-known real-world calling pattern. Wool,
+# Moreton and Upwey also sit on this stretch (all served, per National
+# Rail) but were not part of this task's brief and are left as a further,
+# smaller documented gap rather than guessed at.
 [[stations]]
 crs = "WAT"
 tiploc = "WATRLMN"
@@ -100,11 +113,20 @@ tiploc = "SOTON"
 role = "major"
 segment = "swr-swml-south"
 
+# UPDATE (SWR suburban-gap batch): role corrected from "minor" to
+# "junction", and segment changed from `swr-swml-south` to a new, narrower
+# `swr-brockenhurst-junction` - Brockenhurst is the real junction where
+# `swr-lymington-branch.toml` (Lymington Town/Lymington Pier) leaves this
+# line, per that file's own sourcing. A new segment name (rather than
+# reusing `swr-swml-south` wholesale) keeps Winchester/Southampton/
+# Bournemouth/Poole/Weymouth below correctly exclusive to this file - the
+# same precise-blast-radius approach used for AHV/AHT in
+# swr-alton.toml/swr-ascot-aldershot.toml (this same batch).
 [[stations]]
 crs = "BCU"
 tiploc = "BKNHRST"
-role = "minor"
-segment = "swr-swml-south"
+role = "junction"
+segment = "swr-brockenhurst-junction"
 
 [[stations]]
 crs = "BMH"
@@ -117,6 +139,20 @@ crs = "POO"
 tiploc = "POOLE"
 role = "minor"
 segment = "swr-swml-south"
+
+[[stations]]
+crs = "WRM"
+role = "minor"
+segment = "swr-swml-south"
+# Wareham (Dorset). Added by the real-world-sanity review - see the
+# DATA-AUDIT SCOPE DECISION note above.
+
+[[stations]]
+crs = "DCH"
+role = "minor"
+segment = "swr-swml-south"
+# Dorchester South. Distinct from Dorchester West (DCW), on the separate
+# Heart of Wessex line - see the note above.
 
 [[stations]]
 crs = "WEY"

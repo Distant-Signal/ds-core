@@ -36,6 +36,16 @@ operators = ["NT"]
 # `northern-blackpool.toml`'s and `northern-calder-valley.toml`'s own
 # decision to leave thresholds at their defaults for a broadly 2tph corridor.
 
+# Category check (Yorkshire/real-world-sanity review, 2026-09-21): confirmed
+# "regional" is still correct, not a candidate for "commuter" alongside
+# `northern-airedale.toml`/`northern-wharfedale.toml`/`northern-glossop-
+# hadfield.toml` (each electrified and genuinely commuter-frequency). This
+# line is diesel-operated throughout (Class 150/156/158 DMUs, Class 769
+# BMUs) with a mixed stopping/semi-fast pattern including several
+# infrequently-served intermediate stations (see the scope-boundaries note
+# below) -- not electrified, so it doesn't meet the bar the three lines
+# above were re-categorized against.
+
 sample_stations = ["MCV", "ATN", "WGW", "SOP"]
 # Manchester Victoria (origin), Atherton (the largest intermediate town,
 # representative of the Manchester-Wigan leg), Wigan Wallgate (the junction

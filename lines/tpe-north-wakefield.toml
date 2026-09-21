@@ -1,0 +1,171 @@
+id = "tpe-north-wakefield"
+name = "TransPennine Express: North (Wakefield Line)"
+mode = "national-rail"
+category = "regional"
+# Unlike `tpe-north.toml`/`tpe-north-teesside.toml`/`tpe-north-hull.toml`/
+# `tpe-north-scarborough.toml` (all widely-spaced, inter-city-style calling
+# patterns), this route's western half calls at a run of closely-spaced
+# local halts (Stalybridge, Mossley, Greenfield, Marsden, Slaithwaite) more
+# typical of a stopping service than an express -- "regional" matches this
+# catalogue's precedent of tuning category on genuine service character
+# rather than headline distance/operator brand (see `tpe-borders.toml`'s own
+# identical reasoning for choosing "regional" over "main-line" despite an
+# inter-city-scale route).
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# Sibling of `tpe-north.toml` and its other North-route siblings -- see
+# `tpe-north.toml`'s own header comment for the shared "why sibling files,
+# not one broadened file" reasoning.
+#
+# Route, live-verified 2026-09-21 via two independent sources:
+#   - Wikipedia's "TransPennine Express" article, route table: "Manchester
+#     Piccadilly to York via Wakefield Kirkgate", 1 tph, calling at
+#     Stalybridge, Mossley, Greenfield, Marsden, Slaithwaite, Huddersfield,
+#     Deighton, Mirfield, Wakefield Kirkgate, Normanton, Castleford.
+#   - Castleford's own Wikipedia article, Services section: "1tph operates
+#     in each direction between Manchester Piccadilly and York" via
+#     Wakefield Kirkgate and Normanton, "the first direct service between
+#     Castleford and York since 1970" -- independently confirms the route
+#     and the Castleford-York leg's genuine novelty.
+#
+# Castleford-York leg: this service reaches York WITHOUT calling at Leeds
+# (it diverges from the Leeds-bound North-route services at Huddersfield,
+# not at Leeds -- see the shared-segment note below) and without stopping
+# at any intermediate station between Castleford and York. Confirmed via
+# Church Fenton's own Wikipedia article, History section: "Since the winter
+# 2023 timetable update, scheduled passenger services towards Castleford,
+# Wakefield Kirkgate and Huddersfield now pass through here once again... but
+# run through without stopping" -- i.e. this service is a genuine
+# pass-through at Church Fenton (and, by the same routing, Sherburn-in-Elmet
+# and South Milford), not a missed/unresearched calling point. None of those
+# three are added below.
+#
+# Station overlap, no shared segment name -- same policy `tpe-north.toml`
+# itself already set for this station family, applied here for consistency
+# across the whole North-route sibling group (see `tpe-north-teesside.toml`'s
+# identical note for the fuller reasoning). SYB (Stalybridge) is also on
+# `tpe-north-hull.toml` (this file's own western approach genuinely diverges
+# from that service somewhere around Manchester/Guide Bridge -- both reach
+# Stalybridge, but from different Manchester termini, Piccadilly here vs.
+# Victoria there -- no sourced fact here establishes a shared trunk beyond
+# both calling at the same station). HUD is also on every other North-route
+# sibling and `northern-transpennine`/`northern-calder-valley.toml` (Dryclough
+# Junction, a different corridor). MIR and WKK are also on
+# `grand-central-bradford.toml`'s own West Riding route (a different
+# King's Cross-origin service reaching the same two stations from the
+# opposite direction). YRK is also on every other North-route sibling,
+# `cross-country.toml` and `grand-central.toml`.
+#
+# CRS codes: MSL, GNF, MSN, SWT, DHN, NOR, CFD cross-checked against
+# `https://ds.cursed.solutions/api/stations`, 2026-09-21 -- all new to this
+# catalogue. MAN, SYB, HUD reused verbatim from `tpe-north-teesside.toml`/
+# `tpe-north-hull.toml`. MIR, WKK reused verbatim from
+# `grand-central-bradford.toml`. YRK reused verbatim from `tpe-north.toml`.
+sample_stations = ["MAN", "HUD", "WKK", "YRK"]
+destination_crs_filter = ["MAN", "YRK"]
+
+# No match_keywords: "North" is too generic and the bare "TransPennine
+# Express" brand is reserved for operator-level files, matching every other
+# file in this sibling group. "Wakefield Line" (this file's own display-name
+# disambiguator) is not a confirmed Knowledgebase-used phrase and risks
+# collision with Wakefield-area incidents on other operators' services
+# through Wakefield Westgate (LNER, CrossCountry -- not modelled by any file
+# in this catalogue yet, but not worth risking). Station and operator
+# evidence carries this file instead.
+
+# Tuned as a stopping service, not an inter-city express -- matching this
+# catalogue's other closely-spaced Northern/TPE local corridors
+# (`northern-calder-valley.toml`) rather than `tpe-north.toml`'s own
+# long-distance thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Ordered Manchester Piccadilly -> Stalybridge -> Mossley -> Greenfield ->
+# Marsden -> Slaithwaite -> Huddersfield -> Deighton -> Mirfield -> Wakefield
+# Kirkgate -> Normanton -> Castleford -> York, per the confirmed route above.
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "tpe-north-wakefield"
+
+[[stations]]
+crs = "SYB"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Stalybridge.
+
+[[stations]]
+crs = "MSL"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Mossley (Manchester) -- not to be confused with Mossley Hill (MSH,
+# Liverpool), a different station.
+
+[[stations]]
+crs = "GNF"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Greenfield.
+
+[[stations]]
+crs = "MSN"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Marsden (Yorks) -- not to be confused with any other Marsden.
+
+[[stations]]
+crs = "SWT"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Slaithwaite.
+
+[[stations]]
+crs = "HUD"
+role = "junction"
+segment = "tpe-north-wakefield"
+# Huddersfield -- this route diverges here from the other North-route
+# siblings, which continue towards Leeds; this route's own exclusive
+# continuation starts at the next station, Deighton.
+
+[[stations]]
+crs = "DHN"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Deighton.
+
+[[stations]]
+crs = "MIR"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Mirfield -- CRS reused verbatim from `grand-central-bradford.toml`.
+
+[[stations]]
+crs = "WKK"
+role = "major"
+segment = "tpe-north-wakefield"
+# Wakefield Kirkgate -- CRS reused verbatim from `grand-central-bradford.toml`.
+
+[[stations]]
+crs = "NOR"
+role = "minor"
+segment = "tpe-north-wakefield"
+# Normanton.
+
+[[stations]]
+crs = "CFD"
+role = "major"
+segment = "tpe-north-wakefield"
+# Castleford -- "the first direct service between Castleford and York since
+# 1970"; see the sourcing note above.
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "terminus"
+segment = "tpe-north-wakefield"
+# York -- reached non-stop from Castleford, via Church Fenton (confirmed
+# pass-through, not a missed calling point; see the sourcing note above).

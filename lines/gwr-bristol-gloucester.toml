@@ -1,0 +1,165 @@
+id = "gwr-bristol-gloucester"
+name = "Bristol to Gloucester Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml — not re-derived
+# here, since it's the same operator running this route.
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Real-world sanity review of the GWR "Bristol" service-group gap: Filton
+# Abbey Wood (FIT) — a major Bristol commuter station in its own right,
+# per en.wikipedia.org/wiki/Filton_Abbey_Wood_railway_station — Yate (YAE)
+# and Cam & Dursley (CDU) were all absent from every `lines/*.toml` file in
+# this catalogue before this task (grepped clean before starting), despite
+# being real, currently-open, currently-served GWR stations on the direct
+# Bristol-Gloucester corridor. en.wikipedia.org/wiki/Bristol_to_Gloucester_
+# Line is the route's own current infrastructure/article name, used here.
+#
+# --- Checked first, per this catalogue's own convention: does
+#     gwr-golden-valley.toml already cover this? ---
+#
+# Not the Bristol-side stations. gwr-golden-valley.toml's own route reaches
+# Gloucester from the opposite direction (Swindon-Kemble-Stroud-Stonehouse,
+# the "Golden Valley Line" brand), and its own comment documents that the
+# two routes only share station-building overlap with xc-cardiff.toml at
+# Gloucester, not with a Bristol-direction approach. This task's own
+# research, however, found the two routes DO genuinely converge just
+# short of Gloucester: gwr-golden-valley.toml's own Stonehouse (SHU) entry
+# already notes "The Golden Valley line rejoins/merges with the Bristol-
+# Birmingham main line at Standish Junction, just west of [Stonehouse]" —
+# i.e. Standish Junction, not Gloucester station, is the real convergence
+# point, and it sits between Cam & Dursley and Stonehouse on this file's
+# own route (en.wikipedia.org/wiki/Bristol_to_Gloucester_Line's own route
+# diagram: ... Coaley Junction - Cam & Dursley - Stonehouse - Haresfield -
+# Gloucester). So Stonehouse and Gloucester themselves ARE genuinely shared
+# track with gwr-golden-valley.toml (see segment-naming comment below);
+# this file's own exclusive scope is Bristol Temple Meads to Cam & Dursley.
+
+# Deliberately unset. en.wikipedia.org/wiki/Cam_and_Dursley_railway_station
+# describes a mixed real pattern: "northbound services reach Gloucester,
+# with most services continuing on to Cheltenham Spa, Ashchurch for
+# Tewkesbury and Worcester Foregate Street... southbound services connect
+# to Bristol Temple Meads and onwards to Bath and Westbury, with some
+# services carrying on to Weymouth" — i.e. real GWR workings over this
+# route extend well past both ends of this file's own scope in ways this
+# task did not verify service-by-service. Left unset rather than invent or
+# under-scope it, mirroring gwr-golden-valley.toml's own identical
+# judgment call for the same "through service continues past this file's
+# scope boundary" situation.
+
+# Exclusive-segment stations only, for a clean read of this line's own
+# service (mirrors the other GWR siblings' sample_stations rationale).
+sample_stations = ["FIT", "YAE", "CDU"]
+
+match_keywords = ["Bristol to Gloucester line"]
+# The route's own current infrastructure/article name. Grepped clean
+# against every other file's own match_keywords before adding — no
+# collision.
+
+# Cam & Dursley's own Wikipedia article ("Services" section) confirms this
+# is "largely hourly" throughout — not a sparse single-track branch, but
+# also not full main-line frequency. Matches gwr-cotswold.toml's/
+# gwr-golden-valley.toml's identical {0.30, 10} judgment call for a
+# comparable hourly regional secondary line.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# --- Bristol Temple Meads: real departure point shared with several
+#     sibling files, station overlap only ---
+#
+# BRI is already gwr-main-line.toml's own exclusive `gwr-main-line` segment
+# (Bath/Chippenham direction), cross-country.toml's own `xc-bristol`
+# segment (Bristol Parkway/Midlands direction) and gwr-severn-beach.toml's
+# own exclusive `gwr-severn-beach` segment (Avon Gorge/Avonmouth
+# direction) — none of which run via Filton Abbey Wood/Yate. This line's
+# own real approach out of Bristol (via the Filton Bank) was not fully
+# traced against gwr-severn-beach.toml's own Stapleton Road/Lawrence Hill
+# stretch within this task's budget — both routes leave Bristol Temple
+# Meads via Bristol East Junction and may share real track as far as a
+# further junction near Ashley Down/Narroways Hill before diverging (the
+# Severn Beach line towards the Avon Gorge, this line towards Filton) —
+# flagged here for a future task to verify rather than guessed. BRI is
+# tagged with this line's own exclusive segment below, per this
+# catalogue's established "station overlap is fine, segment-sharing is a
+# deliberate choice" precedent.
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "terminus"
+segment = "gwr-bristol-gloucester"
+
+[[stations]]
+crs = "FIT"
+role = "major"
+segment = "gwr-bristol-gloucester"
+# Filton Abbey Wood: a major Bristol commuter station in its own right
+# (en.wikipedia.org/wiki/Filton_Abbey_Wood_railway_station), also the
+# junction for the MetroWest-reopened Henbury Loop service (not modelled
+# in this catalogue at the time of writing). CRS verified live against
+# ds.cursed.solutions/api/stations.
+
+[[stations]]
+crs = "YAE"
+role = "major"
+segment = "gwr-bristol-gloucester"
+# Yate. CRS verified live against ds.cursed.solutions/api/stations.
+# Westerleigh Junction (where the South Wales Main Line's Badminton-line
+# curves join this route, per en.wikipedia.org/wiki/Bristol_to_Gloucester_
+# Line) sits just south of here and has no CRS/TIPLOC of its own.
+
+[[stations]]
+crs = "CDU"
+role = "minor"
+segment = "gwr-bristol-gloucester"
+# Cam & Dursley. This file's own exclusive segment ends here — Standish
+# Junction, where this route converges with gwr-golden-valley.toml's own
+# Kemble-Stroud approach, sits between here and Stonehouse (see
+# segment-naming comment above) and has no CRS/TIPLOC of its own.
+#
+# Charfield, Wickwar and Coaley Junction — three further named stops on
+# this route's historical infobox, between Yate and here — were checked
+# live against ds.cursed.solutions/api/stations and returned no current
+# CRS; all three confirmed closed and correctly excluded.
+
+[[stations]]
+crs = "SHU"
+role = "minor"
+segment = "gwr-golden-valley"
+# Stonehouse. Real convergence point with gwr-golden-valley.toml's own
+# route (see segment-naming comment above) — `gwr-golden-valley` reused
+# verbatim, row copied directly from that file, rather than treated as a
+# single-waypoint station overlap. Haresfield, between here and Gloucester
+# on this route's own historical infobox, was checked the same way as
+# Charfield/Wickwar/Coaley Junction above and returned no current CRS —
+# confirmed closed.
+
+[[stations]]
+crs = "GCR"
+role = "major"
+segment = "gwr-golden-valley"
+# Gloucester. This file's own scope ends here (matching
+# gwr-golden-valley.toml's own scope boundary); real GWR services continue
+# to Cheltenham Spa/Ashchurch/Worcester (see the destination_crs_filter
+# comment above). Row copied verbatim from gwr-golden-valley.toml.
+#
+# Also, separately, a real station overlap with xc-cardiff.toml (its own
+# `xc-cardiff` segment, Cheltenham-Gloucester-Newport-Cardiff) — already
+# documented as station-overlap-only by gwr-golden-valley.toml's own GCR
+# note, unchanged by this file.
+#
+# cross-country.toml's own core Birmingham-Bristol route physically runs
+# Cheltenham Spa (CNM) - Gloucester - Standish Junction - Bristol Parkway -
+# Bristol Temple Meads too (its own CNM row already notes "Bristol services
+# run via Standish Jn"), but that file's own station list currently jumps
+# straight from CNM to BPW without a GCR/SHU entry at all — a real,
+# separate coverage gap in cross-country.toml's own Bristol arm, out of
+# this task's scope (lines/gwr-bristol-gloucester.toml only) and flagged
+# here for the controller alongside this task's other findings.

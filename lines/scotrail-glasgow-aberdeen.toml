@@ -1,0 +1,387 @@
+id = "scotrail-glasgow-aberdeen"
+name = "ScotRail Glasgow to Aberdeen Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SR"]
+
+# Real-world-sanity review (2026-09-21), Part B, sibling file to
+# `lines/scotrail-edinburgh-aberdeen.toml` -- see that file's own
+# file-level comment for the full background on the coverage gap this
+# closes. This file covers the Glasgow side: Glasgow Queen Street -
+# Stirling - Perth - Dundee - Aberdeen, converging with the Edinburgh side
+# at Dundee to run together over the shared "Dundee to Aberdeen line" (see
+# the segment-naming coordination note below).
+#
+# Real branded name: confirmed independently at Stonehaven's own Wikipedia
+# article ("Trains on both the Edinburgh to Aberdeen Line and the Glasgow
+# to Aberdeen Line call here") and Montrose's own article ("the Glasgow
+# Queen Street and Edinburgh Waverley to Aberdeen routes"). The Glasgow-
+# Stirling-Perth stretch itself is also referred to as the "Glasgow-Dundee
+# line" (Gleneagles' and Invergowrie's own Wikipedia articles both use this
+# name) -- the same physical corridor, cited under its own more localised
+# name in those two station articles specifically.
+#
+# Category: "main-line", matching the sibling
+# `scotrail-edinburgh-aberdeen.toml`'s own reasoning -- see that file's
+# category comment for the full precedent (`scotrail-central-belt.toml`,
+# `lner-ecml.toml`).
+
+sample_stations = ["GLQ", "STG", "PTH", "ABD"]
+destination_crs_filter = ["STG", "PTH", "DEE", "ABD"]
+# LDBWS sampling at GLQ mixes this line's own departures with `scotrail-
+# central-belt.toml`'s own Falkirk-High-bound trains from the same named
+# station/platform group (both files' own GLQ entries are the High Level
+# platforms -- see the segment-naming coordination note below). Filtering
+# to this line's own real intermediate/final destinations cleanly
+# separates the two, mirroring `scotrail-ayrshire.toml`'s identical
+# pattern at GLC against `scotrail-argyle.toml`. (`scotrail-central-
+# belt.toml` itself does not currently have a `destination_crs_filter` at
+# GLQ -- a pre-existing, documented gap this file's own addition does not
+# fix, since that file isn't otherwise touched by this task.)
+
+match_keywords = ["Glasgow to Aberdeen Line", "Glasgow-Aberdeen line"]
+# The two forms of this route's own real branded name, sourced
+# independently at Stonehaven and Montrose (see above). Grepped clean
+# against every other file's own `match_keywords` before adding: no
+# collision (`scotrail-aberdeen-inverness.toml` uses the differently-
+# ordered "Aberdeen-Inverness" phrase, not "Glasgow-Aberdeen" or
+# "Aberdeen" alone).
+
+# Roughly-hourly long-distance corridor: same reasoning and values as the
+# sibling `scotrail-edinburgh-aberdeen.toml` and `lner-ecml.toml`.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# === Station list: Glasgow Queen Street to Aberdeen via Stirling, Perth
+#     and Dundee ===
+#
+# Ordered south to north/east per SCHEMA.md's curation rule. Three real
+# physical stretches:
+#   1. Glasgow Queen Street to Croy: the same physical approach
+#      `scotrail-central-belt.toml`'s own "via Falkirk High" routing uses
+#      as far as Greenhill Junction (just past Croy) -- see the
+#      segment-naming coordination note below for why this file does NOT
+#      reuse that file's own segment name here.
+#   2. Larbert to Dunblane: the same physical track `scotrail-stirling-
+#      dunblane.toml` already models from the opposite (Edinburgh)
+#      direction -- that file's own Croy Line scope-boundary note
+#      pre-registered exactly this reuse ("reusing `scotrail-stirling-
+#      dunblane` for that file's own Larbert/Stirling/Bridge of Allan/
+#      Dunblane entries would correctly mark this real shared trunk").
+#   3. Gleneagles to Dundee: this file's own exclusive stretch, ending at
+#      Dundee, where it converges with the sibling
+#      `scotrail-edinburgh-aberdeen.toml`'s own Fife-side approach to
+#      form the shared "Dundee to Aberdeen line" trunk.
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "scotrail-glasgow-aberdeen-approach"
+# Glasgow Queen Street (High Level) -- see the segment-naming coordination
+# note below for why this gets its own segment name rather than reusing
+# `scotrail-central-belt.toml`'s own GLQ entry's segment.
+
+[[stations]]
+crs = "BBG"
+role = "minor"
+segment = "scotrail-glasgow-aberdeen-approach"
+# Bishopbriggs.
+
+[[stations]]
+crs = "LNZ"
+role = "minor"
+segment = "scotrail-glasgow-aberdeen-approach"
+# Lenzie.
+
+[[stations]]
+crs = "CRO"
+role = "junction"
+segment = "scotrail-glasgow-aberdeen-approach"
+# Croy: per Wikipedia's "Croy Line" article, "most of the route is shared
+# with other services" including "the Glasgow to Edinburgh via Falkirk
+# Line between Glasgow Queen Street and Greenhill Junction" -- Greenhill
+# Junction is a short distance past Croy (not itself a passenger station),
+# so Croy is the last station on the shared Falkirk-High approach before
+# this file's own route splits off towards Larbert and Stirling. Tagged
+# `junction` per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "LBT"
+role = "junction"
+segment = "scotrail-stirling-dunblane-larbert-approach"
+# Larbert: genuine shared trunk with `scotrail-stirling-dunblane.toml`,
+# on a narrow segment name carved specifically for this LBT/STG/BEA/DBL
+# stretch -- see the segment-naming coordination note above for why the
+# broader `scotrail-stirling-dunblane` name isn't reused here (it also
+# covers that file's own unrelated Linlithgow/Polmont stations). That
+# file's own LBT comment already documents the "triangular junction"
+# topology this station sits on.
+
+[[stations]]
+crs = "STG"
+role = "junction"
+segment = "scotrail-stirling-dunblane-larbert-approach"
+# Stirling: reused from `scotrail-stirling-dunblane.toml`; that file's own
+# STG comment already notes it is "served by this line, the (unmodelled)
+# Croy Line, and the Highland Main Line/Glasgow-Aberdeen Line northbound"
+# -- this file is that "Croy Line"/"Glasgow-Aberdeen Line" continuation,
+# now modelled.
+
+[[stations]]
+crs = "BEA"
+role = "minor"
+segment = "scotrail-stirling-dunblane-larbert-approach"
+# Bridge of Allan: reused from `scotrail-stirling-dunblane.toml`.
+
+[[stations]]
+crs = "DBL"
+role = "major"
+segment = "scotrail-stirling-dunblane-larbert-approach"
+# Dunblane: NOT a terminus from this file's own perspective (unlike
+# `scotrail-stirling-dunblane.toml`'s own DBL entry, which correctly
+# tags it `terminus` for that file's own Edinburgh-Dunblane stopping
+# service) -- a fresh fetch of Wikipedia's "Dunblane railway station"
+# article confirms it is physically a through station, with ScotRail
+# services "heading north to Perth, Dundee, Aberdeen and Inverness" using
+# a dedicated platform there. Same convention as `scotrail-argyle.toml`'s
+# CBC/`scotrail-north-clyde.toml`'s ADR: different, accurate `role` values
+# per file describing different real service patterns at the same shared
+# station.
+
+[[stations]]
+crs = "GLE"
+role = "major"
+segment = "scotrail-glasgow-aberdeen-perth"
+# Gleneagles: first station exclusive to this file (Wikipedia's own
+# "Gleneagles railway station" article: preceding station Dunblane,
+# following station Perth, on the "Glasgow-Dundee line"). Serves
+# Auchterarder; also called at by the Caledonian Sleeper and LNER's
+# Highland Chieftain (station overlap only, not modelled as a segment
+# here, per the `xc-south-coast.toml` precedent).
+
+[[stations]]
+crs = "PTH"
+role = "major"
+segment = "scotrail-glasgow-aberdeen-perth"
+# Perth: a through station on this file's own route (NOT this file's own
+# terminus), tagged `major` accordingly. Also the southern terminus of
+# `scotrail-highland-main-line.toml`'s own Perth-Inverness route -- a
+# fresh fetch of Wikipedia's "Perth railway station (Scotland)" article
+# during this task confirms these are genuinely separate, platform-
+# separated approaches, not a shared trunk: "Platforms 1 and 2 lie on the
+# eastern side (the old Dundee & Perth Railway part of the station); they
+# handle the Glasgow Queen Street to Dundee and Aberdeen trains" (this
+# file's own route), while "Platforms 4-7 sit under the main train shed"
+# and are "the start point for the Highland Main Line." Station overlap
+# only -- see the cross-reference note this task also added to
+# `scotrail-highland-main-line.toml` for the full reasoning on why that
+# file is not extended south to include this station.
+
+[[stations]]
+crs = "ING"
+role = "minor"
+segment = "scotrail-glasgow-aberdeen-perth"
+# Invergowrie: per its own Wikipedia article, "the only intermediate
+# station between Dundee and Perth railway stations" -- confirms no other
+# station is missing from this file's own Perth-Dundee stretch.
+
+[[stations]]
+crs = "DEE"
+role = "junction"
+segment = "scotrail-dundee-aberdeen"
+# Dundee: the real convergence point with `scotrail-edinburgh-
+# aberdeen.toml`'s own Fife-side approach -- see that file's own
+# segment-naming coordination note (this file reuses its
+# `scotrail-dundee-aberdeen` segment name verbatim). Per the shared-trunk
+# rule of thumb, this junction station belongs to the shared segment, not
+# this file's own exclusive Perth-side segment, which ends at Invergowrie.
+
+[[stations]]
+crs = "BYF"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Broughty Ferry.
+
+[[stations]]
+crs = "BSI"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Balmossie.
+
+[[stations]]
+crs = "MON"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Monifieth.
+
+[[stations]]
+crs = "BYL"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Barry Links.
+
+[[stations]]
+crs = "GOF"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Golf Street.
+
+[[stations]]
+crs = "CAN"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Carnoustie.
+
+[[stations]]
+crs = "ARB"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Arbroath.
+
+[[stations]]
+crs = "MTS"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Montrose.
+
+[[stations]]
+crs = "LAU"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Laurencekirk.
+
+[[stations]]
+crs = "STN"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Stonehaven.
+
+[[stations]]
+crs = "PLN"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Portlethen.
+
+[[stations]]
+crs = "ABD"
+role = "terminus"
+segment = "scotrail-dundee-aberdeen"
+# Aberdeen.
+
+# === Segment-naming coordination ===
+#
+# 1. `scotrail-glasgow-aberdeen-approach` (GLQ/BBG/LNZ/CRO): a NEW,
+#    file-exclusive segment name, deliberately NOT reusing
+#    `scotrail-central-belt.toml`'s own `scotrail-central-belt` segment
+#    even though the underlying track genuinely is shared as far as
+#    Greenhill Junction (just past Croy). This mirrors `scotrail-stirling-
+#    dunblane.toml`'s own documented reasoning for its Linlithgow/Polmont
+#    entries: `scotrail-central-belt.toml` tags GLQ, BBG, LNZ, CRO, Falkirk
+#    High, Polmont and Linlithgow all under ONE undifferentiated
+#    `scotrail-central-belt` segment name, rather than carving out a
+#    narrower Glasgow-approach-only segment the way it already did for its
+#    own Haymarket/Waverley throat. Reusing that broad name here for just
+#    GLQ/BBG/LNZ/CRO would incorrectly also mark Falkirk High, Polmont and
+#    Linlithgow as shared with this file, even though this file's own
+#    route diverges towards Larbert/Stirling well before reaching any of
+#    them. `scotrail-central-belt.toml` isn't otherwise touched by this
+#    task, so -- per that file's own precedent of flagging this kind of
+#    decision for whoever writes the next overlapping file rather than
+#    guessing -- this file's own GLQ/BBG/LNZ/CRO entries get their own
+#    segment name instead, a deliberate "station overlap without segment
+#    sharing" choice. Flagged here for whoever next touches
+#    `scotrail-central-belt.toml`: carving GLQ/BBG/LNZ/CRO out into their
+#    own dedicated segment (mirroring how `scotrail-central-belt-
+#    edinburgh-throat` was carved out from the start) would let this file
+#    reuse it cleanly.
+#
+# 2. `scotrail-stirling-dunblane-larbert-approach` (LBT/STG/BEA/DBL):
+#    genuinely shared trunk with `scotrail-stirling-dunblane.toml`, per
+#    that file's own explicit, pre-registered invitation in its Croy Line
+#    scope-boundary note (see that file, updated alongside this addition
+#    with a RESOLUTION note). REVIEW2 FIX (2026-09-21): this stretch
+#    originally reused that file's broader `scotrail-stirling-dunblane`
+#    segment name verbatim, which also covers that file's own Linlithgow/
+#    Polmont stations on the unrelated Edinburgh side -- this file's own
+#    trains never call there, so reusing the name would have falsely
+#    promoted LIN/PMT to shared scope too. Fixed by carving this new,
+#    narrower `scotrail-stirling-dunblane-larbert-approach` name for just
+#    LBT/STG/BEA/DBL, applied in both files; LIN/PMT stay on the original
+#    `scotrail-stirling-dunblane` name in that file, unaffected.
+#
+# 3. `scotrail-dundee-aberdeen` (DEE through ABD): reused verbatim from
+#    the sibling `scotrail-edinburgh-aberdeen.toml`, which introduces this
+#    segment name -- see that file's own segment-naming coordination note
+#    for the full sourcing (three independent station-page citations for
+#    the Dundee convergence fact).
+#
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Croy Line" (fetched fresh): gives the ordered station
+#     list Glasgow Queen Street-Bishopbriggs-Lenzie-Croy-Larbert-Stirling-
+#     Bridge of Allan-Dunblane(-Alloa branch), confirms ScotRail
+#     operation, and confirms the shared-track claim with the Falkirk High
+#     route "between Glasgow Queen Street and Greenhill Junction" before
+#     continuing "on the Glasgow to Aberdeen Line toward Dunblane" -- this
+#     is the same source that independently corroborates the "Glasgow to
+#     Aberdeen Line" being this file's own route beyond Dunblane, not a
+#     separate thing.
+#   - Wikipedia "Dunblane railway station" (fetched fresh): confirms
+#     Dunblane is a through station (not a terminus) with a dedicated
+#     platform for "trains heading north to Perth, Dundee, Aberdeen and
+#     Inverness", and gives Gleneagles as the following station
+#     northbound.
+#   - Wikipedia "Gleneagles railway station" (fetched fresh): confirms the
+#     "Glasgow-Dundee line" name, ScotRail operation, and Dunblane/Perth as
+#     the preceding/following stations.
+#   - Wikipedia "Perth railway station (Scotland)" (fetched fresh):
+#     confirms Perth "lies on both the Glasgow-Dundee line and the
+#     Highland Main Line" on physically separate platform groups (quoted
+#     in the PTH station comment above) -- the basis for this file's
+#     station-overlap-only treatment of Perth against
+#     `scotrail-highland-main-line.toml`.
+#   - Wikipedia "Invergowrie railway station" (fetched fresh): confirms it
+#     is "the only intermediate station between Dundee and Perth railway
+#     stations", on the "Glasgow to Dundee line".
+#   - Wikipedia "Dundee railway station" (fetched fresh, cited in full in
+#     the sibling `scotrail-edinburgh-aberdeen.toml`'s own Sources
+#     section): confirms the Glasgow-side and Fife-side approaches
+#     converge at Dundee to form the "Dundee to Aberdeen line", with a
+#     current "1 train per hour to Glasgow Queen Street via Perth and
+#     Stirling" service pattern.
+#   - Wikipedia "Dundee to Aberdeen line" and the individual station
+#     articles for Broughty Ferry, Balmossie, Monifieth, Barry Links, Golf
+#     Street, Carnoustie, Montrose, Laurencekirk, Stonehaven, Portlethen
+#     (all fetched fresh -- see the sibling `scotrail-edinburgh-
+#     aberdeen.toml`'s own Sources section for the full per-station
+#     citations, not repeated here to avoid duplication): confirms the
+#     Dundee-Aberdeen ordered station list this file's own DEE-onward
+#     entries reuse verbatim.
+#
+# CRS codes: every code in `stations` above was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name> during this task
+# (including a specific check that "Croy" resolves unambiguously to CRO
+# and not one of the several London-area Croydon stations the API also
+# returns for a bare "Croy" substring match), and cross-checked against
+# each station's own Wikipedia infobox where fetched. All matched with no
+# discrepancies: GLQ, BBG, LNZ, CRO, LBT, STG, BEA, DBL, GLE, PTH, ING,
+# DEE, BYF, BSI, MON, BYL, GOF, CAN, ARB, MTS, LAU, STN, PLN, ABD.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this catalogue.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Alloa branch (Stirling-Alloa): now modelled in `scotrail-stirling-
+#   dunblane.toml` (ALO, added alongside this file). Not repeated here:
+#   this file's own route continues past Stirling towards Dunblane/
+#   Gleneagles/Perth, a different direction from the Alloa branch, so
+#   there is no station-level overlap for this file to reconcile.
+# - LNER's Highland Chieftain (calls at Gleneagles/Perth on its way to
+#   Inverness) and Caledonian Sleeper: real, per the sourcing above, but
+#   not `SR`-operated and no `lines/*.toml` file for either currently
+#   reaches this corridor -- station overlap only, not modelled as a
+#   segment here.

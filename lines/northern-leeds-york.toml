@@ -1,0 +1,141 @@
+id = "northern-leeds-york"
+name = "Leeds - York Line (via Church Fenton)"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# --- Split out of `northern.toml` (Yorkshire real-world-sanity review,
+# 2026-09-21) ---
+# `northern.toml` (the "operator" catch-all) used to include a bare LDS-YRK
+# pair on its own `northern-yorkshire` segment, representing only the
+# direct, fast Leeds-York working (shared with `northern-yorkshire-coast.
+# toml`'s own Scarborough-bound trains) -- with no coverage at all of the
+# separate, genuinely different-routed Leeds-York LOCAL stopping service
+# that runs via Cross Gates, Garforth, East Garforth, Micklefield, Church
+# Fenton and Ulleskelf. This file models that real, currently-served,
+# previously-uncatalogued service. It is ADDITIVE: `northern.toml`'s own
+# direct LDS/YRK pair is deliberately left unchanged (see that file's own
+# updated top-of-file comment for the fuller restructuring decision) --
+# these are two genuinely different physical routes between the same two
+# cities, not a duplicate of the same one.
+#
+# --- Route and CRS verification ---
+# Confirmed via Wikipedia's own "Church Fenton railway station" article
+# (raw wikitext route-diagram data, fetched 2026-09-21): the station sits at
+# the junction of three separate routes through it, one of which is
+# explicitly the "Leeds to York line" (labelled "York & Selby Lines" in the
+# article's own succession template), with Micklefield as the immediately
+# preceding station and Ulleskelf the immediately following one -- distinct
+# from the Dearne Valley line/Hull-York line route also passing through
+# Church Fenton, whose own preceding station is Sherburn-in-Elmet instead
+# (see `northern-wakefield-line.toml` for that separate Sheffield-York
+# route, which never touches Leeds or Church Fenton on this line's own
+# LDS-Micklefield approach). Ulleskelf's own Wikipedia article independently
+# confirms real, current, substantial two-way traffic on this route ("Nine
+# trains northbound to York... three southbound to Leeds" on weekdays,
+# separate from its own Sheffield/Hull-bound figures) and that "as of April
+# 2023, the line through Ulleskelf became electrified as part of the
+# Transpennine Route Upgrade" -- noted here but NOT used to recategorize
+# this file "commuter": electrification of this specific short stretch
+# alone was not independently confirmed to extend all the way back to
+# Leeds to this task's two-source bar, so "regional" is kept, matching
+# `northern-leeds-selby.toml`'s own precedent for a comparable-character
+# Northern local stopper.
+#
+# Every CRS code below cross-checked against
+# https://ds.cursed.solutions/api/stations?q=<name> (one unambiguous result
+# each): LDS, CRG, GRF, EGF and MIK reused unchanged from
+# `northern-leeds-selby.toml`'s own verified entries (not re-derived here);
+# CHF and ULL independently verified the same way. TIPLOCs omitted
+# throughout -- none confirmed to a second source this session.
+#
+# --- Segment/overlap decisions ---
+# LDS through MIK: genuine same-operator physical track-sharing with
+# `northern-leeds-selby.toml` (confirmed above -- Micklefield is the real
+# fork point between this line's own Church Fenton continuation and that
+# file's own South Milford/Selby/Hull continuation). Segment
+# `northern-leeds-micklefield` reused verbatim from that file, which landed
+# it first as part of this same review -- see that file's own "Segment
+# split" comment for the full reasoning. Per SCHEMA.md's shared-trunk rule
+# of thumb, MIK (the junction) carries the shared name; this file's own
+# exclusive `northern-leeds-york` segment starts at the next station,
+# Church Fenton.
+#
+# YRK is also a station on `northern.toml`/`northern-yorkshire-coast.toml`
+# (`northern-yorkshire`, the direct Leeds-York line), `northern-harrogate-
+# line.toml`, `cross-country.toml`, `grand-central.toml`, `lner-ecml.toml`
+# and `tpe-north.toml` -- each reaches York via a different physical
+# approach (this line's own is via Church Fenton/Ulleskelf from the
+# south-east, not any of those), so station-overlap only throughout,
+# matching this catalogue's standard treatment.
+sample_stations = ["LDS", "CHF", "YRK"]
+destination_crs_filter = ["LDS", "YRK"]
+# This line's own two real termini/directions (per Ulleskelf's own service
+# breakdown, most trains run through to York, a minority terminate back at
+# Leeds). No match_keywords: "Leeds to York" is not a distinctly branded
+# name in Knowledgebase copy and would risk misattributing an incident on
+# the separate, faster, `northern-yorkshire`-tagged direct Leeds-York
+# working to this file instead -- same reasoning `northern-leeds-selby.
+# toml` used to decline "Selby Line" as a keyword. Station and operator
+# evidence carries this file instead.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Same values as `northern-leeds-selby.toml`'s own comparable hourly
+# cross-city local stopping service.
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-leeds-micklefield"
+
+[[stations]]
+crs = "CRG"
+role = "minor"
+segment = "northern-leeds-micklefield"
+# Cross Gates -- shared trunk with `northern-leeds-selby.toml`; see the
+# top-of-file comment.
+
+[[stations]]
+crs = "GRF"
+role = "minor"
+segment = "northern-leeds-micklefield"
+# Garforth.
+
+[[stations]]
+crs = "EGF"
+role = "minor"
+segment = "northern-leeds-micklefield"
+# East Garforth.
+
+[[stations]]
+crs = "MIK"
+role = "junction"
+segment = "northern-leeds-micklefield"
+# Micklefield -- the real divergence point from `northern-leeds-selby.
+# toml`'s own South Milford/Selby/Hull continuation; see the top-of-file
+# comment. This file's own exclusive segment starts at the next station,
+# Church Fenton.
+
+[[stations]]
+crs = "CHF"
+role = "major"
+segment = "northern-leeds-york"
+# Church Fenton -- also sits on the separate Dearne Valley/Hull-York
+# routes, neither of which this file models; see the top-of-file comment.
+
+[[stations]]
+crs = "ULL"
+role = "minor"
+segment = "northern-leeds-york"
+# Ulleskelf.
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "terminus"
+segment = "northern-leeds-york"
+# York -- station-overlap only with several other files; see the
+# top-of-file comment.

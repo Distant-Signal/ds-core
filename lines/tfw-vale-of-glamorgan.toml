@@ -4,10 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["AW"]
 
-# Self-flagged gap: `tfw-valley-lines-south.toml`'s own comment explicitly
-# says it "leaves the Vale of Glamorgan Line, Barry Island Line and Penarth
-# Line uncovered", flagged there for a future task to pick up. This file is
-# that task.
+# Self-flagged gap: the former bundled `tfw-valley-lines-south.toml` (since
+# split into `tfw-city-line.toml`/`tfw-coryton-line.toml`/`tfw-cardiff-bay-
+# line.toml`) had a comment explicitly saying it "leaves the Vale of
+# Glamorgan Line, Barry Island Line and Penarth Line uncovered", flagged
+# there for a future task to pick up. This file is that task.
 #
 # ## One file, not two or three -- verified, not assumed
 #
@@ -56,10 +57,11 @@ operators = ["AW"]
 # Major/Bridgend continuation is hourly only (Rhoose's own Wikipedia article:
 # "an hourly service westbound to Bridgend and eastbound to Cardiff
 # Central"). `category = "commuter"` for the file as a whole, matching
-# `tfw-valley-lines-south.toml`/`tfw-valley-rhymney.toml`'s treatment of
-# the same TfW Valley Lines / Cardiff-radius network, but the severity
-# overrides below are deliberately a documented middle ground rather than
-# either extreme -- not as tight as those two files' 0.20/5min (this line's
+# `tfw-city-line.toml`/`tfw-coryton-line.toml`/`tfw-cardiff-bay-
+# line.toml`/`tfw-valley-rhymney.toml`'s treatment of the same TfW Valley
+# Lines / Cardiff-radius network, but the severity overrides below are
+# deliberately a documented middle ground rather than either extreme -- not
+# as tight as those files' 0.20/5min (this line's
 # outer end is hourly, not 2-4tph throughout), and not as loose as a pure
 # hourly regional line either.
 
@@ -70,8 +72,9 @@ operators = ["AW"]
 sample_stations = ["CDF", "BRY", "BGN", "PEN"]
 
 # Only the line's three genuine dead-end termini. Cardiff Central is
-# deliberately omitted, for the same reason `tfw-valley-lines-south.toml`
-# omits it from its own `destination_crs_filter`: both Barry's and
+# deliberately omitted, for a closely related reason to why
+# `tfw-city-line.toml` omits `destination_crs_filter` entirely (Cardiff
+# Central genuine through-running): both Barry's and
 # Bridgend's own Wikipedia "Services" sections confirm eastbound trains
 # "usually continue beyond Cardiff Central to either Rhymney or Bargoed"
 # (TfW's own Valley Lines through-running, per `tfw-valley-rhymney.toml`,
@@ -104,21 +107,24 @@ delay_threshold_minutes = 7
 # station's own Wikipedia article; RIA, not a guessed "RHO"/"RCA", which
 # would have collided with `tfw-north-wales-coast.toml`'s existing RHO
 # (Rhosneigr, Anglesey). Dinas Powys is DNS (not DNP). TIPLOCs are omitted
-# throughout except the two shared-station values (CDF, BGN) reused
-# verbatim from `gwr-south-wales.toml`/`tfw-valley-lines-south.toml` --
-# consistent with this catalogue's optional-TIPLOC convention where a
+# throughout except the two shared-station values: BGN reused verbatim from
+# `gwr-south-wales.toml`, and CDF reused verbatim from `tfw-city-line.toml`
+# (the former bundled `tfw-valley-lines-south.toml`'s value, carried
+# unchanged into its post-split successor) -- consistent with this
+# catalogue's optional-TIPLOC convention where a
 # second live source wasn't fetched for the rest within this task's budget.
 #
 # ## Overlap: Cardiff Central (CDF) and Bridgend (BGN)
 #
 # CDF already appears in `gwr-south-wales.toml` (its own `gwr-south-wales`
-# segment) and `tfw-valley-lines-south.toml`/`tfw-valley-merthyr.toml`/
+# segment) and `tfw-city-line.toml`/`tfw-valley-merthyr.toml`/
 # `tfw-valley-rhondda.toml`/`tfw-valley-rhymney.toml` (the post-split
-# successors of the former combined `tfw-valley-lines-north.toml`, per a
-# later data-driven catalogue audit -- see those files' own split
-# comments) (`tfw-valley-cardiff-hub`, a genuine shared segment among those
-# files for the Valley Lines proper). This line's own City/Coryton/Bay-line
-# sibling files' shared-hub reasoning does not extend here: the Vale of
+# successors of the former combined `tfw-valley-lines-north.toml` and
+# `tfw-valley-lines-south.toml`, per later data-driven catalogue audits --
+# see those files' own split comments) (`tfw-valley-cardiff-hub`, a genuine
+# shared segment among those files for the Valley Lines proper). This
+# line's own City/Coryton/Bay-line sibling files' shared-hub reasoning does
+# not extend here: the Vale of
 # Glamorgan Line's own route out of Cardiff Central runs via Grangetown
 # towards Barry, a physically different corridor from the Radyr-bound
 # Valley Lines proper, so CDF is tagged with this file's own segment name

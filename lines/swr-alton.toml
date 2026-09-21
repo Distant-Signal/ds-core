@@ -50,17 +50,30 @@ segment = "swr-trunk-waterloo"
 # only 5 real intermediate stations (Ash Vale, Aldershot, Farnham,
 # Bentley, Alton), and via real CIF data showing 97% of genuine
 # Woking -> Aldershot journeys call here.
+# UPDATE (SWR suburban-gap batch): role corrected from "minor" to
+# "junction", and segment changed from `swr-alton-branch` to a new,
+# narrower `swr-ash-vale-junction` - Ash Vale is a real junction where
+# `swr-ascot-aldershot.toml` (the Ascot-Ash Vale line) joins this line's
+# own metals for its final approach into Aldershot, per that file's own
+# sourcing. A new segment name (rather than reusing `swr-alton-branch`
+# wholesale) keeps Farnham/Bentley/Alton below correctly exclusive to this
+# file - swr-ascot-aldershot.toml's own trains never reach past Aldershot.
 [[stations]]
 crs = "AHV"
 tiploc = "ASHVALE"
-role = "minor"
-segment = "swr-alton-branch"
+role = "junction"
+segment = "swr-ash-vale-junction"
 
+# Same UPDATE as AHV above: Aldershot is this file's own pass-through
+# station but swr-ascot-aldershot.toml's own real terminus for "most
+# trains" per that file's sourcing - a second, genuine user of this exact
+# track. Segment changed from `swr-alton-branch` to `swr-ash-vale-junction`
+# for the same reason as AHV.
 [[stations]]
 crs = "AHT"
 tiploc = "ALDRSHT"
 role = "major"
-segment = "swr-alton-branch"
+segment = "swr-ash-vale-junction"
 
 [[stations]]
 crs = "FNH"

@@ -1,0 +1,216 @@
+id = "gwr-weston-super-mare"
+name = "Bristol – Weston-super-Mare – Taunton Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml — not re-derived
+# here, since it's the same operator running this route.
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Real-world sanity review of the GWR catalogue: this batch's GWR files
+# cover the Intercity and Thames Valley service groups thoroughly, but
+# GWR's own published third route group, "Bristol," had a real hole —
+# cross-country.toml's own `xc-south-west` segment previously jumped
+# straight from Bristol Temple Meads (BRI) to Taunton (TAU) with no
+# intermediate stations, even though this stretch carries a genuine GWR
+# local stopping service. en.wikipedia.org/wiki/Bristol_to_Exeter_line
+# (the route's own real infrastructure/article name) and each intermediate
+# station's own Wikipedia article confirm this: Bedminster, Parson Street,
+# Nailsea & Backwell, Yatton, Weston-super-Mare (via a loop), Highbridge &
+# Burnham and Bridgwater were all absent from every `lines/*.toml` file in
+# this catalogue before this task (grepped clean before starting).
+#
+# Split character, same shape scotrail-ayrshire.toml already establishes as
+# "regional" rather than "commuter": a frequent (half-hourly) Bristol-Weston-
+# super-Mare suburban corridor grafted onto a sparser (hourly) semi-fast
+# extension via Highbridge/Bridgwater to Taunton. "Regional" per that same
+# precedent, not gwr-avocet-line.toml's uniform-density "commuter" branch.
+
+destination_crs_filter = ["TAU"]
+# Real GWR services over this route are a genuine mix: some originate/
+# terminate at Weston-super-Mare (the Severn Beach-WSM local), others
+# continue through to Taunton and beyond to Exeter/Penzance (the Cardiff
+# Central-Taunton semi-fast). en.wikipedia.org/wiki/Weston-super-Mare_
+# railway_station: "semi-fast services between Cardiff Central and Taunton
+# (some continuing to Penzance)" combine with the Severn Beach service to
+# give "two trains each hour between Bristol Temple Meads and Weston-super-
+# Mare." Rather than leaving this unset (this file's siblings' usual move
+# for a genuinely mixed pattern) or naming every real destination this task
+# did not verify service-by-service (WSM, TAU, PNZ), TAU alone is used as
+# the one destination every real working on this file's own exclusive
+# segment can be confirmed to at least reach.
+
+# Exclusive-segment stations only, for a clean read of this line's own local
+# service (mirrors the other GWR siblings' sample_stations rationale). Both
+# on the Weston-super-Mare loop, the one stretch of this file genuinely
+# exclusive to it (see the segment-naming comment below).
+sample_stations = ["WOR", "WSM"]
+
+match_keywords = ["Bristol to Exeter line"]
+# The real Wikipedia article/infrastructure name for the whole Bristol-
+# Exeter route, which this file's own Bristol-Taunton stretch is the first
+# half of. Grepped clean against every other file's own match_keywords
+# before adding — no collision. Kept to one high-precision phrase per
+# SCHEMA.md's "don't overload match_keywords" rule; a bare "Weston-super-
+# Mare" was considered and rejected as too generic (a town name, likely to
+# false-positive on unrelated local news/incident text).
+
+# Half-hourly Bristol-Weston-super-Mare, hourly Weston-super-Mare-Taunton
+# (see destination_crs_filter sourcing above) — not a sparse single-track
+# rural line, but not full main-line frequency either. Matches
+# gwr-thames-valley.toml's/gwr-cotswold.toml's identical {0.30, 10}
+# judgment call for a comparable mixed-frequency regional corridor.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# --- Bristol Temple Meads to Yatton: genuine shared trunk with
+#     cross-country.toml ---
+#
+# en.wikipedia.org/wiki/Bristol_to_Exeter_line confirms this file's own
+# local service and XC's own non-stop Bristol-Taunton expresses run over
+# the same physical double-track railway for this whole stretch — a
+# genuine shared corridor, the same shape as `xc-south-west`'s own EXD-NTA-
+# PLY stretch (gwr-west-of-england.toml/gwr-cornish-main-line.toml). BRI,
+# Bedminster (BMT), Parson Street (PSN), Nailsea & Backwell (NLS) and
+# Yatton (YAT) are therefore all tagged with `xc-south-west` (BRI itself
+# copied verbatim from cross-country.toml's own `xc-bristol` row instead,
+# per the shared-trunk rule of thumb — it's the junction station where
+# `xc-bristol` and `xc-south-west` meet, not part of the exclusive
+# continuation). Rows for BMT/PSN/NLS/YAT are copied verbatim from
+# cross-country.toml's own new copies of the same stations (added in this
+# same task, in sync — see that file's own comment for the fuller sourcing
+# and CRS verification).
+#
+# --- The Weston-super-Mare loop: this file's own exclusive territory ---
+#
+# Past Yatton, Wikipedia's own account of this route describes a
+# single-track loop diverging from the double-track main line at Worle
+# Junction (serving Worle, Weston Milton and Weston-super-Mare itself) and
+# rejoining at Uphill Junction — distinct from a more direct through route
+# XC's own non-stop expresses use to bypass Weston-super-Mare. Neither
+# junction has a CRS/TIPLOC of its own. This is genuinely exclusive to this
+# file's own local service, not shared track, so Worle (WOR), Weston Milton
+# (WNM) and Weston-super-Mare (WSM) itself take this line's own new
+# exclusive segment, `gwr-weston-super-mare` (following the established
+# line-id-as-exclusive-segment-name convention), rather than
+# `xc-south-west`.
+#
+# CRS codes for all three verified live against ds.cursed.solutions/api/
+# stations (Worle=WOR, Weston Milton=WNM, Weston-super-Mare=WSM).
+# en.wikipedia.org/wiki/Weston_Milton_railway_station confirms Weston
+# Milton is real, currently open and GWR-served, and confirms the
+# Worle-Weston Milton-Weston-super-Mare geographic order via its own route
+# diagram (preceding station Weston-super-Mare, following station Worle).
+#
+# --- Rejoining the main line: Highbridge & Burnham to Taunton, shared
+#     trunk with cross-country.toml again ---
+#
+# Past Uphill Junction (also no CRS/TIPLOC of its own), the route rejoins
+# the same double-track railway XC's expresses run on. Highbridge & Burnham
+# (HIG) and Bridgwater (BWT) — real, currently-open, currently-served
+# stations, both carrying a genuine "one train in each direction each hour
+# ... to and from Cardiff Central and Taunton" GWR calling pattern per their
+# own Wikipedia "Services" sections — are tagged `xc-south-west`
+# accordingly, rows copied verbatim from cross-country.toml's own new
+# copies of the same stations (see that file's comment). TAU itself is also
+# copied verbatim from cross-country.toml (tiploc TAUNTON) — the same row
+# gwr-west-of-england.toml already reuses for its own genuine shared-trunk
+# claim on this station.
+#
+# Dunball and Durston, two further historic intermediate stops between
+# Highbridge and Taunton named on this route's Wikipedia infobox, were
+# checked live against ds.cursed.solutions/api/stations and returned no
+# current CRS — both long closed, correctly excluded. Long Ashton, Flax
+# Bourton (between Bristol and Nailsea), and Puxton, Bleadon and Uphill,
+# Brean Road and Brent Knoll (on/around the Weston-super-Mare loop) were
+# checked the same way and are likewise all closed.
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "junction"
+segment = "xc-bristol"
+# Bristol Temple Meads. Row copied verbatim from cross-country.toml — see
+# segment-naming comment above.
+
+[[stations]]
+crs = "BMT"
+role = "minor"
+segment = "xc-south-west"
+# Bedminster. Row copied verbatim from cross-country.toml's own new copy of
+# this station — see segment-naming comment above.
+
+[[stations]]
+crs = "PSN"
+role = "minor"
+segment = "xc-south-west"
+# Parson Street. Row copied verbatim from cross-country.toml's own new copy
+# of this station — see segment-naming comment above.
+
+[[stations]]
+crs = "NLS"
+role = "minor"
+segment = "xc-south-west"
+# Nailsea & Backwell. Row copied verbatim from cross-country.toml's own new
+# copy of this station — see segment-naming comment above.
+
+[[stations]]
+crs = "YAT"
+role = "minor"
+segment = "xc-south-west"
+# Yatton. This file's own exclusive Weston-super-Mare-loop segment (below)
+# diverges at Worle Junction, just past here — see segment-naming comment
+# above.
+
+[[stations]]
+crs = "WOR"
+role = "minor"
+segment = "gwr-weston-super-mare"
+# Worle. This line's own exclusive segment starts here — see segment-naming
+# comment above (Worle Junction, immediately before this station, has no
+# CRS/TIPLOC of its own).
+
+[[stations]]
+crs = "WNM"
+role = "minor"
+segment = "gwr-weston-super-mare"
+# Weston Milton.
+
+[[stations]]
+crs = "WSM"
+role = "major"
+segment = "gwr-weston-super-mare"
+# Weston-super-Mare. This corridor's own namesake terminus for the frequent
+# Bristol-bound half of the service (see destination_crs_filter comment
+# above); the semi-fast Cardiff-Taunton service continues on through here
+# towards Highbridge/Bridgwater/Taunton (below). Uphill Junction, where the
+# loop rejoins the main line, is immediately south of here and has no
+# CRS/TIPLOC of its own.
+
+[[stations]]
+crs = "HIG"
+role = "minor"
+segment = "xc-south-west"
+# Highbridge & Burnham. Row copied verbatim from cross-country.toml's own
+# new copy of this station — see segment-naming comment above.
+
+[[stations]]
+crs = "BWT"
+role = "major"
+segment = "xc-south-west"
+# Bridgwater. Row copied verbatim from cross-country.toml's own new copy of
+# this station — see segment-naming comment above.
+
+[[stations]]
+crs = "TAU"
+tiploc = "TAUNTON"
+role = "minor"
+segment = "xc-south-west"
+# Taunton. This file's own scope ends here. Row copied verbatim from
+# cross-country.toml/gwr-west-of-england.toml.

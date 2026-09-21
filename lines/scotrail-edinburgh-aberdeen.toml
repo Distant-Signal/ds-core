@@ -1,0 +1,435 @@
+id = "scotrail-edinburgh-aberdeen"
+name = "ScotRail Edinburgh to Aberdeen Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SR"]
+
+# Real-world-sanity review (2026-09-21), Part B: Scotland's inter-city
+# spine had NO coverage at all for Edinburgh-Dundee-Aberdeen,
+# Glasgow-Stirling-Perth-Dundee/Aberdeen, or the Highland Main
+# Line/Aberdeen-Inverness continuity beyond Perth -- flagged as the
+# biggest single coverage gap found in this review. This file covers the
+# Edinburgh side; the Glasgow side is the sibling file
+# `lines/scotrail-glasgow-aberdeen.toml`, sharing this file's own
+# Dundee-Aberdeen trunk (see the segment-naming coordination note below).
+#
+# Real branded name, confirmed independently by three separately-fetched
+# Wikipedia station articles (not just the corridor's own article title):
+# Stonehaven's own article states plainly "Trains on both the Edinburgh
+# to Aberdeen Line and the Glasgow to Aberdeen Line call here" -- i.e.
+# these are two distinct, real, currently-used route names, not this
+# file's own invention. Montrose's own article corroborates, describing
+# ScotRail service "on both the Glasgow Queen Street and Edinburgh
+# Waverley to Aberdeen routes."
+#
+# Category: "main-line", matching `scotrail-central-belt.toml`'s and
+# `lner-ecml.toml`'s precedent for a named ScotRail/LNER inter-city
+# corridor -- this is one of ScotRail's two flagship routes to Aberdeen,
+# not a regional branch, even though its own frequency (roughly hourly,
+# per the sourcing below) is well short of Central Belt's quarter-hourly
+# core. `lner-ecml.toml`'s own comment makes exactly this same category
+# call for a roughly-hourly long-distance corridor ("the same 5-minute
+# delay matters less than it does on a metro-frequency line, and a single
+# cancellation is a bigger share of the service").
+
+sample_stations = ["EDB", "KDY", "DEE", "ABD"]
+# EDB is also a `sample_stations`/`stations` entry in several other files
+# (`scotrail-central-belt.toml`, `scotrail-fife-circle.toml`,
+# `scotrail-borders-railway.toml`, `scotrail-bathgate.toml`,
+# `scotrail-shotts.toml`) for their own distinct departures from the same
+# named station.
+destination_crs_filter = ["DEE", "ABD"]
+# LDBWS sampling at EDB mixes this line's own departures with every other
+# EDB-departing line's own services. Real Edinburgh-Aberdeen workings
+# terminate at Dundee or Aberdeen (Dundee fetch below: "1 train per hour
+# to Edinburgh ... generally running fast" implies the reverse pairing
+# terminates there too on short-working patterns; Montrose's own page adds
+# that "certain Aberdeen trains are extended to Inverness" on this route,
+# but that destination (INV) is shared with too many other Inverness-bound
+# services from other directions to safely add to this filter without
+# investigating further, so it is deliberately left out -- a real,
+# documented gap rather than a guess).
+
+match_keywords = ["Edinburgh to Aberdeen Line", "Edinburgh-Aberdeen line"]
+# The two forms of this route's own real branded name, sourced
+# independently at Stonehaven and Montrose (see above). Grepped clean
+# against every other file's own `match_keywords` before adding: no
+# collision ("Aberdeen" alone isn't claimed by any other file;
+# `scotrail-aberdeen-inverness.toml` uses "Aberdeen-Inverness", a
+# different phrase).
+
+# Roughly-hourly long-distance corridor: same category-appropriate tuning
+# as `lner-ecml.toml`'s identical roughly-hourly-secondary-flow reasoning
+# (see that file's own comment). Not as tight as `scotrail-central-
+# belt.toml`'s untuned (schema-default) quarter-hourly-core treatment, not
+# as loose as a single-track rural branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# === Station list: Edinburgh Waverley to Aberdeen via Kirkcaldy, Cupar,
+#     Leuchars and Dundee ===
+#
+# Ordered south to north/east per SCHEMA.md's curation rule. Two real
+# physical stretches:
+#   1. Edinburgh Waverley to Kirkcaldy: the same physical corridor
+#      `scotrail-fife-circle.toml` already models (Forth Bridge, then the
+#      coastal side of that file's own loop as far as Kirkcaldy) -- see
+#      the segment-naming coordination note below for why this file
+#      reuses that file's own `scotrail-fife-circle-throat` segment name
+#      verbatim but uses a new, narrower `scotrail-fife-circle-coastal`
+#      name (not the broader `scotrail-fife-circle` name) for the
+#      SGL-through-KDY stretch.
+#   2. Kirkcaldy to Aberdeen: this file's own exclusive Fife stretch
+#      (Markinch, Ladybank, Springfield, Cupar, Leuchars) as far as
+#      Dundee, where it converges with the sibling
+#      `scotrail-glasgow-aberdeen.toml`'s own Perth-side approach to form
+#      the "Dundee to Aberdeen line" (Wikipedia's own name, confirmed by a
+#      fresh fetch of the "Dundee railway station" article: "Dundee
+#      railway station is where the Edinburgh-Dundee line meets the
+#      Glasgow-Dundee line, via Perth, to form the Dundee to Aberdeen
+#      line") -- see the segment-naming coordination note below.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-fife-circle-throat"
+# Edinburgh Waverley: reuses `scotrail-fife-circle.toml`'s own
+# `scotrail-fife-circle-throat` segment name -- see the segment-naming
+# coordination note below.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-fife-circle-throat"
+# Haymarket: reused verbatim from `scotrail-fife-circle.toml`.
+
+[[stations]]
+crs = "SGL"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+
+[[stations]]
+crs = "EGY"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# Edinburgh Gateway.
+
+[[stations]]
+crs = "DAM"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# Dalmeny.
+
+[[stations]]
+crs = "NQU"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# North Queensferry.
+
+[[stations]]
+crs = "INK"
+role = "junction"
+segment = "scotrail-fife-circle-coastal"
+# Inverkeithing: where `scotrail-fife-circle.toml`'s own coastal/inland
+# loop sides diverge -- this file's own route takes the coastal side, same
+# as that file's own traversal choice, as far as Kirkcaldy. The inland
+# side (GLT/CDD/LCG/COW/DFL/DFE/ROS) is NOT part of this file's route and
+# stays on `scotrail-fife-circle.toml`'s own exclusive `scotrail-fife-
+# circle` segment name -- that's why this coastal stretch uses the
+# narrower `scotrail-fife-circle-coastal` name rather than reusing
+# `scotrail-fife-circle` itself (see the segment-naming coordination note
+# below).
+
+[[stations]]
+crs = "DAG"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# Dalgety Bay.
+
+[[stations]]
+crs = "AUR"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# Aberdour.
+
+[[stations]]
+crs = "BTS"
+role = "major"
+segment = "scotrail-fife-circle-coastal"
+# Burntisland.
+
+[[stations]]
+crs = "KGH"
+role = "minor"
+segment = "scotrail-fife-circle-coastal"
+# Kinghorn.
+
+[[stations]]
+crs = "KDY"
+role = "junction"
+segment = "scotrail-fife-circle-coastal"
+# Kirkcaldy: last station shared with `scotrail-fife-circle.toml` -- that
+# file's own loop continues inland from here (Glenrothes with Thornton
+# etc., staying on that file's own exclusive `scotrail-fife-circle`
+# segment name, not the shared `scotrail-fife-circle-coastal` name used
+# here), while this file's own route continues north-east towards
+# Markinch. Per the shared-trunk rule of thumb, the junction stays on the
+# shared segment; this file's own exclusive segment starts at the next
+# station, Markinch. Tagged `junction` here (this file's own perspective);
+# `scotrail-fife-circle.toml`'s own KDY entry keeps its existing
+# `role = "major"`.
+
+[[stations]]
+crs = "MNC"
+role = "major"
+segment = "scotrail-edinburgh-aberdeen-fife"
+# Markinch: 33.25 miles north of Edinburgh Waverley per its own Wikipedia
+# infobox. First station exclusive to this file.
+
+[[stations]]
+crs = "LDY"
+role = "junction"
+segment = "scotrail-edinburgh-aberdeen-fife"
+# Ladybank: a real junction (Wikipedia's "Edinburgh-Dundee line" article:
+# "From Ladybank junction, the line serves Perth station"), but no other
+# `lines/*.toml` file currently models an Edinburgh-Perth-via-Ladybank
+# service, so there is no live shared segment to reconcile here today --
+# see the scope-boundaries note below.
+
+[[stations]]
+crs = "SPF"
+role = "minor"
+segment = "scotrail-edinburgh-aberdeen-fife"
+# Springfield: an unstaffed, lightly-served stop (its own Wikipedia
+# article: "3 northbound and 2 southbound trains" on the May 2021
+# timetable, "the same pattern continues as of summer 2026") -- real and
+# currently open, not every working calls here.
+
+[[stations]]
+crs = "CUP"
+role = "major"
+segment = "scotrail-edinburgh-aberdeen-fife"
+# Cupar.
+
+[[stations]]
+crs = "LEU"
+role = "major"
+segment = "scotrail-edinburgh-aberdeen-fife"
+# Leuchars (for St Andrews): built as "Leuchars Junction" for the route
+# over the Tay Bridge to Dundee, per its own Wikipedia article; the former
+# St Andrews branch bay is historical, not a currently-modelled junction.
+
+[[stations]]
+crs = "DEE"
+role = "junction"
+segment = "scotrail-dundee-aberdeen"
+# Dundee: the real convergence point with `scotrail-glasgow-
+# aberdeen.toml`'s own Perth-side approach -- see the segment-naming
+# coordination note below. Per the shared-trunk rule of thumb, this
+# junction station itself belongs to the shared segment (not this file's
+# own exclusive Fife segment, which ends at Leuchars).
+
+[[stations]]
+crs = "BYF"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Broughty Ferry.
+
+[[stations]]
+crs = "BSI"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Balmossie: limited ("parliamentary") service since 1990, per Wikipedia's
+# "Dundee to Aberdeen line" article -- real and currently open, not every
+# working calls here.
+
+[[stations]]
+crs = "MON"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Monifieth.
+
+[[stations]]
+crs = "BYL"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Barry Links: limited ("parliamentary") service, same basis as Balmossie
+# above.
+
+[[stations]]
+crs = "GOF"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Golf Street: limited ("parliamentary") service, same basis as Balmossie
+# above.
+
+[[stations]]
+crs = "CAN"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Carnoustie.
+
+[[stations]]
+crs = "ARB"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Arbroath: also called at by LNER/CrossCountry/Caledonian Sleeper
+# services per the sourcing below -- station overlap only with any future
+# `lines/*.toml` file for those operators, not modelled as a segment here.
+
+[[stations]]
+crs = "MTS"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Montrose.
+
+[[stations]]
+crs = "LAU"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Laurencekirk.
+
+[[stations]]
+crs = "STN"
+role = "major"
+segment = "scotrail-dundee-aberdeen"
+# Stonehaven.
+
+[[stations]]
+crs = "PLN"
+role = "minor"
+segment = "scotrail-dundee-aberdeen"
+# Portlethen.
+
+[[stations]]
+crs = "ABD"
+role = "terminus"
+segment = "scotrail-dundee-aberdeen"
+# Aberdeen.
+
+# === Segment-naming coordination ===
+#
+# 1. `scotrail-fife-circle-throat` (EDB/HYM): reused verbatim from
+#    `scotrail-fife-circle.toml`. That file's own EDB/HYM entries carry no
+#    other stations under this segment name, so reuse is safe as-is.
+#
+#    SGL through KDY: a fresh fetch of `scotrail-fife-circle.toml`'s own
+#    sourcing (the "Fife Circle Line" article) confirms this is not just
+#    station-name overlap: that article's own current (2025)
+#    service-pattern list includes "1tph Edinburgh to Leven via Aberdour
+#    and Kirkcaldy" and "1tph Edinburgh to Dundee via Kirkcaldy" -- i.e.
+#    Fife Circle-branded services genuinely run this file's own
+#    Edinburgh-Kirkcaldy stretch, calling at the same stations, on the
+#    same physical double-track railway (there is no separate bypass
+#    route).
+#
+#    REVIEW2 FIX (2026-09-21): this stretch originally reused
+#    `scotrail-fife-circle.toml`'s own broad `scotrail-fife-circle`
+#    segment name verbatim, on the reasoning that SGL/EGY/DAM/NQU/INK/DAG/
+#    AUR/BTS/KGH/KDY is an exact subset of that file's `stations` list.
+#    That reasoning missed that `scotrail-fife-circle` in the sibling file
+#    ALSO covers its own inland-loop stations (GLT/CDD/LCG/COW/DFL/DFE/
+#    ROS), which this file's own Edinburgh-Aberdeen trains never call at
+#    -- reusing the name would have falsely promoted those seven unrelated
+#    stations to shared scope via `SegmentRegistry::is_shared`, the same
+#    over-sharing bug class the `scotrail-stirling-dunblane.toml`
+#    Linlithgow/Polmont case below was already written up to avoid. Fixed
+#    by carving a new, narrower `scotrail-fife-circle-coastal` segment
+#    name for just SGL..KDY, applied in both this file and
+#    `scotrail-fife-circle.toml` for those ten stations only;
+#    `scotrail-fife-circle.toml`'s own GLT..ROS inland-loop stations stay
+#    on the original `scotrail-fife-circle` name, unaffected and still
+#    exclusive to that file.
+#
+#    Unlike `scotrail-stirling-dunblane.toml`'s Linlithgow/Polmont case
+#    (where the existing sibling segment was too BROAD to reuse safely,
+#    caught before it shipped), this was the same failure mode caught
+#    afterwards: the sibling segment looked like an exact match for this
+#    file's subset, but was itself broader than either file's shared
+#    physical track. `scotrail-fife-circle.toml` itself is not otherwise
+#    modified by this addition beyond its own segment renames and
+#    cross-reference comment.
+#
+# 2. `scotrail-dundee-aberdeen` (DEE through ABD): a NEW segment name,
+#    introduced by this file and reused verbatim by the sibling
+#    `scotrail-glasgow-aberdeen.toml` for its own Dundee-through-Aberdeen
+#    entries. Sourced by a fresh fetch of Wikipedia's "Dundee railway
+#    station" article (quoted above) and independently corroborated by
+#    Montrose's own article ("trains stop here regularly on both the
+#    Glasgow Queen Street and Edinburgh Waverley to Aberdeen routes") and
+#    Stonehaven's own article ("Trains on both the Edinburgh to Aberdeen
+#    Line and the Glasgow to Aberdeen Line call here") -- three
+#    independent station-page citations for the same convergence fact,
+#    comfortably past this catalogue's two-source standard.
+#
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Edinburgh-Dundee line" (fetched fresh): gives the ordered
+#     station list Edinburgh Waverley-Haymarket-South Gyle-Edinburgh
+#     Gateway-Dalmeny-North Queensferry-Inverkeithing-Dalgety Bay-Aberdour-
+#     Burntisland-Kinghorn-Kirkcaldy-Markinch-Ladybank-Springfield-Cupar-
+#     Leuchars-Dundee, confirms "Passenger services are operated by
+#     ScotRail, Caledonian Sleeper, CrossCountry and London North Eastern
+#     Railway", and confirms the Ladybank-Perth branch (not modelled, see
+#     scope boundaries below).
+#   - Wikipedia "Dundee railway station" (fetched fresh): confirms Dundee
+#     is where the Edinburgh-Dundee line and the Glasgow-Dundee line (via
+#     Perth) converge "to form the Dundee to Aberdeen line", and gives
+#     current service patterns for each direction (1tph to Edinburgh via
+#     Leuchars/Cupar/Haymarket; 1tph to Glasgow Queen Street via Perth and
+#     Stirling; roughly 1tph on to Aberdeen via Arbroath/Montrose/
+#     Stonehaven).
+#   - Wikipedia "Dundee to Aberdeen line" (fetched fresh): gives the full
+#     ordered station list Dundee-Broughty Ferry-Balmossie-Monifieth-Barry
+#     Links-Golf Street-Carnoustie-Arbroath-Montrose-Laurencekirk-
+#     Stonehaven-Portlethen-Aberdeen with per-station operator/frequency
+#     notes (quoted at each station's own comment above), and confirms
+#     "an approximately hourly service for Broughty Ferry and Monifieth
+#     was restored with the December 2018 timetable change."
+#   - Wikipedia "Dundee and Arbroath Joint Railway", "Balmossie railway
+#     station", "Golf Street railway station", "Montrose railway
+#     station", "Laurencekirk railway station", "Stonehaven railway
+#     station" (each fetched fresh individually): cross-check the ordered
+#     station list and current-open status station by station, and the
+#     Montrose/Stonehaven citations used in the segment-naming
+#     coordination note above.
+#   - Wikipedia "Markinch railway station", "Springfield railway station
+#     (Scotland)", "Leuchars railway station" (each fetched fresh
+#     individually): cross-check station order and current-open status for
+#     this file's own exclusive Fife stretch.
+#   - Wikipedia "Errol railway station" (fetched fresh): confirms Errol
+#     (on the Perth-Dundee side, not this file's own route) closed in
+#     1985 -- cited here only to rule it out as a candidate station on the
+#     wrong stretch.
+#
+# CRS codes: every code in `stations` above was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name> during this task, each
+# returning a single unambiguous match, and cross-checked against each
+# station's own Wikipedia infobox where fetched. All matched with no
+# discrepancies: EDB, HYM, SGL, EGY, DAM, NQU, INK, DAG, AUR, BTS, KGH,
+# KDY, MNC, LDY, SPF, CUP, LEU, DEE, BYF, BSI, MON, BYL, GOF, CAN, ARB,
+# MTS, LAU, STN, PLN, ABD.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this catalogue.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Ladybank-Perth branch (real, per the "Edinburgh-Dundee line"
+#   sourcing above, and per a fresh fetch of "Perth railway station
+#   (Scotland)": "a regular service to/from Edinburgh, via the Fife
+#   Coast" using "the reopened Ladybank line"): a real, currently-running
+#   sub-pattern, but a genuinely different physical branch from this
+#   file's own Ladybank-Springfield-Cupar-Leuchars-Dundee route -- left as
+#   a documented, unmodelled gap rather than folded in without its own
+#   dedicated verification of intermediate stations/frequency.
+# - LNER's own Aberdeen and Highland Chieftain services, CrossCountry's
+#   Edinburgh/Plymouth services and the Caledonian Sleeper, all of which
+#   also call at several of this file's stations (per the sourcing
+#   above): real, but not `SR`-operated, and no `lines/*.toml` file for
+#   any of those services currently reaches this corridor -- station
+#   overlap only, per the `xc-south-coast.toml`/`xc-manchester.toml`
+#   precedent, not modelled as a segment here.

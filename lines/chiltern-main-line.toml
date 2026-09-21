@@ -176,6 +176,12 @@ segment = "chiltern-main-line"
 # currently-served, geographically-on-route stops — so it's included as
 # `minor` rather than omitted. This resolves the brief's open question:
 # Princes Risborough DOES belong on this file's route.
+#
+# Also chiltern-aylesbury.toml's own junction (real-world sanity review):
+# that file's Princes Risborough-Aylesbury branch (Monks Risborough,
+# Little Kimble, Aylesbury) diverges here too - station overlap only, own
+# segment name in each file, same reasoning as everywhere else in this
+# catalogue.
 
 [[stations]]
 crs = "HDM"
@@ -185,8 +191,9 @@ segment = "chiltern-main-line"
 # Bicester chord split (see Princes Risborough comment above). Next
 # station BCS (Bicester North) below is the Birmingham-bound fork;
 # Bicester Village/Islip/Oxford Parkway/Oxford are the separate
-# Oxford-bound fork and aren't part of this line (not in this catalogue
-# as a separate file at time of writing).
+# Oxford-bound fork and aren't part of this line - now modelled in
+# lines/chiltern-oxford.toml (real-world sanity review; split out of the
+# formerly bundled chiltern-aylesbury.toml).
 
 [[stations]]
 crs = "BCS"
@@ -199,10 +206,11 @@ segment = "chiltern-main-line"
 # a nearby curve) to two-source standard, so no "junction" role or branch
 # detail is asserted here. Left as a plain major stop; Task 12.2 should do
 # its own verification for that branch.
-# RESOLVED in chiltern-aylesbury.toml (see its Oxford-branch comment,
-# around its "IMPORTANT CORRECTION" paragraph): the Oxford branch actually
-# leaves via a purpose-built chord near Bicester Village, not through
-# Bicester North itself.
+# RESOLVED, originally in chiltern-aylesbury.toml (see its former
+# Oxford-branch comment, around its "IMPORTANT CORRECTION" paragraph, now
+# relocated to lines/chiltern-oxford.toml by the real-world sanity
+# review's split): the Oxford branch actually leaves via a purpose-built
+# chord near Bicester Village, not through Bicester North itself.
 
 [[stations]]
 crs = "KGS"  # Kings Sutton

@@ -143,4 +143,8 @@ crs = "CAR"
 tiploc = "CARLILE"
 role = "junction"
 segment = "wcml-north"
-# Continues to Glasgow Central (GLC) via Lockerbie
+# Continues to Glasgow Central and Edinburgh Waverley via Lockerbie and
+# Carstairs -- now modelled in `lines/wcml-scotland.toml` (found missing by
+# a 2026-09-21 real-world-sanity review; this station's own `wcml-north`
+# segment name is reused verbatim there, per the shared-trunk rule of thumb
+# in `lines/SCHEMA.md`).

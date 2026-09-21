@@ -4,23 +4,33 @@ mode = "national-rail"
 category = "commuter"
 operators = ["CH"]
 
-destination_crs_filter = ["AYS", "AVP", "OXF", "OXP"]
-sample_stations = ["AMR", "AYS", "OXP"]
+# Split by the real-world sanity review: this file previously also folded
+# in the Marylebone-Oxford route (via Bicester Village), a physically
+# distinct corridor sharing nothing with this route beyond Marylebone
+# itself, into a file called "Aylesbury Line" -- geographically wrong, as
+# this file's own comments already half-acknowledged. That route now has
+# its own file, chiltern-oxford.toml. This file covers the Amersham route
+# only, plus (added by the same review) the separate Princes
+# Risborough-Aylesbury local service -- both genuinely terminate at
+# Aylesbury, unlike the Oxford route.
+destination_crs_filter = ["AYS", "AVP"]
+sample_stations = ["AMR", "AYS", "MRS"]
 match_keywords = ["Aylesbury line", "Marylebone to Aylesbury"]
 
 # Mixed frequency along the route (the Marylebone-Amersham stretch runs
 # roughly every 15-20 minutes, shared corridor with London Underground's
-# Metropolitan line; the outer Amersham-Aylesbury(-Vale Parkway) and the
-# Oxford branch are much less frequent, closer to hourly/half-hourly).
-# swr-alton.toml faces the same mixed-frequency situation on its own branch
-# and deliberately skips severity_overrides rather than assert unverified
-# numbers; this file follows that precedent instead of guessing thresholds.
+# Metropolitan line; the outer Amersham-Aylesbury(-Vale Parkway) stretch
+# and the Princes Risborough-Aylesbury branch are much less frequent,
+# closer to hourly/half-hourly). swr-alton.toml faces the same
+# mixed-frequency situation on its own branch and deliberately skips
+# severity_overrides rather than assert unverified numbers; this file
+# follows that precedent instead of guessing thresholds.
 
 # Marylebone to Aylesbury (via Amersham), Marylebone-Aylesbury Vale Parkway
-# stopping service, folding in the Bicester-Oxford branch per the gap
-# analysis's "Chiltern Railways" section (task text says "Bicester North-
-# Oxford branch" — see the Oxford-branch comment below for a correction to
-# that framing, backed by live sources).
+# stopping service, plus (real-world sanity review) the separate Princes
+# Risborough-Aylesbury local service. The Bicester-Oxford branch this file
+# used to also fold in now lives in its own file, chiltern-oxford.toml -
+# see PRINCES RISBOROUGH-AYLESBURY BRANCH below for the replacement branch.
 #
 # Sources: Wikipedia's "London-Aylesbury line" article (ordered station
 # list Marylebone -> Harrow-on-the-Hill -> Rickmansworth -> Chorleywood ->
@@ -39,12 +49,14 @@ crs = "MYB"
 tiploc = "MARYLBN"
 role = "terminus"
 segment = "chiltern-marylebone"
-# Shared trunk with chiltern-main-line.toml: both the Birmingham main line
-# and this line's Aylesbury *and* Oxford services originate here. Per
-# chiltern-main-line.toml's own comment (Task 12.1), the physical
-# divergence point is Neasden Junction, where the Marylebone-Birmingham
-# route peels off west towards Northolt Junction/High Wycombe while this
-# line's Aylesbury service continues north alongside the Underground's
+# Shared trunk with chiltern-main-line.toml AND chiltern-oxford.toml: the
+# Birmingham main line, this line's Aylesbury services (both the Amersham
+# route and the Princes Risborough route below) and chiltern-oxford.toml's
+# own Oxford service all originate here. Per chiltern-main-line.toml's own
+# comment (Task 12.1), the physical divergence point for the Amersham
+# route is Neasden Junction, where the Marylebone-Birmingham route peels
+# off west towards Northolt Junction/High Wycombe while this line's
+# Amersham-bound service continues north alongside the Underground's
 # Metropolitan line via Harrow-on-the-Hill. Confirmed via two independent
 # Wikipedia articles: "Great Western and Great Central Joint Railway"
 # ("The split occurs at Neasden Junction... [the] Joint Line route from
@@ -133,194 +145,67 @@ crs = "AVP"
 role = "terminus"
 segment = "chiltern-aylesbury-branch"
 
-# Bicester-Oxford branch, folded into this file per the task's explicit
-# instruction (the same way swr-south-west-main.toml folds Weymouth in
-# alongside Bournemouth: single-file reading, branch noted in comments).
+# ============================================================================
+# PRINCES RISBOROUGH-AYLESBURY BRANCH - added by the real-world sanity
+# review: a genuine, currently-operating Chiltern local service, distinct
+# from both the Amersham route above and the Oxford route (now split out
+# to chiltern-oxford.toml), and previously absent catalogue-wide.
+# ============================================================================
+# Confirmed via each station's own Wikipedia article: Monks Risborough's
+# own infobox names its line as the "Aylesbury-Princes Risborough line"
+# and gives Princes Risborough as the previous station, Little Kimble as
+# the next; Little Kimble's own infobox confirms the reverse (previous:
+# Monks Risborough, next: Aylesbury), and states the station "is served by
+# trains operated by Chiltern Railways between London Marylebone and
+# Aylesbury." Both stations' operator is confirmed as Chiltern Railways.
 #
-# IMPORTANT CORRECTION to the gap analysis/task title's "Bicester North-
-# Oxford branch" framing: live sources show the Oxford route does not
-# physically pass through Bicester North (BCS, already in
-# chiltern-main-line.toml) at all. Wikipedia's "Bicester Village railway
-# station" article: Bicester Village "lies... near to its junction with
-# the Chiltern Main Line" and Chiltern built "a new .25 mile (400 m) chord
-# to link the Oxford-to-Bicester Line with the Chiltern Main Line"
-# (approved October 2012, part of the Evergreen 3 project). Wikipedia's
-# "Evergreen 3" article gives the Marylebone-Oxford calling pattern as
-# "Gerrards Cross, Beaconsfield, High Wycombe, Saunderton, Princes
-# Risborough, Bicester Village, Oxford Parkway" - i.e. Oxford trains run
-# on the *same initial corridor as chiltern-main-line.toml* (via Gerrards
-# Cross/Beaconsfield/High Wycombe, none of which are in this file's
-# station list, matching chiltern-main-line.toml's own "principal stations
-# only" omissions) and then divert onto a purpose-built chord near
-# Bicester Village - a separate station about a mile from Bicester North -
-# not through Bicester North itself. This confirms chiltern-main-line.toml
-# Task 12.1's own caution ("this pass couldn't confirm the exact junction
-# geography (Bicester North itself vs. a nearby curve)") was warranted:
-# the branch does leave via a nearby curve, not Bicester North.
+# CRS codes independently verified for this task (neither appeared
+# anywhere in the catalogue before now): Monks Risborough (MRS) and Little
+# Kimble (LTK), each confirmed via its own Wikipedia infobox "Station
+# code" field and independently cross-checked against
+# railwaycodes.org.uk's own CRS index pages (both currently listed there
+# as operated by "Chiltern Rail").
 #
-# Follow-up audit (2026-09-21, data-driven schedule audit): the previous
-# revision of this file jumped straight from Marylebone to the Bicester
-# chord, on the reasoning quoted above that "neither HWY nor the omitted
-# intermediate stations appear in this file." That was true at the time
-# but left a real completeness gap this same paragraph had already
-# half-acknowledged: real Marylebone-Oxford trains do not teleport past
-# Neasden Junction to Bicester - they run the *entire* Chiltern Main Line
-# corridor first (per the Evergreen 3 calling pattern quoted above:
-# "Gerrards Cross, Beaconsfield, High Wycombe, Saunderton, Princes
-# Risborough, Bicester Village, Oxford Parkway"), and this file's own
-# station list needs those stations to correctly answer "does the
-# Marylebone-Oxford service call at Gerrards Cross" or resolve an
-# "incident between A and B" on this shared stretch. The 15 stations
-# below (Wembley Stadium through Haddenham & Thame Parkway) fill that gap,
-# added in true geographic order between Marylebone and the Bicester
-# chord.
+# Princes Risborough (PRR) is reused unchanged from chiltern-main-line.toml
+# (CRS only, not that file's segment name - see below); it is also this
+# branch's own real junction, per Little Kimble's and Monks Risborough's
+# own route-diagram fields. Aylesbury (AYS) is this branch's own real
+# terminus, already listed above under the Amersham branch's own
+# `chiltern-aylesbury-branch` segment - a genuine reconvergence (both
+# routes terminate at the same Aylesbury platforms), not re-listed here,
+# matching the precedent `greater-anglia-wherry-lines.toml`'s own Great
+# Yarmouth entry already sets for a same-file reconvergence.
 #
-# CRS codes are NOT independently re-researched here: all 15 are already
-# cited and sourced in `chiltern-main-line.toml`'s own header comment
-# (Task 10.2's catalogue-completeness pass, Evergreen 3/Wikipedia
-# succession-box/railwaycodes.org.uk/nationalrail.co.uk sourcing) and
-# reused verbatim from that file's own station list, which carries the
-# same codes under the same names. Spot-checked against
-# https://ds.cursed.solutions/api/stations?q=<name> for this pass, which
-# returned the identical codes for all 15 (Wembley Stadium=WCX, Sudbury &
-# Harrow Road=SUD, Sudbury Hill Harrow=SDH, Northolt Park=NLT, South
-# Ruislip=SRU, West Ruislip=WRU, Denham Golf Club=DGC, Denham=DNM,
-# Gerrards Cross=GER, Beaconsfield=BCF, Seer Green & Jordans=SRG, High
-# Wycombe=HWY, Saunderton=SDR, Princes Risborough=PRR, Haddenham & Thame
-# Parkway=HDM).
-#
-# Segment-naming decision: this stretch is physically the exact same
-# trunk `chiltern-main-line.toml` tags "chiltern-main-line" (and, for
-# WCX-HDM specifically, it genuinely is byte-for-byte the same set of
-# stations that file lists for that stretch). Even so, this file does NOT
-# reuse the "chiltern-main-line" segment name verbatim, because that name
-# in `chiltern-main-line.toml` also covers many stations well beyond
-# Haddenham & Thame Parkway (Bicester North, Kings Sutton, Banbury,
-# Leamington Spa, Warwick, Hatton...) that this file's Oxford branch never
-# reaches. Reusing the name here would violate this catalogue's
-# shared-segment invariant that a segment name's station set must be
-# byte-identical across every file that uses it (`SegmentRegistry::
-# is_shared` checks only the name, not which specific stations) - exactly
-# the same trap `emr-regional.toml`'s Ruling 1 documents and avoids for
-# its own Manchester Piccadilly/Stockport overlap with
-# `northern-hope-valley.toml`. So a new name exclusive to this file,
-# `chiltern-oxford-approach`, is used instead for WCX-HDM. Cost if wrong
-# (i.e. if the two files' overlapping subset should really propagate
-# jointly): bounded, same shape as that Ruling 1 precedent - both files
-# already independently match a station-level incident on this stretch
-# via StationHit regardless of segment name.
-#
-# Deliberately NOT modelled: Monks Risborough and Little Kimble sit on a
-# separate branch (the Little Kimble/Aylesbury-via-Princes-Risborough
-# route) that diverges from this same corridor - out of scope for this
-# task and not researched to this file's normal two-source bar. Flagging
-# this as a possible future whole-branch gap rather than guessing at it.
-[[stations]]
-crs = "WCX"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "SUD"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "SDH"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "NLT"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "SRU"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "WRU"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "DGC"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "DNM"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "GER"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "BCF"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "SRG"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "HWY"
-role = "major"
-segment = "chiltern-oxford-approach"
-
-[[stations]]
-crs = "SDR"
-role = "minor"
-segment = "chiltern-oxford-approach"
-
+# Segment decision: this branch's own exclusive stretch (PRR through LTK)
+# uses this file's own new segment name, `chiltern-princes-risborough-
+# aylesbury`, not chiltern-main-line.toml's own `chiltern-main-line`
+# segment or chiltern-oxford.toml's own `chiltern-oxford-approach` segment
+# (both of which also touch PRR) - same reasoning already established
+# throughout this catalogue and elsewhere in this file:
+# `SegmentRegistry::is_shared` marks a segment name shared globally by
+# name, not scoped to the stations files actually have in common, and
+# neither sibling segment's station set is byte-identical to this one.
+# Station-level overlap only at PRR (with both chiltern-main-line.toml and
+# chiltern-oxford.toml); MRS and LTK are genuinely new, no overlap.
 [[stations]]
 crs = "PRR"
+role = "junction"
+segment = "chiltern-princes-risborough-aylesbury"
+# Princes Risborough. Also chiltern-main-line.toml's own station
+# (`chiltern-main-line` segment) and chiltern-oxford.toml's own station
+# (`chiltern-oxford-approach` segment) - station overlap only with both,
+# see the note above.
+
+[[stations]]
+crs = "MRS"
 role = "minor"
-segment = "chiltern-oxford-approach"
+segment = "chiltern-princes-risborough-aylesbury"
+# Monks Risborough.
 
 [[stations]]
-crs = "HDM"
+crs = "LTK"
 role = "minor"
-segment = "chiltern-oxford-approach"
-# Last station on the shared corridor before the Bicester chord (see the
-# Oxford-branch comment above); next station BIT (Bicester Village) is
-# reached via the purpose-built chord, not through Bicester North.
-
-# Station list and CRS codes cross-checked the same way as the Aylesbury
-# branch above: Wikipedia's "Oxford-Bicester line" and "Bicester Village
-# railway station" articles for the route/order, nationalrail.co.uk's
-# per-station pages and each station's own Wikipedia infobox for every CRS
-# code (Bicester Village = BIT, Islip = ISP, Oxford Parkway = OXP,
-# Oxford = OXF).
-[[stations]]
-crs = "BIT"
-role = "major"
-segment = "chiltern-oxford-branch"
-
-[[stations]]
-crs = "ISP"
-role = "minor"
-segment = "chiltern-oxford-branch"
-
-[[stations]]
-crs = "OXP"
-role = "major"
-segment = "chiltern-oxford-branch"
-# Terminus of this service from 2015 until its December 2016 extension to
-# Oxford itself (below); most services now continue through to Oxford.
-
-[[stations]]
-crs = "OXF"
-role = "terminus"
-segment = "chiltern-oxford-branch"
-# Also served by xc-south-coast.toml (CrossCountry's Bournemouth-Oxford-
-# Manchester/Newcastle arm calls here too, under its own "xc-south-coast"
-# segment) and GWR's Great Western Main Line - station overlap only, no
-# segment shared with either, same reasoning as elsewhere in this file.
+segment = "chiltern-princes-risborough-aylesbury"
+# Little Kimble. Next station is Aylesbury (AYS), already listed above
+# under the Amersham branch - a genuine reconvergence, not re-listed here,
+# see the header note above.

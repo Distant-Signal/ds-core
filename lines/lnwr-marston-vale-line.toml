@@ -1,0 +1,156 @@
+id = "lnwr-marston-vale-line"
+name = "London Northwestern Railway: Marston Vale Line (Bedford - Bletchley)"
+mode = "national-rail"
+category = "regional"
+# "regional" per this catalogue's precedent for an hourly, single/double-
+# track, community-rail-branded rural branch (`northern-esk-valley.toml`,
+# `emr-barton-line.toml`) -- not the electrified WCML-adjacent commuter
+# character `lnwr-euston-tring.toml`/`lnwr-birmingham-crewe.toml` model.
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution), reused verbatim by every other WMT-family file in this
+  # catalogue. Not re-verified again from scratch here.
+]
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): named
+# as a real coverage gap -- a well-known, currently-branded LNWR community
+# rail line with no existing file; Woburn Sands and Ridgmont (both absent
+# catalogue-wide at the start of this task) had no line file.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Marston Vale line"
+# article, infobox + Services sections):
+#   1. Termini: Bedford and Bletchley. Mostly double track with single-track
+#      sections at both ends; not electrified; 60 mph maximum. Part of
+#      Network Rail Strategic Route 18, supported by a Community Rail
+#      Partnership.
+#   2. Full CURRENTLY OPEN station list, in order (independently re-derived
+#      rather than trusted from the infobox's own route-diagram prose,
+#      which also lists three long-closed historical halts -- Husborne
+#      Crawley, Wootton Broadmead and Kempston & Elstow -- each checked
+#      individually against this app's own station-lookup endpoint and
+#      confirmed to return no match, i.e. genuinely closed, not merely
+#      request stops): Bletchley, Fenny Stratford, Bow Brickhill, Woburn
+#      Sands, Aspley Guise, Ridgmont, Lidlington, Millbrook (Bedfordshire),
+#      Stewartby, Kempston Hardwick, Bedford St Johns, Bedford -- 12
+#      stations, matching the infobox's own separately-stated "12 total"
+#      station count once the three closed halts are excluded, a useful
+#      internal consistency check.
+#   3. Services: "An hourly service operates in each direction from Monday
+#      to Saturday," operated by London Northwestern Railway, using Class
+#      150 diesel multiple units (restored to service February 2024 after
+#      a brief Class 230 deployment was withdrawn).
+#
+# CRS codes: BLY reused verbatim from `lnwr-birmingham-crewe.toml` (already-
+# verified fact; this line's own Bletchley terminus is the same physical
+# station as that file's own WCML-trunk stop, a different subsequent route
+# -- station-overlap only). BDM reused verbatim from `emr-midland-main-
+# line.toml`/`emr-connect.toml`/`thameslink-bedford.toml` (already-
+# verified fact; likewise station-overlap only, a well-established multi-
+# line junction in this catalogue already). Every other code (FEN, BWB,
+# WOB, APG, RID, LID, MLB, SWR, KMH, BSJ) independently confirmed live via
+# this app's own production station-lookup endpoint (ds.cursed.solutions/
+# api/stations?q=<name>, 2026-09-21), single unambiguous match for each
+# (MLB specifically disambiguated as "Millbrook (Bedfordshire)", distinct
+# from the unrelated "Millbrook (Hants)" the same query also returned). No
+# TIPLOC confirmed for any of these to the two-source standard, so `tiploc`
+# is omitted throughout.
+
+destination_crs_filter = ["BLY", "BDM"]
+sample_stations = ["BLY", "WOB", "RID", "BDM"]
+
+match_keywords = ["Marston Vale Line"]
+# The line's own Wikipedia article title / current community-rail brand.
+# Grep-checked against every other `lines/*.toml` file's `match_keywords`
+# before adding -- no collision.
+
+# Hourly rural stopping service, single-track at both ends -- same
+# frequency-driven tuning `northern-esk-valley.toml`/`wmr-nuneaton-
+# coventry.toml`/`emr-nottingham-lincoln.toml` apply for comparable hourly
+# regional branches, reused verbatim.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Bletchley to Bedford, ordered west to east.
+[[stations]]
+crs = "BLY"
+role = "terminus"
+segment = "lnwr-marston-vale"
+# Bletchley: also an `lnwr-birmingham-crewe.toml` station (that file's own
+# Euston-Milton Keynes Central WCML trunk) -- this line's own dedicated
+# branch diverges here onto different metals; station-overlap only, no
+# segment shared.
+
+[[stations]]
+crs = "FEN"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Fenny Stratford.
+
+[[stations]]
+crs = "BWB"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Bow Brickhill.
+
+[[stations]]
+crs = "WOB"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Woburn Sands: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "APG"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Aspley Guise.
+
+[[stations]]
+crs = "RID"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Ridgmont: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "LID"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Lidlington.
+
+[[stations]]
+crs = "MLB"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Millbrook (Bedfordshire) -- confirmed distinct from the unlisted
+# "Millbrook (Hants)" (MBK) via this app's own station-lookup endpoint.
+
+[[stations]]
+crs = "SWR"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Stewartby.
+
+[[stations]]
+crs = "KMH"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Kempston Hardwick.
+
+[[stations]]
+crs = "BSJ"
+role = "minor"
+segment = "lnwr-marston-vale"
+# Bedford St Johns.
+
+[[stations]]
+crs = "BDM"
+role = "terminus"
+segment = "lnwr-marston-vale"
+# Bedford: also an `emr-midland-main-line.toml`/`emr-connect.toml`/
+# `thameslink-bedford.toml` station, each via a physically distinct
+# approach (the Midland Main Line, from the south) -- station-overlap
+# only, matching this catalogue's already-established precedent at this
+# station.

@@ -1,5 +1,5 @@
-id = "lnwr-chase-line"
-name = "London Northwestern Railway: Chase Line (Birmingham - Rugeley Trent Valley)"
+id = "wmr-chase-line"
+name = "West Midlands Railway: Chase Line (Birmingham - Rugeley Trent Valley)"
 mode = "national-rail"
 category = "commuter"
 operators = [
@@ -11,6 +11,28 @@ operators = [
   # `lnwr-birmingham-crewe.toml`). Not re-verified again from scratch here.
 ]
 
+# REVIEW CORRECTION (2026-09-21, Midlands EMR/WMR/LNWR sanity review): both
+# the `id`/filename and `name` originally used the "lnwr-" prefix/"London
+# Northwestern Railway" branding. Wikipedia's own "Chase Line" article is
+# explicit that "Passenger trains are operated by West Midlands Railway",
+# and West Midlands Trains' own services table lists the Chase Line under
+# its WMR brand, not LNWR (LNWR brands the West Coast Main Line-adjacent
+# outer-suburban/regional diesel services, e.g. `lnwr-birmingham-crewe.toml`).
+# `operators` was already correct (the single "LM" ATOC code covers both
+# brands), so only the `id`/filename/`name` needed correcting. The `id` was
+# judged safe to rename rather than just fixing `name`: `git log` shows this
+# file was created in batch 2 (commit cb1d4f64) and had been on `main` for
+# about 3 hours before this rename, but was verified never to have reached
+# production -- the live production API still serves the pre-split
+# `emr-rural-branches` as of this check, confirming no external consumer
+# could yet depend on the old `lnwr-chase-line` id. Renamed to
+# `wmr-chase-line` throughout (this file,
+# its filename, the `wmr-chase-line-newstreet` segment name shared with
+# `wmr-darlaston-line.toml`, that file's own comments, `wmr-camp-hill-
+# line.toml`'s cross-reference comments, and the
+# `crates/common/src/matcher.rs` regression test that names this line's id
+# and shared segment literally).
+#
 # GAP-ANALYSIS PROVENANCE: named as an uncovered gap in the "50+ entire real
 # UK lines with zero coverage" audit that produced this Midlands batch 2
 # brief. Branded "Chase Line" throughout (a genuine, currently-used route
@@ -101,7 +123,7 @@ match_keywords = ["Chase Line"]
 # anywhere near the Chase Line -- the exact coarse-segment-granularity
 # mismatch `emr-regional.toml`'s Ruling 1 and `emr-rural-branches.toml`'s
 # Branch 3 ruling both already establish precedent for. So: this file mints
-# its own new, exclusive segment name (`lnwr-chase-line-newstreet`) for
+# its own new, exclusive segment name (`wmr-chase-line-newstreet`) for
 # BHM/DUD/AST instead. Cost if wrong (i.e. if a finer split of
 # `wmr-cross-city.toml`'s own trunk segment would have been preferable):
 # bounded -- a Duddeston or Aston incident still matches both lines
@@ -110,21 +132,21 @@ match_keywords = ["Chase Line"]
 crs = "BHM"
 tiploc = "BHAMNWS"
 role = "terminus"
-segment = "lnwr-chase-line-newstreet"
+segment = "wmr-chase-line-newstreet"
 # Reuses the TIPLOC already established for this physical station in
 # `wcml-birmingham.toml`/`cross-country.toml`/`wmr-cross-city.toml`.
 
 [[stations]]
 crs = "DUD"
 role = "minor"
-segment = "lnwr-chase-line-newstreet"
+segment = "wmr-chase-line-newstreet"
 # Duddeston. Also a `wmr-cross-city.toml` station -- station-overlap only,
 # see the ruling above.
 
 [[stations]]
 crs = "AST"
 role = "junction"
-segment = "lnwr-chase-line-newstreet"
+segment = "wmr-chase-line-newstreet"
 # Aston: the real physical junction where this line's own Witton/Perry
 # Barr approach diverges from `wmr-cross-city.toml`'s Gravelly Hill/
 # Erdington approach. Per the shared-trunk rule of thumb the junction stays
@@ -174,13 +196,13 @@ segment = "wmr-chase-darlaston-trunk"
 [[stations]]
 crs = "BSC"
 role = "major"
-segment = "lnwr-chase-line-walsall"
+segment = "wmr-chase-line-walsall"
 # Bescot Stadium.
 
 [[stations]]
 crs = "WSL"
 role = "junction"
-segment = "lnwr-chase-line-walsall"
+segment = "wmr-chase-line-walsall"
 # Walsall: a genuine partial terminus for some services (not every working
 # continues to Rugeley) -- the same "major/junction, not exclusively the
 # final terminus" treatment `scotrail-ayrshire.toml` gives Ayr on its own
@@ -195,43 +217,43 @@ segment = "lnwr-chase-line-walsall"
 [[stations]]
 crs = "BLX"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Bloxwich.
 
 [[stations]]
 crs = "BWN"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Bloxwich North.
 
 [[stations]]
 crs = "LAW"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Landywood.
 
 [[stations]]
 crs = "CAO"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Cannock.
 
 [[stations]]
 crs = "HNF"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Hednesford.
 
 [[stations]]
 crs = "RGT"
 role = "minor"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Rugeley Town.
 
 [[stations]]
 crs = "RGL"
 role = "terminus"
-segment = "lnwr-chase-line-rugeley"
+segment = "wmr-chase-line-rugeley"
 # Rugeley Trent Valley: reuses the CRS already established for this
 # physical station in `lnwr-birmingham-crewe.toml` (its own Crewe branch,
 # via the separate Trent Valley Line -- a different physical route into

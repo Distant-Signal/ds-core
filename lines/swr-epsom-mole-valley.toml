@@ -1,0 +1,300 @@
+id = "swr-epsom-mole-valley"
+name = "Epsom / Mole Valley Line (Dorking / Effingham Junction)"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# swr-chessington.toml's own header has flagged this exact gap since it was
+# written: "The Epsom / Mole Valley line beyond Motspur Park (Worcester
+# Park, Stoneleigh, Ewell West, Epsom, Ashtead, Leatherhead, Dorking) and
+# the New Guildford line. This file models the junction end of that route
+# correctly - RAY on the shared trunk, MOT on a reusable `swr-epsom-line`
+# segment - so a future file can be added cleanly, but nothing beyond
+# Motspur Park is covered today." This file is that addition - Worcester
+# Park, Stoneleigh, Ewell West, Epsom, Ashtead, Leatherhead, Dorking,
+# Bookham and Effingham Junction (the last two GENUINELY new; Effingham
+# Junction itself was already a station-overlap entry in
+# swr-new-guildford.toml, but uncovered from this line's own direction)
+# were absent catalogue-wide before it.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route order Motspur Park - Worcester Park - Stoneleigh - Ewell West -
+# Epsom - Ashtead - Leatherhead: per swr-chessington.toml's own already-
+# sourced note (its own "SWR's Epsom - Dorking and Epsom - Guildford
+# services run over it alongside this branch's trains" comment on the
+# Raynes Park-Motspur Park stretch), cross-checked against Leatherhead
+# railway station's own Wikipedia "Services" section, which lists a
+# distinct "Mole Valley Line (South Western Railway)" heading with
+# neighbouring stations Ashtead (towards London) and Bookham (towards
+# Guildford) - confirming both the line's own current branded name and its
+# real fork at Leatherhead. That same section's off-peak service pattern -
+# "1 tph to London Waterloo via Wimbledon", "3 tph to Dorking of which 1
+# continues to Horsham" (Southern only - see SCOPE BOUNDARIES below), "1 tph
+# to Guildford" (this line) - confirms the genuine SWR through-working to
+# Guildford via Bookham/Effingham Junction. Dorking railway station's own
+# article independently confirms the other fork: "1 tph to London Waterloo
+# via Wimbledon" alongside Southern's own separate Victoria/Horsham
+# services, and gives this station's own CRS code (DKG, "Dorking (Main)"),
+# distinguishing it from Dorking Deepdene/Dorking West on the North Downs
+# Line (swr-north-downs.toml).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Worcester Park=WCP, Stoneleigh=SNL, Ewell West=EWW, Epsom (Surrey)=EPS,
+# Ashtead=AHD, Leatherhead=LHD, Bookham=BKA, Dorking (Main)=DKG. Effingham
+# Junction/Horsley/Clandon/London Road (Guildford)/Guildford are reused
+# verbatim from swr-new-guildford.toml (see SEGMENTS below).
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Worcester Park, Stoneleigh, Ewell West, Epsom, Ashtead, Leatherhead,
+# Bookham or Dorking (Main).
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   RAY - MOT - WCP - SNL - EWW - EPS - AHD - LHD | DKG
+#   [trunk][-------------- swr-epsom-line -------------|-- swr-mole-valley-
+#                                                            dorking --]
+#                                                    | BKA | EFF - HSY - CLA - LRD - GLD
+#                                                    [swr- ][-- swr-new-guildford-line --]
+#                                                    effingham-
+#                                                    spur]
+#
+# `swr-trunk-waterloo` (WAT/CLJ/WIM/RAY) is reused verbatim from every
+# sibling swr-*.toml file.
+#
+# `swr-epsom-line`: reused and EXTENDED verbatim from swr-chessington.toml,
+# which already carries Motspur Park (MOT) on this exact segment name for
+# precisely this reason - its own header states it is "named for the track
+# rather than for this service so a future swr-epsom.toml /
+# swr-new-guildford.toml can reuse the name verbatim and get correct
+# shared-trunk propagation." This file is that reuse: Worcester Park,
+# Stoneleigh, Ewell West, Epsom, Ashtead and Leatherhead are added to the
+# same segment, all genuinely the same physical single route as far as
+# Leatherhead, where it forks.
+#
+# Leatherhead is a real junction (per its own Wikipedia "Services" section,
+# quoted above) where this route splits towards Dorking one way and Bookham/
+# Effingham Junction/Guildford the other. Per the shared-trunk rule of
+# thumb, Leatherhead itself stays on `swr-epsom-line`; the two exclusive
+# continuations start at the next station each way.
+#
+# `swr-mole-valley-dorking` (new, exclusive): covers Dorking alone. Real
+# Southern-operated services also reach Dorking from a different direction
+# (via Sutton) - see SCOPE BOUNDARIES below for why that side is not
+# modelled and this is deliberately NOT a shared segment name today.
+#
+# `swr-effingham-spur` (new, exclusive): covers Bookham alone, the one
+# station between the Leatherhead fork and the Effingham Junction merge
+# point.
+#
+# `swr-new-guildford-line`: Effingham Junction, Horsley, Clandon, London
+# Road (Guildford) and Guildford are reused verbatim, rows copied directly
+# with identical roles, from swr-new-guildford.toml. That file's own EFF
+# entry already documents the Leatherhead branch as "a separate branch off
+# this line at Effingham Junction - real, sourced, but not part of this
+# task's assignment and not modelled here", explicitly anticipating this
+# file. Per Leatherhead's own sourced "1 tph to Guildford" working, this is
+# a genuine shared physical approach into Guildford, not just a
+# station-overlap convenience - the same real-workings test
+# swr-chertsey-loop.toml's own header applies to its identical reuse of
+# swr-hounslow-loop.toml's station list.
+
+match_keywords = ["Mole Valley line"]
+# Leatherhead railway station's own Wikipedia article uses this as a
+# section heading for this line's current SWR-operated service ("Mole
+# Valley Line (South Western Railway)") - a real, current, branded name,
+# not assumed. Grepped clean against every other file's match_keywords
+# before adding - no collision (southern-epsom-downs.toml's own mentions of
+# "Sutton and Mole Valley lines" are plain-prose comments, never inside a
+# match_keywords array). A bare "Epsom" or "Dorking" was deliberately not
+# added - both would false-match Epsom Downs/Tattenham Corner
+# (southern-epsom-downs.toml/southern-tattenham-corner.toml) and North
+# Downs Line (swr-north-downs.toml) Knowledgebase content respectively.
+
+sample_stations = ["SNL", "AHD", "BKA"]
+# Stoneleigh and Ashtead are on this line's own `swr-epsom-line` trunk, past
+# the Motspur Park junction and exclusive to this file (Chessington's own
+# trains never reach them - see swr-chessington.toml's own SOURCING note).
+# Bookham is on this line's own wholly exclusive `swr-effingham-spur`
+# segment. All three avoid the Dorking/Guildford forks deliberately, so a
+# sample reflects the shared trunk's own health without depending on which
+# branch is disrupted.
+
+# No `destination_crs_filter`: per the sourcing above, this line's own real
+# service is genuinely two-destination (Dorking and Guildford), not a
+# single clean terminus like swr-new-guildford.toml's own Waterloo<->
+# Guildford pattern - a whitelist would need both DKG and GLD, and even
+# then all three sample stations are on the shared trunk before the fork,
+# so a delayed/cancelled working to EITHER destination should count. Rather
+# than build a filter that has to include both real destinations for no
+# disambiguation benefit (none of the sample stations are shared with
+# another route), the filter is skipped entirely - the mandatory `SW`
+# operator filter already scopes the sample correctly, matching
+# swr-chessington.toml's/swr-chertsey-loop.toml's own precedent for
+# skipping a filter that would buy nothing.
+
+# Regional tuning: per the sourcing above, this line's own two branches each
+# run at 1 tph off-peak (lower than swr-new-guildford.toml's comparable 2
+# tph, which itself uses the tighter commuter thresholds) - matching
+# swr-alton.toml's own judgment for a similarly-infrequent SWR branch
+# (2 tph, left at catalogue defaults) rather than the tighter commuter
+# override this catalogue reserves for 2+ tph suburban corridors.
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - Southern's own "Sutton and Mole Valley lines" service (Sutton - Epsom -
+#   Ashtead - Leatherhead - Box Hill & Westhumble - Dorking, continuing to
+#   Horsham): per Leatherhead's and Dorking's own Services sections, this is
+#   a real, second operator genuinely sharing the Epsom-Ashtead-Leatherhead
+#   track this file also models, but southern-epsom-downs.toml's own SCOPE
+#   BOUNDARIES already flags the whole "Sutton-Epsom-Dorking/Horsham Mole
+#   Valley services" group as a documented, still-open gap beyond this
+#   task's assignment - not modelled by any file yet, including this one.
+#   When it is, Epsom/Ashtead/Leatherhead/Dorking here should very likely
+#   become genuine shared-trunk stations with that future file - flagged
+#   for the controller and for whichever future task adds it.
+# - Box Hill & Westhumble: the one intermediate station on that
+#   Southern-only Leatherhead-Dorking stretch - not this line's own station,
+#   per Leatherhead's own neighbouring-station data (this line's own
+#   Leatherhead neighbour towards Guildford is Bookham, not Box Hill &
+#   Westhumble).
+# - The North Downs Line's own Dorking West/Dorking Deepdene (a different,
+#   already-modelled pair of stations - swr-north-downs.toml): station
+#   overlap only with this file's own Dorking (Main), not a shared segment
+#   (different physical route into the Dorking area).
+# - The New Guildford line's own Hampton Court Junction-Effingham Junction
+#   approach via Claygate/Cobham: swr-new-guildford.toml, an earlier batch -
+#   this file only reuses its EFF-onward rows, see SEGMENTS above.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "RAY"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Raynes Park. Reused verbatim from swr-chessington.toml/
+# swr-kingston-loop.toml - the junction where this line's own route (and
+# Chessington's) leaves the SWML.
+
+[[stations]]
+crs = "MOT"
+role = "junction"
+segment = "swr-epsom-line"
+# Motspur Park. Reused verbatim from swr-chessington.toml - the Chessington
+# branch diverges just south of here; this line's own route continues on
+# `swr-epsom-line` towards Worcester Park.
+
+[[stations]]
+crs = "WCP"
+role = "major"
+segment = "swr-epsom-line"
+# Worcester Park.
+
+[[stations]]
+crs = "SNL"
+role = "minor"
+segment = "swr-epsom-line"
+# Stoneleigh.
+
+[[stations]]
+crs = "EWW"
+role = "minor"
+segment = "swr-epsom-line"
+# Ewell West.
+
+[[stations]]
+crs = "EPS"
+role = "major"
+segment = "swr-epsom-line"
+# Epsom (Surrey). A real junction town (Southern's own Epsom Downs/Sutton
+# services pass nearby, per southern-epsom-downs.toml's own scope notes),
+# but this task found no sourced evidence of track-sharing with any file
+# already in the catalogue AT this specific station - see SCOPE BOUNDARIES.
+
+[[stations]]
+crs = "AHD"
+role = "minor"
+segment = "swr-epsom-line"
+# Ashtead.
+
+[[stations]]
+crs = "LHD"
+role = "junction"
+segment = "swr-epsom-line"
+# Leatherhead. Real fork: Dorking one way, Bookham/Effingham Junction/
+# Guildford the other - stays on the shared trunk per the shared-trunk rule
+# of thumb; see SEGMENTS above.
+
+[[stations]]
+crs = "DKG"
+role = "terminus"
+segment = "swr-mole-valley-dorking"
+# Dorking (Main). This line's own terminus on this fork. Distinct from
+# Dorking West (DKT) and Dorking Deepdene (DPD) on the North Downs Line
+# (swr-north-downs.toml) - station overlap only, not a shared segment
+# (different physical route into the Dorking area). Southern also serves
+# this exact station from a different direction (via Sutton) - not
+# modelled by any file yet, see SCOPE BOUNDARIES.
+
+[[stations]]
+crs = "BKA"
+role = "minor"
+segment = "swr-effingham-spur"
+# Bookham. The one station between the Leatherhead fork and the Effingham
+# Junction merge with swr-new-guildford.toml's own route.
+
+[[stations]]
+crs = "EFF"
+role = "junction"
+segment = "swr-new-guildford-line"
+# Effingham Junction. Reused verbatim from swr-new-guildford.toml, whose
+# own header already anticipates this line's Leatherhead branch joining
+# here - see SEGMENTS above.
+
+[[stations]]
+crs = "HSY"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Horsley. Row copied from swr-new-guildford.toml.
+
+[[stations]]
+crs = "CLA"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Clandon. Row copied from swr-new-guildford.toml.
+
+[[stations]]
+crs = "LRD"
+role = "minor"
+segment = "swr-new-guildford-line"
+# London Road (Guildford). Row copied from swr-new-guildford.toml.
+
+[[stations]]
+crs = "GLD"
+role = "terminus"
+segment = "swr-new-guildford-line"
+# Guildford. This line's own second terminus (the Guildford-bound fork).
+# Station overlap with swr-portsmouth-direct.toml and swr-north-downs.toml
+# (two further, different physical approaches) - see
+# swr-new-guildford.toml's own note on this three-way (now four-way)
+# convergence.

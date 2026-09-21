@@ -1,0 +1,127 @@
+id = "greater-anglia-bittern-line"
+name = "Bittern Line (Norwich - Sheringham)"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml -- not re-derived here.
+
+# Split out of the former `greater-anglia-norfolk-branches.toml` (real-world
+# sanity review): that file bundled three unrelated, separately
+# community-rail-branded Greater Anglia routes (Bittern, Wherry, Breckland)
+# under a single "Norfolk Branch Lines" umbrella that nobody uses -- and the
+# Breckland Line in particular is a 60-mile Norwich-Cambridge secondary
+# main line, not a "branch" by any reasonable reading. A single incident on
+# any one of the three reported as a disruption on all three. Split one
+# file per real brand, matching this session's EMR/TfW split precedent.
+# Station data, CRS codes and segment names below are reused verbatim from
+# the original file -- redistributed, not re-researched.
+
+sample_stations = ["SHM"]
+match_keywords = ["Bittern Line"]
+
+# Typical service is one train per hour in each direction (per the Bittern
+# Line's own Wikipedia article) -- unchanged from the original bundled
+# file's reasoning (northern-lakes.toml/northern-tyne-valley.toml
+# branch-line pattern): one cancellation is a large fraction of the hour's
+# service, and a 5-minute delay on a short branch journey isn't yet a story
+# at config.py's base thresholds.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ## Bittern Line (Norwich-Sheringham)
+#
+# Wikipedia's "Bittern Line" article (fetched raw): "links Norwich to
+# Sheringham... 10 stations." Its own stations table gives the mileage
+# order from Norwich used here: Norwich, Salhouse, Hoveton & Wroxham,
+# Worstead, North Walsham, Gunton, Roughton Road, Cromer, West Runton,
+# Sheringham. No internal forks -- a simple single branch. `major`/`minor`
+# roles assigned from the same table's ORR 2022/23 passenger entries/exits
+# figures: Hoveton & Wroxham (124,804), North Walsham (243,208) and Cromer
+# (244,294) are an order of magnitude busier than Salhouse (14,006),
+# Worstead (26,816), Gunton (28,446), Roughton Road (24,670) and West
+# Runton (32,918), hence `major` for the former three and `minor` for the
+# latter five. CRS codes verified from each station's own Wikipedia
+# infobox `code` field: Salhouse (SAH), Hoveton & Wroxham (HXM, listed on
+# railwaycodes.org.uk under its pre-rename "Wroxham" entry), Worstead
+# (WRT), North Walsham (NWA), Gunton (GNT), Roughton Road (RNR), Cromer
+# (CMR), West Runton (WRN), Sheringham (SHM).
+#
+# ## Segment decision at Norwich: station-level overlap only, NOT a shared
+# segment name
+#
+# Norwich is this line's own shared origin with the (now separately
+# catalogued) Wherry and Breckland lines, and is also the terminus of
+# `greater-anglia-main-line.toml`'s `geml-mainline` segment and
+# `emr-regional.toml`'s own `emr-regional-east` segment. Per the original
+# bundled file's own ruling (`segments.rs`'s `SegmentRegistry::is_shared`
+# marks a segment name shared globally by name, not scoped to the stations
+# files actually have in common -- reusing `geml-mainline` here would
+# wrongly reclassify Diss/Ingatestone as shared trunk with this line too),
+# Norwich is folded into this file's own exclusive `bittern-line` segment
+# rather than a separate shared-with-siblings segment name -- consistent
+# with the other single-segment-per-branch files in this split
+# (`greater-anglia-mayflower-line.toml`, etc.). Since `bittern-line` is not
+# reused by `greater-anglia-wherry-lines.toml` or
+# `greater-anglia-breckland-line.toml` (each has its own distinct segment
+# name), this does NOT create an accidental shared trunk between the three
+# new files -- an incident at Norwich still matches all of them
+# independently, each as `MatchScope::ExclusiveSegment`, exactly as the
+# original bundled file's own tests intended.
+
+[[stations]]
+crs = "NRW"
+tiploc = "NRCH"
+role = "junction"
+segment = "bittern-line"
+# Terminus of greater-anglia-main-line.toml's `geml-mainline` and the
+# shared origin of the (separately catalogued) Wherry and Breckland lines.
+# Station-level overlap only -- see the segment-decision note above.
+
+[[stations]]
+crs = "SAH"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "HXM"
+role = "major"
+segment = "bittern-line"
+# Hoveton & Wroxham: gateway station for Wroxham, "capital of the Broads."
+
+[[stations]]
+crs = "WRT"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "NWA"
+role = "major"
+segment = "bittern-line"
+
+[[stations]]
+crs = "GNT"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "RNR"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "CMR"
+role = "major"
+segment = "bittern-line"
+
+[[stations]]
+crs = "WRN"
+role = "minor"
+segment = "bittern-line"
+
+[[stations]]
+crs = "SHM"
+role = "terminus"
+segment = "bittern-line"

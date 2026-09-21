@@ -56,17 +56,20 @@ sample_stations = ["GLC", "BRR", "KMK", "DMF", "CAR"]
 # departures from those other services sharing the terminus name.
 destination_crs_filter = ["BRR", "KMK", "AUK", "DMF", "CAR"]
 
-match_keywords = ["Nith Valley Line"]
-# NOT "Glasgow South Western Line", even though that is this route's own
-# Wikipedia article title: `scotrail-ayrshire.toml` already claims that
-# exact phrase in its own `match_keywords` (added when it modelled only
-# the Ayr/Stranraer coastal portion of that Wikipedia article -- itself a
-# slightly broad claim, but not this task's to revisit). Reusing it here
-# would make a KeywordOnly Knowledgebase match ambiguous between the two
-# files. "Nith Valley Line" is this file's own high-precision, sourced
-# alternative (see the file-level comment above) and doesn't collide with
-# anything else in the catalogue (grepped clean against every other file's
-# `match_keywords` before adding).
+match_keywords = ["Nith Valley Line", "Glasgow South Western Line"]
+# "Nith Valley Line" is this file's own high-precision, sourced
+# alternative (see the file-level comment above).
+#
+# "Glasgow South Western Line" was ADDED here (real-world-sanity review,
+# 2026-09-21), moved from `scotrail-ayrshire.toml`, which had it as a
+# misattribution: per Wikipedia and National Rail Enquiries, "the Glasgow
+# South Western Line" is THIS file's own Kilmarnock-Dumfries-Carlisle
+# route, not the Ayr/Stranraer coastal line (that route is the Wikipedia
+# "Glasgow South Western Line" article's own "Stranraer line" branch,
+# covered by `scotrail-ayrshire.toml`, plus this file's own "Main Line"
+# section -- see the Sources section above, which already establishes
+# this file as the article's actual subject). No collision risk now that
+# `scotrail-ayrshire.toml` no longer claims the phrase.
 
 # Split-character regional line: not as tight as a pure commuter line
 # (`scotrail-cathcart-circle.toml`'s 0.20/4min), not as loose as a

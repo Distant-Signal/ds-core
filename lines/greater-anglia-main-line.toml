@@ -1,5 +1,11 @@
 id = "greater-anglia-main-line"
-name = "Greater Anglia Main Line"
+name = "Great Eastern Main Line"
+# Renamed from the invented "Greater Anglia Main Line" (real-world sanity
+# review): no source -- not NRE, not Network Rail, not Greater Anglia's own
+# network map, not Wikipedia -- calls this route anything but the Great
+# Eastern Main Line, which is this file's own `match_keywords` below (the
+# old display name contradicted its own keywords). `id` is left unchanged
+# per SCHEMA.md ("Never change once published").
 mode = "national-rail"
 category = "main-line"
 operators = ["LE"]

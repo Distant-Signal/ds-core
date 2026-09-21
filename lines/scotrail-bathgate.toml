@@ -1,8 +1,26 @@
 id = "scotrail-bathgate"
 name = "ScotRail Bathgate Line (Glasgow Queen Street - Edinburgh Waverley via Airdrie & Bathgate)"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["SR"]
+
+# CATEGORY CORRECTION (real-world-sanity review, 2026-09-21): changed from
+# "regional" to "commuter". This file's own EDP station comment already
+# quotes Wikipedia's "Edinburgh Park railway station" article describing
+# "four [trains per hour] to Glasgow Queen Street Low Level via Bathgate"
+# -- a genuine 4tph electrified suburban frequency throughout, not a
+# commuter-core-grafted-onto-a-rural-tail shape like `scotrail-
+# ayrshire.toml`'s (this file's own file-level comment above cites that
+# precedent, but the frequency evidence elsewhere in this same file
+# actually points the other way). ScotRail's own route grouping treats the
+# Bathgate line as part of the North Clyde Line network (it shares
+# `scotrail-north-clyde-core`/`scotrail-north-clyde-airdrie-branch` track
+# with `scotrail-north-clyde.toml`, itself category "commuter" -- see the
+# segment-structure note below), matching `scotrail-argyle.toml`'s/
+# `scotrail-north-clyde.toml`'s uniform-density "commuter" treatment
+# rather than a split trunk+branch shape. `severity_overrides` are left
+# unchanged pending a dedicated tuning pass -- this correction is scoped to
+# `category` only, per the review's own instruction.
 
 # Follow-up task to the Batch 10 (ScotRail) line-catalogue effort. See
 # `scotrail-shotts.toml`'s own header for the full background: this file

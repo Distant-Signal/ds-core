@@ -1,0 +1,141 @@
+id = "scotrail-paisley-canal"
+name = "ScotRail Paisley Canal Line (Glasgow Central - Paisley Canal)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Real-world-sanity review (2026-09-21), Part B lower-priority addition.
+# Referenced as a real, documented, unmodelled gap by two other files:
+# `scotrail-ayrshire.toml`'s own PYG comment ("Paisley Gilmour Street:
+# shared with the Inverclyde Line and Paisley Canal Line (neither
+# currently modelled in any `lines/*.toml` file)") and `scotrail-
+# inverclyde.toml`'s own scope-boundaries note ("The Paisley Canal Line
+# and the Glasgow Airport Rail Link (cancelled 2009): both diverge/would
+# have diverged from this general corridor per the detailed routemap
+# template, but neither is this line -- real, documented gaps").
+#
+# Category: "commuter", matching `scotrail-east-kilbride.toml`'s own
+# precedent for a short, fully electrified Glasgow Central suburban
+# branch with a comparable half-hourly-off-peak frequency (see the
+# severity-tuning comment below) -- not `scotrail-ayrshire.toml`'s
+# trunk+rural-branch "regional" shape (this line has no rural tail; it is
+# short and uniformly suburban start to end).
+
+sample_stations = ["GLC", "PCN"]
+match_keywords = ["Paisley Canal Line", "Paisley Canal line"]
+# The line's own branded/article name (Wikipedia "Paisley Canal line"),
+# in the two capitalisation forms actually seen in the sourcing below.
+# Grepped `lines/*.toml` before adding: no other file's `match_keywords`
+# uses "Paisley Canal" or "Canal Line" -- no collision.
+
+# Half-hourly Monday-Saturday, hourly Sunday, per Paisley Canal's own
+# Wikipedia article (quoted in the Sources section below) -- comparable
+# density to `scotrail-east-kilbride.toml`'s own short Glasgow Central
+# suburban branch, so this file uses that same tuning rather than a
+# looser regional-branch profile.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Station list: Glasgow Central to Paisley Canal ===
+#
+# Ordered end to end per SCHEMA.md's curation rule. Seven stations total,
+# matching Wikipedia's "Paisley Canal line" article's own station count:
+# Glasgow Central, Dumbreck, Corkerhill, Mosspark, Crookston, Hawkhead,
+# Paisley Canal. Track is "Double track from Glasgow Central to Corkerhill
+# Depot" then "Single track from Corkerhill Depot to Paisley Canal", per
+# that same article -- not modelled as a distinct segment boundary here
+# (this catalogue's segment field models shared-vs-exclusive track for the
+# matcher, not single-vs-double-track infrastructure detail).
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-paisley-canal"
+# Glasgow Central: per Wikipedia, this line "left the City of Glasgow
+# Union Railway (CGUR) at Shields Junction" -- a different physical
+# approach out of Glasgow Central from `scotrail-ayrshire.toml`'s own
+# Paisley Gilmour Street-bound approach, `scotrail-glasgow-south-
+# western.toml`'s own Crossmyloof/Pollokshaws West-bound approach, and
+# `scotrail-argyle.toml`'s own low-level approach -- none of those files'
+# own next-station-after-GLC entries (Dumbreck, Corkerhill, Mosspark,
+# Crookston, Hawkhead) appear in any of them, so there is no
+# `[[stations]]`-level overlap to reconcile beyond the shared station name
+# itself. Station overlap only, per the `xc-south-coast.toml`/
+# `xc-manchester.toml` precedent -- this file's own segment name is not
+# reused from any sibling GLC-touching file.
+
+[[stations]]
+crs = "DUM"
+role = "minor"
+segment = "scotrail-paisley-canal"
+# Dumbreck.
+
+[[stations]]
+crs = "CKH"
+role = "minor"
+segment = "scotrail-paisley-canal"
+# Corkerhill: also the site of Corkerhill TMD (train maintenance depot);
+# the double-to-single track transition is just beyond here.
+
+[[stations]]
+crs = "MPK"
+role = "minor"
+segment = "scotrail-paisley-canal"
+# Mosspark.
+
+[[stations]]
+crs = "CKT"
+role = "minor"
+segment = "scotrail-paisley-canal"
+# Crookston.
+
+[[stations]]
+crs = "HKH"
+role = "minor"
+segment = "scotrail-paisley-canal"
+# Hawkhead.
+
+[[stations]]
+crs = "PCN"
+role = "terminus"
+segment = "scotrail-paisley-canal"
+# Paisley Canal: this line's own western terminus, a different Paisley
+# station from Paisley Gilmour Street (the Ayrshire Coast/Inverclyde/GSW
+# lines' own shared approach hub) -- no CRS-level overlap with any of
+# those files.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Paisley Canal line" (fetched fresh): confirms ScotRail
+#     operation; the 7-station ordered list Glasgow Central-Dumbreck-
+#     Corkerhill-Mosspark-Crookston-Hawkhead-Paisley Canal; the Shields
+#     Junction/City of Glasgow Union Railway approach out of Glasgow
+#     Central; the double-track-to-Corkerhill-Depot/single-track-beyond
+#     infrastructure detail; and 25kV AC electrification since 2012.
+#   - Wikipedia "Paisley Canal railway station" (fetched fresh): confirms
+#     current service frequency ("a half-hourly service eastbound to
+#     Glasgow Central" Monday-Saturday, "an hourly service" Sundays).
+#
+# CRS codes: every code in `stations` above was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name> during this task, each
+# returning a single unambiguous match: GLC, DUM, CKH, MPK, CKT, HKH, PCN.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this catalogue.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Glasgow Airport Rail Link (GARL, cancelled 2009): per `scotrail-
+#   inverclyde.toml`'s own prior note, this would have diverged from the
+#   general Paisley corridor but is a dead proposal, not a real route --
+#   not modelled, consistent with that file's own treatment.
+# - The exact physical relationship between this line's own Shields
+#   Junction approach and the CGUR trackage other Glasgow Central-
+#   departing lines also touch further out: real per the sourcing above,
+#   but this task's research budget did not extend to resolving whether
+#   any *other* currently-modelled line's own stations sit on the same
+#   CGUR stretch before diverging -- station overlap at Glasgow Central
+#   only is asserted here, not a ruled-out shared segment elsewhere.

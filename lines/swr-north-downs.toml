@@ -282,4 +282,9 @@ segment = "north-downs-guildford-redhill"
 # Southern/Thameslink Brighton Main Line and Sutton Loop hub, not shared as
 # a segment here (station overlap only - Southern's own approach into
 # Redhill is via the separate Purley/Coulsdon South corridor documented as
-# a scope boundary above, not this line's own metals).
+# a scope boundary above, not this line's own metals). That corridor is now
+# modelled: thameslink-southern.toml's own HORSHAM BRANCH (real-world
+# sanity review) covers GTR's Purley-Coulsdon South-Merstham-Redhill-
+# Earlswood-Salfords-Horley-Horsham service, reusing RDH unchanged from
+# here - station overlap only, own segment name, per that file's own
+# segment-decision note.

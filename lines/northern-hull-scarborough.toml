@@ -1,0 +1,161 @@
+id = "northern-hull-scarborough"
+name = "Yorkshire Coast Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# --- Real-world-sanity review (Yorkshire, 2026-09-21) ---
+# `lines/northern-yorkshire-coast.toml` used to claim the "Yorkshire Coast
+# Line" name while actually modelling the unrelated Leeds-York-Malton-
+# Seamer-Scarborough route. Wikipedia's own "Yorkshire Coast Line" article
+# opens with the real definition: "the Hull–Scarborough line, also known as
+# the Yorkshire Coast Line" -- this file. That other file has been renamed
+# to its own real name, "York–Scarborough Line", and its wrong keywords
+# dropped; see its own top-of-file comment for the full correction. This
+# file fills the resulting, previously-uncatalogued gap.
+#
+# Route: Hull Paragon - Cottingham - Beverley - Arram - Hutton Cranswick -
+# Driffield - Nafferton - Bridlington - Bempton - Hunmanby - Filey - Seamer -
+# Scarborough, per the Yorkshire Coast Line article's own lead sentence and
+# station list (fetched 2026-09-21). Every CRS code cross-checked against
+# https://ds.cursed.solutions/api/stations?q=<name> (one unambiguous result
+# each): HUL, CGM, BEV (reused unchanged from `hull-trains.toml`'s own
+# verified entries, not re-derived here), ARR, HUT, DRF, NFN, BDT, BEM, HUB,
+# FIL, SEM and SCA (SEM/SCA reused unchanged from `northern-yorkshire-
+# coast.toml`'s own verified entries). No discrepancies found. TIPLOCs
+# omitted throughout -- none confirmed to a second source this session.
+#
+# Northern currently operates this line's real service pattern extended
+# beyond Hull, south via Doncaster to Sheffield (confirmed via the
+# `Scarborough railway station` article's own Services section: "Monday to
+# Saturday: hourly service to Sheffield via Beverley, Hull Paragon, and
+# Doncaster"), not merely Hull-Scarborough in isolation. That Hull-Doncaster
+# stretch is a physically different route (the "Hull and Doncaster Branch"
+# diverging at Gilberdyke, already flagged as a real, sourced, documented
+# gap in `northern-leeds-selby.toml`'s own GBD entry) -- out of scope for
+# this file, which models the Hull-Scarborough infrastructure corridor
+# itself (per this catalogue's convention of one file per physical line),
+# not every service pattern that runs over it. Flagged here so a future
+# Sheffield-Doncaster-Hull task can pick it up rather than rediscover it.
+#
+# --- Segment/overlap decisions ---
+# - SEM (Seamer) and SCA (Scarborough): genuine physical convergence with
+#   `northern-yorkshire-coast.toml`'s own York-Scarborough route -- that
+#   line's own Wikipedia article confirms this line "join[s] the
+#   York–Scarborough line at a junction near Seamer before terminating at
+#   Scarborough". Both stations reuse that file's own new
+#   `northern-scarborough-approach` segment name verbatim (it landed the
+#   name first, in this same correction) -- see that file's own comment on
+#   its SEM/SCA entries.
+# - HUL, CGM (Cottingham) and BEV (Beverley): also `hull-trains.toml`
+#   stations, on that file's own `ht-kings-cross-hull`/`ht-beverley`
+#   segments -- genuine physical track-sharing (both run Hull-Cottingham-
+#   Beverley), but per this catalogue's established cross-operator
+#   convention (`hull-trains.toml` itself already declines to reuse
+#   `lner-hull.toml`'s segment name for the identical reason), no segment
+#   name is shared here either -- station-level overlap is expected and
+#   sufficient. HUL is also an `lner-hull.toml`/`northern-leeds-selby.toml`
+#   terminus/station; same station-overlap-only treatment.
+# - No other catalogue file reaches Arram, Hutton Cranswick, Driffield,
+#   Nafferton, Bridlington, Bempton, Hunmanby or Filey (grepped before
+#   starting this file).
+sample_stations = ["HUL", "BDT", "SCA"]
+destination_crs_filter = ["SCA"]
+match_keywords = ["Yorkshire Coast Line", "Hull to Scarborough line"]
+# The real line's own branded/article name (now correctly reclaimed from
+# `northern-yorkshire-coast.toml`, which no longer misuses it) plus a plain-
+# English phrasing. Grepped clean against every other file's own
+# `match_keywords` before adding.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Single-track rural coastal branch beyond Beverley -- tuned thresholds
+# following `northern-furness.toml`'s/`scotrail-ayrshire.toml`'s precedent
+# for a comparable hourly coastal line, rather than the tighter commuter
+# defaults.
+
+[[stations]]
+crs = "HUL"
+role = "terminus"
+segment = "northern-hull-scarborough"
+# Hull Paragon -- CRS reused unchanged from `hull-trains.toml`/`lner-hull.
+# toml`'s own verified entries. Station-overlap only with both; see above.
+
+[[stations]]
+crs = "CGM"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Cottingham -- CRS reused unchanged from `hull-trains.toml`'s own verified
+# entry. Station-overlap only; see above.
+
+[[stations]]
+crs = "BEV"
+role = "major"
+segment = "northern-hull-scarborough"
+# Beverley -- CRS reused unchanged from `hull-trains.toml`'s own verified
+# entry. Station-overlap only; see above. This line's own route continues
+# north past Beverley, unlike Hull Trains' own service which terminates
+# here.
+
+[[stations]]
+crs = "ARR"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Arram.
+
+[[stations]]
+crs = "HUT"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Hutton Cranswick.
+
+[[stations]]
+crs = "DRF"
+role = "major"
+segment = "northern-hull-scarborough"
+# Driffield.
+
+[[stations]]
+crs = "NFN"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Nafferton.
+
+[[stations]]
+crs = "BDT"
+role = "major"
+segment = "northern-hull-scarborough"
+# Bridlington.
+
+[[stations]]
+crs = "BEM"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Bempton.
+
+[[stations]]
+crs = "HUB"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Hunmanby.
+
+[[stations]]
+crs = "FIL"
+role = "minor"
+segment = "northern-hull-scarborough"
+# Filey.
+
+[[stations]]
+crs = "SEM"
+role = "junction"
+segment = "northern-scarborough-approach"
+# Seamer -- genuine physical convergence with `northern-yorkshire-coast.
+# toml`'s own York-Scarborough route; see the top-of-file comment. Shared
+# segment name reused verbatim from that file.
+
+[[stations]]
+crs = "SCA"
+role = "terminus"
+segment = "northern-scarborough-approach"
+# Scarborough -- shared final approach; see above.

@@ -1,7 +1,18 @@
 id = "wmr-camp-hill-line"
 name = "Camp Hill Line (Birmingham New Street - Kings Norton)"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
+# REVIEW CORRECTION (2026-09-21, Midlands EMR/WMR/LNWR sanity review):
+# `category` previously read "regional". This is a 2tph/3tph-late-evening/
+# hourly-Sunday inner-Birmingham suburban reopening (see the service-pattern
+# sourcing below) -- the same short-hop, all-stations, electrified-city
+# character as `wmr-cross-city.toml` (also Birmingham suburban, also WMR,
+# category "commuter"), not the longer-distance/lower-frequency/rural shape
+# "regional" is meant to key elsewhere in this catalogue (e.g.
+# `wmr-nuneaton-coventry.toml`, `northern-esk-valley.toml`). Changed to
+# "commuter" for consistency with its sibling. (`severity_overrides` below
+# is left as-is: its half-hourly-vs-full-commuter-frequency tuning rationale
+# still holds regardless of the `category` label.)
 operators = [
   "LM",  # West Midlands Trains (West Midlands Railway brand) -- the
   # primary local-stopping-service operator, per the sourcing below.
@@ -139,7 +150,7 @@ role = "terminus"
 segment = "wmr-camp-hill"
 # Reuses the TIPLOC already established for this physical station in
 # `wcml-birmingham.toml`/`cross-country.toml`/`wmr-cross-city.toml`/
-# `lnwr-chase-line.toml`. Station-overlap only with every other Birmingham
+# `wmr-chase-line.toml`. Station-overlap only with every other Birmingham
 # New Street-touching file in this catalogue -- this line's own approach
 # (via St Andrews Junction/Grand Junction, per source 1 above) is not
 # independently confirmed as track-identical to any of theirs, so no
@@ -171,7 +182,7 @@ segment = "wmr-camp-hill"
 # Kings Norton: also a `wmr-cross-city.toml` station, on that file's own
 # `wmr-cross-city-trunk` segment (a 22-station-wide name spanning far more
 # track than this line's own single-station touch here) -- per the same
-# coarse-segment-granularity reasoning `lnwr-chase-line.toml`'s own
+# coarse-segment-granularity reasoning `wmr-chase-line.toml`'s own
 # BHM/DUD/AST ruling documents, station-overlap only, no segment name
 # shared with that file.
 

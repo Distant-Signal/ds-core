@@ -1,0 +1,111 @@
+id = "tfw-coryton-line"
+name = "Coryton Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+destination_crs_filter = ["COY"]
+# The line's one genuine dead-end terminus.
+sample_stations = ["CDQ", "COY"]
+match_keywords = ["Coryton Line"]
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-south.toml` (Batch 11, Task 11.7, previously bundled
+# with the City Line and Cardiff Bay Line into one over-broad
+# "Cardiff Valley Lines" file) -- see `tfw-city-line.toml`'s own split-
+# history comment for the full reasoning (the same real-world-branding
+# split precedent already applied on the north side of the network). All
+# content below (station list, sourcing notes, segment names) is carried
+# over unchanged from `tfw-valley-lines-south.toml`'s own Coryton Line
+# material, not re-derived -- see that file's git history for the original
+# disclosure.
+#
+# Sourcing note: CDQ's CRS/TIPLOC is reused unchanged from
+# `tfw-valley-rhymney.toml`/`tfw-valley-merthyr.toml`/`tfw-valley-
+# rhondda.toml`, already cross-checked there. HLL, TGS, BCG, RHI, WHT and
+# COY were each independently confirmed from that station's own Wikipedia
+# infobox "Station code" field, AND cross-checked against a live,
+# verbatim-quoted railwaycodes.org.uk row (per the original file's own
+# disclosed sourcing pass, including a TIPLOC-refresh pass for TGS/WHT/COY
+# specifically after an initial WebFetch truncation failure -- see that
+# file's git history for the full disclosure). Only currently open,
+# passenger-served stations are listed; Tongwynlais (closed to passengers
+# 1931, buried under the A470) is not.
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+# Carried over unchanged from the pre-split `tfw-valley-lines-south.toml`:
+# tighter than this catalogue's default because this is a short-headway
+# urban Cardiff service where delays are proportionately more disruptive
+# than on an hourly regional line. Confirmed frequency (sourced from the
+# Coryton Line's own Wikipedia article): "two trains per hour in each
+# direction" Monday-Saturday daytime (2 tph), independently confirmed at
+# Ty Glas during the original sourcing pass.
+
+# --- Cardiff hub: Cardiff Queen Street, the origin for both this line and
+# `tfw-cardiff-bay-line.toml` -- a genuine shared platform, per each line's
+# own Wikipedia article (confirmed during the original sourcing pass). Not
+# shared with `tfw-city-line.toml` here specifically -- that line reaches
+# Cardiff Central (CDF), not Cardiff Queen Street. See
+# `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+
+# --- Coryton Line: Cardiff Queen Street to Coryton via Heath, ordered
+# south to north. A separate corridor from the City Line, both historically
+# built by the Cardiff Railway, meeting only at the Cardiff hub, not each
+# other. Exclusive to this branch.
+[[stations]]
+crs = "HLL"
+tiploc = "HEATHLL"
+role = "minor"
+segment = "tfw-coryton-line"
+# Heath Low Level: a separate station from `tfw-valley-rhymney.toml`'s
+# Heath High Level (HHL) on the Rhymney Line -- confirmed as distinct CRS/
+# TIPLOC pairs by both sources, an interchange point rather than a shared
+# platform, so no segment-sharing question arises between the two Heath
+# stations.
+
+[[stations]]
+crs = "TGS"
+tiploc = "TYGLAS"
+role = "minor"
+segment = "tfw-coryton-line"
+# Ty Glas.
+
+[[stations]]
+crs = "BCG"
+tiploc = "BCHGRV"
+role = "minor"
+segment = "tfw-coryton-line"
+# Birchgrove.
+
+[[stations]]
+crs = "RHI"
+tiploc = "RHIWBNA"
+role = "minor"
+segment = "tfw-coryton-line"
+# Rhiwbina.
+
+[[stations]]
+crs = "WHT"
+tiploc = "WHCH"
+role = "minor"
+segment = "tfw-coryton-line"
+# Whitchurch (Glamorgan) -- distinct from Whitchurch (Shropshire, WTC, on
+# `tfw-marches.toml`) and Whitchurch (Hampshire, WCH). railwaycodes.org.uk's
+# own location-name column reads "Whitchurch (Cardiff)" for this station, a
+# display-name variance only, with no bearing on the CRS/TIPLOC values.
+
+[[stations]]
+crs = "COY"
+tiploc = "CORYTON"
+role = "terminus"
+segment = "tfw-coryton-line"
+# Coryton: the line's northern terminus, confirmed via its own Wikipedia
+# article ("the terminus of the Coryton Line").

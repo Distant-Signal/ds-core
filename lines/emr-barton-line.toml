@@ -1,0 +1,166 @@
+id = "emr-barton-line"
+name = "Barton-on-Humber - Cleethorpes"
+mode = "national-rail"
+category = "regional"
+operators = ["EM"]  # East Midlands Railway (took over this route from
+# Northern in May 2021, per the sourcing below).
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): named
+# as a real coverage gap -- Barton-on-Humber (BAU, absent catalogue-wide at
+# the start of this task) and every intermediate station on this branded
+# "Barton Line" had no line file, despite Grimsby Town/Cleethorpes/Habrough
+# already appearing in `tpe-south.toml` via a different physical approach
+# (see the segment-sharing ruling below).
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Barton Line"
+# article, infobox + Services sections):
+#   1. Termini: Barton-on-Humber and Cleethorpes -- a genuinely distinct,
+#      branded local line, not merely a stub of another route.
+#   2. Track: single throughout except two short double-track stretches
+#      (New Holland-Ulceby, Habrough-Grimsby Town); no electrification.
+#      Line length 22 miles 72 chains.
+#   3. Full station list, in order (confirmed by the infobox's own ordered
+#      route section): Barton-on-Humber, Barrow Haven, New Holland,
+#      Goxhill, Thornton Abbey, Ulceby, Habrough, Stallingborough, Healing,
+#      Great Coates, Grimsby Town, Grimsby Docks, New Clee, Cleethorpes.
+#   4. Services: East Midlands Railway took over from Northern Trains in
+#      May 2021. "As at July 2023, services operate every two hours in each
+#      direction on weekdays. Sunday trains only run during the summer
+#      months (May to early September)." Rolling stock: Class 170
+#      Turbostar (replaced Class 156s in May 2023, which themselves replaced
+#      Class 153s in December 2021).
+#
+# CRS codes: HAB, GMB and CLE reused verbatim from `tpe-south.toml`
+# (already-verified facts; same physical stations, different physical
+# approach -- see the ruling below). Every other code (BAU, BAV, NHL, GOX,
+# TNA, ULC, SLL, HLI, GCT, GMD, NCE) independently confirmed live via this
+# app's own production station-lookup endpoint (ds.cursed.solutions/api/
+# stations?q=<name>, 2026-09-21), single unambiguous match for each,
+# cross-checked against the Wikipedia article's own station names. No
+# TIPLOC confirmed for any of these to the two-source standard, so `tiploc`
+# is omitted throughout.
+
+destination_crs_filter = ["BAU", "CLE"]
+sample_stations = ["BAU", "ULC", "GMB", "CLE"]
+# BAU and ULC are exclusive to this line (no other file's LDBWS sampling
+# would compete for them -- grep-checked); GMB and CLE are shared with
+# `tpe-south.toml`'s own sampling but included anyway since they're this
+# line's own real termini/major stops, matching this catalogue's general
+# precedent of not omitting a genuine terminus purely to dodge overlap.
+
+match_keywords = ["Barton Line", "Barton-on-Humber line"]
+# The line's own Wikipedia article title, plus a plausible Knowledgebase
+# prose rendering. Grep-checked against every other `lines/*.toml` file's
+# `match_keywords` before adding -- no collision.
+
+# Every-two-hours weekday service, seasonal Sundays only -- sparser than
+# even this catalogue's usual hourly "regional" branches (`northern-
+# esk-valley.toml`/`wmr-nuneaton-coventry.toml`), so thresholds are tuned
+# looser again, matching `scotrail-ayrshire.toml`'s identical treatment for
+# a comparably infrequent single-track rural branch.
+[severity_overrides]
+minor_delays_pct = 0.35
+reduced_service_pct = 0.40
+delay_threshold_minutes = 15
+
+# Barton-on-Humber to Cleethorpes, ordered west to east.
+[[stations]]
+crs = "BAU"
+role = "terminus"
+segment = "emr-barton-line"
+# Barton-on-Humber: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "BAV"
+role = "minor"
+segment = "emr-barton-line"
+# Barrow Haven.
+
+[[stations]]
+crs = "NHL"
+role = "minor"
+segment = "emr-barton-line"
+# New Holland.
+
+[[stations]]
+crs = "GOX"
+role = "minor"
+segment = "emr-barton-line"
+# Goxhill.
+
+[[stations]]
+crs = "TNA"
+role = "minor"
+segment = "emr-barton-line"
+# Thornton Abbey.
+
+[[stations]]
+crs = "ULC"
+role = "minor"
+segment = "emr-barton-line"
+# Ulceby.
+
+# --- Shared-approach ruling: Habrough, Grimsby Town and Cleethorpes are
+# ALSO `tpe-south.toml` stations, on that file's own single `tpe-south`
+# segment -- but that segment spans its entire Liverpool-Manchester-
+# Sheffield-Doncaster-Scunthorpe-Barnetby-Habrough-Grimsby-Cleethorpes
+# route, not just this three-station overlap, the same coarse-granularity
+# mismatch this catalogue documents elsewhere (e.g. `emr-regional.toml`'s
+# Ruling 1, `emr-lincoln-peterborough.toml`'s Gainsborough Lea Road/Saxilby
+# ruling). TransPennine's own route reaches Habrough from the west via
+# Barnetby; this line reaches it from the north via Ulceby -- genuine
+# physical convergence at Habrough itself onward to Grimsby Town/
+# Cleethorpes is plausible but not independently confirmed to this task's
+# two-source standard within its research budget, so this file mints its
+# own exclusive `emr-barton-line` segment name throughout rather than
+# reusing `tpe-south`. Cost if wrong: bounded, as with every other instance
+# of this pattern in this catalogue -- an incident at any of these three
+# stations still matches `tpe-south.toml` independently via StationHit
+# regardless. ---
+[[stations]]
+crs = "HAB"
+role = "junction"
+segment = "emr-barton-line"
+# Habrough: also a `tpe-south.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "SLL"
+role = "minor"
+segment = "emr-barton-line"
+# Stallingborough.
+
+[[stations]]
+crs = "HLI"
+role = "minor"
+segment = "emr-barton-line"
+# Healing.
+
+[[stations]]
+crs = "GCT"
+role = "minor"
+segment = "emr-barton-line"
+# Great Coates.
+
+[[stations]]
+crs = "GMB"
+role = "major"
+segment = "emr-barton-line"
+# Grimsby Town: also a `tpe-south.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "GMD"
+role = "minor"
+segment = "emr-barton-line"
+# Grimsby Docks.
+
+[[stations]]
+crs = "NCE"
+role = "minor"
+segment = "emr-barton-line"
+# New Clee.
+
+[[stations]]
+crs = "CLE"
+role = "terminus"
+segment = "emr-barton-line"
+# Cleethorpes: also a `tpe-south.toml` terminus -- see the ruling above.

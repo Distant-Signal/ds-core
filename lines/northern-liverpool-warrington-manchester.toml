@@ -1,0 +1,264 @@
+id = "northern-liverpool-warrington-manchester"
+name = "Liverpool - Manchester via Warrington Central"
+mode = "national-rail"
+category = "regional"
+# Matches this catalogue's existing precedent for Northern's other
+# Manchester/Merseyside suburban branches (`northern-manchester-southport.toml`,
+# `northern-ormskirk.toml`, `northern-wigan-kirkby.toml`), none of which use
+# "commuter" despite comparable or higher frequency -- "regional" is this
+# batch's settled category for a Northern-branded local/stopping corridor.
+operators = ["NT"]
+
+# Part C of the North West England real-world-sanity review (2026-09-21):
+# Northern's own CLC (Cheshire Lines Committee) "southern route" stopping
+# service between Liverpool and Manchester, distinct from the already-
+# corrected `xc-manchester.toml` (CrossCountry, via Stockport/Macclesfield/
+# Stoke, not Liverpool at all) and `wcml-manchester.toml`/`wcml-liverpool.toml`
+# (Avanti's own Liverpool-Manchester-adjacent WCML services). Also distinct
+# from the parallel Liverpool-Manchester "northern route" via Newton-le-
+# Willows/Manchester Victoria used by TPE (`tpe-north.toml`) and EMR --
+# this file's own route runs via Warrington CENTRAL (the ex-CLC line through
+# Widnes and Irlam), a genuinely different physical corridor.
+#
+# Route and frequency, live-verified 2026-09-21 via two independent sources
+# each:
+#   - Wikipedia's "Liverpool-Manchester lines" article: "Northern [operates]
+#     two trains per hour on the southern route between Liverpool Lime
+#     Street and Warrington Central, with one train per hour extending to
+#     Manchester Oxford Road" (onward to Manchester Piccadilly per the same
+#     article's own station list).
+#   - Cross-checked station-by-station against each intermediate station's
+#     own Wikipedia "Services" section: Warrington West's confirms "an
+#     hourly stopping service between Warrington Central and Liverpool Lime
+#     Street" and its own position "between Sankey for Penketh and
+#     Warrington Central"; Padgate's confirms "an hourly service in each
+#     direction to Manchester Oxford Road and to Liverpool Lime Street" and
+#     its own position between Birchwood and Warrington Central; Trafford
+#     Park's confirms Northern services "towards Humphrey Park and Liverpool
+#     Lime Street to the west and towards Deansgate and Manchester Oxford
+#     Road in the east", off-peak every two hours (i.e. one of the two
+#     Liverpool-Warrington Central workings extends this far, matching the
+#     "1 tph extending to Manchester Oxford Road" figure above).
+#
+# Half of this line's own trains (the other, shorter working) terminate at
+# Warrington Central rather than continuing to Manchester -- included in
+# `destination_crs_filter` below rather than treated as a second file, same
+# "genuine partial-service pattern, not a physically distinct route"
+# convention this catalogue already uses elsewhere (e.g. `grand-central.toml`'s
+# Seaham note).
+#
+# Sankey for Penketh receives a reduced/limited service per the Liverpool-
+# Manchester lines article ("except Sankey for Penketh which receives a
+# limited service") -- still a genuine, currently-served, currently-open
+# station, so included below rather than excluded (per this catalogue's
+# "don't disqualify a low-frequency station" convention, e.g.
+# `tpe-borders.toml`'s Cramlington/East Linton).
+#
+# Station overlap, no shared segment name: LIV is also on `tpe-north.toml`,
+# `tpe-north-hull.toml`, `wcml-liverpool.toml` and several Merseyrail files
+# (different Liverpool-side approaches/platforms in each case). LPY
+# (Liverpool South Parkway) is also on `wcml-liverpool.toml` and Merseyrail
+# files. MCO and MAN are also on numerous TPE/CrossCountry/Avanti/Northern
+# files (`tpe-north-teesside.toml`, `tpe-north-hull.toml`,
+# `tpe-north-wakefield.toml`, `xc-manchester.toml`, `wcml-manchester.toml`).
+# HNX (Hunts Cross, added review2) is also a `merseyrail-northern.toml`
+# station (that file's own City Line service calling here too) -- a
+# legitimate overlap, not a new station to the catalogue. All station-
+# overlap only, matching this whole catalogue's `xc-manchester.toml`
+# precedent ("station overlap is fine, segment-sharing is a deliberate
+# choice"). No existing file in this catalogue currently claims Edge Hill,
+# Mossley Hill, West Allerton, Halewood, Hough Green, Widnes, Sankey for
+# Penketh, Warrington West, Warrington Central, Padgate, Birchwood,
+# Glazebrook, Irlam, Flixton, Urmston, Humphrey Park, Trafford Park or
+# Deansgate (grepped before starting), so this file's own
+# `northern-clc-warrington` segment is exclusive throughout, aside from the
+# HNX station overlap noted above.
+#
+# CRS codes: every code below cross-checked against
+# `https://ds.cursed.solutions/api/stations`, 2026-09-21; no discrepancies.
+# TIPLOCs omitted throughout (none confirmed to a second source this
+# session).
+sample_stations = ["LIV", "WAC", "IRL", "MCO", "MAN"]
+destination_crs_filter = ["WAC", "MCO", "MAN"]
+# Warrington Central is this line's own genuine partial-service terminus
+# (half of all workings); Manchester Oxford Road and Manchester Piccadilly
+# are both listed as the full-length workings' real destination since the
+# sourcing above doesn't establish to the two-source bar whether every
+# Manchester-bound working reaches Piccadilly or some terminate at Oxford
+# Road -- both included rather than guessed away.
+
+# No match_keywords: "Liverpool" and "Manchester" alone are both far too
+# generic (would false-positive against half this catalogue's North West
+# England files), and this route has no confirmed distinct Knowledgebase
+# brand name of its own (unlike, say, the East Lancashire line's own named
+# article). Station and operator evidence carries this file instead.
+
+# Frequent, largely double-track suburban corridor -- default thresholds,
+# matching `northern-manchester-southport.toml`'s own reasoning for a
+# comparable-frequency Northern local line (no `[severity_overrides]`
+# needed).
+
+# Ordered Liverpool Lime Street -> Edge Hill -> Mossley Hill -> West
+# Allerton -> Liverpool South Parkway -> Hunts Cross -> Halewood -> Hough
+# Green -> Widnes -> Sankey for Penketh -> Warrington West -> Warrington
+# Central -> Padgate -> Birchwood -> Glazebrook -> Irlam -> Flixton ->
+# Urmston -> Humphrey Park -> Trafford Park -> Deansgate -> Manchester
+# Oxford Road -> Manchester Piccadilly, per the confirmed route above (Edge
+# Hill/Mossley Hill/West Allerton/Hunts Cross/Halewood added review2,
+# 2026-09-21, each cross-checked via its own Wikipedia succession box and
+# CRS-verified live against https://ds.cursed.solutions/api/stations).
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "northern-clc-warrington"
+
+[[stations]]
+crs = "EDG"
+role = "minor"
+segment = "northern-clc-warrington"
+# Edge Hill -- REVIEW2 FIX (2026-09-21): this file previously jumped
+# straight from Liverpool Lime Street to Liverpool South Parkway, missing
+# several genuinely Northern-served stations on the Liverpool end. Fresh
+# Wikipedia research (Mossley Hill's own succession box: "Preceding
+# Station: Edge Hill ... on the Liverpool to Manchester Line") confirms
+# Edge Hill is the first stop out of Lime Street on this corridor.
+
+[[stations]]
+crs = "MSH"
+role = "minor"
+segment = "northern-clc-warrington"
+# Mossley Hill -- per its own succession box, between Edge Hill and West
+# Allerton on the Liverpool to Manchester Line; also confirms Northern
+# stopping services here "between Liverpool Lime Street and Warrington
+# Central", some continuing to Manchester Oxford Road, matching this
+# file's own service pattern.
+
+[[stations]]
+crs = "WSA"
+role = "minor"
+segment = "northern-clc-warrington"
+# West Allerton -- per its own succession box, between Mossley Hill and
+# Liverpool South Parkway on the Liverpool to Manchester Line (south).
+
+[[stations]]
+crs = "LPY"
+role = "major"
+segment = "northern-clc-warrington"
+# Liverpool South Parkway.
+
+[[stations]]
+crs = "HNX"
+role = "minor"
+segment = "northern-clc-warrington"
+# Hunts Cross -- per its own succession box, between Liverpool South
+# Parkway and Halewood on the City Line route towards Warrington Central.
+# Already a `merseyrail-northern.toml` station (a different, Merseyrail
+# City Line service calling here too) -- a legitimate station overlap, not
+# a new station to the catalogue; station-overlap only, no segment shared,
+# matching this catalogue's usual convention.
+
+[[stations]]
+crs = "HED"
+role = "minor"
+segment = "northern-clc-warrington"
+# Halewood -- per Hunts Cross's own succession box, the next station
+# continuing towards Hough Green/Warrington.
+
+[[stations]]
+crs = "HGN"
+role = "minor"
+segment = "northern-clc-warrington"
+# Hough Green.
+
+[[stations]]
+crs = "WID"
+role = "major"
+segment = "northern-clc-warrington"
+# Widnes.
+
+[[stations]]
+crs = "SNK"
+role = "minor"
+segment = "northern-clc-warrington"
+# Sankey for Penketh -- limited/reduced service; see the sourcing note
+# above.
+
+[[stations]]
+crs = "WAW"
+role = "minor"
+segment = "northern-clc-warrington"
+# Warrington West -- opened 2019, between Sankey for Penketh and Warrington
+# Central per its own Wikipedia article.
+
+[[stations]]
+crs = "WAC"
+role = "major"
+segment = "northern-clc-warrington"
+# Warrington Central -- this line's own genuine partial-service terminus
+# for half of its trains; see the sourcing note above.
+
+[[stations]]
+crs = "PDG"
+role = "minor"
+segment = "northern-clc-warrington"
+# Padgate.
+
+[[stations]]
+crs = "BWD"
+role = "minor"
+segment = "northern-clc-warrington"
+# Birchwood.
+
+[[stations]]
+crs = "GLZ"
+role = "minor"
+segment = "northern-clc-warrington"
+# Glazebrook.
+
+[[stations]]
+crs = "IRL"
+role = "minor"
+segment = "northern-clc-warrington"
+# Irlam.
+
+[[stations]]
+crs = "FLI"
+role = "minor"
+segment = "northern-clc-warrington"
+# Flixton.
+
+[[stations]]
+crs = "URM"
+role = "minor"
+segment = "northern-clc-warrington"
+# Urmston.
+
+[[stations]]
+crs = "HUP"
+role = "minor"
+segment = "northern-clc-warrington"
+# Humphrey Park.
+
+[[stations]]
+crs = "TRA"
+role = "minor"
+segment = "northern-clc-warrington"
+# Trafford Park.
+
+[[stations]]
+crs = "DGT"
+role = "minor"
+segment = "northern-clc-warrington"
+# Deansgate.
+
+[[stations]]
+crs = "MCO"
+role = "minor"
+segment = "northern-clc-warrington"
+# Manchester Oxford Road -- some workings' own genuine terminus; see the
+# `destination_crs_filter` note above.
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-clc-warrington"

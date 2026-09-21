@@ -4,9 +4,41 @@ mode = "national-rail"
 category = "regional"
 operators = ["AW"]
 
-destination_crs_filter = ["LLJ", "BFF"]
-sample_stations = ["LLJ", "BYC", "BFF"]
-match_keywords = ["Conwy Valley Line"]
+destination_crs_filter = ["LLD", "BFF"]
+sample_stations = ["LLD", "LLJ", "BYC", "BFF"]
+match_keywords = ["Conwy Valley Line", "Llandudno branch line"]
+
+# === CORRECTION (real-world-sanity review, 2026-09-21): real Llandudno
+# terminus added ===
+#
+# This file previously stopped one station short of its real terminus.
+# Independently re-verified via Wikipedia's "Conwy Valley line" article
+# (its own infobox lists `start = Llandudno` and `end = Blaenau
+# Ffestiniog`, and its opening sentence: "It runs from Llandudno via
+# Llandudno Junction ... to Blaenau Ffestiniog"), corroborating the
+# "Llandudno branch line" article's own framing already cited below (the
+# branch is "at the northern extremity of the train service between
+# Blaenau Ffestiniog and Llandudno, marketed as the Conwy Valley line").
+# The real, single branded TfW service runs Llandudno-Llandudno
+# Junction-Blaenau Ffestiniog end to end, not just Llandudno
+# Junction-Blaenau Ffestiniog.
+#
+# Deganwy (DGY) and Llandudno (LLD) are added below, both reused verbatim
+# from the now-deleted `lines/tfw-llandudno-branch.toml` -- that file's own
+# station data (a short branch it modelled in isolation, Llandudno
+# Junction-Deganwy-Llandudno) turned out to be entirely redundant with this
+# file's own real extent, not a genuinely separate line, so it has been
+# deleted rather than kept alongside this one (see the git history for its
+# removal). CRS/TIPLOC sourcing for DGY and LLD is carried over unchanged
+# from that file: cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. LLJ's own CRS/TIPLOC and
+# its `tfw-conwy-valley-llandudno-junction` segment tag are left unchanged
+# below (that segment name is no longer genuinely shared with any other
+# file now that `tfw-llandudno-branch.toml` is gone, but it is left as-is
+# rather than folded back into the plain `tfw-conwy-valley` name, since
+# touching an untouched, correctly-tagged station isn't this correction's
+# job -- a future editor is free to simplify it once satisfied nothing else
+# will ever need to reuse it).
 
 # Sourcing note (per the catalogue's "cross-checked against a second source"
 # curation standard, matching the disclosure format established for
@@ -57,8 +89,11 @@ minor_delays_pct = 0.30
 reduced_service_pct = 0.35
 delay_threshold_minutes = 10
 
-# Llandudno Junction to Blaenau Ffestiniog, ordered north to south (the only
+# Llandudno to Blaenau Ffestiniog, ordered north-west to south (the only
 # possible order -- this is a single-track branch with no internal split).
+# Llandudno and Deganwy were added by the 2026-09-21 real-world-sanity
+# review's correction (see the top-of-file note); everything from Llandudno
+# Junction southwards is unchanged from this file's original authoring.
 #
 # Llandudno Junction is a through station on the North Wales Coast Line
 # (Chester-Holyhead) and also the junction for the separate Llandudno
@@ -86,6 +121,22 @@ delay_threshold_minutes = 10
 # (matching `northern-furness.toml`'s treatment of its own through-junction
 # stations, LAN and CNF, which are tagged with that file's one whole-line
 # segment name rather than a separate trunk/exclusive split).
+[[stations]]
+crs = "LLD"
+role = "terminus"
+segment = "tfw-conwy-valley"
+# Llandudno: this line's real northern terminus, confirmed via the Conwy
+# Valley line's own Wikipedia infobox (`start = Llandudno`). Reused from
+# the now-deleted `tfw-llandudno-branch.toml`.
+
+[[stations]]
+crs = "DGY"
+role = "minor"
+segment = "tfw-conwy-valley"
+# Deganwy: historically also a small harbour, per the Llandudno branch
+# line's own Wikipedia article. Reused from the now-deleted
+# `tfw-llandudno-branch.toml`.
+
 [[stations]]
 crs = "LLJ"
 tiploc = "LANDUDJ"

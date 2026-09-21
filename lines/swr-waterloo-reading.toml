@@ -1,0 +1,366 @@
+id = "swr-waterloo-reading"
+name = "Waterloo to Reading Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# SWR's second-biggest suburban corridor out of Waterloo had zero coverage
+# in `lines/` before this file: Longcross, Sunningdale, Ascot, Martins
+# Heron, Bracknell and the Wokingham-Reading approach were absent from every
+# line definition, so a user at any of them saw "no disruptions"
+# indistinguishable from genuine good service. The Twickenham-Staines-Egham-
+# Virginia Water stretch this line also runs over was already modelled (by
+# swr-windsor-lines.toml and swr-hounslow-loop.toml/swr-chertsey-loop.toml),
+# closing part of the gap by accident, but nothing continued past Virginia
+# Water towards Ascot/Reading until now.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations, in order Waterloo - Reading: Wikipedia "Waterloo to
+# Reading line" (infobox: type "Commuter rail", operator "South Western
+# Railway", "Third rail, 750 V DC" electrification throughout, "two trains
+# per hour between Waterloo and Reading, every day of the week") and its own
+# route diagram, which lists the full sequence London Waterloo - Vauxhall -
+# Queenstown Road - Clapham Junction - Wandsworth Town - Putney - Barnes -
+# Mortlake - North Sheen - Richmond - St Margarets - Twickenham - Whitton -
+# Feltham - Ashford - Staines - Egham - Virginia Water - Longcross -
+# Sunningdale - Ascot - Martins Heron - Bracknell - Wokingham - Winnersh -
+# Winnersh Triangle - Earley - Reading. Cross-checked against Longcross
+# railway station's own article ("2 tph to London Waterloo via Richmond",
+# "2 tph to Reading") and Ascot railway station (Berkshire)'s own article,
+# which independently confirms Sunningdale/Martins Heron as Ascot's
+# immediate neighbours on this line and flags the separate
+# "Ascot-Ash Vale line" branching off at Ascot (see swr-ascot-aldershot.toml,
+# this same batch).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Longcross=LNG, Sunningdale=SNG, Ascot (Berks)=ACT, Martins Heron=MAO,
+# Bracknell=BCE. The remaining stations are reused verbatim from existing
+# files - see SEGMENTS below for exactly which.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Longcross, Sunningdale, Ascot, Martins Heron or Bracknell.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   [ -- swr-trunk-waterloo + swr-windsor-lines, reused verbatim from
+#         swr-windsor-lines.toml, WAT through SNS -- ]
+#   ... - SNS | EGH - VIR | LNG - SNG - ACT | MAO - BCE | WKM - WNS - WTI - EAR - RDG
+#            (shared,  junction  (this line's own          junction  [-- north-downs-
+#          swr-staines-       exclusive branch --]                  reading-guildford,
+#          virginia-water)                                          reused verbatim --]
+#
+# `swr-trunk-waterloo` (WAT/VXH/CLJ) and `swr-windsor-lines` (QRB/WNT/PUT/
+# BNS/MTL/NSH/RMD/SMG/TWI/WTN/FEL/AFS/SNS) are reused verbatim, rows copied
+# directly, from swr-windsor-lines.toml - that file's own Vauxhall/Clapham
+# Junction-side approach via Richmond is the real one this line's own trains
+# use too (this line does NOT use the via-Wimbledon leg, same as
+# swr-windsor-lines.toml itself). Both segment names are already
+# established, multi-file shared trunks (see the real-world-sanity bug fix
+# earlier in this batch, which corrected swr-hounslow-loop.toml's own
+# WTN/FEL/AFS/SNS rows to match swr-windsor-lines.toml's segment name for
+# this exact reason).
+#
+# `swr-staines-virginia-water`: EGH and VIR are genuinely shared with
+# swr-hounslow-loop.toml, whose own trains (running through to Chertsey/
+# Weybridge) genuinely traverse this exact stretch before diverging at
+# Virginia Water - the same real shared physical double track this file's
+# own trains use to reach Ascot/Reading. REVIEW2 FIX (2026-09-21): this
+# entry originally reused swr-hounslow-loop.toml's own broad
+# `swr-hounslow-loop` segment name verbatim (the reuse that file's own
+# header had explicitly anticipated), but that name also covers that
+# file's own unrelated Barnes Bridge-through-Hounslow loop-shaped stations
+# - reusing it here would have falsely promoted those to shared scope with
+# this file too. Carved a new, narrower `swr-staines-virginia-water` name
+# for just EGH/VIR instead, applied consistently across this file,
+# swr-hounslow-loop.toml and swr-chertsey-loop.toml - see the EGH entry's
+# own comment below for the full write-up.
+#
+# `swr-waterloo-reading-branch` (this file's own new, exclusive segment):
+# Virginia Water is a real junction (Chertsey branch one way, this line's
+# own Ascot-ward continuation the other), so per the shared-trunk rule of
+# thumb it stays on the shared `swr-staines-virginia-water` segment and
+# this line's own exclusive coverage starts at the next station, Longcross.
+# Ascot (ACT) is ALSO a real junction - the separate Ascot-Ash Vale line (Wikipedia:
+# "Ascot-Ash Vale line") diverges there, southbound towards Bagshot/
+# Camberley/Frimley/Ash Vale/Aldershot - modelled in swr-ascot-aldershot.toml
+# (this same batch), which reuses this exact segment name verbatim for its
+# own Ascot entry, making Ascot a genuine three-file convergence point
+# (this line, swr-ascot-aldershot.toml, and - via Ash Vale/Aldershot further
+# south - swr-alton.toml). This line's own segment therefore continues
+# uninterrupted through Ascot to Martins Heron and Bracknell, where the
+# genuinely exclusive stretch ends.
+#
+# `north-downs-reading-guildford`: reused verbatim from swr-north-downs.toml.
+# Per that Wikipedia article's own route diagram, "at Wokingham, the line
+# joins the west end of the North Downs Line leading into Reading" - i.e.
+# Wokingham-Winnersh-Winnersh Triangle-Earley-Reading is genuinely the same
+# physical track swr-north-downs.toml already models (Reading-Guildford
+# direction) under this exact segment name, with identical CRS codes and
+# roles copied verbatim below. Wokingham (WKM) is the junction where this
+# line's own exclusive `swr-waterloo-reading-branch` segment ends and the
+# shared trunk begins - matching how swr-north-downs.toml's own WKM entry
+# is already on this shared name, not a segment of its own.
+
+match_keywords = ["Waterloo to Reading line"]
+# The line's own Wikipedia article title. Grepped clean against every other
+# file's match_keywords before adding - no collision with
+# gwr-thames-valley.toml's Reading-area keywords or
+# gwr-west-of-england.toml's "Reading to Taunton line"/"Berks and Hants
+# line" (neither is a substring match or vice versa).
+
+sample_stations = ["SNG", "MAO", "BCE"]
+# Sunningdale, Martins Heron and Bracknell - all on this line's own
+# exclusive `swr-waterloo-reading-branch` segment, deliberately excluding
+# Longcross/Ascot (Longcross sits right at the segment's own start, giving a
+# less representative read; Ascot is a genuine junction with
+# swr-ascot-aldershot.toml, so sampling there would mix two lines' own
+# departures - the same reasoning swr-kingston-loop.toml's own
+# sample_stations note gives for avoiding shared-trunk stations).
+
+# No `destination_crs_filter`: per the sourcing above, the real advertised
+# pattern is a clean Waterloo <-> Reading working (2 tph each way, no
+# documented short-working variant found in this task's research budget).
+# All three sample stations are exclusive to this line specifically (not
+# shared with swr-ascot-aldershot.toml or swr-north-downs.toml), so, per
+# swr-chessington.toml's/swr-chertsey-loop.toml's own precedent, a filter
+# would only add risk (an unverified whitelist silently dropping a real
+# short working) for no disambiguation benefit - the mandatory `SW` operator
+# filter already scopes the sample correctly.
+
+# Wikipedia's own infobox gives this line's "Type" as "Commuter rail", which
+# is why `category = "commuter"` above (a sourced fact, not a frequency
+# guess). No severity_overrides, though: unlike swr-kingston-loop.toml's/
+# swr-hounslow-loop.toml's own 4 tph inner-London core (which the tighter
+# commuter override is calibrated for), this line's own sourced frequency is
+# 2 tph throughout, the same figure swr-windsor-lines.toml already judged
+# not frequent enough to justify a tighter-than-default threshold - left at
+# the catalogue defaults for the same reason, rather than guessing a value
+# between the two precedents.
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Ascot-Ash Vale line (Bagshot, Camberley, Frimley, Ash Vale onward to
+#   Aldershot): swr-ascot-aldershot.toml, this same batch.
+# - Everything swr-hounslow-loop.toml's/swr-windsor-lines.toml's own scope
+#   boundaries already document for the shared Twickenham-Virginia Water
+#   stretch (the Hounslow Loop's own loop-shaped diversion, the Chertsey
+#   branch, Windsor & Eton Riverside) - unaffected here, this file simply
+#   reuses the relevant rows.
+# - The North Downs Line proper west of Wokingham (Crowthorne, Sandhurst,
+#   Blackwater, Farnborough North, North Camp, Ash, Wanborough, Guildford,
+#   and onward to Redhill): swr-north-downs.toml, an earlier batch.
+
+# ============================================================================
+# STATIONS - Waterloo to Reading
+# ============================================================================
+
+# --- Shared SWR trunk out of Waterloo, via Vauxhall/Richmond (NOT the
+# via-Wimbledon leg). Reused verbatim from swr-windsor-lines.toml. ---
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "QRB"
+role = "minor"
+segment = "swr-windsor-lines"
+# Queenstown Road (Battersea). Row copied from swr-windsor-lines.toml,
+# ordered before Clapham Junction to match the real chainage from Waterloo.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WNT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Wandsworth Town.
+
+[[stations]]
+crs = "PUT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Putney.
+
+[[stations]]
+crs = "BNS"
+role = "junction"
+segment = "swr-windsor-lines"
+# Barnes.
+
+[[stations]]
+crs = "MTL"
+role = "minor"
+segment = "swr-windsor-lines"
+# Mortlake.
+
+[[stations]]
+crs = "NSH"
+role = "minor"
+segment = "swr-windsor-lines"
+# North Sheen.
+
+[[stations]]
+crs = "RMD"
+role = "major"
+segment = "swr-windsor-lines"
+# Richmond.
+
+[[stations]]
+crs = "SMG"
+role = "minor"
+segment = "swr-windsor-lines"
+# St Margarets.
+
+[[stations]]
+crs = "TWI"
+role = "junction"
+segment = "swr-windsor-lines"
+# Twickenham.
+
+[[stations]]
+crs = "WTN"
+role = "minor"
+segment = "swr-windsor-lines"
+# Whitton (London).
+
+[[stations]]
+crs = "FEL"
+role = "major"
+segment = "swr-windsor-lines"
+# Feltham.
+
+[[stations]]
+crs = "AFS"
+role = "minor"
+segment = "swr-windsor-lines"
+# Ashford (Surrey).
+
+[[stations]]
+crs = "SNS"
+role = "junction"
+segment = "swr-windsor-lines"
+# Staines. Junction for swr-windsor-lines.toml's own exclusive continuation
+# to Windsor & Eton Riverside via Wraysbury - this line continues straight
+# on towards Egham instead.
+
+# --- Egham and Virginia Water (see SEGMENTS above) ---
+[[stations]]
+crs = "EGH"
+role = "minor"
+segment = "swr-staines-virginia-water"
+# Egham. REVIEW2 FIX (2026-09-21): this entry originally reused
+# swr-hounslow-loop.toml's own broad `swr-hounslow-loop` segment name
+# verbatim (that file's own header comment had explicitly anticipated this
+# exact reuse) - but that name also covers swr-hounslow-loop.toml's own
+# Barnes Bridge/Chiswick/Kew Bridge/Brentford/Syon Lane/Isleworth/Hounslow
+# loop-shaped stations, which this line's own trains never call at (they
+# reach Egham via Twickenham/Feltham/Staines, this file's own
+# swr-windsor-lines stretch above, not via the Hounslow loop at all).
+# Reusing `swr-hounslow-loop` here would have falsely promoted those seven
+# unrelated stations to shared scope with this file too - the same
+# whole-route-segment over-sharing bug fixed elsewhere in this review.
+# Fixed by carving a new, narrower `swr-staines-virginia-water` segment
+# name for just EGH/VIR, applied consistently across this file,
+# swr-hounslow-loop.toml and swr-chertsey-loop.toml (all three of whose
+# trains genuinely share this exact stretch) - see
+# swr-hounslow-loop.toml's own matching EGH entry comment.
+
+[[stations]]
+crs = "VIR"
+role = "junction"
+segment = "swr-staines-virginia-water"
+# Virginia Water. Junction for the Chertsey branch (swr-chertsey-loop.toml,
+# via the shared `swr-staines-virginia-water` segment) - this line's own
+# exclusive coverage starts at the next station, Longcross.
+
+# --- This line's own exclusive segment, Longcross to Bracknell. Ascot is a
+# genuine junction with swr-ascot-aldershot.toml (see SEGMENTS above) but
+# stays on this segment name, matching the shared-trunk rule of thumb. ---
+[[stations]]
+crs = "LNG"
+role = "minor"
+segment = "swr-waterloo-reading-branch"
+# Longcross.
+
+[[stations]]
+crs = "SNG"
+role = "minor"
+segment = "swr-waterloo-reading-branch"
+# Sunningdale.
+
+[[stations]]
+crs = "ACT"
+role = "junction"
+segment = "swr-waterloo-reading-branch"
+# Ascot (Berks). Junction for the Ascot-Ash Vale line
+# (swr-ascot-aldershot.toml, this same batch) - see SEGMENTS above.
+
+[[stations]]
+crs = "MAO"
+role = "minor"
+segment = "swr-waterloo-reading-branch"
+# Martins Heron.
+
+[[stations]]
+crs = "BCE"
+role = "major"
+segment = "swr-waterloo-reading-branch"
+# Bracknell. Previously (incorrectly) listed in swr-alton.toml, per that
+# file's own DATA-AUDIT FIX note - confirmed here as this line's own real
+# station instead.
+
+# --- Wokingham to Reading, reused verbatim from swr-north-downs.toml (see
+# SEGMENTS above). ---
+[[stations]]
+crs = "WKM"
+role = "major"
+segment = "north-downs-reading-guildford"
+# Wokingham. The junction where this line's own exclusive segment ends and
+# the shared Reading approach begins - role "major" kept identical to
+# swr-north-downs.toml's own entry, even though it is also a real junction
+# here, to match that file's own row exactly (per the verbatim-reuse
+# convention swr-windsor-lines.toml/swr-chertsey-loop.toml already use for
+# copied rows).
+
+[[stations]]
+crs = "WNS"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Winnersh.
+
+[[stations]]
+crs = "WTI"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Winnersh Triangle.
+
+[[stations]]
+crs = "EAR"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Earley.
+
+[[stations]]
+crs = "RDG"
+role = "terminus"
+segment = "north-downs-reading-guildford"
+# Reading. Station overlap with several other files (gwr-main-line,
+# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line,
+# swr-north-downs.toml among them) - this line's own approach shares only
+# swr-north-downs.toml's own segment (the genuine Wokingham-side approach),
+# matching that file's own precedent for this station.

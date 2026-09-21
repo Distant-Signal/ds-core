@@ -1,5 +1,5 @@
 id = "grand-central-bradford"
-name = "Grand Central Bradford Line"
+name = "Grand Central: West Riding (Bradford)"
 mode = "national-rail"
 category = "regional"
 operators = ["GC"]

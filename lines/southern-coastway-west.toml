@@ -1,5 +1,5 @@
 id = "southern-coastway-west"
-name = "Coastway West Line"
+name = "West Coastway Line"
 mode = "national-rail"
 category = "regional"
 operators = [
@@ -56,14 +56,17 @@ match_keywords = ["Coastway West", "West Coastway"]
 # at further - a real coverage gap (Southampton via Fareham/Cosham/
 # Portsmouth), noted here rather than silently absorbed by this file.
 #
-# The Littlehampton branch (a short spur off Ford) and the Arun Valley Line
-# (Ford/Arundel Junction north toward Arundel/Pulborough/Horsham, not part
-# of this catalogue) are also left out for the same reason: per Ford's own
-# Wikipedia article, the Brighton-Portsmouth through service mostly runs
-# via the direct Angmering-Ford-Barnham alignment ("off-peak... 3 tph to
-# Brighton, 1 of these runs via Littlehampton" - i.e. two-thirds of the
-# direct service bypasses the Littlehampton loop). Neither Littlehampton
-# nor Arundel is listed as a station below.
+# The Arun Valley Line (Ford/Arundel Junction north toward Arundel/
+# Pulborough/Horsham) remains out of scope of this file (it's covered by
+# southern-arun-valley.toml instead). Arundel itself is not listed below.
+#
+# UPDATE (review2-se-southern): the Littlehampton loop and the Bognor Regis
+# branch are REAL gaps, not deliberate scope cuts - see the LITTLEHAMPTON
+# LOOP AND BOGNOR REGIS BRANCH section further down for the fix and its
+# sourcing. Both Bognor Regis (BOG) and Littlehampton (LIT) were completely
+# absent from every file in this catalogue before this fix, despite being
+# real, current London-service termini branded under this line/Arun Valley
+# on Southern's own network map.
 #
 # ============================================================================
 # STATION-OVERLAP AT BRIGHTON - southern-brighton-main-line.toml (Task 5.6)
@@ -223,25 +226,95 @@ segment = "coastway-west-brighton"
 
 [[stations]]
 crs = "ANG"
-role = "minor"
+role = "junction"
 segment = "coastway-west-brighton"
-# Angmering.
+# Angmering. Junction per the shared-trunk rule of thumb: the eastern end
+# of the Littlehampton loop (see LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH
+# below) rejoins the direct Brighton-Portsmouth alignment here.
+
+# ============================================================================
+# LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH (review2-se-southern) - real gap
+# ============================================================================
+# Bognor Regis (BOG) and Littlehampton (LIT) were completely absent from
+# every file in this catalogue before this fix, despite being real, current
+# London-service termini branded under Arun Valley/West Coastway on
+# Southern's own network map - see the ROUTE SCOPE UPDATE above.
+#
+# Independently re-verified (fresh research): Littlehampton's own Wikipedia
+# article describes it as "a terminus at the end of a short branch off the
+# West Coastway line" sitting on a triangular junction arrangement built in
+# the 1880s (Ford Junction to the west, Littlehampton Junction to the south,
+# Arundel Junction to the east) "allowing through running from the lines
+# from Horsham and Brighton" - i.e. this is a genuine loop, not a simple
+# dead-end spur: services can run Angmering - Littlehampton - Ford (or the
+# reverse) as well as calling at Littlehampton and reversing.
+# southern-coastway-west.toml's own pre-fix FOD comment already confirmed
+# roughly a third of off-peak Brighton-Portsmouth services detour via this
+# loop rather than running Angmering-Ford direct. None of the three named
+# junctions has its own CRS code/passenger stop, so none is added as a
+# `[[stations]]` entry - only Littlehampton itself.
+#
+# Bognor Regis's own Wikipedia article confirms it as a Southern-managed
+# West Coastway line terminus, branch off Barnham, with "2 tph to London
+# Victoria via Horsham" off-peak and an additional peak train "to London
+# Bridge via Littlehampton and Horsham" - genuinely London-terminating
+# commuter services, not just a local shuttle. Per Wikipedia's own "West
+# Coastway line" article (route-map section), the Bognor Regis branch is
+# "3.5 miles" off Barnham Junction with Bognor Regis itself as the only
+# other stop - no intermediate station.
+#
+# CRS codes re-verified live against https://ds.cursed.solutions/api/
+# stations: LIT (Littlehampton), BOG (Bognor Regis) - both unambiguous,
+# single results, and confirmed absent from every other `lines/*.toml` file
+# (grepped catalogue-wide before drafting).
+#
+# SEGMENTS: two new exclusive segments, this file's own names (not reused
+# from any sibling file) - `coastway-west-littlehampton` (hanging off both
+# the ANG and FOD junctions, since it's a genuine loop with two real
+# rejoin points, not a single dead-end branch) and
+# `coastway-west-bognor-regis` (hanging off the BAA junction, a simple
+# spur). Neither branch's real London-terminating service (Victoria/London
+# Bridge via Horsham, per Bognor Regis's own sourcing above) runs over any
+# track this file's own `coastway-west-brighton`/`coastway-west-portsmouth`
+# segments claim, so no segment-sharing is asserted with
+# southern-arun-valley.toml either, despite the Horsham routing - that
+# file's own station list (Three Bridges-Ford) doesn't reach Barnham,
+# Bognor Regis or Littlehampton, so there is no overlapping CRS to share a
+# segment name over in the first place.
+# ============================================================================
+[[stations]]
+crs = "LIT"
+role = "terminus"
+segment = "coastway-west-littlehampton"
+# Littlehampton. See LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH above - a
+# real loop with two rejoin points (Angmering and Ford), not a dead-end
+# spur, but modelled as a single-station exclusive segment since neither
+# triangle junction has its own CRS code.
 
 [[stations]]
 crs = "FOD"
 role = "junction"
 segment = "coastway-west-brighton"
-# Ford. Junction station: the Littlehampton branch (a short spur) and the
-# Arun Valley Line (toward Arundel/Pulborough/Horsham, not covered by this
-# catalogue) both diverge near here - see ROUTE SCOPE above. Neither is
-# modelled separately in this file.
+# Ford. Junction station: the western end of the Littlehampton loop (see
+# LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH above) and the Arun Valley
+# Line (toward Arundel/Pulborough/Horsham, covered separately by
+# southern-arun-valley.toml) both diverge near here - see ROUTE SCOPE
+# above.
 
 [[stations]]
 crs = "BAA"
-role = "minor"
+role = "junction"
 segment = "coastway-west-brighton"
-# Barnham. The Bognor Regis branch historically diverged near here (the
-# former Barnham Junction) - not covered by this catalogue.
+# Barnham. Junction per the shared-trunk rule of thumb: the Bognor Regis
+# branch (see LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH above) diverges
+# here (the former Barnham Junction).
+
+[[stations]]
+crs = "BOG"
+role = "terminus"
+segment = "coastway-west-bognor-regis"
+# Bognor Regis. See LITTLEHAMPTON LOOP AND BOGNOR REGIS BRANCH above - was
+# completely absent from this catalogue before this fix.
 
 [[stations]]
 crs = "CCH"

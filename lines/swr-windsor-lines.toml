@@ -66,8 +66,27 @@ match_keywords = ["Windsor Line", "Windsor & Eton Riverside"]
 # The exclusive segment (`swr-windsor-lines-branch`, NOT reusing the
 # `swr-windsor-lines` name itself, to avoid confusion between "the shared
 # Windsor-lines trackage" and "this line's own further-west exclusive
-# stretch") starts at Whitton, the first station past Twickenham reached
-# only by this route.
+# stretch") starts at Wraysbury, the first station reached only by this
+# route.
+#
+# BUG FIX (real-world-sanity review): Whitton, Feltham, Ashford (Surrey)
+# and Staines were previously tagged `swr-windsor-lines-branch` too, as
+# though this line's exclusive coverage began at Whitton. That was wrong:
+# lines/swr-hounslow-loop.toml's own sourcing confirms the Hounslow Loop
+# "rejoins [the Waterloo-Reading line] at a triangular junction between
+# Whitton and Feltham" and its trains continue over this exact WTN-FEL-AFS-
+# SNS run before diverging again towards Egham/Virginia Water - i.e. this
+# is genuinely shared double track, not exclusive to this line, and that
+# file had already (independently) tagged the same four stations with its
+# own different segment name (`swr-hounslow-loop`), silently breaking
+# shared-trunk propagation between the two files. Fixed by retagging
+# WTN/FEL/AFS/SNS below with `swr-windsor-lines` instead - reusing this
+# file's own already-shared trunk name past Twickenham, since that is what
+# the track actually is. Per the shared-trunk rule of thumb, Staines (a
+# real junction - the Windsor & Eton Riverside branch diverges there) now
+# correctly sits on the shared segment too (role updated to "junction"
+# accordingly), and this line's own exclusive segment starts one station
+# later, at Wraysbury.
 [[stations]]
 crs = "WAT"
 tiploc = "WATRLMN"
@@ -149,30 +168,39 @@ segment = "swr-windsor-lines"
 [[stations]]
 crs = "WTN"
 role = "minor"
-segment = "swr-windsor-lines-branch"
-# Whitton. This line's own exclusive segment starts here — not listed in
+segment = "swr-windsor-lines"
+# Whitton. BUG FIX: retagged from this line's own now-removed exclusive use
+# here to the shared `swr-windsor-lines` trunk name — not listed in
 # swr-kingston-loop.toml at all (that file's own loop rejoins the main
 # Windsor lines at Twickenham and heads back towards Waterloo, never
-# reaching this far west).
+# reaching this far west), but genuinely shared with swr-hounslow-loop.toml,
+# whose loop rejoins the main line right here. See the SEGMENTS section
+# above.
 
 [[stations]]
 crs = "FEL"
 role = "major"
-segment = "swr-windsor-lines-branch"
-# Feltham.
+segment = "swr-windsor-lines"
+# Feltham. BUG FIX: see WTN above.
 
 [[stations]]
 crs = "AFS"
 role = "minor"
-segment = "swr-windsor-lines-branch"
+segment = "swr-windsor-lines"
 # Ashford (Surrey) — CRS AFS, distinct from Ashford International (AFK) in
-# Kent, verified via ds.cursed.solutions/api/stations.
+# Kent, verified via ds.cursed.solutions/api/stations. BUG FIX: see WTN
+# above.
 
 [[stations]]
 crs = "SNS"
-role = "major"
-segment = "swr-windsor-lines-branch"
-# Staines.
+role = "junction"
+segment = "swr-windsor-lines"
+# Staines. Junction for this line's own exclusive continuation to Windsor &
+# Eton Riverside via Wraysbury — per the shared-trunk rule of thumb the
+# junction itself stays on the shared trunk; this line's exclusive segment
+# starts at the next station, Wraysbury. BUG FIX: role corrected from
+# "major" to "junction" and segment retagged to `swr-windsor-lines` — see
+# the SEGMENTS section above.
 
 [[stations]]
 crs = "WRY"

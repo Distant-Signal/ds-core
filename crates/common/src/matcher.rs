@@ -420,9 +420,9 @@ mod tests {
         // pattern as the two lines above. It's a real eighth line affected by
         // this incident, still ExclusiveSegment.
         //
-        // Updated by the Midlands batch 2: `lnwr-chase-line.toml` and
+        // Updated by the Midlands batch 2: `wmr-chase-line.toml` and
         // `wmr-darlaston-line.toml` both terminate at Birmingham New Street
-        // too, on the literal `lnwr-chase-line-newstreet` segment name they
+        // too, on the literal `wmr-chase-line-newstreet` segment name they
         // deliberately share (both files were authored together in the same
         // batch and keep this segment's extent byte-identical: BHM/DUD/AST/
         // WTT/PRY/HSD/TAB in both -- see either file's own comment for the
@@ -434,6 +434,11 @@ mod tests {
         // `wmr-camp-hill` segment -- an eleventh line, station-overlap-only
         // like `wcml-birmingham`/`wmr-cross-city`/`lnwr-birmingham-crewe`
         // above.
+        //
+        // Updated by the Midlands EMR/WMR/LNWR sanity review: `wmr-malvern-
+        // line.toml` (a new file from that review) also terminates at
+        // Birmingham New Street, on its own exclusive `wmr-malvern-line`
+        // segment -- a twelfth line, same station-overlap-only pattern.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -456,9 +461,10 @@ mod tests {
                 "wcml-birmingham".to_string(),
                 "wmr-cross-city".to_string(),
                 "lnwr-birmingham-crewe".to_string(),
-                "lnwr-chase-line".to_string(),
+                "wmr-chase-line".to_string(),
                 "wmr-darlaston-line".to_string(),
                 "wmr-camp-hill-line".to_string(),
+                "wmr-malvern-line".to_string(),
             ])
         );
         for m in &matches {
@@ -466,6 +472,7 @@ mod tests {
                 "wcml-birmingham"
                 | "wmr-cross-city"
                 | "lnwr-birmingham-crewe"
+                | "wmr-malvern-line"
                 | "wmr-camp-hill-line" => MatchScope::ExclusiveSegment,
                 _ => MatchScope::SharedSegment,
             };
@@ -567,11 +574,12 @@ mod tests {
         // Diss is well beyond Shenfield, on Greater Anglia's exclusive
         // territory — the Elizabeth line goes no further than Shenfield —
         // and isn't a junction for any branch in this batch either (unlike
-        // Colchester, which greater-anglia-essex-branches.toml's Sunshine
-        // Coast branch also lists as its own real junction — but as
+        // Colchester, which greater-anglia-sunshine-coast.toml (formerly
+        // part of the bundled greater-anglia-essex-branches.toml, split by
+        // brand) also lists as its own real junction — but as
         // station-level overlap only, each independently ExclusiveSegment,
         // not a shared `geml-mainline` segment; see
-        // essex_branches_colchester_is_station_overlap_only_with_main_line
+        // sunshine_coast_colchester_is_station_overlap_only_with_main_line
         // below). An incident here should stay scoped to
         // greater-anglia-main-line only.
         let lines = load_all_lines();
@@ -643,13 +651,23 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        // Updated by the SWR suburban-gap batch: swr-shepperton-branch.toml
+        // and swr-epsom-mole-valley.toml (two new files) also reuse
+        // `swr-trunk-waterloo` verbatim through Raynes Park (Shepperton's
+        // own trains run over the same New Malden-ward formation before
+        // diverging at Shacklegate Junction, several stations further on;
+        // the Epsom/Mole Valley line's own route continues straight past
+        // Raynes Park towards Motspur Park) - both genuinely call here, so
+        // both now match too.
         assert_eq!(
             matched_ids,
             HashSet::from([
                 "swr-kingston-loop".to_string(),
                 "swr-chessington".to_string(),
+                "swr-shepperton-branch".to_string(),
+                "swr-epsom-mole-valley".to_string(),
             ]),
-            "only the two lines that actually call at Raynes Park should match"
+            "every line that actually calls at Raynes Park should match"
         );
         for m in &matches {
             assert_eq!(
@@ -668,13 +686,18 @@ mod tests {
     // further down this file, which already owned that station's expected
     // match set and was extended rather than duplicated here.
 
-    /// Kingston is on the loop's own exclusive `swr-kingston-loop` segment,
-    /// past the New Malden junction. Nothing else in the catalogue serves
-    /// it, so the incident must stay local -- including not reaching the
-    /// Chessington branch, which leaves the main line a station earlier and
-    /// never passes through here.
+    /// Kingston itself is on `swr-kingston-loop`, which the SWR
+    /// suburban-gap batch's own swr-shepperton-branch.toml now also reuses
+    /// verbatim (Shepperton's own trains run over this exact New Malden-
+    /// Teddington stretch before diverging at Shacklegate Junction, several
+    /// stations further on) -- so an incident here must now reach BOTH
+    /// files as SharedSegment. See
+    /// `swr_kingston_loop_own_exclusive_segment_incident_does_not_propagate`
+    /// immediately below for the genuinely-still-exclusive case
+    /// (Strawberry Hill, past the point where Shepperton's own trains
+    /// diverge).
     #[test]
-    fn swr_kingston_loop_exclusive_segment_incident_does_not_propagate() {
+    fn swr_kingston_loop_shared_with_shepperton_segment_incident_propagates() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -683,6 +706,39 @@ mod tests {
             "Trespassers on the railway are causing delays at Kingston.",
             &["SW"],
             &["KNG"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from([
+                "swr-kingston-loop".to_string(),
+                "swr-shepperton-branch".to_string(),
+            ])
+        );
+        for m in &matches {
+            assert_eq!(m.scope, MatchScope::SharedSegment);
+        }
+    }
+
+    /// Strawberry Hill sits past Shacklegate Junction, where Shepperton's
+    /// own off-peak trains diverge away from the loop (per
+    /// swr-kingston-loop.toml's own STW note) -- so unlike Kingston above,
+    /// this station is on the loop's own renamed, genuinely exclusive
+    /// `swr-strawberry-hill` segment. Nothing else in the catalogue serves
+    /// it, so the incident must stay local -- including not reaching the
+    /// Chessington branch, which leaves the main line a station earlier and
+    /// never passes through here, or the Shepperton branch itself.
+    #[test]
+    fn swr_kingston_loop_own_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "SWR-KL-3B",
+            "Trespass incident at Strawberry Hill",
+            "Trespassers on the railway are causing delays at Strawberry Hill.",
+            &["SW"],
+            &["STW"],
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
@@ -725,11 +781,14 @@ mod tests {
     /// swr-kingston-loop.toml's own `swr-windsor-lines` segment name was
     /// coined for (see that file's own SEGMENTS comment: "named for the
     /// track rather than for this service, so a future Reading / Windsor &
-    /// Eton Riverside... file can reuse the name"). So Richmond is now a
-    /// genuine three-way case: swr-kingston-loop and swr-windsor-lines
-    /// share real track and both resolve as SharedSegment, while
-    /// overground-mildmay stays ExclusiveSegment (still separate
-    /// infrastructure, unaffected by the new file).
+    /// Eton Riverside... file can reuse the name"). The SWR suburban-gap
+    /// batch's own swr-waterloo-reading.toml is a further such reuse (its
+    /// own Vauxhall/Richmond-side approach is copied verbatim from
+    /// swr-windsor-lines.toml). So Richmond is now a genuine four-way case:
+    /// swr-kingston-loop, swr-windsor-lines and swr-waterloo-reading share
+    /// real track and all resolve as SharedSegment, while overground-
+    /// mildmay stays ExclusiveSegment (still separate infrastructure,
+    /// unaffected by either new file).
     #[test]
     fn richmond_station_overlap_between_kingston_loop_and_mildmay_stays_exclusive_each_line() {
         let lines = load_all_lines();
@@ -749,6 +808,7 @@ mod tests {
                 "swr-kingston-loop".to_string(),
                 "overground-mildmay".to_string(),
                 "swr-windsor-lines".to_string(),
+                "swr-waterloo-reading".to_string(),
             ])
         );
         for m in &matches {
@@ -948,6 +1008,14 @@ mod tests {
     // London Overground's Windrush line (former East London line,
     // extended) — exclusive segment test for its West Croydon branch,
     // well clear of the shared Canonbury curve.
+    //
+    // Updated by the Southern real-world-sanity review: two new files,
+    // southern-metro-crystal-palace.toml and southern-metro-sutton.toml,
+    // also terminate/junction at West Croydon, each on its own distinct
+    // exclusive segment (`southern-metro-west-croydon-branch`/
+    // `southern-metro-sutton-branch`) - station overlap only against this
+    // line and each other, so both join as independent ExclusiveSegment
+    // matches.
     #[test]
     fn overground_windrush_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -963,9 +1031,20 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["overground-windrush".to_string()])
+            HashSet::from([
+                "overground-windrush".to_string(),
+                "southern-metro-crystal-palace".to_string(),
+                "southern-metro-sutton".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     // The `overground-canonbury-curve` shared segment (Highbury &
@@ -1011,6 +1090,25 @@ mod tests {
     // Nottingham spur's exclusive-segment behaviour is guaranteed testable
     // right now (see the ruling comment in
     // `lines/emr-midland-main-line.toml`).
+    //
+    // Updated by the Midlands EMR/WMR/LNWR sanity review: `emr-derwent-
+    // valley.toml`'s own re-scope (Lincoln/Cleethorpes-Matlock, formerly
+    // Derby-Matlock only) and the new `emr-crewe-derby.toml` both now also
+    // call at Beeston, each on its own exclusive segment - two different
+    // citations of the same general Derby-Nottingham corridor,
+    // deliberately NOT sharing a segment name with `emr-midland-main-
+    // line.toml`'s own `emr-mml-nottingham-spur` or with each other (see
+    // either new file's own ruling comment on its Beeston entry for the
+    // full reasoning). So this incident now also matches both,
+    // independently ExclusiveSegment.
+    //
+    // Updated again by the national/WCML/XC sanity review: cross-
+    // country.toml's own new Nottingham extension (`xc-cardiff.toml`'s own
+    // `xc-cardiff-nottingham` segment) also calls at Beeston, reusing
+    // NOT/BEE/ATB/LGE's CRS codes from emr-midland-main-line.toml verbatim
+    // but deliberately NOT sharing a segment name with it (station overlap
+    // only) - so this incident now also matches xc-cardiff, independently
+    // ExclusiveSegment.
     #[test]
     fn emr_nottingham_spur_incident_stays_on_its_branch() {
         let lines = load_all_lines();
@@ -1026,9 +1124,21 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["emr-midland-main-line".to_string()])
+            HashSet::from([
+                "emr-midland-main-line".to_string(),
+                "emr-derwent-valley".to_string(),
+                "emr-crewe-derby".to_string(),
+                "xc-cardiff".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     // `lines/emr-regional.toml` (Batch 7, Task 7.2): exclusive-segment check
@@ -1297,6 +1407,13 @@ mod tests {
     // intercity MML service skips Duffield/Belper/Ambergate entirely), so it
     // is the only station where an incident can demonstrate both lines
     // matching together as SharedSegment.
+    //
+    // Updated by the Midlands EMR/WMR/LNWR sanity review: `emr-crewe-
+    // derby.toml` (a new file from that review) also reuses `emr-mml-derby`
+    // verbatim for its own Derby entry, so a Derby incident now also
+    // matches it as a third SharedSegment line -- not asserted by name
+    // here (this test only checks specific `by_id` entries, not the full
+    // match set), but consistent with the ruling above.
     #[test]
     fn emr_derwent_valley_shared_with_midland_main_line() {
         let lines = load_all_lines();
@@ -1846,6 +1963,14 @@ mod tests {
         // (merged separately, Batch 10), on its exclusive
         // `scotrail-aberdeen-inverness` segment -- station-level overlap,
         // distinct segment names, both stay ExclusiveSegment.
+        //
+        // Updated (Scotland real-world-sanity review): two new inter-city
+        // spine files, scotrail-edinburgh-aberdeen.toml and scotrail-
+        // glasgow-aberdeen.toml, also terminate at Aberdeen, both reusing
+        // `scotrail-dundee-aberdeen` verbatim for their shared Dundee-
+        // Aberdeen approach - a genuine SharedSegment pair with each other,
+        // station overlap only against lner-ecml/scotrail-aberdeen-
+        // inverness.
         let inc = incident(
             "LNER-1",
             "Points failure at Aberdeen",
@@ -1859,16 +1984,19 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "lner-ecml".to_string(),
-                "scotrail-aberdeen-inverness".to_string()
+                "scotrail-aberdeen-inverness".to_string(),
+                "scotrail-edinburgh-aberdeen".to_string(),
+                "scotrail-glasgow-aberdeen".to_string(),
             ])
         );
         for m in &matches {
-            assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
-                m.line.id
-            );
+            let expected = match m.line.id.as_str() {
+                "scotrail-edinburgh-aberdeen" | "scotrail-glasgow-aberdeen" => {
+                    MatchScope::SharedSegment
+                }
+                _ => MatchScope::ExclusiveSegment,
+            };
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -1971,6 +2099,11 @@ mod tests {
         // segment, a third different name) - the same station-overlap-only
         // pattern, so it joins this set as a third independent
         // ExclusiveSegment match.
+        //
+        // Updated by the Northern NW/TPE sanity review: `tpe-north-
+        // hull.toml` (new, split out of tpe-north.toml) also calls at Selby
+        // on its own exclusive `tpe-north-hull` segment - a fourth
+        // independent ExclusiveSegment match.
         let inc = incident(
             "LNER-4",
             "Signal failure at Selby",
@@ -1986,6 +2119,7 @@ mod tests {
                 "lner-hull".to_string(),
                 "hull-trains".to_string(),
                 "northern-leeds-selby".to_string(),
+                "tpe-north-hull".to_string(),
             ])
         );
         for m in &matches {
@@ -2050,6 +2184,22 @@ mod tests {
         // Lincoln, each via a physically different approach - genuine
         // station overlap, not a shared trunk, so all three now match
         // independently as ExclusiveSegment.
+        //
+        // Updated again by the Midlands EMR/WMR/LNWR sanity review:
+        // `emr-crewe-derby.toml` and the re-scoped `emr-derwent-
+        // valley.toml` (formerly Derby-Matlock only, now Lincoln/
+        // Cleethorpes-Matlock) both deliberately REUSE
+        // `emr-nottingham-lincoln.toml`'s own `emr-nottingham-lincoln`
+        // segment name verbatim for their own Lincoln entries (same
+        // physical Nottingham-Newark Castle-Lincoln stretch, byte-
+        // identical station list in all three files - see either new
+        // file's own comment for the derivation). So those three now
+        // report SharedSegment with EACH OTHER at Lincoln, while
+        // `emr-lincoln-peterborough.toml` (its own exclusive
+        // `emr-lincoln-peterborough` segment - a different, Peterborough/
+        // Doncaster-facing approach) joins `lner-lincoln`/
+        // `northern-sheffield-lincoln` as a fourth independent
+        // ExclusiveSegment match.
         let inc = incident(
             "LNER-6",
             "Signal failure at Lincoln",
@@ -2065,15 +2215,19 @@ mod tests {
                 "lner-lincoln".to_string(),
                 "emr-nottingham-lincoln".to_string(),
                 "northern-sheffield-lincoln".to_string(),
+                "emr-crewe-derby".to_string(),
+                "emr-derwent-valley".to_string(),
+                "emr-lincoln-peterborough".to_string(),
             ])
         );
         for m in &matches {
-            assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
-                m.line.id
-            );
+            let expected = match m.line.id.as_str() {
+                "emr-nottingham-lincoln" | "emr-crewe-derby" | "emr-derwent-valley" => {
+                    MatchScope::SharedSegment
+                }
+                _ => MatchScope::ExclusiveSegment,
+            };
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -2177,12 +2331,62 @@ mod tests {
         //     deliberately declines to reuse `lner-leeds`/`lner-leeds-
         //     harrogate` despite genuine physical track-sharing, mirroring
         //     `hull-trains.toml`'s identical precedent).
-        //   - northern-leeds-selby: its own `northern-leeds-selby` segment
-        //     at LDS, used nowhere else -- exclusive.
+        //   - northern-leeds-selby: at the time this comment was written,
+        //     its own `northern-leeds-selby` segment at LDS, used nowhere
+        //     else -- exclusive. Superseded below (Yorkshire real-world-
+        //     sanity review): LDS now carries the narrower
+        //     `northern-leeds-micklefield` segment instead, shared with the
+        //     new `northern-leeds-york.toml` -- see that file's own
+        //     "Segment split" comment.
         //   - northern-settle-carlisle: reuses `northern-shipley-trunk`
         //     verbatim at LDS (the same Leeds-Shipley approach already
         //     shared between Airedale and Wharfedale) -- joins
         //     northern-airedale as SharedSegment.
+        //
+        // Updated again by the Yorkshire real-world-sanity review
+        // (2026-09-21), which split `northern.toml`'s own incoherent
+        // catch-all fragments into two new, genuine sibling lines (both
+        // also touch LDS) and added a Leeds extension to the renamed
+        // `northern-wakefield-line.toml` (formerly `northern-dearne-
+        // valley.toml`, which never touched LDS before):
+        //   - northern-huddersfield: its own `northern-huddersfield`
+        //     segment at LDS, used nowhere else -- exclusive.
+        //   - northern-leeds-york: shares `northern-leeds-micklefield`
+        //     with `northern-leeds-selby` at LDS (see that file's own
+        //     "Segment split" comment) -- SharedSegment, and flips
+        //     `northern-leeds-selby` from ExclusiveSegment to SharedSegment
+        //     too, since that segment name is no longer used by only one
+        //     file.
+        //   - northern-wakefield-line: its own `northern-wakefield-sheffield`
+        //     segment at LDS, used nowhere else -- exclusive. Superseded
+        //     below (review2 fix, item 10): LDS now carries the narrower
+        //     `northern-outwood-wakefield-trunk` segment instead, genuinely
+        //     shared with `northern-pontefract-line.toml`'s own Wakefield
+        //     branch (at WKF/OUT, not at LDS itself -- see both files' own
+        //     top-of-file comments) -- flips to SharedSegment.
+        //
+        // Updated again by the Northern NW/TPE sanity review (tpe-north.toml
+        // split into four new siblings): tpe-north-teesside, tpe-north-
+        // scarborough and tpe-north-hull each call at LDS on their own
+        // exclusive segment (`tpe-north-teesside`/`tpe-north-scarborough`/
+        // `tpe-north-hull` respectively, each used nowhere else) -- three
+        // more independent ExclusiveSegment matches.
+        //
+        // Updated by the national/WCML/XC sanity review: cross-country.toml
+        // also calls at LDS (a real gap-fill, its own new Leeds branch), on
+        // its own exclusive `xc-yorkshire-leeds` segment -- another
+        // independent ExclusiveSegment match.
+        //
+        // Updated by the Yorkshire real-world-sanity review's own second
+        // pass (northern-hallam-line.toml, northern-pontefract-line.toml,
+        // both new): both reuse `northern-leeds-castleford` verbatim for
+        // their shared Leeds-Castleford approach -- a genuine SharedSegment
+        // pair with each other, independent of every other family here.
+        //
+        // Updated by review2 item 10 (northern-pontefract-line.toml's
+        // Wakefield branch extended to its own real Leeds terminus via
+        // Outwood): `northern-wakefield-line` moves from ExclusiveSegment to
+        // SharedSegment -- see the bullet above.
         assert_eq!(
             matched_ids,
             HashSet::from([
@@ -2196,6 +2400,15 @@ mod tests {
                 "northern-harrogate-line".to_string(),
                 "northern-leeds-selby".to_string(),
                 "northern-settle-carlisle".to_string(),
+                "northern-huddersfield".to_string(),
+                "northern-leeds-york".to_string(),
+                "northern-wakefield-line".to_string(),
+                "tpe-north-teesside".to_string(),
+                "tpe-north-scarborough".to_string(),
+                "tpe-north-hull".to_string(),
+                "cross-country".to_string(),
+                "northern-hallam-line".to_string(),
+                "northern-pontefract-line".to_string(),
             ])
         );
         for m in &matches {
@@ -2205,9 +2418,17 @@ mod tests {
                 | "northern-calder-valley"
                 | "tpe-north"
                 | "northern-harrogate-line"
-                | "northern-leeds-selby" => MatchScope::ExclusiveSegment,
+                | "northern-huddersfield"
+                | "tpe-north-teesside"
+                | "tpe-north-scarborough"
+                | "tpe-north-hull"
+                | "cross-country" => MatchScope::ExclusiveSegment,
                 "northern" | "northern-yorkshire-coast" | "northern-airedale"
-                | "northern-settle-carlisle" => MatchScope::SharedSegment,
+                | "northern-settle-carlisle" | "northern-leeds-selby"
+                | "northern-leeds-york" | "northern-hallam-line"
+                | "northern-pontefract-line" | "northern-wakefield-line" => {
+                    MatchScope::SharedSegment
+                }
                 other => panic!("unexpected line in Leeds overlap test: {other}"),
             };
             assert_eq!(m.scope, expected, "{} scope mismatch", m.line.id);
@@ -2510,6 +2731,11 @@ mod tests {
         // scotrail-argyle.toml is the Argyle Line split successor of the
         // former scotrail-glasgow-suburban.toml) -- station-level overlap,
         // distinct segment names, both stay ExclusiveSegment.
+        //
+        // Updated by the national/WCML/XC sanity review: the new
+        // wcml-scotland.toml also calls at Motherwell, on its own exclusive
+        // `wcml-scotland-glasgow` segment -- a third independent
+        // ExclusiveSegment match.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -2525,7 +2751,8 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "tpe-anglo-scottish".to_string(),
-                "scotrail-argyle".to_string()
+                "scotrail-argyle".to_string(),
+                "wcml-scotland".to_string(),
             ])
         );
         for m in &matches {
@@ -2574,6 +2801,11 @@ mod tests {
     // widen this assertion's matched-line set without adding anything
     // tpe_anglo_scottish_exclusive_segment_incident_does_not_propagate
     // above doesn't already cover.
+    //
+    // Updated by the Northern NW/TPE sanity review: the new northern-
+    // liverpool-st-helens-wigan.toml also calls at St Helens Central, on its
+    // own exclusive segment of the same name -- station overlap only, an
+    // independent ExclusiveSegment match.
     #[test]
     fn tpe_anglo_scottish_st_helens_central_incident_stays_exclusive() {
         let lines = load_all_lines();
@@ -2589,9 +2821,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["tpe-anglo-scottish".to_string()])
+            HashSet::from([
+                "tpe-anglo-scottish".to_string(),
+                "northern-liverpool-st-helens-wigan".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     // No shared-segment-propagation test for tpe-south either: per this
@@ -2602,6 +2844,14 @@ mod tests {
     // by design (station-overlap-only, same precedent as
     // xc-manchester.toml and tpe-anglo-scottish.toml). Genuinely standalone
     // for this assertion.
+    //
+    // Updated by the Midlands EMR/WMR/LNWR sanity review: `emr-barton-
+    // line.toml` and the re-scoped `emr-derwent-valley.toml` (formerly
+    // Derby-Matlock only, now Lincoln/Cleethorpes-Matlock) both also call
+    // at Grimsby Town, each via its own exclusive segment name (genuine
+    // physical overlap, materially different calling pattern - see either
+    // file's own ruling comment). So this incident now also matches both,
+    // independently ExclusiveSegment.
     #[test]
     fn tpe_south_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -2615,8 +2865,22 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(matched_ids, HashSet::from(["tpe-south".to_string()]));
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        assert_eq!(
+            matched_ids,
+            HashSet::from([
+                "tpe-south".to_string(),
+                "emr-barton-line".to_string(),
+                "emr-derwent-valley".to_string(),
+            ])
+        );
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     // Task 8.4 (Batch 8): fills the 9 genuinely missing, currently-open,
@@ -2660,6 +2924,11 @@ mod tests {
     // grep). Station-level overlap, different segment names — same pattern
     // as the Halifax/Grand-Central-Bradford precedent: both lines match by
     // station, both stay ExclusiveSegment on their own segment names.
+    //
+    // Updated by the national/WCML/XC sanity review: cross-country.toml's
+    // own new Edinburgh extension also calls at Berwick-upon-Tweed, on its
+    // own exclusive `xc-borders` segment -- a third independent
+    // ExclusiveSegment match.
     #[test]
     fn tpe_borders_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -2675,7 +2944,11 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["tpe-borders".to_string(), "lner-ecml".to_string()])
+            HashSet::from([
+                "tpe-borders".to_string(),
+                "lner-ecml".to_string(),
+                "cross-country".to_string(),
+            ])
         );
         for m in &matches {
             assert_eq!(
@@ -2855,6 +3128,11 @@ mod tests {
         // "chiltern-marylebone" segment tag for Marylebone itself (Task
         // 12.1's comment invited this): both files' services genuinely
         // originate there before diverging at Neasden Junction.
+        //
+        // Updated (real-world sanity review): chiltern-oxford.toml (split
+        // out of the formerly bundled chiltern-aylesbury.toml) also reuses
+        // this same "chiltern-marylebone" tag for its own Marylebone entry
+        // - a third file now genuinely sharing this trunk.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -2868,6 +3146,7 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert!(matched_ids.contains("chiltern-main-line"));
         assert!(matched_ids.contains("chiltern-aylesbury"));
+        assert!(matched_ids.contains("chiltern-oxford"));
         for m in &matches {
             if m.line.id.starts_with("chiltern-") {
                 assert_eq!(
@@ -2900,15 +3179,19 @@ mod tests {
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
+    // Updated (real-world sanity review): the Oxford branch now lives in
+    // its own file, chiltern-oxford.toml, split out of the formerly
+    // bundled chiltern-aylesbury.toml.
     #[test]
     fn chiltern_oxford_branch_incident_does_not_propagate() {
-        // The Oxford branch (folded into chiltern-aylesbury.toml) is a
-        // physically distinct corridor from both this file's own Amersham
-        // branch and chiltern-main-line.toml's Birmingham route (it only
-        // shares Marylebone itself, per the file's own comments) - an
-        // incident here should stay exclusive to chiltern-aylesbury and not
-        // leak onto chiltern-main-line or xc-south-coast (which also calls
-        // at Oxford, station-overlap only).
+        // The Oxford branch (chiltern-oxford.toml) is a physically distinct
+        // corridor from both chiltern-aylesbury.toml's own Amersham/Princes
+        // Risborough branches and chiltern-main-line.toml's Birmingham
+        // route (it only shares Marylebone itself, per the file's own
+        // comments) - an incident here should stay exclusive to
+        // chiltern-oxford and not leak onto chiltern-main-line,
+        // chiltern-aylesbury or xc-south-coast (which also calls at
+        // Oxford, station-overlap only).
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -2920,10 +3203,7 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(
-            matched_ids,
-            HashSet::from(["chiltern-aylesbury".to_string()])
-        );
+        assert_eq!(matched_ids, HashSet::from(["chiltern-oxford".to_string()]));
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
@@ -3219,14 +3499,16 @@ mod tests {
         // Cambridge (CBG) is on greater-anglia-west-anglia.toml's
         // `waml-mainline` segment, xc-stansted.toml's `xc-stansted` segment
         // (CrossCountry's Birmingham-Stansted service also calls there) and,
-        // since Task 2.6, greater-anglia-norfolk-branches.toml's own
-        // `breckland-line` segment (the Breckland Line's Cambridge terminus,
-        // reached via an entirely different physical corridor — Ely and
-        // Cambridge North, not Elsenham/Audley End — that only converges
-        // with the other two at this station). None of the three files
-        // share a segment name for this station (see
+        // since Task 2.6, greater-anglia-breckland-line.toml's own
+        // `breckland-line` segment (originally part of the bundled
+        // greater-anglia-norfolk-branches.toml, since split by brand --
+        // real-world sanity review; the Breckland Line's Cambridge
+        // terminus, reached via an entirely different physical corridor —
+        // Ely and Cambridge North, not Elsenham/Audley End — that only
+        // converges with the other two at this station). None of the three
+        // files share a segment name for this station (see
         // greater-anglia-west-anglia.toml's and
-        // greater-anglia-norfolk-branches.toml's decision comments —
+        // greater-anglia-breckland-line.toml's decision comments —
         // reusing another file's segment name here would incorrectly mark
         // its whole trunk as shared with this line), so an incident here
         // should match all three lines independently, each still classified
@@ -3258,7 +3540,7 @@ mod tests {
             HashSet::from([
                 "greater-anglia-west-anglia".to_string(),
                 "xc-stansted".to_string(),
-                "greater-anglia-norfolk-branches".to_string(),
+                "greater-anglia-breckland-line".to_string(),
                 "great-northern-kings-lynn".to_string(),
                 "thameslink-cambridge".to_string(),
                 "greater-anglia-ipswich-cambridge".to_string(),
@@ -3335,11 +3617,13 @@ mod tests {
     }
 
     #[test]
-    fn essex_branches_witham_is_station_overlap_only_with_main_line() {
+    fn braintree_branch_witham_is_station_overlap_only_with_main_line() {
         // Witham is on both greater-anglia-main-line.toml's `geml-mainline`
-        // segment and greater-anglia-essex-branches.toml's own
-        // `braintree-branch` segment (the Braintree branch's real junction).
-        // Per that file's segment-decision note, the two files deliberately
+        // segment and greater-anglia-braintree-branch.toml's own
+        // `braintree-branch` segment (the Braintree branch's real junction;
+        // this file was originally bundled as part of
+        // greater-anglia-essex-branches.toml, since split by brand --
+        // real-world sanity review). Per that file's segment-decision note, the two files deliberately
         // do NOT share a segment name here — reusing `geml-mainline` verbatim
         // would (confirmed empirically while drafting that file) incorrectly
         // reclassify unrelated far-flung `geml-mainline` stations (e.g. Diss,
@@ -3364,7 +3648,7 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-essex-branches".to_string()
+                "greater-anglia-braintree-branch".to_string()
             ])
         );
         for m in &matches {
@@ -3378,13 +3662,15 @@ mod tests {
     }
 
     #[test]
-    fn essex_branches_colchester_is_station_overlap_only_with_main_line() {
+    fn sunshine_coast_colchester_is_station_overlap_only_with_main_line() {
         // Colchester is on both greater-anglia-main-line.toml's
-        // `geml-mainline` segment and greater-anglia-essex-branches.toml's
+        // `geml-mainline` segment and greater-anglia-sunshine-coast.toml's
         // own `sunshine-coast-main` segment (the Sunshine Coast line's real
-        // junction). Same reasoning and same non-sharing decision as Witham
-        // above: station-level overlap only, each line classified
-        // independently as ExclusiveSegment.
+        // junction; this file was originally bundled as part of
+        // greater-anglia-essex-branches.toml, since split by brand --
+        // real-world sanity review). Same reasoning and same non-sharing
+        // decision as Witham above: station-level overlap only, each line
+        // classified independently as ExclusiveSegment.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3400,7 +3686,7 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-essex-branches".to_string()
+                "greater-anglia-sunshine-coast".to_string()
             ])
         );
         for m in &matches {
@@ -3414,10 +3700,12 @@ mod tests {
     }
 
     #[test]
-    fn essex_branches_exclusive_segment_incident_does_not_propagate() {
+    fn crouch_valley_exclusive_segment_incident_does_not_propagate() {
         // Southminster is on `crouch-valley-line`, exclusive to
-        // greater-anglia-essex-branches.toml. Per that file's Southminster-
-        // branch deviation note: the branch's real, verified junction is
+        // greater-anglia-crouch-valley.toml (originally bundled as part of
+        // greater-anglia-essex-branches.toml, since split by brand --
+        // real-world sanity review). Per that file's Southminster-branch
+        // deviation note: the branch's real, verified junction is
         // Wickford on the Shenfield-Southend line, two hops from the GEML
         // via a line not covered by any file in this catalogue — so unlike
         // the Braintree/Sunshine Coast branches above, this segment is not
@@ -3435,17 +3723,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["greater-anglia-essex-branches".to_string()])
+            HashSet::from(["greater-anglia-crouch-valley".to_string()])
         );
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
     #[test]
-    fn suffolk_branches_exclusive_segment_incident_does_not_propagate() {
+    fn gainsborough_line_exclusive_segment_incident_does_not_propagate() {
         // Sudbury is the terminus of `gainsborough-line`, exclusive to
-        // greater-anglia-suffolk-branches.toml. It isn't a junction or
-        // overlap point for any other committed line, so an incident here
-        // should stay scoped to greater-anglia-suffolk-branches only.
+        // greater-anglia-gainsborough-line.toml (originally bundled as part
+        // of greater-anglia-suffolk-branches.toml, since split by brand --
+        // real-world sanity review). It isn't a junction or overlap point
+        // for any other committed line, so an incident here should stay
+        // scoped to greater-anglia-gainsborough-line only.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3459,18 +3749,20 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["greater-anglia-suffolk-branches".to_string()])
+            HashSet::from(["greater-anglia-gainsborough-line".to_string()])
         );
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
     #[test]
-    fn suffolk_branches_marks_tey_is_station_overlap_only_with_main_line() {
+    fn gainsborough_line_marks_tey_is_station_overlap_only_with_main_line() {
         // Marks Tey is on both greater-anglia-main-line.toml's
-        // `geml-mainline` segment and greater-anglia-suffolk-branches.toml's
+        // `geml-mainline` segment and greater-anglia-gainsborough-line.toml's
         // own `gainsborough-line` segment (the Sudbury branch's real
-        // junction). Per that file's segment-decision note (mirroring
-        // Task 2.4's Witham/Colchester precedent), the two files
+        // junction; this file was originally bundled as part of
+        // greater-anglia-suffolk-branches.toml, since split by brand --
+        // real-world sanity review). Per that file's segment-decision note
+        // (mirroring Task 2.4's Witham/Colchester precedent), the two files
         // deliberately do NOT share a segment name here — reusing
         // `geml-mainline` verbatim would incorrectly reclassify unrelated
         // far-flung `geml-mainline` stations (e.g. Diss, Norwich) as shared
@@ -3493,7 +3785,7 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-suffolk-branches".to_string()
+                "greater-anglia-gainsborough-line".to_string()
             ])
         );
         for m in &matches {
@@ -3507,13 +3799,15 @@ mod tests {
     }
 
     #[test]
-    fn suffolk_branches_ipswich_is_station_overlap_only_with_main_line() {
+    fn felixstowe_branch_ipswich_is_station_overlap_only_with_main_line() {
         // Ipswich is on both greater-anglia-main-line.toml's `geml-mainline`
-        // segment and greater-anglia-suffolk-branches.toml's own
+        // segment and greater-anglia-felixstowe-branch.toml's own
         // `felixstowe-branch` segment (where Felixstowe branch passenger
         // services originate; the branch's true physical fork is one stop
-        // further out at Westerfield). Same non-sharing decision as Marks
-        // Tey above: station-level overlap only, each line classified
+        // further out at Westerfield; this file was originally bundled as
+        // part of greater-anglia-suffolk-branches.toml, since split by
+        // brand -- real-world sanity review). Same non-sharing decision as
+        // Marks Tey above: station-level overlap only, each line classified
         // independently as ExclusiveSegment.
         //
         // Updated by the Wales/East Anglia batch: `greater-anglia-east-
@@ -3536,7 +3830,7 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-suffolk-branches".to_string(),
+                "greater-anglia-felixstowe-branch".to_string(),
                 "greater-anglia-east-suffolk".to_string(),
                 "greater-anglia-ipswich-cambridge".to_string(),
             ])
@@ -3552,13 +3846,15 @@ mod tests {
     }
 
     #[test]
-    fn suffolk_branches_manningtree_is_station_overlap_only_with_main_line() {
+    fn mayflower_line_manningtree_is_station_overlap_only_with_main_line() {
         // Manningtree is on both greater-anglia-main-line.toml's
-        // `geml-mainline` segment and greater-anglia-suffolk-branches.toml's
-        // own `mayflower-line` segment (the Mayflower line's real junction).
-        // Same non-sharing decision as Marks Tey and Ipswich above:
-        // station-level overlap only, each line classified independently as
-        // ExclusiveSegment.
+        // `geml-mainline` segment and greater-anglia-mayflower-line.toml's
+        // own `mayflower-line` segment (the Mayflower line's real junction;
+        // this file was originally bundled as part of
+        // greater-anglia-suffolk-branches.toml, since split by brand --
+        // real-world sanity review). Same non-sharing decision as Marks Tey
+        // and Ipswich above: station-level overlap only, each line
+        // classified independently as ExclusiveSegment.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3574,7 +3870,7 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-suffolk-branches".to_string()
+                "greater-anglia-mayflower-line".to_string()
             ])
         );
         for m in &matches {
@@ -3588,11 +3884,13 @@ mod tests {
     }
 
     #[test]
-    fn norfolk_branches_exclusive_segment_incident_does_not_propagate() {
+    fn bittern_line_exclusive_segment_incident_does_not_propagate() {
         // Sheringham is the terminus of `bittern-line`, exclusive to
-        // greater-anglia-norfolk-branches.toml. It isn't a junction or
-        // overlap point for any other committed line, so an incident here
-        // should stay scoped to greater-anglia-norfolk-branches only.
+        // greater-anglia-bittern-line.toml (originally bundled as part of
+        // greater-anglia-norfolk-branches.toml, since split by brand --
+        // real-world sanity review). It isn't a junction or overlap point
+        // for any other committed line, so an incident here should stay
+        // scoped to greater-anglia-bittern-line only.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3606,19 +3904,21 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["greater-anglia-norfolk-branches".to_string()])
+            HashSet::from(["greater-anglia-bittern-line".to_string()])
         );
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
     #[test]
-    fn norfolk_branches_great_yarmouth_exclusive_segment_incident_does_not_propagate() {
+    fn wherry_lines_great_yarmouth_exclusive_segment_incident_does_not_propagate() {
         // Great Yarmouth (the Acle route's terminus, and also the physical
         // terminus of the separate, much lower-frequency Berney Arms route —
-        // see greater-anglia-norfolk-branches.toml's Wherry Lines segment
-        // note for why GYM is listed once, under `wherry-acle-branch`) isn't
-        // a junction or overlap point for any other committed line, so an
-        // incident here should stay scoped to greater-anglia-norfolk-branches
+        // see greater-anglia-wherry-lines.toml's (originally bundled as
+        // part of greater-anglia-norfolk-branches.toml, since split by
+        // brand -- real-world sanity review) Wherry Lines segment note for
+        // why GYM is listed once, under `wherry-acle-branch`) isn't a
+        // junction or overlap point for any other committed line, so an
+        // incident here should stay scoped to greater-anglia-wherry-lines
         // only.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
@@ -3633,7 +3933,7 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["greater-anglia-norfolk-branches".to_string()])
+            HashSet::from(["greater-anglia-wherry-lines".to_string()])
         );
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
@@ -3641,26 +3941,31 @@ mod tests {
     #[test]
     fn norfolk_branches_norwich_is_station_overlap_only_with_main_line() {
         // Norwich is on both greater-anglia-main-line.toml's `geml-mainline`
-        // segment (as GEML's terminus) and
-        // greater-anglia-norfolk-branches.toml's own
-        // `norfolk-branches-norwich` segment (the shared origin of the
-        // Bittern, Wherry and Breckland lines). Per that file's
+        // segment (as GEML's terminus) and the shared origin of the
+        // Bittern, Wherry and Breckland lines -- originally the single
+        // bundled greater-anglia-norfolk-branches.toml's own
+        // `norfolk-branches-norwich` segment, since split by brand
+        // (real-world sanity review) into three separate files
+        // (greater-anglia-bittern-line.toml, greater-anglia-wherry-lines.toml,
+        // greater-anglia-breckland-line.toml), each of which now lists NRW
+        // under its own exclusive segment name. Per the original file's
         // segment-decision note (mirroring Task 2.4's Witham/Colchester and
         // Task 2.5's Marks Tey/Ipswich/Manningtree precedent — and a
         // deliberate departure from this task's own brief, which suggested a
-        // SharedSegment-asserting test here), the two files deliberately do
-        // NOT share a segment name — reusing `geml-mainline` verbatim would
-        // incorrectly reclassify unrelated far-flung `geml-mainline`
+        // SharedSegment-asserting test here), none of these files share a
+        // segment name at Norwich with each other or with
+        // greater-anglia-main-line.toml — reusing `geml-mainline` verbatim
+        // would incorrectly reclassify unrelated far-flung `geml-mainline`
         // stations (e.g. Diss, Ingatestone) as shared trunk too, since
         // SegmentRegistry::is_shared marks a segment name shared globally,
         // not per overlapping station, and there is no track beyond Norwich
         // that GEML and these three branches jointly occupy. So an incident
-        // here should match both lines independently, each still classified
+        // here should match all lines independently, each still classified
         // as ExclusiveSegment rather than escalating to SharedSegment.
         //
         // Norwich is also emr-regional.toml's own terminus (its own
         // `emr-regional-east` segment, exclusive catalogue-wide, merged
-        // separately from this batch) -- a third independent ExclusiveSegment
+        // separately from this batch) -- another independent ExclusiveSegment
         // match by the same station-overlap pattern.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
@@ -3677,7 +3982,9 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "greater-anglia-main-line".to_string(),
-                "greater-anglia-norfolk-branches".to_string(),
+                "greater-anglia-bittern-line".to_string(),
+                "greater-anglia-wherry-lines".to_string(),
+                "greater-anglia-breckland-line".to_string(),
                 "emr-regional".to_string(),
             ])
         );
@@ -3692,16 +3999,18 @@ mod tests {
     }
 
     #[test]
-    fn norfolk_branches_ely_is_station_overlap_only_with_xc_stansted() {
-        // Ely is on both greater-anglia-norfolk-branches.toml's own
-        // `breckland-line` segment (the Breckland Line's route to Cambridge)
-        // and xc-stansted.toml's whole-route `xc-stansted` segment
-        // (CrossCountry's Birmingham-Stansted Airport route also approaches
-        // Cambridge via Peterborough and Ely). This overlap wasn't
-        // previously exercised by any regression test, since no other
-        // committed line touched Ely before this file existed. The two
-        // files deliberately do NOT share a segment name here (see
-        // greater-anglia-norfolk-branches.toml's Ely/Cambridge decision
+    fn breckland_line_ely_is_station_overlap_only_with_xc_stansted() {
+        // Ely is on both greater-anglia-breckland-line.toml's own
+        // `breckland-line` segment (the Breckland Line's route to Cambridge;
+        // this file was originally bundled as part of
+        // greater-anglia-norfolk-branches.toml, since split by brand --
+        // real-world sanity review) and xc-stansted.toml's whole-route
+        // `xc-stansted` segment (CrossCountry's Birmingham-Stansted Airport
+        // route also approaches Cambridge via Peterborough and Ely). This
+        // overlap wasn't previously exercised by any regression test, since
+        // no other committed line touched Ely before this file existed. The
+        // two files deliberately do NOT share a segment name here (see
+        // greater-anglia-breckland-line.toml's Ely/Cambridge decision
         // note — reusing `xc-stansted` verbatim would incorrectly mark
         // xc-stansted.toml's entire Midlands trunk as shared with this
         // line), so an incident here should match both lines independently,
@@ -3730,7 +4039,7 @@ mod tests {
         assert_eq!(
             matched_ids,
             HashSet::from([
-                "greater-anglia-norfolk-branches".to_string(),
+                "greater-anglia-breckland-line".to_string(),
                 "xc-stansted".to_string(),
                 "emr-regional".to_string(),
                 "great-northern-kings-lynn".to_string(),
@@ -3911,6 +4220,13 @@ mod tests {
         // ExclusiveSegment match, same pattern as
         // `emr_regional_stockport_and_hope_valley_both_match_without_over_propagating`
         // above.
+        //
+        // Updated by the Midlands EMR/WMR/LNWR sanity review: `emr-crewe-
+        // derby.toml` and `lnwr-stafford-crewe.toml` (both real coverage
+        // gaps this review added) also call at Stoke-on-Trent, each on its
+        // own exclusive segment (different operators, different physical
+        // approaches from each other and from the two lines above) -- two
+        // more independent ExclusiveSegment matches.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3924,7 +4240,12 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["wcml-manchester".to_string(), "xc-manchester".to_string()])
+            HashSet::from([
+                "wcml-manchester".to_string(),
+                "xc-manchester".to_string(),
+                "emr-crewe-derby".to_string(),
+                "lnwr-stafford-crewe".to_string(),
+            ])
         );
         for m in &matches {
             assert_eq!(
@@ -3959,18 +4280,20 @@ mod tests {
     }
 
     #[test]
-    fn wcml_north_wales_exclusive_segment_incident_does_not_propagate() {
-        // Rhyl is on the exclusive `wcml-north-wales-branch` segment,
-        // starting immediately after the Crewe junction (per the
-        // shared-trunk rule of thumb) -- not shared with any other line's
-        // segment tag, even though `wcml-manchester.toml` and
-        // `wcml-liverpool.toml` also diverge at Crewe (onto different
-        // physical branches, via Wilmslow and Runcorn respectively).
-        //
-        // Rhyl is also tfw-north-wales-coast.toml's own station (merged
-        // separately, Batch 11), on its exclusive `tfw-north-wales-coast`
-        // segment -- station-level overlap, distinct segment names, both
-        // stay ExclusiveSegment.
+    fn wcml_north_wales_shared_corridor_incident_propagates_to_tfw() {
+        // Rhyl sits on the shared `tfw-north-wales-coast` segment name, now
+        // reused by both this file and `tfw-north-wales-coast.toml` (2026-
+        // 09-21 real-world-sanity review, reversing the original
+        // station-overlap-only ruling -- see either file's own "TfW/WCML
+        // shared corridor"/"Cross-batch note" comment for the full
+        // reasoning: Avanti and TfW genuinely run over the same physical
+        // double-track main line here, not two corridors meeting at a
+        // point). Starting immediately after the Crewe junction (per the
+        // shared-trunk rule of thumb), this is a real SharedSegment match
+        // for both lines -- not shared with `wcml-manchester.toml`'s or
+        // `wcml-liverpool.toml`'s own different branches, which diverge at
+        // Crewe onto physically distinct corridors (via Wilmslow and
+        // Runcorn respectively).
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -3992,8 +4315,8 @@ mod tests {
         for m in &matches {
             assert_eq!(
                 m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment",
                 m.line.id
             );
         }
@@ -4108,6 +4431,14 @@ mod tests {
         // above, but tagged with a distinct segment name since it's a
         // different physical branch (added as a second southern terminus once
         // electrification reached it in 2018).
+        //
+        // Updated by the Midlands EMR/WMR/LNWR sanity review: `lines/wmr-
+        // malvern-line.toml` (a new file from that review) also calls at
+        // Bromsgrove, on its own exclusive `wmr-malvern-line` segment --
+        // genuine physical track-sharing but a materially different
+        // calling pattern beyond this point, so station-overlap only (see
+        // that file's own ruling comment). This incident now also matches
+        // it, independently ExclusiveSegment.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -4119,8 +4450,18 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(matched_ids, HashSet::from(["wmr-cross-city".to_string()]));
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["wmr-cross-city".to_string(), "wmr-malvern-line".to_string()])
+        );
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     #[test]
@@ -4595,10 +4936,14 @@ mod tests {
     // task's file-scope limits).
     #[test]
     fn gwr_south_wales_station_overlap_with_xc_cardiff_stays_exclusive_each_line() {
-        // Cardiff Central is also the terminus of tfw-valley-lines-south.toml
-        // and of all three of the former tfw-valley-lines-north.toml's
-        // successor files (Batch 11's later data-driven split:
-        // tfw-valley-rhymney.toml, tfw-valley-merthyr.toml,
+        // Cardiff Central is also the terminus of tfw-city-line.toml
+        // (originally part of tfw-valley-lines-south.toml, Task 11.7; split
+        // out into its own file by the 2026-09-21 real-world-sanity review --
+        // that split doesn't change which stations reach CDF, since Cardiff
+        // Central was always the City Line's own share of that file, not the
+        // Coryton or Cardiff Bay Lines') and of all three of the former
+        // tfw-valley-lines-north.toml's successor files (Batch 11's later
+        // data-driven split: tfw-valley-rhymney.toml, tfw-valley-merthyr.toml,
         // tfw-valley-rhondda.toml), tagged on every side with their
         // genuinely shared `tfw-valley-cardiff-hub` segment -- those four
         // resolve SharedSegment *with each other*, while gwr-south-wales/
@@ -4630,7 +4975,7 @@ mod tests {
                 "tfw-valley-rhymney".to_string(),
                 "tfw-valley-merthyr".to_string(),
                 "tfw-valley-rhondda".to_string(),
-                "tfw-valley-lines-south".to_string(),
+                "tfw-city-line".to_string(),
                 "tfw-ebbw-vale".to_string(),
                 "tfw-vale-of-glamorgan".to_string(),
             ])
@@ -4640,7 +4985,7 @@ mod tests {
                 "tfw-valley-rhymney"
                 | "tfw-valley-merthyr"
                 | "tfw-valley-rhondda"
-                | "tfw-valley-lines-south" => MatchScope::SharedSegment,
+                | "tfw-city-line" => MatchScope::SharedSegment,
                 _ => MatchScope::ExclusiveSegment,
             };
             assert_eq!(m.scope, expected, "{} scope mismatch", m.line.id);
@@ -4725,6 +5070,11 @@ mod tests {
     // an incident there should stay ExclusiveSegment on both lines rather
     // than propagate as a shared trunk. Mirrors
     // `gwr_south_wales_station_overlap_with_xc_cardiff_stays_exclusive_each_line`.
+    //
+    // Updated by the national/WCML/XC sanity review: wcml-birmingham.toml's
+    // own extension to Wolverhampton also calls at Smethwick Galton Bridge,
+    // on its own distinct exclusive `wcml-birmingham-branch` segment -- a
+    // third independent ExclusiveSegment match.
     #[test]
     fn xc_manchester_station_overlap_with_wmr_snow_hill_stays_exclusive_each_line() {
         let lines = load_all_lines();
@@ -4740,7 +5090,11 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["xc-manchester".to_string(), "wmr-snow-hill".to_string()])
+            HashSet::from([
+                "xc-manchester".to_string(),
+                "wmr-snow-hill".to_string(),
+                "wcml-birmingham".to_string(),
+            ])
         );
         for m in &matches {
             assert_eq!(
@@ -4909,7 +5263,12 @@ mod tests {
     // `swr-west-of-england` segment, i.e. ExclusiveSegment scope, not
     // SharedSegment.
     //
-    // The assertion below is updated to expect all seven lines.
+    // GWR/southwest sanity review (2026-09-21): the new gwr-riviera-line.toml
+    // also lists Exeter St Davids, reusing `xc-south-west` verbatim for its
+    // own Exeter-Newton Abbot approach (the same South Devon Main Line
+    // sea-wall route) - an eighth line, SharedSegment.
+    //
+    // The assertion below is updated to expect all eight lines.
     #[test]
     fn gwr_trunk_xc_south_west_incident_propagates_across_west_of_england_and_cornish_main_line() {
         let lines = load_all_lines();
@@ -4933,6 +5292,7 @@ mod tests {
                 "gwr-avocet-line".to_string(),
                 "gwr-dartmoor-line".to_string(),
                 "swr-west-of-england".to_string(),
+                "gwr-riviera-line".to_string(),
             ])
         );
         for m in &matches {
@@ -5128,10 +5488,12 @@ mod tests {
     // with that line) — included here too, also staying ExclusiveSegment.
     #[test]
     fn gwr_thames_valley_station_overlap_with_gwr_cotswold_stays_exclusive_each_line() {
-        // Oxford is also chiltern-aylesbury.toml's own terminus (merged
-        // separately, Batch 12), on its exclusive `chiltern-oxford-branch`
-        // segment -- a fourth independent ExclusiveSegment match by the same
-        // station-overlap pattern the other three already establish.
+        // Oxford is also chiltern-oxford.toml's own terminus (originally
+        // merged as part of chiltern-aylesbury.toml, Batch 12, since split
+        // out by the real-world sanity review), on its exclusive
+        // `chiltern-oxford-branch` segment -- a fourth independent
+        // ExclusiveSegment match by the same station-overlap pattern the
+        // other three already establish.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -5149,7 +5511,7 @@ mod tests {
                 "gwr-thames-valley".to_string(),
                 "gwr-cotswold".to_string(),
                 "xc-south-coast".to_string(),
-                "chiltern-aylesbury".to_string(),
+                "chiltern-oxford".to_string(),
             ])
         );
         for m in &matches {
@@ -5685,68 +6047,72 @@ mod tests {
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
-    // `tfw-north-wales-coast` (Task 11.4). An incident on a station well
-    // away from the Llandudno Junction overlap should match only this line,
-    // as `MatchScope::ExclusiveSegment` -- e.g. Rhyl.
+    // `tfw-north-wales-coast` (Task 11.4). An incident on a station on this
+    // line's own additional stretch -- one of the 11 stations
+    // `wcml-north-wales.toml` doesn't separately list (see the 2026-09-21
+    // real-world-sanity review's shared-corridor note above Chester in
+    // this file) -- still only matches this one line
+    // (`wcml-north-wales.toml` has no entry at this CRS code at all, so it
+    // cannot match regardless of the segment name), but the match itself
+    // is classified `MatchScope::SharedSegment`, not `ExclusiveSegment`:
+    // `is_shared`/`is_exclusive_to` key off the segment *name* across the
+    // whole catalogue, not per-station, and `tfw-north-wales-coast` is
+    // that name here too (genuinely, not spuriously -- Avanti's own
+    // through service physically runs over this exact stretch of track
+    // even where it doesn't stop). e.g. Penmaenmawr.
     #[test]
-    fn north_wales_coast_exclusive_segment_incident_does_not_propagate() {
-        // Rhyl is also wcml-north-wales.toml's own station (merged
-        // separately, Batch 1), on its exclusive `wcml-north-wales-branch`
-        // segment -- station-level overlap, distinct segment names, both
-        // stay ExclusiveSegment.
+    fn north_wales_coast_own_stretch_incident_is_shared_segment_but_single_match() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
             "VT-1",
-            "Signal failure at Rhyl",
+            "Signal failure at Penmaenmawr",
             "Signal failure causing delays to services on the North Wales Coast Line.",
             &["AW"],
-            &["RHL"],
+            &["PMW"],
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from([
-                "tfw-north-wales-coast".to_string(),
-                "wcml-north-wales".to_string()
-            ])
+            HashSet::from(["tfw-north-wales-coast".to_string()])
         );
-        for m in &matches {
-            assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
-                m.line.id
-            );
-        }
+        assert_eq!(matches[0].scope, MatchScope::SharedSegment);
     }
 
     // Llandudno Junction is on both `tfw-conwy-valley` and
-    // `tfw-north-wales-coast`, but Task 11.4 ruled that overlap
-    // station-overlap-only rather than a shared trunk (see the comment
-    // above `conwy_valley_exclusive_segment_incident_does_not_propagate`
+    // `tfw-north-wales-coast`, but that overlap is station-overlap-only
+    // rather than a shared trunk (see the comment above
+    // `conwy_valley_exclusive_segment_incident_does_not_propagate`
     // and the comments in `lines/tfw-north-wales-coast.toml`). So an
     // incident there should match both lines independently, each still
     // classified as `MatchScope::ExclusiveSegment` (not `SharedSegment` --
     // that scope only applies when a segment name is genuinely shared
     // across line files, which is deliberately not the case here).
     //
-    // Updated by the Wales/East Anglia batch: `tfw-llandudno-branch.toml`
-    // also calls at Llandudno Junction, genuinely sharing track with
-    // `tfw-conwy-valley.toml` there (TfW's own through-service continues
-    // past the junction to Llandudno) on a dedicated, narrow
-    // `tfw-conwy-valley-llandudno-junction` segment name (reconciled during
-    // integration merge -- see either file's own LLJ note for the full
-    // writeup). So `tfw-conwy-valley` and `tfw-llandudno-branch` are now a
-    // genuine SharedSegment pair here, while `tfw-north-wales-coast` and
-    // `wcml-north-wales` stay independently ExclusiveSegment.
+    // Updated twice by the 2026-09-21 real-world-sanity review:
+    //
+    // 1. The former `tfw-llandudno-branch.toml` (a later Wales/East Anglia
+    //    batch addition, which used to also call at Llandudno Junction on
+    //    a dedicated, narrow `tfw-conwy-valley-llandudno-junction` segment
+    //    name genuinely shared with `tfw-conwy-valley.toml`) turned out to
+    //    be entirely redundant with `tfw-conwy-valley.toml`'s own real
+    //    extent (that line's real terminus is Llandudno itself, not
+    //    Llandudno Junction -- see `tfw-conwy-valley.toml`'s own
+    //    top-of-file correction note) and has been deleted, its station
+    //    data folded directly into `tfw-conwy-valley.toml`.
+    //    `tfw-conwy-valley.toml`'s own LLJ entry keeps the same
+    //    `tfw-conwy-valley-llandudno-junction` segment name unchanged, but
+    //    since no other file uses that name any more, it now resolves as
+    //    `MatchScope::ExclusiveSegment` rather than `SharedSegment`.
+    // 2. `tfw-north-wales-coast.toml` and `wcml-north-wales.toml` now
+    //    genuinely share a segment name for the whole Chester-Holyhead
+    //    corridor, including Llandudno Junction (see either file's own
+    //    "TfW/WCML shared corridor"/"Cross-batch note" comment) -- both
+    //    resolve `MatchScope::SharedSegment` here, reversing their
+    //    previous ExclusiveSegment classification.
     #[test]
     fn llj_station_overlap_matches_both_lines_as_exclusive() {
-        // Llandudno Junction is also wcml-north-wales.toml's own station
-        // (merged separately, Batch 1), on its exclusive
-        // `wcml-north-wales-branch` segment -- a third independent
-        // ExclusiveSegment match by the same station-overlap pattern.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -5764,34 +6130,41 @@ mod tests {
                 "tfw-conwy-valley".to_string(),
                 "tfw-north-wales-coast".to_string(),
                 "wcml-north-wales".to_string(),
-                "tfw-llandudno-branch".to_string(),
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "tfw-conwy-valley" || m.line.id == "tfw-llandudno-branch"
-            {
-                MatchScope::SharedSegment
-            } else {
+            let expected = if m.line.id == "tfw-conwy-valley" {
                 MatchScope::ExclusiveSegment
+            } else {
+                MatchScope::SharedSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
-    // `tfw-marches` (Task 11.5). An incident on a station well away from
-    // both coordination points (the Shrewsbury-Craven Arms shared trunk
-    // with Heart of Wales, and the Chester station-overlap with North
-    // Wales Coast) should match only this line, as
-    // `MatchScope::ExclusiveSegment` -- e.g. Hereford, which sits on
-    // `tfw-marches-south`, a segment no other line in the catalogue uses.
+    // `tfw-marches` (Task 11.5; rescoped to its real Shrewsbury-Crewe
+    // northern extent by the 2026-09-21 real-world-sanity review -- see
+    // `lines/tfw-marches.toml`'s own top-of-file correction note). An
+    // incident on a station well away from this line's one coordination
+    // point (the Shrewsbury-Craven Arms shared trunk with Heart of Wales)
+    // should match only this line, as `MatchScope::ExclusiveSegment` --
+    // e.g. Hereford, which sits on `tfw-marches-south`, a segment no other
+    // line in the catalogue uses.
+    //
+    // Updated by the Midlands EMR/WMR/LNWR sanity review: `lines/wmr-
+    // malvern-line.toml` (a new file from that review) also terminates at
+    // Hereford, on its own exclusive `wmr-malvern-line` segment (a
+    // physically distinct, Bromsgrove/Worcester-facing approach) --
+    // station-overlap only, so this incident now also matches that line,
+    // independently ExclusiveSegment.
     #[test]
     fn marches_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
+        // Updated by the GWR/southwest sanity review: gwr-cotswold.toml's
+        // own extension now also terminates at Hereford, on its own
+        // exclusive `gwr-cotswold` segment - a third independent
+        // ExclusiveSegment match, station overlap only.
         let inc = incident(
             "AW-6",
             "Signal failure at Hereford",
@@ -5801,8 +6174,22 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(matched_ids, HashSet::from(["tfw-marches".to_string()]));
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        assert_eq!(
+            matched_ids,
+            HashSet::from([
+                "tfw-marches".to_string(),
+                "wmr-malvern-line".to_string(),
+                "gwr-cotswold".to_string(),
+            ])
+        );
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 
     // Craven Arms is on both `tfw-marches` and `tfw-heart-of-wales`, and
@@ -5888,29 +6275,47 @@ mod tests {
         }
     }
 
-    // Chester is on both `tfw-marches` and `tfw-north-wales-coast`, but
-    // Task 11.5 ruled that overlap station-overlap-only rather than a
-    // shared trunk, mirroring `tfw-north-wales-coast.toml`'s own Llandudno
-    // Junction decision against `tfw-conwy-valley.toml`: despite genuine
-    // physical track sharing existing at Saltney Junction on the final
-    // approach into Chester (see the comment above Chester in
-    // `lines/tfw-marches.toml`), `tfw-north-wales-coast.toml` uses one
-    // single whole-line segment name for its entire route, so reusing it
-    // here would incorrectly mark that line's whole route (Rhyl, Bangor,
-    // Holyhead, etc.) as shared with Marches. So the two files use distinct
-    // segment names at Chester, and an incident there should match both
-    // lines independently, each still classified as
+    // Chester is on both `tfw-shrewsbury-chester` and
+    // `tfw-north-wales-coast`, but that overlap is station-overlap-only
+    // rather than a shared trunk, mirroring `tfw-north-wales-coast.toml`'s
+    // own Llandudno Junction decision against `tfw-conwy-valley.toml`:
+    // despite genuine physical track sharing existing at Saltney Junction
+    // on the final approach into Chester (see the comment above Chester in
+    // `lines/tfw-shrewsbury-chester.toml`), `tfw-north-wales-coast.toml`
+    // uses one single whole-line segment name for its entire route, so
+    // reusing it here would incorrectly mark that line's whole route
+    // (Rhyl, Bangor, Holyhead, etc.) as shared with this line. So the two
+    // files use distinct segment names at Chester, and an incident there
+    // should match both lines independently, each still classified as
     // `MatchScope::ExclusiveSegment` (not `SharedSegment`).
+    //
+    // Updated by the 2026-09-21 real-world-sanity review: this station
+    // data used to live in `tfw-marches.toml` (Task 11.5), which
+    // mistakenly modelled the "Marches Line" as running Shrewsbury-Chester.
+    // It has been moved to a new, separately-branded
+    // `lines/tfw-shrewsbury-chester.toml` file -- the real "Marches Line"
+    // (`tfw-marches.toml`) now runs Shrewsbury-Crewe instead and no longer
+    // touches Chester at all. See `lines/tfw-marches.toml`'s own
+    // top-of-file correction note for the full story.
     #[test]
     fn chester_station_overlap_matches_both_lines_as_exclusive() {
         // Chester is also wcml-north-wales.toml's (Batch 1) and
-        // merseyrail-wirral.toml's (Batch 12) own station, each on its own
-        // exclusive segment (`wcml-north-wales-branch`,
-        // `merseyrail-wirral-chester`) -- two more independent
-        // ExclusiveSegment matches by the same station-overlap pattern.
-        // `northern-mid-cheshire.toml` (North West England line-coverage
-        // audit, 2026-09-21) adds a fifth: its own approach to Chester via
-        // Northwich, again station overlap only, no shared track.
+        // merseyrail-wirral.toml's (Batch 12) own station. `wcml-north-
+        // wales.toml` reuses `tfw-north-wales-coast.toml`'s own segment
+        // name here (2026-09-21 real-world-sanity review, reversing the
+        // original station-overlap-only ruling -- see either file's own
+        // "TfW/WCML shared corridor"/"Cross-batch note" comment: Avanti and
+        // TfW genuinely run over the same physical Chester-Holyhead main
+        // line, not two corridors meeting at a point), so those two are
+        // now a genuine SharedSegment pair here. `merseyrail-wirral.toml`
+        // stays on its own exclusive segment (`merseyrail-wirral-chester`)
+        // -- an independent ExclusiveSegment match by the ordinary
+        // station-overlap pattern, same as `tfw-shrewsbury-chester.toml`
+        // (a genuinely different physical corridor into Chester, per that
+        // file's own comment). `northern-mid-cheshire.toml` (North West
+        // England line-coverage audit, 2026-09-21) adds a fifth line here:
+        // its own approach to Chester via Northwich, again station overlap
+        // only, no shared track.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -5925,7 +6330,7 @@ mod tests {
         assert_eq!(
             matched_ids,
             HashSet::from([
-                "tfw-marches".to_string(),
+                "tfw-shrewsbury-chester".to_string(),
                 "tfw-north-wales-coast".to_string(),
                 "wcml-north-wales".to_string(),
                 "merseyrail-wirral".to_string(),
@@ -5933,13 +6338,63 @@ mod tests {
             ])
         );
         for m in &matches {
-            assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
-                m.line.id
-            );
+            let expected = if m.line.id == "tfw-north-wales-coast" || m.line.id == "wcml-north-wales"
+            {
+                MatchScope::SharedSegment
+            } else {
+                MatchScope::ExclusiveSegment
+            };
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
+    }
+
+    // `tfw-marches`'s corrected Shrewsbury-Crewe stretch (2026-09-21
+    // real-world-sanity review). An incident on a station on that stretch,
+    // well away from the Shrewsbury/Craven Arms coordination point, should
+    // match only this line, as `MatchScope::ExclusiveSegment` -- e.g.
+    // Nantwich, which sits on `tfw-marches-crewe`, a segment no other line
+    // in the catalogue uses.
+    #[test]
+    fn marches_crewe_stretch_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "AW-16",
+            "Signal failure at Nantwich",
+            "Signal failure causing delays to Transport for Wales services.",
+            &["AW"],
+            &["NAN"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(matched_ids, HashSet::from(["tfw-marches".to_string()]));
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `tfw-shrewsbury-chester` (new file, 2026-09-21 real-world-sanity
+    // review -- split out of the old, mis-scoped `tfw-marches.toml`). An
+    // incident well away from its own Chester/Shrewsbury station-overlap
+    // points should match only this line, as `MatchScope::ExclusiveSegment`
+    // -- e.g. Ruabon, which sits on `tfw-shrewsbury-chester`, a segment no
+    // other line in the catalogue uses.
+    #[test]
+    fn shrewsbury_chester_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "AW-17",
+            "Signal failure at Ruabon",
+            "Signal failure causing delays to Transport for Wales services.",
+            &["AW"],
+            &["RUA"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["tfw-shrewsbury-chester".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
     // Shrewsbury is a genuine three-way overlap point, introduced by Task
@@ -5962,6 +6417,14 @@ mod tests {
     // different segment name from the TfW trio, so both now also match as
     // SharedSegment with each other but ExclusiveSegment relative to every
     // TfW file here.
+    //
+    // Updated again by the 2026-09-21 real-world-sanity review:
+    // `lines/tfw-shrewsbury-chester.toml` (split out of the old, mis-scoped
+    // `tfw-marches.toml`) also has its own SHR entry, on its own exclusive
+    // `tfw-shrewsbury-chester` segment (station-overlap only, same
+    // reasoning as Cambrian at this station -- see that file's own SHR
+    // comment) -- a sixth line now resolves at this one incident, as a
+    // seventh independent ExclusiveSegment match.
     #[test]
     fn shrewsbury_three_way_overlap_resolves_per_line() {
         let lines = load_all_lines();
@@ -5986,6 +6449,7 @@ mod tests {
                 "tfw-heart-of-wales".to_string(),
                 "wmr-shrewsbury-local".to_string(),
                 "wmr-darlaston-line".to_string(),
+                "tfw-shrewsbury-chester".to_string(),
             ])
         );
         assert_eq!(scopes["tfw-cambrian"], MatchScope::ExclusiveSegment);
@@ -5993,6 +6457,10 @@ mod tests {
         assert_eq!(scopes["tfw-heart-of-wales"], MatchScope::SharedSegment);
         assert_eq!(scopes["wmr-shrewsbury-local"], MatchScope::SharedSegment);
         assert_eq!(scopes["wmr-darlaston-line"], MatchScope::SharedSegment);
+        assert_eq!(
+            scopes["tfw-shrewsbury-chester"],
+            MatchScope::ExclusiveSegment
+        );
     }
 
     // `tfw-valley-rhymney` (originally `tfw-valley-lines-north`, Task 11.6;
@@ -6025,23 +6493,22 @@ mod tests {
 
     // `tfw-valley-rhymney`/`tfw-valley-merthyr`/`tfw-valley-rhondda`
     // (originally `tfw-valley-lines-north`, Task 11.6, later split three
-    // ways) x `tfw-valley-lines-south` (Task 11.7): the Cardiff hub
-    // segment-sharing decision. This test supersedes the batch's earlier
-    // `valley_lines_north_cardiff_hub_is_exclusive_pending_task_11_7`, which
-    // documented the interim state before Task 11.7 existed (back then only
-    // one line file used the `tfw-valley-cardiff-hub` segment name, so the
-    // registry resolved it as `ExclusiveSegment`). Task 11.7 independently
-    // verified genuine same-platform sharing (both files' routes call at
-    // Cardiff Central and/or Cardiff Queen Street) and deliberately reused
-    // `tfw-valley-lines-north.toml`'s `tfw-valley-cardiff-hub` segment name
-    // in `tfw-valley-lines-south.toml` -- see that file's own Cardiff hub
-    // segment-sharing decision comment. The later three-way split of
-    // `tfw-valley-lines-north.toml` carried this same segment name unchanged
-    // into all three successor files, so an incident at Cardiff Queen Street
-    // now correctly propagates to all four line files as
-    // `MatchScope::SharedSegment`, mirroring
+    // ways) x `tfw-coryton-line`/`tfw-cardiff-bay-line` (originally
+    // `tfw-valley-lines-south`, Task 11.7, itself later split three ways by
+    // the 2026-09-21 real-world-sanity review -- see `tfw-city-line.toml`'s
+    // own split-history comment): the Cardiff hub segment-sharing decision.
+    // Task 11.7 independently verified genuine same-platform sharing (all
+    // routes call at Cardiff Central and/or Cardiff Queen Street) and
+    // deliberately reused `tfw-valley-lines-north.toml`'s
+    // `tfw-valley-cardiff-hub` segment name in the former
+    // `tfw-valley-lines-south.toml`. Cardiff Queen Street specifically is
+    // only ever the origin for the Coryton Line and Cardiff Bay Line (not
+    // the City Line, which reaches Cardiff Central instead) -- both true
+    // before and after the south-side split -- so an incident there
+    // propagates to Rhymney/Merthyr/Rhondda (all three touch both CDF and
+    // CDQ) plus `tfw-coryton-line` and `tfw-cardiff-bay-line`, five lines in
+    // total, all `MatchScope::SharedSegment`, mirroring
     // `xc_hub_incident_propagates_to_every_cross_country_arm`.
-    // `tfw-valley-lines-south.toml` itself was not edited by that split.
     #[test]
     fn valley_lines_cardiff_hub_shared_segment_propagates() {
         let lines = load_all_lines();
@@ -6061,7 +6528,8 @@ mod tests {
                 "tfw-valley-rhymney".to_string(),
                 "tfw-valley-merthyr".to_string(),
                 "tfw-valley-rhondda".to_string(),
-                "tfw-valley-lines-south".to_string()
+                "tfw-coryton-line".to_string(),
+                "tfw-cardiff-bay-line".to_string(),
             ])
         );
         for m in &matches {
@@ -6074,13 +6542,17 @@ mod tests {
         }
     }
 
-    // `tfw-valley-lines-south` (Task 11.7). An incident on a station well
-    // into the Coryton Line's own exclusive corridor (its own segment,
-    // `tfw-valley-coryton`, used by no other branch in this file and no
-    // other file in the catalogue) should match only this line, as
-    // `MatchScope::ExclusiveSegment` -- e.g. Birchgrove.
+    // `tfw-coryton-line` (originally part of `tfw-valley-lines-south`, Task
+    // 11.7; split out into its own file by the 2026-09-21 real-world-sanity
+    // review, for consistency with the same real-world-branding split
+    // already applied on the north side of the network -- see
+    // `tfw-city-line.toml`'s own split-history comment). An incident on a
+    // station well into the Coryton Line's own exclusive corridor (its own
+    // segment, `tfw-coryton-line`, used by no other line in the catalogue)
+    // should match only this line, as `MatchScope::ExclusiveSegment` --
+    // e.g. Birchgrove.
     #[test]
-    fn valley_lines_south_exclusive_coryton_segment_does_not_propagate() {
+    fn coryton_line_exclusive_segment_does_not_propagate() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -6092,28 +6564,29 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(
-            matched_ids,
-            HashSet::from(["tfw-valley-lines-south".to_string()])
-        );
+        assert_eq!(matched_ids, HashSet::from(["tfw-coryton-line".to_string()]));
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
     // `tfw-valley-merthyr`/`tfw-valley-rhondda` (originally
     // `tfw-valley-lines-north`, Task 11.6, later split three ways) x
-    // `tfw-valley-lines-south` (Task 11.7): the Radyr junction-sharing
-    // decision (see `tfw-valley-lines-south.toml`'s own comment). Radyr
-    // carries its own dedicated, Radyr-only segment name,
-    // `tfw-valley-radyr-junction`, minted in all three files that touch it
-    // today (fix round 1: this used to reuse `tfw-valley-lines-north.toml`'s
-    // `tfw-valley-taff-trunk` segment name for Radyr alone, which incorrectly
-    // made every other station on that segment register as shared too -- see
+    // `tfw-city-line` (originally part of `tfw-valley-lines-south`, Task
+    // 11.7, split out into its own file by the 2026-09-21 real-world-sanity
+    // review): the Radyr junction-sharing decision (see
+    // `tfw-city-line.toml`'s own comment). Radyr carries its own dedicated,
+    // Radyr-only segment name, `tfw-valley-radyr-junction`, minted in all
+    // three files that touch it today (fix round 1: this used to reuse
+    // `tfw-valley-lines-north.toml`'s `tfw-valley-taff-trunk` segment name
+    // for Radyr alone, which incorrectly made every other station on that
+    // segment register as shared too -- see
     // `valley_taff_trunk_shared_segment_propagates_after_split` below for the
     // regression test guarding against the equivalent mistake post-split) --
     // so an incident at Radyr itself should propagate to all three files
     // that carry it, all `MatchScope::SharedSegment`. (Rhymney does not
     // carry Radyr at all -- it takes its own separate corridor via the
-    // Caerphilly Tunnel -- so it correctly does not appear here.)
+    // Caerphilly Tunnel -- and neither `tfw-coryton-line` nor
+    // `tfw-cardiff-bay-line` ever touch Radyr at all, so none of them
+    // appear here.)
     #[test]
     fn valley_lines_radyr_junction_shared_segment_propagates() {
         let lines = load_all_lines();
@@ -6132,7 +6605,7 @@ mod tests {
             HashSet::from([
                 "tfw-valley-merthyr".to_string(),
                 "tfw-valley-rhondda".to_string(),
-                "tfw-valley-lines-south".to_string()
+                "tfw-city-line".to_string()
             ])
         );
         for m in &matches {
@@ -6166,8 +6639,9 @@ mod tests {
     // correctly propagates to both lines as `MatchScope::SharedSegment` --
     // more accurate than before, not a regression: passengers on both lines
     // are genuinely affected by an incident on their shared approach. This
-    // must still NOT extend to `tfw-valley-lines-south.toml`: the City Line
-    // only touches this trunk at Radyr itself, via its own dedicated
+    // must still NOT extend to `tfw-city-line.toml` (formerly part of
+    // `tfw-valley-lines-south.toml`): the City Line only touches this
+    // trunk at Radyr itself, via its own dedicated
     // `tfw-valley-radyr-junction` segment, not at Pontypridd or any of the
     // other five stations on `tfw-valley-taff-trunk` (Cathays, Llandaf,
     // Taffs Well, Treforest, Treforest Estate).
@@ -6251,7 +6725,15 @@ mod tests {
     // below), this test now exercises a `chatham-medway` station the new
     // file doesn't touch (Meopham, between Longfield and Sole Street -
     // west of Strood, where the Javelin's North Kent pattern joins), to
-    // confirm the untouched part of chatham-medway still stays exclusive.
+    // confirm the untouched part of chatham-medway still stays exclusive
+    // of southeastern-highspeed.toml.
+    //
+    // Updated (Southeastern real-world-sanity review): southeastern-
+    // sheerness-line.toml (a new file from that review) also reuses
+    // `chatham-medway` verbatim for its own VIC-Sheerness through service as
+    // far as Sittingbourne, and its own FNR-SOR stretch includes Meopham -
+    // so this incident now also matches that file, and both lines report
+    // SharedSegment for this exact station.
     #[test]
     fn chatham_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -6267,9 +6749,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["southeastern-chatham".to_string()])
+            HashSet::from([
+                "southeastern-chatham".to_string(),
+                "southeastern-sheerness-line".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment",
+                m.line.id
+            );
+        }
     }
 
     // The two branches within this one file (chatham-coastal via Ramsgate,
@@ -6415,17 +6907,26 @@ mod tests {
     // Same reasoning again for the North Kent pattern: from Strood onward
     // this file's `hs1-northkent` segment runs over the same physical
     // track as southeastern-chatham.toml's `chatham-medway`/
-    // `chatham-coastal`, but the name isn't reused (this file doesn't
-    // touch e.g. Longfield/Meopham/Sole Street), so it's station overlap,
-    // not a shared trunk - both lines match a Ramsgate incident
-    // independently, each ExclusiveSegment.
+    // `chatham-coastal`. Originally the name wasn't reused (this file
+    // doesn't touch e.g. Longfield/Meopham/Sole Street), so it was modelled
+    // as station overlap, not a shared trunk.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): resolved by splitting the segment at Strood (the actual
+    // physical boundary - this file's own Gravesend approach is genuinely
+    // exclusive, but SOO onward is genuinely the same track as
+    // southeastern-chatham.toml) rather than declining to share the whole
+    // stretch. SOO through RAM is now `strood-ramsgate-corridor`, reused
+    // verbatim by both files - see southeastern-chatham.toml's own header
+    // comment. A Ramsgate incident is therefore now a genuine SharedSegment
+    // between southeastern-chatham and southeastern-highspeed.
     //
     // Kent/Sussex batch: southeastern-canterbury-west.toml also terminates
     // at RAM (its own `canterbury-west-line` segment, approached from
-    // Ashford/Canterbury West rather than Faversham/Margate) - same
-    // station-overlap treatment, added here.
+    // Ashford/Canterbury West rather than Faversham/Margate) - untouched by
+    // this review, stays independently ExclusiveSegment.
     #[test]
-    fn hs1_northkent_station_overlap_matches_both_chatham_and_hs1_as_independent_exclusive_segments()
+    fn hs1_northkent_ramsgate_incident_matches_chatham_shared_and_canterbury_west_exclusive()
      {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
@@ -6447,11 +6948,15 @@ mod tests {
             ])
         );
         for m in &matches {
+            let expected = if m.line.id == "southeastern-canterbury-west" {
+                MatchScope::ExclusiveSegment
+            } else {
+                MatchScope::SharedSegment
+            };
             assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
-                m.line.id
+                m.scope, expected,
+                "{} should be {:?}",
+                m.line.id, expected
             );
         }
     }
@@ -6576,16 +7081,57 @@ mod tests {
     //
     // Kent/Sussex batch: southeastern-north-kent.toml (its own
     // `southeastern-north-kent` segment, the Greenwich-line approach) also
-    // calls at LBG - same station-overlap treatment, added here as a ninth
-    // independent match. (southeastern-maidstone-east.toml does NOT touch
-    // LBG - its own London approach is via Herne Hill/Bromley South, the
-    // same Victoria-side alignment southeastern-chatham.toml already
-    // models, which never reaches London Bridge.) The set below and the
-    // function name below now cover nine lines in total, eight of them
-    // independent ExclusiveSegment matches plus the bexleyheath/
-    // dartford-loop SharedSegment pair.
+    // calls at LBG - originally station overlap, a ninth independent match.
+    // (southeastern-maidstone-east.toml does NOT touch LBG - its own London
+    // approach is via Herne Hill/Bromley South, the same Victoria-side
+    // alignment southeastern-chatham.toml already models, which never
+    // reaches London Bridge.)
+    //
+    // Updated (real-world sanity review): thameslink-rainham.toml's own
+    // Luton-Rainham route also runs the Thameslink core's full length
+    // through London Bridge (its own `thameslink-rainham` segment) before
+    // diverging towards Greenwich - a tenth independent ExclusiveSegment
+    // match.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): a cross-file review found southeastern-main-line.toml,
+    // southeastern-hayes-line.toml and southeastern-north-kent.toml had each
+    // kept their own separate name for this exact Charing Cross/Cannon
+    // Street-Waterloo East-London Bridge-New Cross-St Johns-Lewisham
+    // stretch, even though it is the same physical four-track approach
+    // southeastern-bexleyheath.toml/southeastern-dartford-loop.toml already
+    // correctly share as `southeastern-lewisham-corridor`. All three have
+    // now been fixed to reuse that name too (see each file's own header
+    // comment) - so this set now has FIVE files sharing
+    // `southeastern-lewisham-corridor` at LBG (bexleyheath, dartford-loop,
+    // main-line, hayes-line, north-kent), all SharedSegment together.
+    // thameslink-core and thameslink-rainham each keep their own distinct
+    // segment name here (`thameslink-core`/`thameslink-rainham`, untouched
+    // by this review) and stay independently ExclusiveSegment. southern-
+    // brighton-main-line and thameslink-southern are ALSO now a
+    // SharedSegment pair with each other at LBG (their own separate
+    // `brighton-main-line-north` unification - see Group 3 of the same
+    // review, southern-brighton-main-line.toml's own SEGMENT NAMING
+    // comment), independent of the southeastern-lewisham-corridor family.
+    // southern-oxted-uckfield's own `oxted-london-bridge-approach` is
+    // untouched by this review and stays independently ExclusiveSegment.
+    //
+    // Updated (Southern real-world-sanity review): southern-metro-crystal-
+    // palace.toml also calls at LBG, on its own exclusive
+    // `southern-metro-beckenham-approach` segment (not reused by
+    // southern-metro-sutton.toml, which doesn't reach LBG at all) - an
+    // eleventh independent ExclusiveSegment match.
+    //
+    // The set below and the function name cover eleven lines in total: five
+    // of them (southeastern-{bexleyheath,dartford-loop,main-line,hayes-line,
+    // north-kent}) share southeastern-lewisham-corridor as one SharedSegment
+    // family, southern-brighton-main-line and thameslink-southern are a
+    // second, independent SharedSegment pair, and the remaining four
+    // (thameslink-core, thameslink-rainham, southern-oxted-uckfield,
+    // southern-metro-crystal-palace) are each their own independent
+    // ExclusiveSegment match.
     #[test]
-    fn lbg_station_overlap_spans_nine_lines_bexleyheath_and_dartford_loop_share_the_trunk() {
+    fn lbg_station_overlap_spans_ten_lines_bexleyheath_and_dartford_loop_share_the_trunk() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -6609,15 +7155,20 @@ mod tests {
                 "southern-oxted-uckfield".to_string(),
                 "thameslink-southern".to_string(),
                 "southeastern-north-kent".to_string(),
+                "thameslink-rainham".to_string(),
+                "southern-metro-crystal-palace".to_string(),
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "southeastern-bexleyheath"
-                || m.line.id == "southeastern-dartford-loop"
-            {
-                MatchScope::SharedSegment
-            } else {
-                MatchScope::ExclusiveSegment
+            let expected = match m.line.id.as_str() {
+                "southeastern-bexleyheath"
+                | "southeastern-dartford-loop"
+                | "southeastern-main-line"
+                | "southeastern-hayes-line"
+                | "southeastern-north-kent"
+                | "southern-brighton-main-line"
+                | "thameslink-southern" => MatchScope::SharedSegment,
+                _ => MatchScope::ExclusiveSegment,
             };
             assert_eq!(
                 m.scope, expected,
@@ -6673,15 +7224,22 @@ mod tests {
     // data-driven line-definition audit): LEW is the Bexleyheath line's own
     // diverging junction, so it stays on `southeastern-lewisham-corridor`
     // in BOTH new files (the same shared trunk each still crosses up to and
-    // including Lewisham). That gives a fourth match here, and - unlike
-    // southeastern-hayes-line/southeastern-main-line, which each use their
-    // own distinct segment name at LEW - southeastern-bexleyheath and
-    // southeastern-dartford-loop share the literal segment name here, so
-    // the registry correctly promotes BOTH of those two to SharedSegment
-    // (mirrors swr_shared_trunk_incident_propagates's per-family
-    // SharedSegment shape; see also
+    // including Lewisham). That originally gave a fourth match here, with
+    // southeastern-hayes-line/southeastern-main-line each using their own
+    // distinct segment name at LEW (station overlap only).
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): southeastern-hayes-line.toml and southeastern-main-
+    // line.toml have both now been fixed to reuse
+    // `southeastern-lewisham-corridor` at LEW too (see each file's own
+    // header comment) - so all FOUR lines here now share the literal
+    // segment name and the registry correctly promotes all four to
+    // SharedSegment (mirrors swr_shared_trunk_incident_propagates's
+    // per-family SharedSegment shape; see also
     // lbg_station_overlap_spans_nine_lines_bexleyheath_and_dartford_loop_share_the_trunk
-    // above for the same pattern at London Bridge).
+    // above for the same pattern at London Bridge). southeastern-north-
+    // kent.toml does not reach LEW at all (its own exclusive Greenwich-line
+    // stretch diverges earlier, at New Cross), so it is not in this set.
     #[test]
     fn lew_station_overlap_matches_four_lines_bexleyheath_and_dartford_loop_share_the_trunk() {
         let lines = load_all_lines();
@@ -6705,17 +7263,11 @@ mod tests {
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "southeastern-bexleyheath"
-                || m.line.id == "southeastern-dartford-loop"
-            {
-                MatchScope::SharedSegment
-            } else {
-                MatchScope::ExclusiveSegment
-            };
             assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
+                m.scope,
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment on southeastern-lewisham-corridor",
+                m.line.id
             );
         }
     }
@@ -6758,10 +7310,13 @@ mod tests {
     // (southeastern-bexleyheath.toml/southeastern-dartford-loop.toml, per a
     // data-driven line-definition audit): both new files still list LEW on
     // their shared `southeastern-lewisham-corridor` segment, so this
-    // incident now matches four lines instead of three, with the split pair
-    // promoted to SharedSegment between themselves - same shape as
+    // incident matches four lines. Updated again by the shared-segment
+    // structural review (review2-shared-segments): southeastern-hayes-
+    // line.toml and southeastern-main-line.toml now also reuse
+    // `southeastern-lewisham-corridor` at LEW (see
     // lew_station_overlap_matches_four_lines_bexleyheath_and_dartford_loop_share_the_trunk
-    // above.
+    // above for the full write-up), so all four lines are now promoted to
+    // SharedSegment together, not just the bexleyheath/dartford-loop pair.
     #[test]
     fn sibling_line_names_no_longer_veto_a_shared_station_hit() {
         let lines = load_all_lines();
@@ -6786,17 +7341,11 @@ mod tests {
             "all named/overlapping lines list LEW and must all match; before the fix each vetoed the other and this was empty"
         );
         for m in &matches {
-            let expected = if m.line.id == "southeastern-bexleyheath"
-                || m.line.id == "southeastern-dartford-loop"
-            {
-                MatchScope::SharedSegment
-            } else {
-                MatchScope::ExclusiveSegment
-            };
             assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
+                m.scope,
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment on southeastern-lewisham-corridor",
+                m.line.id
             );
         }
     }
@@ -6817,12 +7366,18 @@ mod tests {
     // below. HSK remains exclusive to `southern-bml-south`.
     //
     // Updated by Task 5.14 (thameslink-southern.toml): that file's own
-    // Brighton branch also calls at Hassocks, on its own `thameslink-
-    // brighton` segment - deliberately NOT the same name as this line's own
-    // `southern-bml-south` (see thameslink-southern.toml's own PAST EAST
-    // CROYDON header comment for why that lead was documented but not
-    // acted on), so this is a second independent ExclusiveSegment match,
-    // not a SharedSegment one.
+    // Brighton branch also calls at Hassocks, originally on its own
+    // `thameslink-brighton` segment - deliberately NOT the same name as this
+    // line's own `southern-bml-south` at the time (see thameslink-
+    // southern.toml's own PAST EAST CROYDON header comment history for why
+    // that lead was originally documented but not acted on).
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): that decision was reversed by a later cross-file review -
+    // `southern-bml-south` (renamed `brighton-main-line-south`) is now
+    // reused verbatim by thameslink-southern.toml too, so this is now a
+    // genuine SharedSegment pair, not two independent ExclusiveSegment
+    // matches - see both files' own updated header comments.
     #[test]
     fn southern_bml_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -6846,8 +7401,8 @@ mod tests {
         for m in &matches {
             assert_eq!(
                 m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment on brighton-main-line-south",
                 m.line.id
             );
         }
@@ -6876,10 +7431,14 @@ mod tests {
     // in `aggregation.rs`, which WOULD fail without `GX` in `operators`.
     //
     // Updated by Task 5.14 (thameslink-southern.toml): that file's own
-    // Brighton branch also calls at Preston Park, on its own
-    // `thameslink-brighton` segment - a second independent ExclusiveSegment
-    // station-overlap match, same reasoning as
-    // southern_bml_exclusive_segment_incident_does_not_propagate above.
+    // Brighton branch also calls at Preston Park - originally its own
+    // `thameslink-brighton` segment, a second independent ExclusiveSegment
+    // station-overlap match.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): now a genuine SharedSegment pair on `brighton-main-line-
+    // south` - see southern_bml_exclusive_segment_incident_does_not_propagate
+    // above for the full write-up.
     #[test]
     fn southern_bml_station_hit_matches_regardless_of_gx_or_sn_operator_tag() {
         let lines = load_all_lines();
@@ -6903,8 +7462,8 @@ mod tests {
         for m in &matches {
             assert_eq!(
                 m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment on brighton-main-line-south",
                 m.line.id
             );
         }
@@ -6953,13 +7512,21 @@ mod tests {
     // incident at Brighton matches all three lines independently, each
     // still scoped ExclusiveSegment, never SharedSegment.
     // Updated by Task 5.14 (thameslink-southern.toml): that file's own
-    // Brighton branch also terminates at Brighton, on its own
-    // `thameslink-brighton` segment - deliberately NOT the same name as
+    // Brighton branch also terminates at Brighton - originally its own
+    // `thameslink-brighton` segment, deliberately NOT the same name as
     // southern-brighton-main-line.toml's own `southern-bml-south` here (see
-    // that file's own PAST EAST CROYDON header comment for why the
+    // that file's own PAST EAST CROYDON header comment history for why the
     // southern-bml-south sharing lead found past East Croydon was
-    // documented but not acted on), so this remains a fourth independent
-    // ExclusiveSegment station-overlap match, not a SharedSegment one.
+    // originally documented but not acted on).
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): that decision was reversed - southern-brighton-main-
+    // line.toml and thameslink-southern.toml now share `brighton-main-
+    // line-south` verbatim (see southern_bml_exclusive_segment_incident_
+    // does_not_propagate above), so those two are now SharedSegment with
+    // each other here. southern-coastway-east.toml's/southern-coastway-
+    // west.toml's own segment names are untouched by this review and stay
+    // independently ExclusiveSegment.
     #[test]
     fn btn_station_overlap_matches_coastway_east_and_brighton_main_line_as_independent_exclusive_segments()
      {
@@ -6984,11 +7551,17 @@ mod tests {
             ])
         );
         for m in &matches {
+            let expected = if m.line.id == "southern-brighton-main-line"
+                || m.line.id == "thameslink-southern"
+            {
+                MatchScope::SharedSegment
+            } else {
+                MatchScope::ExclusiveSegment
+            };
             assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
-                m.line.id
+                m.scope, expected,
+                "{} should be {:?}",
+                m.line.id, expected
             );
         }
     }
@@ -7143,8 +7716,31 @@ mod tests {
     // ExclusiveSegment, never SharedSegment.
     //
     // Kent/Sussex batch: southeastern-maidstone-east.toml also terminates at
-    // VIC (its own `maidstone-east-victoria` segment) - same station-overlap
-    // treatment, added here as a fourth independent match.
+    // VIC - originally its own `maidstone-east-victoria` segment, a fourth
+    // independent station-overlap match.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): southeastern-chatham.toml's and southeastern-maidstone-
+    // east.toml's own Victoria approaches turned out to be an IDENTICAL
+    // twelve-station list, so both now share `chatham-maidstone-victoria`
+    // verbatim - a genuine SharedSegment between those two specifically
+    // (see southeastern-chatham.toml's own header comment). southern-
+    // brighton-main-line.toml's own `southern-bml-victoria` and southern-
+    // oxted-uckfield.toml's own `oxted-victoria-approach` are untouched by
+    // this review and stay independently ExclusiveSegment.
+    //
+    // Updated by the Southeastern real-world-sanity review: southeastern-
+    // sheerness-line.toml (new) also terminates at Victoria, reusing
+    // `chatham-maidstone-victoria` verbatim (see that file's own SEGMENT
+    // NAMING comment, updated to match southeastern-chatham.toml's
+    // shared-segments-review split) - a fourth genuine SharedSegment member.
+    //
+    // Updated by the Southern real-world-sanity review: two more new files,
+    // southern-metro-crystal-palace.toml and southern-metro-sutton.toml,
+    // also terminate at Victoria, sharing their own `southern-metro-
+    // victoria-trunk` segment verbatim with EACH OTHER - a separate,
+    // independent SharedSegment pair, station overlap only against every
+    // other family here.
     #[test]
     fn vic_station_overlap_matches_brighton_main_line_chatham_and_oxted_uckfield_as_independent_exclusive_segments()
      {
@@ -7166,14 +7762,26 @@ mod tests {
                 "southeastern-chatham".to_string(),
                 "southern-oxted-uckfield".to_string(),
                 "southeastern-maidstone-east".to_string(),
+                "southeastern-sheerness-line".to_string(),
+                "southern-metro-crystal-palace".to_string(),
+                "southern-metro-sutton".to_string(),
             ])
         );
         for m in &matches {
+            let expected = if m.line.id == "southeastern-chatham"
+                || m.line.id == "southeastern-maidstone-east"
+                || m.line.id == "southeastern-sheerness-line"
+                || m.line.id == "southern-metro-crystal-palace"
+                || m.line.id == "southern-metro-sutton"
+            {
+                MatchScope::SharedSegment
+            } else {
+                MatchScope::ExclusiveSegment
+            };
             assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
-                m.line.id
+                m.scope, expected,
+                "{} should be {:?}",
+                m.line.id, expected
             );
         }
     }
@@ -7241,10 +7849,12 @@ mod tests {
     fn cbg_station_overlap_matches_great_northern_kings_lynn_and_xc_stansted_as_independent_exclusive_segments()
      {
         // Cambridge is also greater-anglia-west-anglia.toml's (`waml-mainline`)
-        // and greater-anglia-norfolk-branches.toml's (`breckland-line`) own
-        // terminus (both Batch 2) -- two more independent ExclusiveSegment
-        // matches by the same station-overlap pattern already established
-        // by west_anglia_cambridge_is_station_overlap_only_with_xc_stansted.
+        // and greater-anglia-breckland-line.toml's (`breckland-line`, orig.
+        // bundled in greater-anglia-norfolk-branches.toml -- since split by
+        // brand, real-world sanity review) own terminus (both Batch 2) --
+        // two more independent ExclusiveSegment matches by the same
+        // station-overlap pattern already established by
+        // west_anglia_cambridge_is_station_overlap_only_with_xc_stansted.
         //
         // Updated by the Wales/East Anglia batch: `greater-anglia-ipswich-
         // cambridge.toml` also terminates at Cambridge (its own
@@ -7268,7 +7878,7 @@ mod tests {
                 "xc-stansted".to_string(),
                 "thameslink-cambridge".to_string(),
                 "greater-anglia-west-anglia".to_string(),
-                "greater-anglia-norfolk-branches".to_string(),
+                "greater-anglia-breckland-line".to_string(),
                 "greater-anglia-ipswich-cambridge".to_string(),
             ])
         );
@@ -7409,6 +8019,13 @@ mod tests {
     // exclusive to this line - mirrors
     // swr_exclusive_segment_incident_does_not_propagate and
     // elizabeth_branch_incident_stays_on_its_branch above.
+    // Updated (real-world sanity review): Harpenden is also on
+    // thameslink-rainham.toml's own Luton-St Pancras stretch, reused
+    // verbatim from this file (its own `thameslink-rainham` segment) -
+    // station overlap only, both independently ExclusiveSegment. The name
+    // ("...does_not_propagate") now refers to this station staying off
+    // every OTHER curated line (EMR's own Bedford-St Pancras service skips
+    // it - see ltn_lut_bdm_station_overlap_... below), not to zero overlap.
     #[test]
     fn thameslink_bedford_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -7424,9 +8041,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["thameslink-bedford".to_string()])
+            HashSet::from([
+                "thameslink-bedford".to_string(),
+                "thameslink-rainham".to_string()
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment, not shared",
+                m.line.id
+            );
+        }
     }
 
     // Task 5.12. St Pancras International (STP) is where this file's
@@ -7463,6 +8090,11 @@ mod tests {
         // between those two specifically, while staying independent
         // ExclusiveSegment matches relative to the four Thameslink/HS1
         // lines, which use entirely distinct segment names.
+        //
+        // Updated (real-world sanity review): thameslink-rainham.toml's own
+        // Luton-Rainham route also meets the core at STP (its own
+        // `thameslink-rainham` segment) -- a seventh independent
+        // exclusive-segment match.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -7483,6 +8115,7 @@ mod tests {
                 "thameslink-cambridge".to_string(),
                 "emr-connect".to_string(),
                 "emr-midland-main-line".to_string(),
+                "thameslink-rainham".to_string(),
             ])
         );
         for m in &matches {
@@ -7507,15 +8140,34 @@ mod tests {
     // already exercised by
     // `stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments`
     // above; this test covers the three remaining overlap stations.
+    //
+    // Updated by the Midlands EMR/WMR/LNWR sanity review: `lines/lnwr-
+    // marston-vale-line.toml` (a new file from that review) also terminates
+    // at Bedford, on its own exclusive `lnwr-marston-vale` segment (a
+    // physically distinct branch, west towards Bletchley) -- station-
+    // overlap only, so BDM specifically now also matches that line as a
+    // fourth ExclusiveSegment line, while LTN/LUT are unaffected.
+    //
+    // Updated (real-world sanity review): thameslink-rainham.toml reuses
+    // thameslink-bedford.toml's own Luton/Luton Airport Parkway stations
+    // verbatim (its own route starts at Luton, one station south of
+    // Bedford) -- so LTN and LUT now also match thameslink-rainham,
+    // ExclusiveSegment, while BDM (Bedford itself, north of Luton, not on
+    // thameslink-rainham's own route) does not gain that match -- it gains
+    // the lnwr-marston-vale-line match described above instead.
     #[test]
     fn ltn_lut_bdm_station_overlap_between_emr_and_thameslink_bedford_stays_exclusive_for_thameslink()
      {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
-        for (crs, station_name) in [
-            ("LTN", "Luton Airport Parkway"),
-            ("LUT", "Luton"),
-            ("BDM", "Bedford"),
+        for (crs, station_name, extra_lines) in [
+            (
+                "LTN",
+                "Luton Airport Parkway",
+                vec!["thameslink-rainham".to_string()],
+            ),
+            ("LUT", "Luton", vec!["thameslink-rainham".to_string()]),
+            ("BDM", "Bedford", vec!["lnwr-marston-vale-line".to_string()]),
         ] {
             let inc = incident(
                 &format!("EMR-TL-{crs}"),
@@ -7529,13 +8181,15 @@ mod tests {
                 .iter()
                 .map(|m| (m.line.id.clone(), m.scope))
                 .collect();
+            let mut expected = HashSet::from([
+                "emr-midland-main-line".to_string(),
+                "emr-connect".to_string(),
+                "thameslink-bedford".to_string(),
+            ]);
+            expected.extend(extra_lines.iter().cloned());
             assert_eq!(
                 by_id.keys().cloned().collect::<HashSet<_>>(),
-                HashSet::from([
-                    "emr-midland-main-line".to_string(),
-                    "emr-connect".to_string(),
-                    "thameslink-bedford".to_string(),
-                ]),
+                expected,
                 "unexpected match set for {crs}"
             );
             assert_eq!(
@@ -7553,6 +8207,13 @@ mod tests {
                 Some(&MatchScope::ExclusiveSegment),
                 "{crs}"
             );
+            for extra in &extra_lines {
+                assert_eq!(
+                    by_id.get(extra.as_str()),
+                    Some(&MatchScope::ExclusiveSegment),
+                    "{crs}: {extra}"
+                );
+            }
         }
     }
 
@@ -7698,22 +8359,29 @@ mod tests {
     // branch's Catford Loop stretch rejoins the Chatham Main Line at
     // Shortlands and shares track with southeastern-chatham.toml's own
     // approach as far as Swanley - see thameslink-southern.toml's own
-    // header comment), but it is deliberately NOT modelled as a
-    // SharedSegment: southeastern-chatham.toml's own `chatham-london`
-    // segment bundles this stretch together with its own Victoria-Herne
-    // Hill approach (which this file's Sevenoaks branch never touches), so
-    // reusing that name verbatim would incorrectly also mark Victoria/BKJ/
-    // Herne Hill as SharedSegment - exactly the trap
-    // thameslink-cambridge.toml's own OVERLAP (a)/(b) comment warns about.
-    // Confirms an incident at Swanley matches both lines independently,
-    // each still scoped ExclusiveSegment, never SharedSegment - mirrors
-    // bfr_station_overlap_matches_thameslink_core_and_thameslink_southern_
-    // as_independent_exclusive_segments above.
+    // header comment). Originally NOT modelled as a SharedSegment:
+    // southeastern-chatham.toml's own OLD `chatham-london` segment bundled
+    // this stretch together with its own Victoria-Herne Hill approach
+    // (which this file's Sevenoaks branch never touches), so reusing that
+    // name verbatim would have incorrectly also marked Victoria/BKJ/Herne
+    // Hill as SharedSegment.
     //
-    // Kent/Sussex batch: southeastern-maidstone-east.toml also has a station
-    // at Swanley (its own `maidstone-east-victoria` segment, ending there) -
-    // same station-overlap treatment, added here as a third independent
-    // match.
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): resolved by splitting southeastern-chatham.toml's segment
+    // at Shortlands instead of declining to share - SRT through SAY is now
+    // `chatham-maidstone-thameslink-swanley`, reused verbatim by this file,
+    // southeastern-chatham.toml AND southeastern-maidstone-east.toml (which
+    // also turned out to run this identical stretch, previously its own
+    // separately-named `maidstone-east-victoria`). All three now genuinely
+    // SharedSegment at Swanley - see southeastern-chatham.toml's own header
+    // comment for the full write-up.
+    //
+    // Updated by the Southeastern real-world-sanity review: southeastern-
+    // sheerness-line.toml (new) also reuses `chatham-maidstone-thameslink-
+    // swanley` verbatim for its own SRT-SAY stretch (see that file's own
+    // SEGMENT NAMING comment, updated to match southeastern-chatham.toml's
+    // shared-segments-review split) - a fourth genuine SharedSegment member
+    // at Swanley.
     #[test]
     fn say_station_overlap_matches_chatham_and_thameslink_southern_as_independent_exclusive_segments()
      {
@@ -7734,33 +8402,37 @@ mod tests {
                 "southeastern-chatham".to_string(),
                 "thameslink-southern".to_string(),
                 "southeastern-maidstone-east".to_string(),
+                "southeastern-sheerness-line".to_string(),
             ])
         );
         for m in &matches {
             assert_eq!(
                 m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment on chatham-maidstone-thameslink-swanley",
                 m.line.id
             );
         }
     }
 
-    // Task 5.14. REVISED after review: the flagged Task 5.6 coordination
-    // (London Bridge/East Croydon) does NOT clear this batch's two-source
-    // bar after all - an earlier draft reused `southern-bml-north` here and
-    // asserted a genuine SharedSegment pair, but the only non-Wikipedia
-    // source found (thetrainline.com) is not one of COMMON.md's four
-    // approved second-source categories and only shows service-existence,
-    // not physical track sharing. See thameslink-southern.toml's own
-    // BRIGHTON BRANCH header comment for the full writeup. This file's own
-    // Brighton branch now uses its own segment name (`thameslink-brighton`)
-    // at East Croydon instead, so an incident here is a THIRD independent
-    // ExclusiveSegment station-overlap match alongside
-    // southern-brighton-main-line's own `southern-bml-north` and
-    // southern-oxted-uckfield's own `oxted-trunk` - mirrors
-    // bfr_station_overlap_matches_thameslink_core_and_thameslink_southern_
-    // as_independent_exclusive_segments above.
+    // Task 5.14. Originally REVISED after review to decline the flagged
+    // Task 5.6 coordination (London Bridge/East Croydon): an earlier draft
+    // reused `southern-bml-north` here and asserted a genuine SharedSegment
+    // pair, but the only non-Wikipedia source found at the time
+    // (thetrainline.com) is not one of COMMON.md's four approved
+    // second-source categories and only shows service-existence, not
+    // physical track sharing - so the claim was withdrawn.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): reinstated on different grounds - see thameslink-
+    // southern.toml's own BRIGHTON BRANCH header comment and southern-
+    // brighton-main-line.toml's own SEGMENT NAMING comment for the full
+    // write-up. `brighton-main-line-north` (renamed from
+    // `southern-bml-north`) is now reused verbatim by this file too, so an
+    // incident here is a genuine SharedSegment pair with
+    // southern-brighton-main-line.toml. southern-oxted-uckfield.toml's own
+    // `oxted-trunk` is untouched by this review and stays independently
+    // ExclusiveSegment.
     #[test]
     fn ecr_station_overlap_matches_brighton_main_line_and_oxted_uckfield_as_independent_exclusive_segments()
      {
@@ -7784,11 +8456,15 @@ mod tests {
             ])
         );
         for m in &matches {
+            let expected = if m.line.id == "southern-oxted-uckfield" {
+                MatchScope::ExclusiveSegment
+            } else {
+                MatchScope::SharedSegment
+            };
             assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment, not shared",
-                m.line.id
+                m.scope, expected,
+                "{} should be {:?}",
+                m.line.id, expected
             );
         }
     }
@@ -7801,6 +8477,11 @@ mod tests {
     // thameslink-cambridge.toml, LBG above) - mirrors
     // stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments
     // above.
+    //
+    // Updated (real-world sanity review): thameslink-rainham.toml's own
+    // Luton-Rainham route also runs the Thameslink core's full length,
+    // including Blackfriars (its own `thameslink-rainham` segment) - a
+    // third independent ExclusiveSegment match.
     #[test]
     fn bfr_station_overlap_matches_thameslink_core_and_thameslink_southern_as_independent_exclusive_segments()
      {
@@ -7819,7 +8500,8 @@ mod tests {
             matched_ids,
             HashSet::from([
                 "thameslink-core".to_string(),
-                "thameslink-southern".to_string()
+                "thameslink-southern".to_string(),
+                "thameslink-rainham".to_string()
             ])
         );
         for m in &matches {
@@ -7866,6 +8548,15 @@ mod tests {
     // swr-chertsey-loop.toml and swr-hounslow-loop.toml (same batch) do NOT
     // call at Wimbledon — both diverge from the Waterloo trunk before
     // reaching it — so they are correctly absent here.
+    //
+    // Updated again by the SWR suburban-gap batch: swr-shepperton-
+    // branch.toml, swr-hampton-court-branch.toml and swr-epsom-mole-
+    // valley.toml also reuse `swr-trunk-waterloo` verbatim for WIM (each
+    // file's own SEGMENTS diagram runs via Wimbledon before diverging
+    // further out), growing the SWR side to ten. swr-waterloo-reading.toml
+    // (same batch) does NOT call at Wimbledon — like swr-windsor-lines.toml
+    // before it, its own route runs via Vauxhall/Richmond, never via
+    // Wimbledon — so it is correctly absent here too.
     #[test]
     fn wim_station_overlap_matches_swr_trunk_and_thameslink_southern_as_independent_segments() {
         let lines = load_all_lines();
@@ -7889,6 +8580,9 @@ mod tests {
                 "swr-chessington".to_string(),
                 "swr-west-of-england".to_string(),
                 "swr-new-guildford".to_string(),
+                "swr-shepperton-branch".to_string(),
+                "swr-hampton-court-branch".to_string(),
+                "swr-epsom-mole-valley".to_string(),
                 "thameslink-southern".to_string(),
             ])
         );
@@ -8117,6 +8811,13 @@ mod tests {
         // `ecml-aberdeen` segment, merged separately), on the Edinburgh-
         // Aberdeen main line via the Forth Bridge -- station-level overlap,
         // distinct segment names, both stay ExclusiveSegment.
+        //
+        // Updated by the Scotland real-world-sanity review: the new
+        // scotrail-edinburgh-aberdeen.toml also calls at Kirkcaldy, reusing
+        // `scotrail-fife-circle` verbatim (the last station its own route
+        // shares with scotrail-fife-circle.toml before diverging) - a
+        // genuine SharedSegment pair, so this incident now also matches
+        // that file, and both flip to SharedSegment here.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -8130,15 +8831,20 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["scotrail-fife-circle".to_string(), "lner-ecml".to_string()])
+            HashSet::from([
+                "scotrail-fife-circle".to_string(),
+                "lner-ecml".to_string(),
+                "scotrail-edinburgh-aberdeen".to_string(),
+            ])
         );
         for m in &matches {
-            assert_eq!(
-                m.scope,
-                MatchScope::ExclusiveSegment,
-                "{} should be ExclusiveSegment",
-                m.line.id
-            );
+            let expected = match m.line.id.as_str() {
+                "scotrail-fife-circle" | "scotrail-edinburgh-aberdeen" => {
+                    MatchScope::SharedSegment
+                }
+                _ => MatchScope::ExclusiveSegment,
+            };
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -8656,6 +9362,11 @@ mod tests {
         // exclusive segment name -- the same station-overlap pattern as
         // lumo above, not a claimed shared trunk with anything here (see
         // both files' own segment-naming coordination notes).
+        //
+        // Updated (Scotland real-world-sanity review): the new scotrail-
+        // glasgow-aberdeen.toml also terminates at GLQ, on its own distinct
+        // exclusive `scotrail-glasgow-aberdeen-approach` segment -- the same
+        // station-overlap pattern, an independent ExclusiveSegment match.
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -8678,6 +9389,7 @@ mod tests {
                 "lumo".to_string(),
                 "scotrail-cumbernauld".to_string(),
                 "scotrail-maryhill".to_string(),
+                "scotrail-glasgow-aberdeen".to_string(),
             ])
         );
         for m in &matches {
@@ -8911,6 +9623,17 @@ mod tests {
     // segment name for its own Edinburgh Waverley/Haymarket entries, so an
     // incident at Haymarket now also matches `scotrail-stirling-dunblane`
     // with `MatchScope::SharedSegment`.
+    //
+    // Updated by the Scotland real-world-sanity review: the new
+    // scotrail-edinburgh-aberdeen.toml reuses `scotrail-fife-circle-throat`
+    // verbatim at Haymarket (from scotrail-fife-circle.toml), so it now also
+    // matches with SharedSegment - and since sharing is evaluated per
+    // segment NAME catalogue-wide (that name is now used by three files:
+    // fife-circle, edinburgh-aberdeen, and scotrail-levenmouth.toml
+    // elsewhere), `scotrail-fife-circle` itself flips here from
+    // ExclusiveSegment to SharedSegment too. wcml-scotland.toml (new) also
+    // calls at Haymarket, on its own exclusive `wcml-scotland-edinburgh`
+    // segment (used nowhere else) - an independent ExclusiveSegment match.
     #[test]
     fn scotrail_central_belt_edinburgh_throat_shared_incident_propagates() {
         let lines = load_all_lines();
@@ -8935,6 +9658,8 @@ mod tests {
                 "tpe-anglo-scottish".to_string(),
                 "lner-ecml".to_string(),
                 "lumo".to_string(),
+                "scotrail-edinburgh-aberdeen".to_string(),
+                "wcml-scotland".to_string(),
             ])
         );
         for m in &matches {
@@ -8942,7 +9667,9 @@ mod tests {
                 "scotrail-central-belt"
                 | "scotrail-shotts"
                 | "scotrail-bathgate"
-                | "scotrail-stirling-dunblane" => MatchScope::SharedSegment,
+                | "scotrail-stirling-dunblane"
+                | "scotrail-fife-circle"
+                | "scotrail-edinburgh-aberdeen" => MatchScope::SharedSegment,
                 _ => MatchScope::ExclusiveSegment,
             };
             assert_eq!(m.scope, expected, "{} scope mismatch", m.line.id);
@@ -8976,13 +9703,17 @@ mod tests {
     }
 
     // `lines/scotrail-stirling-dunblane.toml`'s own exclusive stretch
-    // (Falkirk Grahamston through Dunblane) has no sibling file today --
-    // the Croy Line and Cumbernauld Line, which genuinely share this
-    // stretch in real life, are documented-but-unmodelled gaps (see that
-    // file's own scope notes). An incident at Dunblane itself, this
-    // route's own terminus, should therefore match only this line,
-    // `ExclusiveSegment`, mirroring
-    // `scotrail_bathgate_exclusive_segment_incident_does_not_propagate`.
+    // (Falkirk Grahamston through Dunblane) originally had no sibling file
+    // -- the Croy Line and Cumbernauld Line, which genuinely share this
+    // stretch in real life, were documented-but-unmodelled gaps (see that
+    // file's own scope notes).
+    //
+    // Updated (Scotland real-world-sanity review): the new scotrail-
+    // glasgow-aberdeen.toml also calls at Dunblane (not its own terminus,
+    // but a genuine through station on its own Glasgow-Aberdeen spine),
+    // reusing `scotrail-stirling-dunblane` verbatim - a genuine SharedSegment
+    // pair, mirroring the Kirkcaldy/Haymarket precedent above for the other
+    // new inter-city spine files.
     #[test]
     fn scotrail_stirling_dunblane_exclusive_segment_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -8998,9 +9729,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["scotrail-stirling-dunblane".to_string()])
+            HashSet::from([
+                "scotrail-stirling-dunblane".to_string(),
+                "scotrail-glasgow-aberdeen".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment",
+                m.line.id
+            );
+        }
     }
 
     // Integration-merge reconciliation: `scotrail-stirling-dunblane.toml`
@@ -9054,6 +9795,14 @@ mod tests {
     // lines, each with its own `MatchScope::ExclusiveSegment`, mirroring
     // `xc_manchester_station_overlap_with_wmr_snow_hill_stays_exclusive_each_line`'s
     // station-overlap-without-segment-sharing shape.
+    // Updated by the Scotland real-world-sanity review: the new
+    // scotrail-edinburgh-aberdeen.toml reuses the plain `scotrail-fife-
+    // circle` segment name verbatim (see the Kirkcaldy test above) - since
+    // sharing is evaluated per segment NAME catalogue-wide, not per
+    // station, `scotrail-fife-circle`'s OWN GLT entry now also reports
+    // SharedSegment here even though scotrail-edinburgh-aberdeen has no
+    // station at Glenrothes with Thornton itself. scotrail-levenmouth's own
+    // distinct segment name is unaffected and stays ExclusiveSegment.
     #[test]
     fn scotrail_levenmouth_station_overlap_with_fife_borders_stays_exclusive_each_line() {
         let lines = load_all_lines();
@@ -9074,6 +9823,22 @@ mod tests {
                 "scotrail-levenmouth".to_string(),
             ])
         );
+        // REVIEW2 FIX (item 2, 2026-09-21): `scotrail-fife-circle` at GLT
+        // used to show as SharedSegment, but only as a side effect of the
+        // whole-route-segment over-sharing bug this review fixed:
+        // `scotrail-edinburgh-aberdeen.toml` used to reuse the broad
+        // `scotrail-fife-circle` segment name for its own SGL..KDY coastal
+        // stretch, which made the segment NAME shared across two files even
+        // though neither of scotrail-edinburgh-aberdeen's own stations is
+        // GLT (an inland-loop-only station). That file now uses a narrower
+        // `scotrail-fife-circle-coastal` name instead (see
+        // scotrail-fife-circle.toml's own top-of-file comment), so
+        // `scotrail-fife-circle` is once again used by only one file --
+        // correctly ExclusiveSegment here, matching `scotrail-levenmouth`.
+        // `scotrail-levenmouth.toml`'s own GLT entry has always used its own
+        // `scotrail-levenmouth` segment name, not `scotrail-fife-circle`, so
+        // this incident matches both lines by station overlap only, neither
+        // sharing a segment with the other.
         for m in &matches {
             assert_eq!(
                 m.scope,
@@ -9250,10 +10015,12 @@ mod tests {
     // slow-line stations between Herne Hill and Bromley South (West
     // Dulwich, Sydenham Hill, Penge East, Kent House) for unconfirmed
     // fast/slow calling pattern reasons. They're now confirmed and
-    // inserted on the existing `chatham-london` segment - this is a
-    // regression guard that `has_station` picks them up via
-    // `LineDefinition::from_dir` (i.e. the TOML actually parses and the
-    // stations aren't silently dropped or misspelled).
+    // inserted - originally on `chatham-london`, renamed to
+    // `chatham-maidstone-victoria` by the shared-segment structural review
+    // (review2-shared-segments; see southeastern-chatham.toml's own header
+    // comment) - this is a regression guard that `has_station` picks them
+    // up via `LineDefinition::from_dir` (i.e. the TOML actually parses and
+    // the stations aren't silently dropped or misspelled).
     #[test]
     fn chatham_fillin_suburban_stations_are_now_modelled() {
         let lines = load_line("southeastern-chatham");
@@ -9267,8 +10034,8 @@ mod tests {
             );
             assert_eq!(
                 chatham.segment_for(crs),
-                Some("chatham-london"),
-                "{crs} should be on chatham-london"
+                Some("chatham-maidstone-victoria"),
+                "{crs} should be on chatham-maidstone-victoria"
             );
         }
     }
@@ -9326,25 +10093,42 @@ mod tests {
     // stopping-pattern stations between London Bridge and Orpington (New
     // Cross, St Johns, Lewisham, Hither Green, Grove Park, Chislehurst,
     // Petts Wood) pending route-diagram confirmation. They're now
-    // confirmed and inserted on the existing `seml-london` segment - a
-    // regression guard that `has_station`/`segment_for` pick them up via
-    // `LineDefinition::from_dir` (i.e. the TOML actually parses and the
-    // stations aren't silently dropped or misspelled).
+    // confirmed and inserted - originally all on one `seml-london` segment,
+    // split by the shared-segment structural review (review2-shared-
+    // segments) into the genuinely shared CHX-LEW stretch (NWX/SAJ/LEW, now
+    // `southeastern-lewisham-corridor`) and this file's own exclusive
+    // continuation past Lewisham (HGR/GRP/CIT/PET, now
+    // `seml-orpington-branch`) - see southeastern-main-line.toml's own
+    // header comment. This is a regression guard that `has_station`/
+    // `segment_for` pick them up via `LineDefinition::from_dir` (i.e. the
+    // TOML actually parses and the stations aren't silently dropped or
+    // misspelled).
     #[test]
     fn seml_fillin_suburban_stations_are_now_modelled() {
         let lines = load_line("southeastern-main-line");
         let seml = lines
             .get("southeastern-main-line")
             .expect("southeastern-main-line should exist");
-        for crs in ["NWX", "SAJ", "LEW", "HGR", "GRP", "CIT", "PET"] {
+        for crs in ["NWX", "SAJ", "LEW"] {
             assert!(
                 seml.has_station(crs),
                 "southeastern-main-line should now have station {crs}"
             );
             assert_eq!(
                 seml.segment_for(crs),
-                Some("seml-london"),
-                "{crs} should be on seml-london"
+                Some("southeastern-lewisham-corridor"),
+                "{crs} should be on southeastern-lewisham-corridor"
+            );
+        }
+        for crs in ["HGR", "GRP", "CIT", "PET"] {
+            assert!(
+                seml.has_station(crs),
+                "southeastern-main-line should now have station {crs}"
+            );
+            assert_eq!(
+                seml.segment_for(crs),
+                Some("seml-orpington-branch"),
+                "{crs} should be on seml-orpington-branch"
             );
         }
     }
@@ -9365,16 +10149,34 @@ mod tests {
     // share the literal segment name at NWX, so the registry correctly
     // promotes both of those two to SharedSegment.
     //
-    // Kent/Sussex batch: southeastern-north-kent.toml also has a station at
-    // New Cross (its own `southeastern-north-kent` segment, the point this
-    // file's and southeastern-metro-north-kent.toml's own NWX comments both
-    // already flagged as where "a differently-aligned North Kent Line route
-    // ... diverges") - same station-overlap treatment, added here as a
-    // fifth independent match. The set below and the function name now
-    // cover five lines in total, four of them independent ExclusiveSegment
-    // matches plus the bexleyheath/dartford-loop SharedSegment pair.
+    // Kent/Sussex batch: southeastern-north-kent.toml also USED TO have a
+    // station at New Cross - originally its own `southeastern-north-kent`
+    // segment, the point this file's and southeastern-metro-north-kent.
+    // toml's own NWX comments both already flagged as where "a
+    // differently-aligned North Kent Line route ... diverges" - a fifth
+    // independent match at the time.
+    //
+    // REVIEW FIX (shared-segment structural review, review2-shared-
+    // segments): southeastern-main-line.toml and southeastern-north-
+    // kent.toml were both fixed to reuse `southeastern-lewisham-corridor`
+    // at NWX too (see each file's own header comment), so this set briefly
+    // had FOUR lines sharing the literal segment name (main-line,
+    // bexleyheath, dartford-loop, north-kent), all promoted to
+    // SharedSegment together.
+    //
+    // REVIEW2 FIX (2026-09-21): southeastern-north-kent.toml's own NWX
+    // entry has been removed entirely - fresh research found the Greenwich
+    // line this file models genuinely diverges from the South Eastern Main
+    // Line at North Kent East Junction, BEFORE New Cross (between London
+    // Bridge and New Cross), not "just past" it, so this file's own trains
+    // never physically call at New Cross at all; see that file's own DEP
+    // entry comment for the full write-up. This set is back down to THREE
+    // lines sharing `southeastern-lewisham-corridor` at NWX (main-line,
+    // bexleyheath, dartford-loop). overground-windrush.toml's own
+    // `overground-windrush-new-cross` is untouched by either review (a
+    // different route entirely) and stays independently ExclusiveSegment.
     #[test]
-    fn nwx_station_overlap_matches_five_lines_bexleyheath_and_dartford_loop_share_the_trunk() {
+    fn nwx_station_overlap_matches_four_lines_bexleyheath_and_dartford_loop_share_the_trunk() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -9393,16 +10195,13 @@ mod tests {
                 "southeastern-bexleyheath".to_string(),
                 "southeastern-dartford-loop".to_string(),
                 "overground-windrush".to_string(),
-                "southeastern-north-kent".to_string(),
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "southeastern-bexleyheath"
-                || m.line.id == "southeastern-dartford-loop"
-            {
-                MatchScope::SharedSegment
-            } else {
+            let expected = if m.line.id == "overground-windrush" {
                 MatchScope::ExclusiveSegment
+            } else {
+                MatchScope::SharedSegment
             };
             assert_eq!(
                 m.scope, expected,
@@ -9550,8 +10349,17 @@ mod tests {
         );
         assert_eq!(
             bml.segment_for("WVF"),
-            Some("southern-bml-south"),
-            "WVF should be on southern-bml-south"
+            Some("brighton-main-line-central"),
+            "WVF should be on brighton-main-line-central (originally \
+             brighton-main-line-south, renamed from southern-bml-south by \
+             the shared-segment structural review, review2-shared-segments; \
+             review2 item 3 later split brighton-main-line-south at Three \
+             Bridges into brighton-main-line-south (GTW/TBD only) and \
+             brighton-main-line-central (HHE onward, including WVF) to \
+             restore byte-identical sharing with thameslink-southern.toml \
+             once that file's own Balcombe/BAB entry was found to diverge - \
+             see southern-brighton-main-line.toml's own header/TBD-entry \
+             comments)"
         );
     }
 
@@ -9580,6 +10388,21 @@ mod tests {
     // Junction approach before diverging), growing the SharedSegment side
     // from seven SWR files to ten. The three Overground/Southern exclusive
     // matches are unaffected.
+    //
+    // Updated again by the SWR suburban-gap batch: swr-waterloo-
+    // reading.toml, swr-shepperton-branch.toml, swr-hampton-court-
+    // branch.toml and swr-epsom-mole-valley.toml (four more new files) all
+    // also reuse `swr-trunk-waterloo` verbatim at CLJ, growing the
+    // SharedSegment side from ten SWR files to fourteen. The three
+    // Overground/Southern exclusive matches remain unaffected.
+    //
+    // Updated by the Southern real-world-sanity review: two new files,
+    // southern-metro-crystal-palace.toml and southern-metro-sutton.toml,
+    // also call at CLJ, sharing their own `southern-metro-victoria-trunk`
+    // segment verbatim with EACH OTHER (a separate SharedSegment pair,
+    // independent of the fourteen-strong SWR family) - station overlap only
+    // against every other line here. Both join the SharedSegment side (of
+    // their own pair), growing the total match count to seventeen.
     #[test]
     fn clj_station_overlap_matches_swr_trunk_shared_and_overground_and_bml_as_mixed_scope() {
         let lines = load_all_lines();
@@ -9606,9 +10429,15 @@ mod tests {
                 "swr-chertsey-loop".to_string(),
                 "swr-hounslow-loop".to_string(),
                 "swr-new-guildford".to_string(),
+                "swr-waterloo-reading".to_string(),
+                "swr-shepperton-branch".to_string(),
+                "swr-hampton-court-branch".to_string(),
+                "swr-epsom-mole-valley".to_string(),
                 "overground-windrush".to_string(),
                 "overground-mildmay".to_string(),
                 "southern-brighton-main-line".to_string(),
+                "southern-metro-crystal-palace".to_string(),
+                "southern-metro-sutton".to_string(),
             ])
         );
         for m in &matches {
@@ -9623,6 +10452,12 @@ mod tests {
                 "swr-chertsey-loop",
                 "swr-hounslow-loop",
                 "swr-new-guildford",
+                "swr-waterloo-reading",
+                "swr-shepperton-branch",
+                "swr-hampton-court-branch",
+                "swr-epsom-mole-valley",
+                "southern-metro-crystal-palace",
+                "southern-metro-sutton",
             ]
             .contains(&m.line.id.as_str())
             {
@@ -9724,15 +10559,28 @@ mod tests {
         );
     }
 
-    // `tfw-north-wales-coast` is not a cross-file shared segment: this file's
-    // own comments confirm both its Chester overlap with
-    // `wcml-north-wales.toml` and its Llandudno Junction overlap with
-    // `tfw-conwy-valley.toml` are station-overlap-only, not shared trunks.
-    // So, like `tfw_cambrian_new_coast_station_incident_resolves_exclusive_segment`,
-    // there is no sibling line to assert a `MatchScope::SharedSegment`
-    // against for a newly-added station here. This test instead confirms an
-    // incident at one of the newly-added stations (Conwy) resolves to
-    // `tfw-north-wales-coast` alone, with `MatchScope::ExclusiveSegment`.
+    // `tfw-north-wales-coast`'s Chester-Holyhead segment (`tfw-north-wales-
+    // coast`) is, as of the 2026-09-21 real-world-sanity review, a genuine
+    // cross-file shared segment with `wcml-north-wales.toml` (reversing
+    // this file's own former station-overlap-only ruling at Chester -- see
+    // this file's own "Cross-batch note" comment above Chester). Segment
+    // sharing is indexed by name across the whole catalogue, not
+    // per-station, so an incident at Conwy -- a station
+    // `wcml-north-wales.toml` doesn't separately list -- still resolves to
+    // `tfw-north-wales-coast` alone (no other file has a CNW entry to
+    // match), but classified `MatchScope::SharedSegment`, not
+    // `ExclusiveSegment`: this station genuinely sits on the same
+    // physical, Avanti-shared main line as the 8 stations both files list,
+    // even though Avanti's own limited-stop service doesn't call here.
+    // This test's own name is kept (its previous conclusion has been
+    // superseded, not its subject) so a future editor who greps for it by
+    // name still lands on this exact case; see
+    // `north_wales_coast_own_stretch_incident_is_shared_segment_but_
+    // single_match` above for the twin assertion at a different station,
+    // and `llj_station_overlap_matches_both_lines_as_exclusive`/
+    // `chester_station_overlap_matches_both_lines_as_exclusive` for the
+    // cases where `wcml-north-wales.toml` genuinely does have a matching
+    // entry too.
     #[test]
     fn tfw_north_wales_coast_new_station_incident_resolves_exclusive_segment() {
         let lines = load_all_lines();
@@ -9750,7 +10598,7 @@ mod tests {
             matched_ids,
             HashSet::from(["tfw-north-wales-coast".to_string()])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        assert_eq!(matches[0].scope, MatchScope::SharedSegment);
     }
 
     // Task 2.3: `northern-calder-valley.toml`'s previously-missing
@@ -10776,7 +11624,14 @@ mod tests {
     // not reuse `scotrail-north-clyde.toml`'s segment names for the
     // Springburn overlap (that file lives in a different, unmerged
     // worktree today -- see this file's own segment-naming coordination
-    // note), so this is an exclusive-segment assertion for now.
+    // note), so this was originally an exclusive-segment assertion.
+    //
+    // Updated (Scotland real-world-sanity review): scotrail-argyle.toml also
+    // terminates its own Whifflet-spur service at Cumbernauld, deliberately
+    // reusing `scotrail-cumbernauld-branch` verbatim from this file (see
+    // that file's own CUB comment: same physical track, different `role`
+    // describing each line's own service pattern there) - a genuine
+    // SharedSegment pair.
     #[test]
     fn scotrail_cumbernauld_branch_incident_does_not_propagate() {
         let lines = load_all_lines();
@@ -10792,9 +11647,19 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["scotrail-cumbernauld".to_string()])
+            HashSet::from([
+                "scotrail-cumbernauld".to_string(),
+                "scotrail-argyle".to_string(),
+            ])
         );
-        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::SharedSegment,
+                "{} should be SharedSegment",
+                m.line.id
+            );
+        }
     }
 
     // Integration-merge reconciliation: `scotrail-cumbernauld.toml` and
@@ -10901,5 +11766,236 @@ mod tests {
             matched_ids,
             HashSet::from(["scotrail-glasgow-south-western".to_string()])
         );
+    }
+
+    // Midlands EMR/WMR/LNWR sanity review: new-line regression guards.
+    //
+    // `lines/emr-crewe-derby.toml` -- Uttoxeter is on the exclusive
+    // `emr-crewe-derby-west` segment, west of the shared-with-`emr-mml-
+    // derby` Derby junction, so it should not propagate to any other line.
+    #[test]
+    fn emr_crewe_derby_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "EM-CD-1",
+            "Points failure at Uttoxeter",
+            "Points failure causing delays to services at Uttoxeter.",
+            &["EM"],
+            &["UTT"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(matched_ids, HashSet::from(["emr-crewe-derby".to_string()]));
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/emr-lincoln-peterborough.toml` -- Ruskington is on the
+    // exclusive `emr-lincoln-peterborough` segment, not shared with any
+    // other line. (Sleaford itself, one station further along this same
+    // segment, is ALSO a genuine `emr-poacher.toml` station -- the Poacher
+    // Line's own Grantham-Skegness route also runs via Sleaford, a real
+    // crossing point between the two lines, discovered while writing this
+    // test. Station-overlap only, no segment shared; Ruskington is used
+    // here instead purely so this test demonstrates the single-line case.)
+    #[test]
+    fn emr_lincoln_peterborough_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "EM-LP-1",
+            "Points failure at Ruskington",
+            "Points failure causing delays to services at Ruskington.",
+            &["EM"],
+            &["RKT"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["emr-lincoln-peterborough".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/emr-barton-line.toml` -- Goxhill is exclusive to this line's
+    // own `emr-barton-line` segment.
+    #[test]
+    fn emr_barton_line_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "EM-BL-1",
+            "Points failure at Goxhill",
+            "Points failure causing delays to services at Goxhill.",
+            &["EM"],
+            &["GOX"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(matched_ids, HashSet::from(["emr-barton-line".to_string()]));
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/emr-derwent-valley.toml` (re-scoped, Midlands EMR/WMR/LNWR
+    // sanity review) -- Market Rasen is exclusive to this line's own
+    // `emr-derwent-valley-grimsby` segment.
+    #[test]
+    fn emr_derwent_valley_market_rasen_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "EM-DV-1",
+            "Points failure at Market Rasen",
+            "Points failure causing delays to services at Market Rasen.",
+            &["EM"],
+            &["MKR"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["emr-derwent-valley".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/wmr-malvern-line.toml` -- Great Malvern is exclusive to this
+    // line's own `wmr-malvern-line` segment.
+    //
+    // Updated by the GWR/southwest sanity review: gwr-cotswold.toml's own
+    // extension also terminates at Great Malvern, on its own exclusive
+    // `gwr-cotswold` segment - station overlap only, a second independent
+    // ExclusiveSegment match.
+    #[test]
+    fn wmr_malvern_line_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "LM-ML-1",
+            "Points failure at Great Malvern",
+            "Points failure causing delays to services at Great Malvern.",
+            &["LM"],
+            &["GMV"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["wmr-malvern-line".to_string(), "gwr-cotswold".to_string()])
+        );
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
+    }
+
+    // `lines/lnwr-marston-vale-line.toml` -- Ridgmont is exclusive to this
+    // line's own `lnwr-marston-vale` segment.
+    #[test]
+    fn lnwr_marston_vale_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "LM-MV-1",
+            "Points failure at Ridgmont",
+            "Points failure causing delays to services at Ridgmont.",
+            &["LM"],
+            &["RID"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["lnwr-marston-vale-line".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/lnwr-stafford-crewe.toml` -- Stone (Staffs) is exclusive to
+    // this line's own `lnwr-stafford-crewe` segment.
+    #[test]
+    fn lnwr_stafford_crewe_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "LM-SC-1",
+            "Points failure at Stone",
+            "Points failure causing delays to services at Stone.",
+            &["LM"],
+            &["SNE"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["lnwr-stafford-crewe".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/wmr-stourbridge-town.toml` -- the whole two-station shuttle is
+    // exclusive to this file.
+    #[test]
+    fn wmr_stourbridge_town_exclusive_segment_incident_does_not_propagate() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "LM-ST-1",
+            "Points failure at Stourbridge Town",
+            "Points failure causing delays to services at Stourbridge Town.",
+            &["LM"],
+            &["SBT"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from(["wmr-stourbridge-town".to_string()])
+        );
+        assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
+    }
+
+    // `lines/wmr-nuneaton-coventry.toml` (extended) and `lines/wmr-snow-
+    // hill.toml` (extended) both now reach Leamington Spa, alongside the
+    // two files that already modelled it (`xc-south-coast.toml`,
+    // `chiltern-main-line.toml`) -- four independent physical approaches
+    // into the same station, none sharing a segment name with any other
+    // (see each file's own ruling comment), so all four should match this
+    // incident independently as ExclusiveSegment.
+    #[test]
+    fn leamington_spa_four_way_station_overlap_stays_exclusive_each_line() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "LM-LMS-1",
+            "Signal failure at Leamington Spa",
+            "Signal failure causing delays to services at Leamington Spa.",
+            &["LM"],
+            &["LMS"],
+        );
+        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
+        assert_eq!(
+            matched_ids,
+            HashSet::from([
+                "xc-south-coast".to_string(),
+                "chiltern-main-line".to_string(),
+                "wmr-nuneaton-coventry".to_string(),
+                "wmr-snow-hill".to_string(),
+            ])
+        );
+        for m in &matches {
+            assert_eq!(
+                m.scope,
+                MatchScope::ExclusiveSegment,
+                "{} should be ExclusiveSegment",
+                m.line.id
+            );
+        }
     }
 }

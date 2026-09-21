@@ -1,46 +1,328 @@
 id = "emr-derwent-valley"
-name = "Derwent Valley Line"
+name = "Derwent Valley Line (Cleethorpes / Lincoln - Matlock)"
 mode = "national-rail"
 category = "regional"
 # "regional" chosen to match `northern-furness.toml`/`northern-hope-valley.toml`'s
-# category choice for comparable hourly, single/double-track DMU branches -
-# this is not part of the electrified intercity core (`emr-midland-main-line.toml`,
+# category choice for comparable hourly-or-sparser, single/double-track DMU
+# branches - this is not part of the electrified intercity core (`emr-midland-main-line.toml`,
 # category "main-line").
 operators = ["EM"]  # East Midlands Railway
 
-# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
-# "East Midlands Railway (EMR)" section (a): "...rural branches (Robin Hood
-# Line Nottingham-Worksop, the Poacher/Skegness line, Derby-Matlock)." Those
-# three branches originally shared one file, `lines/emr-rural-branches.toml`,
-# under an explicitly-scoped one-line-per-file exception. A later audit
-# recommended splitting it: the three lines are unrelated, separately
-# community-rail-branded routes, and this one is the least justified of the
-# three to have ever been bundled with the other two - it doesn't even touch
-# Nottingham, where the Robin Hood Line and Poacher Line at least overlap at
-# a shared station. This file is the Derwent Valley Line's share of that
-# split; see `lines/emr-robin-hood.toml` and `lines/emr-poacher.toml` for
-# the other two, and git history for the original combined file's full
-# station-by-station sourcing. Note Wikipedia's own article title capitalises
-# this as "Derwent Valley line" (lower-case "line"); `match_keywords` below
-# keeps the original file's Title Case rendering, which is also the common
-# usage on nationalrail.co.uk and in EMR's own branding.
+# RE-SCOPE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): this file
+# previously modelled Derby-Matlock only. Fresh research this session (the
+# "East Midlands Railway" Wikipedia article's own Services table, its own
+# "Derwent Valley line" section, fetched live) found the real current
+# service is materially bigger than that: EMR's own table lists TWO
+# alternating half-hourly workings under this same "Derwent Valley line"
+# heading -- "Lincoln - Matlock" and "Cleethorpes - Matlock" -- which
+# combine to give Lincoln-Matlock a full hourly frequency, with every other
+# working continuing further back to Cleethorpes via Market Rasen. Matlock
+# itself is not reached by any Derby-only working any more (per the same
+# table, every row reaching Matlock originates at Lincoln or Cleethorpes,
+# not Derby). This file is re-scoped accordingly rather than left stale or
+# duplicated into a conflicting new file, per this task's own brief -- see
+# the segment-sharing rulings below for how this interacts with
+# `emr-nottingham-lincoln.toml`, `emr-crewe-derby.toml`,
+# `emr-lincoln-peterborough.toml`, `emr-barton-line.toml` and
+# `tpe-south.toml`, several of which are themselves new files from this
+# same review session. Everything from Duffield to Matlock (the original
+# file's own `emr-matlock-branch` segment) is UNCHANGED by this re-scope --
+# same stations, same CRS codes, same segment name, same sourcing (see that
+# segment's own original comment, retained below).
+#
+# ROUTE RESEARCH, eastern extension (fetched live 2026-09-21, the "East
+# Midlands Railway" article's own Services table, quoted as closely as this
+# task's tooling could extract verbatim):
+#   Row "Lincoln - Matlock" ("1/2" tph): "Hykeham, Swinderby, Collingham,
+#     Newark Castle, Nottingham, Beeston, Long Eaton, Spondon, Derby,
+#     Duffield, Belper, Ambergate, Whatstandwell, Cromford, Matlock Bath"
+#     [Matlock].
+#   Row "Cleethorpes - Matlock" ("1/2" tph): "New Clee, Grimsby Docks,
+#     Grimsby Town, Habrough, Barnetby, Market Rasen, Lincoln, then same
+#     stops as [the Lincoln-Matlock row]."
+# Cross-checked against the "Grimsby-Lincoln-Newark line" Wikipedia
+# article, which independently confirms EMR runs "one train per hour from
+# Leicester to Lincoln via Newark Castle, with every other train continuing
+# to Grimsby Town via Market Rasen" over this same Lincoln-Market
+# Rasen-Grimsby stretch (a different EMR working from the one this file
+# models, but confirming the same physical route and Market Rasen calling
+# point).
+#
+# DISCREPANCY, RESOLVED (review2 fix, 2026-09-21): the quoted "Lincoln -
+# Matlock" row names Beeston, Long Eaton and Spondon between Nottingham and
+# Derby, with no Attenborough; `emr-crewe-derby.toml`'s own, separately-
+# sourced EMR-table row for its Crewe-Lincoln service names Long Eaton and
+# Attenborough on this same general stretch, with no Spondon. Both are
+# real, currently open stations (confirmed individually via this app's own
+# station-lookup endpoint) on the same physical Derby-Nottingham direct
+# alignment. A later review pass confirmed via fresh EMR services-table
+# research (each station's own Wikipedia "Services" section) that BOTH
+# files are correct, not in conflict: Spondon's own current service list is
+# "1 train per hour to Matlock via Derby" with no Crewe working, while
+# Attenborough's own current service list is "1 tph to Crewe, via Derby"
+# with no Matlock working -- i.e. these are two genuinely different, real
+# EMR calling patterns on the same corridor (Crewe-Lincoln calls
+# Attenborough, not Spondon; Lincoln-Matlock, this file's own route, calls
+# Spondon, not Attenborough), not a sourcing error in either file. This
+# file's own station list below correctly follows its own row's explicit
+# wording (Beeston, Long Eaton, Spondon; no Attenborough) -- see the
+# segment-sharing ruling on the Beeston entry below for why this also means
+# no segment name is shared between the two files here (that ruling was
+# already correct and is unaffected by this resolution).
+#
+# CRS codes: DBY, DFI, BLP, AMB, WTS, CMF, MTB, MAT are unchanged from the
+# original file (already twice-verified there; see that segment's own
+# comment, retained below, for the original sourcing). NOT, CTO, BUJ, LOW,
+# THU, BSB, FSK, ROL, NCT, CLM, SWD, HKM and LCN reused verbatim from
+# `emr-nottingham-lincoln.toml` (same physical Nottingham-Newark
+# Castle-Lincoln stretch; see the shared-segment ruling below). CLE, NCE,
+# GMD, GMB and HAB reused verbatim from `emr-barton-line.toml`/
+# `tpe-south.toml` (already-verified facts; same physical stations,
+# different calling pattern -- see the ruling below). BEE and LGE reused
+# verbatim from `emr-midland-main-line.toml`. BTB and MKR (Barnetby, Market
+# Rasen) and SPO (Spondon) independently confirmed live via this app's own
+# production station-lookup endpoint (ds.cursed.solutions/api/stations?
+# q=<name>, 2026-09-21), single unambiguous match for each. No TIPLOC
+# confirmed for any newly-added code to the two-source standard, so
+# `tiploc` is omitted for all of them.
 
-# Terminus plus the Derby junction (shared trunk with `emr-midland-main-line.toml`).
-destination_crs_filter = ["DBY", "MAT"]
+# Terminus plus the two real origin points (see the frequency-split note
+# above -- Lincoln and Cleethorpes are both genuine origins, never
+# terminating destinations themselves, since every working that reaches
+# either one continues on to/from Matlock).
+destination_crs_filter = ["MAT", "LCN", "CLE"]
 
-sample_stations = ["DBY", "MAT"]
+sample_stations = ["CLE", "MKR", "LCN", "NOT", "DBY", "MAT"]
 
 match_keywords = ["Derwent Valley Line"]
+# Wikipedia's own article title capitalises this as "Derwent Valley line"
+# (lower-case "line"); this keeps the original file's Title Case rendering,
+# also the common usage on nationalrail.co.uk and in EMR's own branding.
+# The EMR Services table's own route listing groups both the Lincoln-Matlock
+# and Cleethorpes-Matlock rows under this same "Derwent Valley line"
+# heading, corroborating that the brand name now covers the whole extended
+# route, not just the original Derby-Matlock stretch.
 
-# "one train per hour in each direction" (Wikipedia "Ambergate railway
-# station"/"Duffield railway station" articles). Thresholds follow
-# `northern-furness.toml`'s identical rationale/values for a comparable
-# hourly branch.
+# "1/2" tph each of the two alternating origins, combining to an hourly
+# Lincoln-Matlock service -- same frequency-driven tuning
+# `northern-furness.toml`'s comparable hourly branch, reused verbatim
+# (unchanged from the original file; no per-branch override mechanism
+# exists to tune only the sparser Cleethorpes extension without
+# misrepresenting the busier Lincoln-Matlock core).
 [severity_overrides]
 minor_delays_pct = 0.30
 reduced_service_pct = 0.35
 delay_threshold_minutes = 10
 
+# Cleethorpes to Matlock, ordered north-east to south-west.
+#
+# --- Shared-approach ruling: New Clee, Grimsby Docks, Grimsby Town and
+# Habrough are ALSO `emr-barton-line.toml` stations (and Habrough/Grimsby
+# Town are also `tpe-south.toml` stations), but this line's own EMR-table
+# row does not name Healing, Great Coates or Stallingborough -- the three
+# Barton Line stations between Grimsby Town and Habrough -- meaning this
+# Matlock-bound working runs semi-fast over a stretch the Barton Line
+# stops at every station on. Same "genuine track-sharing, materially
+# different calling pattern" shape `emr-midland-main-line.toml`'s own
+# Bedford-area ruling documents for its overlap with
+# `thameslink-bedford.toml` -- station-overlap only for the four stations
+# this file DOES call at, no shared segment name (this file's own new,
+# exclusive `emr-derwent-valley-grimsby` segment is used throughout
+# instead). Cost if wrong: bounded, as with every other instance of this
+# pattern in this catalogue. ---
+[[stations]]
+crs = "CLE"
+role = "terminus"
+segment = "emr-derwent-valley-grimsby"
+# Cleethorpes: also an `emr-barton-line.toml`/`tpe-south.toml` terminus --
+# see the ruling above.
+
+[[stations]]
+crs = "NCE"
+role = "minor"
+segment = "emr-derwent-valley-grimsby"
+# New Clee: also an `emr-barton-line.toml` station -- see the ruling above.
+
+[[stations]]
+crs = "GMD"
+role = "minor"
+segment = "emr-derwent-valley-grimsby"
+# Grimsby Docks: also an `emr-barton-line.toml` station -- see the ruling
+# above.
+
+[[stations]]
+crs = "GMB"
+role = "major"
+segment = "emr-derwent-valley-grimsby"
+# Grimsby Town: also an `emr-barton-line.toml`/`tpe-south.toml` station --
+# see the ruling above.
+
+[[stations]]
+crs = "HAB"
+role = "minor"
+segment = "emr-derwent-valley-grimsby"
+# Habrough: also an `emr-barton-line.toml`/`tpe-south.toml` station -- see
+# the ruling above.
+
+[[stations]]
+crs = "BTB"
+role = "minor"
+segment = "emr-derwent-valley-grimsby"
+# Barnetby: absent catalogue-wide before this session's review (grep-
+# checked).
+
+[[stations]]
+crs = "MKR"
+role = "minor"
+segment = "emr-derwent-valley-grimsby"
+# Market Rasen: absent catalogue-wide before this session's review (grep-
+# checked). This line's own exclusive Grimsby-facing segment ends here; the
+# shared Lincoln-Nottingham trunk begins at the next station, per the
+# shared-trunk rule of thumb.
+
+# --- Shared trunk with `emr-nottingham-lincoln.toml`/`emr-crewe-derby.toml`:
+# Lincoln through Nottingham. This is the identical physical Nottingham-
+# Newark Castle-Lincoln line those two files already model, reused verbatim
+# with the same 13-station list and CRS codes -- see
+# `emr-crewe-derby.toml`'s own matching comment for the fuller derivation
+# of why this catalogue trusts `emr-nottingham-lincoln.toml`'s own dedicated
+# route research for this stretch over either file's own more compressed
+# EMR-services-table citation. Per the shared-trunk rule of thumb, Lincoln
+# (the junction where this file's own Grimsby-facing approach ends) stays
+# on the shared segment. ---
+[[stations]]
+crs = "LCN"
+role = "junction"
+segment = "emr-nottingham-lincoln"
+# Lincoln: also an `lner-lincoln.toml`/`northern-sheffield-lincoln.toml`/
+# `emr-lincoln-peterborough.toml` station via other, physically distinct
+# approaches -- station-overlap only with those three.
+
+[[stations]]
+crs = "HKM"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Hykeham.
+
+[[stations]]
+crs = "SWD"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Swinderby.
+
+[[stations]]
+crs = "CLM"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Collingham.
+
+[[stations]]
+crs = "NCT"
+role = "major"
+segment = "emr-nottingham-lincoln"
+# Newark Castle.
+
+[[stations]]
+crs = "ROL"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Rolleston.
+
+[[stations]]
+crs = "FSK"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Fiskerton (Nottinghamshire).
+
+[[stations]]
+crs = "BSB"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Bleasby.
+
+[[stations]]
+crs = "THU"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Thurgarton.
+
+[[stations]]
+crs = "LOW"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Lowdham.
+
+[[stations]]
+crs = "BUJ"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Burton Joyce.
+
+[[stations]]
+crs = "CTO"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Carlton.
+
+[[stations]]
+crs = "NOT"
+role = "junction"
+segment = "emr-nottingham-lincoln"
+# Nottingham: also an `emr-midland-main-line.toml`/`emr-regional.toml`/
+# `emr-poacher.toml`/`emr-robin-hood.toml`/`northern-erewash-valley.toml`/
+# `emr-crewe-derby.toml` station via other, physically distinct approaches
+# -- station-overlap only with all of those. This file's own exclusive
+# segment resumes at the next station, per the shared-trunk rule of thumb.
+
+# --- Beeston, Long Eaton, Spondon: this file's own real physical routing
+# for the Nottingham-Derby leg, per the EMR-table quote above -- see the
+# HONEST DISCREPANCY FLAG in the file-level comment for why this does NOT
+# reuse `emr-crewe-derby.toml`'s own `emr-crewe-derby-nottingham` segment
+# name for this stretch, despite both files modelling the same general
+# Derby-Nottingham corridor: the two files' own source rows disagree on the
+# exact intermediate stations (Attenborough vs. Spondon), so their station
+# sets are not byte-identical and cannot share a segment name under this
+# catalogue's own convention. This file's own new, exclusive
+# `emr-derwent-valley-nottingham` segment is used instead. Cost if wrong
+# (i.e. if the two stretches really are one identical alignment): bounded,
+# as with every other instance of this pattern -- an incident at Beeston or
+# Long Eaton still matches `emr-crewe-derby.toml` independently via
+# StationHit regardless of segment name. ---
+[[stations]]
+crs = "BEE"
+role = "minor"
+segment = "emr-derwent-valley-nottingham"
+# Beeston: also an `emr-midland-main-line.toml` station (that file's own
+# East-Midlands-Parkway-origin Nottingham spur, a different approach) and
+# an `emr-crewe-derby.toml` station (a different, unreconciled citation of
+# the same general corridor) -- see the ruling above.
+
+[[stations]]
+crs = "LGE"
+role = "minor"
+segment = "emr-derwent-valley-nottingham"
+# Long Eaton: see the ruling above.
+
+[[stations]]
+crs = "SPO"
+role = "minor"
+segment = "emr-derwent-valley-nottingham"
+# Spondon: absent catalogue-wide before this session's review (grep-
+# checked). See the ruling above.
+
+# --- Shared trunk with `emr-midland-main-line.toml`/`emr-crewe-derby.toml`:
+# Derby. Reuses `emr-mml-derby` verbatim -- unchanged from the original
+# file (see the original ruling, retained below). ---
+[[stations]]
+crs = "DBY"
+tiploc = "DRBY"  # reused from emr-midland-main-line.toml/cross-country.toml
+role = "junction"
+segment = "emr-mml-derby"
+# Derby: junction for this branch, reusing `emr-midland-main-line.toml`'s
+# `emr-mml-derby` segment.
+
+# === Original ruling, retained unchanged by this re-scope ===
+#
 # --- Segment-sharing ruling: Derby is shared trunk with
 # `emr-midland-main-line.toml`'s `emr-mml-derby` segment; Duffield-
 # Ambergate is physically shared Midland Main Line track too, but is NOT a
@@ -87,14 +369,6 @@ delay_threshold_minutes = 10
 # nationalrail.co.uk) for every station below except Derby, whose CRS is
 # reused unchanged from `emr-midland-main-line.toml` (already verified
 # there, same physical station; TIPLOC also reused - see that file).
-[[stations]]
-crs = "DBY"
-tiploc = "DRBY"  # reused from emr-midland-main-line.toml/cross-country.toml
-role = "junction"
-segment = "emr-mml-derby"
-# Derby: junction for this branch, reusing `emr-midland-main-line.toml`'s
-# `emr-mml-derby` segment - see ruling above.
-
 [[stations]]
 crs = "DFI"
 role = "minor"

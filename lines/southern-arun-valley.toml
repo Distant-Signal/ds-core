@@ -55,24 +55,23 @@ match_keywords = ["Arun Valley Line"]
 # branch and the Barnham-onward alignment), so this file stops there rather
 # than duplicating already-modelled track.
 #
-# HAND-OFF NOTE (not acted on here, disclosed per this catalogue's own
-# convention for a real but Wikipedia-only-sourced lead): Wikipedia's own
-# "Thameslink" article lists a real, current, off-peak 2tph "Peterborough
-# to Horsham via Redhill" service, explicitly calling at "...East Croydon,
-# Coulsdon South, Merstham, Redhill, Horley, Gatwick Airport, Three
-# Bridges, Crawley, Ifield, and Littlehaven" before reaching Horsham - i.e.
-# this service necessarily runs over this file's own Three Bridges-Horsham
-# tracks (there is no alternative alignment between those two points this
-# task's sourcing found), even though it approaches Three Bridges itself
-# via a different, slower Redhill alignment than this file's own Victoria/
-# Brighton Main Line approach. This is a real, single-Wikipedia-article-
-# sourced lead for a future Thameslink file to independently verify and
-# potentially claim a genuine `SharedSegment` for the Three Bridges-Horsham
-# stretch - not acted on here, since it falls short of this batch's
-# two-source bar and thameslink-southern.toml (the natural home for such a
-# branch) would need its own independent confirmation, exactly as
-# southern-brighton-main-line.toml's own Task 5.14 hand-off already models
-# for an analogous situation.
+# HAND-OFF NOTE - ACTED ON by the real-world sanity review: thameslink-
+# southern.toml now has its own HORSHAM BRANCH modelling this exact
+# "Peterborough to Horsham via Redhill"/"Bedford to Three Bridges via
+# Redhill" service, independently re-verified (CDS/MHM/ELD/SAF/HOR CRS
+# codes confirmed to this catalogue's two-source bar - Wikipedia infobox
+# plus railwaycodes.org.uk, not Wikipedia-only as this note originally
+# flagged). Per that file's own segment-decision note, the genuinely shared
+# Three Bridges-Horsham stretch is still deliberately modelled as
+# station-overlap-only rather than a `SharedSegment` reuse of this file's
+# own `southern-arun-valley` segment name: that segment spans this file's
+# ENTIRE route (Three Bridges through Ford), and the Thameslink service
+# terminates at Horsham - reusing the name verbatim would incorrectly mark
+# Christs Hospital/Billingshurst/Pulborough/Amberley/Arundel/Ford (south of
+# Horsham, never touched by the Thameslink service) as SharedSegment too.
+# CRW, IFI, FGT, LVN and HRH are therefore station-overlap-only between the
+# two files, each independently ExclusiveSegment - see
+# thameslink-southern.toml's own HORSHAM BRANCH note for the full writeup.
 [severity_overrides]
 minor_delays_pct = 0.30
 delay_threshold_minutes = 8

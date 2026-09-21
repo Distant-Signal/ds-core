@@ -1,0 +1,119 @@
+id = "tpe-north-scarborough"
+name = "TransPennine Express: North (Scarborough)"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# Sibling of `tpe-north.toml` and `tpe-north-teesside.toml`/`tpe-north-hull.toml`
+# -- see `tpe-north.toml`'s own header comment for the shared "why sibling
+# files, not one broadened file" reasoning (TPE's own "North" route grouping
+# fans out beyond York into several distinct services that can't be
+# linearised into one file under SCHEMA.md's rules).
+#
+# Route, live-verified 2026-09-21 via two independent sources:
+#   - Wikipedia's "TransPennine Express" article, route table: "Manchester
+#     Victoria to Scarborough", 1 tph, calling at Huddersfield, Dewsbury,
+#     Leeds, York, Malton, Seamer.
+#   - Scarborough's own Wikipedia article, Services section (as of May 2025):
+#     "1 tph to Manchester Victoria via York, Leeds and Huddersfield", plus
+#     "one train per day" extending beyond Manchester Victoria to serve
+#     Manchester Airport -- independently corroborates the core route and
+#     adds the daily Airport extension.
+#
+# Station overlap, no shared segment name -- same policy `tpe-north.toml`
+# itself already set for this exact MCV/HUD/LDS/YRK stretch, applied here
+# for consistency across the whole North-route sibling group (see
+# `tpe-north-teesside.toml`'s identical note for the fuller reasoning,
+# including why a genuine multi-file branching trunk isn't attempted in this
+# pass). MIA is also on `tpe-anglo-scottish.toml`/`tpe-south.toml` and
+# `tpe-north-teesside.toml`; DEW is also on `northern.toml`; MLT and SEM are
+# also on `northern-yorkshire-coast.toml`'s own separate York-Scarborough-
+# Whitby-adjacent coverage; SCA is also on `northern-yorkshire-coast.toml`.
+# All station-overlap only, matching the `xc-manchester.toml` precedent this
+# whole catalogue uses.
+#
+# CRS codes: MLT, SEM, SCA cross-checked against
+# `https://ds.cursed.solutions/api/stations`, 2026-09-21, and reused verbatim
+# from `northern-yorkshire-coast.toml` where already present there. MCV, HUD,
+# DEW, LDS, YRK, MIA reused verbatim from `tpe-north.toml`/
+# `tpe-north-teesside.toml`.
+sample_stations = ["MCV", "LDS", "YRK", "SCA"]
+destination_crs_filter = ["MCV", "SCA", "MIA"]
+# Manchester Victoria and Scarborough are this route's two everyday real
+# termini; Manchester Airport is included too for the one daily working that
+# genuinely extends there (see the sourcing above) -- omitting it would
+# silently drop that departure from LDBWS sampling.
+
+# No match_keywords: same reasoning as `tpe-north.toml` -- "North" and
+# "Scarborough" are both too generic/risk collision with other operators'
+# own Scarborough-area services (Northern's `northern-yorkshire-coast.toml`),
+# and the bare "TransPennine Express" brand is reserved for operator-level
+# files. Station and operator evidence carries this file instead.
+
+# Same long-distance thresholds as `tpe-north.toml` and its other siblings.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Manchester Victoria -> Huddersfield -> Dewsbury -> Leeds -> York ->
+# Malton -> Seamer -> Scarborough, per the confirmed route above. Manchester
+# Airport is listed first as the westward extension terminus (one train per
+# day only -- see the sourcing note above).
+[[stations]]
+crs = "MIA"
+role = "terminus"
+segment = "tpe-north-scarborough"
+# Manchester Airport -- only one daily working extends this far beyond
+# Manchester Victoria; see the sourcing note above.
+
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "tpe-north-scarborough"
+# Manchester Victoria -- this route's everyday real terminus.
+
+[[stations]]
+crs = "HUD"
+role = "major"
+segment = "tpe-north-scarborough"
+
+[[stations]]
+crs = "DEW"
+role = "minor"
+segment = "tpe-north-scarborough"
+# Dewsbury.
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "junction"
+segment = "tpe-north-scarborough"
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "junction"
+segment = "tpe-north-scarborough"
+# Junction with `tpe-north.toml` (Newcastle) and `tpe-north-teesside.toml`
+# (Teesside) -- this route's own exclusive continuation towards Scarborough
+# starts at the next station, Malton.
+
+[[stations]]
+crs = "MLT"
+role = "minor"
+segment = "tpe-north-scarborough"
+# Malton -- CRS reused verbatim from `northern-yorkshire-coast.toml`.
+
+[[stations]]
+crs = "SEM"
+role = "minor"
+segment = "tpe-north-scarborough"
+# Seamer -- CRS reused verbatim from `northern-yorkshire-coast.toml`.
+
+[[stations]]
+crs = "SCA"
+role = "terminus"
+segment = "tpe-north-scarborough"
+# Scarborough -- CRS reused verbatim from `northern-yorkshire-coast.toml`.

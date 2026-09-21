@@ -93,19 +93,23 @@ delay_threshold_minutes = 5
 # by current Rhymney Line trains, not merely historically adjacent to them.
 #
 # Cardiff hub segment sharing: `tfw-valley-cardiff-hub` below is shared with
-# `tfw-valley-merthyr.toml`, `tfw-valley-rhondda.toml` and
-# `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff Bay Line) --
-# every one of those files' routes genuinely departs from the same two
-# platforms. See `tfw-valley-lines-south.toml`'s own "Cardiff hub
-# segment-sharing decision" comment for the full history of that call, and
+# `tfw-valley-merthyr.toml`, `tfw-valley-rhondda.toml`, `tfw-city-line.toml`
+# (CDF only), and `tfw-coryton-line.toml`/`tfw-cardiff-bay-line.toml` (CDQ
+# only) -- the latter three are the post-split successors of the former
+# bundled `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff
+# Bay Line) -- every one of those files' routes genuinely departs from the
+# same two platforms. See `tfw-city-line.toml`'s own "Cardiff hub" comment
+# for the full history of that call, and
 # `valley_lines_cardiff_hub_shared_segment_propagates` in
 # `crates/common/src/matcher.rs` for the regression test.
 #
 # Only currently open, passenger-served stations are listed below.
 
-# --- Cardiff hub: shared with `tfw-valley-merthyr.toml`, `tfw-valley-
-# rhondda.toml` and `tfw-valley-lines-south.toml`. See the Cardiff hub
-# segment-sharing note above.
+# --- Cardiff hub: CDF shared with `tfw-valley-merthyr.toml`,
+# `tfw-valley-rhondda.toml` and `tfw-city-line.toml`; CDQ shared with
+# `tfw-valley-merthyr.toml`, `tfw-valley-rhondda.toml`,
+# `tfw-coryton-line.toml` and `tfw-cardiff-bay-line.toml`. See the Cardiff
+# hub segment-sharing note above.
 [[stations]]
 crs = "CDF"
 tiploc = "CRDFCEN"

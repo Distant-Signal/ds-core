@@ -1,8 +1,16 @@
 id = "gwr-marlow-branch"
 name = "Marlow Branch Line"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["GW"]
+
+# Recategorized from "regional" to "commuter" (real-world sanity review):
+# a roughly half-hourly-off-peak (better at peak, per the two-shorter-
+# workings split at Bourne End described below) Thames Valley commuter
+# feeder, the same frequency/character precedent `gwr-avocet-line.toml`
+# already established as "commuter" for a comparable branch — not the
+# sparser, genuinely rural service this catalogue's "regional" category is
+# meant for.
 # Great Western Railway, Class 165/166 "Turbo" diesel multiple units
 # (en.wikipedia.org/wiki/Marlow_branch_line).
 

@@ -147,10 +147,16 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the three
 #     quadrupled in 1884). It stays on the shared trunk; this line's own
 #     exclusive segment starts at the NEXT station, Norbiton.
 #
-#   WAT - VXH - CLJ - EAD - WIM - RAY - NEM | NBT - KNG - HMW - TED - STW |
-#   [--------------- swr-trunk-waterloo ---------|-- swr-kingston-loop --|
-#        TWI - SMG - RMD - NSH - MTL - BNS - PUT - WNT - QRB
-#        |-------------- swr-windsor-lines ---------------]
+#   WAT - VXH - CLJ - EAD - WIM - RAY - NEM | NBT - KNG - HMW - TED | STW |
+#   [--------------- swr-trunk-waterloo ---------|-- swr-kingston-loop --|swr-|
+#        TWI - SMG - RMD - NSH - MTL - BNS - PUT - WNT - QRB       strawberry-
+#        |-------------- swr-windsor-lines ---------------]           hill]
+#
+# NBT-KNG-HMW-TED is now ALSO shared with swr-shepperton-branch.toml (see
+# the UPDATE note above) - Shepperton's own trains run over this exact
+# stretch before diverging at Shacklegate Junction, between Teddington and
+# Strawberry Hill. STW itself sits past that junction, so it moved to its
+# own `swr-strawberry-hill` segment, exclusive to this file.
 #
 # `swr-windsor-lines` is a separate segment from `swr-kingston-loop` because
 # it is physically different infrastructure: the loop rejoins the Windsor
@@ -165,16 +171,29 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the three
 # one file, southeastern-metro-north-kent.toml) use for
 # `southeastern-lewisham-corridor`.
 #
-# One nuance deliberately NOT modelled as its own segment: SWR's Shepperton
-# services share this line as far as Teddington, then diverge at Shacklegate
-# Junction (between Teddington and Strawberry Hill) and, off-peak, do not
-# serve Strawberry Hill, Twickenham or Richmond. So NBT-KNG-HMW-TED runs at
-# 4 tph (2 loop + 2 Shepperton) while STW-TWI runs at 2 tph. Splitting a
-# one-station `swr-kingston-loop`/Strawberry Hill segment out of this would
-# add a segment with no behavioural effect today (nothing else uses either
-# name). Recorded here instead: if a `swr-shepperton.toml` is ever added, it
-# should reuse `swr-kingston-loop` for NBT/KNG/HMW/TED ONLY, and this file's
-# STW entry must move to its own segment at that point.
+# One nuance: SWR's Shepperton services share this line as far as
+# Teddington, then diverge at Shacklegate Junction (between Teddington and
+# Strawberry Hill) and, off-peak, do not serve Strawberry Hill, Twickenham
+# or Richmond. So NBT-KNG-HMW-TED runs at 4 tph (2 loop + 2 Shepperton)
+# while STW-TWI runs at 2 tph.
+#
+# UPDATE (SWR suburban-gap batch): `lines/swr-shepperton-branch.toml` now
+# fills the Shepperton gap flagged above and reuses this file's own
+# `swr-kingston-loop` segment name verbatim for its own WAT-through-TED
+# rows (a genuine shared trunk - both files' trains run over the identical
+# NBT-KNG-HMW-TED track before diverging at Shacklegate Junction, per that
+# file's own sourcing). Per the shared-trunk rule of thumb the junction
+# itself has no CRS code, so the split is drawn at the last shared real
+# station, Teddington - exactly as this note originally anticipated.
+# Strawberry Hill (STW) is no longer served by any Shepperton working
+# off-peak (see above), so it was RENAMED from `swr-kingston-loop` to its
+# own new `swr-strawberry-hill` segment as part of this update -
+# swr-shepperton-branch.toml does not touch STW at all, so leaving it under
+# the shared segment's own name would have wrongly marked it as shared too
+# (`SegmentRegistry` keys shared-vs-exclusive purely off segment *name*
+# reuse across files, not per-station overlap - the same mechanism
+# scotrail-ayrshire.toml's own UPDATE note documents for its analogous
+# Kilwinning/Ayr-branch split).
 
 # ============================================================================
 # MATCH KEYWORDS
@@ -392,13 +411,16 @@ segment = "swr-kingston-loop"
 [[stations]]
 crs = "STW"
 role = "junction"
-segment = "swr-kingston-loop"
+segment = "swr-strawberry-hill"
 # Strawberry Hill. Sits inside the Strawberry Hill / Shacklegate / Fulwell
 # junction triangle (with the depot in the middle), which is how the
 # Shepperton branch connects to this line. Off-peak Shepperton services cut
 # the corner via Shacklegate Junction and do not call here, so this is the
 # one sample station served by the loop service alone; a handful of peak
 # Shepperton workings are routed via Twickenham and do call.
+# RENAMED from `swr-kingston-loop` to its own exclusive `swr-strawberry-
+# hill` segment when swr-shepperton-branch.toml was added - see the
+# SEGMENTS section's UPDATE note above.
 
 # --- Windsor lines, Twickenham inward to Waterloo. Named for the track
 # rather than for this service, so a future Reading / Windsor & Eton

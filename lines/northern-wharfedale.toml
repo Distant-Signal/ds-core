@@ -1,8 +1,21 @@
 id = "northern-wharfedale"
 name = "Wharfedale Line"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["NT"]
+
+# Category correction (Yorkshire/real-world-sanity review, 2026-09-21): was
+# "regional". This line shares its Bradford Forster Square-Shipley approach
+# (`northern-shipley-trunk`, above) with `northern-airedale.toml`, which the
+# same review re-categorizes "commuter" -- Wikipedia's "Airedale line"
+# article confirms that shared stretch was electrified at 25kV AC in 1994
+# and is run today by Class 333 EMUs. The Guiseley-Ilkley stretch itself is
+# part of the same 1994/95 Airedale and Wharfedale lines electrification
+# scheme (same infobox, same source) and carries a comparable half-hourly
+# service -- genuinely commuter-frequency electrified running, not a rural
+# diesel branch, despite the earlier blanket rule this catalogue's older
+# files cited reserving "commuter" for Merseyrail alone. See
+# `northern-airedale.toml`'s own comment for the fuller citation.
 
 destination_crs_filter = ["LDS", "BDQ", "ILK"]
 sample_stations = ["GSY", "BEY", "ILK"]

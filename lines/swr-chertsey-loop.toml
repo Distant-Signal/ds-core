@@ -57,9 +57,10 @@ operators = ["SW"]
 #            junction  [--- swr-chertsey-branch ---]
 #
 # This file reuses swr-hounslow-loop.toml's ENTIRE station list
-# (swr-trunk-waterloo, swr-windsor-lines and swr-hounslow-loop segments,
-# identical CRS/role/segment values throughout) rather than just its final
-# junction station. This is a deliberate, not lazy, choice: per that file's
+# (swr-trunk-waterloo, swr-windsor-lines, swr-hounslow-loop and, since the
+# REVIEW2 FIX below, swr-staines-virginia-water segments - identical
+# CRS/role/segment values throughout) rather than just its final junction
+# station. This is a deliberate, not lazy, choice: per that file's
 # own IMPORTANT FINDING, the standard-service Chertsey/Weybridge trains
 # ARE the same physical workings that call at Hounslow, Isleworth, Brentford
 # etc. on their way to/from Waterloo - there is no genuine "this line's own
@@ -69,13 +70,25 @@ operators = ["SW"]
 # "Adding a complex operator" section describes for swr-trunk-waterloo
 # itself.
 #
+# BUG FIX (real-world-sanity review): swr-hounslow-loop.toml's own
+# WTN/FEL/AFS/SNS rows were retagged from `swr-hounslow-loop` to the shared
+# `swr-windsor-lines` segment (see that file's own SEGMENTS note for the
+# full reasoning — they were previously mismatched against
+# swr-windsor-lines.toml's own segment name for the identical stations).
+# Updated identically here to keep this file's own "identical... throughout"
+# claim true.
+#
 # This file's own exclusive segment, `swr-chertsey-branch`, starts at the
 # station AFTER the Virginia Water junction (Chertsey), per the
-# shared-trunk rule of thumb - VIR itself stays on the shared
-# `swr-hounslow-loop` segment name, reused verbatim from the sibling file
-# (not "swr-chertsey-loop" - there is nothing chertsey-specific about
-# Virginia Water's own role, it is purely the sibling's own segment's
-# terminus-of-scope station).
+# shared-trunk rule of thumb - VIR itself stays on the shared segment name,
+# reused verbatim from the sibling file (not "swr-chertsey-loop" - there is
+# nothing chertsey-specific about Virginia Water's own role, it is purely
+# the sibling's own segment's terminus-of-scope station). REVIEW2 FIX
+# (2026-09-21): that shared name is now `swr-staines-virginia-water`, not
+# `swr-hounslow-loop` - see the EGH entry's own comment below and
+# swr-hounslow-loop.toml's own matching write-up (the old broad
+# `swr-hounslow-loop` name was over-sharing this EGH/VIR stretch once
+# swr-waterloo-reading.toml reused it for just those two stations).
 
 match_keywords = ["Chertsey branch", "Chertsey line"]
 # The line's own real Wikipedia name plus one close variant. Grepped clean
@@ -186,35 +199,45 @@ segment = "swr-hounslow-loop"
 [[stations]]
 crs = "WTN"
 role = "minor"
-segment = "swr-hounslow-loop"
+segment = "swr-windsor-lines"
+# BUG FIX: retagged from `swr-hounslow-loop` — see the SEGMENTS note above.
 
 [[stations]]
 crs = "FEL"
 role = "minor"
-segment = "swr-hounslow-loop"
+segment = "swr-windsor-lines"
+# BUG FIX: see WTN above.
 
 [[stations]]
 crs = "AFS"
 role = "minor"
-segment = "swr-hounslow-loop"
+segment = "swr-windsor-lines"
+# BUG FIX: see WTN above.
 
 [[stations]]
 crs = "SNS"
 role = "junction"
-segment = "swr-hounslow-loop"
+segment = "swr-windsor-lines"
+# BUG FIX: see WTN above.
 
 [[stations]]
 crs = "EGH"
 role = "minor"
-segment = "swr-hounslow-loop"
+segment = "swr-staines-virginia-water"
+# Egham. REVIEW2 FIX (2026-09-21): moved off `swr-hounslow-loop` onto the
+# new, narrower `swr-staines-virginia-water` segment name, alongside
+# swr-hounslow-loop.toml's own EGH/VIR entries and swr-waterloo-
+# reading.toml's - see swr-hounslow-loop.toml's own EGH entry comment for
+# the full write-up (that file's own broad `swr-hounslow-loop` name was
+# over-sharing this stretch once swr-waterloo-reading.toml reused it).
 
 [[stations]]
 crs = "VIR"
 role = "junction"
-segment = "swr-hounslow-loop"
+segment = "swr-staines-virginia-water"
 # Virginia Water. Shared boundary with swr-hounslow-loop.toml - see
-# SEGMENTS above. This file's own exclusive segment starts at the next
-# station, Chertsey.
+# SEGMENTS above (and its own REVIEW2 FIX note). This file's own exclusive
+# segment starts at the next station, Chertsey.
 
 [[stations]]
 crs = "CHY"

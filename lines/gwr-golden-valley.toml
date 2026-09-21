@@ -137,16 +137,54 @@ segment = "gwr-golden-valley"
 # Stonehouse. The Golden Valley line rejoins/merges with the Bristol-
 # Birmingham main line at Standish Junction, just west of here (no CRS/
 # TIPLOC of its own) — en.wikipedia.org/wiki/Golden_Valley_line.
+#
+# UPDATE (real-world sanity review): `gwr-golden-valley` is now a genuine
+# multi-file shared-trunk segment name — `lines/gwr-bristol-gloucester.toml`
+# (new in that review) reuses this row verbatim, since its own Bristol-
+# Filton-Yate-Cam & Dursley route converges with this one at Standish
+# Junction, immediately south-west of here. See that file's own
+# segment-naming comment for the full reasoning.
 
 [[stations]]
 crs = "GCR"
-role = "major"
+role = "junction"
 segment = "gwr-golden-valley"
-# Gloucester. This task's own scope ends here (the brief's own "Swindon-
-# Kemble-Stroud-Gloucester" wording); real GWR services continue on to
-# Cheltenham Spa, and Gloucester is also served by cross-country.toml/
+# Gloucester. Role corrected major -> junction (real-world sanity review):
+# this line's own real Cheltenham Spa extension (below) diverges/continues
+# here, per the shared-trunk rule of thumb. Also served by cross-country.toml/
 # xc-cardiff.toml from other directions — station overlap only, see comment
-# above.
+# above. Also now shared with `lines/gwr-bristol-gloucester.toml` via
+# `gwr-golden-valley` — see the SHU update note above.
+
+# --- Extension to Cheltenham Spa (real-world sanity review) ---
+#
+# This file's own scope previously ended at Gloucester, short of GWR's real
+# terminus for this service. This file's own destination_crs_filter comment
+# already documented the gap: "GWR's current Swindon-Westbury... [and]
+# Paddington-Cheltenham through workings... continues past Gloucester" —
+# en.wikipedia.org/wiki/Golden_Valley_line's own "Services" section confirms
+# "roughly hourly" London Paddington-Cheltenham Spa through trains, plus
+# additional Swindon-Cheltenham locals Monday-Saturday, so Cheltenham Spa
+# (CNM) is this route's own real, regular terminus, not an occasional extra.
+# CNM itself is also cross-country.toml's own `xc-west`/xc-cardiff.toml's own
+# `xc-west` junction station (Cardiff arm diverges for Gloucester there;
+# Bristol-bound XC services run via Standish Junction — i.e. the same
+# physical Gloucester-Cheltenham track this line's own extension uses).
+# Reusing `xc-west` verbatim for just this file's own CNM row was
+# considered, but neither cross-country.toml nor xc-cardiff.toml currently
+# tags GCR itself with that segment (both jump straight from CNM to their
+# next station, skipping Gloucester — a separate pre-existing gap in those
+# files, out of this task's scope), so introducing `xc-west` here without a
+# matching GCR entry on the other side would misrepresent the shared
+# stretch as starting at the wrong station. Station overlap only is used
+# instead, on this file's own `gwr-golden-valley` segment, flagged here for
+# the controller alongside gwr-bristol-gloucester.toml's identical finding.
+[[stations]]
+crs = "CNM"
+role = "terminus"
+segment = "gwr-golden-valley"
+# Cheltenham Spa. This route's own real, regular terminus for most London-
+# connected services — see the extension note above.
 
 # ============================================================================
 # SCOPE BOUNDARIES — historic halts checked and excluded
@@ -161,9 +199,7 @@ segment = "gwr-golden-valley"
 # "Intermediate stations" list), flagged here for the controller on the same
 # low-risk basis as the equivalent note in swr-west-of-england.toml.
 #
-# Cheltenham Spa (CNM) is real, currently open and the true endpoint of most
-# of this line's London-through services, but sits outside this task's own
-# "Swindon-Kemble-Stroud-Gloucester" scope and is already referenced (though
-# not as a full stations entry) by cross-country.toml/xc-cardiff.toml — left
-# for a future task to properly extend this file or add a dedicated one,
-# rather than guessed here.
+# UPDATE (real-world sanity review): Cheltenham Spa (CNM) is now a full
+# `stations` entry above — see the "Extension to Cheltenham Spa" comment
+# further up for the sourcing. This paragraph is left in place as a record
+# of the original scope note.

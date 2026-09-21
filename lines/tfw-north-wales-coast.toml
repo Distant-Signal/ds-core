@@ -131,27 +131,50 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # `MatchScope::SharedSegment` match -- see the regression test in
 # `crates/aggregator/src/matcher.rs` for the concrete assertion.
 #
-# Cross-batch note (controller ruling, reconciled during Task 11.8's
-# batch verification): `lines/wcml-north-wales.toml` (Batch 1's Task 1.4)
-# did not exist when this file was first written -- that worktree was
-# still at the shared base commit with no new commits. It has since
-# landed (Batch 1, still on its own unmerged worktree branch as of this
-# check) and its own Chester-Holyhead segment
-# (`wcml-north-wales-branch`) carries an explicit "TfW future-overlap
-# note" comment offering this file's curator exactly two options: reuse
-# its segment name as a genuine shared trunk, or give this line its own
-# distinct segment name with station-overlap-only at Chester. This file
-# already independently chose the second option before that file existed
-# -- confirmed here as one of the two options that file's own comment
-# explicitly sanctioned, not a conflicting or overlooked choice. No
-# rename needed on either side; the two files deliberately use distinct
-# segment names at Chester (`tfw-north-wales-coast` here,
-# `wcml-north-wales-branch` there), matching the same
-# station-overlap-only pattern as the LLJ decision above. This reconciles
-# cleanly once both batches merge to main -- no further action required
-# unless a future review disputes the station-overlap-only physical
-# claim itself (it does not; see source 1 in `wcml-north-wales.toml`'s
-# own research for the physical-junction description of Chester).
+# Cross-batch note, UPDATED (2026-09-21 real-world-sanity review): this
+# file's own segment, `tfw-north-wales-coast`, below, is now genuinely
+# SHARED with `lines/wcml-north-wales.toml` for the Chester-Holyhead
+# stretch -- reversing the original station-overlap-only ruling described
+# in the paragraph below (kept for history). Avanti's Euston-Holyhead
+# service and this line's own local stopping service run over the exact
+# same physical double-track main line for this entire stretch, not two
+# corridors meeting at one station (unlike the genuinely distinct Chester/
+# Wrexham corridor case -- see `tfw-shrewsbury-chester.toml`'s own Chester
+# comment for that different situation). `wcml-north-wales.toml` reuses
+# this file's own `tfw-north-wales-coast` segment name verbatim at its own
+# 8 stations (CTR, FLN, PRT, RHL, CWB, LLJ, BNG, HHD -- exactly Avanti's
+# own limited-stop calling pattern); this file's own additional 11
+# stations on the same segment (Shotton, Abergele & Pensarn, Conwy,
+# Penmaenmawr, Llanfairfechan and the five Anglesey stops) are on the same
+# physical track too. `is_shared`/`is_exclusive_to` key off the segment
+# *name* across the whole catalogue, not per-station, so an incident at
+# one of those 11 is still classified `MatchScope::SharedSegment` for
+# this file (correctly -- Avanti's own through service genuinely runs
+# over that stretch too, even where it doesn't stop), even though
+# `wcml-north-wales.toml` has no entry at any of those CRS codes and so
+# cannot itself match such an incident at all. See
+# `chester_station_overlap_matches_both_lines_as_exclusive`/
+# `llj_station_overlap_matches_both_lines_as_exclusive` (both updated,
+# where both files genuinely have a matching station) and
+# `north_wales_coast_own_stretch_incident_is_shared_segment_but_single_match`/
+# `tfw_north_wales_coast_new_station_incident_resolves_exclusive_segment`
+# (the single-file-but-still-shared case) in `crates/common/src/matcher.rs`
+# for the concrete assertions, and `lines/wcml-north-wales.toml`'s own
+# "TfW/WCML shared corridor" note for the fuller writeup of this reversal.
+#
+# Original ruling, kept for history (controller ruling, reconciled during
+# Task 11.8's batch verification): `lines/wcml-north-wales.toml` (Batch
+# 1's Task 1.4) did not exist when this file was first written. It later
+# landed with its own Chester-Holyhead segment (`wcml-north-wales-branch`)
+# carrying an explicit "TfW future-overlap note" comment offering this
+# file's curator exactly two options: reuse its segment name as a genuine
+# shared trunk, or give this line its own distinct segment name with
+# station-overlap-only at Chester. This file chose the second option,
+# confirmed mutually consistent by Batch 11's own final review. That was a
+# defensible reading of the evidence available at the time (the note only
+# flagged the Chester station overlap specifically, not the full-corridor
+# track sharing); the 2026-09-21 review re-examined the whole corridor and
+# reversed it, per the updated note above.
 [[stations]]
 crs = "CTR"
 tiploc = "CHST"
@@ -160,8 +183,11 @@ segment = "tfw-north-wales-coast"
 # Chester is a real multi-line junction (West Coast Main Line, the
 # Wrexham/Borderlands corridor, the Wirral Line, the Mid-Cheshire Line
 # and the Shrewsbury-Chester Line all meet here, per the line's own
-# route diagram) -- but none of those is `wcml-north-wales.toml` itself
-# sharing a segment name with this file; see the cross-batch note above.
+# route diagram). Of those, `wcml-north-wales.toml` now genuinely shares
+# this file's own segment name here (see the cross-batch note above); the
+# others (`tfw-shrewsbury-chester.toml`, `merseyrail-wirral.toml`,
+# `northern-mid-cheshire.toml`) remain station-overlap-only, each on its
+# own distinct segment name.
 
 [[stations]]
 crs = "SHT"

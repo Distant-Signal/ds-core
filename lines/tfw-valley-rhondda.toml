@@ -81,10 +81,12 @@ delay_threshold_minutes = 5
 # merely historically adjacent.
 #
 # Cardiff hub segment sharing: `tfw-valley-cardiff-hub` below is shared with
-# `tfw-valley-rhymney.toml`, `tfw-valley-merthyr.toml` and
-# `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff Bay Line).
-# See `tfw-valley-lines-south.toml`'s own "Cardiff hub segment-sharing
-# decision" comment for the full history of that call, and
+# `tfw-valley-rhymney.toml`, `tfw-valley-merthyr.toml`, `tfw-city-line.toml`
+# (CDF only), and `tfw-coryton-line.toml`/`tfw-cardiff-bay-line.toml` (CDQ
+# only) -- the latter three are the post-split successors of the former
+# bundled `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff
+# Bay Line). See `tfw-city-line.toml`'s own "Cardiff hub" comment for the
+# full history of that call, and
 # `valley_lines_cardiff_hub_shared_segment_propagates` in
 # `crates/common/src/matcher.rs` for the regression test.
 #
@@ -100,8 +102,10 @@ delay_threshold_minutes = 5
 #
 # Radyr junction: this file also reuses the dedicated, Radyr-only
 # `tfw-valley-radyr-junction` segment name (rather than folding Radyr into
-# the Taff trunk segment above), matching `tfw-valley-lines-south.toml`'s own
-# City Line and `tfw-valley-merthyr.toml`'s treatment. Segment sharing is
+# the Taff trunk segment above), matching `tfw-city-line.toml`'s own City
+# Line (the post-split successor of the former bundled `tfw-valley-lines-
+# south.toml`'s City Line) and `tfw-valley-merthyr.toml`'s treatment.
+# Segment sharing is
 # indexed by name across the whole catalogue, not per-station, so giving
 # Radyr its own name keeps the other six Taff trunk stations from falsely
 # registering as shared with the City Line, which only touches this corridor
@@ -109,9 +113,11 @@ delay_threshold_minutes = 5
 #
 # Only currently open, passenger-served stations are listed.
 
-# --- Cardiff hub: shared with `tfw-valley-rhymney.toml`, `tfw-valley-
-# merthyr.toml` and `tfw-valley-lines-south.toml`. See the Cardiff hub
-# segment-sharing note above.
+# --- Cardiff hub: CDF shared with `tfw-valley-rhymney.toml`,
+# `tfw-valley-merthyr.toml` and `tfw-city-line.toml`; CDQ shared with
+# `tfw-valley-rhymney.toml`, `tfw-valley-merthyr.toml`,
+# `tfw-coryton-line.toml` and `tfw-cardiff-bay-line.toml`. See the Cardiff
+# hub segment-sharing note above.
 [[stations]]
 crs = "CDF"
 tiploc = "CRDFCEN"

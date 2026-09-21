@@ -27,7 +27,14 @@ sample_stations = ["MKM"]
 # element of the TransWilts Community Rail Partnership"). Grepped clean
 # against every other file's own match_keywords before adding — no
 # collision.
-match_keywords = ["TransWilts"]
+match_keywords = ["TransWilts", "Trans-Wilts Line"]
+# "Trans-Wilts Line" added (real-world sanity review): GWR's own spelling
+# uses a hyphen and title case ("Trans-Wilts Line"), which the original
+# "TransWilts" substring match would not catch. Both kept — "TransWilts" is
+# the community rail partnership's own legal/brand name (see the sourcing
+# above), "Trans-Wilts Line" is GWR's own spelling for the same route.
+# Grepped clean against every other file's own match_keywords before
+# adding — no collision.
 
 # A two-hourly community rail service (en.wikipedia.org/wiki/
 # Melksham_railway_station: GWR "operates services approximately every two

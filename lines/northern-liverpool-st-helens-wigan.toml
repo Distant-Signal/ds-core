@@ -1,0 +1,171 @@
+id = "northern-liverpool-st-helens-wigan"
+name = "Liverpool - St Helens - Wigan Line"
+mode = "national-rail"
+category = "regional"
+# Matches this catalogue's existing precedent for Northern's other
+# Manchester/Merseyside suburban branches (`northern-manchester-southport.toml`,
+# `northern-ormskirk.toml`, `northern-wigan-kirkby.toml`,
+# `northern-liverpool-warrington-manchester.toml`) -- "regional" is this
+# batch's settled category for a Northern-branded local/stopping corridor,
+# even at a 2tph frequency.
+operators = ["NT"]
+
+# Part C of the North West England real-world-sanity review (2026-09-21):
+# Northern's own Liverpool Lime Street-Wigan North Western stopping service
+# via St Helens Central -- a genuinely different corridor from this same
+# review's `northern-liverpool-warrington-manchester.toml` (the CLC route
+# via Widnes/Warrington Central/Irlam, which never touches St Helens or
+# Wigan) and from `northern-wigan-kirkby.toml` (Wigan Wallgate, not Wigan
+# North Western -- two different Wigan stations, no physical connection
+# modelled between them in this catalogue).
+#
+# Route and frequency, live-verified 2026-09-21 via two independent sources
+# each:
+#   - Wikipedia's "Liverpool-Wigan line" article, Route section: "Liverpool
+#     Lime Street, Edge Hill, Wavertree Technology Park, Broad Green, Roby,
+#     Huyton, Prescot, Eccleston Park, Thatto Heath, St Helens Central,
+#     Garswood, Bryn, Wigan North Western", and its Services section:
+#     "Two all-stations stopping services, operating every 30 minutes
+#     between Liverpool and Wigan only" (Monday-Saturday).
+#   - Cross-checked against Edge Hill's and Wavertree Technology Park's own
+#     Wikipedia "Services" sections, which each independently confirm a
+#     genuine calling pattern here: Edge Hill "a half-hourly service to
+#     Wigan North Western via St Helens Central"; Wavertree Technology Park
+#     "2 tph to Wigan North Western".
+#
+# St Helens Junction (on a related but physically separate WCML-adjacent
+# loop through St Helens, per the same Wikipedia article's own "not listed
+# as current passenger stations on the active route" treatment of it here)
+# is NOT on this route and is deliberately not added.
+#
+# Also NOT modelled here: the same article's "one hourly long-distance
+# express service, originating at Liverpool Lime Street and continuing to
+# Blackpool North via Preston" -- this shares this file's own four
+# Liverpool-Wigan stops (per the article) before diverging north of Wigan,
+# but is a genuinely different, longer-distance service with its own
+# separate calling pattern beyond Wigan North Western that this task's
+# research budget didn't extend to; `northern-blackpool.toml`'s own header
+# comment already independently flags this exact Liverpool-Blackpool
+# service (via Euxton Balshaw Lane) as real but unmodelled by that file
+# too. Flagged here as a real, sourced, documented gap for a future task,
+# not guessed at.
+#
+# Station overlap, no shared segment name: HUY (Huyton) is also on
+# `northern.toml`. SNH (St Helens Central) and WGN (Wigan North Western)
+# are also on `tpe-anglo-scottish.toml` (its own Liverpool-Manchester
+# Airport route via a different calling pattern); WGN is also on
+# `west-coast-main-line.toml`. All station-overlap only, matching this
+# catalogue's `xc-manchester.toml` precedent. No existing file in this
+# catalogue currently claims Edge Hill, Wavertree Technology Park, Broad
+# Green, Roby, Prescot, Eccleston Park, Thatto Heath, Garswood or Bryn
+# (grepped before starting), so this file's own
+# `northern-liverpool-st-helens-wigan` segment is exclusive throughout.
+#
+# CRS codes: every code below cross-checked against
+# `https://ds.cursed.solutions/api/stations`, 2026-09-21; no discrepancies.
+# TIPLOCs omitted throughout (none confirmed to a second source this
+# session).
+sample_stations = ["LIV", "HUY", "SNH", "WGN"]
+destination_crs_filter = ["WGN"]
+# Wigan North Western is this line's own real terminus at the Liverpool end
+# of the shared Liverpool Lime Street trunk (LIV itself is the other real
+# terminus, but destination_crs_filter is consumed by LDBWS sampling FROM
+# Liverpool-area stations, so only the outbound terminus needs listing here,
+# matching `tpe-borders.toml`'s own convention for its own two-real-termini
+# routes).
+
+# No match_keywords: "Liverpool" alone is far too generic, and this route
+# has no confirmed distinct Knowledgebase brand name of its own (unlike,
+# say, the East Lancashire line's own named article). Station and operator
+# evidence carries this file instead.
+
+# Frequent (2 tph), largely double-track suburban corridor -- default
+# thresholds, matching `northern-manchester-southport.toml`'s own reasoning
+# for a comparable-frequency Northern local line (no `[severity_overrides]`
+# needed).
+
+# Ordered Liverpool Lime Street -> Edge Hill -> Wavertree Technology Park ->
+# Broad Green -> Roby -> Huyton -> Prescot -> Eccleston Park -> Thatto Heath
+# -> St Helens Central -> Garswood -> Bryn -> Wigan North Western, per the
+# confirmed route above.
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "northern-liverpool-st-helens-wigan"
+
+[[stations]]
+crs = "EDG"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Edge Hill.
+
+[[stations]]
+crs = "WAV"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Wavertree Technology Park.
+
+[[stations]]
+crs = "BGE"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Broad Green.
+
+[[stations]]
+crs = "ROB"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Roby.
+
+[[stations]]
+crs = "HUY"
+role = "major"
+segment = "northern-liverpool-st-helens-wigan"
+# Huyton -- also on `northern.toml`; station-overlap only.
+
+[[stations]]
+crs = "PSC"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Prescot.
+
+[[stations]]
+crs = "ECL"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Eccleston Park.
+
+[[stations]]
+crs = "THH"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Thatto Heath.
+
+[[stations]]
+crs = "SNH"
+role = "major"
+segment = "northern-liverpool-st-helens-wigan"
+# St Helens Central -- also on `tpe-anglo-scottish.toml`; station-overlap
+# only. St Helens Junction, on a physically separate route, is NOT this
+# station and is not on this line -- see the sourcing note above.
+
+[[stations]]
+crs = "GSW"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Garswood.
+
+[[stations]]
+crs = "BYN"
+role = "minor"
+segment = "northern-liverpool-st-helens-wigan"
+# Bryn.
+
+[[stations]]
+crs = "WGN"
+role = "terminus"
+segment = "northern-liverpool-st-helens-wigan"
+# Wigan North Western -- also on `west-coast-main-line.toml`/
+# `tpe-anglo-scottish.toml`; station-overlap only. Not the same station as
+# Wigan Wallgate (`northern-wigan-kirkby.toml`'s own terminus) -- see the
+# top-of-file comment.

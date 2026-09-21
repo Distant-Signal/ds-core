@@ -1,11 +1,35 @@
 id = "southeastern-north-kent"
-name = "North Kent Line (via Greenwich)"
+name = "North Kent Line"
 mode = "national-rail"
 category = "commuter"
 operators = ["SE"]
 
-sample_stations = ["GNW", "WWA", "ABW", "DFD"]
+sample_stations = ["GNW", "WWA", "ABW", "DFD", "GRV"]
 match_keywords = ["North Kent Line", "Greenwich line"]
+
+# REVIEW FIX (Southeastern real-world-sanity pass): this file previously
+# stopped at Dartford and was named "North Kent Line (via Greenwich)" - an
+# honest name for what it modelled, but not what Southeastern/Wikipedia mean
+# by "North Kent Line": that name properly covers the whole
+# Charlton-Woolwich-Dartford-Gravesend-Strood corridor, not just the
+# Greenwich-to-Dartford stretch. Extended below to its real Dartford ->
+# Gravesend -> Strood extent (Greenhithe, Stone Crossing, Swanscombe,
+# Northfleet were a real, catalogue-wide gap - Bluewater/Ebbsfleet-area
+# classic-line commuters had no line coverage at all), so the plain "North
+# Kent Line" name is now accurate rather than a disambiguating
+# parenthetical, and the "(via Greenwich)" qualifier is dropped.
+#
+# Confirmed via Wikipedia's "North Kent Line" article (lead: branches off
+# "at St Johns junction west of Lewisham" and "runs to Rochester Bridge
+# Junction near Strood, Medway where it links to the Chatham Main Line";
+# full ordered route section lists ...Slade Green, Dartford, Stone
+# Crossing, Greenhithe (for Bluewater), Swanscombe, Northfleet, Gravesend,
+# [closed halts], Higham, Strood, in that order). Every new CRS code
+# independently verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>: Greenhithe for
+# Bluewater = GNH, Stone Crossing = SCG, Swanscombe = SWM, Northfleet = NFL.
+# GRV/HGM/SOO were already verified elsewhere in this catalogue (see the new
+# STATIONS entries below for the segment-sharing rationale).
 
 # ============================================================================
 # SELF-FLAGGED GAP, AND THE REQUIRED OVERLAP CHECK AGAINST THE ALREADY-SPLIT
@@ -63,12 +87,18 @@ match_keywords = ["North Kent Line", "Greenwich line"]
 # (the historic North Kent Line's own original alignment - already flagged,
 # not modelled, in southeastern-metro-north-kent.toml's own BKH comment:
 # "The North Kent Line's own alignment (toward Charlton/Woolwich) diverges
-# here"), and (b) via New Cross, Deptford and Greenwich (the "Greenwich
-# line" proper, the original 1836 London and Greenwich Railway route -
-# already flagged, not modelled, in BOTH southeastern-main-line.toml's and
+# here"), and (b) via Deptford and Greenwich (the "Greenwich line" proper,
+# the original 1836 London and Greenwich Railway route - already flagged,
+# not modelled, in BOTH southeastern-main-line.toml's and
 # southeastern-metro-north-kent.toml's own NWX comments: "A
 # differently-aligned North Kent Line route (via the Surrey Canal curve
-# toward Greenwich/Woolwich) diverges near here"). This task's own brief
+# toward Greenwich/Woolwich) diverges near here"). REVIEW2 FIX (2026-09-21):
+# approach (b) does NOT run via New Cross station itself, despite those two
+# sibling files' own comments describing the divergence as being "near"
+# New Cross -- fresh research on the Greenwich line's own real divergence
+# point (North Kent East Junction, between London Bridge and New Cross)
+# confirms this file's own trains branch off before New Cross and never
+# call there; see the DEP entry's own comment below. This task's own brief
 # names the route as "Charing Cross/Cannon Street-Greenwich-Woolwich
 # Arsenal-Dartford" - i.e. approach (b), which this file models. Approach
 # (a), via Blackheath, is confirmed real (Wikipedia's own "North Kent Line"
@@ -120,61 +150,94 @@ minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
 # ============================================================================
-# STATIONS - ordered London to Dartford. One segment throughout: this file's
-# own name, not reused from any sibling file, per the xc-south-coast.toml/
-# xc-manchester.toml precedent - matching how southeastern-main-line.toml
-# and southeastern-metro-north-kent.toml already use two DIFFERENT segment
-# names (`seml-london` vs `southeastern-lewisham-corridor`) for their own
-# genuinely-identical CHX/WAE/CST/LBG/NWX/SAJ/LEW physical stretch, rather
-# than sharing one.
+# STATIONS - ordered London to Dartford.
+# ============================================================================
+# REVIEW FIX (shared-segment structural review, review2-shared-segments):
+# this file originally put its whole route on one segment name,
+# `southeastern-north-kent`, reasoning (per the xc-south-coast.toml/
+# xc-manchester.toml precedent) that southeastern-main-line.toml and the
+# pre-split southeastern-metro-north-kent.toml already used two DIFFERENT
+# names (`seml-london`/`southeastern-lewisham-corridor`) for their own
+# genuinely-identical CHX/WAE/CST/LBG physical stretch, so there was no
+# single established name to reuse. That premise is now resolved the other
+# way: southeastern-main-line.toml, southeastern-bexleyheath.toml,
+# southeastern-dartford-loop.toml and southeastern-hayes-line.toml have all
+# been unified onto `southeastern-lewisham-corridor` for this exact stretch
+# (see each file's own header comment). This file's own CHX/WAE/CST/LBG -
+# the same Charing Cross/Cannon Street approach into London Bridge - now
+# reuses that same name too. DEP onward (this file's own exclusive
+# Greenwich-line stretch) stays on this file's own name,
+# `southeastern-north-kent`.
+#
+# REVIEW2 FIX (2026-09-21): this file previously also listed New Cross
+# (NWX) on `southeastern-lewisham-corridor`, reasoning that "this file's own
+# Greenwich-line route diverges just past here". That's geographically
+# wrong: per fresh Wikipedia research, the Greenwich line diverges from the
+# South Eastern Main Line at North Kent East Junction, which sits BETWEEN
+# London Bridge and New Cross ("The line diverges from the South Eastern
+# Main Line at North Kent East junction and runs as far as Charlton
+# junction where it connects with the North Kent Line") -- i.e. before New
+# Cross, not past it. Greenwich-line trains, this file's own route, do not
+# physically pass through New Cross station at all; they take a separate,
+# dedicated pair of tracks (the historic London Bridge-Greenwich viaduct)
+# that splits off before reaching it. The NWX `[[stations]]` entry has been
+# removed; this file's own exclusive segment now starts at the very next
+# station past London Bridge, DEP (Deptford), with no intervening shared or
+# junction station. `crates/common/src/matcher.rs`'s own
+# `nwx_station_overlap_matches_five_lines_...` regression test has been
+# updated to drop this file from its expected New-Cross-incident matches
+# (four lines now, not five) -- see that test's own updated comment.
 # ============================================================================
 [[stations]]
 crs = "CHX"
 role = "terminus"
-segment = "southeastern-north-kent"
-# Charing Cross. Also southeastern-main-line.toml's and southeastern-metro-
-# north-kent.toml's own terminus, and southeastern-hayes-line.toml's own
-# station - station overlap only with all three, see ROUTE AND SOURCING
-# above.
+segment = "southeastern-lewisham-corridor"
+# Charing Cross. Genuine SharedSegment with southeastern-main-line.toml's,
+# southeastern-bexleyheath.toml's, southeastern-dartford-loop.toml's and
+# southeastern-hayes-line.toml's own stations here - see REVIEW FIX above.
 
 [[stations]]
 crs = "WAE"
 role = "minor"
-segment = "southeastern-north-kent"
+segment = "southeastern-lewisham-corridor"
 # Waterloo East - the first stop out of Charing Cross specifically, per the
-# same data-driven finding southeastern-main-line.toml's and
-# southeastern-metro-north-kent.toml's own WAE comments already document.
+# same data-driven finding southeastern-main-line.toml's own WAE comment
+# already documents. Genuine SharedSegment - see REVIEW FIX above.
 
 [[stations]]
 crs = "CST"
 role = "terminus"
-segment = "southeastern-north-kent"
-# Cannon Street. Also southeastern-main-line.toml's and southeastern-metro-
-# north-kent.toml's own terminus - station overlap only.
+segment = "southeastern-lewisham-corridor"
+# Cannon Street. Also southeastern-main-line.toml's, southeastern-
+# bexleyheath.toml's and southeastern-dartford-loop.toml's own terminus -
+# genuine SharedSegment, see REVIEW FIX above. (southeastern-hayes-line.toml
+# does not call at Cannon Street at all.)
 
 [[stations]]
 crs = "LBG"
 role = "major"
-segment = "southeastern-north-kent"
-# London Bridge. Also thameslink-core.toml's own terminus and every other
-# Kent-line file's own station in this catalogue - station overlap only,
-# per the long-established precedent for this specific station.
-
-[[stations]]
-crs = "NWX"
-role = "junction"
-segment = "southeastern-north-kent"
-# New Cross. Also southeastern-main-line.toml's and southeastern-metro-
-# north-kent.toml's own station (both already flag this file's own route as
-# "diverges near here" - see ROUTE AND SOURCING above) - station overlap
-# only, own segment name here.
+segment = "southeastern-lewisham-corridor"
+# London Bridge. Genuine SharedSegment with the other four Southeastern
+# files on `southeastern-lewisham-corridor` - see REVIEW FIX above. Also
+# thameslink-core.toml's own terminus (different segment name there,
+# station overlap only, per the long-established precedent for this
+# specific station).
 
 [[stations]]
 crs = "DEP"
 role = "minor"
 segment = "southeastern-north-kent"
-# Deptford. Genuinely new to this catalogue - the Greenwich line's own
-# exclusive stretch begins here, one station past the New Cross junction.
+# Deptford. REVIEW2 FIX (2026-09-21): this file previously listed New
+# Cross (NWX) here first, reasoning this file's own Greenwich-line route
+# "diverges just past" it. Removed: fresh Wikipedia research on the
+# Greenwich line's own divergence point (North Kent East Junction, between
+# London Bridge and New Cross) confirms Greenwich-line trains never
+# physically call at or pass through New Cross station at all - they take
+# a dedicated pair of tracks that splits off before reaching it. This
+# file's own exclusive segment now starts here, at Deptford, the very next
+# station past London Bridge (above) with no intervening station. Deptford
+# itself is genuinely new to this catalogue - the Greenwich line's own
+# exclusive stretch begins here, its first stop out of London Bridge.
 
 [[stations]]
 crs = "GNW"
@@ -253,8 +316,102 @@ segment = "southeastern-north-kent"
 
 [[stations]]
 crs = "DFD"
-role = "terminus"
+role = "junction"
 segment = "southeastern-north-kent"
-# Dartford. Also southeastern-metro-north-kent.toml's own shared terminus
-# (both its Bexleyheath and Dartford Loop branches end here) - station
-# overlap only, see SELF-FLAGGED GAP above.
+# Dartford. REVIEW FIX: no longer this file's own terminus - the real North
+# Kent Line continues past here to Gravesend/Strood (see below), so DFD is
+# now a through/junction station, not the end of the line. Also
+# southeastern-dartford-loop.toml's and southeastern-bexleyheath.toml's own
+# shared terminus (both those files' branches end here, reached via
+# physically different approaches) - station overlap only, see SELF-FLAGGED
+# GAP above.
+
+# --- REVIEW FIX: extension past Dartford to the real Dartford Loop-style
+# North Kent Line terminus at Strood, per the header comment above. Stays on
+# this file's own exclusive `southeastern-north-kent` segment as far as
+# Northfleet - none of these four stations appear in any other file in the
+# catalogue. ---
+[[stations]]
+crs = "SCG"
+role = "minor"
+segment = "southeastern-north-kent"
+# Stone Crossing.
+
+[[stations]]
+crs = "GNH"
+role = "minor"
+segment = "southeastern-north-kent"
+# Greenhithe (for Bluewater) - the nearest station to the Bluewater shopping
+# centre, per its own Wikipedia infobox name.
+
+[[stations]]
+crs = "SWM"
+role = "minor"
+segment = "southeastern-north-kent"
+# Swanscombe.
+
+[[stations]]
+crs = "NFL"
+role = "minor"
+segment = "southeastern-north-kent"
+# Northfleet.
+
+# --- Genuine shared trunk with southeastern-highspeed.toml, not just
+# station overlap: past Northfleet this file rejoins the exact classic
+# North Kent Line track southeastern-highspeed.toml's own "North Kent"
+# Javelin pattern already runs over from Ebbsfleet onward (that file's own
+# header comment: the Javelin pattern "leav[es] HS1 near Ebbsfleet for the
+# classic North Kent Line via Gravesend to Strood" before continuing onto
+# Chatham Main Line metals) - genuinely the same physical rails, not two
+# different alignments converging only at a station, so per SCHEMA.md's
+# shared-trunk rule GRV and HGM below reuse that file's own `hs1-northkent`
+# segment name verbatim rather than this file's own exclusive segment.
+# This file's own exclusive segment therefore ends at Northfleet (above).
+# Strood is this file's own terminus - matching Wikipedia's "North Kent
+# Line" lead, which ends the line at "Rochester Bridge Junction near
+# Strood, Medway where it links to the Chatham Main Line" - but the
+# station itself is now retagged `strood-ramsgate-corridor`, not
+# `hs1-northkent`: see the SOO entry's own REVIEW2 FIX comment below for
+# why (a later sibling branch's shared-segment-unification pass renamed
+# the equivalent stretch in southeastern-highspeed.toml/southeastern-
+# chatham.toml/southeastern-sheerness-line.toml, and this file's own SOO
+# now matches that rename for consistency). ---
+[[stations]]
+crs = "GRV"
+role = "minor"
+segment = "hs1-northkent"
+# Gravesend. Also southeastern-highspeed.toml's own station (same segment
+# name, genuine shared trunk - see above).
+
+[[stations]]
+crs = "HGM"
+role = "minor"
+segment = "hs1-northkent"
+# Higham. Also southeastern-highspeed.toml's own station (same segment
+# name, genuine shared trunk - see above).
+
+[[stations]]
+crs = "SOO"
+role = "terminus"
+segment = "strood-ramsgate-corridor"
+# Strood - this file's own terminus, where the North Kent Line joins the
+# Chatham Main Line at Rochester Bridge Junction (per Wikipedia's own lead
+# sentence, see the header comment above).
+#
+# REVIEW2 FIX (2026-09-21): retagged from `hs1-northkent` to
+# `strood-ramsgate-corridor`, for consistency with a sibling branch's
+# shared-segment-unification pass elsewhere in this integration.
+# southeastern-highspeed.toml's own SOO entry already made this exact move
+# (its own comment: "genuine SharedSegment now (renamed from
+# `hs1-northkent`)") -- this file reaches Strood via the identical physical
+# Gravesend/Higham approach that file uses (GRV/HGM above are already a
+# genuine shared trunk with that file on `hs1-northkent`, which now
+# correctly ends at Higham, the station before this one), so this file's
+# own SOO is the same real convergence point, not a different alignment.
+# southeastern-chatham.toml's own SOO entry also now uses
+# `strood-ramsgate-corridor` (its own approach, via Longfield/Meopham/Sole
+# Street, converges with this one AT Strood and they run on together from
+# here) -- see that file's own SOO comment. This file's own terminus role
+# is unaffected by the rename: the shared-trunk rule of thumb puts the
+# junction/convergence station itself on the shared segment regardless of
+# whether a given file's own service continues past it.

@@ -4,6 +4,19 @@ mode = "national-rail"
 category = "regional"
 operators = ["NT"]
 
+# Category check (Yorkshire/real-world-sanity review, 2026-09-21): confirmed
+# "regional" is still correct, not a candidate for "commuter" alongside
+# `northern-airedale.toml`/`northern-wharfedale.toml`/`northern-glossop-
+# hadfield.toml` in the same review. Live-sourced check found this line is
+# NOT electrified today (diesel Class 158/170, plus LNER's Class 800 Azuma
+# bi-modes on its own few daily workings) -- multiple electrification
+# proposals (750V DC third rail in 2011, 25kV AC "by 2019" in 2013, a 2015
+# "top priority" costed scheme) have all lapsed without a funded completion
+# date. Frequency alone (hourly-or-better on the Leeds end) doesn't outweigh
+# the lack of electrification for this catalogue's "commuter" bar as applied
+# to the other three lines above, each of which is both frequent AND
+# electrified.
+
 sample_stations = ["LDS", "HGT", "YRK"]
 destination_crs_filter = ["HGT", "YRK"]
 match_keywords = ["Harrogate Line"]

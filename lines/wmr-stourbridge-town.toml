@@ -1,0 +1,75 @@
+id = "wmr-stourbridge-town"
+name = "Stourbridge Town Shuttle"
+mode = "national-rail"
+category = "commuter"
+# "commuter" per this catalogue's category key for a turn-up-and-go,
+# high-frequency service -- 6tph (every 10 minutes) weekdays/Saturdays is
+# tighter than any of this catalogue's "regional" hourly branches and
+# closer in character (if not scale) to `wmr-cross-city.toml`'s own
+# "commuter" choice.
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution), reused verbatim by every other WMT-family file in this
+  # catalogue. Wikipedia's own "Stourbridge Town railway station" article
+  # notes the actual day-to-day operator is a third party, PRE Metro
+  # Operations, but the service is branded and sold throughout as West
+  # Midlands Railway (fare/timetable/livery), consistent with every other
+  # WMR-branded file's use of "LM" -- not a separate ATOC code.
+]
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): named
+# as a real coverage gap -- a famous, very short, high-frequency shuttle
+# with no line file; Stourbridge Town (SBT, absent catalogue-wide at the
+# start of this task) had no entry anywhere.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Stourbridge Town
+# railway station" article): a genuinely standalone, terminus-to-terminus,
+# two-station branch -- Stourbridge Town to Stourbridge Junction only, no
+# intermediate stops, 0.8 miles, "said to be the shortest operational
+# branch railway line in Europe." "The shuttle service to Stourbridge
+# Junction runs every ten minutes on weekdays and Saturdays, and every
+# fifteen minutes on Sundays." Rolling stock: two Class 139 "people mover"-
+# type railcars (replaced a single Class 153 unit).
+#
+# CRS codes: SBJ reused verbatim from `wmr-snow-hill.toml` (already-
+# verified fact; this shuttle's own far end is the same physical station
+# as that file's own Worcester-line stop -- station-overlap only, see the
+# ruling below). SBT independently confirmed live via this app's own
+# production station-lookup endpoint (ds.cursed.solutions/api/stations?
+# q=<name>, 2026-09-21), single unambiguous match. No TIPLOC confirmed for
+# either to the two-source standard, so `tiploc` is omitted for both.
+
+destination_crs_filter = ["SBT", "SBJ"]
+sample_stations = ["SBT", "SBJ"]
+
+match_keywords = ["Stourbridge Town shuttle"]
+# A plausible Knowledgebase prose rendering of this well-known, distinctly-
+# named service. Grep-checked against every other `lines/*.toml` file's
+# `match_keywords` before adding -- no collision.
+
+# Every-10-minutes weekday/Saturday shuttle (every 15 on Sundays) -- a
+# tighter-than-default commuter frequency, same milder-than-`thameslink-
+# core.toml` tuning `wmr-cross-city.toml` applies for its own busier-than-
+# regional-but-not-London-core service, reused verbatim.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+
+# Stourbridge Town to Stourbridge Junction -- a single exclusive segment,
+# the whole of this file's own modelled extent.
+[[stations]]
+crs = "SBT"
+role = "terminus"
+segment = "wmr-stourbridge-town"
+# Stourbridge Town: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "SBJ"
+role = "terminus"
+segment = "wmr-stourbridge-town"
+# Stourbridge Junction: also a `wmr-snow-hill.toml` station (that file's
+# own Worcester line, via Kidderminster) -- this shuttle's own far end
+# connects there for onward travel, but is not the same service; station-
+# overlap only, no segment shared.

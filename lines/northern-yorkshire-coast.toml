@@ -1,17 +1,70 @@
 id = "northern-yorkshire-coast"
-name = "Yorkshire Coast Line"
+name = "York–Scarborough Line"
 mode = "national-rail"
 category = "regional"
-operators = ["NT"]
+operators = ["TP"]
 
 destination_crs_filter = ["SCA", "YRK", "MLT"]
 sample_stations = ["SCA", "SEM", "MLT"]
-match_keywords = ["Yorkshire Coast", "Scarborough line"]
+match_keywords = ["York to Scarborough line"]
 
 [severity_overrides]
 minor_delays_pct = 0.30
 delay_threshold_minutes = 10
 
+# --- REAL-WORLD-SANITY CORRECTION (Yorkshire review, 2026-09-21) ---
+# This file's own `id` and `name` used to claim to be the "Yorkshire Coast
+# Line" while modelling Leeds-York-Malton-Seamer-Scarborough. That is wrong:
+# Wikipedia's own "Yorkshire Coast Line" article opens "the Hull–Scarborough
+# line, also known as the Yorkshire Coast Line" -- a completely different,
+# previously-uncatalogued route (Hull-Beverley-Driffield-Bridlington-Filey-
+# Scarborough), now correctly modelled in the new sibling file
+# `lines/northern-hull-scarborough.toml`. THIS file's own real route --
+# confirmed via Wikipedia's own "York–Scarborough line" article -- is a
+# different, separate corridor with its own name: the York-Scarborough
+# line. `id` is kept unchanged (published for a month, per SCHEMA.md's "never
+# change once published" and `crates/common/src/matcher.rs`'s own several
+# regression tests keyed on this exact id-string) but `name` and
+# `match_keywords` are corrected below to stop misclaiming the Hull-
+# Scarborough route's own name/keywords, which would otherwise have
+# misattributed that route's real-world incidents to this file.
+#
+# RESOLVED (review2 fix, 2026-09-21): a previous pass flagged, but
+# deliberately did not fix, live sourcing evidence that this route's current
+# stopping service may actually be operated by TransPennine Express rather
+# than Northern -- Wikipedia's own "York–Scarborough line" article states
+# "Services operated along this line are run by TransPennine Express" with
+# no Northern mention, and `lner-hull.toml`'s `Scarborough railway station`
+# cross-check lists Northern's own current Scarborough services as running
+# via Beverley/Hull/Doncaster (south, towards Sheffield -- see
+# `northern-hull-scarborough.toml`), not via York/Malton at all.
+# `tpe-north.toml`'s own YRK entry already flagged "the wider 'North Route'
+# grouping fans out to ... Scarborough on separate TPE services not modelled
+# in this file" -- this file was exactly that gap.
+#
+# Independently re-verified via a fresh live fetch of the same Wikipedia
+# article, which confirms the quote above verbatim, and via
+# `lines/tpe-north-scarborough.toml` (created by a sibling branch in this
+# same integration), which now correctly models this exact corridor under
+# the `TP` operator code. `operators` above is changed from `["NT"]` to
+# `["TP"]` accordingly -- this file was effectively a duplicate/phantom line
+# with the wrong operator, not a genuinely separate Northern service.
+#
+# The previous pass's stated concern -- that changing `operators` "would
+# cascade into this file's `northern-yorkshire` segment sharing with
+# `northern.toml` and into several `matcher.rs` regression tests keyed on
+# that sharing" -- turns out not to apply:
+# `crates/common/src/segments.rs`'s `SegmentRegistry` derives shared-vs-
+# exclusive scope purely from segment NAME equality across files, never
+# from the `operators` field, so this file's own `northern-yorkshire`
+# segment sharing with `northern.toml` is completely unaffected by this
+# operator change. `crates/common/src/matcher.rs`'s station-hit matching
+# (`match_one`, Tier 1) is likewise operator-independent for station/segment
+# hits -- confirmed by running the full `crates/common` regression suite
+# after this change, which passes unchanged. `id`/`name`/segment tagging are
+# all left exactly as they were; only the operator code is corrected to
+# match reality.
+#
 # Leeds to Scarborough via York, ordered south-west to north-east. Services
 # run through from Leeds, so it shares the `northern-yorkshire` trunk with the
 # `northern` corridor; the exclusive section starts east of York.
@@ -50,15 +103,29 @@ segment = "northern-yorkshire"
 [[stations]]
 crs = "MLT"
 role = "minor"
-segment = "northern-yorkshire-coast"
+segment = "northern-york-scarborough"
+# Malton -- this file's own exclusive segment, renamed from the stale
+# `northern-yorkshire-coast` (the old, wrong route name) as part of this
+# correction. Not shared with `northern-hull-scarborough.toml`: that file's
+# own route joins this one only further on, at Seamer -- see below.
 
 [[stations]]
 crs = "SEM"
 role = "junction"
-segment = "northern-yorkshire-coast"
-# Hull services diverge here
+segment = "northern-scarborough-approach"
+# Seamer -- confirmed genuine physical convergence with the real Yorkshire
+# Coast Line: that line's own Wikipedia article states it "join[s] the
+# York–Scarborough line at a junction near Seamer before terminating at
+# Scarborough". Per SCHEMA.md's shared-trunk rule of thumb the junction
+# belongs to the shared segment; `northern-hull-scarborough.toml` reuses
+# this exact segment name for its own SEM/SCA entries. (Hull services no
+# longer "diverge" here -- that framing was this file's own pre-correction
+# guess at the Yorkshire Coast Line's junction point, since superseded by
+# the sourced fact above.)
 
 [[stations]]
 crs = "SCA"
 role = "terminus"
-segment = "northern-yorkshire-coast"
+segment = "northern-scarborough-approach"
+# Scarborough -- shared final approach with `northern-hull-scarborough.
+# toml`; see the Seamer note above.

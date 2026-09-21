@@ -41,16 +41,32 @@ operators = [
 # from the brief's unverified starting list.
 #
 # SCOPE: Wikipedia's TPE article shows the "North Route" grouping actually
-# comprises several distinct hourly services fanning out beyond York
-# (Newcastle, Redcar Central/Middlesbrough, Scarborough), plus the
+# comprises several distinct hourly services fanning out beyond York/Leeds
+# (Newcastle, Redcar Central/Middlesbrough via Thirsk, Scarborough, Hull,
+# and a Wakefield Kirkgate/Castleford-York stopping service), plus the
 # separately-timetabled Newcastle-Edinburgh Borders route
 # (`tpe-borders.toml`). Per this task's own brief, the gap-analysis scope
 # for Task 9.4 is specifically "Newcastle-Manchester/Liverpool via
 # York/Leeds" — the narrower reading, matching the single Liverpool
 # Lime Street-Newcastle service confirmed above, not the full "North"
-# umbrella. Redcar Central/Middlesbrough, Scarborough and Hull branches are
-# therefore deliberately not modelled here; they belong in separate line
-# definitions if this catalogue ever covers them.
+# umbrella. Redcar Central/Middlesbrough, Scarborough, Hull and the
+# Wakefield/Castleford stopping service were deliberately not modelled in
+# THIS file.
+#
+# UPDATE (real-world-sanity review, 2026-09-21): those four gaps are now
+# filled, as separate sibling files rather than a broadening of this one --
+# SCHEMA.md's linear-ordering and one-line-per-file rules rule out folding a
+# genuine multi-way fan-out into a single file (the same constraint that
+# forced `grand-central.toml`/`grand-central-bradford.toml` apart from an
+# originally-combined, non-linear file). See `tpe-north-teesside.toml`
+# (Manchester Airport-Redcar Central/Saltburn), `tpe-north-scarborough.toml`
+# (Manchester Victoria-Scarborough), `tpe-north-hull.toml` (Liverpool Lime
+# Street-Hull Paragon) and `tpe-north-wakefield.toml` (Manchester
+# Piccadilly-York via Wakefield Kirkgate/Castleford). Each shares heavy
+# station-level overlap with this file (MCV/HUD/LDS/YRK) but, per this
+# file's own already-established policy below, no segment name -- see each
+# sibling's own header comment for why a cross-file shared trunk wasn't
+# introduced for that stretch in this pass.
 #
 # The Huddersfield-Leeds section carries all of the North Route's fanned-out
 # services (4 tph combined per Manchester Victoria's own Wikipedia page),

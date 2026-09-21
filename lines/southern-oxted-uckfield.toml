@@ -6,6 +6,20 @@ operators = [
   "SN",  # Southern
 ]
 
+# CATEGORY - considered "commuter" (review2-se-southern) since the East
+# Grinstead branch is a frequent, fully-electrified, London Victoria-
+# terminating EMU service through the South Croydon/Sanderstead/Riddlesdown/
+# Upper Warlingham/Woldingham commuter belt. Kept as "regional" on review:
+# this file also covers the Uckfield branch, which per HAND-OFF/sourcing
+# below is single-track, unelectrified and diesel-worked beyond Hurst
+# Green - the same mixed commuter-trunk-plus-rural-branch shape that
+# `scotrail-ayrshire.toml` documents choosing "regional" over "commuter"
+# for, and for the same reason (no per-branch category split is possible;
+# one file, one category). `category` is not currently read by any
+# sampling/threshold logic in `crates/` (checked directly - it's a
+# passthrough/display field despite SCHEMA.md's "drives default sampling
+# strategy" language), so this is a documentation judgment call, not a
+# behavioural one either way.
 sample_stations = ["OXT", "UCK", "EGR"]
 match_keywords = ["Oxted line", "Uckfield line", "East Grinstead branch"]
 

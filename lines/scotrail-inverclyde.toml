@@ -244,6 +244,10 @@ segment = "scotrail-inverclyde-wemyss-bay-branch"
 #   Constraints.
 # - The Paisley Canal Line and the Glasgow Airport Rail Link (cancelled
 #   2009): both diverge/would have diverged from this general corridor per
-#   the detailed routemap template, but neither is this line -- real,
-#   documented gaps (Paisley Canal) or dead proposals (GARL), out of scope
-#   here.
+#   the detailed routemap template, but neither is this line. GARL is a
+#   dead proposal, out of scope here. The Paisley Canal Line is now
+#   modelled, in `lines/scotrail-paisley-canal.toml` (real-world-sanity
+#   review, 2026-09-21) -- that file's own sourcing found it uses a
+#   physically distinct Shields Junction/Corkerhill approach out of
+#   Glasgow Central, not this line's own corridor, so no station-level
+#   overlap with this file exists.

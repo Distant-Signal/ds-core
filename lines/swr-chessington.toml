@@ -178,6 +178,13 @@ delay_threshold_minutes = 4
 #     correctly - RAY on the shared trunk, MOT on a reusable
 #     `swr-epsom-line` segment - so a future file can be added cleanly, but
 #     nothing beyond Motspur Park is covered today.
+#     UPDATE (SWR suburban-gap batch): `lines/swr-epsom-mole-valley.toml`
+#     now fills this gap and reuses `swr-epsom-line` verbatim for its own
+#     MOT entry onward (through Worcester Park, Stoneleigh, Ewell West,
+#     Epsom, Ashtead and Leatherhead) - the exact reuse this note
+#     anticipated. The New Guildford line itself remains
+#     swr-new-guildford.toml, an earlier batch; the new file reuses its
+#     `swr-new-guildford-line` segment too, past Effingham Junction.
 #   - Berrylands (BRS), Surbiton's slow-line stoppers, Thames Ditton and the
 #     Hampton Court branch. Berrylands was specifically checked and is on
 #     neither of this pass's two routes. (It is also physically CLOSED from

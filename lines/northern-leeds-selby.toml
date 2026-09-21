@@ -54,7 +54,8 @@ delay_threshold_minutes = 10
 # future -- station-overlap only for now, since this file doesn't list any
 # Bradford Interchange/Halifax-side station.
 #
-# --- Segment/overlap decision: no shared segment name anywhere ---
+# --- Segment/overlap decision: no shared segment name with LNER/Hull Trains
+# ---
 # SBY (Selby), HOW (Howden), BUH (Brough) and HUL (Hull Paragon) are also
 # `lner-hull.toml`/`hull-trains.toml` stations (their own King's Cross-Hull
 # approach joins this same physical track at/after Selby). Per this
@@ -62,23 +63,41 @@ delay_threshold_minutes = 10
 # trains.toml`'s own explicit choice NOT to reuse `lner-hull.toml`'s
 # segment name despite running literally the same physical trains
 # alongside LNER ("per the task brief's standalone-operator exception...
-# NO segment name here is shared with any lner-*.toml file") -- this file
-# also uses its own single exclusive segment, `northern-leeds-selby`, for
-# every station. This is reinforced by this being a genuinely different
-# service tier: Northern's local stopping pattern calls at Eastrington and
-# Wressle, which neither LNER's nor Hull Trains' own station lists include
-# at all. Station-level overlap at SBY/HOW/BUH/HUL is expected and
-# sufficient.
+# NO segment name here is shared with any lner-*.toml file") -- this
+# file's own South Milford-onward stations keep their own exclusive
+# `northern-leeds-selby` segment. This is reinforced by this being a
+# genuinely different service tier: Northern's local stopping pattern calls
+# at Eastrington and Wressle, which neither LNER's nor Hull Trains' own
+# station lists include at all. Station-level overlap at SBY/HOW/BUH/HUL is
+# expected and sufficient.
 #
-# LDS is a station-overlap-only situation with every other Leeds-terminating
-# file in this catalogue (`northern-airedale.toml`/`northern-wharfedale.
-# toml`'s `northern-shipley-trunk`, `lner-leeds.toml`'s `lner-leeds`, this
-# batch's own `northern-harrogate-line.toml`) -- the Cross Gates/Garforth
-# approach used by this line is a physically distinct corridor out of
-# Leeds from all of those (which leave via Holbeck/Whitehall Junction
-# towards Bradford/Shipley/Harrogate, not east towards Micklefield), so no
-# segment name is shared, matching this catalogue's standard "different
-# physical approach, same terminus" treatment.
+# --- Segment split: LDS-Micklefield now a genuine same-operator shared
+# trunk (Yorkshire review, 2026-09-21) ---
+# LDS through MIK used to carry this file's own single `northern-leeds-selby`
+# segment name throughout, on the assumption that "the Cross Gates/Garforth
+# approach used by this line is a physically distinct corridor" from every
+# other Leeds-terminating file. That was true when written, but is no
+# longer the full picture: `northern-leeds-york.toml` (this same review) now
+# models a genuine, real, currently-served Leeds-York local stopping
+# service (confirmed via Wikipedia's "Church Fenton railway station"
+# article, whose own route-diagram data places "Micklefield" as the
+# immediately preceding station on the "York & Selby Lines"/Leeds-York
+# route) that runs over this exact same Leeds-Cross Gates-Garforth-East
+# Garforth-Micklefield stretch before diverging towards Church Fenton,
+# Ulleskelf and York -- genuine physical track-sharing, not just both files
+# touching Leeds. Per SCHEMA.md's shared-trunk rule of thumb (the junction
+# station belongs to the shared segment), LDS/CRG/GRF/EGF/MIK below are
+# split onto a new, narrower segment name, `northern-leeds-micklefield`,
+# shared verbatim with `northern-leeds-york.toml`'s own identical LDS/CRG/
+# GRF/EGF/MIK entries -- mirroring `northern-airedale.toml`'s own
+# "Bingley/Keighley/Skipton: reconciled during integration merge" precedent
+# for the identical over-broad-segment-reuse hazard (reusing the file-wide
+# `northern-leeds-selby` name here would have wrongly promoted this file's
+# own exclusive South Milford-Selby-Hull continuation to SharedSegment too).
+# MIK itself -- the real divergence point -- is tagged `junction` below and
+# carries the new shared name, not the old exclusive one; `northern-leeds-
+# selby`'s own exclusive continuation now starts at the next station, South
+# Milford, unchanged from before.
 #
 # --- Station list, open/closed status and CRS sourcing ---
 # Per Template:Selby Line's own routemap icons (current/open stations
@@ -97,33 +116,37 @@ delay_threshold_minutes = 10
 crs = "LDS"
 tiploc = "LEEDS"
 role = "terminus"
-segment = "northern-leeds-selby"
+segment = "northern-leeds-micklefield"
 
 [[stations]]
 crs = "CRG"
 role = "minor"
-segment = "northern-leeds-selby"
+segment = "northern-leeds-micklefield"
 # Cross Gates.
 
 [[stations]]
 crs = "GRF"
 role = "minor"
-segment = "northern-leeds-selby"
+segment = "northern-leeds-micklefield"
 # Garforth.
 
 [[stations]]
 crs = "EGF"
 role = "minor"
-segment = "northern-leeds-selby"
+segment = "northern-leeds-micklefield"
 # East Garforth.
 
 [[stations]]
 crs = "MIK"
-role = "minor"
-segment = "northern-leeds-selby"
+role = "junction"
+segment = "northern-leeds-micklefield"
 # Micklefield -- western boundary of the "Selby Line" brand proper per
 # South Milford's own Wikipedia article ("previous=Micklefield... route=
-# Selby Line" in that page's own route-diagram template).
+# Selby Line" in that page's own route-diagram template). Also where
+# `northern-leeds-york.toml`'s own Leeds-York local stopper diverges
+# towards Church Fenton; see the segment-split note above. This file's own
+# exclusive `northern-leeds-selby` segment starts at the next station,
+# South Milford.
 
 [[stations]]
 crs = "SOM"
@@ -169,7 +192,9 @@ role = "junction"
 segment = "northern-leeds-selby"
 # Gilberdyke -- the "Hull and Doncaster Branch" (a direct Doncaster route,
 # unmodelled by any file in this catalogue) diverges here per
-# Template:Selby Line.
+# Template:Selby Line. `northern-hull-scarborough.toml` independently flags
+# the same gap from its own Sheffield-via-Doncaster-via-Hull angle (Yorkshire
+# review, 2026-09-21) -- still not modelled by either file.
 
 [[stations]]
 crs = "BMF"

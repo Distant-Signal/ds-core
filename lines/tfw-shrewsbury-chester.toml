@@ -1,0 +1,148 @@
+id = "tfw-shrewsbury-chester"
+name = "Shrewsbury to Chester Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["AW"]
+
+sample_stations = ["SHR", "WRX", "CTR"]
+match_keywords = ["Shrewsbury to Chester Line"]
+
+# === Provenance (real-world-sanity review, 2026-09-21) ===
+#
+# This file's station data (Shrewsbury-Gobowen-Chirk-Ruabon-Wrexham-Chester)
+# previously lived in `lines/tfw-marches.toml` under the "Marches Line"
+# name, on the mistaken premise that this was the route TfW's own
+# Manchester Piccadilly-Cardiff Central "Marches" service group used north
+# of Shrewsbury. Independently re-verified against Wikipedia's "Welsh
+# Marches line" article (raw wikitext): that line's real northern extent is
+# Shrewsbury-Crewe (via Yorton/Wem/Prees/Whitchurch/Wrenbury/Nantwich, now
+# in `tfw-marches.toml`), not Shrewsbury-Chester. This stretch is real
+# infrastructure and a real, separately-branded Wikipedia article
+# ("Shrewsbury to Chester line", historically the Shrewsbury and Chester
+# Railway) in its own right -- moved here verbatim (station list, CRS/
+# TIPLOC sourcing and segment-naming reasoning all carried over unchanged
+# from the superseded `tfw-marches.toml` entries) rather than deleted, per
+# this review's brief. See `tfw-marches.toml`'s own top-of-file correction
+# note for the full story and sources.
+#
+# Category ("main-line") is independently re-confirmed this review, not
+# just carried over: this line's own Wikipedia infobox "Character" field
+# reads "Main line, Commuter Rail, Freight" directly, and the article notes
+# a December 2025 service upgrade -- "an hourly shuttle service between
+# Wrexham General and Chester ... providing a twice hourly service between
+# Wrexham and Chester" -- on top of the pre-existing hourly
+# Shrewsbury-Chester local service (introduced December 2005, per the same
+# article) and the historical "through train every two hours between
+# Holyhead and Cardiff" that used to run this way (the old Holyhead-Cardiff
+# through service; today's real Holyhead-Cardiff-equivalent flagship is the
+# Manchester Piccadilly-Cardiff Central service via the Shrewsbury-Crewe
+# route in `tfw-marches.toml`, not this one). No severity_overrides are set:
+# this frequency (hourly-or-better) doesn't suggest a deviation from
+# config.py's base thresholds, matching `tfw-north-wales-coast.toml`'s
+# precedent for a comparable roughly-hourly main line.
+#
+# `destination_crs_filter` is deliberately omitted, same reasoning as
+# `tfw-marches.toml`: real services on this route continue past both ends
+# (south of Shrewsbury towards the rest of the TfW network, north of
+# Chester towards Warrington/Manchester on some historical through
+# workings), so neither SHR nor CTR reliably distinguishes this line's own
+# service from a same-operator service merely transiting these stations.
+#
+# Sourcing note (per the catalogue's "cross-checked against a second
+# source" curation standard): GOB, CRK, RUA, WRX and CTR's CRS/TIPLOC
+# values and their sourcing (Wikipedia infobox "Station code" field,
+# independently cross-checked against a live raw-HTML fetch of
+# railwaycodes.org.uk's per-letter CRS pages) are carried over unchanged
+# from this file's prior life as part of `tfw-marches.toml` -- see that
+# file's git history for the original disclosure, including the "LDW"
+# WebFetch-summarisation artefact caught and discarded during that
+# original sourcing pass (not reused here, since Ludlow isn't on this
+# route). SHR/SHRWBY is reused unchanged from `tfw-marches.toml`, already
+# cross-checked there.
+#
+# Only currently open, passenger-served stations are listed. Gresford,
+# Rossett, Balderton, Pulford, Rhosrobin Halt, Wynnville Halt and other
+# historical halts on this stretch were individually checked against their
+# own "preceding/following station" Wikipedia infoboxes during the original
+# sourcing pass and confirmed closed (Gresford 1962, Rossett to passengers
+# 1964, Balderton to passengers 1952); Wrexham General's own adjacent-
+# station data shows Chester and Ruabon as its immediate open neighbours in
+# each direction, with nothing open between.
+[[stations]]
+crs = "SHR"
+tiploc = "SHRWBY"
+role = "junction"
+segment = "tfw-shrewsbury-chester"
+# Shrewsbury: this line's own southern terminus in this catalogue's scope.
+# Station-overlap only with `tfw-marches.toml`, `tfw-heart-of-wales.toml`
+# and `tfw-cambrian.toml`'s own SHR entries -- this line diverges
+# north-west here onto entirely separate metals from all three, sharing
+# nothing beyond the station throat, the same reasoning `tfw-cambrian.toml`
+# already uses at this same station. This line's own exclusive segment
+# (a single whole-line segment, matching `tfw-north-wales-coast.toml`'s
+# precedent for a route with no internal trunk/branch split) covers every
+# station below, including Shrewsbury itself.
+
+[[stations]]
+crs = "GOB"
+tiploc = "GOBOWEN"
+role = "minor"
+segment = "tfw-shrewsbury-chester"
+
+[[stations]]
+crs = "CRK"
+tiploc = "CHIRK"
+role = "minor"
+segment = "tfw-shrewsbury-chester"
+# Chirk.
+
+[[stations]]
+crs = "RUA"
+tiploc = "RUABON"
+role = "major"
+segment = "tfw-shrewsbury-chester"
+# Ruabon: "a combined rail and bus interchange" per its own Wikipedia
+# article.
+
+[[stations]]
+crs = "WRX"
+tiploc = "WREXHMG"
+role = "junction"
+segment = "tfw-shrewsbury-chester"
+# Wrexham General: a live junction with the Borderlands Line (Wrexham
+# Central/Bidston), per this station's own Wikipedia article. No line file
+# in this catalogue reaches the Borderlands Line yet, so no shared-segment
+# question arises here today.
+
+[[stations]]
+crs = "CTR"
+tiploc = "CHST"
+role = "junction"
+segment = "tfw-shrewsbury-chester"
+# Chester: this line's own northern terminus in this catalogue's scope,
+# and a genuine multi-line junction (West Coast Main Line, the
+# Wrexham/Borderlands corridor, the Wirral Line, the Mid-Cheshire Line and
+# this line all meet here, per `tfw-north-wales-coast.toml`'s own comment
+# at this station).
+#
+# Chester segment-sharing decision: station-overlap-only, NOT a shared
+# segment -- CTR below uses this file's own segment name
+# (`tfw-shrewsbury-chester`), not `tfw-north-wales-coast.toml`'s
+# `tfw-north-wales-coast`, `wcml-north-wales.toml`'s
+# `wcml-north-wales-branch`, `merseyrail-wirral.toml`'s
+# `merseyrail-wirral-chester`, or `northern-mid-cheshire.toml`'s own
+# segment name there. This is despite real physical track sharing existing
+# here (Chester station's own Wikipedia article states the historic
+# Shrewsbury and Chester Railway "was planned to connect to the [Chester
+# and Holyhead Railway] at Saltney Junction and use the [Chester and
+# Holyhead Railway] line for the final 1 mile 67 chains (3.0 km) into" what
+# is now Chester station -- i.e. trains from Wrexham do run over the same
+# final approach tracks as North Wales Coast Line services; Saltney, the
+# only intermediate station on that stretch, closed decades ago, per its
+# own Wikipedia article, so the entire physically-shared stretch reduces to
+# Chester station itself, with no other station to tag). Reusing any of
+# those other files' segment names for just this line's Chester entry
+# would make the segment registry treat every one of their own other
+# stations as shared with this line too, which is false. A future
+# integration task could split a genuine shared "Chester-area" segment
+# name across the relevant files at once; out of scope for this review.

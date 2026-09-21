@@ -15,6 +15,20 @@ operators = [
   # other WMT-family files.
 ]
 
+# EXTENSION (2026-09-21, Midlands EMR/WMR/LNWR sanity review): this file
+# originally stopped modelling the route at Coventry, per its own then-scope
+# ("Nuneaton-Bedworth-Coventry Arena-Coventry") -- but its own "Scope
+# boundaries" note (retained below, now superseded) already flagged that
+# the real southbound service continues to Leamington Spa via Kenilworth,
+# and that this stretch is physically the same track as `xc-south-
+# coast.toml`'s own Coventry-Leamington Spa segment. That extension is now
+# modelled -- see the KNW/LMS entries and the segment-sharing ruling near
+# the end of this file's station list for the full derivation. No new
+# route research was needed: source 3/6 below already established the
+# Nuneaton-Leamington Spa via Coventry/Kenilworth service as this line's
+# real, current, end-to-end pattern; this file's own station list simply
+# now matches its own already-cited sourcing.
+#
 # GAP-ANALYSIS PROVENANCE: `lnwr-birmingham-crewe.toml`'s own "TASK 9.2
 # FRESH VERIFICATION" comment (point 4a) names this exact route as a real,
 # distinct, currently-modelled-nowhere gap, flagged rather than folded in
@@ -165,32 +179,49 @@ segment = "wmr-nuneaton-coventry"
 
 [[stations]]
 crs = "COV"
-role = "major"
+role = "junction"
 segment = "wmr-nuneaton-coventry"
-# Coventry: NOT "terminus" -- the real southbound working continues beyond
-# here to Leamington Spa via Kenilworth (source 3/6 above), this file
-# simply stops modelling the working here, per this task's own scope (see
-# below). Same "major, not terminus" treatment the now-deleted
-# `lnwr-euston-commuter.toml` gave Northampton for an analogous reason.
-# Also served by `lnwr-birmingham-crewe.toml`'s Birmingham branch (from the
-# east, via Rugby) and `xc-south-coast.toml` (also from the east, via
-# Leamington Spa/Kenilworth in the other direction) -- station-level
+# Coventry: the real southbound working continues beyond here to Leamington
+# Spa via Kenilworth (source 3/6 above) -- now modelled, see below. Per the
+# shared-trunk rule of thumb the junction stays on this file's own approach
+# segment; the exclusive Leamington-facing continuation starts at the next
+# station. Also served by `lnwr-birmingham-crewe.toml`'s Birmingham branch
+# (from the east, via Rugby) and `xc-south-coast.toml` (also from the east,
+# via Leamington Spa/Kenilworth in the other direction) -- station-level
 # overlap only, no segment shared; see the segment-sharing note above.
+
+# --- Extension: Coventry to Leamington Spa via Kenilworth ---
+# Real, sourced (source 3/6 above), the genuine continuation of this line's
+# own southbound service -- previously flagged here as a documented gap,
+# now modelled. Physically the SAME track as `xc-south-coast.toml`'s own
+# Coventry-Leamington Spa stretch (that file's own COV/KNW/LMS entries),
+# but NOT a shared segment name: `xc-south-coast`'s own segment spans its
+# entire Coventry-Leamington Spa-Banbury-Oxford-Reading route (dozens of
+# stations), not just this two-station overlap, the same coarse-
+# granularity mismatch this catalogue documents elsewhere (e.g.
+# `emr-regional.toml`'s Ruling 1, `wmr-malvern-line.toml`'s Bromsgrove
+# ruling). This file's own new, exclusive `wmr-nuneaton-coventry-
+# leamington` segment is used instead. Cost if wrong: bounded, as with
+# every other instance of this pattern -- an incident at Kenilworth or
+# Leamington Spa still matches `xc-south-coast.toml` independently via
+# StationHit regardless of segment name. CRS codes KNW and LMS reused
+# verbatim from `xc-south-coast.toml` (already-verified facts there).
+[[stations]]
+crs = "KNW"
+role = "minor"
+segment = "wmr-nuneaton-coventry-leamington"
+# Kenilworth: reopened 2018. Also an `xc-south-coast.toml` station -- see
+# the ruling above.
+
+[[stations]]
+crs = "LMS"
+role = "terminus"
+segment = "wmr-nuneaton-coventry-leamington"
+# Leamington Spa: also an `xc-south-coast.toml` station -- see the ruling
+# above.
 
 # === Scope boundaries (documented, not modelled) ===
 #
-# - Coventry to Leamington Spa via Kenilworth: real, sourced (source 3/6
-#   above), the genuine continuation of this line's own southbound
-#   service. This task's brief scopes this file specifically to
-#   "Nuneaton-Bedworth-Coventry Arena-Coventry", so the Leamington Spa leg
-#   isn't modelled here. It is worth flagging precisely because it is
-#   physically the SAME track as `xc-south-coast.toml`'s own
-#   Coventry-Leamington Spa stretch (that file's own Coventry, Kenilworth,
-#   Leamington Spa entries, on its `xc-south-coast` segment) -- a genuine
-#   shared-trunk candidate for whoever picks up this extension, unlike the
-#   Rugby-approach overlap noted above. Left as a documented, real gap
-#   rather than folded in here, since it falls outside this line's own
-#   named scope.
 # - Freight-only workings (Bedworth Murco Oil Terminal, Prologis Park):
 #   real (source 4/5 above) but not passenger services; out of scope for
 #   this catalogue entirely, not just this file.

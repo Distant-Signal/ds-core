@@ -40,12 +40,25 @@ sample_stations = ["GLC", "KWN", "AYR", "GIR", "STR"]
 # same terminus.
 destination_crs_filter = ["KWN", "AYR", "GIR", "STR"]
 
-match_keywords = ["Ayrshire Coast Line", "Glasgow South Western Line"]
-# Two high-precision phrases per the curation rule against padding
-# match_keywords. Both are the line's own branded/article names (confirmed
-# in the sourcing below) and don't collide with anything else in the
-# catalogue -- `swr-south-west-main.toml`'s "South West Main Line"/"SWML"
-# keywords are a different, non-overlapping string.
+match_keywords = ["Ayrshire Coast Line"]
+# One high-precision phrase -- this line's own branded/article name
+# (confirmed in the sourcing below).
+#
+# CORRECTION (real-world-sanity review, 2026-09-21): "Glasgow South
+# Western Line" was previously also listed here, but that is a
+# misattribution -- per both Wikipedia and National Rail Enquiries, "the
+# Glasgow South Western Line" is the Kilmarnock-Dumfries-Carlisle route
+# (this file's own Sources section above already documents this: Troon,
+# Prestwick, Ayr etc. are that Wikipedia article's own "Stranraer line"
+# BRANCH, not the line itself). The keyword has been moved to
+# `lines/scotrail-glasgow-south-western.toml`, which models the actual
+# Glasgow South Western Line and did not previously claim its own article
+# title as a keyword (see that file's own `match_keywords` comment,
+# updated alongside this fix). This file's remaining "Ayrshire Coast
+# Line" keyword is high-precision and unambiguous on its own for genuine
+# Ayrshire-coast incidents; "Ayrshire Coast" and station-name-based
+# Knowledgebase matching (GLC/AYR/GIR/STR etc., already covered via
+# `stations`) provide the rest of this file's real-world coverage.
 
 # Rural, hourly, largely single-track extension south of Ayr: tuned
 # thresholds following `northern-furness.toml`'s precedent for a comparable
@@ -191,9 +204,15 @@ segment = "scotrail-ayrshire-glasgow-ayr"
 crs = "PYG"
 role = "junction"
 segment = "scotrail-ayrshire-glasgow-ayr"
-# Paisley Gilmour Street: shared with the Inverclyde Line and Paisley Canal
-# Line (neither currently modelled in any `lines/*.toml` file), on
-# different platforms per the Ayrshire Coast Line article.
+# Paisley Gilmour Street: shared with the Inverclyde Line (still not
+# modelled in any `lines/*.toml` file) on different platforms per the
+# Ayrshire Coast Line article. The Paisley Canal Line is now modelled,
+# in `lines/scotrail-paisley-canal.toml` (real-world-sanity review,
+# 2026-09-21) -- but that line does NOT call at Paisley Gilmour Street at
+# all (its own Wikipedia sourcing: a physically distinct Shields
+# Junction/Corkerhill approach out of Glasgow Central, reaching a
+# different Paisley terminus, Paisley Canal), so no station-level overlap
+# exists here after all.
 
 [[stations]]
 crs = "JHN"

@@ -1,0 +1,73 @@
+id = "tfw-cardiff-bay-line"
+name = "Cardiff Bay Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+destination_crs_filter = ["CDB"]
+# The line's one genuine dead-end terminus.
+sample_stations = ["CDQ", "CDB"]
+match_keywords = ["Cardiff Bay Line"]
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-south.toml` (Batch 11, Task 11.7, previously bundled
+# with the City Line and Coryton Line into one over-broad "Cardiff Valley
+# Lines" file) -- see `tfw-city-line.toml`'s own split-history comment for
+# the full reasoning (the same real-world-branding split precedent already
+# applied on the north side of the network). All content below (station
+# list, sourcing notes, segment names) is carried over unchanged from
+# `tfw-valley-lines-south.toml`'s own Cardiff Bay Line (Butetown branch
+# line) material, not re-derived -- see that file's git history for the
+# original disclosure.
+#
+# Sourcing note: CDQ's CRS/TIPLOC is reused unchanged from
+# `tfw-valley-rhymney.toml`/`tfw-valley-merthyr.toml`/`tfw-valley-
+# rhondda.toml`, already cross-checked there. CDB was independently
+# confirmed from its own Wikipedia infobox "Station code" field, AND
+# cross-checked against a live, verbatim-quoted railwaycodes.org.uk row
+# (per the original file's own disclosed sourcing pass). Butetown, the
+# planned intermediate station on this branch, is confirmed via Cardiff
+# Bay's own Wikipedia article as a "Proposed station" under South Wales
+# Metro plans, not yet open, and is not listed -- a future editor should
+# add it once it opens.
+
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+# Carried over unchanged from the pre-split `tfw-valley-lines-south.toml`,
+# which deliberately kept one shared override across all three of its
+# former branches despite this one running a noticeably higher frequency
+# than its two siblings: the Cardiff Bay Line (Butetown branch line) runs
+# "four trains per hour to Cardiff Queen Street" (4 tph, per this line's
+# own Wikipedia article) versus the City/Coryton Lines' 2 tph. Now that
+# this line has its own file, a tighter override reflecting its higher
+# frequency would be a defensible future change, but its own article also
+# confirms it as a single 1.7 km shuttle with no intermediate open stations
+# today, not a long corridor -- the pre-split file's own judgment that the
+# shared 0.20/5min value was "an honest middle ground" is carried over
+# unchanged here rather than re-derived without a documented reason to
+# diverge from it.
+
+# --- Cardiff hub: Cardiff Queen Street, the origin for both this line and
+# `tfw-coryton-line.toml` -- a genuine shared platform, per each line's own
+# Wikipedia article (confirmed during the original sourcing pass). Not
+# shared with `tfw-city-line.toml` here specifically -- that line reaches
+# Cardiff Central (CDF), not Cardiff Queen Street. See
+# `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+
+# --- Cardiff Bay Line (Butetown branch line): Cardiff Queen Street to
+# Cardiff Bay, a single-track 1.7 km shuttle with no intermediate open
+# stations today (see the sourcing note above). Exclusive to this branch.
+[[stations]]
+crs = "CDB"
+tiploc = "CARDFBR"
+role = "terminus"
+segment = "tfw-valley-cardiff-bay"
+# Cardiff Bay: the branch's southern terminus, confirmed via its own
+# Wikipedia article ("the southern terminus of the Butetown branch line").

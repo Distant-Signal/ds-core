@@ -1,5 +1,5 @@
 id = "southern-coastway-east"
-name = "Coastway East Line"
+name = "East Coastway Line"
 mode = "national-rail"
 category = "regional"
 operators = [

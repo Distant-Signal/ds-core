@@ -1,5 +1,5 @@
 id = "wmr-darlaston-line"
-name = "West Midlands Railway: Walsall - Wolverhampton Line (via Darlaston)"
+name = "West Midlands Railway: Birmingham - Shrewsbury (via Darlaston)"
 mode = "national-rail"
 category = "regional"
 operators = [
@@ -28,8 +28,46 @@ operators = [
 # Darlaston that only touches Darlaston via a branch, not this line -- see
 # the scope note below) and a bare "Walsall to Wolverhampton Railway" guess
 # (no such article exists). The file's own `id`/filename keeps the
-# brief's "Darlaston" naming per this task's explicit instruction, but
-# `name` above reflects Wikipedia's real, current title.
+# brief's "Darlaston" naming per this task's explicit instruction.
+#
+# REVIEW CORRECTION (2026-09-21, Midlands EMR/WMR/LNWR sanity review): the
+# `name` above previously read "West Midlands Railway: Walsall -
+# Wolverhampton Line (via Darlaston)", reusing the Wikipedia *article*
+# title even though this file's own routing research two paragraphs below
+# had already established that the real modelled service does NOT call at
+# Walsall at all -- it's a Birmingham New Street-Shrewsbury working via
+# Tame Bridge Parkway/Darlaston/Willenhall/Wolverhampton (see point 2
+# below: neither Darlaston's nor Willenhall's own infobox route diagram
+# shows Walsall or Bescot Stadium anywhere in the chain). Keeping "Walsall"
+# in the display name was misleading given the file's own station list
+# never touches WSL. Renamed to "Birmingham - Shrewsbury (via Darlaston)"
+# to match the actual calling pattern this file models; the Wikipedia
+# article's own "Walsall-Wolverhampton line" title is still noted above/
+# below as the source article's name (also still reflected in the
+# `match_keywords` below, which target Knowledgebase incidents that will
+# likely use the source's own historic title regardless of what NR real-
+# world reality now is).
+#
+# FRESH WEB CHECK (2026-09-21, this review): re-fetched both this route's
+# own Wikipedia article and the Chase Line's, specifically to check whether
+# either now shows a genuine, separate Wolverhampton-Walsall short-working
+# distinct from this file's own Birmingham-Shrewsbury through-service (the
+# open uncertainty point 4 below already flagged). RESULT: no such service
+# exists today. This route's own article states outright: "In March 2026,
+# stopping passenger services on the line resumed, operating between
+# Birmingham New Street and Shrewsbury...via...Wolverhampton. No passenger
+# service currently operates from Walsall along the line" -- and separately
+# names a genuine Wolverhampton-Walsall stopping service as a *proposed*,
+# not-yet-operating, future scheme ("A stopping service from Wolverhampton
+# to Walsall is also proposed"). The Chase Line's own Services section
+# (re-fetched this review) confirms its real Wolverhampton contact is a
+# single early-morning (6am) one-way Wolverhampton-Rugeley Trent Valley
+# working over this line's own Birmingham-Walsall section, not a standing
+# Walsall-Wolverhampton service. So: this file's existing Birmingham-
+# Shrewsbury-only modelling is correct and no new gap exists today, but the
+# *proposed* Wolverhampton-Walsall scheme is worth flagging for whoever
+# revisits this catalogue once/if it opens -- not modelled now per this
+# task's "don't invent data" instruction (it isn't running yet).
 #
 # ROUTE RESEARCH (fetched live 2026-09-21, cross-checked across the line
 # article, the Darlaston/Willenhall station articles, and this app's own
@@ -60,7 +98,7 @@ operators = [
 #      a reinstated curve linking Wolverhampton to the Chase Line's own
 #      Tame Bridge Parkway-New Street approach WITHOUT calling at Walsall
 #      or Bescot Stadium themselves (those sit on the physically separate
-#      Chase Line proper, `lnwr-chase-line.toml`) -- i.e. despite the
+#      Chase Line proper, `wmr-chase-line.toml`) -- i.e. despite the
 #      Wikipedia article's own title ("Walsall-Wolverhampton line"), the
 #      real reinstated passenger service is Birmingham New Street-
 #      Wolverhampton(-Shrewsbury) via Darlaston, not a Walsall-Wolverhampton
@@ -96,7 +134,7 @@ operators = [
 # live via this app's own production station-lookup endpoint
 # (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21), single
 # unambiguous match for each. BHM, TAB (reused verbatim from
-# `lnwr-chase-line.toml`, this same task's own sibling file) and WVH
+# `wmr-chase-line.toml`, this same task's own sibling file) and WVH
 # (reused verbatim from `wcml-birmingham.toml`/`xc-manchester.toml`) are
 # already-verified facts, not re-derived here. No TIPLOC confirmed for
 # DAS/WIA to the two-source standard, so `tiploc` is omitted for both.
@@ -133,7 +171,7 @@ delay_threshold_minutes = 10
 # local route -- ordered west/south to east/north matching the "Birmingham
 # New Street and Shrewsbury" framing in source 2 above.
 #
-# --- Shared trunk with `lnwr-chase-line.toml`: Birmingham New Street
+# --- Shared trunk with `wmr-chase-line.toml`: Birmingham New Street
 # through Tame Bridge Parkway. See that file's own matching comment for the
 # full derivation -- both files were authored together in this batch and
 # deliberately keep this segment's extent byte-identical (BHM/DUD/AST/
@@ -142,20 +180,20 @@ delay_threshold_minutes = 10
 crs = "BHM"
 tiploc = "BHAMNWS"
 role = "terminus"
-segment = "lnwr-chase-line-newstreet"
-# See `lnwr-chase-line.toml`'s own BHM/DUD/AST entries and comment for why
+segment = "wmr-chase-line-newstreet"
+# See `wmr-chase-line.toml`'s own BHM/DUD/AST entries and comment for why
 # this 3-station stretch is its own exclusive-to-those-two-files segment
 # name, not `wmr-cross-city-trunk`.
 
 [[stations]]
 crs = "DUD"
 role = "minor"
-segment = "lnwr-chase-line-newstreet"
+segment = "wmr-chase-line-newstreet"
 
 [[stations]]
 crs = "AST"
 role = "junction"
-segment = "lnwr-chase-line-newstreet"
+segment = "wmr-chase-line-newstreet"
 
 [[stations]]
 crs = "WTT"

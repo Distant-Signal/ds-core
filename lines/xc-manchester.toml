@@ -4,6 +4,18 @@ mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
 
+# STRUCTURAL GAP, documented not fixed (review2 finding, 2026-09-21): the six
+# Wolverhampton-Birmingham Stour Valley stops below (CSY/TIP/DDP/SAD/SGB/SMR)
+# are real West Midlands Railway local-stopping stations that this file only
+# carries because XC's own limited-stop service happens to run over the same
+# metals -- there is no `wmr-stour-valley-local.toml` (or similar) file in
+# this catalogue to "own" them as their actual principal operator's line, the
+# same "wrong operator's line owns these stations" shape
+# `xc-south-coast.toml`'s own SWML stopping-halt stations have (see that
+# file's matching comment). Fixing this properly (adding a WMR
+# Wolverhampton-Birmingham stopping-service file) is a bigger task than this
+# review's scope -- flagged here for a future pass rather than attempted
+# piecemeal.
 destination_crs_filter = ["MAN", "SPT"]
 sample_stations = ["MAN", "SPT", "WVH"]
 # No match_keywords: this arm has no route name the Knowledgebase actually

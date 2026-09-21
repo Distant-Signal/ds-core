@@ -1,20 +1,35 @@
 id = "gwr-henley-branch"
-name = "Henley Branch Line"
+name = "Regatta Line"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["GW"]
 # Great Western Railway, modern diesel multiple units
 # (en.wikipedia.org/wiki/Henley_branch_line).
 
+# Renamed from "Henley Branch Line" and recategorized from "regional" to
+# "commuter" (real-world sanity review). GWR and Oxfordshire County Council
+# have branded this route the "Regatta Line" since 2006 (GWR's own current
+# route list uses this name) — "Henley Branch" is kept below as a
+# match_keywords entry (and in this file's own id) since it's still the
+# name most incident text and the line's own Wikipedia article title use.
+# Category: a roughly half-hourly off-peak commuter feeder into the Thames
+# Valley network (see the severity_overrides sourcing below), the same
+# frequency/character precedent `gwr-avocet-line.toml` already established
+# as "commuter" rather than "regional" for a comparable branch.
+
 destination_crs_filter = ["HOT"]
 sample_stations = ["WGV", "SHI", "HOT"]
 
-match_keywords = ["Henley branch"]
-# The line's own current name. Grepped clean against every other file's own
+match_keywords = ["Regatta Line", "Henley branch", "Henley Branch Line"]
+# "Regatta Line" is GWR's own current branding (see rename note above).
+# "Henley branch"/"Henley Branch Line" are kept per this task's own
+# instruction to retain "Henley Branch" as a keyword — the line's former
+# display name and its Wikipedia article title, both still likely to appear
+# in incident text. Grepped clean against every other file's own
 # match_keywords before adding — no collision. (wmr-snow-hill.toml's own
 # comments separately mention "Henley-in-Arden," an unrelated Warwickshire
 # town on a different route; that file's own match_keywords does not
-# contain "Henley branch" or any conflicting phrase.)
+# contain any of these phrases.)
 
 # A short (4.5 mile), single-track branch with no diversionary alternative,
 # roughly half-hourly off-peak (en.wikipedia.org/wiki/Henley_branch_line) —

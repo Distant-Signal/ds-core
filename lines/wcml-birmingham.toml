@@ -18,7 +18,7 @@ operators = [
 # through-to-Wolverhampton workings this file's own comment above already
 # documents (some Avanti Birmingham services continue past New Street).
 destination_crs_filter = ["BHM", "WVH", "EUS"]
-sample_stations = ["COV", "BHM"]
+sample_stations = ["COV", "BHM", "WVH"]
 # No match_keywords: same reasoning as `xc-manchester.toml` -- this branch
 # has no route name the Knowledgebase is confirmed to use consistently, and
 # a generic word like "Birmingham" would false-positive against
@@ -90,9 +90,30 @@ sample_stations = ["COV", "BHM"]
 # `crates/aggregator/src/matcher.rs` for the has_station coverage this task's
 # testing convention requires instead.
 #
-# Some Avanti Birmingham services continue beyond New Street to
-# Wolverhampton -- not modelled here, out of this file's researched scope
-# (Euston-Birmingham only).
+# RESOLVED (review2 finding, 2026-09-21): Avanti's Birmingham services
+# genuinely continue beyond New Street to Wolverhampton -- confirmed live via
+# Wikipedia's "Avanti West Coast" article, whose own Euston-Glasgow/Edinburgh
+# calling-pattern list names "Birmingham New Street, Sandwell & Dudley,
+# Wolverhampton" in that order (the same Wolverhampton-Birmingham stretch
+# `xc-manchester.toml`'s own 2026-09-21 route correction already models in
+# full for CrossCountry's Stour Valley line service). WVH was already this
+# file's own `destination_crs_filter` entry (added for exactly this gap) but
+# never added to `stations` -- now fixed below.
+#
+# CRS/TIPLOC for CSY, TIP, DDP, SAD, SGB and SMR are reused verbatim from
+# `xc-manchester.toml`'s own already-verified Stour Valley entries (same
+# physical line, different operator/file) rather than re-derived. WVH itself
+# re-verified live against https://ds.cursed.solutions/api/stations
+# (2026-09-21), matching `xc-manchester.toml`'s existing WVH entry. All six
+# intermediate stations are included per this file's own established
+# full-coverage convention (see the Task 9.3 comment above: "a low/limited
+# calling frequency isn't grounds for exclusion" for this exact Coventry-
+# Birmingham stretch) even though Avanti's own limited-stop Wolverhampton
+# working may not call at all of them -- consistent with how this file
+# already treats the Coventry-Birmingham stretch, and avoids the file
+# silently omitting real, open, currently-served stations strictly between
+# two already-modelled points. BHM's `role` changes from "terminus" to
+# "junction" below since the line now continues past it.
 [[stations]]
 crs = "EUS"
 tiploc = "EUSTON"
@@ -187,5 +208,57 @@ segment = "wcml-birmingham-branch"
 [[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
+role = "junction"
+segment = "wcml-birmingham-branch"
+
+[[stations]]
+crs = "SMR"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Smethwick Rolfe Street: strictly between Birmingham New Street and
+# Smethwick Galton Bridge on the Stour Valley line. CRS reused verbatim from
+# `xc-manchester.toml`.
+
+[[stations]]
+crs = "SGB"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Smethwick Galton Bridge: a genuine split-level interchange -- its
+# high-level platforms carry `wmr-snow-hill.toml`'s Snow Hill route,
+# station-level overlap only. CRS reused verbatim from `xc-manchester.toml`.
+
+[[stations]]
+crs = "SAD"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Sandwell & Dudley: the one intermediate stop Avanti's own published
+# Wolverhampton calling pattern names explicitly (see the sourcing note
+# above). CRS reused verbatim from `xc-manchester.toml`.
+
+[[stations]]
+crs = "DDP"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Dudley Port: strictly between Sandwell & Dudley and Tipton. CRS reused
+# verbatim from `xc-manchester.toml`.
+
+[[stations]]
+crs = "TIP"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Tipton: strictly between Dudley Port and Coseley. CRS reused verbatim from
+# `xc-manchester.toml`.
+
+[[stations]]
+crs = "CSY"
+role = "minor"
+segment = "wcml-birmingham-branch"
+# Coseley: strictly between Tipton and Wolverhampton. CRS reused verbatim
+# from `xc-manchester.toml`.
+
+[[stations]]
+crs = "WVH"
 role = "terminus"
 segment = "wcml-birmingham-branch"
+# Wolverhampton: already this file's own `destination_crs_filter` entry;
+# now added to `stations` too -- see the sourcing note above.

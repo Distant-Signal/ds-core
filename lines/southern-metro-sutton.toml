@@ -1,0 +1,229 @@
+id = "southern-metro-sutton"
+name = "Sutton Line (Victoria - Selhurst - West Croydon - Sutton)"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "SN",  # Southern
+]
+
+# ============================================================================
+# WHY THIS FILE EXISTS - Southern Metro coverage gap (review2-se-southern)
+# ============================================================================
+# Sibling of lines/southern-metro-crystal-palace.toml - see that file's own
+# header for the full context on the Southern Metro coverage gap this task
+# is closing. This file covers the other half of the brief's named station
+# list: Selhurst, Wallington, Carshalton Beeches and Norbury (West Croydon
+# is covered by both files, via two genuinely different approaches - see
+# STATION OVERLAP below).
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Service pattern and calling points confirmed via Wikipedia's "Southern
+# (train operating company)" article's own current Metro service list:
+# "London Victoria - Epsom Downs": "Battersea Park, Clapham Junction,
+# Wandsworth Common, Balham, Streatham Common, Norbury, Thornton Heath,
+# Selhurst, West Croydon, Waddon, Wallington, Carshalton Beeches, Sutton,
+# Belmont, Banstead". Every CRS code below was independently re-verified
+# live against https://ds.cursed.solutions/api/stations?q=<name>. West
+# Croydon's own Wikipedia article independently confirms Southern trains run
+# "to London Victoria, London Bridge... and Sutton" from there, corroborating
+# this as a real, current calling pattern rather than a single-source claim.
+#
+# This file's own station list stops at Sutton (SUO), the real junction
+# where - per the same Wikipedia calling-point list - the service continues
+# on to Belmont, Banstead and Epsom Downs. That continuation is ALREADY
+# modelled by the already-committed southern-epsom-downs.toml (its own
+# `southern-epsom-downs-branch` segment), whose own header comment
+# explicitly flagged "the wider Sutton and Mole Valley lines network... a
+# much larger scope... a documented, still-open gap" - this file closes
+# part of that gap by supplying the real Victoria-side approach into Sutton
+# that file's own scope boundary left unmodelled. Rather than duplicate
+# Belmont/Banstead/Epsom Downs into this file too (against SCHEMA.md's "one
+# line per file" curation rule), this file's own list ends at Sutton and
+# reuses that file's own SUO segment name - see SEGMENTS below.
+#
+# A separate real Wikipedia-listed service ("London Bridge - Epsom" via
+# Norwood Junction/West Croydon/Waddon/Wallington/Carshalton Beeches/Sutton/
+# Cheam/Ewell East) is DELIBERATELY NOT modelled here: this task's research
+# did not establish which physical alignment that service takes between
+# London Bridge and Norwood Junction (plausibly the same New Cross Gate/
+# Sydenham track overground-windrush.toml and southern-metro-crystal-
+# palace.toml's own excluded VIC-LBG service already cover, but not
+# confirmed), and Cheam/Epsom/Ewell East are new stations this task's own
+# named scope (Balham/Streatham Hill/Selhurst/Norwood Junction/Wallington/
+# Carshalton Beeches/Gipsy Hill/Norbury/West Croydon) did not ask for.
+# Noted here as a real, sourced lead for a future task, not acted on.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   VIC - BAK - CLJ - WSW - BAL | SRC - NRB - TTH - SRS - WCY - WDO - WLT - CSB | SUO
+#   [-- southern-metro-victoria-trunk --][----- southern-metro-sutton-branch -----][shared]
+#
+# `southern-metro-victoria-trunk` (VIC through BAL): reused VERBATIM from
+# southern-metro-crystal-palace.toml - see that file's own SEGMENTS section
+# for the sourcing (genuine same-operator shared trunk out of Victoria,
+# splitting at Balham into this file's own Streatham Common-ward branch and
+# that file's own Streatham Hill-ward branch).
+#
+# `southern-epsom-downs-sutton` (SUO only): reused VERBATIM from the
+# already-committed southern-epsom-downs.toml, marking Sutton as a genuine
+# SharedSegment - both files are the same operator (SN) and Sutton is the
+# real junction where this file's own Victoria-side approach and that
+# file's own Belmont/Banstead/Epsom Downs branch meet, per the ROUTE AND
+# SOURCING note above. Per the shared-trunk rule of thumb, the junction
+# itself (SUO) carries the shared name; this file's own exclusive approach
+# segment (`southern-metro-sutton-branch`) ends at the station immediately
+# before it (Carshalton Beeches).
+#
+# ============================================================================
+# STATION OVERLAP AT WEST CROYDON - southern-metro-crystal-palace.toml
+# ============================================================================
+# West Croydon (WCY) is also southern-metro-crystal-palace.toml's own
+# terminus, reached there via a genuinely different alignment (Crystal
+# Palace/Norwood Junction) from this file's own (Selhurst). Per the
+# xc-south-coast.toml/xc-manchester.toml precedent, this is treated as
+# station overlap only - this file's own `southern-metro-sutton-branch`
+# segment name is not reused there and vice versa. Also
+# overground-windrush.toml's own terminus (Windrush line, different
+# operator) and served by Tramlink - same precedent.
+#
+# No other CRS code below (SRC, NRB, TTH, SRS, WDO, WLT, CSB) appears in
+# any other `lines/*.toml` file (grepped catalogue-wide before drafting).
+#
+# ============================================================================
+# REMAINING GAPS (documented, not modelled here)
+# ============================================================================
+# - The London Bridge-Epsom service's own London Bridge-Norwood Junction
+#   leg, and the Sutton-Cheam-Ewell East/Epsom continuation past Sutton on
+#   that service: see ROUTE AND SOURCING above - a real, sourced lead, not
+#   acted on this task.
+# - The wider South London Line / Sutton & Mole Valley network beyond what
+#   this file, southern-metro-crystal-palace.toml and southern-epsom-
+#   downs.toml already cover (Wimbledon loop, further Thameslink Sutton
+#   Loop territory already in thameslink-southern.toml): real, but out of
+#   scope for this task's budget - a still-open gap.
+# ============================================================================
+sample_stations = ["VIC", "SRS", "WCY", "SUO"]
+destination_crs_filter = ["WCY", "SUO"]
+# VIC is also southern-brighton-main-line.toml's/southeastern-chatham.
+# toml's/southern-oxted-uckfield.toml's/southern-metro-crystal-palace.
+# toml's own sample station - the filter disambiguates this file's own
+# West Croydon/Sutton-bound services, mirroring scotrail-ayrshire.toml's
+# identical use of the field at Glasgow Central for the same reason.
+
+[severity_overrides]
+minor_delays_pct = 0.25
+delay_threshold_minutes = 5
+# Dense inner-London commuter service, same baseline commuter tuning as
+# southern-metro-crystal-palace.toml - see that file's own note.
+
+# ============================================================================
+# STATIONS - ordered south-west from Victoria via Balham, Selhurst and West
+# Croydon to Sutton.
+# ============================================================================
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "southern-metro-victoria-trunk"
+# London Victoria. Also southern-brighton-main-line.toml's/southeastern-
+# chatham.toml's/southern-oxted-uckfield.toml's/southern-metro-crystal-
+# palace.toml's own station - station overlap only (shared segment with
+# the latter only, see SEGMENTS above).
+
+[[stations]]
+crs = "BAK"
+role = "minor"
+segment = "southern-metro-victoria-trunk"
+# Battersea Park.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "southern-metro-victoria-trunk"
+# Clapham Junction. Major interchange, also several other files' own
+# station - station overlap only outside this file's own shared trunk with
+# southern-metro-crystal-palace.toml.
+
+[[stations]]
+crs = "WSW"
+role = "minor"
+segment = "southern-metro-victoria-trunk"
+# Wandsworth Common.
+
+[[stations]]
+crs = "BAL"
+role = "junction"
+segment = "southern-metro-victoria-trunk"
+# Balham. Junction per the shared-trunk rule of thumb: the Streatham
+# Common (this file) and Streatham Hill (southern-metro-crystal-palace.
+# toml) branches diverge here - see SEGMENTS above.
+
+[[stations]]
+crs = "SRC"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Streatham Common. Exclusive segment starts here, one station past the
+# Balham junction. Not to be confused with Streatham Hill (SRH,
+# southern-metro-crystal-palace.toml's own station) - confirmed as
+# distinct stations via ds.cursed.solutions.
+
+[[stations]]
+crs = "NRB"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Norbury.
+
+[[stations]]
+crs = "TTH"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Thornton Heath.
+
+[[stations]]
+crs = "SRS"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Selhurst.
+
+[[stations]]
+crs = "WCY"
+role = "junction"
+segment = "southern-metro-sutton-branch"
+# West Croydon. Station overlap only with southern-metro-crystal-palace.
+# toml's own terminus here (different alignment) and with
+# overground-windrush.toml's own terminus - see STATION OVERLAP above.
+# Role "junction" here (unlike the sibling file's "terminus") since this
+# line's own service continues on through Waddon toward Sutton rather than
+# ending here.
+
+[[stations]]
+crs = "WDO"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Waddon.
+
+[[stations]]
+crs = "WLT"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Wallington.
+
+[[stations]]
+crs = "CSB"
+role = "minor"
+segment = "southern-metro-sutton-branch"
+# Carshalton Beeches. Exclusive segment ends here; the next station
+# (Sutton) is the shared junction with southern-epsom-downs.toml - see
+# SEGMENTS above.
+
+[[stations]]
+crs = "SUO"
+role = "junction"
+segment = "southern-epsom-downs-sutton"
+# Sutton (London). SharedSegment with southern-epsom-downs.toml - see
+# SEGMENTS above. Also thameslink-southern.toml's own `thameslink-sutton-
+# loop` station (operator TL) - that overlap remains station-only, per
+# southern-epsom-downs.toml's own existing STATION OVERLAP note, which
+# this file's reuse of that file's own segment name does not change.

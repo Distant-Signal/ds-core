@@ -1,0 +1,433 @@
+id = "thameslink-rainham"
+name = "Thameslink Luton - Rainham (via Greenwich)"
+mode = "national-rail"
+category = "commuter"
+operators = ["TL"]
+
+# Real-world sanity review: a genuine, currently-operating 2tph GTR
+# Thameslink route (per Wikipedia's "Thameslink" article service tables,
+# already independently cited as a disclosed-but-unmodelled lead by BOTH
+# `southeastern-north-kent.toml`'s own HAND-OFF NOTE, which quotes the exact
+# calling pattern reused below, and `thameslink-bedford.toml`, whose own
+# Luton stretch this line reuses) had zero Thameslink-file coverage: no
+# `thameslink-*.toml` file tied the Luton end to the Greenwich/North Kent
+# end together as one route. This file closes that gap, reusing existing
+# station data/CRS codes from the sibling files whose stations this route
+# genuinely overlaps, per this catalogue's established station-overlap
+# convention -- not re-researched from scratch.
+
+sample_stations = ["LUT", "STP", "DFD", "RAI"]
+destination_crs_filter = ["RAI"]
+# This line's own real terminus, matching `thameslink-bedford.toml`'s own
+# single-terminus-only convention.
+
+match_keywords = ["Thameslink Rainham"]
+# One high-precision phrase naming this route's own real destination,
+# distinct from every other Thameslink branch file's own keywords
+# (checked: no collision with "Thameslink Bedford", "Thameslink Cambridge",
+# "Thameslink Peterborough", "Thameslink Sevenoaks", "Sutton loop line",
+# "Thameslink Brighton" or "Thameslink core").
+
+# Commuter line: tighter thresholds, matching every other thameslink-*.toml
+# file in this catalogue.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# `southeastern-north-kent.toml`'s own HAND-OFF NOTE already did the primary
+# research for this route and flagged it as real-but-unmodelled: "Wikipedia's
+# own 'Thameslink' article lists a real, current, off-peak 2tph 'Luton to
+# Rainham via Greenwich' service, explicitly calling at 'Greenwich, Maze
+# Hill, Westcombe Park, Charlton, Woolwich Arsenal, Plumstead, Abbey Wood,
+# Slade Green, Dartford' before continuing to Rainham." That stretch is
+# reused here verbatim from `southeastern-north-kent.toml` -- and note it is
+# a genuinely NARROWER calling pattern than that file's own full North Kent
+# Line stopping service: this Thameslink working skips Woolwich Dockyard,
+# Belvedere and Erith, all of which `southeastern-north-kent.toml` calls at
+# on the same physical track.
+#
+# REVIEW2 FIX (2026-09-21): this note previously also listed New Cross and
+# Deptford among the stations this service "skips". Deptford was wrong --
+# fresh research (its own Wikipedia article's Services section: "Services
+# at Deptford are operated by Southeastern and Thameslink", with the
+# Thameslink service specifically "2 tph to Luton") confirms this service
+# DOES call at Deptford; added as a `[[stations]]` entry below, between
+# London Bridge and Greenwich. New Cross was never a genuine candidate in
+# the first place: it isn't "skipped" so much as not physically on this
+# route at all -- see southeastern-north-kent.toml's own corrected header
+# comment on the Greenwich line's real divergence point (North Kent East
+# Junction, between London Bridge and New Cross, not past New Cross).
+#
+# Same reasoning already established repeatedly in this catalogue
+# (`thameslink-cambridge.toml`'s OVERLAP (a)/(b), `thameslink-bedford.toml`'s
+# EMR ruling): same track, different calling pattern -> station overlap
+# only, this file's own exclusive segment name, not a reuse of
+# `southeastern-north-kent`'s segment.
+#
+# Past Dartford, continuing to Rainham (Kent): no source consulted for this
+# task named the exact intermediate stations between Dartford and Gravesend,
+# and none of Greenhithe, Swanscombe, Northfleet or Stone Crossing -- all
+# real intermediate stations on that stretch -- appear in ANY committed
+# `lines/*.toml` file catalogue-wide (grepped before drafting). Per this
+# batch's "don't invent, disclose the gap" convention, they are NOT added
+# here as guessed `[[stations]]` entries; this is a genuine, disclosed
+# coverage gap for a future task with the budget to verify those four CRS
+# codes to this catalogue's two-source bar. From Gravesend onward, this
+# route rejoins `southeastern-highspeed.toml`'s own `hs1-northkent` segment
+# (Gravesend - Higham - Strood - Rochester - Chatham - Gillingham -
+# Rainham), reused verbatim for the same station-overlap-only reasoning:
+# this file's own exclusive segment name is used, not `hs1-northkent`,
+# since this Thameslink service's own calling pattern past Gravesend was not
+# independently re-verified against that file's full stopping pattern
+# within this task's budget -- treated as a station-overlap lead, not a
+# confirmed identical pattern, matching `thameslink-southern.toml`'s own
+# disclosure convention for evidence that doesn't clear the two-source bar.
+#
+# Luton end: reused verbatim from `thameslink-bedford.toml`'s own
+# Luton-St Pancras stretch (LUT through KTN), which that file already
+# independently verified. This service originates at Luton (LUT), one
+# station south of `thameslink-bedford.toml`'s own Bedford/Flitwick/
+# Harlington/Leagrave stretch, none of which this line touches. Whether
+# this route's own calling pattern south of Luton is identical,
+# station-for-station, to `thameslink-bedford.toml`'s own Bedford service
+# was not independently re-verified within this task's budget -- treated
+# conservatively as station-overlap-only on this file's own segment name,
+# not a reuse of `mml-bedford-st-pancras`, consistent with every other
+# same-corridor overlap in this catalogue defaulting to station-overlap
+# absent a specific confirmed-identical-pattern finding (contrast
+# `thameslink-cambridge.toml`'s OVERLAP (c), where an explicit "all
+# stations" citation justified reusing `gn-peterborough-branch` verbatim --
+# no equivalent citation was found here).
+#
+# Core stretch (STP through LBG): this route runs the Thameslink core's full
+# length -- St Pancras, Farringdon, City Thameslink, Blackfriars, London
+# Bridge -- before diverging south-east towards Greenwich, unlike
+# `thameslink-southern.toml` (which only touches BFR/LBG) or
+# `thameslink-bedford.toml`/`thameslink-cambridge.toml` (which only touch
+# STP). All five core stations are reused verbatim from
+# `thameslink-core.toml`, station overlap only against that file's own
+# `thameslink-core` segment (per the same reasoning every other branch file
+# in this catalogue already applies at the core boundary: reusing
+# `thameslink-core` verbatim here would not itself be wrong for THIS
+# stretch, since this line uniquely touches every one of that segment's
+# stations -- but is avoided anyway for consistency with this catalogue's
+# uniform "each branch keeps its own segment name at the core, station
+# overlap only" convention, which every sibling thameslink-*.toml file
+# already follows for the same reason: it keeps `SegmentRegistry`'s
+# shared-vs-exclusive semantics predictable across the whole Thameslink
+# family rather than special-casing the one branch that happens to touch
+# every core station).
+
+# --- Luton to St Pancras (reused from thameslink-bedford.toml) ---
+
+[[stations]]
+crs = "LUT"
+role = "terminus"
+segment = "thameslink-rainham"
+# Luton. This route's own northern terminus -- one station south of
+# thameslink-bedford.toml's own Bedford/Flitwick/Harlington/Leagrave
+# stretch, none of which this line touches.
+
+[[stations]]
+crs = "LTN"
+role = "major"
+segment = "thameslink-rainham"
+# Luton Airport Parkway. Also thameslink-bedford.toml's own station
+# (`mml-bedford-st-pancras` segment) -- station overlap only, see the
+# sourcing note above.
+
+[[stations]]
+crs = "HPD"
+role = "minor"
+segment = "thameslink-rainham"
+
+[[stations]]
+crs = "SAC"
+role = "junction"
+segment = "thameslink-rainham"
+# St Albans City. Also a junction for the separate Abbey Line branch (not
+# covered by this file), and also thameslink-bedford.toml's own station --
+# station overlap only.
+
+[[stations]]
+crs = "RDT"
+role = "minor"
+segment = "thameslink-rainham"
+
+[[stations]]
+crs = "ELS"
+role = "minor"
+segment = "thameslink-rainham"
+
+[[stations]]
+crs = "MIL"
+role = "minor"
+segment = "thameslink-rainham"
+
+[[stations]]
+crs = "HEN"
+role = "minor"
+segment = "thameslink-rainham"
+
+[[stations]]
+crs = "BCZ"
+role = "minor"
+segment = "thameslink-rainham"
+# Brent Cross West. Opened 10 Dec 2023 -- see thameslink-bedford.toml's own
+# sourcing note.
+
+[[stations]]
+crs = "CRI"
+role = "minor"
+segment = "thameslink-rainham"
+# Cricklewood.
+
+[[stations]]
+crs = "WHP"
+role = "major"
+segment = "thameslink-rainham"
+# West Hampstead Thameslink.
+
+[[stations]]
+crs = "KTN"
+role = "minor"
+segment = "thameslink-rainham"
+# Kentish Town.
+
+# --- Thameslink core (reused from thameslink-core.toml) ---
+
+[[stations]]
+crs = "STP"
+tiploc = "STPX"
+role = "junction"
+segment = "thameslink-rainham"
+# St Pancras International. Station overlap only with thameslink-core.toml,
+# thameslink-bedford.toml and thameslink-cambridge.toml -- see the sourcing
+# note above.
+
+[[stations]]
+crs = "ZFD"
+tiploc = "FRNDNLT"
+role = "major"
+segment = "thameslink-rainham"
+# Farringdon. Also thameslink-cambridge.toml's own FPK-area overlap station
+# ZFD itself is exclusive to thameslink-core.toml among the other branch
+# files -- station overlap only with thameslink-core.toml here.
+
+[[stations]]
+crs = "CTK"
+tiploc = "CTMSLNK"
+role = "minor"
+segment = "thameslink-rainham"
+# City Thameslink.
+
+[[stations]]
+crs = "BFR"
+tiploc = "BLFR"
+role = "major"
+segment = "thameslink-rainham"
+# Blackfriars. Also thameslink-southern.toml's own core-boundary junction
+# (its own `thameslink-southern-trunk` segment) -- station overlap only.
+
+[[stations]]
+crs = "LBG"
+tiploc = "LNDNBDC"
+role = "junction"
+segment = "thameslink-rainham"
+# London Bridge. Also thameslink-core.toml's, thameslink-southern.toml's
+# and southeastern-north-kent.toml's own station (that file's own terminus
+# for its Charing Cross/Cannon Street approach) -- station overlap only.
+# This route diverges south-east from here towards Greenwich.
+
+# --- Via Greenwich to Dartford (reused from southeastern-north-kent.toml;
+# a narrower calling pattern than that file's own full stopping service --
+# see the sourcing note above) ---
+
+[[stations]]
+crs = "DEP"
+role = "minor"
+segment = "thameslink-rainham"
+# Deptford -- REVIEW2 FIX (2026-09-21): added. Its own Wikipedia article's
+# Services section confirms "Services at Deptford are operated by
+# Southeastern and Thameslink..." with the Thameslink service specifically
+# "2 tph to Luton" -- i.e. this exact route. Its own succession box gives
+# London Bridge as the preceding station and Greenwich as the following
+# one, confirming this position. This file's own header comment previously
+# said this service "skips New Cross, Deptford..."; that was stale/wrong
+# for Deptford specifically -- see the header sourcing note, corrected
+# alongside this entry. (New Cross itself genuinely isn't "skipped" so
+# much as not on this physical route at all -- the Greenwich line diverges
+# from the South Eastern Main Line at North Kent East Junction, between
+# London Bridge and New Cross, so New Cross was never a candidate calling
+# point for this service; see southeastern-north-kent.toml's own header
+# comment for the corrected topology.)
+
+[[stations]]
+crs = "GNW"
+role = "major"
+segment = "thameslink-rainham"
+# Greenwich. Also southeastern-north-kent.toml's own station -- station
+# overlap only, see the sourcing note above.
+
+[[stations]]
+crs = "MZH"
+role = "minor"
+segment = "thameslink-rainham"
+# Maze Hill.
+
+[[stations]]
+crs = "WCB"
+role = "minor"
+segment = "thameslink-rainham"
+# Westcombe Park.
+
+[[stations]]
+crs = "CTN"
+role = "junction"
+segment = "thameslink-rainham"
+# Charlton.
+
+[[stations]]
+crs = "WWA"
+role = "major"
+segment = "thameslink-rainham"
+# Woolwich Arsenal. Also elizabeth-line.toml's own station and
+# southeastern-north-kent.toml's own station -- station overlap only with
+# both.
+
+[[stations]]
+crs = "PLU"
+role = "minor"
+segment = "thameslink-rainham"
+# Plumstead.
+
+[[stations]]
+crs = "ABW"
+role = "major"
+segment = "thameslink-rainham"
+# Abbey Wood. Also elizabeth-line.toml's own terminus and
+# southeastern-north-kent.toml's own station -- station overlap only with
+# both.
+
+[[stations]]
+crs = "SGR"
+role = "junction"
+segment = "thameslink-rainham"
+# Slade Green. Also southeastern-north-kent.toml's own station -- station
+# overlap only.
+
+[[stations]]
+crs = "DFD"
+role = "junction"
+segment = "thameslink-rainham"
+# Dartford. Also southeastern-north-kent.toml's own terminus -- station
+# overlap only. Not this line's own terminus: the route continues to
+# Rainham (Kent) below. Not a `terminus` role here since through-running
+# continues past it.
+
+# --- Dartford to Gravesend: Stone Crossing, Greenhithe, Swanscombe and
+# Northfleet ---
+#
+# REVIEW2 FIX (2026-09-21): this section previously disclosed these four
+# stations as an unmodelled gap ("do not appear in any committed
+# `lines/*.toml` file catalogue-wide"). That's now stale on two counts:
+# (1) a sibling branch in this same integration added all four to
+# `southeastern-north-kent.toml` (verified via `grep -n 'crs = "SCG"\|crs =
+# "GNH"\|crs = "SWM"\|crs = "NFL"' lines/southeastern-north-kent.toml`,
+# all four present); (2) fresh Wikipedia research (each station's own
+# article's Services section, e.g. Greenhithe's: "Services at Greenhithe
+# are operated by Southeastern and Thameslink... 2 tph to Luton via
+# Woolwich Arsenal and Greenwich") confirms this exact Thameslink service
+# genuinely calls at all four. Added below, CRS-verified live against
+# https://ds.cursed.solutions/api/stations, matching
+# southeastern-north-kent.toml's own codes and DFD-to-Gravesend order.
+#
+# Segment name: kept on this file's own exclusive `thameslink-rainham`
+# name, station-overlap only against southeastern-north-kent.toml, NOT a
+# reuse of that file's `southeastern-north-kent` segment -- consistent
+# with this file's own established treatment of the whole Deptford-
+# Dartford stretch above (that segment name also covers Woolwich Dockyard/
+# Belvedere/Erith, which this Thameslink working skips, so reusing it here
+# would risk the same whole-route-segment over-sharing bug already fixed
+# elsewhere in this review).
+
+[[stations]]
+crs = "SCG"
+role = "minor"
+segment = "thameslink-rainham"
+# Stone Crossing.
+
+[[stations]]
+crs = "GNH"
+role = "minor"
+segment = "thameslink-rainham"
+# Greenhithe (for Bluewater). Also southeastern-north-kent.toml's own
+# station -- station overlap only, see the note above.
+
+[[stations]]
+crs = "SWM"
+role = "minor"
+segment = "thameslink-rainham"
+# Swanscombe. Also southeastern-north-kent.toml's own station -- station
+# overlap only, see the note above.
+
+[[stations]]
+crs = "NFL"
+role = "minor"
+segment = "thameslink-rainham"
+# Northfleet. Also southeastern-north-kent.toml's own station -- station
+# overlap only, see the note above.
+
+# --- Gravesend to Rainham (reused from southeastern-highspeed.toml's own
+# `hs1-northkent` segment) ---
+
+[[stations]]
+crs = "GRV"
+role = "minor"
+segment = "thameslink-rainham"
+# Gravesend. Also southeastern-highspeed.toml's own station
+# (`hs1-northkent` segment) -- station overlap only, see the sourcing note
+# above.
+
+[[stations]]
+crs = "HGM"
+role = "minor"
+segment = "thameslink-rainham"
+# Higham.
+
+[[stations]]
+crs = "SOO"
+role = "junction"
+segment = "thameslink-rainham"
+# Strood. Also southeastern-chatham.toml's own station (`chatham-medway`,
+# a different physical approach) and southeastern-highspeed.toml's own
+# station -- station overlap only with both.
+
+[[stations]]
+crs = "RTR"
+role = "major"
+segment = "thameslink-rainham"
+# Rochester.
+
+[[stations]]
+crs = "CTM"
+role = "major"
+segment = "thameslink-rainham"
+# Chatham.
+
+[[stations]]
+crs = "GLM"
+role = "major"
+segment = "thameslink-rainham"
+# Gillingham (Kent).
+
+[[stations]]
+crs = "RAI"
+role = "terminus"
+segment = "thameslink-rainham"
+# Rainham (Kent) -- this line's own real terminus. Also
+# southeastern-highspeed.toml's own station and southeastern-chatham.toml's
+# own station -- station overlap only with both.

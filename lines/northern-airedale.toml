@@ -1,8 +1,23 @@
 id = "northern-airedale"
 name = "Airedale Line"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["NT"]
+
+# Category correction (Yorkshire/real-world-sanity review, 2026-09-21): was
+# "regional", following an earlier blanket rule reserving "commuter" for the
+# electrified Merseyrail metro network alone (see e.g.
+# `northern-glossop-hadfield.toml`'s and `northern-manchester-southport.
+# toml`'s own now-superseded citations of that rule). That rule doesn't
+# survive a real-world-perception check against this specific line:
+# Wikipedia's own "Airedale line" article confirms it was electrified at
+# 25kV AC overhead between Leeds and Skipton in 1994, and is operated today
+# by Class 333 EMUs -- a genuinely frequent (half-hourly Leeds-Skipton,
+# hourly Bradford Forster Square) electric suburban corridor into Leeds,
+# not a diesel rural branch. Re-categorized "commuter" to match. (The
+# neighbouring `northern-wharfedale.toml`, which shares this same
+# electrified Shipley-approach infrastructure, is corrected the same way
+# for the same reason -- see that file's own comment.)
 
 destination_crs_filter = ["LDS", "BDQ", "SKI"]
 sample_stations = ["SHY", "KEI", "SKI"]

@@ -1,0 +1,234 @@
+id = "swr-romsey-salisbury"
+name = "Salisbury - Romsey - Southampton / Eastleigh"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS, AND A CORRECTION TO THIS TASK'S OWN BRIEF
+# ============================================================================
+# The brief frames this as "Romsey-Salisbury via Eastleigh" with Romsey's
+# own CRS assumed "RMS". Checked against https://ds.cursed.solutions/api/
+# stations rather than assumed: Romsey's real CRS is ROM, not RMS - "RMS"
+# does not resolve to this station at all. Also checked against Wikipedia
+# rather than assumed: Eastleigh is not actually ON the direct Salisbury-
+# Romsey-Southampton route ("Wessex Main Line") - it is reached via a
+# separate branch, the "Eastleigh to Romsey Line", which diverges from the
+# main spine AT Romsey. Both corrections are recorded here rather than
+# silently absorbed.
+#
+# Salisbury (SAL) was already `gwr-wessex-main.toml`'s own junction
+# station, and that file's own header explicitly flags this exact gap:
+# "real GWR services continue on towards Southampton/Portsmouth... this
+# task's own scope... ends at Salisbury, well short of that real
+# Portsmouth-bound continuation." Romsey railway station's own Wikipedia
+# article independently confirms the real, current SWR-operated service
+# this file adds: "South Western Railway... running from Salisbury to
+# Romsey and Southampton via Redbridge, then to Eastleigh and back to
+# Romsey via Chandler's Ford" - a genuine "figure of six" pattern. Dean,
+# Mottisfont & Dunbridge, Romsey, Chandlers Ford and Eastleigh (in this
+# specific SWR context - see the ESL note below) were absent catalogue-wide
+# before this file.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Main spine order, Salisbury to Southampton: Wikipedia "Wessex Main Line"
+# own "Stations served" section - Salisbury - Dean - Mottisfont & Dunbridge
+# - Romsey - Redbridge - Millbrook - Southampton Central. The same section
+# notes the "Eastleigh to Romsey Line diverges to Chandlers Ford and
+# Eastleigh" at Romsey, confirming that branch as a genuinely separate
+# named route rather than part of the main spine itself.
+# Services: "Passenger services are currently operated by Great Western
+# Railway services between Portsmouth Harbour and Cardiff Central,
+# supplemented by South Western Railway between Salisbury and Southampton
+# Central" (same article) - cross-checked against Romsey's own article
+# (quoted above), which independently confirms both operators and gives
+# the SWR-specific loop pattern this file models.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Dean (Wilts)=DEN, Mottisfont & Dunbridge=DBG, Romsey=ROM, Chandlers
+# Ford=CFR. Redbridge (RDB), Millbrook (MBK), Southampton Central (SOU) and
+# Eastleigh (ESL) are reused verbatim from xc-south-coast.toml/
+# swr-south-west-main.toml - see SEGMENTS below.
+# Grepped clean before starting: no other `lines/*.toml` file lists Dean,
+# Mottisfont & Dunbridge, Romsey or Chandlers Ford.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   SAL - DEN - DBG - ROM - RDB - MBK - SOU | CFR - ESL
+#   [--------- swr-wessex-main-south (shared with -----|-- swr-eastleigh-
+#              gwr-wessex-main.toml at SAL) ---------]      romsey --]
+#
+# `swr-wessex-main-south` (new): Salisbury (SAL) through Southampton
+# Central are genuinely the SAME physical double track GWR's own Wessex
+# Main Line service continues over past Salisbury, per Romsey's own
+# sourcing above ("South Western Railway... between Salisbury and
+# Southampton Central" and GWR's own "Portsmouth Harbour and Cardiff
+# Central" service both running this whole spine) - gwr-wessex-main.toml's
+# own header explicitly names this as a real, sourced, deliberately
+# out-of-that-file's-scope continuation. Rather than reuse
+# `gwr-wessex-main` itself for SAL (which would also mark that segment's
+# own Bristol-Westbury stations - Bath Spa, Bristol Temple Meads and the
+# rest - as "shared" with this file, even though this file never reaches
+# them), this whole Salisbury-Southampton stretch gets its own new,
+# narrower name, reused verbatim by gwr-wessex-main.toml's own (updated)
+# SAL row - the same precise-blast-radius approach used for Ash Vale/
+# Aldershot and Brockenhurst earlier in this batch.
+#
+# Redbridge and Millbrook are ALSO already station-overlap entries in
+# xc-south-coast.toml (its own exclusive `xc-south-coast` segment, grouped
+# there under that file's own Basingstoke-Winchester-Southampton-Bournemouth
+# heading - a different physical approach into the Southampton area).
+# Treated as station overlap only against that file, not a shared segment,
+# matching this catalogue's established precedent for this exact shape of
+# convergence. Southampton Central (SOU) is likewise a station overlap with
+# swr-south-west-main.toml (a different physical approach, via Winchester)
+# and swr-netley-line.toml - see those files' own precedent for the same
+# station.
+#
+# Romsey (ROM) is the real junction for the Eastleigh branch, per the
+# sourcing above - stays on the shared `swr-wessex-main-south` segment per
+# the shared-trunk rule of thumb; this file's own new exclusive segment,
+# `swr-eastleigh-romsey`, starts at the next station on that branch,
+# Chandlers Ford.
+#
+# Eastleigh (ESL) is already a station-overlap entry in xc-south-coast.toml
+# (its own exclusive `xc-south-coast` segment, approached from Winchester/
+# Shawford - a different physical direction from this file's own Chandlers
+# Ford-side approach). Treated as station overlap only, matching the
+# Redbridge/Millbrook precedent above. This is the specific gap the task's
+# own brief flagged: Eastleigh is "the SWML's principal junction" but had
+# no SWR-side coverage in any file - this file adds that, without claiming
+# xc-south-coast.toml's own different physical approach.
+#
+# NOT modelled as an actual closed loop: SWR's own real service is a
+# genuine "figure of six" (Salisbury -> Romsey -> Southampton via Redbridge
+# -> Eastleigh -> Romsey via Chandlers Ford, back to the loop), but a TOML
+# station list cannot repeat a CRS code (Romsey would need to appear
+# twice). Modelled instead as the spine plus one branch, the same
+# simplification swr-kingston-loop.toml's own header discusses for a
+# comparable real-world loop shape - every station the loop touches is
+# still covered, just not as a literal closed ring in this file's own
+# `stations` array.
+
+match_keywords = ["Wessex Main Line", "Eastleigh to Romsey line"]
+# "Wessex Main Line" is the real, current infrastructure name for the
+# WHOLE corridor this file's own spine sits on (per the sourcing above,
+# the same physical track gwr-wessex-main.toml already claims the name
+# for) - deliberately included here too, even though gwr-wessex-main.toml
+# already uses it, because an incident report using this phrase plausibly
+# affects either operator's own service on this shared track; this is the
+# same "same real name, both files claim it" judgment this catalogue
+# already makes for segment names reused across files, applied here to a
+# match keyword instead. "Eastleigh to Romsey line" is the branch's own
+# sourced name (Romsey station's own neighbouring-station data), grepped
+# clean against every other file's match_keywords before adding.
+
+sample_stations = ["DEN", "DBG", "CFR"]
+# Dean and Mottisfont & Dunbridge are on this file's own new
+# `swr-wessex-main-south` segment, exclusive to this file today and touched
+# by no third file. Chandlers Ford is on this file's own wholly exclusive
+# Eastleigh branch. Deliberately avoids Redbridge/Millbrook/Eastleigh (all
+# station overlaps with xc-south-coast.toml) for a clean read, the same
+# reasoning swr-waterloo-reading.toml's own sample_stations note gives for
+# avoiding a junction station.
+
+# No `destination_crs_filter`: per the sourcing above, this line's own real
+# service is genuinely multi-destination (a "figure of six" touching
+# Southampton Central AND Eastleigh from Salisbury), not a single clean
+# terminus - a filter would need to include both without any sourced
+# evidence it wouldn't also need Salisbury itself for the return leg. None
+# of the three sample stations are shared with another route, so, per
+# swr-chessington.toml's/swr-epsom-mole-valley.toml's own precedent, the
+# filter is skipped as buying nothing while carrying real downside.
+
+# Regional tuning, matching swr-west-of-england.toml's/gwr-wessex-main.toml's
+# own category for a comparable secondary SWR/GWR corridor - no sourced
+# frequency figure found within this task's budget precise enough to
+# justify a tighter commuter override.
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The rest of gwr-wessex-main.toml's own route (Bristol-Bath-Westbury-
+#   Warminster-Salisbury): already modelled, genuine shared trunk with this
+#   file only at Salisbury itself (`swr-wessex-main-south`) - the rest of
+#   that file's own route stays on its own exclusive `gwr-wessex-main`
+#   segment, untouched by this file.
+# - Portsmouth Harbour: GWR's own real service continues from Southampton
+#   Central towards Portsmouth per the sourcing above - a further,
+#   still-uncovered gap beyond this file's own scope (this file's own
+#   spine ends at Southampton Central).
+
+# ============================================================================
+# STATIONS - Salisbury to Southampton, plus the Eastleigh branch
+# ============================================================================
+[[stations]]
+crs = "SAL"
+role = "junction"
+segment = "swr-wessex-main-south"
+# Salisbury. Reused verbatim (segment name) from gwr-wessex-main.toml's own
+# (updated) SAL row - see SEGMENTS above. Also swr-west-of-england.toml's
+# own junction station, approached from a completely different direction
+# (east, via Andover) - station overlap only there too, per that file's
+# own SAL note.
+
+[[stations]]
+crs = "DEN"
+role = "minor"
+segment = "swr-wessex-main-south"
+# Dean (Wilts).
+
+[[stations]]
+crs = "DBG"
+role = "minor"
+segment = "swr-wessex-main-south"
+# Mottisfont & Dunbridge.
+
+[[stations]]
+crs = "ROM"
+role = "junction"
+segment = "swr-wessex-main-south"
+# Romsey. Junction for the Eastleigh branch - see SEGMENTS above.
+
+[[stations]]
+crs = "RDB"
+role = "minor"
+segment = "swr-wessex-main-south"
+# Redbridge. Station overlap with xc-south-coast.toml's own exclusive
+# `xc-south-coast` segment (a different physical approach) - see SEGMENTS
+# above.
+
+[[stations]]
+crs = "MBK"
+role = "minor"
+segment = "swr-wessex-main-south"
+# Millbrook. Station overlap with xc-south-coast.toml - see SEGMENTS above.
+
+[[stations]]
+crs = "SOU"
+role = "terminus"
+segment = "swr-wessex-main-south"
+# Southampton Central. This file's own spine terminus. Station overlap
+# with swr-south-west-main.toml's own `swr-swml-south` segment and
+# swr-netley-line.toml's own `swr-netley-line` segment (both different
+# physical approaches) - see SEGMENTS above.
+
+[[stations]]
+crs = "CFR"
+role = "minor"
+segment = "swr-eastleigh-romsey"
+# Chandlers Ford.
+
+[[stations]]
+crs = "ESL"
+role = "terminus"
+segment = "swr-eastleigh-romsey"
+# Eastleigh. This branch's own terminus for this file's purposes (the real
+# service continues back onto the South West Main Line towards Southampton,
+# already covered by swr-south-west-main.toml/swr-netley-line.toml's own
+# SOU/ESL-adjacent stations - see the "NOT modelled as an actual closed
+# loop" note above). Station overlap with xc-south-coast.toml's own
+# exclusive `xc-south-coast` segment (a different physical approach, via
+# Shawford/Winchester) - see SEGMENTS above.

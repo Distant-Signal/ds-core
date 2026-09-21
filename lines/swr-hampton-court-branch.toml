@@ -1,0 +1,146 @@
+id = "swr-hampton-court-branch"
+name = "Hampton Court Branch Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Flagged as a real, still-open gap by both swr-kingston-loop.toml's own
+# SCOPE BOUNDARIES ("Berrylands (BRS), Thames Ditton and the Hampton Court
+# branch...") and swr-new-guildford.toml's own SCOPE BOUNDARIES ("The
+# Hampton Court branch (Thames Ditton - Hampton Court), which also uses
+# Hampton Court Junction: a different physical spur, not this line, not
+# modelled here"). Thames Ditton and Hampton Court were absent from every
+# line definition in `lines/` before this file.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Hampton Court branch line" infobox and
+# station list - Surbiton (junction) - Thames Ditton - Hampton Court
+# (terminus), opened 1849. Electrification 750 V DC third rail. The
+# infobox/lead also describes the junction's own grade separation ("in July
+# 1915, a flyover was opened, carrying the down branch line over the main
+# lines... allowing Hampton Court branch trains to cross above the South
+# Western Main Line without conflicting with mainline traffic").
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Thames Ditton=THD, Hampton Court=HMC (distinct from Hampton (London)=HMP,
+# swr-shepperton-branch.toml's own terminus-area station on a completely
+# different branch, and from Hampton Wick=HMW, swr-kingston-loop.toml's own
+# station - all three "Hampton"-named stations confirmed distinct).
+# Grepped clean before starting: no other `lines/*.toml` file lists Thames
+# Ditton or Hampton Court.
+#
+# ============================================================================
+# SEGMENTS - and the Hampton Court Junction / New Guildford Line question
+# ============================================================================
+#   WAT - CLJ - WIM - SUR | THD - HMC
+#   [--- swr-trunk-waterloo ---|-- swr-hampton-court-branch --]
+#                          junction
+#
+# `swr-trunk-waterloo` is reused verbatim from every sibling swr-*.toml file
+# for the Waterloo-Surbiton approach. Hampton Court Junction itself - where
+# this branch actually leaves the South West Main Line - has no CRS code
+# and is not a passenger stop, so per the shared-trunk rule of thumb (and
+# matching swr-new-guildford.toml's own identical treatment of this same
+# junction) the boundary is drawn at the nearest real station, Surbiton;
+# this file's own exclusive segment starts at the next real station, Thames
+# Ditton.
+#
+# swr-new-guildford.toml's own header states its route "branches from the
+# South West Main Line at Hampton Court Junction (near Surbiton)" too -
+# i.e. both this branch and the New Guildford line are commonly described
+# against the same named junction. This task's own Wikipedia research for
+# THIS file's article did not surface a route diagram confirming genuine
+# shared track between the two beyond that shared name (the New Guildford
+# line's own physical divergence, per its own already-sourced infobox, then
+# heads towards Hinchley Wood/Claygate/Oxshott - a different compass
+# direction to this branch's own Thames Ditton/Hampton Court, and the two
+# do not share any station). Treated as station overlap only at Surbiton
+# (already the established, multi-file "swr-trunk-waterloo" station), not a
+# shared segment name - the same "real junction, no sourced shared track
+# beyond it" judgment swr-west-of-england.toml's own Salisbury note makes
+# for gwr-wessex-main.toml.
+
+match_keywords = ["Hampton Court branch", "Hampton Court line"]
+# The line's own Wikipedia article name plus one close variant. Grepped
+# clean against every other file's match_keywords before adding - no
+# collision (the "Hampton Court" phrase appears only in other files' plain
+# comments, never inside a match_keywords array).
+
+sample_stations = ["THD", "HMC"]
+# Both stations on this line's own wholly exclusive segment - no other line
+# in the catalogue touches either.
+
+destination_crs_filter = ["HMC"]
+# Every booked working on this short branch is a there-and-back Waterloo <->
+# Hampton Court service (per the infobox's own termini) - a clean,
+# unambiguous advertised destination, and both sample stations are
+# exclusive to this line (see above), so the filter carries no risk of
+# dropping a real sample the way an unverified filter did in an earlier
+# draft of swr-chessington.toml. Matches swr-netley-line.toml's/
+# swr-new-guildford.toml's own precedent for a short branch with one clean
+# terminus.
+
+# Commuter line, same tuning as its Waterloo-suburban siblings
+# (swr-kingston-loop.toml, swr-chessington.toml, swr-new-guildford.toml).
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - Berrylands (BRS): checked and confirmed not on this branch (it sits on
+#   the SWML between New Malden and Surbiton) - the same finding
+#   swr-kingston-loop.toml's/swr-chessington.toml's own scope notes already
+#   record. Still physically closed for platform replacement per those
+#   files' own notes at the time they were written.
+# - The New Guildford line (Hinchley Wood onward): swr-new-guildford.toml -
+#   see the SEGMENTS note above for why no segment is shared with it here.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Surbiton. Hampton Court Junction, where this line's own route diverges
+# from the South West Main Line, is under a mile further on and has no CRS
+# code - per the shared-trunk rule of thumb, the boundary is drawn here,
+# the nearest real station, and this line's exclusive segment starts at the
+# next station, Thames Ditton. See the SEGMENTS section above for why this
+# is treated as station overlap only, not a shared segment, with
+# swr-new-guildford.toml's own use of the same junction's name.
+
+[[stations]]
+crs = "THD"
+role = "minor"
+segment = "swr-hampton-court-branch"
+# Thames Ditton.
+
+[[stations]]
+crs = "HMC"
+role = "terminus"
+segment = "swr-hampton-court-branch"
+# Hampton Court. This line's own terminus. Distinct from Hampton (London,
+# HMP, swr-shepperton-branch.toml) and Hampton Wick (HMW,
+# swr-kingston-loop.toml) - see CRS sourcing note above.

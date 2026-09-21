@@ -1,0 +1,251 @@
+id = "northern-pontefract-line"
+name = "Pontefract Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# --- Part B (Yorkshire real-world-sanity review, 2026-09-21) ---
+# CFD (Castleford), KNO (Knottingley) and PFR (Pontefract Baghill) were
+# confirmed absent catalogue-wide before starting this file (grepped
+# every `lines/*.toml`). This file fills that gap.
+#
+# Route: Wikipedia's own "Pontefract line" article (raw route-diagram data,
+# fetched 2026-09-21) confirms a genuinely Y-shaped route -- "The route
+# links Wakefield and Leeds with Goole, via Pontefract" -- two separate
+# starting approaches (Leeds-Woodlesford-Castleford-Glasshoughton, and
+# Wakefield Westgate-Wakefield Kirkgate-Streethouse-Featherstone-Pontefract
+# Tanshelf) that converge at Pontefract Monkhill and continue as one route
+# through Knottingley to Goole. Confirmed genuinely current (not just a
+# historical route-diagram artefact) by the same article's own service
+# description: "Both services now run hourly to Leeds from Knottingley;
+# this provides a combined half-hourly service between Knottingley,
+# Pontefract Monkhill and Leeds" -- operated by Northern Trains using Class
+# 158 units.
+#
+# CRS verification: every named station cross-checked against
+# https://ds.cursed.solutions/api/stations?q=<name>. Several of the
+# article's own named stations are CLOSED and correctly omitted below --
+# Leeds Hunslet Lane, Hunslet, Methley North/Junction/South, Altofts and
+# Whitwood, Castleford Cutsyke (Leeds approach, same historical closures
+# already confirmed in `northern-hallam-line.toml`'s own research) and
+# Crofton, Sharlston (Wakefield approach) -- none returned a live result
+# ("Crofton" only matched the unrelated "Crofton Park" in south London,
+# confirming no live Yorkshire Crofton stop exists today). LDS, WDS and CFD
+# reused unchanged from `northern-hallam-line.toml`'s own verified entries;
+# WKF/WKK reused unchanged from `northern-wakefield-line.toml`'s/
+# `northern-hallam-line.toml`'s own verified entries. TIPLOCs omitted
+# throughout -- none confirmed to a second source this session.
+#
+# Pontefract Baghill (PFR), named in this task's own brief, is real and
+# open but is NOT on this file's own route -- it sits on a different line
+# (the Wakefield line's own Sheffield fork, per `northern-wakefield-
+# line.toml`'s own scope-boundary note on Fitzwilliam/the Doncaster fork,
+# and per Wikipedia's own "Pontefract Baghill railway station" article,
+# which places it on "the line between Wakefield and Goole" via a
+# different, more southerly alignment than this file's own Pontefract
+# Monkhill-based route). Not added here -- flagged so a future reader
+# doesn't assume it belongs on this file's own station list just because
+# it shares the town name with Pontefract Monkhill/Tanshelf.
+#
+# --- Segment/overlap decisions ---
+# LDS/WDS/CFD (Leeds approach): genuine physical track-sharing with
+# `northern-hallam-line.toml`; see that file's own top-of-file comment for
+# the full reasoning. Segment `northern-leeds-castleford` reused verbatim.
+# Per SCHEMA.md's shared-trunk rule of thumb, Castleford (the junction)
+# carries the shared name; this file's own exclusive Leeds-approach segment
+# (`northern-pontefract-leeds`) starts at the next station, Glasshoughton.
+#
+# REVIEW2 FIX (2026-09-21): the Wakefield approach is ALSO a genuine
+# Leeds-originating branch, not a Wakefield-Westgate-terminating stub --
+# Knottingley's own Wikipedia article ("one runs via Castleford and the
+# other via Featherstone and Wakefield Westgate", both "to Leeds") confirms
+# both of this file's own two approaches genuinely start/end at Leeds. The
+# Wakefield approach's own Leeds-Outwood-Wakefield Westgate stretch is a
+# genuine shared trunk with `northern-wakefield-line.toml` (which already
+# modelled this exact stretch), not mere station overlap -- WKF below now
+# carries a new, narrower `northern-outwood-wakefield-trunk` segment name,
+# shared with that file (see its own matching REVIEW2 FIX note). This
+# file's own exclusive Wakefield-approach segment
+# (`northern-pontefract-wakefield`) now starts one station later, at
+# Wakefield Kirkgate, per the shared-trunk rule of thumb. Leeds (LDS)
+# itself is NOT repeated as a second `[[stations]]` entry for this branch:
+# it's already modelled once, above, as the Castleford approach's own
+# terminus, and this catalogue's convention is one entry per CRS code per
+# file -- `northern-wakefield-line.toml`'s own LDS entry carries the new
+# shared segment name instead, so the genuine "both approaches meet at
+# Leeds" fact is still represented, just not by literally duplicating this
+# file's own LDS row (documented in more detail on the WKF entry below, and
+# on `northern-wakefield-line.toml`'s own LDS entry).
+#
+# REVIEW3 FIX (2026-09-21): Outwood (OUT) itself is NOT a calling point on
+# this branch and is correctly not modelled as a `[[stations]]` entry --
+# see the full write-up on the WKF entry below. The shared trunk name still
+# reflects genuine physical track-sharing (this branch's real train runs
+# over the Outwood stretch non-stop), it just doesn't imply a stop there.
+#
+# WKK (Wakefield Kirkgate) is also a station on `grand-central-bradford.
+# toml`/`northern-hallam-line.toml` -- a different physical approach, so
+# station-overlap only, no segment shared, matching this catalogue's
+# standard cross-file treatment.
+#
+# No other catalogue file reaches Glasshoughton, Pontefract Monkhill,
+# Knottingley, Whitley Bridge, Hensall, Snaith, Rawcliffe, Goole,
+# Streethouse, Featherstone or Pontefract Tanshelf (grepped before starting
+# this file), so this file's own two exclusive approach segments
+# (`northern-pontefract-leeds`, `northern-pontefract-wakefield`) and its
+# own shared onward segment (`northern-pontefract-goole`, internal to this
+# file only -- not shared with any other file in the catalogue, simply this
+# file's own two approaches merging into one continuation, the same
+# dual-origin shape `northern-airedale.toml`'s LDS/BDQ pair uses) remain
+# genuinely exclusive to this file.
+sample_stations = ["LDS", "WKF", "PFM", "GOO"]
+destination_crs_filter = ["LDS", "GOO"]
+match_keywords = ["Pontefract line", "Pontefract Line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's own `match_keywords` before adding.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Hourly-per-approach, half-hourly combined Knottingley-Leeds service --
+# same values as `northern-hallam-line.toml`'s own comparable-frequency
+# Northern stopper.
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-leeds-castleford"
+# Leeds -- this file's own real terminus for BOTH of its two approaches
+# (Castleford and, per the REVIEW2 FIX note below, Outwood/Wakefield
+# Westgate too), modelled once here on the Castleford approach's own
+# shared segment name; see the top-of-file segment/overlap note for why
+# the Wakefield approach's own Leeds-Outwood stretch is represented via
+# `northern-wakefield-line.toml`'s own LDS entry instead of a second row
+# here.
+
+[[stations]]
+crs = "WDS"
+role = "minor"
+segment = "northern-leeds-castleford"
+# Woodlesford -- shared trunk with `northern-hallam-line.toml`; see the
+# top-of-file comment.
+
+[[stations]]
+crs = "CFD"
+role = "junction"
+segment = "northern-leeds-castleford"
+# Castleford -- shared trunk with `northern-hallam-line.toml`; see the
+# top-of-file comment. This file's own exclusive Leeds-approach segment
+# starts at the next station, Glasshoughton.
+
+[[stations]]
+crs = "GLH"
+role = "minor"
+segment = "northern-pontefract-leeds"
+# Glasshoughton.
+
+[[stations]]
+crs = "WKF"
+role = "junction"
+segment = "northern-outwood-wakefield-trunk"
+# Wakefield Westgate -- also a `northern-wakefield-line.toml`/
+# `lner-leeds.toml` station via a different physical approach; see the
+# top-of-file comment. REVIEW2 FIX (2026-09-21): no longer this branch's
+# own terminus (role changed from `terminus` to `junction`) and no longer
+# this file's own exclusive segment -- genuinely shared trunk with
+# `northern-wakefield-line.toml` as far back as Leeds; this file's own
+# exclusive Featherstone/Pontefract-bound segment
+# (`northern-pontefract-wakefield`) now starts at the next station,
+# Wakefield Kirkgate, per the shared-trunk rule of thumb.
+#
+# REVIEW3 FIX (2026-09-21): Outwood (OUT) is NOT modelled as a calling
+# point on this branch -- a prior fix wrongly added it as a `[[stations]]`
+# entry here. Independent re-verification found three separate sources
+# contradicting that: Wakefield Westgate's own Wikipedia Services section
+# states the Knottingley-originating Leeds train is the ONE of Wakefield
+# Westgate's 3tph Leeds services that does NOT call at Outwood (the other
+# 2tph, Doncaster- and Sheffield-stoppers, do); Outwood's own Services
+# section independently confirms its calling trains are the Doncaster and
+# Sheffield stoppers, not the Knottingley one; and Outwood's routebox only
+# lists a `Wakefield Line` previous/next pair, with no Pontefract-line
+# routebox at all. The physical track WKF-Outwood-LDS genuinely is the
+# same shared trunk `northern-wakefield-line.toml` models (this branch's
+# real Knottingley-Leeds service runs over it non-stop past Outwood), so
+# WKF correctly stays on the shared `northern-outwood-wakefield-trunk`
+# name -- it's the OUT calling-point claim specifically that was wrong,
+# now removed.
+
+[[stations]]
+crs = "WKK"
+role = "major"
+segment = "northern-pontefract-wakefield"
+# Wakefield Kirkgate -- also a `grand-central-bradford.toml`/
+# `northern-hallam-line.toml` station via a different physical approach;
+# see the top-of-file comment.
+
+[[stations]]
+crs = "SHC"
+role = "minor"
+segment = "northern-pontefract-wakefield"
+# Streethouse.
+
+[[stations]]
+crs = "FEA"
+role = "minor"
+segment = "northern-pontefract-wakefield"
+# Featherstone.
+
+[[stations]]
+crs = "POT"
+role = "minor"
+segment = "northern-pontefract-wakefield"
+# Pontefract Tanshelf.
+
+[[stations]]
+crs = "PFM"
+role = "junction"
+segment = "northern-pontefract-goole"
+# Pontefract Monkhill -- where this file's own Leeds and Wakefield
+# approaches converge; see the top-of-file comment. Also a
+# `grand-central-bradford.toml` station (that file's own `gc-bradford`
+# segment, a different physical approach/operator) -- station-overlap
+# only, matching this catalogue's standard cross-operator treatment.
+
+[[stations]]
+crs = "KNO"
+role = "major"
+segment = "northern-pontefract-goole"
+# Knottingley -- the combined half-hourly Leeds service's own real
+# terminus per the service-pattern citation above; some workings continue
+# on to Goole.
+
+[[stations]]
+crs = "WBD"
+role = "minor"
+segment = "northern-pontefract-goole"
+# Whitley Bridge.
+
+[[stations]]
+crs = "HEL"
+role = "minor"
+segment = "northern-pontefract-goole"
+# Hensall.
+
+[[stations]]
+crs = "SNI"
+role = "minor"
+segment = "northern-pontefract-goole"
+# Snaith.
+
+[[stations]]
+crs = "RWC"
+role = "minor"
+segment = "northern-pontefract-goole"
+# Rawcliffe.
+
+[[stations]]
+crs = "GOO"
+role = "terminus"
+segment = "northern-pontefract-goole"
+# Goole.

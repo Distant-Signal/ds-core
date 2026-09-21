@@ -1,0 +1,187 @@
+id = "northern-huddersfield"
+name = "Huddersfield Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# --- Split out of `northern.toml` (Yorkshire real-world-sanity review,
+# 2026-09-21) ---
+# `northern.toml` (the "operator" catch-all) used to include a Stalybridge-
+# Huddersfield-Dewsbury fragment on its own `northern-transpennine` segment,
+# with no station list continuing it to either genuine end of the real
+# route -- an unconnected stub, not a real, complete line. This file gives
+# that real corridor -- the Huddersfield line proper -- its own genuine
+# station list and a correct name. It is ADDITIVE: `northern.toml` itself
+# is deliberately left unchanged (still carrying its own SYB/HUD/DEW
+# entries on `northern-transpennine`) rather than having those stations
+# removed, because `northern-transpennine` is not shared with any other
+# file in this catalogue and removing it risked no regression, but this
+# file's own station list is far more complete on its real extent (it
+# fills in Deighton, Mirfield, Ravensthorpe, Batley, Morley and Cottingley,
+# none of which `northern.toml` ever listed) and gives this real route a
+# correct, dedicated name -- see `northern.toml`'s own updated top-of-file
+# comment for the fuller restructuring decision.
+#
+# REVIEW2 FIX (2026-09-21): this file originally extended all the way west
+# to Manchester Victoria (Ashton-under-Lyne/Stalybridge/Mossley/Greenfield/
+# Marsden/Slaithwaite), modelled as a Northern (`NT`) service throughout.
+# Fresh Wikipedia research on the "Huddersfield line" article confirms this
+# was wrong: "Northern services calling at the smaller stations on the
+# section between Greater Manchester and Huddersfield were transferred to
+# TPE" at the May 2018 timetable change -- Northern does NOT operate west
+# of Huddersfield on this corridor today; only TransPennine Express does
+# (already correctly modelled, with those exact stations, in
+# `tpe-north-wakefield.toml`). Trimmed to this file's real extent:
+# Huddersfield to Leeds only. The removed western stations (MCV, AHN, SYB,
+# MSL, GNF, MSN, SWT) are not otherwise lost from the catalogue -- they
+# remain correctly modelled as TPE stations in `tpe-north-wakefield.toml`.
+# The Huddersfield-Leeds half re-verified genuinely Northern-served: the
+# same article states "local services on the route have been operated by
+# the Northern franchise" for this eastern stretch, distinct from the
+# western stretch's 2018 transfer to TPE.
+#
+# Route and CRS verification: Wikipedia's own "Huddersfield line" article
+# (fetched 2026-09-21) gives the full historical route list including
+# Huddersfield-Leeds; each named station was cross-checked against
+# https://ds.cursed.solutions/api/stations?q=<name>. Bradley (on the
+# Huddersfield-Leeds stretch) is a historical stop, CLOSED and correctly
+# omitted below -- it returned no result from the stations API, confirming
+# no live CRS/current service exists for it. The stations API returning a
+# result only confirms a CRS code is live in the reference data, not that a
+# station is currently open for passengers -- see the REVIEW3 FIX note on
+# Ravensthorpe below for a case where that distinction mattered. TIPLOCs
+# omitted throughout -- none confirmed to a second source this session.
+#
+# Electrification: per Wikipedia's own article, this line "is currently
+# subject to the Transpennine Route Upgrade" with full electrification
+# proposed but not yet complete/funded to a confirmed date -- kept
+# "regional" rather than "commuter" for the same reason
+# `northern-harrogate-line.toml` was (see that file's own category-check
+# comment): not yet electrified end to end, despite reasonable frequency.
+#
+# --- Operator mix and segment/overlap decisions ---
+# This file models Northern's own `NT` service only, matching this
+# catalogue's one-operator-per-file convention elsewhere (`hull-trains.
+# toml` vs `lner-hull.toml` on the same King's Cross-Hull track,
+# `northern-harrogate-line.toml` vs `lner-leeds.toml`'s Harrogate
+# workings). `tpe-north.toml` already covers TPE's own Manchester
+# Victoria-Huddersfield-Leeds-York-Newcastle "North" route over the same
+# physical track (HUD/LDS both appear there too, on that file's own
+# single `tpe-north` segment) -- per this catalogue's established
+# cross-operator convention, station-overlap only, no segment name shared
+# with that file.
+#
+# MIR (Mirfield) is also a `grand-central-bradford.toml` station (that
+# file's own `gc-bradford` segment) -- a different physical approach
+# (Grand Central's own Bradford-Wakefield-Doncaster-London route), so
+# station-overlap only, no segment shared.
+#
+# DEW (Dewsbury) and HUD (Huddersfield) are also `northern.toml` stations
+# on that file's own `northern-transpennine` segment -- see the top-of-file
+# note above for why that overlap is deliberately left as station-overlap
+# only (not merged into one file, not segment-shared) rather than fixed by
+# editing `northern.toml`.
+#
+# LDS (Leeds) is station-overlap-only with every other Leeds-terminating
+# file in this catalogue (`northern-airedale.toml`/`northern-wharfedale.
+# toml`'s `northern-shipley-trunk`, `lner-leeds.toml`, `northern-harrogate-
+# line.toml`, `northern-leeds-selby.toml`, `northern-wakefield-line.toml`,
+# `northern.toml`'s own `northern-yorkshire`, `tpe-north.toml`), each a
+# physically distinct approach into the same station -- this file's own
+# entry keeps its own exclusive segment name throughout.
+#
+# Every station below uses this file's own single exclusive segment,
+# `northern-huddersfield` -- no genuine, currently-modelled
+# same-operator physical track-sharing was found anywhere on this route.
+sample_stations = ["HUD", "DEW", "LDS"]
+destination_crs_filter = ["HUD", "LDS"]
+match_keywords = ["Huddersfield line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's own `match_keywords` before adding.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Local stopping service sharing infrastructure with TPE's own faster
+# service -- tuned thresholds following `northern-harrogate-line.toml`'s
+# comparable-density precedent (that file left thresholds at catalogue
+# defaults; this file's own service is somewhat sparser end-to-end with a
+# genuine trans-Pennine hill section, so the same lighter tuning as
+# `northern-buxton-line.toml` is used instead).
+
+[[stations]]
+crs = "HUD"
+role = "terminus"
+segment = "northern-huddersfield"
+# Huddersfield -- this file's own western terminus (review2 fix,
+# 2026-09-21): the line continues west towards Manchester Victoria via
+# Ashton-under-Lyne/Stalybridge/Mossley/Greenfield/Marsden/Slaithwaite, but
+# Northern does not operate that stretch (transferred to TransPennine
+# Express in May 2018; see `tpe-north-wakefield.toml`) -- see the
+# top-of-file REVIEW2 FIX note. Also a `northern.toml`
+# (`northern-transpennine`), `northern-penistone.toml` and `tpe-north.toml`
+# station; see the top-of-file note above. Tagged `terminus` here (this
+# file's own real extent), matching `northern-penistone.toml`'s own HUD
+# entry (also tagged `terminus`, from that file's own perspective);
+# `tpe-north-wakefield.toml`'s own HUD entry instead tags it `junction`,
+# describing that file's own different branch-divergence perspective.
+
+[[stations]]
+crs = "DHN"
+role = "minor"
+segment = "northern-huddersfield"
+# Deighton.
+
+[[stations]]
+crs = "MIR"
+role = "minor"
+segment = "northern-huddersfield"
+# Mirfield -- also a `grand-central-bradford.toml` station; see the
+# top-of-file note above.
+#
+# REVIEW3 FIX (2026-09-21): Ravensthorpe (RVN), the next real station
+# towards Dewsbury, is CLOSED as of today and correctly omitted here --
+# a prior fix wrongly kept it on the assumption that the stations API
+# returning a result meant it was open. Ravensthorpe's own Wikipedia
+# article gives an infobox closure date of 13 December 2025, with a
+# planned reopening ~200m to the west in summer 2028 as part of the
+# Transpennine Route Upgrade. The station remaining in the live reference
+# data (so the API still resolves its CRS) does not mean it currently has
+# a passenger service -- this file's own stated convention is to omit
+# closed stations regardless of API presence (see the Bradley note above).
+# Worth re-adding once/if the 2028 reopening happens.
+
+[[stations]]
+crs = "DEW"
+role = "major"
+segment = "northern-huddersfield"
+# Dewsbury -- also a `northern.toml` station on that file's own
+# `northern-transpennine` segment; see the top-of-file note above.
+
+[[stations]]
+crs = "BTL"
+role = "minor"
+segment = "northern-huddersfield"
+# Batley -- previously absent catalogue-wide.
+
+[[stations]]
+crs = "MLY"
+role = "minor"
+segment = "northern-huddersfield"
+# Morley -- previously absent catalogue-wide.
+
+[[stations]]
+crs = "COT"
+role = "minor"
+segment = "northern-huddersfield"
+# Cottingley -- previously absent catalogue-wide. Not to be confused with
+# Cottingham (CGM) near Hull, on `hull-trains.toml`/`northern-hull-
+# scarborough.toml` -- a different, similarly-named station.
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-huddersfield"
+# Leeds -- station-overlap only with several other files; see the
+# top-of-file note above.

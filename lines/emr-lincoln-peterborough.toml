@@ -1,0 +1,222 @@
+id = "emr-lincoln-peterborough"
+name = "Peterborough - Lincoln - Doncaster"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "EM",  # East Midlands Railway -- primary operator, Peterborough-Lincoln
+  # and Lincoln-Doncaster.
+  "NT",  # Northern -- co-operator on the Lincoln-Doncaster stretch only,
+  # per the sourcing below. Reused verbatim from `northern.toml`/
+  # `northern-sheffield-lincoln.toml`, an already-verified fact.
+]
+
+# REVIEW PROVENANCE (2026-09-21, Midlands EMR/WMR/LNWR sanity review): named
+# as a real coverage gap -- Sleaford and Spalding (SPA, absent
+# catalogue-wide at the start of this task) had no line file. While
+# researching this gap, this task also checked the adjacent, brief-flagged
+# "Lincoln-Doncaster" gap for overlap first, per the brief's own
+# instruction -- see point 3 below for why this file folds both in as one
+# route rather than two files.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Peterborough to
+# Lincoln Line" and "Doncaster to Lincoln Line" articles, cross-checked
+# against the "East Midlands Railway" article's own Services route table):
+#   1. Peterborough-Lincoln: double track throughout, not electrified
+#      (though it connects to 25kV AC OHLE at the Peterborough end via the
+#      ECML). Following a 2015 upgrade it also serves as a 24-hour
+#      diversionary route for ECML traffic (freight and occasional
+#      passenger), separate from its own local passenger service. Current
+#      stations, Peterborough to Lincoln: Peterborough, [Peakirk, St James
+#      Deeping, Littleworth -- all historically closed, confirmed via this
+#      app's own station-lookup endpoint returning no match for any of the
+#      three], Spalding, Sleaford, Ruskington, Metheringham, Lincoln. "All
+#      minor stations closed on Sundays" per the article. Operators named:
+#      East Midlands Railway (the genuine local calling service this file
+#      models) and London North East Railway (the diversionary/occasional
+#      use described above, not a regular calling-pattern service -- not
+#      added to `operators` on that basis, matching this catalogue's
+#      convention of only listing operators whose trains actually call at
+#      these stations as a matter of course).
+#   2. East Midlands Railway's own Services table corroborates, listing a
+#      "Peterborough - Lincoln" row at "1 [tph], calling at Spalding,
+#      Sleaford, Ruskington, Metheringham" -- matching the infobox route
+#      exactly.
+#   3. Lincoln-Doncaster overlap check (per the brief's own instruction):
+#      the "Doncaster to Lincoln Line" Wikipedia article's own Services
+#      section states plainly: "Services on the line are provided by East
+#      Midlands Railway and Northern, with a few continuing through Lincoln
+#      to the Peterborough-Lincoln line" -- i.e. this is not a separate,
+#      unrelated service, but a genuine extension of a subset of this same
+#      Peterborough-Lincoln working continuing on past Lincoln towards
+#      Doncaster. The EMR Services table's own row for this direction is
+#      "Lincoln - Doncaster: 1/2 [tph]" (half the Peterborough-Lincoln
+#      leg's own frequency), consistent with "a few continuing through"
+#      rather than every working. Modelled here as one file with Lincoln as
+#      the real-world reconvergence/extension point, matching this
+#      catalogue's established precedent for a single trunk-plus-partial-
+#      extension shape (e.g. `wmr-chase-line.toml`'s Walsall/Rugeley split,
+#      `lnwr-birmingham-crewe.toml`'s Y-shape) rather than authoring a
+#      second, thinner file for a route that isn't a genuinely independent
+#      service.
+#   4. Doncaster-Lincoln's own currently-open station list was independently
+#      re-derived rather than trusted from the article's own route-diagram
+#      prose (which lists many long-closed historical halts, e.g.
+#      Bessacarr Halt, Finningley, Park Drain, Haxey and Epworth,
+#      Misterton, Walkeringham, Beckingham, Lea, Stow Park, Skellingthorpe):
+#      each candidate name was checked individually against this app's own
+#      station-lookup endpoint (ds.cursed.solutions/api/stations?q=<name>,
+#      2026-09-21). Only Doncaster, Gainsborough Lea Road and Saxilby
+#      returned a match between Lincoln and Doncaster -- every other name in
+#      the article's route diagram is a real, but currently-closed,
+#      historical station, correctly omitted per the "currently open,
+#      currently served" bar this catalogue applies elsewhere (e.g.
+#      `wmr-darlaston-line.toml`'s South Staffordshire line note,
+#      `lnwr-birmingham-crewe.toml`'s Task 9.2 closed-station spot-checks).
+#   5. Gainsborough Lea Road and Saxilby are ALSO `northern-sheffield-
+#      lincoln.toml` stations, on that file's own approach from Retford (a
+#      different, sourced, currently-open route to the same two stations,
+#      not the Doncaster-direct approach this file models) -- that file's
+#      own comment already flags this exact EMR Doncaster-Lincoln gap as
+#      "a real, sourced, documented gap for a future EMR batch." See the
+#      segment-sharing ruling on the Saxilby entry below for why no segment
+#      name is shared despite the genuine station overlap.
+#
+# CRS codes: PBO reused verbatim from `lner-lincoln.toml`. LCN reused
+# verbatim from `emr-nottingham-lincoln.toml`/`lner-lincoln.toml`/
+# `northern-sheffield-lincoln.toml`. GBL and SXY reused verbatim from
+# `northern-sheffield-lincoln.toml` (already twice-verified there; same
+# physical stations). SPA, SLR, RKT, MGM and DON independently confirmed
+# live via this app's own production station-lookup endpoint
+# (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21), single
+# unambiguous match for each, cross-checked against the Wikipedia article's
+# own station names. No TIPLOC confirmed for any newly-added code to the
+# two-source standard, so `tiploc` is omitted for all of them.
+
+destination_crs_filter = ["PBO", "DON"]
+# The line's two real termini. LCN is deliberately excluded: it is a
+# genuine mid-route junction where a majority of workings from Peterborough
+# actually terminate (per the "1tph" vs "1/2tph" frequency split in source
+# 2/3 above), not merely an intermediate calling point -- including it
+# would have been defensible too, but PBO/DON alone already capture every
+# genuine end-to-end working without risk of over-filtering the more
+# common Peterborough-Lincoln-only departures.
+sample_stations = ["PBO", "SLR", "LCN", "DON"]
+
+match_keywords = ["Peterborough to Lincoln Line", "Peterborough-Lincoln line", "Doncaster to Lincoln Line"]
+# The two underlying Wikipedia article titles, both genuinely describing
+# this one real-world through-working per source 3 above. Grep-checked
+# against every other `lines/*.toml` file's `match_keywords` before adding
+# -- no collision.
+
+# Roughly hourly (Peterborough-Lincoln) thinning to half-hourly... i.e.
+# every two hours (Lincoln-Doncaster) diesel stopping service, with minor
+# stations closed on Sundays -- same frequency-driven tuning
+# `northern-sheffield-lincoln.toml`/`emr-nottingham-lincoln.toml` apply for
+# comparable hourly regional lines, reused verbatim; no per-branch override
+# mechanism exists to tune only the sparser Doncaster extension without
+# misrepresenting the busier Peterborough core, per `wmr-chase-line.toml`'s
+# identical reasoning for its own Walsall/Rugeley split.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Peterborough to Doncaster via Lincoln, ordered south to north.
+[[stations]]
+crs = "PBO"
+role = "terminus"
+segment = "emr-lincoln-peterborough"
+# Peterborough: also an `lner-lincoln.toml` station (LNER's own
+# King's Cross-Lincoln working, via the ECML and Newark Northgate -- a
+# physically distinct route from this line's own direct Peterborough-
+# Lincoln alignment). Station-overlap only.
+
+[[stations]]
+crs = "SPA"
+role = "minor"
+segment = "emr-lincoln-peterborough"
+# Spalding: absent catalogue-wide before this file (grep-checked).
+
+[[stations]]
+crs = "SLR"
+role = "minor"
+segment = "emr-lincoln-peterborough"
+# Sleaford: ALSO an `emr-poacher.toml` station (that file's own
+# Grantham-Skegness Poacher Line route also runs via Sleaford -- a real,
+# genuine crossing point between the two lines, found while regression-
+# testing this file). Station-overlap only: `emr-poacher.toml`'s own
+# segment covers its entire Grantham-Skegness route, not just this one
+# station, the same coarse-granularity mismatch this catalogue documents
+# elsewhere, so no segment name is shared.
+
+[[stations]]
+crs = "RKT"
+role = "minor"
+segment = "emr-lincoln-peterborough"
+# Ruskington.
+
+[[stations]]
+crs = "MGM"
+role = "minor"
+segment = "emr-lincoln-peterborough"
+# Metheringham.
+
+[[stations]]
+crs = "LCN"
+role = "junction"
+segment = "emr-lincoln-peterborough"
+# Lincoln: the real reconvergence/extension point -- a majority of
+# Peterborough-originating workings terminate here, a minority continue on
+# to Doncaster (see source 3 above). Per the shared-trunk rule of thumb the
+# junction stays on this file's own western segment; the exclusive
+# Doncaster-bound continuation starts at the next station. Also an
+# `emr-nottingham-lincoln.toml`/`emr-crewe-derby.toml`/`lner-lincoln.toml`/
+# `northern-sheffield-lincoln.toml` station via other, physically distinct
+# approaches -- station-overlap only with all of those.
+
+# --- Doncaster extension: genuine station overlap with `northern-
+# sheffield-lincoln.toml` at Gainsborough Lea Road and Saxilby (see point 5
+# above), but NOT a shared segment name -- that file's own segment
+# (`northern-sheffield-lincoln`) spans its entire 11-station Sheffield-
+# Lincoln route, not just these two stations, the same coarse-granularity
+# mismatch this catalogue documents elsewhere (e.g. `emr-regional.toml`'s
+# Ruling 1). Whether this file's own Doncaster-direct approach and that
+# file's own Retford-direct approach to Gainsborough Lea Road/Saxilby are
+# genuinely the same physical track or two separate alignments converging
+# at the same two stations was not confirmed to this task's two-source
+# standard -- flagged rather than guessed. This file's own exclusive
+# `emr-lincoln-doncaster` segment name is used for both; an incident at
+# either station still matches `northern-sheffield-lincoln.toml`
+# independently via StationHit regardless. ---
+[[stations]]
+crs = "SXY"
+role = "minor"
+segment = "emr-lincoln-doncaster"
+# Saxilby. Also a `northern-sheffield-lincoln.toml` station -- see the
+# ruling above.
+
+[[stations]]
+crs = "GBL"
+role = "minor"
+segment = "emr-lincoln-doncaster"
+# Gainsborough Lea Road. Also a `northern-sheffield-lincoln.toml` station --
+# see the ruling above.
+
+[[stations]]
+crs = "DON"
+role = "terminus"
+segment = "emr-lincoln-doncaster"
+# Doncaster: absent catalogue-wide before this file (grep-checked). No
+# other `lines/*.toml` file reaches this far west on this line's own
+# approach, so no further overlap to document.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - LNER's occasional diversionary/freight-relief use of the Peterborough-
+#   Lincoln stretch: real, sourced (see point 1 above), but not a genuine
+#   regular calling-pattern service -- not added to `operators`.
+# - The exact physical relationship between this file's own Doncaster-
+#   direct approach to Gainsborough Lea Road/Saxilby and
+#   `northern-sheffield-lincoln.toml`'s own Retford-direct approach to the
+#   same two stations: flagged as unconfirmed in the segment-sharing ruling
+#   above, not modelled as a shared segment on a guess.

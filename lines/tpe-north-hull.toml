@@ -1,0 +1,169 @@
+id = "tpe-north-hull"
+name = "TransPennine Express: North (Hull)"
+mode = "national-rail"
+category = "main-line"
+operators = [
+  "TP",  # TransPennine Express (DfT Operator Ltd)
+]
+
+# Sibling of `tpe-north.toml` and `tpe-north-teesside.toml`/
+# `tpe-north-scarborough.toml` -- see `tpe-north.toml`'s own header comment
+# for the shared "why sibling files, not one broadened file" reasoning.
+#
+# Route, live-verified 2026-09-21 via two independent sources:
+#   - Wikipedia's "TransPennine Express" article, route table: "Liverpool
+#     Lime Street to Hull Paragon", 1 tph, calling at Lea Green, Manchester
+#     Victoria, Stalybridge, Huddersfield, Leeds, Selby, Brough. This is the
+#     route's own official/booked TPE route-table designation, matching this
+#     task's own framing of the gap as "Liverpool-Hull", and is what this
+#     file models as its linear station order below.
+#   - Hull Paragon's own Wikipedia article ("Hull Paragon Interchange"),
+#     Services section: "a Monday-Saturday service of one train per hour to
+#     and from Manchester via Leeds. During daytimes, 5 trains a day call at
+#     Manchester Piccadilly, whereas during Mornings and Evenings, trains
+#     call at Manchester Victoria. Evening trains to [Manchester] Victoria
+#     continue onward to Liverpool Lime Street" (Sundays: hourly to
+#     Manchester Piccadilly only).
+#
+# The two sources describe the same hourly service but frame its western end
+# differently: the route-table row (and this task's own brief) treats the
+# full Liverpool Lime Street extension as the route's real identity, while
+# Hull Paragon's own page shows that, day to day, MOST workings (weekday
+# daytimes and all day Sunday) actually shorten to/from Manchester
+# Piccadilly rather than running the full Victoria/Lea Green/Liverpool
+# extension -- only morning and evening workings use Manchester Victoria at
+# all, and only a subset of the evening ones continue on to Liverpool.
+# Modelled here as one file with Manchester Piccadilly included in
+# `destination_crs_filter` (not as an ordered station -- see below) rather
+# than split into two files, following this catalogue's established
+# convention of not splitting a file over a partial/select-service calling
+# pattern (`grand-central.toml`'s Seaham note, `lner-leeds.toml`'s
+# Peterborough calls) -- the Piccadilly-only workings are a shortening of
+# the same numbered service, not a physically distinct route.
+#
+# Station overlap, no shared segment name -- same policy `tpe-north.toml`
+# itself already set for the MCV/HUD/LDS stretch, applied here for
+# consistency across the whole North-route sibling group (see
+# `tpe-north-teesside.toml`'s identical note for the fuller reasoning). LIV
+# and NLW-adjacent Liverpool-area stations are also on `tpe-north.toml`,
+# `tpe-anglo-scottish.toml` and `tpe-south.toml` (station-overlap only,
+# different Liverpool-side branches in each case).
+#
+# REVIEW2 FIX (2026-09-21): SYB (Stalybridge) was previously claimed here
+# as "also on `northern.toml`/`northern-blackpool.toml`/`northern-glossop-
+# hadfield.toml`" -- verified false by a review pass (a repo-wide grep
+# shows SYB only in `northern.toml`, `northern-huddersfield.toml` (at the
+# time) and `tpe-north-wakefield.toml`, besides this file). That set has
+# since changed again: `northern-huddersfield.toml` was itself corrected in
+# this same review (see that file's own REVIEW2 FIX note) to drop
+# Stalybridge and the rest of the Manchester-end stations, since Northern
+# does not actually operate west of Huddersfield on this corridor (that
+# stretch transferred to TransPennine Express, i.e. to this file, in May
+# 2018). SYB is therefore currently on exactly three files: `northern.toml`,
+# `tpe-north-wakefield.toml` and this one -- re-confirmed via
+# `grep -l 'crs = "SYB"' lines/*.toml` after all other review2 fixes were
+# applied. SYB is explicitly named-but-omitted in `tpe-north.toml`'s own
+# header comment as belonging to a different North-route service -- this
+# file is that service. SBY and BUH are also on `northern-leeds-selby.toml` and
+# `lner-hull.toml`/`hull-trains.toml`; this file's own Selby-Hull stretch
+# runs non-stop through Eastrington/Howden/Wressle/Gilberdyke/Broomfleet/
+# Ferriby/Hessle, all of which `northern-leeds-selby.toml` already models as
+# genuine Northern-only calling points (not called at by TPE), so none of
+# them are added here. HUL is also on `northern-leeds-selby.toml`/
+# `lner-hull.toml`/`hull-trains.toml`. All station-overlap only.
+#
+# CRS codes: LEG, SYB, SBY, BUH, HUL cross-checked against
+# `https://ds.cursed.solutions/api/stations`, 2026-09-21, and reused verbatim
+# from `northern-leeds-selby.toml`/`lner-hull.toml`/`hull-trains.toml` where
+# already present there. MCV, HUD, LDS reused verbatim from `tpe-north.toml`.
+sample_stations = ["LIV", "MCV", "LDS", "HUL"]
+destination_crs_filter = ["LIV", "HUL", "MAN"]
+# Liverpool Lime Street and Hull Paragon are this route's own full-extent
+# termini per the official route table; Manchester Piccadilly is included
+# too because most weekday-daytime and all Sunday workings actually
+# originate/terminate there instead (see the sourcing above) -- omitting it
+# would silently drop the majority of this route's real departures from
+# LDBWS sampling. Manchester Piccadilly is deliberately NOT added to the
+# ordered `stations` list below: it is not on the same physical
+# Liverpool-Manchester Victoria-Stalybridge approach the full-extent service
+# uses, and this catalogue's convention (see the header comment) is to
+# capture a genuine partial-service variant via `destination_crs_filter`
+# rather than force it into the linear station order.
+
+# No match_keywords: same reasoning as `tpe-north.toml` -- "North" and
+# "Hull" are both too generic (Hull is also served by LNER, Hull Trains and
+# Northern), and the bare "TransPennine Express" brand is reserved for
+# operator-level files. Station and operator evidence carries this file
+# instead.
+
+# Same long-distance thresholds as `tpe-north.toml` and its other siblings.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Ordered Liverpool Lime Street -> Lea Green -> Manchester Victoria ->
+# Stalybridge -> Huddersfield -> Leeds -> Selby -> Brough -> Hull Paragon,
+# per the confirmed route above (the full-extent, official route-table
+# pattern; see the header comment for the Manchester Piccadilly variant).
+[[stations]]
+crs = "LIV"
+role = "terminus"
+segment = "tpe-north-hull"
+
+[[stations]]
+crs = "LEG"
+role = "minor"
+segment = "tpe-north-hull"
+# Lea Green.
+
+[[stations]]
+crs = "MCV"
+role = "major"
+segment = "tpe-north-hull"
+
+[[stations]]
+crs = "SYB"
+role = "minor"
+segment = "tpe-north-hull"
+# Stalybridge -- named-but-omitted in `tpe-north.toml`'s own ROUTING
+# CORRECTION note as belonging to a different North-route service; this
+# file is that service.
+
+[[stations]]
+crs = "HUD"
+role = "major"
+segment = "tpe-north-hull"
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "junction"
+segment = "tpe-north-hull"
+# Junction with `tpe-north.toml`/`tpe-north-teesside.toml`/
+# `tpe-north-scarborough.toml` (all continue towards York) -- this route's
+# own exclusive continuation towards Hull starts at the next station,
+# Selby.
+
+[[stations]]
+crs = "SBY"
+role = "junction"
+segment = "tpe-north-hull"
+# Selby -- CRS reused verbatim from `northern-leeds-selby.toml`. Also an
+# `lner-hull.toml`/`hull-trains.toml` King's Cross-approach station;
+# station-overlap only.
+
+[[stations]]
+crs = "BUH"
+role = "minor"
+segment = "tpe-north-hull"
+# Brough -- CRS reused verbatim from `northern-leeds-selby.toml`. This
+# service runs non-stop through Eastrington, Howden, Wressle, Gilberdyke,
+# Broomfleet, Ferriby and Hessle (all genuine Northern-only calling points
+# per `northern-leeds-selby.toml`'s own sourcing) -- deliberately not added.
+
+[[stations]]
+crs = "HUL"
+role = "terminus"
+segment = "tpe-north-hull"
+# Hull Paragon Interchange -- CRS reused verbatim from
+# `northern-leeds-selby.toml`/`lner-hull.toml`/`hull-trains.toml`.

@@ -1,7 +1,7 @@
 id = "northern-glossop-hadfield"
 name = "Glossop/Hadfield Line"
 mode = "national-rail"
-category = "regional"
+category = "commuter"
 operators = ["NT"]
 
 # North West England line-coverage audit (2026-09-21): a real, currently
@@ -20,10 +20,19 @@ operators = ["NT"]
 # 1500 V DC to 25 kV AC." (Wikipedia "Glossop line"; independently confirmed
 # by Ashburys' own article: "The line was electrified at 25 kV AC on 10
 # December 1984; it replaced the 1500 V DC electrification, which was
-# inaugurated on 14 June 1954.") Category "regional" rather than "commuter"
-# per `northern-manchester-southport.toml`'s own precedent that "commuter" is
-# reserved for the electrified Merseyrail metro network specifically, even
-# though this line is itself electrified and frequent.
+# inaugurated on 14 June 1954.")
+#
+# Category correction (Yorkshire/real-world-sanity review, 2026-09-21): was
+# "regional", citing `northern-manchester-southport.toml`'s then-precedent
+# that "commuter" is reserved for the electrified Merseyrail metro network
+# specifically. That blanket rule doesn't survive a real-world-perception
+# check against this specific line's own facts, already stated directly
+# above: 25kV AC electrified throughout the Manchester Piccadilly-Dinting
+# trunk, Class 323 EMUs, 3 trains/hour -- genuinely commuter-frequency
+# electrified running. Re-categorized "commuter" to match (see
+# `northern-airedale.toml`'s own comment for the fuller cross-catalogue
+# reasoning; `northern-manchester-southport.toml` itself, diesel-operated
+# throughout, is unaffected and stays "regional").
 #
 # Route: Manchester Piccadilly - Ashburys - Gorton - Fairfield - Guide
 # Bridge - Flowery Field - Newton for Hyde - Godley - Hattersley -
