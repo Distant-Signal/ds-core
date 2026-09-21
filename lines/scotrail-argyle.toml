@@ -1,0 +1,427 @@
+id = "scotrail-argyle"
+name = "ScotRail Argyle Line (Glasgow)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Split out of the former `scotrail-glasgow-suburban.toml` (Task 10.2 of the
+# Batch 10 ScotRail line-catalogue effort) per a line-definition audit's
+# recommendation (2026-09-21) that found that file -- at 62 stations, the
+# largest in the whole catalogue -- bundling two independently-branded
+# ScotRail lines with their own real-world identities and their own
+# Wikipedia articles ("North Clyde Line" and "Argyle Line (Glasgow)") under
+# one generic "Glasgow Suburban" id. This file models the Argyle Line (the
+# Glasgow Central Low Level-hubbed network, with its Whifflet, Hamilton
+# Circle, Larkhall and Lanark branches); the North Clyde Line (the Glasgow
+# Queen Street Low Level-hubbed network) is now `scotrail-north-clyde.toml`.
+# All sourcing below is carried over unchanged from the original file's own
+# research -- nothing new was fetched for the split itself, only
+# redistributed to whichever line it actually documents.
+#
+# Original Task 10.2 background, preserved: gap analysis source
+# docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "extensive Glasgow suburban electric network
+# (North Clyde, Argyle Line)" -- explicitly listed separately from the
+# Ayrshire Coast/Glasgow South Western Line (Ayr/Stranraer/Girvan), which
+# is its own gap-analysis item and is not modelled here.
+#
+# Category: "commuter", per the original brief's own steer, confirmed
+# rather than assumed -- this network is uniformly dense electric suburban
+# working (multiple trains per hour, short inter-station hops, urban/
+# suburban stopping pattern throughout), unlike `northern.toml`'s
+# "operator" category and unlike `scotrail-central-belt.toml`'s "main-line"
+# category (the Edinburgh-Glasgow flagship inter-city corridor).
+# `thameslink-core.toml` is the closest structural comparison: a dense,
+# multi-branch electric metro-style network under one TOC.
+
+sample_stations = ["GLC", "RUT"]
+match_keywords = ["Argyle Line"]
+# One high-precision phrase per the curation rule against padding
+# match_keywords: the line's own brand name, used consistently in
+# ScotRail/Network Rail incident language and confirmed as the Wikipedia
+# article's own subject ("Argyle Line (Glasgow)", disambiguated from the
+# unrelated Argyle railway line in New South Wales). Doesn't collide with
+# anything else in the catalogue (no other line uses "Argyle"). "North
+# Clyde" -- the original bundled file's other keyword -- now belongs solely
+# to `scotrail-north-clyde.toml`.
+
+# Commuter line: tighter thresholds, following `thameslink-core.toml`'s
+# precedent for a dense multi-branch metro-style network -- a short delay
+# on a service running every 15-30 minutes at peak is more disruptive than
+# the same delay on an hourly regional service. Unchanged from the original
+# bundled file (both halves of that file shared this same override block,
+# and both resulting lines keep it).
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Sources (cross-checked per the plan's Global Constraints; carried
+#     over verbatim from `scotrail-glasgow-suburban.toml`, filtered to what
+#     actually documents this line's own stations) ===
+#
+# Route/branch structure:
+#   - Wikipedia "Argyle Line" (raw wikitext, Route section): confirms the
+#     line's central Glasgow low-level route (Exhibition Centre, Anderston,
+#     Glasgow Green tunnels, Bridgeton, Dalmarnock), its western end
+#     joining North Clyde metals via Singer/Westerton to Dalmuir/Milngavie
+#     (see the scope-boundary note below for how this split handles that
+#     overlap), and its eastern end reaching Rutherglen (where the
+#     Whifflet Line diverges) and on to Motherwell. Operator confirmed as
+#     ScotRail (SR).
+#   - Wikipedia "Dalmuir railway station": confirms Dalmuir is "a large,
+#     five-platform interchange" where North Clyde, Argyle Line and West
+#     Highland Line services meet.
+#   - (Task 3.1, station-catalogue-completeness plan) Wikipedia "Whifflet
+#     Line" (raw wikitext, infobox and Line description sections): confirms
+#     the modern seven-station spur from Rutherglen to Coatbridge Central,
+#     and that it was folded into the Argyle Line's own service pattern
+#     from December 2014.
+#   - (Task 3.1) Every individual station's own Wikipedia article (infobox
+#     + succession box) for the Lanarkshire BRANCH-RESEARCH stations added
+#     by that task -- see the inline comments at each group below for the
+#     specific succession-box citations used to establish adjacency/order.
+#
+# CRS codes: every code below was verified live against National Rail
+# Enquiries (nationalrail.co.uk/stations/<crs>/details.html) and
+# cross-checked against each station's own Wikipedia infobox where fetched.
+# Several initial code guesses across the original bundled file were wrong
+# and caught by this verification pass (e.g. Dalmarnock is DAK not DAL) --
+# underlining why every code here was checked against a live source rather
+# than assumed from memory.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source, matching the optional-field convention already used by
+# `xc-manchester.toml`/`scotrail-central-belt.toml`.
+
+# === Segment-naming coordination with other files ===
+#
+# GLC (Glasgow Central, Low Level) also appears in `scotrail-shotts.toml`,
+# `scotrail-ayrshire.toml` and `tpe-anglo-scottish.toml`, all for their own
+# distinct high-level departures. Station-name overlap only, no genuine
+# track-sharing claim sourced for any of those pairs, so this file's own
+# segment name is not reused from any of them -- station overlap is fine,
+# segment-sharing is a deliberate, sourced choice, per the
+# `xc-south-coast.toml`/`xc-manchester.toml` precedent.
+#
+# `lines/scotrail-shotts.toml` reuses this file's own
+# `scotrail-uddingston-bellshill-trunk` segment name (Uddingston/
+# Bellshill) -- a genuine shared trunk, per Wikipedia's "Shotts line"
+# article ("The line follows the ... West Coast Main Line as far as
+# Uddingston Junction where it branches off to the east. Until Holytown
+# Junction the line [is] used by Argyle Line services"), independently
+# corroborated by both stations' own succession boxes and Bellshill's own
+# Services section. This segment name predates this split (it was already
+# neutral, not prefixed `scotrail-glasgow-suburban-*`) and is unchanged by
+# it.
+#
+# === Scope boundary: this line's own western reach (documented, not
+#     modelled) ===
+#
+# This line's own sourcing above states that Argyle Line services join
+# "North Clyde metals via Singer/Westerton to Dalmuir/Milngavie" -- i.e.
+# some Argyle-branded services physically continue west of Exhibition
+# Centre, via Partick, out over `scotrail-north-clyde.toml`'s own
+# Partick-Dalmuir approach track and Milngavie branch, real track-sharing
+# beyond mere station-name overlap. This split does not model that as a
+# shared segment or add `[[stations]]` entries for it here: unlike the
+# Uddingston/Bellshill trunk above (a clean, single, well-bounded stretch
+# already verified station-by-station), fully representing this overlap
+# would mean deciding, station by station along both the via-Yoker and
+# via-Singer approaches and the whole Milngavie branch, which are
+# genuinely still served by Argyle Line workings today -- a fresh research
+# question this split's own audit did not ask, and a wrong guess here
+# risks the exact kind of invented-topology claim the Global Constraints
+# warn against. Per the `xc-south-coast.toml` precedent ("runs over SWML
+# metals ... but claims neither line's segments ... incidents on the
+# shared track still match both lines by station"), this file leaves that
+# whole corridor to `scotrail-north-clyde.toml` (it is, after all, one of
+# the North Clyde Line's own four western termini per that file's own
+# Wikipedia sourcing) and does not claim it here. `scotrail-north-
+# clyde.toml` documents this same open question from its own side.
+
+# --- Central Glasgow low-level route ---
+
+[[stations]]
+crs = "EXG"
+role = "minor"
+segment = "scotrail-argyle-core"
+
+[[stations]]
+crs = "AND"
+role = "minor"
+segment = "scotrail-argyle-core"
+
+[[stations]]
+crs = "AGS"
+role = "minor"
+segment = "scotrail-argyle-core"
+
+[[stations]]
+crs = "GLC"
+role = "major"
+segment = "scotrail-argyle-core"
+# Glasgow Central (Low Level) -- the Argyle Line's own central Glasgow
+# hub, physically separate from the North Clyde route through Queen
+# Street Low Level. See the segment-naming coordination note above for why
+# this deliberately isn't shared with `scotrail-shotts.toml`/`scotrail-
+# ayrshire.toml`/`tpe-anglo-scottish.toml`'s own high-level GLC entries.
+
+[[stations]]
+crs = "BDG"
+role = "minor"
+segment = "scotrail-argyle-core"
+
+[[stations]]
+crs = "DAK"
+role = "minor"
+segment = "scotrail-argyle-core"
+
+# --- Eastern branch towards Motherwell ---
+#
+# === Task 3.1 BRANCH-RESEARCH: the Lanarkshire branch group ===
+#
+# Fresh research pass (Wikipedia raw wikitext for the "Whifflet Line"
+# article, and individual station infobox/succession-box pages, each CRS
+# code cross-checked live against National Rail Enquiries), replacing the
+# old "not independently verified" scope-boundary note. `grep`-checked
+# against every other `lines/*.toml` file first: none of the 17 CRS codes
+# below appear anywhere else in the catalogue, so this whole branch group
+# is exclusive to this file today.
+#
+# Topology (Wikipedia "Whifflet Line" infobox: start=Glasgow Central,
+# end=Motherwell, "stations = 7" -- matches Carmyle, Mount Vernon,
+# Baillieston, Bargeddie, Kirkwood, Whifflet, Coatbridge Central exactly,
+# once the shared Glasgow Central-Rutherglen trunk above is excluded from
+# the count):
+#   - Whifflet spur (diverges at Rutherglen, per this file's own RUT
+#     comment below): Rutherglen -> Carmyle -> Mount Vernon -> Baillieston
+#     -> Bargeddie -> Kirkwood -> Whifflet -> Coatbridge Central
+#     (terminus). Whifflet's own succession box lists its "next" station
+#     as "Motherwell or Terminus" with no intermediate station -- i.e.
+#     Whifflet is itself a junction: one direction is the short terminus
+#     spur to Coatbridge Central, the other rejoins this file's existing
+#     Rutherglen-Motherwell route (via Uddingston/Bellshill, below) with
+#     no additional stops.
+#   - Hamilton Circle (diverges at Motherwell): Motherwell -> Airbles ->
+#     Hamilton Central -> Hamilton West -> (Blantyre/East Kilbride Line,
+#     out of scope -- see the scope-boundaries note below).
+#   - Larkhall branch (feeds into Hamilton Central): Hamilton Central ->
+#     Chatelherault -> Merryton -> Larkhall (terminus). Source:
+#     Chatelherault and Hamilton Central's own succession boxes ("Hamilton
+#     Circle" / "Larkhall Branch" route labels).
+#   - Lanark branch (diverges at Motherwell, the other side from the
+#     Hamilton Circle): Motherwell -> Shieldmuir -> Wishaw -> Carluke ->
+#     Lanark (terminus). Source: Shieldmuir's own "Services" section --
+#     "The station is served by a ... service between Lanark and Glasgow
+#     Central via Motherwell, Bellshill and Cambuslang" -- and Lanark's own
+#     succession box, confirming it as "the southern terminus of the
+#     Argyle Line, with current services running northbound to Glasgow
+#     Central only." (Wishaw's own succession box additionally shows a
+#     same-named "Argyle Line" route continuing to Holytown -- that is the
+#     Shotts Line, already modelled independently in
+#     `scotrail-shotts.toml`, and is very likely a Wikipedia mislabelling;
+#     it is not reused here.)
+#
+# Segment naming (SCHEMA.md's shared-trunk rule of thumb): Rutherglen and
+# Motherwell themselves stay on the `argyle-east` segment (the junctions);
+# each new branch's own exclusive segment starts at the next station past
+# its junction.
+
+[[stations]]
+crs = "RUT"
+role = "junction"
+segment = "scotrail-argyle-east"
+# Rutherglen: the Whifflet Line diverges here.
+
+[[stations]]
+crs = "CML"
+role = "minor"
+segment = "scotrail-argyle-whifflet-branch"
+# Carmyle: first station on the Whifflet spur out of Rutherglen (Wikipedia
+# succession box: previous Mount Vernon, next Rutherglen; CRS cross-checked
+# against National Rail Enquiries).
+
+[[stations]]
+crs = "MTV"
+role = "minor"
+segment = "scotrail-argyle-whifflet-branch"
+
+[[stations]]
+crs = "BIO"
+role = "minor"
+segment = "scotrail-argyle-whifflet-branch"
+
+[[stations]]
+crs = "BGI"
+role = "minor"
+segment = "scotrail-argyle-whifflet-branch"
+
+[[stations]]
+crs = "KWD"
+role = "minor"
+segment = "scotrail-argyle-whifflet-branch"
+
+[[stations]]
+crs = "WFF"
+role = "junction"
+segment = "scotrail-argyle-whifflet-branch"
+# Whifflet: junction where the short Coatbridge Central terminus spur
+# diverges from the through route back to this file's own Rutherglen-
+# Motherwell corridor (Wikipedia succession box: "previous = Coatbridge
+# Central or Kirkwood; next = Motherwell or Terminus"). Per the
+# shared-trunk rule of thumb, the junction stays on `whifflet-branch`; the
+# terminus spur gets its own exclusive segment starting at the next
+# station, Coatbridge Central.
+
+[[stations]]
+crs = "CBC"
+role = "terminus"
+segment = "scotrail-argyle-coatbridge-spur"
+# Coatbridge Central: terminus of the short spur off Whifflet (Wikipedia
+# succession box: previous Whifflet, no further station). No through route
+# to Hamilton Central -- the real topology is the branch group described
+# in the Task 3.1 BRANCH-RESEARCH comment above.
+
+[[stations]]
+crs = "UDD"
+role = "minor"
+segment = "scotrail-uddingston-bellshill-trunk"
+# Uddingston: on the existing Rutherglen-Motherwell route, past the
+# Whifflet spur's Rutherglen fork and the (unmodelled) Cambuslang
+# (Wikipedia succession box: previous Bellshill, next Cambuslang; CRS
+# cross-checked against National Rail Enquiries). Cambuslang itself is a
+# real, current station in the same position but was not individually
+# verified within the original research pass, so it is left out -- its
+# absence does not break `stations_between()` ordering since Rutherglen
+# and Uddingston remain correctly ordered relative to each other.
+#
+# Genuine physical track sharing (not mere station-name overlap) with
+# `scotrail-shotts.toml`: Wikipedia's own "Shotts line" article states
+# outright "The line follows the ... West Coast Main Line as far as
+# Uddingston Junction where it branches off to the east. Until Holytown
+# Junction the line [is] used by Argyle Line services" -- independently
+# corroborated by Uddingston's own succession box (identical Bellshill/
+# Cambuslang neighbours listed under both a "Shotts Line" and an "Argyle
+# Line" route label) and by Bellshill's own Services section, which lists
+# current "additional peak trains to Anderston via Central L.L." alongside
+# the Shotts-branded Edinburgh service. Tagged with the neutral shared
+# segment name `scotrail-uddingston-bellshill-trunk` (mirroring
+# `scotrail-inverness-dingwall-trunk`'s precedent for a segment owned by
+# neither sibling file specifically), reused verbatim by `scotrail-
+# shotts.toml`'s own UDD entry. Rutherglen and Motherwell themselves stay
+# on `argyle-east` -- neither is a `[[stations]]` entry in `scotrail-
+# shotts.toml`, so no sharing claim applies to them.
+
+[[stations]]
+crs = "BLH"
+role = "minor"
+segment = "scotrail-uddingston-bellshill-trunk"
+# Bellshill: between Uddingston and Motherwell (Wikipedia succession box:
+# previous Motherwell, next Uddingston). Same shared-trunk reasoning as UDD
+# above -- see that entry's comment for the sourcing. The Shotts line's own
+# "Until Holytown Junction the line [is] used by Argyle Line services"
+# quote covers Bellshill too (it sits between Uddingston and Holytown), so
+# this station is also tagged onto `scotrail-uddingston-bellshill-trunk`.
+# Holytown (HLY), the next station past Bellshill on `scotrail-
+# shotts.toml`'s own line, is not a `[[stations]]` entry here, so the
+# shared segment does not extend past Bellshill in this file today.
+
+[[stations]]
+crs = "MTH"
+role = "junction"
+segment = "scotrail-argyle-east"
+# Motherwell: junction with the West Coast Main Line, which
+# `west-coast-main-line.toml` does not currently model this far north
+# (its northernmost modelled station is Carlisle) -- no live schema-level
+# overlap to reconcile today. Also the fork point for this file's own
+# Hamilton Circle and Lanark branch segments (Wikipedia's own Motherwell
+# succession box lists three incoming Argyle Line directions -- Whifflet,
+# Bellshill/Uddingston, and, per the entries below, Airbles and Shieldmuir
+# outbound).
+
+[[stations]]
+crs = "AIR"
+role = "minor"
+segment = "scotrail-argyle-hamilton-circle"
+# Airbles: first station on the Hamilton Circle out of Motherwell
+# (Wikipedia succession box: previous Motherwell, next Hamilton Central;
+# CRS cross-checked against National Rail Enquiries).
+
+[[stations]]
+crs = "HNC"
+role = "junction"
+segment = "scotrail-argyle-hamilton-circle"
+# Hamilton Central: junction where the Larkhall branch joins the Hamilton
+# Circle (Wikipedia succession box names both a "Hamilton Circle" route via
+# Airbles and a "Larkhall Branch" route via Chatelherault, both terminating
+# here before continuing to Hamilton West). Per the shared-trunk rule of
+# thumb, the junction stays on `hamilton-circle`; the Larkhall branch's own
+# exclusive segment starts at the next station, Chatelherault.
+
+[[stations]]
+crs = "HNW"
+role = "minor"
+segment = "scotrail-argyle-hamilton-circle"
+# Hamilton West: last station on the Hamilton Circle modelled here --
+# Wikipedia's own succession box continues onward to Blantyre and, beyond
+# it, the East Kilbride Line, out of scope (see the scope-boundaries note
+# below).
+
+[[stations]]
+crs = "CTE"
+role = "minor"
+segment = "scotrail-argyle-larkhall-branch"
+# Chatelherault: first station on the Larkhall branch out of Hamilton
+# Central (Wikipedia succession box: previous Merryton, next Hamilton
+# Central; CRS cross-checked against National Rail Enquiries).
+
+[[stations]]
+crs = "MEY"
+role = "minor"
+segment = "scotrail-argyle-larkhall-branch"
+
+[[stations]]
+crs = "LRH"
+role = "terminus"
+segment = "scotrail-argyle-larkhall-branch"
+
+[[stations]]
+crs = "SDM"
+role = "minor"
+segment = "scotrail-argyle-lanark-branch"
+# Shieldmuir: first station on the Lanark branch out of Motherwell
+# (Wikipedia succession box: previous Wishaw, next Motherwell; its own
+# "Services" section confirms "a ... service between Lanark and Glasgow
+# Central via Motherwell, Bellshill and Cambuslang." CRS cross-checked
+# against National Rail Enquiries).
+
+[[stations]]
+crs = "WSH"
+role = "minor"
+segment = "scotrail-argyle-lanark-branch"
+
+[[stations]]
+crs = "CLU"
+role = "minor"
+segment = "scotrail-argyle-lanark-branch"
+
+[[stations]]
+crs = "LNK"
+role = "terminus"
+segment = "scotrail-argyle-lanark-branch"
+# Lanark: Wikipedia's own article confirms it "operates as the southern
+# terminus of the Argyle Line, with current services running northbound to
+# Glasgow Central only."
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - East Kilbride Line: Hamilton West's own Argyle Line succession
+#   continues onward to Blantyre and, beyond it, East Kilbride -- a
+#   separate, currently unmodelled ScotRail line in its own right (like
+#   the Cumbernauld Line off Springburn on `scotrail-north-clyde.toml`),
+#   not part of the original Hamilton Circle/Larkhall/Lanark research
+#   pass. Left out rather than folded in without its own dedicated
+#   verification.
+# - This line's own western reach onto `scotrail-north-clyde.toml`'s
+#   Partick-Dalmuir-Milngavie corridor: real, sourced, deliberately not
+#   modelled as a shared segment -- see the scope-boundary note above.

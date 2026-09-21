@@ -4,7 +4,7 @@ mode = "national-rail"
 category = "regional"
 operators = ["SW"]
 
-destination_crs_filter = ["AON", "BTL", "FNH", "AHT"]
+destination_crs_filter = ["AON", "BTY", "FNH", "AHT"]
 sample_stations = ["AHT", "FNH", "AON"]
 match_keywords = ["Alton line", "Alton branch"]
 
@@ -39,9 +39,20 @@ tiploc = "WOKING"
 role = "junction"
 segment = "swr-trunk-waterloo"
 
+# DATA-AUDIT FIX: "BCE"/"BRACKNL" (Bracknell, Berkshire) was previously
+# listed here but was never actually part of the Alton line - confirmed
+# via real CIF data that it belongs to the entirely separate Waterloo -
+# Reading-via-Ascot "Windsor lines" route. Removed outright rather than
+# corrected, since Bracknell has no place on this line at all.
+#
+# DATA-AUDIT FIX: Ash Vale (AHV) was missing between Woking and
+# Aldershot. Confirmed via Wikipedia's "Alton line" article, which lists
+# only 5 real intermediate stations (Ash Vale, Aldershot, Farnham,
+# Bentley, Alton), and via real CIF data showing 97% of genuine
+# Woking -> Aldershot journeys call here.
 [[stations]]
-crs = "BCE"
-tiploc = "BRACKNL"
+crs = "AHV"
+tiploc = "ASHVALE"
 role = "minor"
 segment = "swr-alton-branch"
 
@@ -57,9 +68,14 @@ tiploc = "FARNHAM"
 role = "minor"
 segment = "swr-alton-branch"
 
+# DATA-AUDIT FIX: this entry previously read crs = "BTL" / tiploc =
+# "BATLEY" - that's real Batley, West Yorkshire, an unrelated station
+# hundreds of miles away with no connection to this line. The actual
+# Alton-line station here is Bentley (Hampshire): CRS BTY, TIPLOC BNTEY
+# (confirmed via railwaydata.co.uk and Wikidata).
 [[stations]]
-crs = "BTL"
-tiploc = "BATLEY"
+crs = "BTY"
+tiploc = "BNTEY"
 role = "minor"
 segment = "swr-alton-branch"
 

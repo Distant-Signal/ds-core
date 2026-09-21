@@ -1,0 +1,248 @@
+id = "tfw-valley-rhymney"
+name = "Rhymney Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+destination_crs_filter = ["RHY"]
+sample_stations = ["CDQ", "RHY"]
+match_keywords = ["Rhymney Line"]
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-north.toml` (Batch 11, Task 11.6), which bundled the
+# Rhymney, Merthyr, Aberdare and Rhondda/Treherbert lines into one
+# over-broad `id`/`name`. A later data-driven catalogue audit recommended
+# splitting that file along its own real-world community-rail branding, and
+# this file is the Rhymney Line's share of that split -- its own standalone,
+# currently-live Wikipedia article (https://en.wikipedia.org/wiki/Rhymney_line,
+# confirmed as of 2026-09-21) made this an easy, undisputed split, unlike the
+# Merthyr/Aberdare question -- see `tfw-valley-merthyr.toml`'s own comments
+# for that 3-vs-4-file reasoning. All content below (station list, sourcing
+# notes, electrification/frequency research) is carried over unchanged from
+# `tfw-valley-lines-north.toml`'s own Rhymney Line material, not re-derived.
+
+# Sourcing note (per the catalogue's "Wikipedia cross-checked against a
+# second independent source" curation standard established across Tasks
+# 11.1-11.5 of the original batch): every CRS code below was independently
+# confirmed twice -- once from that station's own Wikipedia infobox "Station
+# code" field (fetched individually, station by station, not from a bulk
+# route-diagram summary -- see the cautionary note below), and once from a
+# live, verbatim-quoted row of railwaycodes.org.uk's per-letter CRS pages
+# (fetched via raw HTML and grepped directly rather than trusting an AI
+# summary of the page, for the same reason). All matched exactly between the
+# two sources except one disclosed oddity, not invented:
+#   - Lisvane & Thornhill's railwaycodes.org.uk row lists two CRS values in
+#     one cell, "LVT" and "LAT". LVT is confirmed as the live/primary code by
+#     the station's own Wikipedia infobox; LAT is carried in the database as
+#     a secondary/historic alternate and is not used below. (The sibling
+#     Dinas Rhondda dual-code disclosure that used to sit alongside this note
+#     now lives in `tfw-valley-rhondda.toml`, since Dinas Rhondda is on that
+#     branch.)
+#
+# A cautionary methodology note, in the same spirit as `tfw-marches.toml`'s
+# disclosed Ludlow/"LDW" artefact: an early, single bulk fetch of the whole
+# Rhymney Line Wikipedia article (asking for "every station in order with its
+# CRS code" in one pass) returned a table containing several silently wrong
+# codes -- "CQS" for Cardiff Queen Street (the real code, confirmed two ways,
+# is CDQ), "HHI" for Heath High Level (real: HHL), "LLI" for Llanishen (real:
+# LLS), "LLB" for Llanbradach (real: LNB), "HGD" for Hengoed (real: HNG),
+# "BTD" for Brithdir (real: BHD), "TPL" for Tir-Phil (real: TIR), and "PTY"
+# for Pontlottyn (real: PLT). None of these were used -- every station below
+# was re-verified individually against its own Wikipedia infobox plus a live
+# railwaycodes.org.uk row before being written here. This is disclosed so a
+# future editor trusts the sourcing methodology described above (one fetch
+# per station, plus a raw-HTML second source), not any bulk table.
+#
+# TIPLOCs are included for every station because railwaycodes.org.uk's live
+# table gave one directly for all of them, matching the precedent set by
+# `tfw-north-wales-coast.toml` and `tfw-marches.toml`.
+#
+# Category: "commuter", carried over from `tfw-valley-lines-north.toml`'s own
+# framing of this whole network as "structurally more like Merseyrail's
+# two-line metro than a long-distance route" -- see `tfw-valley-merthyr.toml`
+# for the fuller discussion of why the original file bundled these lines
+# together in the first place, now superseded by this split.
+#
+# Confirmed frequency, sourced from the Rhymney Line's own Wikipedia article:
+# "15 minute daytime headway between Bargoed and Cardiff" (4 tph), dropping
+# to "two trains per hour" north of Bargoed over the single-track,
+# passing-loop-equipped stretch through Tir-Phil to Rhymney. `severity_
+# overrides` below sits between `thameslink-core.toml`'s very tight
+# core-metro thresholds (that line runs every ~8 minutes) and this
+# catalogue's default: tighter than default because delays on a 15-minute
+# headway commuter service are proportionately more disruptive than on an
+# hourly regional service, but not as tight as Thameslink.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+
+# Electrification status: the Rhymney Line's own Wikipedia article states
+# electrification "began in March 2025, and was completed in December 2025"
+# -- now fully electrified end to end.
+
+# Cardiff terminus decision: both Cardiff Central (CDF) and Cardiff Queen
+# Street (CDQ) are included below as a shared hub. This needed a deliberate
+# call: the Rhymney Line's own infobox lists its formal termini as only
+# "Cardiff Queen Street" and "Rhymney" (not Cardiff Central) -- a relic of
+# the historic Rhymney Railway's own boundary with the Taff Vale Railway's
+# Cardiff Central approach -- but the same article's own opening sentence
+# describes the line as "running from Cardiff Central... to... Rhymney", and
+# Cardiff Queen Street's own article documents current services from
+# Merthyr, Rhondda and Rhymney all continuing through Queen Street rather
+# than terminating there. This file therefore treats CDF as genuinely served
+# by current Rhymney Line trains, not merely historically adjacent to them.
+#
+# Cardiff hub segment sharing: `tfw-valley-cardiff-hub` below is shared with
+# `tfw-valley-merthyr.toml`, `tfw-valley-rhondda.toml` and
+# `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff Bay Line) --
+# every one of those files' routes genuinely departs from the same two
+# platforms. See `tfw-valley-lines-south.toml`'s own "Cardiff hub
+# segment-sharing decision" comment for the full history of that call, and
+# `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+#
+# Only currently open, passenger-served stations are listed below.
+
+# --- Cardiff hub: shared with `tfw-valley-merthyr.toml`, `tfw-valley-
+# rhondda.toml` and `tfw-valley-lines-south.toml`. See the Cardiff hub
+# segment-sharing note above.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-valley-cardiff-hub"
+
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Queen Street. Also the northern boundary of the Cardiff City Line's
+# own route (Coryton branch) and the Cardiff Bay Line (`tfw-valley-lines-
+# south.toml`'s territory).
+
+# --- Rhymney Line proper: diverges from Cardiff Queen Street via its own
+# corridor (through the Caerphilly Tunnel) rather than via the Taff Vale
+# route the Merthyr/Aberdare/Rhondda lines share. Ordered south to north,
+# Cardiff to Rhymney. Exclusive to this line throughout -- no other file in
+# the catalogue uses this corridor.
+[[stations]]
+crs = "HHL"
+tiploc = "HEATHHL"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Heath High Level.
+
+[[stations]]
+crs = "LLS"
+tiploc = "LLISHEN"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Llanishen.
+
+[[stations]]
+crs = "LVT"
+tiploc = "LTHH"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Lisvane & Thornhill. See the sourcing note above on the LVT/LAT dual-code
+# row.
+
+[[stations]]
+crs = "CPH"
+tiploc = "CRPHLY"
+role = "major"
+segment = "tfw-valley-rhymney"
+# Caerphilly. Historically a four-way junction (Rhymney Railway, Pontypridd
+# Caerphilly & Newport Railway, Brecon & Merthyr Railway), but its own
+# Wikipedia article confirms those other junctions closed and the station
+# was simplified to a two-platform through station in 1970 -- no live
+# segment-sharing question arises here today.
+
+[[stations]]
+crs = "ABE"
+tiploc = "ABER"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Aber.
+
+[[stations]]
+crs = "ECP"
+tiploc = "ERGNCHP"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Energlyn & Churchill Park.
+
+[[stations]]
+crs = "LNB"
+tiploc = "LLBRDCH"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Llanbradach.
+
+[[stations]]
+crs = "YSM"
+tiploc = "YSTRADM"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Ystrad Mynach.
+
+[[stations]]
+crs = "HNG"
+tiploc = "HENGOED"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Hengoed.
+
+[[stations]]
+crs = "PGM"
+tiploc = "PENGAM"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Pengam.
+
+[[stations]]
+crs = "GFF"
+tiploc = "GLFCHFR"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Gilfach Fargoed.
+
+[[stations]]
+crs = "BGD"
+tiploc = "BARGOED"
+role = "major"
+segment = "tfw-valley-rhymney"
+# Bargoed. The Rhymney Line's confirmed 15-minute (4 tph) daytime headway
+# runs as far north as here; north of Bargoed the line is single track and
+# drops to 2 tph -- see the severity_overrides sourcing note above.
+
+[[stations]]
+crs = "BHD"
+tiploc = "BRITHDR"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Brithdir.
+
+[[stations]]
+crs = "TIR"
+tiploc = "TIRPHIL"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Tir-Phil. Has the single-track stretch's passing loop, per the Rhymney
+# Line's own Wikipedia article.
+
+[[stations]]
+crs = "PLT"
+tiploc = "PNTLTYN"
+role = "minor"
+segment = "tfw-valley-rhymney"
+# Pontlottyn.
+
+[[stations]]
+crs = "RHY"
+tiploc = "RHYMNEY"
+role = "terminus"
+segment = "tfw-valley-rhymney"
+# Rhymney: the line's northern terminus, confirmed via its own Wikipedia
+# article ("is the terminus of the Rhymney Line").

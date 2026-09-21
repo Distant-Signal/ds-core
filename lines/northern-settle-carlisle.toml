@@ -1,0 +1,256 @@
+id = "northern-settle-carlisle"
+name = "Settle-Carlisle Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# Yorkshire/North East line-coverage batch (2026-09-21 audit). One of the
+# most famous scenic routes in England, yet entirely unmodelled before this
+# file. Leeds to Carlisle, two-hourly, all Northern (Wikipedia's "Settle-
+# Carlisle line" article, infobox: `operator = Northern Trains`; "All
+# passenger services are operated by Northern... apart from temporary
+# diverted services").
+
+sample_stations = ["LDS", "SET", "APP", "CAR"]
+destination_crs_filter = ["LDS", "CAR"]
+match_keywords = ["Settle-Carlisle line", "Settle and Carlisle Line"]
+# Both are the line's own branded/article names (Wikipedia's article is
+# titled "Settle-Carlisle line"; Northern's own route-diagram template
+# {{Northern (train operating company) route 7}} calls it "Settle & Carlisle
+# & Bentham lines"). Grepped clean against every other file's own
+# `match_keywords` before adding -- no collision.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+# Two-hourly service ("the Settle and Carlisle Line provides generally
+# two-hourly services between Leeds and Carlisle" -- Skipton railway
+# station's own Wikipedia article, Services section) -- same rationale as
+# `northern-furness.toml`'s comparable hourly-or-worse rural branch: a
+# single delayed/cancelled working is a much bigger share of the day's
+# service than on a metro-frequency line. Note the line itself is mostly
+# double-track ("tracks = Double (except Ribblehead Viaduct)" per the
+# infobox), so this isn't the single-track fragility rationale
+# `northern-furness.toml`/`scotrail-ayrshire.toml` cite -- it's frequency
+# alone driving the tuning here.
+
+# === Route ===
+#
+# Real-world topology is three layers, confirmed against Northern's own
+# published route diagram, {{Northern (train operating company) route 7}}
+# ("Settle & Carlisle & Bentham lines", a Wikipedia-hosted routemap template
+# reproducing Northern's own route-numbering: raw wikitext fetched via
+# Special:Export, ordered station list Leeds-Shipley-Bingley-Keighley-
+# Skipton-Gargrave-Hellifield-Long Preston-[Settle Junction split]-Settle-
+# Horton-in-Ribblesdale-Ribblehead-Dent-Garsdale-Kirkby Stephen-Appleby-
+# Langwathby-Lazonby & Kirkoswald-Armathwaite-Carlisle), cross-checked
+# against Skipton's own Services section (confirms the Airedale Line runs
+# "half-hourly... to Leeds" while a separate "Settle and Carlisle Line
+# provides generally two-hourly services between Leeds and Carlisle" -- two
+# different route brands sharing the same Leeds-Skipton track) and
+# Wikipedia's "Leeds-Morecambe line" article (confirms the Skipton-Settle
+# Junction stretch and its own current stations):
+#
+# 1. Leeds-Skipton: physically the Airedale Line (`northern-airedale.toml`).
+#    Northern's own route-7 diagram shows this working calls only at
+#    Shipley, Bingley, Keighley and Skipton between Leeds and Skipton --
+#    NOT Saltaire, Crossflatts, Steeton & Silsden or Cononley, which remain
+#    exclusive to Airedale's own all-stations local pattern. LDS and SHY
+#    reuse `northern-airedale.toml`'s own `northern-shipley-trunk` segment
+#    verbatim (the same two-approaches-merge-at-Shipley trunk already
+#    shared with `northern-wharfedale.toml`); BIY, KEI and SKI use a
+#    dedicated `northern-airedale-skipton-approach` segment, shared with
+#    that same subset of `northern-airedale.toml`'s own stations
+#    (reconciled during integration merge -- an earlier draft reused that
+#    file's plain `northern-airedale` segment verbatim, which would have
+#    falsely promoted Airedale's OWN exclusive Saltaire/Crossflatts/
+#    Steeton & Silsden/Cononley stations to SharedSegment too, since
+#    sharing is evaluated per segment name catalogue-wide, not per
+#    individual station -- see `northern-airedale.toml`'s own reconciliation
+#    note for the full writeup).
+# 2. Skipton-Settle Junction: physically the Leeds-Morecambe/"Bentham" line
+#    (Wikipedia: "also known as the Bentham line"; not yet a file in this
+#    catalogue). Gargrave, Hellifield and Long Preston are real, currently
+#    open, currently-served stations on this stretch (all three appear
+#    without an "ex"/closed prefix in Northern's own route-7 diagram, and
+#    Hellifield/Long Preston are independently confirmed open by the
+#    Leeds-Morecambe line article's own route description). Settle Junction
+#    itself, where the Settle-Carlisle line proper begins, has no CRS code
+#    (a short-lived 1876-77 halt only, per the Settle-Carlisle line
+#    article's Route section) and isn't modelled as a station. These three
+#    stations get this file's own new segment, `northern-bentham-trunk`
+#    (place-based naming, matching the `swr-trunk-waterloo`/
+#    `northern-shipley-trunk` convention) -- flagged here for whoever
+#    eventually writes a Leeds-Morecambe/Bentham Line file to reuse this
+#    exact name rather than inventing a new one, since that line's own
+#    Skipton-Wennington-Lancaster/Morecambe service genuinely shares this
+#    same track (Leeds-Morecambe line article, "The route covered by the
+#    service was historically part of the Midland Railway" and the
+#    Skipton-Settle route-diagram section listing Gargrave/Hellifield/Long
+#    Preston as common to both this line and the Bentham line).
+# 3. Settle Junction-Carlisle: the Settle-Carlisle line proper (Wikipedia
+#    infobox: `start = Settle`, `end = Carlisle`, `stations = 19` counting
+#    every historical stop; of these, only Settle, Horton-in-Ribblesdale,
+#    Ribblehead, Dent, Garsdale, Kirkby Stephen, Appleby, Langwathby,
+#    Lazonby & Kirkoswald, Armathwaite and Carlisle are currently open --
+#    Crosby Garrett, Ormside, Long Marton, New Biggin, Culgaith, Little
+#    Salkeld, Cotehill, Cumwhinton and Scotby are all explicitly listed as
+#    closed, with closure years, in the article's own Route section).
+#    Exclusive to this file (`northern-settle-carlisle` segment) -- no
+#    other file in this catalogue touches any of these CRS codes (grepped
+#    before writing).
+#
+# CRS codes for every new station below verified against
+# https://ds.cursed.solutions/api/stations?q=<name> (one result each,
+# unambiguous) and cross-checked against each station's own Wikipedia
+# infobox/article name. LDS/SHY/BIY/KEI/SKI CRS+tiploc data reused
+# unchanged from `northern-airedale.toml`, already verified there; CAR
+# tiploc "CARLILE" reused from `northern-tyne-valley.toml`.
+#
+# Honesty note: the Leeds-Skipton calling pattern (Shipley/Bingley/
+# Keighley only, skipping Saltaire/Crossflatts/Steeton & Silsden/Cononley)
+# is sourced from Northern's own route-diagram template rather than a
+# live timetable extract -- treated as authoritative (it's Northern's own
+# published route classification, not a third-party summary), but flagged
+# here in case a future audit finds the diagram stale.
+
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-shipley-trunk"
+
+[[stations]]
+crs = "SHY"
+role = "junction"
+segment = "northern-shipley-trunk"
+# Last station shared with the Bradford Forster Square approach before
+# Airedale's own exclusive segment begins -- see `northern-airedale.toml`.
+
+[[stations]]
+crs = "BIY"
+tiploc = "BNGY"
+role = "minor"
+segment = "northern-airedale-skipton-approach"
+# Bingley -- this working skips Saltaire between Shipley and here (see the
+# route-level comment above). Segment name reconciled during integration
+# merge: see `northern-airedale.toml`'s own Bingley/Keighley/Skipton note
+# for why a narrower name is used here instead of that file's plain
+# `northern-airedale` segment.
+
+[[stations]]
+crs = "KEI"
+role = "major"
+segment = "northern-airedale-skipton-approach"
+# Keighley -- this working skips Crossflatts between Bingley and here. See
+# the segment-naming reconciliation note on the Bingley row above.
+
+[[stations]]
+crs = "SKI"
+role = "junction"
+segment = "northern-airedale-skipton-approach"
+# Skipton: junction, not terminus, from this line's own perspective -- the
+# Bentham/Settle-Carlisle service continues on to Gargrave, unlike the
+# Airedale Line's own trains which terminate here. This working skips
+# Steeton & Silsden and Cononley between Keighley and here.
+
+[[stations]]
+crs = "GGV"
+role = "minor"
+segment = "northern-bentham-trunk"
+# Gargrave. New segment shared in principle with the not-yet-written
+# Leeds-Morecambe/Bentham Line file -- see the route-level comment above.
+
+[[stations]]
+crs = "HLD"
+role = "minor"
+segment = "northern-bentham-trunk"
+# Hellifield -- former locomotive shed; no currently-operating passenger
+# junction here.
+
+[[stations]]
+crs = "LPR"
+role = "junction"
+segment = "northern-bentham-trunk"
+# Long Preston: last station shared with the Bentham line before Settle
+# Junction (uncoded, see the route-level comment) and this file's own
+# exclusive Settle-Carlisle segment.
+
+[[stations]]
+crs = "SET"
+role = "major"
+segment = "northern-settle-carlisle"
+# Settle -- the Settle-Carlisle line's own nominal southern end per its
+# infobox `start` field, even though through workings continue to Leeds.
+
+[[stations]]
+crs = "HIR"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Horton-in-Ribblesdale.
+
+[[stations]]
+crs = "RHD"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Ribblehead -- site of the famous Ribblehead (Batty Moss) Viaduct.
+
+[[stations]]
+crs = "DNT"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Dent -- the highest railway station in England, 4.5 miles from Dent
+# village itself.
+
+[[stations]]
+crs = "GSD"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Garsdale -- originally Hawes Junction; the Hawes branch (to the former
+# Wensleydale line towards Northallerton) is long closed, so this is not a
+# currently-operating junction.
+
+[[stations]]
+crs = "KSW"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Kirkby Stephen. CRS confirmed KSW (not the KBS sometimes guessed) via
+# the cursed.solutions lookup.
+
+[[stations]]
+crs = "APP"
+role = "major"
+segment = "northern-settle-carlisle"
+# Appleby (Appleby-in-Westmorland) -- the largest town directly on the
+# exclusive Settle-Carlisle stretch.
+
+[[stations]]
+crs = "LGW"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Langwathby.
+
+[[stations]]
+crs = "LZB"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Lazonby & Kirkoswald.
+
+[[stations]]
+crs = "AWT"
+role = "minor"
+segment = "northern-settle-carlisle"
+# Armathwaite. CRS confirmed AWT (not AWD) via the cursed.solutions lookup.
+
+[[stations]]
+crs = "CAR"
+tiploc = "CARLILE"
+role = "terminus"
+segment = "northern-settle-carlisle"
+# Carlisle -- tiploc reused from `northern-tyne-valley.toml`, already
+# verified there. Petteril Bridge Junction, just short of the station, is
+# where Midland Railway metal (this line) meets the Newcastle-Carlisle
+# line (`northern-tyne-valley.toml`'s own route) -- station-overlap only,
+# no segment shared, matching that file's own treatment of Carlisle as its
+# own exclusive-segment terminus.

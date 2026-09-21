@@ -100,10 +100,15 @@ role = "major"
 segment = "wcml-london"
 
 [[stations]]
-crs = "HMP"
-tiploc = "HAMPTON"
+crs = "HML"
+tiploc = "HEMLHMP"
 role = "minor"
 segment = "wcml-london"
+# Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
+# cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
+# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# Kept identical across all five WCML files that carry this shared-trunk
+# row.
 
 [[stations]]
 crs = "TRI"
@@ -149,8 +154,14 @@ segment = "wcml-midlands"
 
 # Branch 1: via Stoke-on-Trent. Diverges from the core spine near Stafford
 # (Colwich Junction, not itself a passenger station) and never touches
-# Crewe. Exclusive to this line -- `xc-manchester.toml` and
-# `northern-hope-valley.toml` also touch Manchester-area stations but not
+# Crewe. Segment `wcml-manchester-stoke` is exclusive to this line, but as
+# of `xc-manchester.toml`'s 2026-09-21 route correction (that file had
+# previously modelled the wrong corridor via Wilmslow/Crewe; it now
+# correctly runs via Stockport/Macclesfield/Stoke-on-Trent, the same real
+# CrossCountry corridor), both SOT and MAC are also stations on
+# `xc-manchester.toml`, under its own unrelated `xc-manchester` segment
+# name -- station-level overlap only, same precedent as SPT/MAN below.
+# `northern-hope-valley.toml` also touches Manchester-area stations but not
 # these two.
 [[stations]]
 crs = "SOT"

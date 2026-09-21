@@ -161,7 +161,9 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the three
 # is exclusive to this line TODAY - it is named for what the track actually
 # is so that a future file for any of them can reuse the name verbatim and
 # get correct shared-trunk propagation, the same forward-looking naming
-# southeastern-metro-north-kent.toml uses for `southeastern-lewisham-corridor`.
+# southeastern-bexleyheath.toml/southeastern-dartford-loop.toml (formerly
+# one file, southeastern-metro-north-kent.toml) use for
+# `southeastern-lewisham-corridor`.
 #
 # One nuance deliberately NOT modelled as its own segment: SWR's Shepperton
 # services share this line as far as Teddington, then diverge at Shacklegate
@@ -249,7 +251,8 @@ sample_stations = ["KNG", "NBT", "TED", "STW"]
 
 # Commuter line: tighter thresholds, the same values every other
 # `category = "commuter"` file uses (southeastern-hayes-line.toml,
-# southeastern-metro-north-kent.toml, thameslink-core.toml,
+# southeastern-bexleyheath.toml, southeastern-dartford-loop.toml (formerly
+# one file, southeastern-metro-north-kent.toml), thameslink-core.toml,
 # great-northern-suburban.toml). The core of this loop runs 4 tph off-peak,
 # so a 4-minute delay is far more disruptive here than on an hourly
 # long-distance service.

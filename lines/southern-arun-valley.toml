@@ -1,0 +1,167 @@
+id = "southern-arun-valley"
+name = "Arun Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SN"]
+
+sample_stations = ["HRH", "PUL", "ARU"]
+match_keywords = ["Arun Valley Line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP - confirmed via THREE separate already-committed files'
+# own comments, all pointing at the same junction
+# ============================================================================
+# - southern-brighton-main-line.toml's own TBD (Three Bridges) comment:
+#   "The Arun Valley line (toward Horsham/Littlehampton) diverges here; not
+#   covered by this catalogue."
+# - thameslink-southern.toml's own TBD comment: "The Arun Valley line
+#   diverges here, not covered by this catalogue."
+# - southern-coastway-west.toml's own FOD (Ford) comment: "Ford. Junction
+#   station: the Littlehampton branch (a short spur) and the Arun Valley
+#   Line (toward Arundel/Pulborough/Horsham, not covered by this
+#   catalogue) both diverge near here."
+# This file is that line, covering this task's own specified scope:
+# "Horsham-Pulborough-Arundel-Ford". Grepped `lines/*.toml` first to
+# confirm Horsham itself is not a station in any other file (confirmed
+# absent - only ever mentioned in the three comments above as an
+# undevoted destination).
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Arun Valley line" article (infobox: "Line
+# length: 30 mi 46 ch (between Three Bridges and Arundel junctions)",
+# "tracks = 2", "electrification = 750 V DC third rail") cross-checked
+# against nationalrail.co.uk's own /stations/<crs>/details.html pages, and
+# every CRS code independently verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>.
+#
+# Faygate is a genuinely current, open station, but Wikipedia's own article
+# describes it as served only at peak times ("Faygate (Peak time only)");
+# nationalrail.co.uk's own page for it confirms the station and its
+# Southern management but does not itself state the peak-only restriction -
+# disclosed here as a real but only-Wikipedia-sourced service-pattern
+# detail (the station's existence and CRS code are independently confirmed
+# either way). Roffey Road Halt, an intermediate stop shown in some
+# historical route diagrams between Ifield and Littlehaven, is confirmed
+# CLOSED (1937) via Wikipedia and correctly excluded below.
+#
+# This task's own scope ("Horsham-Pulborough-Arundel-Ford") is narrower
+# than the line's full real-world extent, which per the same infobox
+# continues to "Arundel junctions" and, in practice, on to Barnham/
+# Littlehampton/Bognor Regis. Ford (FOD) is this file's own southern scope
+# boundary: continuing past it is southern-coastway-west.toml's own
+# territory (that file's FOD comment already claims the Littlehampton
+# branch and the Barnham-onward alignment), so this file stops there rather
+# than duplicating already-modelled track.
+#
+# HAND-OFF NOTE (not acted on here, disclosed per this catalogue's own
+# convention for a real but Wikipedia-only-sourced lead): Wikipedia's own
+# "Thameslink" article lists a real, current, off-peak 2tph "Peterborough
+# to Horsham via Redhill" service, explicitly calling at "...East Croydon,
+# Coulsdon South, Merstham, Redhill, Horley, Gatwick Airport, Three
+# Bridges, Crawley, Ifield, and Littlehaven" before reaching Horsham - i.e.
+# this service necessarily runs over this file's own Three Bridges-Horsham
+# tracks (there is no alternative alignment between those two points this
+# task's sourcing found), even though it approaches Three Bridges itself
+# via a different, slower Redhill alignment than this file's own Victoria/
+# Brighton Main Line approach. This is a real, single-Wikipedia-article-
+# sourced lead for a future Thameslink file to independently verify and
+# potentially claim a genuine `SharedSegment` for the Three Bridges-Horsham
+# stretch - not acted on here, since it falls short of this batch's
+# two-source bar and thameslink-southern.toml (the natural home for such a
+# branch) would need its own independent confirmation, exactly as
+# southern-brighton-main-line.toml's own Task 5.14 hand-off already models
+# for an analogous situation.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 8
+
+# ============================================================================
+# STATIONS - ordered Three Bridges to Ford. One segment throughout: this
+# file's own name, not reused from any sibling file, per the
+# xc-south-coast.toml/xc-manchester.toml precedent used throughout this
+# catalogue.
+# ============================================================================
+[[stations]]
+crs = "TBD"
+role = "junction"
+segment = "southern-arun-valley"
+# Three Bridges. Also southern-brighton-main-line.toml's and
+# thameslink-southern.toml's own station (both already flag this file's own
+# route as diverging here) - station overlap only, see SELF-FLAGGED GAP
+# above.
+
+[[stations]]
+crs = "CRW"
+role = "minor"
+segment = "southern-arun-valley"
+# Crawley.
+
+[[stations]]
+crs = "IFI"
+role = "minor"
+segment = "southern-arun-valley"
+# Ifield.
+
+[[stations]]
+crs = "FGT"
+role = "minor"
+segment = "southern-arun-valley"
+# Faygate. Peak-time-only service per Wikipedia's own article - see ROUTE
+# AND SOURCING above.
+
+[[stations]]
+crs = "LVN"
+role = "minor"
+segment = "southern-arun-valley"
+# Littlehaven.
+
+[[stations]]
+crs = "HRH"
+role = "major"
+segment = "southern-arun-valley"
+# Horsham. Junction with the physically distinct Arun Valley/Portsmouth
+# alignment continuing west (Christs Hospital onward is this same line -
+# see below; the separate Horsham-Guildford "Arun Valley/North Downs" and
+# Horsham-Dorking lines toward Guildford/Redhill are not covered by this
+# catalogue).
+
+[[stations]]
+crs = "CHH"
+role = "minor"
+segment = "southern-arun-valley"
+# Christs Hospital.
+
+[[stations]]
+crs = "BIG"
+role = "minor"
+segment = "southern-arun-valley"
+# Billingshurst.
+
+[[stations]]
+crs = "PUL"
+role = "major"
+segment = "southern-arun-valley"
+# Pulborough.
+
+[[stations]]
+crs = "AMY"
+role = "minor"
+segment = "southern-arun-valley"
+# Amberley.
+
+[[stations]]
+crs = "ARU"
+role = "major"
+segment = "southern-arun-valley"
+# Arundel.
+
+[[stations]]
+crs = "FOD"
+role = "junction"
+segment = "southern-arun-valley"
+# Ford. This file's own scope boundary - also southern-coastway-west.toml's
+# own station (`coastway-west-brighton` segment, already commented as this
+# exact junction) - station overlap only, see ROUTE AND SOURCING above. The
+# Littlehampton branch also diverges here; not covered by this file.

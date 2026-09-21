@@ -8,12 +8,24 @@ sample_stations = ["TON", "AFK", "DVP"]
 match_keywords = ["South Eastern Main Line"]
 
 # Southeastern also operates the Hastings line (Tonbridge - Tunbridge Wells -
-# Battle - Hastings), a distinct historic route with its own Wikipedia
-# article that diverges well before/away from this line's stations and
-# shares no station with this file, so a bare "Southeastern"/operator-only
-# match on it shouldn't also tag this file. The Hastings line via Tunbridge
-# Wells currently has no line-catalogue task anywhere in this plan and is a
-# known coverage gap.
+# Battle - Hastings), a distinct historic route diverging at Tonbridge.
+#
+# KENT/SUSSEX BATCH FIX: this file previously carried `excluded_keywords =
+# ["Hastings line"]` here, justified at the time by "diverges well before/
+# away from this line's stations and shares no station with this file." That
+# premise no longer holds now that southeastern-hastings-line.toml exists:
+# TON (Tonbridge) is a station in BOTH files (this file's own `seml-weald`
+# segment already comments "Hastings line diverges here"; the new file lists
+# TON too, as station overlap, not a shared segment). Per the identical bug
+# class this file's own "Chatham Main Line" REVIEW FIX below already
+# documents - `is_excluded` in crates/aggregator/src/matcher.rs is a HARD
+# VETO evaluated BEFORE station matching - keeping "Hastings line" excluded
+# here would silently veto this file on any incident naming the Hastings
+# line with `affected_stations = ["TON"]`, even though TON is genuinely
+# shared and should show as affected. So the entry has been removed. See
+# southeastern-hastings-line.toml's own header comment for the full writeup
+# of this fix and why southeastern-chatham.toml's identical exclusion did NOT
+# need the same fix (Chatham shares zero stations with the Hastings line).
 #
 # REVIEW FIX (final whole-branch review of this batch): "Chatham Main Line"
 # was removed from this list. southeastern-chatham.toml (Task 5.2) and this
@@ -28,9 +40,9 @@ match_keywords = ["South Eastern Main Line"]
 # is just ["South Eastern Main Line"], so no KeywordOnly false positive was
 # possible either. Station-CRS matching already disambiguates DVP correctly
 # (see chatham_dover_branch_incident_does_not_propagate_to_seml in
-# matcher.rs). "Hastings line" stays: no file in the catalogue models that
-# route, and it shares no station with this file, so it causes no such harm.
-excluded_keywords = ["Hastings line"]
+# matcher.rs). "Hastings line" is NOT re-added here - see the KENT/SUSSEX
+# BATCH FIX comment above for why that entry (previously kept here) has now
+# been removed instead.
 
 # Charing Cross/Cannon Street, via Sevenoaks and Tonbridge, to Ashford
 # International, then via Folkestone to Dover Priory. Ordered London to
@@ -72,23 +84,27 @@ excluded_keywords = ["Hastings line"]
 # strictly between the already-modelled LBG and ORP entries.
 #
 # New Cross/St Johns/Lewisham/Hither Green determination: these four
-# already appear in southeastern-metro-north-kent.toml, on its own
-# `southeastern-lewisham-corridor` segment (CHX/CST/LBG/NWX/SAJ/LEW) and,
-# for Hither Green, its own `senk-dartford-loop` segment. Checked whether
-# they sit on THIS line's own physical alignment toward Orpington or only
-# on the Dartford Loop/Bexleyheath corridor's physically distinct tracks:
-# Hither Green's own Wikipedia article states it is served by "the South
-# Eastern Main Line (to Charing Cross and Cannon Street via New Cross)"
-# AND the Dartford Loop Line, with the Dartford Loop diverging AT Hither
-# Green while the main line continues on to Grove Park/Orpington - i.e.
-# Hither Green itself is the shared station before the fork, not a
+# already appear in the pre-split southeastern-metro-north-kent.toml (since
+# split into southeastern-bexleyheath.toml and
+# southeastern-dartford-loop.toml per a later data-driven line-definition
+# audit), on its own `southeastern-lewisham-corridor` segment
+# (CHX/CST/LBG/NWX/SAJ/LEW, carried unchanged in both of the split's files)
+# and, for Hither Green, its own `senk-dartford-loop` segment (now
+# `dartford-loop-branch`, in southeastern-dartford-loop.toml). Checked
+# whether they sit on THIS line's own physical alignment toward Orpington or
+# only on the Dartford Loop/Bexleyheath corridor's physically distinct
+# tracks: Hither Green's own Wikipedia article states it is served by "the
+# South Eastern Main Line (to Charing Cross and Cannon Street via New
+# Cross)" AND the Dartford Loop Line, with the Dartford Loop diverging AT
+# Hither Green while the main line continues on to Grove Park/Orpington -
+# i.e. Hither Green itself is the shared station before the fork, not a
 # Dartford-Loop-exclusive stop. St Johns' own Wikipedia article confirms
 # it sits "on the slow lines" of the South Eastern Main Line with New
 # Cross as its immediate neighbour toward London and Lewisham as its
-# immediate neighbour south - the same chain southeastern-metro-north-
-# kent.toml's own `southeastern-lewisham-corridor` segment already
-# documents. So all four sit on this line's own alignment and are added
-# here too, as station overlap with southeastern-metro-north-kent.toml
+# immediate neighbour south - the same chain the pre-split senk file's own
+# `southeastern-lewisham-corridor` segment already documents. So all four
+# sit on this line's own alignment and are added here too, as station
+# overlap with southeastern-bexleyheath.toml/southeastern-dartford-loop.toml
 # (not a shared segment - no new segment name, following the
 # xc-south-coast.toml/xc-manchester.toml precedent and this file's own
 # DVP/Thameslink-LBG precedent below).
@@ -165,36 +181,38 @@ segment = "seml-london"
 crs = "NWX"
 role = "junction"
 segment = "seml-london"
-# New Cross. Station overlap with southeastern-metro-north-kent.toml's own
-# `southeastern-lewisham-corridor` segment (see header comment above) - a
-# differently-aligned North Kent Line route (via the Surrey Canal curve
-# toward Greenwich/Woolwich) diverges near here; not covered by this
-# catalogue.
+# New Cross. Station overlap with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
+# segment (see header comment above) - a differently-aligned North Kent
+# Line route (via the Surrey Canal curve toward Greenwich/Woolwich)
+# diverges near here; not covered by this catalogue.
 
 [[stations]]
 crs = "SAJ"
 role = "minor"
 segment = "seml-london"
-# St Johns. Station overlap with southeastern-metro-north-kent.toml's own
-# `southeastern-lewisham-corridor` segment (see header comment above).
+# St Johns. Station overlap with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
+# segment (see header comment above).
 
 [[stations]]
 crs = "LEW"
 role = "junction"
 segment = "seml-london"
-# Lewisham. Station overlap with southeastern-metro-north-kent.toml's own
-# `southeastern-lewisham-corridor` segment (see header comment above); the
-# Bexleyheath line diverges here (toward Blackheath), and the Hayes line
-# and North Kent Line also diverge/join here - none covered by this file.
+# Lewisham. Station overlap with southeastern-bexleyheath.toml's/
+# southeastern-dartford-loop.toml's own `southeastern-lewisham-corridor`
+# segment (see header comment above); the Bexleyheath line diverges here
+# (toward Blackheath), and the Hayes line and North Kent Line also
+# diverge/join here - none covered by this file.
 
 [[stations]]
 crs = "HGR"
 role = "junction"
 segment = "seml-london"
-# Hither Green. Station overlap with southeastern-metro-north-kent.toml's
-# own `senk-dartford-loop` segment (see header comment above) - the
-# Dartford Loop line's own exclusive tracks diverge here; this line's own
-# alignment continues on to Grove Park.
+# Hither Green. Station overlap with southeastern-dartford-loop.toml's own
+# `dartford-loop-branch` segment (formerly `senk-dartford-loop`, see header
+# comment above) - the Dartford Loop line's own exclusive tracks diverge
+# here; this line's own alignment continues on to Grove Park.
 
 [[stations]]
 crs = "GRP"

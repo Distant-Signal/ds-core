@@ -65,21 +65,32 @@ delay_threshold_minutes = 10
 # branch (Llandudno Junction-Llandudno via Deganwy) -- confirmed via
 # Llandudno Junction's own Wikipedia article. Task 11.4
 # (`lines/tfw-north-wales-coast.toml`, Chester-Holyhead, not yet written
-# when this file was authored) is expected to read this file and decide
+# when this file was authored) was expected to read this file and decide
 # whether to reuse the `tfw-conwy-valley` segment name at Llandudno
 # Junction for a genuine cross-file shared-trunk relationship, or to give
-# its own line a distinct segment name there instead -- that decision is
-# deliberately left to Task 11.4, not made here. For now, since no other
-# line in the catalogue reaches Llandudno Junction yet, this file uses a
-# single segment name for the whole route (matching `northern-furness.toml`'s
-# treatment of its own through-junction stations, LAN and CNF, which are
-# tagged with that file's one whole-line segment name rather than a
-# separate trunk/exclusive split).
+# its own line a distinct segment name there instead -- that decision was
+# deliberately left to Task 11.4, not made here. It has since done so:
+# `tfw-north-wales-coast.toml` deliberately does NOT reuse `tfw-conwy-
+# valley` (station-overlap only, its own reasoning documented in that
+# file's own "Llandudno Junction segment-sharing decision" comment).
+#
+# `tfw-llandudno-branch.toml` (a later Wales/East Anglia batch addition)
+# DOES genuinely share track here (TfW's own Conwy Valley service
+# continues through this station to Llandudno -- see that file's own LLJ
+# note), so LLJ below uses a dedicated, narrow segment name,
+# `tfw-conwy-valley-llandudno-junction`, reused verbatim by that file --
+# reconciled during integration merge to avoid over-broadening this file's
+# whole-route `tfw-conwy-valley` segment (which covers ten other stations
+# `tfw-llandudno-branch.toml` never reaches) into a false shared claim.
+# Every other station below keeps the whole-route `tfw-conwy-valley` name
+# (matching `northern-furness.toml`'s treatment of its own through-junction
+# stations, LAN and CNF, which are tagged with that file's one whole-line
+# segment name rather than a separate trunk/exclusive split).
 [[stations]]
 crs = "LLJ"
 tiploc = "LANDUDJ"
 role = "junction"
-segment = "tfw-conwy-valley"
+segment = "tfw-conwy-valley-llandudno-junction"
 
 [[stations]]
 crs = "GCW"

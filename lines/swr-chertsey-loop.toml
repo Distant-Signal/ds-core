@@ -1,0 +1,238 @@
+id = "swr-chertsey-loop"
+name = "Chertsey Branch (Weybridge via Virginia Water)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS, AND ITS RELATIONSHIP TO swr-hounslow-loop.toml
+# ============================================================================
+# Sibling to swr-hounslow-loop.toml, added in the same pass - see that
+# file's own header for the full "Windsor Lines is a disambiguation page,
+# not a real umbrella article" and "these are really one continuous through
+# service today" findings, both checked against Wikipedia rather than
+# assumed. In short: Wikipedia's real article title for this route is
+# "Chertsey branch line", not "Chertsey loop line" - the word "loop" in
+# this task's own brief does not match Wikipedia's branding for this
+# specific route (unlike the genuinely-a-loop Hounslow Loop Line and
+# swr-kingston-loop.toml). The article's own Infrastructure and services
+# section is explicit that current standard service is a there-and-back
+# branch, not a circuit: "two trains per hour in each direction calling at
+# all stations between Weybridge and London Waterloo via Hounslow" - the
+# same route both ways, not out one way/back another the way
+# swr-kingston-loop.toml's and the Hounslow Loop's own namesake pattern
+# works. This file is still named `swr-chertsey-loop.toml` per this task's
+# requested filename, for batch consistency, with the naming discrepancy
+# recorded here rather than silently assumed away.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Chertsey branch line" (infobox: operator
+# "South Western Railway", 4 stations, terminus mileages confirming order
+# Virginia Water - Chertsey - Addlestone - Weybridge) and its Infrastructure
+# and services section (quoted above). Confirmed at both ends independently:
+# Weybridge's own station article ("Platform 1: 2tph to London Waterloo via
+# Staines and Hounslow") and Virginia Water's own ("2 tph to Weybridge"
+# alongside its separate Waterloo-via-Hounslow/via-Richmond services).
+# An earlier draft of this comment also cited a Weybridge-article quote,
+# "On Sundays... southbound trains run to and from Woking instead of
+# Weybridge," as a Sunday variation of THIS line's own service -- that was
+# a misattribution: on closer re-reading, that quote describes a separate,
+# unrelated Woking/Guildford local service that also happens to be
+# mentioned on Weybridge's own article, not this Virginia Water-Chertsey-
+# Weybridge branch. Corrected here; no Sunday substitution is modelled or
+# claimed for this line.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Virginia Water=VIR, Chertsey=CHY, Addlestone=ASN, Weybridge=WYB.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Chertsey, Addlestone or Weybridge. Virginia Water (VIR) is this file's
+# own sibling's terminus station, reused here (see SEGMENTS).
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   [ -- entire swr-hounslow-loop.toml station list, reused verbatim -- ]
+#   ... - VIR | CHY - ASN - WYB
+#            junction  [--- swr-chertsey-branch ---]
+#
+# This file reuses swr-hounslow-loop.toml's ENTIRE station list
+# (swr-trunk-waterloo, swr-windsor-lines and swr-hounslow-loop segments,
+# identical CRS/role/segment values throughout) rather than just its final
+# junction station. This is a deliberate, not lazy, choice: per that file's
+# own IMPORTANT FINDING, the standard-service Chertsey/Weybridge trains
+# ARE the same physical workings that call at Hounslow, Isleworth, Brentford
+# etc. on their way to/from Waterloo - there is no genuine "this line's own
+# separate approach" to model. Reusing the whole shared stretch verbatim is
+# what makes an incident anywhere on it correctly propagate to both files as
+# a shared-trunk event, exactly matching the mechanism the README's own
+# "Adding a complex operator" section describes for swr-trunk-waterloo
+# itself.
+#
+# This file's own exclusive segment, `swr-chertsey-branch`, starts at the
+# station AFTER the Virginia Water junction (Chertsey), per the
+# shared-trunk rule of thumb - VIR itself stays on the shared
+# `swr-hounslow-loop` segment name, reused verbatim from the sibling file
+# (not "swr-chertsey-loop" - there is nothing chertsey-specific about
+# Virginia Water's own role, it is purely the sibling's own segment's
+# terminus-of-scope station).
+
+match_keywords = ["Chertsey branch", "Chertsey line"]
+# The line's own real Wikipedia name plus one close variant. Grepped clean
+# against every other file's match_keywords - no collision.
+
+sample_stations = ["CHY", "ASN", "WYB"]
+# This file's own exclusive segment, past the Virginia Water junction - no
+# other line in the catalogue touches any of them.
+
+# No `destination_crs_filter`: this branch has a clean, unambiguous
+# advertised terminus (Weybridge, WYB, itself one of this file's own sample
+# stations - unlike swr-hounslow-loop.toml, this file's own exclusive
+# stations include a real destination), but a filter would only matter if
+# any of the sample stations were shared with another route, and none are
+# (see sample_stations above) - so, per swr-kingston-loop.toml's and
+# swr-chessington.toml's own precedent, the filter is skipped as buying
+# nothing while the mandatory `SW` operator filter already scopes the
+# sample correctly.
+
+# Commuter line, same tuning as its sibling swr-hounslow-loop.toml and the
+# rest of the SWR suburban siblings.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - Everything in swr-hounslow-loop.toml's own SCOPE BOUNDARIES section
+#   (the "via Richmond" pattern, Windsor & Eton Riverside, Reading-via-Ascot)
+#   applies equally here, since this file's own shared stretch is identical.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "QRB"
+role = "minor"
+segment = "swr-windsor-lines"
+# Ordered before Clapham Junction to match the real chainage from Waterloo
+# (Queenstown Road then Clapham Junction); segment tags unchanged.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WNT"
+role = "minor"
+segment = "swr-windsor-lines"
+
+[[stations]]
+crs = "PUT"
+role = "minor"
+segment = "swr-windsor-lines"
+
+[[stations]]
+crs = "BNS"
+role = "junction"
+segment = "swr-windsor-lines"
+
+[[stations]]
+crs = "BNI"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "CHK"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "KWB"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "BFD"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "SYL"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "ISL"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "HOU"
+role = "major"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "WTN"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "FEL"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "AFS"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "SNS"
+role = "junction"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "EGH"
+role = "minor"
+segment = "swr-hounslow-loop"
+
+[[stations]]
+crs = "VIR"
+role = "junction"
+segment = "swr-hounslow-loop"
+# Virginia Water. Shared boundary with swr-hounslow-loop.toml - see
+# SEGMENTS above. This file's own exclusive segment starts at the next
+# station, Chertsey.
+
+[[stations]]
+crs = "CHY"
+role = "minor"
+segment = "swr-chertsey-branch"
+# Chertsey.
+
+[[stations]]
+crs = "ASN"
+role = "minor"
+segment = "swr-chertsey-branch"
+# Addlestone.
+
+[[stations]]
+crs = "WYB"
+role = "terminus"
+segment = "swr-chertsey-branch"
+# Weybridge. Also on the South West Main Line proper (a different physical
+# approach via Surbiton/Byfleet, not modelled by any file yet - a real,
+# separate gap; swr-south-west-main.toml's own station list does not reach
+# Weybridge, only Basingstoke and beyond) - no overlap to document today.

@@ -296,9 +296,44 @@ segment = "gwr-south-wales"
 # no segment shared (see above). Not this line's own terminus: real GWR
 # services continue west to Bridgend/Port Talbot/Neath/Swansea below.
 
+# Pontyclun (PYC), Llanharan (LLR), Pencoed (PCD), Pyle (PYL), Baglan (BAJ),
+# Briton Ferry (BNF), Skewen (SKE) and Llansamlet (LAS): eight real,
+# currently-open, currently-served intermediate stations between Cardiff
+# Central and Swansea, previously omitted here as non-principal alongside
+# Bridgend/Port Talbot Parkway/Neath. Found and confirmed by a data-driven
+# schedule audit tracing one continuous real CIF-scheduled trip end to end
+# over this whole stretch (Cardiff Central through to Swansea), the same
+# audit methodology already applied to this file's own Patchway/Pilning/
+# Severn Tunnel Junction addition above — each station's real position in
+# the trip trace fixes its geographic order below (Pontyclun/Llanharan/
+# Pencoed between Cardiff Central and Bridgend; Pyle between Bridgend and
+# Port Talbot Parkway; Baglan/Briton Ferry between Port Talbot Parkway and
+# Neath; Skewen/Llansamlet between Neath and Swansea). All `role = "minor"`
+# per this task's scope, matching the existing Patchway/Pilning/STJ
+# precedent for catalogue-completeness infill.
+[[stations]]
+crs = "PYC"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "LLR"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "PCD"
+role = "minor"
+segment = "gwr-south-wales"
+
 [[stations]]
 crs = "BGN"
 tiploc = "BRGEND"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "PYL"
 role = "minor"
 segment = "gwr-south-wales"
 
@@ -309,8 +344,28 @@ role = "minor"
 segment = "gwr-south-wales"
 
 [[stations]]
+crs = "BAJ"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "BNF"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
 crs = "NTH"
 tiploc = "NEATH"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "SKE"
+role = "minor"
+segment = "gwr-south-wales"
+
+[[stations]]
+crs = "LAS"
 role = "minor"
 segment = "gwr-south-wales"
 

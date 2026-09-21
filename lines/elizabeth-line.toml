@@ -42,10 +42,40 @@ role = "minor"
 segment = "elizabeth-west"
 
 [[stations]]
+crs = "TAP"
+role = "minor"
+segment = "elizabeth-west"
+# Taplow: real, currently-served Elizabeth line stop between Maidenhead and
+# Slough, missing from the original catalogue — a data-driven audit against
+# real CIF schedule calling-point data found it touched by ~100-394 of ~930
+# relevant services (also BNM/SLO-side LNY/IVR below); confirmed against
+# Wikipedia and TfL's own official timetable.
+
+[[stations]]
+crs = "BNM"
+role = "minor"
+segment = "elizabeth-west"
+# Burnham: see Taplow's note above.
+
+[[stations]]
 crs = "SLO"
 tiploc = "SLOUGH"
 role = "major"
 segment = "elizabeth-west"
+
+[[stations]]
+crs = "LNY"
+role = "minor"
+segment = "elizabeth-west"
+# Langley: real, currently-served Elizabeth line stop between Slough and West
+# Drayton, missing from the original catalogue — see Taplow's note above for
+# the same data-driven audit and sourcing.
+
+[[stations]]
+crs = "IVR"
+role = "minor"
+segment = "elizabeth-west"
+# Iver: see Langley's note above.
 
 [[stations]]
 crs = "WDT"
@@ -65,9 +95,36 @@ role = "minor"
 segment = "elizabeth-trunk-west"
 
 [[stations]]
+crs = "HAN"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# Hanwell: real, currently-served Elizabeth line stop between Southall and
+# Ealing Broadway, missing from the original catalogue — a data-driven audit
+# against real CIF schedule calling-point data confirmed it (also WEA/AML
+# below); confirmed against Wikipedia and TfL's own official timetable.
+# Shared `elizabeth-trunk-west` segment with elizabeth-heathrow.toml — added
+# there identically to keep the two files' shared rows in sync (this
+# catalogue's established convention, e.g. gwr-cornish-main-line.toml's and
+# cross-country.toml's shared `xc-south-west` segment rows).
+
+[[stations]]
+crs = "WEA"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# West Ealing: see Hanwell's note above.
+
+[[stations]]
 crs = "EAL"
 role = "major"
 segment = "elizabeth-trunk-west"
+
+[[stations]]
+crs = "AML"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# Acton Main Line: real, currently-served Elizabeth line stop between Ealing
+# Broadway and Paddington — see Hanwell's note above for the same
+# data-driven audit, sourcing and cross-file sync convention.
 
 [[stations]]
 crs = "PAD"
@@ -104,9 +161,15 @@ segment = "elizabeth-central"
 # Shenfield branch diverges east of here
 
 [[stations]]
-crs = "ZCW"
+crs = "CWX"
 role = "major"
 segment = "elizabeth-south-east"
+# Canary Wharf. Previously catalogued as "ZCW" (Canada Water), a different
+# London Overground/Jubilee line station the Elizabeth line does not serve —
+# corrected by a data-driven CRS audit against the bulk stanox-crs dataset,
+# `/api/stations?q=`, Wikipedia and real CIF schedule calling-point data, all
+# of which place the Whitechapel-to-Custom House Elizabeth line stop at
+# Canary Wharf (CWX), not Canada Water.
 
 [[stations]]
 crs = "CUS"
@@ -114,9 +177,14 @@ role = "minor"
 segment = "elizabeth-south-east"
 
 [[stations]]
-crs = "WWA"
+crs = "WWC"
 role = "major"
 segment = "elizabeth-south-east"
+# Woolwich. Previously catalogued as "WWA" (Woolwich Arsenal), a physically
+# separate Southeastern/DLR station ~200m away — corrected by the same
+# data-driven CRS audit described above (bulk stanox-crs dataset,
+# `/api/stations?q=`, Wikipedia, real CIF schedule calling-point data): the
+# Custom House-to-Abbey Wood Elizabeth line stop is Woolwich (WWC).
 
 [[stations]]
 crs = "ABW"

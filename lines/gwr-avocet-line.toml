@@ -1,0 +1,195 @@
+id = "gwr-avocet-line"
+name = "Avocet Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["GW"]
+
+# Devon/Cornwall branch-line batch: full UK station-coverage audit found this
+# real, currently-open GWR branch (Exeter - Exmouth) entirely missing from
+# the catalogue. Wikipedia "Avocet Line" infobox: GWR operator, 11 stations,
+# 11+1/4 miles; first 1.81 miles double track shared with the West of
+# England main line, "single except for a passing loop at Topsham."
+#
+# Category: "commuter", NOT "regional" -- deliberately verified rather than
+# assumed against this batch's own default framing, matching
+# `scotrail-ayrshire.toml`'s precedent of confirming category rather than
+# inheriting it. The line's own Wikipedia infobox `character` field reads
+# "Commuter" outright, and the sourced detail below backs that up: Digby &
+# Sowton is "one of the busiest stations in Devon", Newcourt opened in 2015
+# specifically "to serve a housing development", and the line runs a
+# turn-up-and-go 30-minute daytime frequency (37 services/day on weekdays)
+# -- a materially different character from this batch's other, sparser
+# rural branches (`gwr-looe-valley.toml`, `gwr-tamar-valley.toml`).
+#
+# This file is one of three created together in this same task
+# (`gwr-tarka-line.toml`, `gwr-dartmoor-line.toml`) for the three GWR local
+# routes that fan out from Exeter -- see `gwr-tarka-line.toml`'s own comment
+# block for the full shared-trunk research; not re-derived in full here.
+
+# Exclusive-segment stations only (Exeter St Davids/Central are genuinely
+# shared with `gwr-tarka-line.toml`/`gwr-dartmoor-line.toml`, see below).
+sample_stations = ["DIG", "TOP", "EXM"]
+
+# Exeter St Davids/Central are shared with both `gwr-tarka-line.toml` and
+# `gwr-dartmoor-line.toml`. `destination_crs_filter` disambiguates this
+# line's own LDBWS departures (bound for EXM) from Tarka-bound (BNP) and
+# Dartmoor-bound (OKE/OKI) services sampled at the same shared stations,
+# mirroring `scotrail-ayrshire.toml`'s identical use of the field at GLC.
+destination_crs_filter = ["EXM"]
+
+match_keywords = ["Avocet Line"]
+# One high-precision phrase -- the line's own branded/article name. Grepped
+# `lines/*.toml` before starting: no other file uses "Avocet" in
+# `match_keywords`.
+
+# Mostly single track (only the first 1.81 miles out of Exeter are double,
+# shared with the main line; only one passing loop thereafter, at Topsham)
+# despite the busy, commuter-tier 30-minute frequency -- a genuinely
+# different risk profile from a fully double-tracked main line (no override
+# on `gwr-cornish-main-line.toml`) but also not as sparse as this batch's
+# hourly-or-worse rural branches. A single-track, mostly-one-passing-loop
+# branch can still lose its recovery margin quickly if a working runs late,
+# so a lighter version of this batch's rural tuning is kept rather than
+# dropping overrides entirely, mirroring `gwr-maritime-line.toml`'s
+# identical judgment call for a comparably frequent single-track line.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 8
+
+# === Shared trunk: Exeter St Davids - Exeter Central ===
+#
+# See `gwr-tarka-line.toml`'s own comment block for the full sourcing
+# (Wikipedia "Exeter Central railway station", fetched fresh for this task:
+# Avocet Line services "operate twice an hour ... from Exmouth to Exeter St
+# Davids (from where they continue to Paignton)", and "The SWR and GWR
+# services combine to give up to five trains per hour each way between
+# Exeter Central and Exeter St Davids"). Segment name
+# `gwr-exeter-central-approach`, reused verbatim from `gwr-tarka-line.toml`/
+# `gwr-dartmoor-line.toml` for the same two stations.
+[[stations]]
+crs = "EXD"
+role = "junction"
+segment = "gwr-exeter-central-approach"
+# Exeter St Davids: also a station entry in `cross-country.toml`,
+# `gwr-cornish-main-line.toml` and `gwr-west-of-england.toml` (segment
+# "xc-south-west" there) -- a different, non-overlapping segment name from
+# this file's own `gwr-exeter-central-approach`; station overlap only with
+# those files, per this catalogue's established convention.
+
+[[stations]]
+crs = "EXC"
+role = "junction"
+segment = "gwr-exeter-central-approach"
+# Exeter Central: reached via St Davids Tunnel. This line's own exclusive
+# segment starts at the next station past it, St James Park -- the Tarka
+# and Dartmoor Lines never continue this far south-east.
+
+# === This line's own exclusive segment ===
+
+[[stations]]
+crs = "SJP"
+role = "minor"
+segment = "gwr-avocet-line"
+# St James Park: half-hourly stop only, per Wikipedia's own "Services"
+# section ("Trains only stop once an hour at St James Park, Polsloe Bridge,
+# Exton and Lympstone Commando, the latter two being request stops").
+
+[[stations]]
+crs = "POL"
+role = "minor"
+segment = "gwr-avocet-line"
+# Polsloe Bridge: half-hourly stop only, per the same source. "Stands on an
+# embankment where there used to be two tracks but now just the down line
+# ... remains although the old up platform is still in place" -- a
+# historical double-track remnant, not a current passing capability.
+
+[[stations]]
+crs = "DIG"
+role = "major"
+segment = "gwr-avocet-line"
+# Digby & Sowton: opened 1995, "now one of the busiest stations in Devon"
+# per Wikipedia -- the basis for this file's "commuter" category above.
+
+[[stations]]
+crs = "NCO"
+role = "minor"
+segment = "gwr-avocet-line"
+# Newcourt: opened 2015, "serves a housing development and offers a better
+# route to Sandy Park for passengers coming from the Exmouth direction."
+
+[[stations]]
+crs = "TOP"
+role = "junction"
+segment = "gwr-avocet-line"
+# Topsham: site of this line's only passing loop beyond the shared Exeter
+# approach.
+
+[[stations]]
+crs = "EXN"
+role = "minor"
+segment = "gwr-avocet-line"
+# Exton: request stop, per the Services-section quote above.
+
+[[stations]]
+crs = "LYC"
+role = "minor"
+segment = "gwr-avocet-line"
+# Lympstone Commando: request stop, "for the use of people travelling to
+# and from the Commando Training Centre Royal Marines" per Wikipedia's own
+# "Route" section. No booking requirement or public-access restriction is
+# documented in that article -- it is a real, public, currently-served
+# National Rail station, not a closed-to-the-public military halt.
+
+[[stations]]
+crs = "LYM"
+role = "minor"
+segment = "gwr-avocet-line"
+# Lympstone Village.
+
+[[stations]]
+crs = "EXM"
+role = "terminus"
+segment = "gwr-avocet-line"
+# Exmouth: this line's own terminus.
+
+# === Sources (cross-checked per this batch's Global Constraints) ===
+#
+# Route structure, operator, character, service pattern:
+#   - Wikipedia "Avocet Line" (infobox + lead + body, fetched fresh for this
+#     task): confirms GWR operation, `character = Commuter`, 11 stations,
+#     11+1/4 miles, first 1.81 miles double track then single except for
+#     the Topsham passing loop; confirms the ordered station list Exeter St
+#     Davids - Exeter Central - St James Park - Polsloe Bridge - Digby &
+#     Sowton - Newcourt - Topsham - Exton - Lympstone Commando - Lympstone
+#     Village - Exmouth; confirms Digby & Sowton's 1995 opening and current
+#     busy status, Newcourt's 2015 opening and purpose, Polsloe Bridge's
+#     former double-track history, Lympstone Commando's MOD-training-centre
+#     purpose with no public-access restriction documented, and the request-
+#     stop status of Polsloe Bridge (half-hourly only), Exton and Lympstone
+#     Commando; confirms "37 services per day during the week... typical
+#     daytime frequency of every 30 minutes."
+#   - Wikipedia "Exeter Central railway station" (fetched fresh for this
+#     task): see `gwr-tarka-line.toml`'s own comment block for the exact
+#     quotes underpinning the shared-trunk segment above.
+#
+# CRS codes: every code below was verified live against
+# `https://ds.cursed.solutions/api/stations?q=<name>` during this task --
+# EXD "Exeter St Davids", EXC "Exeter Central", SJP "St James Park
+# (Exeter)", POL "Polsloe Bridge", DIG "Digby & Sowton", NCO "Newcourt",
+# TOP "Topsham", EXN "Exton", LYC "Lympstone Commando", LYM "Lympstone
+# Village", EXM "Exmouth". All matched with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live source
+# during this task, matching this batch's optional-field convention.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Great Western/South Devon main line onward from Exeter St Davids
+#   (towards Paignton, which most Avocet Line services continue to per
+#   Wikipedia's own "from where they continue to Paignton"): the Riviera
+#   Line/Paignton branch is a real, separate route not yet catalogued and
+#   out of this task's own scope (Devon/Cornwall branch lines named in the
+#   brief); not modelled here.
+# - SWR's own West of England Line, sharing the Exeter St Davids-Exeter
+#   Central approach: see `gwr-tarka-line.toml`'s identical scope note.

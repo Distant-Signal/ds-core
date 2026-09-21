@@ -1,0 +1,148 @@
+id = "tfw-ebbw-vale"
+name = "Ebbw Valley Railway (Ebbw Vale Town - Newport/Cardiff Central)"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+# Confirmed via Wikipedia's "Ebbw Valley Railway" article (raw wikitext, the
+# real title -- "Ebbw Vale Line" redirects to it): closed to passengers in
+# 1962, reopened in phases (Ebbw Vale Parkway to Cardiff Central in 2008;
+# extended to a new station at Ebbw Vale Town itself in 2015). Currently
+# provides "an hourly passenger service each way between Ebbw Vale Town and
+# Cardiff Central, and an hourly service each way between Ebbw Vale Town and
+# Newport" -- i.e. a half-hourly combined service splitting into two
+# hourly-each termini at the Newport end, per the infobox `character` and
+# the article's own "Current service" section. `category = "commuter"`:
+# this is a South Wales Metro-branded, Cardiff-radius corridor with a
+# genuinely sub-hourly combined frequency on its shared inner section,
+# closer in character to `tfw-valley-lines-north.toml`'s Aberdare/Merthyr
+# branches than to a sparse rural single-train-an-hour line.
+#
+# Station list and order confirmed via the article's own "Current service"
+# and "Route" sections (raw wikitext): Ebbw Vale Town - Ebbw Vale Parkway -
+# Llanhilleth - Newbridge - Crosskeys - Risca and Pontymister - Rogerstone -
+# Pye Corner (8 stations, matching the infobox's own `stations = 8` count),
+# then the line joins the South Wales Main Line at a triangular junction
+# (Park Junction/Gaer Junction/Ebbw Junction, none of which carry a
+# passenger CRS code) with no further stations of its own before reaching
+# Newport or Cardiff Central -- both of which are therefore this file's own
+# two genuine termini, not invented endpoints.
+
+sample_stations = ["EBB", "PYE", "NWP", "CDF"]
+destination_crs_filter = ["EBB", "NWP", "CDF"]
+# The line's three genuine termini (one shared origin, two alternating
+# destinations at the Newport/Cardiff end).
+
+match_keywords = ["Ebbw Valley Railway", "Ebbw Vale Line"]
+# The article's own current title plus the older/common-use name it
+# redirects from (both attested in the article's own text -- the lead
+# sentence uses "Ebbw Valley Railway" throughout, while "Ebbw Vale Line" is
+# the pre-rename title Wikipedia itself still redirects). Grepped
+# `lines/*.toml`: no collision with either phrase.
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. Risca and Pontymister's
+# combined name only resolves via a "Risca"-only query on that API (its
+# combined-name query returned no rows) but is confirmed there as "Risca &
+# Pontymister" (RCA). TIPLOCs are omitted throughout except the two shared
+# termini (NWP, CDF), reused verbatim from `gwr-south-wales.toml`, which
+# already cross-checked them.
+#
+# ## Overlap: Newport (NWP) and Cardiff Central (CDF) -- station-overlap only
+#
+# Both already appear in `gwr-south-wales.toml` as South Wales Main Line
+# stations (NWP tagged `major`, CDF tagged `major`, both on that file's own
+# `gwr-south-wales` segment). This line's own route reaches both via a
+# physically distinct branch line joining the SWML at a triangular junction
+# southwest of Newport (Park/Gaer/Ebbw Junctions, per the Ebbw Valley
+# Railway article's own "Route" section) -- a real junction, not shared
+# track along any stretch this file's own stations cover, matching the
+# `xc-south-coast.toml`/`xc-manchester.toml` precedent for this exact
+# same-station-different-corridor shape. Station-overlap only in both
+# directions; this file's own segment name is used throughout, including at
+# NWP and CDF.
+
+[severity_overrides]
+minor_delays_pct = 0.25
+delay_threshold_minutes = 7
+# Matches `tfw-vale-of-glamorgan.toml`'s documented middle ground: a real
+# half-hourly-combined inner service (Ebbw Vale Town-Pye Corner) but each
+# individual onward branch (to Newport, to Cardiff Central) is only hourly,
+# so neither this catalogue's tightest commuter defaults nor its loosest
+# rural-branch overrides fit cleanly.
+
+[[stations]]
+crs = "EBB"
+role = "terminus"
+segment = "tfw-ebbw-vale"
+# Ebbw Vale Town: this line's own northern terminus, opened 2015 -- the
+# newest of the line's stations, and the point that made the previous
+# terminus (Ebbw Vale Parkway) an intermediate stop.
+
+[[stations]]
+crs = "EBV"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Ebbw Vale Parkway.
+
+[[stations]]
+crs = "LTH"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Llanhilleth. A dedicated feeder bus links this station to Abertillery town
+# centre (per the article's own "Current service" section) -- no rail
+# connection, so not tagged `junction`.
+
+[[stations]]
+crs = "NBE"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Newbridge.
+
+[[stations]]
+crs = "CKY"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Crosskeys: the point where the line's single-line-worked northern section
+# ends and the doubled Risca-Aberbeeg passing-loop stretch begins.
+
+[[stations]]
+crs = "RCA"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Risca and Pontymister.
+
+[[stations]]
+crs = "ROR"
+role = "minor"
+segment = "tfw-ebbw-vale"
+# Rogerstone: the line reverts to single track just north of here.
+
+[[stations]]
+crs = "PYE"
+role = "junction"
+segment = "tfw-ebbw-vale"
+# Pye Corner: the last station before the line's own triangular junction
+# with the South Wales Main Line, where services split towards Newport or
+# Cardiff Central. Tagged `junction` for that split even though the actual
+# named junctions (Park/Gaer/Ebbw) carry no passenger CRS code of their own.
+
+[[stations]]
+crs = "NWP"
+tiploc = "NWPTRTG"
+role = "terminus"
+segment = "tfw-ebbw-vale"
+# Newport: one of this line's two alternating termini. See the overlap note
+# above for the station-overlap-only relationship with `gwr-south-wales.toml`.
+
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-ebbw-vale"
+# Cardiff Central: the other of this line's two alternating termini. See
+# the overlap note above. Also a station-level overlap with
+# `tfw-vale-of-glamorgan.toml` and `tfw-maesteg.toml` (this batch's own
+# other new files) and `tfw-valley-lines-north.toml`/`-south.toml` -- all
+# genuine multi-line-hub overlaps at Cardiff Central, none of them a shared
+# segment with this file.

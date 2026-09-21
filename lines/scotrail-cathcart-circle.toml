@@ -1,0 +1,328 @@
+id = "scotrail-cathcart-circle"
+name = "ScotRail Cathcart Circle Lines (Circle, Newton and Neilston branches)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Greater Glasgow batch. Not named in `docs/superpowers/specs/2026-08-29-
+# line-coverage-gap-analysis.md`'s ScotRail bullet -- a genuinely
+# unflagged gap found by the follow-up full UK station-coverage audit, and
+# per that audit's own framing, "a genuinely large, interconnected
+# suburban cluster south of the Clyde" (21 stations per Wikipedia's own
+# infobox).
+#
+# === Why one file, and why NOT a Barrhead branch ===
+#
+# Wikipedia's own "Cathcart Circle Lines" article is the single
+# authoritative source for this whole cluster's real structure, and it
+# names its own scope precisely: "a mostly suburban railway route linking
+# Glasgow (Central) to Cathcart via a circular line, with branches to
+# Newton and Neilston" -- its own infobox: `end = Neilston / Newton /
+# Cathcart`, `routes = 4` (the Circle's own inner/outer working counts as
+# two of the four). Circle + Newton + Neilston are one Wikipedia-branded
+# family with one shared history (the Cathcart District Railway and the
+# Lanarkshire and Ayrshire Railway), so this file follows that same
+# grouping -- unlike `scotrail-fife-borders.toml`'s bundling of two
+# routes that share no track or branding, this cluster genuinely is one
+# thing with internal branches, and modelling it as one file (with
+# per-route segment-name prefixes throughout, exactly like
+# `scotrail-fife-borders.toml`'s own precedent) is the natural fit, not an
+# exception to the "one line per file" rule.
+#
+# The task brief that assigned this gap suggested a Barrhead branch might
+# also belong to this cluster. Checked directly against Wikipedia and
+# found NOT to be the case: the Cathcart Circle Lines article states the
+# Neilston Line "used to connect to the Glasgow South Western Line at
+# Lugton railway station but was cut back to the current terminus at
+# Neilston as part of the Beeching cuts in 1964" -- Neilston, not
+# Barrhead, is this cluster's own southern branch terminus today.
+# Independently, Barrhead railway station's own Wikipedia article gives
+# its `original` infobox field as the Glasgow, Barrhead and Neilston
+# Direct Railway and its current `route` template as plain "Glasgow South
+# Western Line" -- and its own succession box's HISTORICAL entry (not its
+# current one) is the only place "Neilston Low" (a different, since-
+# renamed/relocated station on the old Glasgow, Barrhead and Kilmarnock
+# Joint Railway, not today's Neilston on the Cathcart Circle) appears
+# adjacent to Barrhead. Barrhead today is modelled in
+# `scotrail-glasgow-south-western.toml` instead -- see that file's own
+# segment-naming coordination note for the fuller cross-reference. No
+# separate `scotrail-neilston.toml`/`scotrail-barrhead.toml` files are
+# created: Neilston is genuinely inseparable from the Circle (it is one of
+# the Circle's own three named branches per the infobox above, sharing the
+# same Glasgow Central throat and the same Cathcart junction), and
+# Barrhead does not belong to this cluster at all.
+#
+# Category: "commuter", matching this catalogue's other dense Glasgow-
+# suburban lines (North Clyde, Argyle, Inverclyde -- see
+# `scotrail-inverclyde.toml`'s own category note). Per Wikipedia's 2024
+# Passenger services section, off-peak frequency is 2tph Neilston, 1tph
+# each Newton branch (via two different routings) and 2tph looping the
+# Circle itself, rising to a train every 5-10 minutes at peak between
+# Glasgow Central and Cathcart -- comparable density to this catalogue's
+# other "commuter" Glasgow-suburban lines.
+
+sample_stations = ["GLC", "CCT", "NTN", "NEI"]
+destination_crs_filter = ["CCT", "NTN", "NEI"]
+# GLC also samples several other lines from the same named terminus
+# complex (see the segment-naming coordination note below).
+
+match_keywords = ["Cathcart Circle"]
+# One high-precision phrase -- this route's own Wikipedia article's core
+# brand name (used both as "Cathcart Circle Lines" and simply "Cathcart
+# Circle" throughout the article and in current ScotRail route-branding
+# language cited there). Grepped clean against every other file's own
+# `match_keywords` before adding: no collisions.
+
+# Dense commuter cluster (2tph off-peak per branch, 5-10 minute peak
+# headways on the shared Glasgow Central-Cathcart throat): tighter
+# thresholds following `scotrail-inverclyde.toml`'s and the (unmerged,
+# sibling worktree) North Clyde/Argyle files' precedent for this
+# catalogue's other Glasgow-suburban metro-style lines.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Cathcart Circle Lines" (raw wikitext, infobox +
+#     Constituent lines section): confirms ScotRail operation, 25 kV AC
+#     electrification (1962); confirms the Circle's own topology --
+#     "both the eastern and western sections split[ting] from each other
+#     just before Pollokshields East ... the western section running
+#     through Pollokshields West, Maxwell Park, Shawlands, Pollokshaws
+#     East and Langside stations before meeting with the eastern section
+#     again at Cathcart station. The eastern section runs through
+#     Pollokshields East, Queens Park (Glasgow), Crosshill and Mount
+#     Florida stations before it reaches Cathcart"; confirms the Newton
+#     Line "diverges from the Circle via a dive under junction south of
+#     Mount Florida, and at Cathcart South Junction ... [running] towards
+#     Newton, where it joins with both the Hamilton branch of the Argyle
+#     Line and the West Coast Main Line"; confirms the Neilston Line
+#     "diverges from the Circle at Cathcart" and its Lugton/Beeching
+#     history quoted above.
+#   - Wikipedia "Muirend railway station", "Whitecraigs railway station",
+#     "Patterton railway station", "Mount Florida railway station",
+#     "Cathcart railway station", "Pollokshields East railway station",
+#     "Pollokshields West railway station", "King's Park railway
+#     station", "Croftfoot railway station", "Kirkhill railway station"
+#     and "Newton railway station" (raw wikitext succession boxes, via
+#     Special:Export -- `action=raw` was intermittently unreliable during
+#     this task): independently confirm, station by station, the west-side
+#     order (Pollokshields West-Maxwell Park-Shawlands-Pollokshaws
+#     East-Langside-Cathcart), the east-side order (Cathcart-Mount
+#     Florida-Crosshill-Queens Park-Pollokshields East-Glasgow Central),
+#     the Newton branch order (Mount Florida-King's Park-Croftfoot-
+#     Burnside-Kirkhill-Newton, per Croftfoot's own succession box:
+#     "previous=Burnside, next=King's Park"), and the Neilston branch
+#     order (Cathcart-Muirend-Williamwood-Whitecraigs-Patterton-Neilston,
+#     per Muirend's own succession box: "previous=Williamwood,
+#     next=Cathcart").
+#   - Wikipedia "Neilston railway station": confirms it "lies on the
+#     Cathcart Circle Lines" and is the real terminus today ("the line
+#     previously continued southwest to Uplawmoor, but this section closed
+#     to passengers in April 1962 and to all traffic in December 1964").
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>, matching each
+# station's Wikipedia infobox `code` field with no discrepancies (Crosshill
+# is COI, not an intuitive guess from the name -- confirmed both ways).
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+#
+# === Circular topology: how this file represents it ===
+#
+# Following `scotrail-fife-borders.toml`'s own precedent for representing
+# a real loop within `SCHEMA.md`'s inherently linear `stations` list: this
+# file traverses the Circle in one direction (west side out, east side
+# back) rather than modelling both directions or repeating stations. GLC
+# appears once, as the one real terminus; Cathcart is the loop's own
+# midpoint (both sides reach it), tagged `role = "junction"` rather than
+# `terminus`. Two branches (Newton, Neilston) hang off this single-
+# traversal Circle at their real, sourced divergence points.
+
+# === Segment-naming coordination ===
+#
+# GLC is also a `[[stations]]` entry in several other files departing the
+# same named terminus complex on physically distinct approach tracks
+# (`scotrail-glasgow-south-western.toml`, `scotrail-east-kilbride.toml`,
+# `scotrail-ayrshire.toml`, `scotrail-inverclyde.toml`, and the
+# (unmerged, sibling worktree) `scotrail-argyle.toml`'s own Low Level
+# entry). This file's own Pollokshields West/Pollokshields East approach
+# tracks (the historical Cathcart District Railway formation) are
+# physically distinct from all of those, and no genuine track-sharing
+# beyond the shared station building was sourced within this task's
+# budget -- station overlap only, per the `xc-south-coast.toml`/
+# `xc-manchester.toml` precedent.
+#
+# Newton (NTN) is also physically a junction with the Argyle Line's own
+# Hamilton branch and the West Coast Main Line, per the sourcing above.
+# Neither `scotrail-argyle.toml` nor `west-coast-main-line.toml` currently
+# lists Newton as a `[[stations]]` entry (grepped before adding), so there
+# is no live cross-file overlap to reconcile today -- documented here as a
+# real, sourced fact for whoever eventually models that side.
+
+# --- Circle: west side (Glasgow Central out to Cathcart) ---
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-cathcart-throat"
+
+[[stations]]
+crs = "PLW"
+role = "minor"
+segment = "scotrail-cathcart-west"
+# Pollokshields West.
+
+[[stations]]
+crs = "MAX"
+role = "minor"
+segment = "scotrail-cathcart-west"
+# Maxwell Park.
+
+[[stations]]
+crs = "SHL"
+role = "minor"
+segment = "scotrail-cathcart-west"
+# Shawlands.
+
+[[stations]]
+crs = "PWE"
+role = "minor"
+segment = "scotrail-cathcart-west"
+# Pollokshaws East.
+
+[[stations]]
+crs = "LGS"
+role = "minor"
+segment = "scotrail-cathcart-west"
+# Langside.
+
+[[stations]]
+crs = "CCT"
+role = "junction"
+segment = "scotrail-cathcart-west"
+# Cathcart: the loop's own midpoint (west and east sides meet here) and
+# the point where the Neilston branch diverges (Cathcart South Junction is
+# also a second, alternate divergence point for the Newton branch -- see
+# the Mount Florida entry below). Per the shared-trunk rule of thumb, the
+# junction stays on the Circle segment; the Neilston branch's own
+# exclusive segment starts at the next station, Muirend.
+
+# --- Circle: east side (Cathcart back to Glasgow Central) ---
+
+[[stations]]
+crs = "MFL"
+role = "junction"
+segment = "scotrail-cathcart-east"
+# Mount Florida: the Newton branch's other, more southerly divergence
+# point (a dive-under junction just south of the station) -- see the
+# Cathcart entry above. Per the shared-trunk rule of thumb, this station
+# stays on the Circle segment; the Newton branch's own exclusive segment
+# starts at the next station, King's Park.
+
+[[stations]]
+crs = "COI"
+role = "minor"
+segment = "scotrail-cathcart-east"
+# Crosshill.
+
+[[stations]]
+crs = "QPK"
+role = "minor"
+segment = "scotrail-cathcart-east"
+# Queens Park (Glasgow).
+
+[[stations]]
+crs = "PLE"
+role = "minor"
+segment = "scotrail-cathcart-east"
+# Pollokshields East: per Wikipedia, both Circle sides split from each
+# other "just before" this station -- listed on the east-side return leg
+# here per this file's own single-direction traversal (see the
+# circular-topology note above); the physical fork itself sits between
+# here and Glasgow Central, already represented by GLC/PLW being this
+# file's only other throat-adjacent entries.
+
+# --- Newton branch (diverges from the Circle at Mount Florida/Cathcart) ---
+
+[[stations]]
+crs = "KGP"
+role = "minor"
+segment = "scotrail-cathcart-newton-branch"
+# King's Park.
+
+[[stations]]
+crs = "CFF"
+role = "minor"
+segment = "scotrail-cathcart-newton-branch"
+# Croftfoot.
+
+[[stations]]
+crs = "BUI"
+role = "minor"
+segment = "scotrail-cathcart-newton-branch"
+# Burnside (South Lanarkshire).
+
+[[stations]]
+crs = "KKH"
+role = "minor"
+segment = "scotrail-cathcart-newton-branch"
+# Kirkhill.
+
+[[stations]]
+crs = "NTN"
+role = "terminus"
+segment = "scotrail-cathcart-newton-branch"
+# Newton: also a physical junction with the Argyle Line's Hamilton branch
+# and the West Coast Main Line -- see the segment-naming coordination note
+# above.
+
+# --- Neilston branch (diverges from the Circle at Cathcart) ---
+
+[[stations]]
+crs = "MUI"
+role = "minor"
+segment = "scotrail-cathcart-neilston-branch"
+# Muirend.
+
+[[stations]]
+crs = "WLM"
+role = "minor"
+segment = "scotrail-cathcart-neilston-branch"
+# Williamwood.
+
+[[stations]]
+crs = "WCR"
+role = "minor"
+segment = "scotrail-cathcart-neilston-branch"
+# Whitecraigs.
+
+[[stations]]
+crs = "PTT"
+role = "minor"
+segment = "scotrail-cathcart-neilston-branch"
+# Patterton.
+
+[[stations]]
+crs = "NEI"
+role = "terminus"
+segment = "scotrail-cathcart-neilston-branch"
+# Neilston: real terminus today (the former continuation to Uplawmoor
+# closed 1962/1964, per the sourcing above). A new station, Balgray, is
+# under construction on this branch (expected opening September 2026 per
+# Wikipedia) -- not yet added here, as it does not exist as of this task.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Barrhead: NOT part of this cluster -- see the file-level comment
+#   above. Modelled in `scotrail-glasgow-south-western.toml` instead.
+# - Balgray (under construction, expected September 2026): not a live
+#   station yet, per the Global Constraints' current-operational-route
+#   scope.
+# - Newton's own further connections (Argyle Line Hamilton branch, West
+#   Coast Main Line): real, sourced, but no live cross-file overlap exists
+#   to reconcile today -- see the segment-naming coordination note above.

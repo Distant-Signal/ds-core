@@ -1,0 +1,287 @@
+id = "swr-hounslow-loop"
+name = "Hounslow Loop Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS, AND HOW IT RELATES TO ITS SIBLING swr-chertsey-loop
+# ============================================================================
+# "Windsor Lines" (the brief's own umbrella term) turns out on Wikipedia to
+# be a disambiguation page only, not a single article - checked, not
+# assumed, per this task's instruction. The real umbrella infrastructure
+# name used by the individual route articles (Hounslow Loop Line, Chertsey
+# branch line, and this catalogue's own pre-existing swr-kingston-loop.toml)
+# is the "Waterloo-Reading line". This catalogue already has a segment for
+# part of it - `swr-windsor-lines`, covering Twickenham inward to Waterloo
+# via Richmond, established by swr-kingston-loop.toml specifically so a
+# future file for "Reading / Windsor & Eton Riverside / Hounslow Loop" could
+# reuse it. This file and its sibling do exactly that (see SEGMENTS below).
+#
+# IMPORTANT FINDING, checked directly against Wikipedia station articles
+# rather than assumed from the "loop" name: the Hounslow Loop's own
+# standard off-peak weekday service does NOT run out one way and back the
+# other via Richmond, the way the Kingston Loop does. Hounslow's own
+# station article gives its off-peak pattern as "2 tph to London Waterloo
+# via Brentford" and "2 tph to Weybridge via Staines" - i.e. it is ONE
+# continuous through service, Weybridge <-> Waterloo via Hounslow, in both
+# directions over the same track (Isleworth/Brentford/Barnes side).
+# Confirmed independently at Weybridge ("2tph to London Waterloo via
+# Staines and Hounslow") and Virginia Water ("2 tph to Weybridge" alongside
+# "2 tph to Waterloo... via Hounslow"). The "via Richmond" route
+# (swr-windsor-lines) is a SEPARATE, parallel pattern used by other Windsor
+# lines services (semi-fast Virginia Water/Reading workings, and peak
+# extras per Hounslow's own article) - not, in normal off-peak service, the
+# same trains that call at Hounslow.
+#
+# Practical consequence: "Hounslow Loop" and "Chertsey branch" are real
+# Wikipedia article names for two contiguous halves of what is, today, a
+# SINGLE physical through service (Waterloo <-> Weybridge via Hounslow).
+# This task asks for two files by these names regardless (for catalogue
+# granularity, matching how swr-kingston-loop.toml/swr-chessington.toml
+# split two related-but-distinct SWR suburban routes into siblings), so
+# this file models the loop-shaped Barnes-to-Virginia-Water stretch and
+# defers the Chertsey/Weybridge continuation to swr-chertsey-loop.toml -
+# but because they are genuinely the same trains on the same track, the
+# whole Barnes-Virginia Water stretch is a real, deliberate SHARED segment
+# between the two files (see SEGMENTS), not just a station-overlap
+# convenience.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route shape: Wikipedia "Hounslow Loop Line" ("leaves the Waterloo-Reading
+# line at Barnes Junction and after some seven and a half miles rejoins it
+# at a triangular junction between Whitton and Feltham"), cross-checked
+# against the Hounslow and Isleworth station articles' own Services
+# sections (quoted above) and against Waterloo to Reading line's own route
+# diagram (Twickenham - Whitton - Feltham - Ashford - Staines - Egham -
+# Virginia Water, confirming Whitton/Feltham's position relative to
+# Staines/Virginia Water).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Barnes Bridge=BNI, Chiswick=CHK, Kew Bridge=KWB, Brentford=BFD, Syon
+# Lane=SYL, Isleworth=ISL, Hounslow=HOU, Whitton (London)=WTN, Feltham=FEL,
+# Ashford (Surrey)=AFS (distinct from Ashford International=AFK in Kent -
+# confirmed both codes), Staines=SNS, Egham=EGH, Virginia Water=VIR.
+# Grepped clean before starting: no other `lines/*.toml` file lists any of
+# Barnes Bridge, Chiswick, Kew Bridge, Brentford, Syon Lane, Isleworth,
+# Hounslow, Whitton, Feltham, Ashford (Surrey), Staines, Egham or Virginia
+# Water. Barnes (BNS) itself is already in swr-kingston-loop.toml.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   WAT - VXH - CLJ | QRB - WNT - PUT - BNS | BNI - CHK - KWB - BFD - SYL -
+#   [-- swr-trunk-waterloo --|-- swr-windsor-lines (reused) --|
+#   ISL - HOU - WTN - FEL - AFS - SNS - EGH - VIR
+#   --------------- swr-hounslow-loop (new, shared with sibling) ---------]
+#
+# `swr-trunk-waterloo`: reused verbatim, as in every sibling swr-*.toml.
+#
+# `swr-windsor-lines`: QRB, WNT, PUT and BNS are reused verbatim from
+# swr-kingston-loop.toml, which already lists this exact station sequence
+# (as part of its own Windsor-lines return leg via Richmond) with these
+# exact roles. This is genuinely the same physical Vauxhall-side approach a
+# Hounslow Loop train also uses (Vauxhall's Windsor-lines platforms 1-4,
+# per swr-kingston-loop.toml's own note) before diverging from the
+# Richmond-bound route at Barnes - reusing the name is correct, not
+# incidental, per the "same operator's own branching network" rule.
+#
+# `swr-hounslow-loop` (this file's own new segment name): Barnes Junction
+# has no separate CRS code from Barnes (BNS) itself, so per the shared-trunk
+# rule of thumb this line's own exclusive-but-shared segment starts at the
+# next station past the junction, Barnes Bridge - matching how
+# swr-kingston-loop.toml treats New Malden/Norbiton. It is SHARED
+# (deliberately, not just a same-operator convenience) with
+# swr-chertsey-loop.toml all the way to Virginia Water, because - per the
+# IMPORTANT FINDING above - both files' trains are, in current normal
+# service, literally the same physical workings running the same track;
+# an incident anywhere on this stretch genuinely affects both files' lines
+# and should be flagged as a shared-trunk event between them.
+#
+# This file's own modelled scope ends at Virginia Water (a real junction:
+# Chertsey branch one way, the separate Waterloo-Reading-via-Ascot route
+# the other, neither modelled beyond this point - see SCOPE BOUNDARIES).
+# VIR is given role "junction", not "terminus": the real passenger service
+# does not terminate there, it continues onto the sibling file's own
+# exclusive `swr-chertsey-branch` segment.
+
+match_keywords = ["Hounslow loop"]
+# The line's own branded/article name ("Hounslow Loop Line"). Grepped clean
+# against every other file's match_keywords. A bare "Hounslow" is
+# deliberately not added - it would also match Hounslow Central/West/East
+# London Underground content outside this catalogue's National Rail scope,
+# mirroring swr-kingston-loop.toml's own reasoning for not adding a bare
+# "Kingston".
+
+sample_stations = ["ISL", "HOU", "BFD"]
+# All three are on the loop-shaped, non-Windsor-lines part of this file's
+# own segment (Isleworth, Hounslow, Brentford) - served only by this
+# corridor's own trains, no other line in the catalogue touches them.
+
+# No `destination_crs_filter`: the real advertised destination for this
+# corridor's trains is Weybridge (not a station on this file's own list -
+# see the IMPORTANT FINDING above), the same "no natural destination to
+# whitelist without dropping real samples" situation swr-kingston-loop.toml
+# and swr-chessington.toml both already document and both resolve by
+# dropping the filter entirely. All three of this file's own sample
+# stations are exclusive to it, so the mandatory `SW` operator filter
+# already scopes the sample correctly.
+
+# Commuter line, same tuning as its siblings (swr-kingston-loop.toml,
+# swr-chessington.toml): a frequent (2-4 tph) inner/outer London suburban
+# corridor, not a rural branch.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Chertsey branch / Weybridge continuation past Virginia Water:
+#   swr-chertsey-loop.toml, this file's own sibling.
+# - The "via Richmond" semi-fast pattern, and the Windsor & Eton Riverside
+#   and Reading-via-Ascot continuations past Staines/Virginia Water: none
+#   are modelled by any file yet (swr-kingston-loop.toml's own scope
+#   boundaries already flag the Windsor & Eton Riverside/Reading gap) -
+#   still open.
+# - Peak-only "via Richmond" extra services that also call at Hounslow, per
+#   that station's own article: a real, minor complication, but since this
+#   file's own sample stations are exclusive to the Hounslow-side track
+#   regardless of which approach a given working used to get there, it does
+#   not affect sampling correctness.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "QRB"
+role = "minor"
+segment = "swr-windsor-lines"
+# Queenstown Road (Battersea). Reused verbatim from swr-kingston-loop.toml.
+# Ordered before Clapham Junction below to match the real chainage from
+# Waterloo (Queenstown Road then Clapham Junction) -- segment tags for both
+# stations are unchanged, only the array position was corrected.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WNT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Wandsworth Town. Reused verbatim from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "PUT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Putney. Reused verbatim from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "BNS"
+role = "junction"
+segment = "swr-windsor-lines"
+# Barnes. Also swr-kingston-loop.toml's own junction station on this same
+# segment name (that file's own Richmond-bound approach). Barnes Junction
+# itself, where THIS file's own loop diverges, is immediately south of the
+# station and uncoded - exclusive coverage starts at the next station,
+# Barnes Bridge, per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "BNI"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Barnes Bridge. NOT on swr-kingston-loop.toml's own route (that file's own
+# header explicitly notes loop trains there run Barnes -> Mortlake instead).
+
+[[stations]]
+crs = "CHK"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Chiswick.
+
+[[stations]]
+crs = "KWB"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Kew Bridge.
+
+[[stations]]
+crs = "BFD"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Brentford.
+
+[[stations]]
+crs = "SYL"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Syon Lane.
+
+[[stations]]
+crs = "ISL"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Isleworth.
+
+[[stations]]
+crs = "HOU"
+role = "major"
+segment = "swr-hounslow-loop"
+# Hounslow. The loop's namesake and principal intermediate station.
+
+[[stations]]
+crs = "WTN"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Whitton (London). Sits inside the "triangular junction between Whitton
+# and Feltham" where the loop rejoins the Waterloo-Reading line proper.
+
+[[stations]]
+crs = "FEL"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Feltham.
+
+[[stations]]
+crs = "AFS"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Ashford (Surrey). Distinct from Ashford International (Kent, AFK) - see
+# CRS sourcing note above.
+
+[[stations]]
+crs = "SNS"
+role = "junction"
+segment = "swr-hounslow-loop"
+# Staines. Junction for the Windsor & Eton Riverside branch (via Wraysbury/
+# Datchet), per Waterloo to Reading line's own route diagram - real, not
+# modelled by any file yet, see SCOPE BOUNDARIES.
+
+[[stations]]
+crs = "EGH"
+role = "minor"
+segment = "swr-hounslow-loop"
+# Egham.
+
+[[stations]]
+crs = "VIR"
+role = "junction"
+segment = "swr-hounslow-loop"
+# Virginia Water. Junction for the Chertsey branch (this file's own sibling,
+# swr-chertsey-loop.toml, continues from here) and for the separate
+# Waterloo-Reading-via-Ascot/Bracknell route (not modelled by any file yet).
+# This file's own modelled scope ends here - see SEGMENTS above.

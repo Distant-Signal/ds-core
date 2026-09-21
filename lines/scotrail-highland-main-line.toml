@@ -35,7 +35,8 @@ operators = ["SR"]
 # additional operator alongside its dominant West Coast TOCs. Unlike that
 # file, LNER/CS are NOT added here: every other file in this ScotRail
 # batch (`scotrail-central-belt.toml`, `scotrail-ayrshire.toml`,
-# `scotrail-fife-borders.toml`) lists `operators = ["SR"]` only, even
+# `scotrail-fife-circle.toml`/`scotrail-borders-railway.toml`, the split
+# successors of `scotrail-fife-borders.toml`) lists `operators = ["SR"]` only, even
 # where other operators' services also touch the metals, and the task
 # brief for this file explicitly states "Operators: `SR`." Kept consistent
 # with that batch-wide convention rather than mixed on a per-file basis.
@@ -51,7 +52,7 @@ match_keywords = ["Highland Main Line"]
 # `sample_stations`/stations by any other `lines/*.toml` file (grepped
 # before starting this task), so there is no live LDBWS ambiguity to
 # resolve today, unlike `scotrail-ayrshire.toml`'s GLC disambiguation
-# against `scotrail-glasgow-suburban.toml`. Perth in particular is a real
+# against `scotrail-argyle.toml`. Perth in particular is a real
 # multi-line junction (Glasgow-Dundee line, Edinburgh-Aberdeen main line
 # access via Hilton Junction, per Wikipedia's "Perth railway station
 # (Scotland)" article), so this may need revisiting once a Perth-Dundee-

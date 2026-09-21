@@ -1,0 +1,149 @@
+id = "southeastern-medway-valley"
+name = "Medway Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SE"]
+
+sample_stations = ["MDW", "AYL", "PDW"]
+match_keywords = ["Medway Valley line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP - southeastern-chatham.toml's own SOO (Strood) comment
+# already flags this: "North Kent Line joins here; not covered by this
+# catalogue" (that comment is actually about the North Kent Line, a
+# different uncovered gap - see southeastern-north-kent.toml, part of this
+# same batch - but Strood is also this line's own northern end). More
+# directly, southeastern-main-line.toml's own PDW (Paddock Wood) comment
+# says plainly: "Medway Valley line diverges here." This file is that line.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Medway Valley line" article (lead: "the name
+# given to the railway line linking Strood in the Medway Towns via Maidstone
+# West to Tonbridge"; infobox: "tracks = 2", "electrification = Third rail,
+# 750 V DC"), cross-checked station-by-station against each intermediate
+# station's own Wikipedia infobox, and every CRS code independently verified
+# live against https://ds.cursed.solutions/api/stations?q=<name>.
+#
+# This task's own scope is "Strood - Maidstone West - Paddock Wood" -
+# narrower than the line's full real-world extent, which per the same
+# Wikipedia lead continues on to Tonbridge ("High Speed services also link
+# between Maidstone West, Snodland, Strood and London St Pancras
+# International (peak only)"). Paddock Wood-Tonbridge itself is not new
+# track this file would need to add: both stations are already
+# southeastern-main-line.toml's own `seml-weald` stations, and that file's
+# own PDW comment already anticipates this exact branch. This file therefore
+# stops at Paddock Wood (PDW), its southern scope boundary, rather than
+# duplicating the already-modelled PDW-TON stretch.
+#
+# Double track throughout (no single-track sections found in sourcing);
+# service is "off-peak half-hourly (hourly on Sundays)" per the line's own
+# infobox - closer to a moderate-frequency regional service than a sparse
+# rural single-track branch, so no `severity_overrides` are applied here
+# (matching southern-oxted-uckfield.toml/southern-coastway-east.toml/
+# southern-coastway-west.toml's own precedent of leaving default thresholds
+# alone for a "regional" line of this frequency, rather than
+# northern-furness.toml/scotrail-ayrshire.toml's rural-hourly tuning, which
+# is for a lower-frequency, more sparsely-served class of line).
+#
+# HAND-OFF NOTE for a future southeastern-highspeed.toml revision (not acted
+# on here, per this catalogue's own convention for a real but
+# Wikipedia-only-sourced lead - see southern-brighton-main-line.toml's own
+# Task 5.14 hand-off for the precedent this follows): the Medway Valley
+# line's own Wikipedia article states a genuine current peak-only Javelin
+# (HS1 domestic) service links "Maidstone West, Snodland, Strood and London
+# St Pancras International." southeastern-highspeed.toml does not currently
+# model Maidstone West/Snodland/Strood (grepped before writing this file -
+# confirmed absent from that file's own CRS list), so this would be a real
+# extension for that file to pick up independently; not modelled here since
+# it's a different file's own operator/service pattern to verify, and this
+# single Wikipedia sentence does not meet this batch's two-source bar on its
+# own.
+[[stations]]
+crs = "SOO"
+role = "junction"
+segment = "southeastern-medway-valley"
+# Strood. Also southeastern-chatham.toml's own station (`chatham-medway`
+# segment, already commented "North Kent Line joins here" - a different,
+# separately-uncovered route, see southeastern-north-kent.toml) - station
+# overlap only, own segment name here, per the xc-south-coast.toml/
+# xc-manchester.toml precedent used throughout this catalogue.
+
+[[stations]]
+crs = "CUX"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Cuxton.
+
+[[stations]]
+crs = "HAI"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Halling.
+
+[[stations]]
+crs = "SDA"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Snodland.
+
+[[stations]]
+crs = "NHE"
+role = "minor"
+segment = "southeastern-medway-valley"
+# New Hythe.
+
+[[stations]]
+crs = "AYL"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Aylesford.
+
+[[stations]]
+crs = "MDB"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Maidstone Barracks.
+
+[[stations]]
+crs = "MDW"
+role = "major"
+segment = "southeastern-medway-valley"
+# Maidstone West. Not to be confused with Maidstone East (MDE) or Maidstone
+# Barracks (MDB, above) - the former is on the physically distinct
+# southeastern-maidstone-east.toml (part of this same batch), on the other
+# side of the town; confirmed as a genuinely distinct, non-overlapping CRS
+# code.
+
+[[stations]]
+crs = "EFL"
+role = "minor"
+segment = "southeastern-medway-valley"
+# East Farleigh.
+
+[[stations]]
+crs = "WTR"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Wateringbury.
+
+[[stations]]
+crs = "YAL"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Yalding.
+
+[[stations]]
+crs = "BEG"
+role = "minor"
+segment = "southeastern-medway-valley"
+# Beltring.
+
+[[stations]]
+crs = "PDW"
+role = "terminus"
+segment = "southeastern-medway-valley"
+# Paddock Wood. Also southeastern-main-line.toml's own station (`seml-weald`
+# segment, already commented "Medway Valley line diverges here") - station
+# overlap only, this file's own scope boundary per ROUTE AND SOURCING above.

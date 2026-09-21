@@ -1,0 +1,188 @@
+id = "wmr-camp-hill-line"
+name = "Camp Hill Line (Birmingham New Street - Kings Norton)"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "LM",  # West Midlands Trains (West Midlands Railway brand) -- the
+  # primary local-stopping-service operator, per the sourcing below.
+  "XC",  # CrossCountry -- named alongside WMR as also running services
+  # over this route (longer-distance workings), see below. Reused verbatim
+  # from `cross-country.toml`, an already-verified fact.
+]
+
+# GAP-ANALYSIS PROVENANCE: the second of the two very-recent reopenings the
+# batch brief flagged for extra care (real-world reopening date 7 April
+# 2026, ~5 months before this task, closing an 85-year gap since local
+# passenger services here ended in 1941).
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Camp Hill line"
+# article raw wikitext, cross-checked against each of the three newly
+# reopened stations' own individual infobox route diagrams -- Moseley
+# Village, Kings Heath, Pineapple Road -- since the line article's own
+# prose was not fully explicit about calling-point order):
+#   1. Infrastructure identity: the article gives the line's own formal
+#      engineering name as the "St Andrews Junction to Kings Norton line"
+#      -- it "piggybacks the station approach of the Rugby-Birmingham-
+#      Stafford line (accessed via St Andrews Junction and Grand Junction)
+#      to enter Birmingham New Street", i.e. today's reopened service joins
+#      the existing New Street throat rather than using a dedicated
+#      approach of its own. "Camp Hill line" (used as this file's `name`)
+#      is the article's own title and the plain-English name used
+#      throughout its prose.
+#   2. Termini today: Birmingham New Street and Kings Norton. A FUTURE
+#      "Bordesley Chords" project would divert services into Birmingham
+#      Moor Street via a new viaduct near Bordesley instead -- not built
+#      yet as of this task, so New Street remains this file's modelled
+#      terminus; a future revision should re-check this once/if that
+#      project completes.
+#   3. Full current station list, in geographic order (cross-checked
+#      station-by-station against each new station's own infobox route
+#      diagram, which resolved an ordering ambiguity in the line article's
+#      own prose): Birmingham New Street, Moseley Village (reopened 7 April
+#      2026), Kings Heath (reopened 7 April 2026), Pineapple Road (reopened
+#      7 April 2026), Kings Norton. Moseley Village's own infobox lists its
+#      preceding station as Kings Heath and following station as Birmingham
+#      New Street; Kings Heath's own infobox lists its preceding station as
+#      Pineapple Road and following station as Moseley Village; Pineapple
+#      Road's own infobox lists its preceding station as Kings Norton and
+#      following station as Kings Heath -- all three agree on exactly this
+#      one ordering, New Street-Moseley Village-Kings Heath-Pineapple
+#      Road-Kings Norton.
+#   4. Historical note (not modelled, current-day scope only): the line
+#      historically served six passenger stations before their 1941
+#      closure; Kings Heath's own article separately notes its Midland
+#      Railway-era name was "Pineapple Road (Hazelwell)" -- i.e. today's
+#      Pineapple Road occupies a similar location to the historic Hazelwell
+#      stop, though this task did not independently verify them as the
+#      identical site (flagged as an open, minor historical-continuity
+#      question, not load-bearing for this file's current-day data).
+#      Bordesley (a historic stop on this route, and separately a
+#      currently-open station on `wmr-snow-hill.toml`'s own trunk segment)
+#      is not served by the current Camp Hill line service and is not
+#      duplicated here.
+#   5. Funding/authority: West Midlands Combined Authority-led, funding
+#      announced March 2021. No "Restoring Your Railway" central-government
+#      scheme mentioned for this specific project (unlike the Darlaston-line
+#      reopening's own funding, per `wmr-darlaston-line.toml`'s research).
+#   6. Service pattern: West Midlands Railway "every half an hour for most
+#      of the day, with three [trains per] hour in the late evening,
+#      Monday to Saturday" and "an hourly service on Sundays". CrossCountry
+#      is separately named as running "longer-distance services" over this
+#      same route -- read as CrossCountry services using this line's own
+#      track (e.g. as a Birmingham-avoiding diversionary/relief routing for
+#      its own Cross-Country spine), not necessarily calling at the three
+#      new local halts at the same frequency as WMR's own stopping service.
+#      This was not independently confirmed to a two-source standard within
+#      this task's research budget, and Wikipedia's own coverage of this
+#      six-month-old reopening is comparatively thin (a known risk the
+#      brief itself flagged for this line) -- flagged here rather than
+#      silently assumed either way. Included as a genuine second operator
+#      per the source's own explicit naming, not removed for caution, but
+#      this uncertainty should be re-checked in a future pass.
+#   7. Electrification: not stated in the article's infobox; no claim made
+#      either way.
+#
+# CRS codes: BHM reused verbatim (see below). MOV (Moseley Village), KIH
+# (Kings Heath) and PIR (Pineapple Road) are each stated directly in that
+# station's own Wikipedia infobox `code` field (fetched live 2026-09-21) --
+# this app's own station-lookup endpoint was not independently queried for
+# these three specific codes this session (an omission relative to this
+# task's usual two-source standard, flagged honestly rather than silently
+# treated as fully verified, precisely because this is one of the two
+# recent-reopening lines the brief asked to be extra careful about). KNN
+# reused verbatim from `wmr-cross-city.toml` (already twice-verified
+# there). No TIPLOC confirmed for MOV/KIH/PIR to any standard, so `tiploc`
+# is omitted for all three.
+
+sample_stations = ["MOV", "KIH", "PIR"]
+# All three exclusive to this line (no other file's LDBWS sampling would
+# compete for them -- grep-checked against `lines/*.toml`); BHM and KNN are
+# both busy multi-line stations shared with other catalogued files
+# (`wmr-cross-city.toml` at Kings Norton; effectively every Birmingham-area
+# file at New Street) so are left out of sampling per
+# `wmr-nuneaton-coventry.toml`'s identical precedent for exclusive-station
+# preference.
+
+# No `destination_crs_filter`: an earlier draft set `["KNN"]`, but that
+# self-contradicted this file's own reasoning below (MOV/KIH/PIR are
+# already unambiguous once sampled, since no other file's LDBWS sampling
+# competes for them) and dropped every genuine Birmingham New Street-bound
+# departure, since `destination_crs_filter` only counts departures whose
+# destination is IN the list. Operator-only filtering is sufficient given
+# the exclusive sample stations, matching `wmr-nuneaton-coventry.toml`'s
+# identical reasoning.
+
+match_keywords = ["Camp Hill Line"]
+# The line's own Wikipedia article title. Grep-checked against every other
+# `lines/*.toml` file's `match_keywords` before adding -- no collision
+# ("Camp Hill" does not otherwise appear in this catalogue's keywords). An
+# earlier draft also listed a lowercase "Camp Hill line" variant, but
+# matching is case-insensitive so that was a redundant duplicate; dropped.
+
+# Half-hourly WMR core (busier than most of this catalogue's "regional"
+# hourly branches, but this is a brand-new reopening with the same kind of
+# initial-teething/lower-baseline-reliability risk profile the brief asked
+# to be careful about) -- tuned per the same hourly/sub-hourly
+# regional-branch precedent `wmr-nuneaton-coventry.toml`/
+# `northern-esk-valley.toml` already establish, since default thresholds
+# are calibrated for a busier commuter-core service than this.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Birmingham New Street to Kings Norton, ordered north to south.
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "wmr-camp-hill"
+# Reuses the TIPLOC already established for this physical station in
+# `wcml-birmingham.toml`/`cross-country.toml`/`wmr-cross-city.toml`/
+# `lnwr-chase-line.toml`. Station-overlap only with every other Birmingham
+# New Street-touching file in this catalogue -- this line's own approach
+# (via St Andrews Junction/Grand Junction, per source 1 above) is not
+# independently confirmed as track-identical to any of theirs, so no
+# segment name is shared here, matching this catalogue's established
+# default at this station.
+
+[[stations]]
+crs = "MOV"
+role = "minor"
+segment = "wmr-camp-hill"
+# Moseley Village: reopened 7 April 2026.
+
+[[stations]]
+crs = "KIH"
+role = "minor"
+segment = "wmr-camp-hill"
+# Kings Heath: reopened 7 April 2026.
+
+[[stations]]
+crs = "PIR"
+role = "minor"
+segment = "wmr-camp-hill"
+# Pineapple Road: reopened 7 April 2026.
+
+[[stations]]
+crs = "KNN"
+role = "terminus"
+segment = "wmr-camp-hill"
+# Kings Norton: also a `wmr-cross-city.toml` station, on that file's own
+# `wmr-cross-city-trunk` segment (a 22-station-wide name spanning far more
+# track than this line's own single-station touch here) -- per the same
+# coarse-segment-granularity reasoning `lnwr-chase-line.toml`'s own
+# BHM/DUD/AST ruling documents, station-overlap only, no segment name
+# shared with that file.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Bordesley Chords / a future Birmingham Moor Street terminus: real,
+#   sourced (Wikipedia's own "Future plans" section), but not built as of
+#   this task -- this file models the line as it exists today (New Street
+#   terminus). A future revision should re-check this once/if that project
+#   completes.
+# - CrossCountry's own calling pattern on this route beyond "runs
+#   longer-distance services here": not independently confirmed to this
+#   catalogue's usual two-source standard within this task's budget, flagged
+#   in the sourcing note above rather than silently assumed.

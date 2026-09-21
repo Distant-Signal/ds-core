@@ -1,0 +1,151 @@
+id = "emr-derwent-valley"
+name = "Derwent Valley Line"
+mode = "national-rail"
+category = "regional"
+# "regional" chosen to match `northern-furness.toml`/`northern-hope-valley.toml`'s
+# category choice for comparable hourly, single/double-track DMU branches -
+# this is not part of the electrified intercity core (`emr-midland-main-line.toml`,
+# category "main-line").
+operators = ["EM"]  # East Midlands Railway
+
+# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "East Midlands Railway (EMR)" section (a): "...rural branches (Robin Hood
+# Line Nottingham-Worksop, the Poacher/Skegness line, Derby-Matlock)." Those
+# three branches originally shared one file, `lines/emr-rural-branches.toml`,
+# under an explicitly-scoped one-line-per-file exception. A later audit
+# recommended splitting it: the three lines are unrelated, separately
+# community-rail-branded routes, and this one is the least justified of the
+# three to have ever been bundled with the other two - it doesn't even touch
+# Nottingham, where the Robin Hood Line and Poacher Line at least overlap at
+# a shared station. This file is the Derwent Valley Line's share of that
+# split; see `lines/emr-robin-hood.toml` and `lines/emr-poacher.toml` for
+# the other two, and git history for the original combined file's full
+# station-by-station sourcing. Note Wikipedia's own article title capitalises
+# this as "Derwent Valley line" (lower-case "line"); `match_keywords` below
+# keeps the original file's Title Case rendering, which is also the common
+# usage on nationalrail.co.uk and in EMR's own branding.
+
+# Terminus plus the Derby junction (shared trunk with `emr-midland-main-line.toml`).
+destination_crs_filter = ["DBY", "MAT"]
+
+sample_stations = ["DBY", "MAT"]
+
+match_keywords = ["Derwent Valley Line"]
+
+# "one train per hour in each direction" (Wikipedia "Ambergate railway
+# station"/"Duffield railway station" articles). Thresholds follow
+# `northern-furness.toml`'s identical rationale/values for a comparable
+# hourly branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# --- Segment-sharing ruling: Derby is shared trunk with
+# `emr-midland-main-line.toml`'s `emr-mml-derby` segment; Duffield-
+# Ambergate is physically shared Midland Main Line track too, but is NOT a
+# shared *segment name* ---
+# The Wikipedia "Ambergate railway station" article states directly: "It
+# is located on the Derwent Valley Line, which connects Derby and Matlock;
+# it diverges from the Midland Main Line just south of the station at
+# Ambergate Junction." The "Midland Main Line" article's own route-
+# description table independently corroborates this, listing Duffield,
+# Belper and Ambergate in sequence between Derby and Chesterfield. Two
+# independent, purpose-built Wikipedia articles agree the Derby-Matlock
+# branch runs over the same physical Midland Main Line metals as far as
+# Ambergate Junction, just south of Ambergate station.
+#
+# However, `emr-midland-main-line.toml`'s own station list has no entry
+# for Duffield, Belper, or Ambergate (its intercity service does not call
+# there) - Derby is the *only* station both files' station lists literally
+# include in common. Because `SegmentRegistry::is_shared`/`is_exclusive_to`
+# operate per segment name across the whole catalogue and check only
+# which *files* use a name (not which specific stations), reusing
+# `emr-mml-derby` for Duffield/Belper/Ambergate too would incorrectly mark
+# those three stations "shared" even though `emr-midland-main-line.toml`
+# has no independent station entry there to confirm it - the exact same
+# invariant-violation shape the catalogue's final review caught for the
+# original combined file's `emr-mml-north` over-reuse. So: Derby (the one
+# genuinely common station) reuses `emr-mml-derby` verbatim; Duffield,
+# Belper and Ambergate are folded into this branch's own exclusive
+# `emr-matlock-branch` segment instead, per the schema's shared-trunk rule
+# of thumb (junction station - Derby - stays on the shared segment; the
+# exclusive segment starts at the next station). Cost if this distinction
+# ever matters: bounded - if a future revision adds Duffield/Belper/Ambergate
+# as genuine `emr-midland-main-line.toml` calling points, those three
+# stations' segment here should be revisited to reuse `emr-mml-derby` (or
+# a new, wider shared name) at that point; in the meantime both lines
+# still independently match an incident at any of these three stations via
+# StationHit/ExclusiveSegment, they just won't jointly report
+# SharedSegment for Duffield/Belper/Ambergate specifically (Derby itself
+# still does, correctly, via the test below). This ruling and the segment
+# name (`emr-mml-derby`) are unchanged by the split - verified against
+# `lines/emr-midland-main-line.toml`'s current copy, which still declares
+# exactly this segment for its own Derby station entry.
+#
+# Station list, CRS codes verified two-source (Wikipedia infobox +
+# nationalrail.co.uk) for every station below except Derby, whose CRS is
+# reused unchanged from `emr-midland-main-line.toml` (already verified
+# there, same physical station; TIPLOC also reused - see that file).
+[[stations]]
+crs = "DBY"
+tiploc = "DRBY"  # reused from emr-midland-main-line.toml/cross-country.toml
+role = "junction"
+segment = "emr-mml-derby"
+# Derby: junction for this branch, reusing `emr-midland-main-line.toml`'s
+# `emr-mml-derby` segment - see ruling above.
+
+[[stations]]
+crs = "DFI"
+role = "minor"
+segment = "emr-matlock-branch"
+# Duffield. Physically on shared Midland Main Line metal as far as
+# Ambergate Junction (see ruling above), but folded into this branch's own
+# exclusive segment since `emr-midland-main-line.toml` has no station entry
+# here to share a segment name with. A former branch to Wirksworth
+# diverges here too (now the heritage Ecclesbourne Valley Railway, not
+# National Rail - not a passenger-service overlap with any line in this
+# catalogue).
+
+[[stations]]
+crs = "BLP"
+role = "minor"
+segment = "emr-matlock-branch"
+# Belper. Same reasoning as Duffield above.
+
+[[stations]]
+crs = "AMB"
+role = "junction"
+segment = "emr-matlock-branch"
+# Ambergate: Ambergate Junction, immediately south of the station, is the
+# real physical point where the Derwent Valley Line diverges from the
+# Midland Main Line - see ruling above for why this catalogue's
+# segment-sharing model still folds this station into the branch's own
+# exclusive segment rather than the shared one.
+
+[[stations]]
+crs = "WTS"
+role = "minor"
+segment = "emr-matlock-branch"
+# Whatstandwell.
+
+[[stations]]
+crs = "CMF"
+role = "minor"
+segment = "emr-matlock-branch"
+# Cromford.
+
+[[stations]]
+crs = "MTB"
+role = "minor"
+segment = "emr-matlock-branch"
+# Matlock Bath.
+
+[[stations]]
+crs = "MAT"
+role = "terminus"
+segment = "emr-matlock-branch"
+# Matlock. Also the southern terminus of the heritage Peak Rail line
+# (Wikipedia "Matlock railway station": "the terminus of both the Derwent
+# Valley Line from Derby and Peak Rail") - not a National Rail passenger
+# service, so no overlap with any line in this catalogue.

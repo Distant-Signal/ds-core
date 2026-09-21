@@ -140,12 +140,26 @@ match_keywords = ["Snow Hill lines"]
 #     it closed on 5 April 1965 (Beeching) and has never reopened --
 #     current-day proposals to reinstate it are unbuilt as of 2026. Fails
 #     the "currently-open, currently-served" bar, so it stays OUT.
-#   - Whitlocks End, The Lakes (North Warwickshire branch), Hartlebury
-#     (Worcester trunk), Smethwick Galton Bridge's other closed
-#     neighbours (Smethwick West, Rood End, Handsworth & Smethwick, Soho &
-#     Winson Green, Hockley): none of these were named in this task's
-#     brief/starting list, so they weren't independently researched here
-#     and are left for a future pass rather than guessed at.
+#   - Smethwick Galton Bridge's other closed neighbours (Smethwick West,
+#     Rood End, Handsworth & Smethwick, Soho & Winson Green, Hockley):
+#     none of these were named in this task's brief/starting list, so they
+#     weren't independently researched here and are left for a future pass
+#     rather than guessed at.
+#
+# Follow-up audit (2026-09-21, data-driven schedule audit cross-checked
+# against Wikipedia): Hartlebury, Whitlocks End and The Lakes -- named just
+# above in an earlier draft of this comment as "left for a future pass" --
+# have now been independently confirmed as real, currently-open,
+# genuinely/regularly WMR-served stations and are added below at their
+# correct geographic positions. This resolves that deferral; nothing from
+# the earlier list remains outstanding except the already-closed/
+# out-of-scope stations noted above.
+#   - Hartlebury (HBY): Worcester trunk, between Droitwich Spa and
+#     Kidderminster.
+#   - Whitlocks End (WTE): North Warwickshire branch, between Shirley and
+#     Wythall.
+#   - The Lakes (TLK): North Warwickshire branch, between Earlswood and
+#     Wood End.
 [[stations]]
 crs = "WOS"
 role = "terminus"
@@ -158,6 +172,11 @@ segment = "wmr-snow-hill-trunk"
 
 [[stations]]
 crs = "DTW"
+role = "minor"
+segment = "wmr-snow-hill-trunk"
+
+[[stations]]
+crs = "HBY"  # Hartlebury
 role = "minor"
 segment = "wmr-snow-hill-trunk"
 
@@ -303,12 +322,22 @@ role = "major"
 segment = "wmr-snow-hill-stratford"
 
 [[stations]]
+crs = "WTE"  # Whitlocks End
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
 crs = "WYT"  # Wythall
 role = "minor"
 segment = "wmr-snow-hill-stratford"
 
 [[stations]]
 crs = "EWD"  # Earlswood
+role = "minor"
+segment = "wmr-snow-hill-stratford"
+
+[[stations]]
+crs = "TLK"  # The Lakes
 role = "minor"
 segment = "wmr-snow-hill-stratford"
 

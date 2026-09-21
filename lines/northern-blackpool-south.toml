@@ -1,0 +1,143 @@
+id = "northern-blackpool-south"
+name = "South Fylde Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains diesel service with no existing `lines/*.toml`
+# coverage. Confirmed via Wikipedia's "South Fylde line" article (raw
+# wikitext) and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference), fetched/verified 2026-09-21.
+#
+# --- Correcting `northern-blackpool.toml`'s own divergence point ---
+# `northern-blackpool.toml` tags Poulton-le-Fylde (PFY) with the comment
+# "Blackpool South services diverge here." This research found that is not
+# accurate: Wikipedia's "South Fylde line" article is explicit that the real
+# physical divergence is further south, at Kirkham & Wesham: "The main
+# branch, which is double-tracked and electrified, runs to Blackpool North
+# station via Poulton-le-Fylde... A second branch, which is single-tracked
+# and non-electrified, diverges from the main branch at Kirkham and Wesham
+# junction, running on a southerly route to Blackpool South station." This
+# file is modelled on that sourced fact (Kirkham & Wesham as the true
+# junction), not on the other file's existing comment. Not fixed there --
+# out of this task's scope, which is limited to adding new line files -- but
+# flagged here clearly for a future correction pass on that file's own PFY
+# annotation, which does not itself affect matcher behaviour (segment
+# sharing is keyed on the `segment` field, not the human-readable comment).
+#
+# --- Preston - Kirkham & Wesham: genuine track sharing, but a
+# coarse-granularity mismatch, so no segment name is reused ---
+# Preston and Kirkham & Wesham are real, physically shared double-track
+# electrified stations between this line and `northern-blackpool.toml`. But
+# that file tags its ENTIRE route (Preston all the way through Blackpool
+# North -- Chorley, Leyland, Layton, everything) with a single flat
+# `northern-blackpool` segment, not a finer sub-segment for just the
+# Preston-Kirkham & Wesham stretch. Reusing that name here would incorrectly
+# mark this file as "shared trunk" with stations nowhere near the actual
+# South Fylde divergence (e.g. Chorley, many miles east) -- the exact
+# "coarse-granularity mismatch" already identified and deliberately handled
+# by `northern-hope-valley.toml`/`emr-regional.toml`'s own Stockport overlap
+# (see `emr_regional_stockport_and_hope_valley_both_match_without_over_propagating`
+# in `crates/common/src/matcher.rs`): "genuinely shares... track... but NOT
+# a shared *segment name*." Following that precedent, this file's own PRE
+# and KKM entries stay on its own exclusive `northern-blackpool-south`
+# segment; an incident at either station matches both files independently
+# (each ExclusiveSegment), which is the correct, narrower outcome here.
+#
+# --- Salwick: a genuine curation oddity, flagged rather than glossed over ---
+# Salwick sits geographically BETWEEN Preston and Kirkham & Wesham -- i.e. on
+# the physically-shared double-track electrified stretch -- but is served
+# exclusively by this line's own sparse diesel trains, not by Blackpool
+# North's electric expresses: "The typical off-peak service... in trains per
+# day is: 3tpd to Blackpool South, 3tpd to Preston. Trains do not call at
+# Salwick on Sundays." `northern-blackpool.toml` does not currently list
+# Salwick as a station at all -- a real, sourced gap: that file should
+# probably gain its own Salwick entry in a future pass. Not fixed here (out
+# of this task's scope).
+#
+# --- Rest of route and severity ---
+# Moss Side - Lytham - Ansdell & Fairhaven - St Annes-on-the-Sea - Squires
+# Gate - Blackpool Pleasure Beach - Blackpool South, all confirmed via each
+# station's own Wikipedia infobox chain. Electrification: "A second branch,
+# which is single-tracked and non-electrified" -- diesel throughout the
+# Kirkham & Wesham-Blackpool South branch itself (Salwick included, despite
+# sitting on electrified track it never uses for a stopping service).
+# Frequency: "one service per hour runs along this branch" (Moss Side
+# onward) -- a genuinely sparse, single-track branch service, distinct from
+# Blackpool North's frequent electrified trunk; tuned thresholds follow
+# `northern-clitheroe.toml`'s own three-field rural-branch pattern.
+sample_stations = ["PRE", "KKM", "LTM", "BPS"]
+destination_crs_filter = ["BPS"]
+match_keywords = ["South Fylde line"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "PRE"
+role = "junction"
+segment = "northern-blackpool-south"
+# Preston -- station/track overlap only with `northern-blackpool.toml`'s
+# own Preston entry; no segment shared, per the top-of-file comment.
+
+[[stations]]
+crs = "SLW"
+role = "minor"
+segment = "northern-blackpool-south"
+# Salwick -- geographically upstream of the real junction, but exclusive to
+# this line's own trains; see the top-of-file comment.
+
+[[stations]]
+crs = "KKM"
+role = "junction"
+segment = "northern-blackpool-south"
+# Kirkham & Wesham -- the true physical divergence point (see the top-of-
+# file comment correcting `northern-blackpool.toml`'s own PFY annotation);
+# station/track overlap only, no segment shared -- see the top-of-file
+# comment on the coarse-granularity mismatch.
+
+[[stations]]
+crs = "MOS"
+role = "minor"
+segment = "northern-blackpool-south"
+# Moss Side -- first station on this line's own exclusive segment.
+
+[[stations]]
+crs = "LTM"
+role = "minor"
+segment = "northern-blackpool-south"
+# Lytham.
+
+[[stations]]
+crs = "AFV"
+role = "minor"
+segment = "northern-blackpool-south"
+# Ansdell & Fairhaven.
+
+[[stations]]
+crs = "SAS"
+role = "minor"
+segment = "northern-blackpool-south"
+# St Annes-on-the-Sea.
+
+[[stations]]
+crs = "SQU"
+role = "minor"
+segment = "northern-blackpool-south"
+# Squires Gate.
+
+[[stations]]
+crs = "BPB"
+role = "minor"
+segment = "northern-blackpool-south"
+# Blackpool Pleasure Beach.
+
+[[stations]]
+crs = "BPS"
+role = "terminus"
+segment = "northern-blackpool-south"
+# Blackpool South.

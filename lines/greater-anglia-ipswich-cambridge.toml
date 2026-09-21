@@ -1,0 +1,164 @@
+id = "greater-anglia-ipswich-cambridge"
+name = "Ipswich - Cambridge Line (via Newmarket)"
+mode = "national-rail"
+category = "regional"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) -- not re-derived here.
+
+# Confirmed via Wikipedia's "Ipswich-Ely line" article (raw wikitext -- also
+# known as the "St Edmund's Line"; the real current infrastructure identity
+# for this task's brief covers a wider Ipswich-Peterborough-via-Ely route
+# with a branch to Cambridge via Newmarket, not just the Cambridge/Newmarket
+# stretch this task names -- see the scope note below). Passenger services
+# (article's own "Passenger services" section): "Ipswich-Cambridge (hourly)"
+# and "Ipswich-Peterborough (two-hourly)", both Greater Anglia.
+#
+# Route and current station list confirmed via Template:Ipswich_to_Ely_Line_RDT
+# (raw wikitext route diagram), which shows the Cambridge-bound service
+# diverging from the Ipswich-Peterborough main line at Chippenham Junction
+# (no passenger CRS code) near Kennett, running via Newmarket to Cambridge:
+# Ipswich - Needham Market - Stowmarket - Thurston - Elmswell - Bury St
+# Edmunds - Kennett - [Chippenham Junction] - Newmarket - Dullingham -
+# Cambridge. (Six Mile Bottom, between Dullingham and Cambridge on the same
+# diagram, is marked closed -- not listed.)
+#
+# ## Scope: Ipswich-Cambridge only, not Ipswich-Peterborough
+#
+# This task's brief names only "Ipswich-Cambridge/Newmarket Line". The
+# genuine Ipswich-Peterborough continuation beyond Kennett/Chippenham
+# Junction (via Soham and Ely, two-hourly, per the sourcing above) is real,
+# sourced, and part of the same Wikipedia article, but is not named in this
+# task's scope and is not modelled here -- left as a documented gap for a
+# future task, rather than silently folded in or invented. Soham and Ely
+# are not `[[stations]]` entries in this file.
+#
+# `category = "regional"`: infobox `character = Rural`, single track
+# throughout except Ipswich-Stowmarket, unelectrified beyond Stowmarket, an
+# hourly service -- matching this catalogue's other single-track hourly
+# regional branches.
+
+sample_stations = ["IPS", "BSE", "NMK", "CBG"]
+destination_crs_filter = ["CBG", "IPS"]
+
+match_keywords = ["Ipswich-Ely line", "Ipswich to Ely line"]
+# The article's own current title (both the plain and "to"-spelled forms
+# appear in its own running text and infobox) -- this is the real
+# infrastructure/article identity for the route this file models, even
+# though this task's brief and this file's own `name` favour the more
+# service-pattern-specific "Ipswich-Cambridge" framing. "St Edmund's Line"
+# is deliberately not added: per the article's own tag ({{Split|St Edmund's
+# Line}}) it is a name under live editorial dispute/pending-split as of this
+# task, not a confirmed stable Knowledgebase phrase. Grepped `lines/*.toml`:
+# no collision.
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. TIPLOCs are omitted
+# throughout except the shared stations (IPS, SMK, CBG), none of which carry
+# a recorded TIPLOC in the files they're reused from either.
+#
+# ## Overlaps -- all station-overlap only
+#
+# Ipswich (IPS): already a `geml-mainline`-tagged junction in
+# `greater-anglia-main-line.toml` and a `felixstowe-branch`-tagged junction
+# in `greater-anglia-suffolk-branches.toml`. Neither segment name is reused
+# here for the same "would incorrectly widen the claim onto unrelated
+# stations" reason already documented by both of those files and by this
+# batch's own `greater-anglia-east-suffolk.toml`.
+#
+# Needham Market: NOT an overlap, despite appearing geographically between
+# Ipswich and Stowmarket on the Great Eastern Main Line too.
+# `greater-anglia-main-line.toml`'s own comment explicitly excludes it from
+# that file ("deliberately omitted: ... 'not served by main line trains'"),
+# so there is no double-claim here -- this file is the one line that
+# genuinely does call there.
+#
+# Stowmarket (SMK): already a `geml-mainline`-tagged junction in
+# `greater-anglia-main-line.toml`, whose own comment already names this
+# exact line ("Ipswich-Ely line diverges here"). Station-overlap only, same
+# reasoning as Ipswich above.
+#
+# Cambridge (CBG): a major multi-line hub already appearing in
+# `great-northern-kings-lynn.toml`, `greater-anglia-norfolk-branches.toml`,
+# `greater-anglia-west-anglia.toml`, `xc-stansted.toml` and
+# `thameslink-cambridge.toml` -- none of them sharing a segment name with
+# each other at this station (per `greater-anglia-west-anglia.toml`'s own
+# CBG/xc-stansted decision, cited there as the precedent). This file follows
+# the same established pattern: station-overlap only, own segment name.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+# Matches `greater-anglia-east-suffolk.toml`'s own overrides for the same
+# reasoning: an hourly single-track branch where one cancellation is a
+# large fraction of the service and a short delay isn't yet a story at
+# config.py's base thresholds.
+
+[[stations]]
+crs = "IPS"
+tiploc = "IPSWICH"
+role = "junction"
+segment = "greater-anglia-ipswich-cambridge"
+
+[[stations]]
+crs = "NMT"
+role = "minor"
+segment = "greater-anglia-ipswich-cambridge"
+# Needham Market: see the overlap note above -- genuinely exclusive to this
+# line, not a double-claim against `greater-anglia-main-line.toml`.
+
+[[stations]]
+crs = "SMK"
+role = "junction"
+segment = "greater-anglia-ipswich-cambridge"
+# Stowmarket: also served by `greater-anglia-main-line.toml`'s East Suffolk
+# line / Ipswich-Ely line junction note. See the overlap note above.
+
+[[stations]]
+crs = "TRS"
+role = "minor"
+segment = "greater-anglia-ipswich-cambridge"
+# Thurston.
+
+[[stations]]
+crs = "ESW"
+role = "minor"
+segment = "greater-anglia-ipswich-cambridge"
+# Elmswell.
+
+[[stations]]
+crs = "BSE"
+role = "major"
+segment = "greater-anglia-ipswich-cambridge"
+# Bury St Edmunds.
+
+[[stations]]
+crs = "KNE"
+role = "junction"
+segment = "greater-anglia-ipswich-cambridge"
+# Kennett: the last station before Chippenham Junction, where this file's
+# own scope (the Cambridge branch) diverges from the unmodelled
+# Ipswich-Peterborough continuation via Soham and Ely -- see the scope note
+# above. The junction itself carries no passenger CRS code.
+
+[[stations]]
+crs = "NMK"
+role = "major"
+segment = "greater-anglia-ipswich-cambridge"
+# Newmarket (Suffolk).
+
+[[stations]]
+crs = "DUL"
+role = "minor"
+segment = "greater-anglia-ipswich-cambridge"
+# Dullingham: the line's only passing loop, per the article's own
+# "Infrastructure" section.
+
+[[stations]]
+crs = "CBG"
+role = "terminus"
+segment = "greater-anglia-ipswich-cambridge"
+# Cambridge: this line's own terminus. See the overlap note above for the
+# station-overlap-only relationship with the five other files already
+# reaching this station.

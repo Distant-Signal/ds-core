@@ -21,15 +21,17 @@ operators = ["SR"]
 # this line is a real, useful second Glasgow-Edinburgh link (roughly
 # half-hourly per the current ScotRail timetable) but structurally the
 # less-frequent, non-flagship alternative, closer to how
-# `scotrail-ayrshire.toml` and `scotrail-fife-borders.toml` categorise their
-# own real-but-non-flagship corridors than to `scotrail-central-belt.toml`'s
-# own "main-line" choice.
+# `scotrail-ayrshire.toml` and `scotrail-fife-circle.toml`/`scotrail-
+# borders-railway.toml` (the former `scotrail-fife-borders.toml`, split by
+# the same audit that split this file's own former `scotrail-glasgow-
+# suburban.toml` sibling) categorise their own real-but-non-flagship
+# corridors than to `scotrail-central-belt.toml`'s own "main-line" choice.
 
 sample_stations = ["GLC", "SHS", "HYM", "EDB"]
 # GLC (Glasgow Central) is also a `sample_stations` entry in
 # `scotrail-ayrshire.toml` and `tpe-anglo-scottish.toml`, for their own
-# distinct high-level services, and in `scotrail-glasgow-suburban.toml` for
-# the physically separate Low Level Argyle Line platforms -- see the
+# distinct high-level services, and in `scotrail-argyle.toml` for the
+# physically separate Low Level Argyle Line platforms -- see the
 # station-overlap note below. SHS (Shotts) is this line's own namesake
 # mid-corridor station. HYM/EDB are the shared Edinburgh throat (see below).
 
@@ -49,13 +51,15 @@ match_keywords = ["Shotts Line"]
 # "Shotts line") and grepped clean against every other file's own
 # `match_keywords` before adding.
 
-# Regional-line thresholds, following `scotrail-ayrshire.toml`'s and
-# `scotrail-fife-borders.toml`'s precedent -- both explicitly note that
-# every "regional"-category file in this batch (`scotrail-ayrshire.toml`,
-# `scotrail-highland-main-line.toml`, `scotrail-far-north.toml`,
-# `scotrail-kyle.toml`, both West Highland files, `scotrail-fife-
-# borders.toml`) shares this identical override block rather than falling
-# through to the schema's global defaults.
+# Regional-line thresholds, following `scotrail-ayrshire.toml`'s and the
+# former `scotrail-fife-borders.toml`'s precedent -- both explicitly note
+# that every "regional"-category file in this batch (`scotrail-
+# ayrshire.toml`, `scotrail-highland-main-line.toml`, `scotrail-far-
+# north.toml`, `scotrail-kyle.toml`, both West Highland files,
+# `scotrail-fife-circle.toml`/`scotrail-borders-railway.toml`, the split
+# successors of `scotrail-fife-borders.toml`) shares this identical
+# override block rather than falling through to the schema's global
+# defaults.
 [severity_overrides]
 minor_delays_pct = 0.30
 reduced_service_pct = 0.35
@@ -124,7 +128,7 @@ crs = "GLC"
 role = "terminus"
 segment = "scotrail-shotts-exclusive"
 # Glasgow Central: this line's own south-western terminus. Also a
-# `[[stations]]` entry in `scotrail-glasgow-suburban.toml` (the physically
+# `[[stations]]` entry in `scotrail-argyle.toml` (the physically
 # separate Low Level Argyle Line platforms), `scotrail-ayrshire.toml` and
 # `tpe-anglo-scottish.toml` (their own high-level departures) -- station-
 # name overlap only, no genuine track-sharing claim sourced for any of
@@ -143,12 +147,12 @@ segment = "scotrail-shotts-exclusive"
 # then-hypothetical future event, that whoever eventually modelled the
 # Argyle Line's Lanarkshire branches beyond Rutherglen/Motherwell might
 # find real service overlap with this file's own Uddingston/Bellshill
-# stations. That has now happened: `scotrail-glasgow-suburban.toml`'s
+# stations. That has now happened: `scotrail-argyle.toml`'s
 # Task 3.1 added Uddingston and Bellshill on its own Rutherglen-Motherwell
 # route, and cross-file verification confirmed genuine physical track
 # sharing (not mere station-name overlap) -- see the UDD entry below for
 # the sourcing and the resulting segment rename. Cambuslang itself remains
-# exclusive to this file: `scotrail-glasgow-suburban.toml` does not
+# exclusive to this file: `scotrail-argyle.toml` does not
 # (yet) list it as a `[[stations]]` entry, so no shared-segment claim
 # applies to it today, even though Wikipedia's own "Shotts line" article
 # ("the line follows the ... West Coast Main Line as far as Uddingston
@@ -165,7 +169,7 @@ segment = "scotrail-uddingston-bellshill-trunk"
 # RESOLUTION (Task 3.1, fix round 1, post-review): retagged from the
 # exclusive `scotrail-shotts-exclusive` segment onto a new shared segment,
 # `scotrail-uddingston-bellshill-trunk`, also used by
-# `scotrail-glasgow-suburban.toml`'s own UDD entry (added by that same
+# `scotrail-argyle.toml`'s own UDD entry (added by that same
 # task's FILL-IN piece). Verified as genuine physical track sharing, not
 # coincidental station-name overlap (per the `xc-south-coast.toml`/
 # `xc-manchester.toml`/GLC precedent this file's own GLC comment above
@@ -178,8 +182,8 @@ segment = "scotrail-uddingston-bellshill-trunk"
 # "Argyle Line" route label -- i.e. the same physical platforms) and by
 # Bellshill's own Services section below.
 #
-# `scotrail_uddingston_bellshill_trunk_shares_glasgow_suburban_incident_
-# propagates` in `crates/aggregator/src/matcher.rs` asserts the resulting
+# `scotrail_uddingston_bellshill_trunk_shares_argyle_incident_
+# propagates` in `crates/common/src/matcher.rs` asserts the resulting
 # `MatchScope::SharedSegment` for both lines.
 
 [[stations]]
@@ -201,7 +205,7 @@ segment = "scotrail-uddingston-bellshill-trunk"
 # "Until Holytown Junction" quote (see the UDD comment above) covers this
 # station too, since it sits between Uddingston and Holytown. Holytown
 # (HLY, below) itself is not a `[[stations]]` entry in
-# `scotrail-glasgow-suburban.toml` today, so the shared segment does not
+# `scotrail-argyle.toml` today, so the shared segment does not
 # extend past Bellshill in that file for now.
 
 [[stations]]
@@ -355,7 +359,7 @@ segment = "scotrail-central-belt-edinburgh-throat"
 #     West Coast Main Line as far as Uddingston Junction where it branches
 #     off to the east. Until Holytown Junction the line [is] used by
 #     Argyle Line services" -- confirms genuine physical track sharing
-#     with `scotrail-glasgow-suburban.toml` through Uddingston and
+#     with `scotrail-argyle.toml` through Uddingston and
 #     Bellshill, cross-checked against Uddingston's own succession box and
 #     Bellshill's own Services section (fetched fresh) -- see the UDD/BLH
 #     entries above for the segment-rename this produced.

@@ -1,0 +1,234 @@
+id = "tfw-vale-of-glamorgan"
+name = "Vale of Glamorgan Line (Barry Island & Penarth branches)"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+# Self-flagged gap: `tfw-valley-lines-south.toml`'s own comment explicitly
+# says it "leaves the Vale of Glamorgan Line, Barry Island Line and Penarth
+# Line uncovered", flagged there for a future task to pick up. This file is
+# that task.
+#
+# ## One file, not two or three -- verified, not assumed
+#
+# Wikipedia has no separate "Barry Island Line" or "Penarth Line" article:
+# both titles 404 (confirmed live, both `action=raw` fetches returned
+# Wikimedia's own "Not Found" error page, not a redirect), and there is no
+# "Barry line" article either (opensearch for all three returns unrelated
+# results). The single "Vale of Glamorgan Line" article covers all three
+# routes as one topic: its own Operations section states "The Barry (BRY),
+# Penarth (PTH) and Vale of Glamorgan (VOG) branches are currently operated
+# by Transport for Wales (TfW) as part of the Valley Lines network", and its
+# infobox lists all three as the line's `end` points (`{{ubl|Penarth|Barry
+# Island|Bridgend}}`) off a shared Cardiff Central start. One file, with the
+# three branches as distinct segments off a shared trunk, is therefore the
+# straightforwardly correct reading of the source, not just the cleanest
+# option -- matching this catalogue's existing multi-branch-file precedent
+# (e.g. the former combined `tfw-valley-lines-north.toml`'s Merthyr/
+# Aberdare/Rhondda branches, at the time this file was written; since split
+# into `tfw-valley-merthyr.toml` and `tfw-valley-rhondda.toml` by a later
+# data-driven catalogue audit).
+#
+# ## Route and current station list
+#
+# Confirmed via Wikipedia's "Vale of Glamorgan Line" article (raw wikitext)
+# and its own route-diagram template (Template:Vale of Glamorgan Line map,
+# raw wikitext), which distinguishes currently-open stations from long-closed
+# ones (Llandough Platform, Penarth Dock, the ex-Cadoxton-via-Sully alignment
+# through Lavernock/Swanbridge/Sully closed 1968, Aberthaw High/Low Level,
+# Gileston, St Athan, and three Llantwit-area halts -- none of these are
+# listed below). The current, open station list confirmed this way:
+#   - Trunk: Cardiff Central - Grangetown - [Cogan Junction] - Cogan -
+#     Eastbrook - Dinas Powys - Cadoxton - Barry Docks - Barry - Rhoose -
+#     Llantwit Major - Bridgend.
+#   - Penarth branch (from Cogan Junction): Dingle Road - Penarth.
+#   - Barry Island branch (from Barry): Barry Island.
+# Cogan Junction itself (where the Penarth branch splits) has no passenger
+# CRS code and is not a `[[stations]]` entry -- Grangetown is the last coded
+# station before the split and is tagged `junction` here as the nearest
+# real anchor, with this note in place of a station-less junction entry.
+#
+# Frequency (Barry railway station's own Wikipedia "Services" section,
+# confirming the mixed inner/outer character): "a basic four trains per hour
+# ... to Cardiff Central eastbound and three per hour to Barry Island and one
+# per hour to Bridgend westbound." So the Cardiff-Barry-Barry Island core
+# runs at a genuinely commuter-grade 3-4tph, while the Rhoose/Llantwit
+# Major/Bridgend continuation is hourly only (Rhoose's own Wikipedia article:
+# "an hourly service westbound to Bridgend and eastbound to Cardiff
+# Central"). `category = "commuter"` for the file as a whole, matching
+# `tfw-valley-lines-south.toml`/`tfw-valley-rhymney.toml`'s treatment of
+# the same TfW Valley Lines / Cardiff-radius network, but the severity
+# overrides below are deliberately a documented middle ground rather than
+# either extreme -- not as tight as those two files' 0.20/5min (this line's
+# outer end is hourly, not 2-4tph throughout), and not as loose as a pure
+# hourly regional line either.
+
+# Cardiff Central and Bridgend are shared, real stations, not shared track
+# in either case investigated below -- both are genuine multi-line hubs
+# where this line's own trains terminate/originate, not through-running
+# claims onto the other file's exclusive territory.
+sample_stations = ["CDF", "BRY", "BGN", "PEN"]
+
+# Only the line's three genuine dead-end termini. Cardiff Central is
+# deliberately omitted, for the same reason `tfw-valley-lines-south.toml`
+# omits it from its own `destination_crs_filter`: both Barry's and
+# Bridgend's own Wikipedia "Services" sections confirm eastbound trains
+# "usually continue beyond Cardiff Central to either Rhymney or Bargoed"
+# (TfW's own Valley Lines through-running, per `tfw-valley-rhymney.toml`,
+# not modelled here), so a CDF-keyed filter would wrongly exclude those
+# genuine continuing services from LDBWS-based sampling at this line's own
+# stations.
+destination_crs_filter = ["PEN", "BYI", "BGN"]
+
+# One confirmed branded name ("Vale of Glamorgan Line", the article title
+# itself). An earlier draft also added "Vale Line", the short form used
+# repeatedly in TfW's own route-diagram templates embedded in Barry's and
+# Bridgend's station articles ("Vale Line - main route" / "Vale line -
+# Barry Island branch" / "Vale line" at Bridgend) -- but that string is a
+# literal substring of `tfw-ebbw-vale.toml`'s own "Ebbw Vale Line" keyword,
+# and this catalogue's matcher does substring containment, so it caused a
+# false-positive match against every Ebbw Vale Line incident. Dropped;
+# "Vale of Glamorgan Line" alone is unambiguous and was already confirmed
+# (per the note above) not to collide with any other file's own
+# `match_keywords`.
+match_keywords = ["Vale of Glamorgan Line"]
+
+[severity_overrides]
+minor_delays_pct = 0.25
+delay_threshold_minutes = 7
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations
+# (per this batch's house standard), matching each station's own Wikipedia
+# infobox. Rhoose is officially "Rhoose Cardiff International Airport"
+# (CRS RIA) -- confirmed the longest station name on the network per that
+# station's own Wikipedia article; RIA, not a guessed "RHO"/"RCA", which
+# would have collided with `tfw-north-wales-coast.toml`'s existing RHO
+# (Rhosneigr, Anglesey). Dinas Powys is DNS (not DNP). TIPLOCs are omitted
+# throughout except the two shared-station values (CDF, BGN) reused
+# verbatim from `gwr-south-wales.toml`/`tfw-valley-lines-south.toml` --
+# consistent with this catalogue's optional-TIPLOC convention where a
+# second live source wasn't fetched for the rest within this task's budget.
+#
+# ## Overlap: Cardiff Central (CDF) and Bridgend (BGN)
+#
+# CDF already appears in `gwr-south-wales.toml` (its own `gwr-south-wales`
+# segment) and `tfw-valley-lines-south.toml`/`tfw-valley-merthyr.toml`/
+# `tfw-valley-rhondda.toml`/`tfw-valley-rhymney.toml` (the post-split
+# successors of the former combined `tfw-valley-lines-north.toml`, per a
+# later data-driven catalogue audit -- see those files' own split
+# comments) (`tfw-valley-cardiff-hub`, a genuine shared segment among those
+# files for the Valley Lines proper). This line's own City/Coryton/Bay-line
+# sibling files' shared-hub reasoning does not extend here: the Vale of
+# Glamorgan Line's own route out of Cardiff Central runs via Grangetown
+# towards Barry, a physically different corridor from the Radyr-bound
+# Valley Lines proper, so CDF is tagged with this file's own segment name
+# below -- station-overlap only with all three other files, not a reused
+# shared-segment name, per the `xc-south-coast.toml`/`xc-manchester.toml`
+# precedent this catalogue already applies to exactly this kind of
+# same-station-different-corridor case.
+#
+# Bridgend (BGN) already appears in `gwr-south-wales.toml` (South Wales Main
+# Line's own western end) and is also this batch's own Maesteg Line
+# (`tfw-maesteg.toml`) junction, per that station's own Wikipedia article
+# ("also the western terminus of the Vale of Glamorgan Line from Cardiff"
+# and the point "where the Maesteg Line diverges from the South Wales Main
+# Line"). Bridgend's own article additionally confirms real through-running
+# from this line onto `tfw-valley-merthyr.toml`'s territory (the Aberdare
+# Line's post-split home; formerly part of the combined `tfw-valley-lines-
+# north.toml`) ("trains now running through to and from Aberdare") -- a
+# service-pattern fact noted here, not modelled as a shared segment, since
+# Aberdare is that file's own exclusive stretch. Station-overlap only in
+# every direction at BGN.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-vale-of-glamorgan"
+
+[[stations]]
+crs = "GTN"
+role = "junction"
+segment = "tfw-vale-of-glamorgan"
+# Grangetown: the nearest coded station to Cogan Junction, where the Penarth
+# branch actually splits off (the junction itself carries no passenger CRS
+# code -- see the route note above).
+
+[[stations]]
+crs = "CGN"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+# Cogan: on the main trunk south of Cogan Junction, distinct from the
+# Penarth branch that splits there.
+
+[[stations]]
+crs = "EBK"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+
+[[stations]]
+crs = "DNS"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+# Dinas Powys. CRS confirmed as DNS, not the more "obvious"-looking DNP.
+
+[[stations]]
+crs = "CAD"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+
+[[stations]]
+crs = "BYD"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+# Barry Docks: a real, currently-open passenger station in its own right,
+# distinct from the Barry Docks freight facility described in the same
+# route-diagram template.
+
+[[stations]]
+crs = "BRY"
+role = "junction"
+segment = "tfw-vale-of-glamorgan"
+# Barry: the Barry Island branch diverges here (see below); the main trunk
+# continues west to Rhoose/Llantwit Major/Bridgend.
+
+[[stations]]
+crs = "RIA"
+role = "major"
+segment = "tfw-vale-of-glamorgan"
+# Rhoose Cardiff International Airport: bus-linked interchange for Cardiff
+# Airport, and the longest current station name on the National Rail
+# network (per this station's own Wikipedia article).
+
+[[stations]]
+crs = "LWM"
+role = "minor"
+segment = "tfw-vale-of-glamorgan"
+# Llantwit Major.
+
+[[stations]]
+crs = "BGN"
+tiploc = "BRGEND"
+role = "terminus"
+segment = "tfw-vale-of-glamorgan"
+# Bridgend: this line's own western terminus. See the Bridgend overlap note
+# above for the station-overlap-only relationship with `gwr-south-wales.toml`
+# and `tfw-maesteg.toml`.
+
+# --- Penarth branch (from Cogan Junction, via Grangetown above) ---
+[[stations]]
+crs = "DGL"
+role = "minor"
+segment = "tfw-vog-penarth"
+# Dingle Road.
+
+[[stations]]
+crs = "PEN"
+role = "terminus"
+segment = "tfw-vog-penarth"
+# Penarth: this branch's own terminus.
+
+# --- Barry Island branch (from Barry, above) ---
+[[stations]]
+crs = "BYI"
+role = "terminus"
+segment = "tfw-vog-barry-island"

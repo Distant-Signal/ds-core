@@ -34,11 +34,11 @@ operators = ["SR"]
 sample_stations = ["GLQ", "DMR", "CNR", "FTW", "MLG"]
 # GLQ (Glasgow Queen Street, this line's own terminus -- also a
 # `sample_stations` entry in `scotrail-central-belt.toml` and
-# `scotrail-glasgow-suburban.toml`, a real LDBWS ambiguity at a station
+# `scotrail-north-clyde.toml`, a real LDBWS ambiguity at a station
 # used by three different physical services/platform groups; see the GLQ
 # station comment below for why this file does not reuse either sibling's
 # segment there), DMR (Dalmuir, the genuine shared-trunk station with
-# `scotrail-glasgow-suburban.toml`'s own `west-trunk` segment), CNR
+# `scotrail-north-clyde.toml`'s own `west-trunk` segment), CNR
 # (Crianlarich, the real junction where Oban and Fort William/Mallaig
 # services divide/combine), FTW (Fort William, this file's own internal
 # trunk/branch junction for the Mallaig extension), and MLG (Mallaig, this
@@ -46,7 +46,7 @@ sample_stations = ["GLQ", "DMR", "CNR", "FTW", "MLG"]
 
 destination_crs_filter = ["FTW", "MLG"]
 # GLQ and DMR are also `sample_stations` entries in `scotrail-central-belt`
-# and `scotrail-glasgow-suburban` respectively (and CNR/FTW/MLG will be
+# and `scotrail-north-clyde` respectively (and CNR/FTW/MLG will be
 # shared with `scotrail-west-highland-oban.toml`'s own sample stations for
 # the Glasgow-Crianlarich stretch once that file exists). Filtering LDBWS
 # departures to `destination_crs` of FTW or MLG cleanly separates this
@@ -72,7 +72,7 @@ match_keywords = ["West Highland Line"]
 # already gives high-precision coverage of ScotRail/Network Rail incident
 # language for this line. Grepped `lines/*.toml` before starting this task:
 # no other file uses "West Highland", "Fort William", "Mallaig" or
-# "Crianlarich" in `match_keywords` (only `scotrail-glasgow-suburban.toml`
+# "Crianlarich" in `match_keywords` (only `scotrail-north-clyde.toml`
 # mentions these names in prose comments, not as match keywords).
 
 # Remote, single-track, largely request-stop rural line with only a
@@ -141,8 +141,8 @@ delay_threshold_minutes = 10
 #    Platform).
 #
 #    Dalmuir and Dumbarton Central are both already `[[stations]]` entries
-#    in the already-merged `lines/scotrail-glasgow-suburban.toml` (Task
-#    10.2), tagged `scotrail-glasgow-suburban-west-trunk` -- a segment that
+#    in the already-merged `lines/scotrail-north-clyde.toml` (Task
+#    10.2), tagged `scotrail-north-clyde-west-trunk` -- a segment that
 #    file's own DBC comment already documents as the stretch "where trains
 #    on the West Highland line ... call before diverging." This is a
 #    genuine, sourced, real track-sharing fact (not mere station-name
@@ -150,10 +150,10 @@ delay_threshold_minutes = 10
 #    EXACT segment name for its own DMR/DBC entries. This makes the
 #    cross-file shared-trunk propagation live immediately (no reservation
 #    needed, unlike the Crianlarich case below): `SegmentRegistry::
-#    is_shared` now reports `scotrail-glasgow-suburban-west-trunk` shared
-#    between `scotrail-glasgow-suburban` and
+#    is_shared` now reports `scotrail-north-clyde-west-trunk` shared
+#    between `scotrail-north-clyde` and
 #    `scotrail-west-highland-fort-william`, asserted by
-#    `scotrail_west_highland_shares_glasgow_suburban_west_trunk_incident_propagates`
+#    `scotrail_west_highland_shares_north_clyde_west_trunk_incident_propagates`
 #    in `crates/aggregator/src/matcher.rs`.
 #
 #    UPDATE (Task 10.9, now merged): `lines/scotrail-west-highland-oban.toml`
@@ -161,9 +161,9 @@ delay_threshold_minutes = 10
 #    Dumbarton Central before diverging (Dumbarton Central's own Wikipedia
 #    article explicitly names "trains ... between Glasgow and Oban and
 #    Mallaig," not just Fort William/Mallaig) and reused this exact
-#    `scotrail-glasgow-suburban-west-trunk` segment name for its own DMR/DBC
+#    `scotrail-north-clyde-west-trunk` segment name for its own DMR/DBC
 #    entries too, making it a genuine three-way shared segment. The
-#    `scotrail_west_highland_shares_glasgow_suburban_west_trunk_incident_propagates`
+#    `scotrail_west_highland_shares_north_clyde_west_trunk_incident_propagates`
 #    test above is updated to assert all three line IDs.
 #
 #    GLQ (Glasgow Queen Street) itself is NOT tagged onto this shared
@@ -287,8 +287,8 @@ segment = "scotrail-west-highland-glasgow-terminus"
 [[stations]]
 crs = "DMR"
 role = "junction"
-segment = "scotrail-glasgow-suburban-west-trunk"
-# Dalmuir: genuine shared trunk with `scotrail-glasgow-suburban.toml`.
+segment = "scotrail-north-clyde-west-trunk"
+# Dalmuir: genuine shared trunk with `scotrail-north-clyde.toml`.
 # "A large, five-platform interchange" where North Clyde, Argyle Line and
 # West Highland Line services converge (Wikipedia); WHL trains run
 # non-stop between here and Glasgow Queen Street.
@@ -296,7 +296,7 @@ segment = "scotrail-glasgow-suburban-west-trunk"
 [[stations]]
 crs = "DBC"
 role = "junction"
-segment = "scotrail-glasgow-suburban-west-trunk"
+segment = "scotrail-north-clyde-west-trunk"
 # Dumbarton Central: the last North Clyde station WHL (and future Oban
 # arm) trains call at before diverging near Craigendoran Junction. Tagged
 # on the shared west-trunk segment per the shared-trunk rule of thumb
@@ -566,7 +566,7 @@ segment = "scotrail-west-highland-mallaig"
 #   Platform, Helensburgh Central): left out rather than guessed, matching
 #   `scotrail-far-north.toml`'s and `scotrail-ayrshire.toml`'s own
 #   precedent for omitting unconfirmed minor stops. Helensburgh Central
-#   specifically belongs to `scotrail-glasgow-suburban.toml`'s own North
+#   specifically belongs to `scotrail-north-clyde.toml`'s own North
 #   Clyde `helensburgh-branch` segment, not to this line.
 # - Glasgow Queen Street High Level's possible track-sharing with
 #   `scotrail-central-belt.toml`'s own Falkirk High route (both use the

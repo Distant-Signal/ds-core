@@ -132,8 +132,9 @@ destination_crs_filter = ["MOG", "WGC", "HFN", "WAS", "SVG"]
 # `[severity_overrides]` block, and these are the same values every other
 # commuter file uses (thameslink-core.toml, elizabeth-shenfield.toml,
 # thameslink-bedford.toml, thameslink-cambridge.toml, thameslink-southern.toml,
-# southeastern-metro-north-kent.toml, southeastern-hayes-line.toml). The
-# reasoning applies here too: Moorgate suburban services run every few
+# southeastern-bexleyheath.toml, southeastern-dartford-loop.toml (formerly
+# one file, southeastern-metro-north-kent.toml), southeastern-hayes-line.toml).
+# The reasoning applies here too: Moorgate suburban services run every few
 # minutes at peak, so a 4-minute delay is more disruptive than the same
 # delay on an hourly long-distance service.
 [severity_overrides]

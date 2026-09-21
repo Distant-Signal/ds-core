@@ -4,8 +4,8 @@ mode = "national-rail"
 category = "regional"
 operators = ["NT"]
 
-destination_crs_filter = ["WNE", "OXN"]
-sample_stations = ["WNE", "KEN", "OXN"]
+destination_crs_filter = ["WDM", "OXN"]
+sample_stations = ["WDM", "KEN", "OXN"]
 match_keywords = ["Lakes Line", "Windermere branch"]
 
 # Hourly single-track branch: one cancellation is most of the hour's service,
@@ -56,6 +56,11 @@ segment = "northern-lakes"
 # Lakes").
 
 [[stations]]
-crs = "WNE"
+crs = "WDM"
+tiploc = "WMER"
 role = "terminus"
 segment = "northern-lakes"
+# Windermere. Previously mistagged `WNE` (which is actually Wilnecote,
+# Staffordshire, an unrelated station near Tamworth) - corrected to WDM,
+# cross-checked against the bulk stanox-crs dataset and Wikipedia's
+# Windermere railway station article. Fixed 2026-09-21.

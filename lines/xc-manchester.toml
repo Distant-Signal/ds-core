@@ -4,11 +4,16 @@ mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
 
-destination_crs_filter = ["MAN", "SPT", "WML"]
+destination_crs_filter = ["MAN", "SPT"]
 sample_stations = ["MAN", "SPT", "WVH"]
 # No match_keywords: this arm has no route name the Knowledgebase actually
 # uses, and "Manchester" on its own would match half the north west. Station
 # and operator evidence carries it.
+#
+# destination_crs_filter previously included "WML" (Wilmslow) -- dropped as
+# part of the 2026-09-21 route correction below: Wilmslow was never a real
+# CrossCountry destination even on the old, physically-wrong route, and it
+# is not a station on this line at all any more.
 
 # Same long-distance thresholds as the spine.
 [severity_overrides]
@@ -16,42 +21,85 @@ minor_delays_pct = 0.30
 delay_threshold_minutes = 10
 
 # Manchester Piccadilly to Birmingham New Street, ordered north to south,
-# where it joins the `cross-country` spine. Runs over WCML metals between
-# Crewe and Wolverhampton; no segment is shared with `wcml` because that
-# line's segments are far coarser than the shared section, and an incident on
-# the shared stretch matches both lines by station anyway.
+# where it joins the `cross-country` spine.
 #
-# Task 9.5 fill-in (2026-09-01, fresh route-diagram pass, no named starting
-# list in the plan): the "minor intermediate calls are omitted" boilerplate
-# below is this file's OWN original convention, cited by several other
-# tasks in this plan as precedent -- filling this file's own gap doesn't
-# invalidate that precedent for those other, already-completed files, per
-# the plan's own note on this task. Each candidate station was confirmed to
-# the two-source bar (Wikipedia infobox/article cross-checked against
-# nationalrail.co.uk's `/stations/<crs>/details.html`), fetched live
-# 2026-09-01:
-#   - Manchester Piccadilly-Stockport: Levenshulme (LVM), Heaton Chapel
-#     (HTC). Both confirmed, via each station's own Wikipedia infobox, to
-#     sit on the "Crewe-Manchester line" proper, strictly between MAN and
-#     SPT. Deliberately NOT added: Longsight (closed 1958, confirmed via its
-#     own Wikipedia infobox); Ardwick, Burnage, Heaton Mersey, Heaton
-#     Norris, Mauldeth Road, East Didsbury, Heald Green, Gatley, Manchester
-#     Airport, Styal -- all confirmed (via Burnage's own infobox, which
-#     explicitly names its line) to sit on the separate, parallel "Styal
-#     line" branch via Manchester Airport, which rejoins this route at
-#     Wilmslow -- a genuinely different physical route, not "between"
-#     Manchester Piccadilly and Stockport on this line, so out of scope for
-#     this fill-in.
-#   - Stockport-Wilmslow: Cheadle Hulme (CHU), Handforth (HTH). Both
-#     confirmed strictly between SPT and WML on the direct Crewe-Manchester
-#     line (not the Styal branch) via each station's own infobox route
-#     diagram.
-#   - Wilmslow-Crewe: Alderley Edge (ALD), Chelford (CEL), Goostrey (GTR),
-#     Holmes Chapel (HCH), Sandbach (SDB) -- confirmed strictly between WML
-#     and CRE, each station's infobox chaining directly to the next.
-#   - Crewe-Stafford: no currently-open intermediate station found. Madeley
-#     and Whitmore (Staffordshire) were both investigated and confirmed
-#     closed historical stations on this stretch -- correctly stay out.
+# CORRECTED (2026-09-21, data-driven audit + independent re-verification --
+# see below): this file's exclusive segment previously modelled the WRONG
+# physical corridor. Task 9.5 (2026-09-01) had filled this file's
+# "minor intermediate calls are omitted" gap with a route via Levenshulme,
+# Heaton Chapel, Cheadle Hulme, Handforth, Wilmslow, Alderley Edge,
+# Chelford, Goostrey, Holmes Chapel, Sandbach and Crewe -- the
+# Manchester-Stockport-then-Wilmslow-then-Crewe "Crewe-Manchester line".
+# That research was thorough and each station genuinely exists and sits
+# where claimed, but it verified the wrong corridor for CrossCountry's real
+# Manchester Piccadilly services: that route (a real, live, currently-served
+# line) is run by Avanti West Coast (already modelled in
+# `wcml-manchester.toml`'s own "Branch 2" via WML) and by Northern, NOT by
+# CrossCountry. Wilmslow's own Wikipedia article lists only Avanti West
+# Coast, Northern Trains and Transport for Wales as its operators --
+# CrossCountry does not call there at all, and by extension does not use
+# this corridor.
+#
+# Independently re-verified from scratch here (not just trusting the
+# audit), live fetches of Wikipedia, 2026-09-21:
+#   - CrossCountry's own Wikipedia article: its route-diagram/calling-point
+#     table for the Bristol Temple Meads-Manchester Piccadilly service lists
+#     "Stockport, Macclesfield, Stoke-on-Trent, Stafford, Wolverhampton,
+#     Birmingham New Street" -- the Bournemouth-Manchester pattern uses the
+#     same corridor as far as Wolverhampton/Birmingham before diverging
+#     towards Coventry/Reading.
+#   - Stockport's, Macclesfield's, Stoke-on-Trent's and Wilmslow's own
+#     Wikipedia station articles cross-checked independently: Stockport,
+#     Macclesfield and Stoke-on-Trent each list CrossCountry among their
+#     operators and describe the "2 tph to/from Manchester Piccadilly, via
+#     Macclesfield and Stockport" pattern; Wilmslow's does not mention
+#     CrossCountry at all.
+#   - A live CIF schedule pull (`/api/lines/xc-manchester/schedule`, a real
+#     recent Wednesday) shows an actual booked working (e.g. Manchester
+#     Piccadilly to Southampton) with booked calls at exactly Stockport
+#     (STKP), Macclesfield (MACLSFD), Stoke-on-Trent (STOKEOT), Stafford
+#     (STAFFRD) and Wolverhampton (WVRMPTN) between MAN and BHM -- Crewe,
+#     Wilmslow, Levenshulme and Heaton Chapel tiplocs do not even appear as
+#     pass-through points on this train's route, confirming the physical
+#     line, not just the calling pattern, is different from the old file's.
+#     The same pull also shows Congleton and Kidsgrove (the two stations
+#     physically between Macclesfield and Stoke-on-Trent) as pass-through
+#     tiplocs with no booked arrival/departure -- correctly left out below.
+#     (Congleton's own Wikipedia article confirms CrossCountry withdrew its
+#     limited peak service there in June 2020; Kidsgrove's confirms it was
+#     never a CrossCountry stop -- EMR, LNWR and Northern only.)
+#
+# CRS codes for Macclesfield (MAC) and Stoke-on-Trent (SOT) are reused
+# verbatim from `wcml-manchester.toml`'s own Stoke branch (already verified
+# there against Wikipedia/nationalrail.co.uk) rather than re-derived, and
+# cross-checked again here via `https://ds.cursed.solutions/api/stations`.
+# Levenshulme (LVM) and Heaton Chapel (HTC), the two Manchester-Stockport
+# infill stations from the old route, are dropped entirely: they sit on the
+# shared Piccadilly-Stockport approach every branch uses, but their own
+# Wikipedia "Services" sections list Northern Trains only -- CrossCountry
+# does not call there either, so unlike Macclesfield/Stoke they were never
+# real CrossCountry stops at all, on any corridor.
+#
+# Old Wilmslow-route research NOT deleted, just moved: Wilmslow (WML),
+# Alderley Edge, Chelford, Goostrey, Holmes Chapel, Sandbach, Cheadle
+# Hulme, Handforth, Levenshulme, Heaton Chapel and Crewe are all real,
+# open, currently-served stations -- just by Avanti West Coast and/or
+# Northern, not CrossCountry. Wilmslow (WML) and Crewe (CRE) are already
+# modelled on `wcml-manchester.toml`'s own Crewe/Wilmslow branch. The
+# others (Cheadle Hulme, Handforth, Alderley Edge, Chelford, Goostrey,
+# Holmes Chapel, Sandbach, Levenshulme, Heaton Chapel) are real Northern
+# local stops on the Crewe-Manchester line that have no line-file coverage
+# in this catalogue today -- flagged as a possible future Northern line
+# file, out of scope here.
+#
+# Runs over WCML metals between Stafford and Wolverhampton; no segment is
+# shared with `wcml`/`wcml-manchester` because those files' segments are far
+# coarser than the shared section, and an incident on the shared stretch
+# matches all of them by station anyway.
+#
+# Original Task 9.5 fill-in (2026-09-01) sourcing retained below for the
+# Stafford-Wolverhampton-Birmingham stretch, which this correction does NOT
+# touch -- that part of the route was never in question:
 #   - Stafford-Wolverhampton: Penkridge (PKG), the only intermediate station,
 #     confirmed via its own infobox and nationalrail.co.uk.
 #   - Wolverhampton-Birmingham New Street (the Stour Valley line): Coseley
@@ -76,93 +124,39 @@ role = "terminus"
 segment = "xc-manchester"
 
 [[stations]]
-crs = "LVM"
-role = "minor"
-segment = "xc-manchester"
-# Levenshulme: strictly between Manchester Piccadilly and Heaton Chapel on
-# the Crewe-Manchester line. Confirmed via Wikipedia's infobox, cross-checked
-# against nationalrail.co.uk/stations/lvm/details.html.
-
-[[stations]]
-crs = "HTC"
-role = "minor"
-segment = "xc-manchester"
-# Heaton Chapel: strictly between Levenshulme and Stockport on the
-# Crewe-Manchester line. Confirmed via Wikipedia's infobox, cross-checked
-# against nationalrail.co.uk/stations/htc/details.html.
-
-[[stations]]
 crs = "SPT"
 role = "major"
 segment = "xc-manchester"
 
 [[stations]]
-crs = "CHU"
+crs = "MAC"
 role = "minor"
 segment = "xc-manchester"
-# Cheadle Hulme: strictly between Stockport and Handforth. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/chu/details.html.
+# Macclesfield: strictly between Stockport and Stoke-on-Trent on the real
+# CrossCountry Manchester corridor (the ex-North Staffordshire Railway
+# "Stoke line", not the Crewe-Manchester line via Wilmslow). CRS reused
+# verbatim from `wcml-manchester.toml`'s own Stoke branch. Confirmed as an
+# actual CrossCountry calling point (not just a station on the line) via
+# Macclesfield's own Wikipedia article ("2 tph to Manchester Piccadilly, via
+# Stockport") and a live CIF schedule pull showing a real booked XC stop
+# (MACLSFD, booked arrival/departure) between MAN and SOT.
 
 [[stations]]
-crs = "HTH"
-role = "minor"
+crs = "SOT"
+role = "major"
 segment = "xc-manchester"
-# Handforth: strictly between Cheadle Hulme and Wilmslow. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/hth/details.html.
-
-[[stations]]
-crs = "WML"
-role = "minor"
-segment = "xc-manchester"
-
-[[stations]]
-crs = "ALD"
-role = "minor"
-segment = "xc-manchester"
-# Alderley Edge: strictly between Wilmslow and Chelford. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/ald/details.html.
-
-[[stations]]
-crs = "CEL"
-role = "minor"
-segment = "xc-manchester"
-# Chelford: strictly between Alderley Edge and Goostrey. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/cel/details.html.
-
-[[stations]]
-crs = "GTR"
-role = "minor"
-segment = "xc-manchester"
-# Goostrey: strictly between Chelford and Holmes Chapel. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/gtr/details.html.
-
-[[stations]]
-crs = "HCH"
-role = "minor"
-segment = "xc-manchester"
-# Holmes Chapel: strictly between Goostrey and Sandbach. Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/hch/details.html.
-
-[[stations]]
-crs = "SDB"
-role = "minor"
-segment = "xc-manchester"
-# Sandbach: strictly between Holmes Chapel and Crewe, on the direct route via
-# Wilmslow (not the alternate Stoke-on-Trent route). Confirmed via
-# Wikipedia's infobox, cross-checked against
-# nationalrail.co.uk/stations/sdb/details.html.
-
-[[stations]]
-crs = "CRE"
-tiploc = "CREWE"
-role = "junction"
-segment = "xc-manchester"
+# Stoke-on-Trent: strictly between Macclesfield and Stafford. CRS reused
+# verbatim from `wcml-manchester.toml`'s own Stoke branch. Confirmed as an
+# actual CrossCountry calling point via Stoke-on-Trent's own Wikipedia
+# article ("2 tph to Manchester Piccadilly, via Macclesfield and Stockport")
+# and the same live CIF schedule pull (STOKEOT, booked arrival/departure).
+# Congleton and Kidsgrove, the two stations physically between Macclesfield
+# and Stoke-on-Trent, are deliberately NOT added: Congleton's own Wikipedia
+# article confirms CrossCountry withdrew its limited peak-hour calls there
+# in June 2020 (Northern only today), Kidsgrove's confirms it was never a
+# CrossCountry stop (EMR/LNWR/Northern only), and the same CIF pull shows
+# both (CONGLTN, KIDSGRV) as pass-through tiplocs with no booked
+# arrival/departure on this route.
 
 [[stations]]
 crs = "STA"

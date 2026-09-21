@@ -1,0 +1,139 @@
+id = "gwr-transwilts"
+name = "TransWilts Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. en.wikipedia.org/wiki/Melksham_railway_station
+# confirms current GWR operation over this route.
+
+# Deliberately unset. This is a community rail service with a real,
+# documented onward continuation past both ends of this task's own scope:
+# GWR's current Swindon-Westbury service (see below) means real workings
+# continue south past Trowbridge onto the Wessex Main Line towards
+# Westbury/Warminster/Salisbury, and this task's own research did not
+# service-by-service verify how much of that continuation is scheduled
+# versus occasional. Left unset rather than invent or under-scope it,
+# mirroring gwr-cotswold.toml's/gwr-thames-valley.toml's identical judgment
+# call.
+
+# Exclusive-segment stations only. Melksham is the one station on this
+# line's own segment not shared with any sibling file (see the
+# segment-naming comment below for why SWI/CPM/TRO are all real overlaps).
+sample_stations = ["MKM"]
+
+# "TransWilts" is the current community rail partnership's own name
+# (en.wikipedia.org/wiki/Melksham_railway_station: "Melksham comes under the
+# remit of the TransWilts Community Interest Company (CIC)... the community
+# element of the TransWilts Community Rail Partnership"). Grepped clean
+# against every other file's own match_keywords before adding — no
+# collision.
+match_keywords = ["TransWilts"]
+
+# A two-hourly community rail service (en.wikipedia.org/wiki/
+# Melksham_railway_station: GWR "operates services approximately every two
+# hours each way between Swindon and Westbury, with additional services at
+# peak times; there are nine departures in total") over a route with a long
+# history of underinvestment and campaign-driven reinstatement — closer to
+# gwr-cotswold.toml's/scotrail-ayrshire.toml's sparse-and-vulnerable
+# precedent than to a frequent double-tracked main line.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# `gwr-trunk-paddington` (PAD/RDG/DID/SWI) is reused verbatim, rows copied
+# directly from gwr-main-line.toml — real GWR TransWilts-branded services
+# originate from Swindon, itself reached via the same Paddington-Reading-
+# Didcot approach every other GWR sibling in this batch shares.
+#
+# --- Chippenham: real shared waypoint, kept as station overlap only ---
+#
+# This line's real route runs Swindon-Chippenham, then diverges onto the
+# historic Wilts, Somerset and Weymouth Railway alignment towards Melksham
+# at Thingley Junction (just west of Chippenham, no CRS/TIPLOC of its own).
+# Chippenham (CPM) is already gwr-main-line.toml's own exclusive
+# `gwr-main-line` segment, which also covers BTH/BRI — neither reached by
+# this line. Reusing that segment name verbatim for just this file's CPM row
+# would incorrectly pull BTH/BRI into "shared" status catalogue-wide too, the
+# same mistake this batch's other single-waypoint overlaps (BSK in
+# swr-west-of-england.toml, GCR in gwr-golden-valley.toml) already avoid by
+# the same method. Station overlap only is used instead: CPM is tagged with
+# this line's own exclusive segment below.
+#
+# The exclusive segment itself (`gwr-transwilts`, following the established
+# line-id-as-exclusive-segment-name convention) starts at Melksham (MKM),
+# the first station reached only by this route.
+#
+# --- Trowbridge: real shared waypoint with the Wessex Main Line, kept as
+#     station overlap only ---
+#
+# This line rejoins the Wessex Main Line at a junction near Bradford-on-Avon
+# (en.wikipedia.org/wiki/Wessex_Main_Line: "Bradford-on-Avon: TransWilts
+# Line joins from Melksham and Chippenham"), with Trowbridge (TRO) the first
+# station reached on that shared line. TRO is already a two-file shared
+# segment (`gwr-bristol-weymouth`, gwr-heart-of-wessex.toml — formerly part
+# of the combined gwr-bristol-suburban.toml, before that file's later split
+# — and gwr-wessex-main.toml, this same batch), which also covers BRI/KYN/OLF/
+# BTH/FFD/AVF/BOA — none reached by this line (this line joins the corridor
+# AFTER Bradford-on-Avon, not from Bristol). Reusing that name verbatim here
+# would misrepresent this line as sharing the whole Bristol-Bath-Freshford-
+# Avoncliff-Bradford-on-Avon stretch too. Station overlap only is used
+# instead: TRO is tagged with this line's own exclusive segment below. This
+# task's own scope ends at Trowbridge (the brief's own "Swindon-Melksham-
+# Trowbridge" wording); real GWR services continue on towards Westbury (see
+# destination_crs_filter comment above).
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "SWI"
+tiploc = "SDON"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "CPM"
+tiploc = "CHIPNHM"
+role = "junction"
+segment = "gwr-transwilts"
+# Chippenham. Real shared waypoint with gwr-main-line.toml, kept as station
+# overlap only — see comment above. This line diverges onto the Melksham
+# branch at Thingley Junction just west of here (no CRS/TIPLOC of its own).
+
+[[stations]]
+crs = "MKM"
+role = "major"
+segment = "gwr-transwilts"
+# Melksham. The line's namesake community rail hub and the only station on
+# this file's segment not shared with any sibling file. No live intermediate
+# stations currently exist between Chippenham and here (Christian Malford
+# and the historic route via Christian Malford were checked via
+# ds.cursed.solutions/api/stations and returned no live CRS) or between here
+# and Trowbridge (Holt/Broughton Gifford, both long closed, checked the same
+# way).
+
+[[stations]]
+crs = "TRO"
+role = "major"
+segment = "gwr-transwilts"
+# Trowbridge. Real shared waypoint with gwr-wessex-main.toml/
+# gwr-heart-of-wessex.toml (formerly gwr-bristol-suburban.toml, before that
+# file's later split), kept as station overlap only — see comment above.
+# This task's own scope ends here.

@@ -1,0 +1,344 @@
+id = "swr-west-of-england"
+name = "West of England Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SW"]
+# South Western Railway. ATOC code "SW", same as the four existing swr-*.toml
+# files (south-west-main, alton, portsmouth-direct, kingston-loop) — SWR now
+# publicly owned (per docs/superpowers/specs/2026-08-29-line-coverage-gap-
+# analysis.md's nationalisation section) but the ATOC code itself is
+# unchanged, matching that precedent. en.wikipedia.org/wiki/West_of_England_
+# line's own infobox names South Western Railway as the sole operator, and
+# states the line "has never been electrified" — Class 158/159 diesel units
+# throughout.
+
+# --- Naming note: this IS the real "West of England line" ---
+#
+# lines/gwr-west-of-england.toml (Task 4.4, an earlier batch) already flags
+# this exact situation: its own research found that Wikipedia's actual "West
+# of England line" article describes THIS route (Basingstoke-Salisbury-
+# Exeter, SWR-operated), not the Reading-Taunton line that file covers, and
+# it deliberately left "West of England Line" out of its own match_keywords
+# to avoid future collision once this route was added. This file now claims
+# that name and phrase, per that file's own flagged expectation. The two
+# files' `id`s (`gwr-west-of-england` / `swr-west-of-england`) are distinct
+# strings, so there is no `id` collision — only the informal English name was
+# ever shared, and only one file's `match_keywords` claims it.
+
+# One of the two Waterloo-Salisbury trains per hour terminates at Salisbury;
+# the other continues through to Exeter St Davids
+# (en.wikipedia.org/wiki/West_of_England_line, "Services" section: "London
+# Waterloo to Salisbury: Generally two trains per hour... Salisbury to Exeter
+# St Davids: one hourly service"). These are the two genuine, sourced
+# destinations this line's own trains are advertised against. Real peak
+# short workings to Yeovil Junction (crew-change/traincrew depot location,
+# per the same source) were also considered, but this task did not find a
+# second source confirming YVJ as a scheduled advertised destination
+# (as opposed to just an operational depot), so it is left out per the
+# two-source bar rather than guessed.
+destination_crs_filter = ["SAL", "EXD"]
+
+# One per major stretch, all on this line's own exclusive segment past the
+# Basingstoke/Worting Junction divergence (mirrors swr-south-west-main.toml's
+# / swr-alton.toml's sample_stations rationale — a clean read of this line's
+# own service, not the SWML/Alton/Portsmouth expresses that also run over the
+# shared Waterloo-Basingstoke stretch).
+sample_stations = ["ANV", "SAL", "EXD"]
+
+match_keywords = ["West of England line", "West of England Main Line"]
+# "West of England line" is the line's own Wikipedia article title (see
+# naming note above) and grepped clean against every other file's own
+# match_keywords before adding (no collision). "West of England Main Line"
+# is a well-attested alternative name for the same route seen in
+# infrastructure/industry usage — kept per SCHEMA.md's precedent for a
+# route with two genuinely current names (c.f. `scotrail-ayrshire.toml`'s
+# two entries), not padding: it is not a strict substring of the first
+# phrase, so it can catch text the first phrase alone would miss.
+
+# Basingstoke-Salisbury is double track, but Salisbury-Pinhoe (the bulk of
+# this line's own exclusive mileage) is single track with passing loops
+# (en.wikipedia.org/wiki/West_of_England_line, infobox `tracks` field, and
+# the "Infrastructure" section's list of individual passing loops at
+# Tisbury, Gillingham, Axminster [reinstated 2009] and Honiton), carrying an
+# unelectrified diesel-only hourly-or-worse service west of Salisbury. Same
+# override pair as `gwr-cotswold.toml`/`scotrail-ayrshire.toml`'s rural
+# single-track precedent, not the tighter commuter/main-line defaults that
+# would misjudge a single delayed working here as a bigger problem than it
+# is.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# `swr-trunk-waterloo` (WAT/CLJ/WIM/SUR/WOK) is reused VERBATIM, rows copied
+# directly, from swr-south-west-main.toml/swr-alton.toml/swr-portsmouth-
+# direct.toml. en.wikipedia.org/wiki/West_of_England_line's own "Route"
+# section confirms this line's trains run out of Waterloo over the same
+# South West Main Line as far as Worting Junction, "just to the west of
+# Basingstoke" — i.e. past Woking, matching the existing trunk's own scope,
+# not diverging early the way Alton/Portsmouth do.
+#
+# --- Basingstoke: real shared trunk, kept as station overlap only ---
+#
+# Worting Junction itself has no CRS/TIPLOC of its own, so per the
+# shared-trunk rule of thumb the practical boundary is the last real station
+# before it: Basingstoke (BSK). BSK is real, physically shared track between
+# this line and BOTH swr-south-west-main.toml (its own exclusive
+# `swr-swml-south` segment, which also covers WIN/SOU/BMH/POO/WEY — none of
+# which this line reaches) and xc-south-coast.toml (its own exclusive
+# `xc-south-coast` segment, which likewise covers many stations this line
+# never reaches). Reusing either sibling's segment name verbatim for just
+# this file's BSK row would incorrectly mark all of THAT segment's other,
+# unrelated stations as "shared" catalogue-wide too — the same mistake
+# `gwr-west-of-england.toml`'s and `gwr-heart-of-wessex.toml`'s (formerly
+# gwr-bristol-suburban.toml, before that file's later split) own
+# corrected-scope notes already identify and fix for their own single-
+# station overlaps (BTH/BRI there). A technically correct fix needs one of
+# those two sibling files' own segments split at Basingstoke, out of this
+# task's file scope (lines/swr-west-of-england.toml only). Station overlap
+# only is used instead: BSK is tagged with this line's own exclusive segment
+# below, flagged here (and in this task's report) for the controller,
+# alongside the two already-known GWR-batch findings of the same shape.
+#
+# The exclusive segment itself is named `swr-west-of-england`, following the
+# established line-id-as-exclusive-segment-name convention, and covers every
+# station below from Basingstoke onward, including Exeter St Davids (see the
+# Exeter note further down for why that station is NOT put on
+# cross-country.toml's `xc-south-west` despite also being that file's own
+# terminus-area station).
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+tiploc = "CLPHMJ1"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+tiploc = "WDON"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+tiploc = "SURBITN"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WOK"
+tiploc = "WOKING"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "BSK"
+tiploc = "BSNGSEB"
+role = "junction"
+segment = "swr-west-of-england"
+# Basingstoke. Real shared trunk with swr-south-west-main.toml and
+# xc-south-coast.toml as far as Worting Junction (no CRS/TIPLOC of its own,
+# just west of here) — kept as station overlap only, not a shared segment
+# name; see the SEGMENTS comment above for why.
+
+[[stations]]
+crs = "OVR"
+role = "minor"
+segment = "swr-west-of-england"
+# Overton.
+
+[[stations]]
+crs = "WCH"
+role = "minor"
+segment = "swr-west-of-england"
+# Whitchurch (Hampshire) — CRS confirmed via ds.cursed.solutions/api/
+# stations as distinct from Whitchurch (Cardiff, WHT) and Whitchurch
+# (Shropshire, WTC), both unrelated stations with similar names.
+
+[[stations]]
+crs = "ADV"
+role = "major"
+segment = "swr-west-of-england"
+# Andover. CRS is ADV, not the more intuitive-looking "ANV" — verified via
+# ds.cursed.solutions/api/stations, which returns ADV for "Andover" and
+# separately confirms ANV is not in use. Formerly a junction for branch
+# lines to Romsey (via Salisbury) and, separately, the Midland and South
+# Western Junction Railway toward Swindon/Cheltenham — both long closed to
+# passengers, per en.wikipedia.org/wiki/Andover_railway_station — so no
+# junction role or further branch is modelled here.
+
+[[stations]]
+crs = "GRT"
+role = "minor"
+segment = "swr-west-of-england"
+# Grateley.
+
+[[stations]]
+crs = "SAL"
+role = "junction"
+segment = "swr-west-of-england"
+# Salisbury. Major interchange — this line's principal intermediate stop,
+# where roughly half of Waterloo services terminate (see
+# destination_crs_filter comment above). Also the eastern terminus of
+# lines/gwr-wessex-main.toml (a sibling file added in this same batch,
+# Bristol-Bath-Warminster-Salisbury) — the two routes approach Salisbury
+# from completely different directions (this line from the east via
+# Andover, gwr-wessex-main.toml from the north-west via Warminster) and
+# this task found no sourced evidence of shared track between them beyond
+# both terminating at the same station building, so this is treated as
+# station overlap only, the same "different approach, same terminus
+# building" judgment gwr-west-of-england.toml/gwr-cornish-main-line.toml
+# already make for EXD (see that note below) — not a shared segment name.
+
+[[stations]]
+crs = "TIS"
+role = "minor"
+segment = "swr-west-of-england"
+# Tisbury. Passing loop.
+
+[[stations]]
+crs = "GIL"
+role = "minor"
+segment = "swr-west-of-england"
+# Gillingham (Dorset) — CRS GIL, distinct from Gillingham (Kent, GLM) on an
+# unrelated Southeastern route. Passing loop.
+
+[[stations]]
+crs = "TMC"
+role = "minor"
+segment = "swr-west-of-england"
+# Templecombe. Closed 1966, reopened 3 October 1983 following a sustained
+# local campaign — en.wikipedia.org/wiki/Templecombe_railway_station.
+# Formerly also the junction for the Somerset and Dorset Joint Railway
+# (closed 1966, well before this station's own reopening), not modelled.
+
+[[stations]]
+crs = "SHE"
+role = "minor"
+segment = "swr-west-of-england"
+# Sherborne.
+
+[[stations]]
+crs = "YVJ"
+role = "major"
+segment = "swr-west-of-england"
+# Yeovil Junction. SWR's traincrew depot for this line
+# (en.wikipedia.org/wiki/West_of_England_line, "Infrastructure" section).
+# Deliberately distinct from Yeovil Pen Mill (YVP), a separate station a
+# short distance away on lines/gwr-heart-of-wessex.toml's own Heart of
+# Wessex line (Bristol-Weymouth; that file was formerly part of the combined
+# gwr-bristol-suburban.toml, before that file's later split) — this task's
+# research did not find a
+# second source confirming any current scheduled through running between
+# the two stations (a heritage/preserved shuttle has run historically), so
+# no link or shared segment is modelled between the two files here.
+
+[[stations]]
+crs = "CKN"
+role = "minor"
+segment = "swr-west-of-england"
+# Crewkerne. CRS is CKN (verified via ds.cursed.solutions/api/stations),
+# not the "CRK" that might otherwise be guessed.
+
+[[stations]]
+crs = "AXM"
+role = "minor"
+segment = "swr-west-of-england"
+# Axminster. Passing loop reinstated 2009 (part of the works enabling the
+# current Salisbury-Exeter hourly pattern). Formerly the junction for the
+# closed Lyme Regis branch, not modelled.
+
+[[stations]]
+crs = "HON"
+role = "minor"
+segment = "swr-west-of-england"
+# Honiton. Passing loop; the line's own ~1-mile Honiton Tunnel is just west
+# of here.
+
+[[stations]]
+crs = "FNT"
+role = "minor"
+segment = "swr-west-of-england"
+# Feniton.
+
+[[stations]]
+crs = "WHM"
+role = "minor"
+segment = "swr-west-of-england"
+# Whimple.
+
+[[stations]]
+crs = "CBK"
+role = "minor"
+segment = "swr-west-of-england"
+# Cranbrook (Devon) — a genuinely new station (opened 2015) serving the new
+# town of Cranbrook, confirmed live and currently served via
+# ds.cursed.solutions/api/stations.
+
+[[stations]]
+crs = "PIN"
+role = "junction"
+segment = "swr-west-of-england"
+# Pinhoe. Junction for the Avocet Line (Exeter-Exmouth via Topsham), not
+# currently covered by any file in this catalogue — a real, documented gap
+# left for future work, not modelled here.
+
+[[stations]]
+crs = "SJP"
+role = "minor"
+segment = "swr-west-of-england"
+# St James Park (Exeter) — a request stop serving Exeter City FC's ground
+# and the university, immediately east of Exeter Central.
+
+[[stations]]
+crs = "EXC"
+role = "major"
+segment = "swr-west-of-england"
+# Exeter Central. This line's own principal Exeter-area station (the former
+# LSWR terminus building); services continue on to Exeter St Davids below.
+
+[[stations]]
+crs = "EXD"
+role = "terminus"
+segment = "swr-west-of-england"
+# Exeter St Davids. This line's real terminus for through Waterloo-Exeter
+# services (see destination_crs_filter comment above). Also
+# cross-country.toml's own `xc-south-west` segment and
+# gwr-west-of-england.toml's/gwr-cornish-main-line.toml's own scope-ending
+# station, all reached via the Bristol-Taunton corridor from a completely
+# different direction. Unlike that corridor's own genuine multi-mile shared
+# approach with cross-country.toml (Cogload Junction onward — a real shared
+# CORRIDOR, per gwr-west-of-england.toml's own sourced finding), this line's
+# approach via Exeter Central converges with the Bristol-Taunton route only
+# at the St Davids station throat itself — a single-waypoint station
+# overlap, not a shared corridor, so `xc-south-west` is deliberately NOT
+# reused here; this line's own exclusive segment covers EXD instead.
+
+# ============================================================================
+# SCOPE BOUNDARIES — historic halts checked and excluded
+# ============================================================================
+# The following intermediate halts appear on the line's historic route
+# diagram (en.wikipedia.org/wiki/West_of_England_line's own station table)
+# but are marked there as closed, and are excluded accordingly: Oakley,
+# Hurstbourne, Idmiston Halt, Porton, Wilton South, Semley, Milborne Port,
+# Sutton Bingham Halt, Chard Junction, Seaton Junction, Roundball Halt,
+# Broad Clyst, Whipton Bridge Halt, Mount Pleasant Road Halt. Dinton was
+# checked individually and independently confirmed closed
+# (en.wikipedia.org/wiki/Dinton_railway_station: "closed to passengers in
+# 1966... most of the track has been removed"; ds.cursed.solutions/api/
+# stations returns no live code for it). The remaining closed halts above
+# were NOT each individually re-verified against a second source within
+# this task's budget — they are taken from the same route-diagram table's
+# own "Closed" annotation, not independently double-checked station-by-
+# station the way Dinton was. Flagged here for the controller as the one
+# part of this file's exclusions not fully cleared to the catalogue's
+# usual two-source bar (the risk is asymmetric and low: at worst this
+# under-includes a station that should be added later, not a fabricated
+# current stop).

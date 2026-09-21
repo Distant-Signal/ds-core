@@ -121,6 +121,26 @@ tiploc = "BATHSPA"
 role = "major"
 segment = "gwr-main-line"
 
+# Oldfield Park (OLF) and Keynsham (KYN): real stations directly between Bath
+# Spa and Bristol Temple Meads, previously missing from this file. Found by a
+# data-driven schedule audit (real CIF schedule population: each station
+# shows up as a real scheduled stop roughly 32-35 times independently in the
+# audited data, not a one-off/parsing artefact), and independently confirmed
+# as real/open/currently-served by both already being correctly tagged in
+# the sibling gwr-heart-of-wessex.toml (formerly part of the combined
+# gwr-bristol-suburban.toml, before that file's later split; its own
+# Bristol-Weymouth group, `gwr-bristol-weymouth` segment) — this file simply
+# never had them added.
+[[stations]]
+crs = "OLF"
+role = "minor"
+segment = "gwr-main-line"
+
+[[stations]]
+crs = "KYN"
+role = "minor"
+segment = "gwr-main-line"
+
 [[stations]]
 crs = "BRI"
 tiploc = "BRSTLTM"

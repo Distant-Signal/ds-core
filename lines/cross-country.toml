@@ -78,6 +78,18 @@ role = "minor"
 segment = "xc-midlands"
 
 [[stations]]
+crs = "TAM"
+role = "minor"
+segment = "xc-midlands"
+# Tamworth (Low Level platforms). CrossCountry runs 2 tph to Nottingham via
+# Derby calling here -- confirmed by this audit's CIF-schedule cross-check.
+# Same CRS "TAM" already used elsewhere in this catalogue for the High
+# Level (WCML) platforms at this station (e.g. `west-coast-main-line.toml`'s
+# own TAM entry, tiploc "TMWTHLL") -- legitimate CRS/station overlap between
+# two physically distinct platform groups at one station, not a duplicate
+# or mistake.
+
+[[stations]]
 crs = "BHM"
 tiploc = "BHAMNWS"
 role = "junction"
@@ -89,6 +101,17 @@ segment = "xc-birmingham"
 crs = "UNI"
 role = "minor"
 segment = "xc-west"
+
+[[stations]]
+crs = "WOP"
+role = "minor"
+segment = "xc-west"
+# Worcestershire Parkway. CrossCountry runs southbound-only/select-service
+# stops here on both the Bristol-Manchester and Bournemouth-Manchester
+# patterns -- confirmed by this audit's CIF-schedule cross-check. Resolves
+# `xc-cardiff.toml`'s own "Task 9.4" deferred-to-cross-country.toml note
+# about this shared row. Kept byte-identical with `xc-cardiff.toml`'s own
+# copy of this BHM/UNI/WOP/CNM stretch.
 
 [[stations]]
 crs = "CNM"

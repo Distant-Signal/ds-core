@@ -1,0 +1,260 @@
+id = "southeastern-north-kent"
+name = "North Kent Line (via Greenwich)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SE"]
+
+sample_stations = ["GNW", "WWA", "ABW", "DFD"]
+match_keywords = ["North Kent Line", "Greenwich line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP, AND THE REQUIRED OVERLAP CHECK AGAINST THE ALREADY-SPLIT
+# BEXLEYHEATH/DARTFORD LOOP FILES
+# ============================================================================
+# "North Kent Line" appears as a named, explicitly-uncovered gap in FIVE
+# already-committed files' own comments: southeastern-chatham.toml's SOO
+# (Strood) entry, southeastern-main-line.toml's NWX (New Cross) entry, and -
+# most directly - southeastern-metro-north-kent.toml's own header FINDING 2
+# and its BKH (Blackheath)/SGR (Slade Green)/DFD (Dartford) comments. It is
+# also carried as a forward-looking placeholder in TWO files'
+# `excluded_keywords`: southeastern-metro-north-kent.toml and
+# southeastern-hayes-line.toml, each with a comment explicitly warning "If a
+# North Kent Line file is ever added it WILL share [stations] with this
+# file, and this entry must then be removed." This file is that
+# North Kent Line file, and both of those removals have now been made (see
+# each file's own updated `excluded_keywords` comment).
+#
+# IMPORTANT NAMING NOTE: this task's brief asked me to first check this
+# against "the already-split southeastern-bexleyheath.toml/southeastern-
+# dartford-loop.toml from earlier this session." Those two files do NOT
+# exist on this branch (`feat/newlines-se-kent-sussex`, based on `main`) or
+# anywhere in this repository's git history reachable from `main` - grepped
+# and confirmed absent. They DO exist, already committed, on a sibling
+# branch `feat/split-southeastern-metro` (not merged to `main` as of this
+# task). On `main`/this branch, the combined file is still
+# `southeastern-metro-north-kent.toml` ("Dartford Loop & Bexleyheath
+# Lines"), which is what this file's own overlap check below is actually
+# against. This is a real discrepancy between the brief's assumption and
+# this branch's actual state - flagged here plainly for the controller
+# rather than silently reconciled, since I cannot and should not merge or
+# read from an unrelated, unmerged sibling branch's own working state as
+# part of this task.
+#
+# THE REAL GAP, per southeastern-metro-north-kent.toml's own FINDING 2 and
+# its Slade Green/Dartford comments: that file's Bexleyheath branch
+# (`senk-bexleyheath`: BKH, KDB, ELW, FCN, WLI, BXH, BNH, SGR) and Dartford
+# Loop branch (`senk-dartford-loop`: HGR, LEE, MTG, NEH, SID, AYP, BXY, CRY)
+# both physically diverge from the Lewisham/Hither Green area and converge
+# on Dartford via Slade Green - neither one runs via Greenwich, Maze Hill,
+# Westcombe Park, Charlton, Woolwich Dockyard, Woolwich Arsenal, Plumstead
+# or Abbey Wood, none of which appear anywhere in that file. Confirmed by
+# grepping that file's full CRS list before writing this one: zero overlap
+# on the genuinely new stations this file adds (see STATIONS below); the
+# only overlap is at the two ends both files already separately reach -
+# SGR (Slade Green) and DFD (Dartford) - which that file's own comments
+# already flag as "a genuine, everyday Thameslink calling point... and a
+# North Kent Line coverage gap for a future file" (i.e. this file).
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Two real, physically distinct London approaches reach the Charlton/
+# Woolwich/Dartford trunk this file models: (a) via Lewisham and Blackheath
+# (the historic North Kent Line's own original alignment - already flagged,
+# not modelled, in southeastern-metro-north-kent.toml's own BKH comment:
+# "The North Kent Line's own alignment (toward Charlton/Woolwich) diverges
+# here"), and (b) via New Cross, Deptford and Greenwich (the "Greenwich
+# line" proper, the original 1836 London and Greenwich Railway route -
+# already flagged, not modelled, in BOTH southeastern-main-line.toml's and
+# southeastern-metro-north-kent.toml's own NWX comments: "A
+# differently-aligned North Kent Line route (via the Surrey Canal curve
+# toward Greenwich/Woolwich) diverges near here"). This task's own brief
+# names the route as "Charing Cross/Cannon Street-Greenwich-Woolwich
+# Arsenal-Dartford" - i.e. approach (b), which this file models. Approach
+# (a), via Blackheath, is confirmed real (Wikipedia's own "North Kent Line"
+# article; both spellings converge at Charlton per that article's own route
+# description) but is a genuinely separate remaining gap, left undisclosed-
+# but-real for a future file, consistent with how the BKH comment already
+# treats it - not folded in here, since this file's own scope (per the
+# brief) is specifically the Greenwich approach.
+#
+# Confirmed via Wikipedia's "Greenwich line" article (lead: diverges "from
+# the South Eastern Main Line at North Kent East junction" and runs "as far
+# as Charlton junction where it connects with the North Kent Line";
+# stations Deptford, Greenwich, Maze Hill, Westcombe Park) and Wikipedia's
+# "North Kent Line" article (lead: branches off "at St Johns junction west
+# of Lewisham" [approach (a), not modelled here] "and runs to Rochester
+# Bridge Junction near Strood"; confirms the Charlton-Woolwich Arsenal-
+# Plumstead-Abbey Wood-Belvedere-Erith-Slade Green-Dartford stretch this
+# file models past the Greenwich line's own Charlton junction). Every CRS
+# code independently verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>; Woolwich Arsenal (WWA)
+# and Abbey Wood (ABW) additionally cross-checked against
+# elizabeth-line.toml, which already lists both (its own `elizabeth-
+# south-east` segment) - genuine station overlap with a physically
+# different route (the Elizabeth line's own tunnelled core reaches these
+# two stations from Custom House, not via this file's own Deptford/
+# Greenwich/Charlton alignment) - not a shared segment, same precedent as
+# everywhere else in this catalogue.
+#
+# HAND-OFF NOTE (not acted on here, disclosed per this catalogue's own
+# convention for a real but Wikipedia-only-sourced lead): Wikipedia's own
+# "Thameslink" article lists a real, current, off-peak 2tph "Luton to
+# Rainham via Greenwich" service, explicitly calling at "Greenwich, Maze
+# Hill, Westcombe Park, Charlton, Woolwich Arsenal, Plumstead, Abbey Wood,
+# Slade Green, Dartford" before continuing to Rainham - i.e. the exact same
+# stations this file models. This independently corroborates (a second,
+# separate research pass reaching the same conclusion) southeastern-metro-
+# north-kent.toml's own FINDING 2, which already flagged Slade Green as "a
+# genuine, everyday Thameslink calling point." Both findings are still
+# ultimately Wikipedia-sourced only (no non-Wikipedia confirmation of the
+# *service pattern*, as opposed to station identity, was found within this
+# task's budget), so `operators` here stays `["SE"]` only, matching this
+# task's own scope, and no shared segment is claimed with any future
+# Thameslink file - a future `thameslink-*` file covering this service
+# would need its own independent verification to clear this catalogue's
+# bar, exactly as southern-brighton-main-line.toml's own Task 5.14 hand-off
+# already models for an analogous situation.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# STATIONS - ordered London to Dartford. One segment throughout: this file's
+# own name, not reused from any sibling file, per the xc-south-coast.toml/
+# xc-manchester.toml precedent - matching how southeastern-main-line.toml
+# and southeastern-metro-north-kent.toml already use two DIFFERENT segment
+# names (`seml-london` vs `southeastern-lewisham-corridor`) for their own
+# genuinely-identical CHX/WAE/CST/LBG/NWX/SAJ/LEW physical stretch, rather
+# than sharing one.
+# ============================================================================
+[[stations]]
+crs = "CHX"
+role = "terminus"
+segment = "southeastern-north-kent"
+# Charing Cross. Also southeastern-main-line.toml's and southeastern-metro-
+# north-kent.toml's own terminus, and southeastern-hayes-line.toml's own
+# station - station overlap only with all three, see ROUTE AND SOURCING
+# above.
+
+[[stations]]
+crs = "WAE"
+role = "minor"
+segment = "southeastern-north-kent"
+# Waterloo East - the first stop out of Charing Cross specifically, per the
+# same data-driven finding southeastern-main-line.toml's and
+# southeastern-metro-north-kent.toml's own WAE comments already document.
+
+[[stations]]
+crs = "CST"
+role = "terminus"
+segment = "southeastern-north-kent"
+# Cannon Street. Also southeastern-main-line.toml's and southeastern-metro-
+# north-kent.toml's own terminus - station overlap only.
+
+[[stations]]
+crs = "LBG"
+role = "major"
+segment = "southeastern-north-kent"
+# London Bridge. Also thameslink-core.toml's own terminus and every other
+# Kent-line file's own station in this catalogue - station overlap only,
+# per the long-established precedent for this specific station.
+
+[[stations]]
+crs = "NWX"
+role = "junction"
+segment = "southeastern-north-kent"
+# New Cross. Also southeastern-main-line.toml's and southeastern-metro-
+# north-kent.toml's own station (both already flag this file's own route as
+# "diverges near here" - see ROUTE AND SOURCING above) - station overlap
+# only, own segment name here.
+
+[[stations]]
+crs = "DEP"
+role = "minor"
+segment = "southeastern-north-kent"
+# Deptford. Genuinely new to this catalogue - the Greenwich line's own
+# exclusive stretch begins here, one station past the New Cross junction.
+
+[[stations]]
+crs = "GNW"
+role = "major"
+segment = "southeastern-north-kent"
+# Greenwich.
+
+[[stations]]
+crs = "MZH"
+role = "minor"
+segment = "southeastern-north-kent"
+# Maze Hill.
+
+[[stations]]
+crs = "WCB"
+role = "minor"
+segment = "southeastern-north-kent"
+# Westcombe Park.
+
+[[stations]]
+crs = "CTN"
+role = "junction"
+segment = "southeastern-north-kent"
+# Charlton. Per Wikipedia's own "Greenwich line" article, this is Charlton
+# junction, where the Greenwich line's own tracks join the North Kent
+# Line's own formation; the separate, unmodelled Blackheath approach
+# (approach (a) above) also joins here.
+
+[[stations]]
+crs = "WWD"
+role = "minor"
+segment = "southeastern-north-kent"
+# Woolwich Dockyard.
+
+[[stations]]
+crs = "WWA"
+role = "major"
+segment = "southeastern-north-kent"
+# Woolwich Arsenal. Also elizabeth-line.toml's own station - station
+# overlap only, see ROUTE AND SOURCING above.
+
+[[stations]]
+crs = "PLU"
+role = "minor"
+segment = "southeastern-north-kent"
+# Plumstead.
+
+[[stations]]
+crs = "ABW"
+role = "major"
+segment = "southeastern-north-kent"
+# Abbey Wood. Also elizabeth-line.toml's own terminus - station overlap
+# only, see ROUTE AND SOURCING above.
+
+[[stations]]
+crs = "BVD"
+role = "minor"
+segment = "southeastern-north-kent"
+# Belvedere.
+
+[[stations]]
+crs = "ERH"
+role = "minor"
+segment = "southeastern-north-kent"
+# Erith.
+
+[[stations]]
+crs = "SGR"
+role = "junction"
+segment = "southeastern-north-kent"
+# Slade Green. Also southeastern-metro-north-kent.toml's own station
+# (`senk-bexleyheath` segment, already commented as a "genuine, everyday
+# Thameslink calling point" and a "North Kent Line coverage gap for a
+# future file" - this file) - station overlap only, see SELF-FLAGGED GAP
+# above.
+
+[[stations]]
+crs = "DFD"
+role = "terminus"
+segment = "southeastern-north-kent"
+# Dartford. Also southeastern-metro-north-kent.toml's own shared terminus
+# (both its Bexleyheath and Dartford Loop branches end here) - station
+# overlap only, see SELF-FLAGGED GAP above.

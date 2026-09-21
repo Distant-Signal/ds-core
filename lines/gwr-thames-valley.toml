@@ -170,10 +170,16 @@ delay_threshold_minutes = 10
 # WDT on its own `elizabeth-west` segment — checked directly in that file) —
 # the same "different service class, same physical station, station overlap
 # only" shape already established below for MAI/SLO/TWY, so all three stay
-# on `gwr-thames-valley`, not either Elizabeth-line segment. IVR, LNY, BNM
-# and TAP are not currently in elizabeth-line.toml's own station list at all
-# (checked directly), so there is no sibling-segment overlap to flag for
-# those four.
+# on `gwr-thames-valley`, not either Elizabeth-line segment.
+#
+# --- Update: London line-definition audit (2026-09) ---
+#
+# The London line-definition audit that fixed elizabeth-line.toml's ZCW/WWA
+# CRS bugs also infilled that file's own `elizabeth-west` segment with real
+# CIF-schedule-confirmed stations, including IVR, LNY, BNM and TAP — all four
+# previously absent from elizabeth-line.toml (as this comment used to note),
+# now present there too. Same station-overlap shape as STL/HAY/WDT above:
+# both files stay ExclusiveSegment for their own segment.
 #
 # --- Branch 1: Didcot Parkway - Oxford (via Appleford, Culham, Radley) ---
 #
@@ -390,6 +396,39 @@ segment = "gwr-thames-valley"
 # (terminus of its own `elizabeth-west`) — station overlap only in every
 # case, no segment shared (see above). This line's Oxford and Newbury
 # branches (below) both diverge from here, in different directions.
+
+# Tilehurst (TLH), Pangbourne (PAN), Goring & Streatley (GOR) and Cholsey
+# (CHO): real, currently-open, currently-served stations directly between
+# Reading and Didcot Parkway, previously missing from this file. A
+# data-driven schedule audit confirms these are the Reading-side half of the
+# very same "2tph to Didcot Parkway" GWR local/semi-fast product this file's
+# own Slough/Maidenhead/Twyford research above already documents from the
+# Paddington side — the Didcot-Oxford half of that same working (via
+# Appleford/Culham/Radley, below) was already catalogued here, but the
+# Reading-Didcot stretch itself had been skipped over. Geographic order
+# (Reading - Tilehurst - Pangbourne - Goring & Streatley - Cholsey - Didcot
+# Parkway) matches each station's real position on this line. All
+# `role = "minor"`, inheriting this line's one `gwr-thames-valley` segment
+# per this file's established convention.
+[[stations]]
+crs = "TLH"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "PAN"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "GOR"
+role = "minor"
+segment = "gwr-thames-valley"
+
+[[stations]]
+crs = "CHO"
+role = "minor"
+segment = "gwr-thames-valley"
 
 # --- Branch 1: Didcot Parkway - Oxford ---
 [[stations]]

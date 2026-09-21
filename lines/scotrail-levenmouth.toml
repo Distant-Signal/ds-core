@@ -1,0 +1,191 @@
+id = "scotrail-levenmouth"
+name = "ScotRail Levenmouth Rail Link (Thornton Junction - Cameron Bridge - Leven)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Central Scotland/Edinburgh gap-coverage batch (2026-09-21 audit of the
+# ~50+ zero-coverage real UK lines). This is a brand-new addition to the
+# network: passenger services reopened 2 June 2024 (formally opened 29 May
+# 2024), after the original Fife Coast Railway route through here closed
+# to passengers in 1969. `scotrail-fife-borders.toml` (the bundled file
+# this task was told to read for context, at the time not yet split; now
+# split, and fully superseded, by `scotrail-fife-circle.toml` and
+# `scotrail-borders-railway.toml`, per a later data-driven catalogue audit
+# -- see those files' own top-of-file split comments) already documented
+# this exact gap in its own scope-boundaries section: "The Levenmouth Rail
+# Link (Glenrothes with Thornton/Cameron Bridge/Leven, reopened 2024): per
+# Wikipedia, also calls at Glenrothes with Thornton, but is a distinct
+# branch service... a real, documented gap left for future work." This
+# file closes that gap.
+#
+# Category: "regional", matching this batch's other newly-added-or-modest
+# ScotRail branch lines (`scotrail-ayrshire.toml`, `scotrail-fife-circle.
+# toml`) -- a single branch line, not a flagship or metro-density route.
+#
+# Electrification: not currently electrified (Wikipedia: diesel operation
+# throughout); electrification of the branch by 2029 and new battery-
+# electric trains by 2031 have been announced but are not yet built --
+# noted here as a real, sourced future change, not modelled as a current
+# fact.
+
+match_keywords = ["Levenmouth Rail Link"]
+# The line's own official, branded name (used consistently by Transport
+# Scotland, Network Rail and ScotRail's own reopening coverage, and the
+# Wikipedia article's own title) -- a single high-precision phrase per the
+# curation rule against padding match_keywords; distinctive enough that a
+# second phrase isn't needed. Grepped `lines/*.toml` first: no collision.
+
+sample_stations = ["GLT", "CBX", "LEV"]
+# GLT (Glenrothes with Thornton) is also `scotrail-fife-circle.toml`'s own
+# sample station and `[[stations]]` entry -- a deliberate, sourced
+# station-overlap choice; see the segment-naming note below for why it
+# isn't modelled as a shared segment. CBX and LEV are exclusive to this
+# line.
+
+# A brand-new branch, still ramping up: 1 train per hour between Leven and
+# Edinburgh Waverley at the 2 June 2024 launch, increased to 2 trains per
+# hour in 2025 (one route via Kirkcaldy, one via Dunfermline City, per
+# Cameron Bridge's own Wikipedia page). Tuned the same as this batch's
+# other single-branch regional lines (`scotrail-ayrshire.toml`'s Stranraer
+# extension, `scotrail-fife-circle.toml`) rather than a denser commuter
+# line's tighter defaults -- a single delayed or cancelled working on a
+# still-hourly-per-routing branch is a bigger share of the day's capacity
+# than on a quarter-hourly trunk.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Junction with `scotrail-fife-circle.toml`: Glenrothes with Thornton
+#     -- station overlap, not a shared segment ===
+#
+# Per Wikipedia "Levenmouth Rail Link", the branch "connects the town of
+# Leven, Fife with the Fife Circle Line at Thornton Junction, north of
+# Kirkcaldy." `scotrail-fife-circle.toml`'s own Glenrothes with Thornton
+# (GLT) entry -- carried over unchanged from the former combined
+# `scotrail-fife-borders.toml` by this session's later split task --
+# independently corroborates this from the Fife Circle side, describing
+# GLT itself as "a physical junction where the line towards Markinch/
+# Perth/Dundee diverges" and (in that file's own Levenmouth scope note)
+# confirming Levenmouth trains "also call at Glenrothes with Thornton".
+# Per the shared-trunk rule of thumb, the junction station would
+# ordinarily belong to a shared segment name with whichever line it hands
+# off to.
+#
+# In practice that can't be expressed cleanly here: `scotrail-fife-
+# circle.toml` tags GLT with the plain `scotrail-fife-circle` segment name
+# -- the same, undifferentiated name it also gives Kirkcaldy and every
+# other coastal/inland loop station that has nothing to do with the
+# Levenmouth branch (only Edinburgh Waverley/Haymarket get their own
+# dedicated `scotrail-fife-circle-throat` segment there). Reusing
+# `scotrail-fife-circle` here for just GLT would incorrectly mark
+# Kirkcaldy and the rest of that file's own loop as shared with this
+# branch too -- confirmed the hard way: an earlier draft of this file did
+# exactly that and broke a pre-existing matcher test asserting
+# `scotrail-fife-circle` stays `ExclusiveSegment` at Kirkcaldy.
+# `scotrail-fife-circle.toml` is not touched by this task, so GLT is given
+# this file's own `scotrail-levenmouth` segment name instead -- the same
+# "station overlap without segment sharing"
+# choice `scotrail-stirling-dunblane.toml` documents for its own Linlithgow/
+# Polmont entries against this same coarse-segment problem, and the same
+# category of choice `scotrail-fife-circle.toml` itself already makes for
+# its own Edinburgh Waverley/Haymarket entries against `scotrail-central-
+# belt.toml`. Flagged here for whoever next carves `scotrail-fife-circle.
+# toml`'s own segment tagging more finely: splitting GLT out into its own
+# dedicated segment (mirroring that file's existing `-throat` split) would
+# let this file reuse it cleanly.
+#
+# From Glenrothes with Thornton, Leven-bound services continue over the
+# existing Fife Circle Line to reach Edinburgh (via Kirkcaldy on the
+# coastal side, or via Dunfermline City on the inland side, per Cameron
+# Bridge's own page) -- track and stations `scotrail-fife-circle.toml`
+# already models in full. This file does not re-list any of those
+# stations; only the genuinely new branch beyond the junction is modelled
+# here, mirroring how branch-only files elsewhere in this catalogue (e.g.
+# `scotrail-ayrshire.toml`'s own Stranraer extension) don't re-list their
+# host trunk's stations either.
+
+[[stations]]
+crs = "GLT"
+role = "junction"
+segment = "scotrail-levenmouth"
+# Glenrothes with Thornton: the real-world Thornton Junction is at/
+# immediately adjacent to this station per the sourcing above. CRS code
+# reused verbatim from `scotrail-fife-circle.toml`, but given this file's
+# own segment name rather than reusing theirs -- see the note above for
+# why. Services continue from
+# here over the existing Fife Circle Line towards Edinburgh (not
+# re-modelled in this file).
+
+[[stations]]
+crs = "CBX"
+role = "major"
+segment = "scotrail-levenmouth"
+# Cameron Bridge: reopened 2 June 2024 (originally opened 10 August 1854,
+# closed to passengers 1969). Tagged `major` rather than `minor`: per its
+# own Wikipedia page it was built with substantial park-and-ride capacity
+# ("16 cycle spaces and a 125 space car park, with space for an extra 300
+# spaces"), functioning as a railhead for the surrounding area rather than
+# a basic halt.
+
+[[stations]]
+crs = "LEV"
+role = "terminus"
+segment = "scotrail-levenmouth"
+# Leven: reopened 2 June 2024, the eastern terminus of the branch and of
+# the whole Levenmouth Rail Link -- Wikipedia states plainly it is "the
+# eastern terminus of the Levenmouth rail link". Leven and Cameron Bridge
+# are the two new stations this 2024 reopening added to the network.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, reopening date and operator:
+#   - Wikipedia "Levenmouth Rail Link": confirms the 2 June 2024 start of
+#     scheduled passenger services (formally opened 29 May 2024), ScotRail
+#     operation, the branch's junction with the Fife Circle Line "at
+#     Thornton Junction, north of Kirkcaldy", non-electrified diesel
+#     operation with 2029/2031 electrification and battery-electric-train
+#     plans announced but not yet built, and the 2024-launch 1 tph
+#     frequency increased to 2 tph in 2025 (one route via Kirkcaldy, one
+#     via Dunfermline City).
+#   - Wikipedia "Cameron Bridge railway station": confirms the CRS code,
+#     the 2 June 2024 reopening date (originally opened 10 August 1854),
+#     its position between Glenrothes with Thornton/Kirkcaldy and Leven,
+#     its park-and-ride facilities, and the current 2 tph frequency split
+#     via Kirkcaldy/via Dunfermline City.
+#   - Wikipedia "Leven railway station": confirms the CRS code, the 2 June
+#     2024 reopening (opened 29 May 2024), its status as "the eastern
+#     terminus of the Levenmouth rail link", and Cameron Bridge as the
+#     immediately preceding station.
+#   - `scotrail-fife-circle.toml`'s own scope-boundaries comment (carried
+#     over from the former combined `scotrail-fife-borders.toml`; see the
+#     junction note above): independently corroborates the Thornton/
+#     Cameron Bridge/Leven station names, the 2024 reopening date, and
+#     that Levenmouth trains call at Glenrothes with Thornton.
+#
+# CRS codes: GLT was reused verbatim from `scotrail-fife-circle.toml`
+# (itself already live-verified there). CBX and LEV were each independently
+# confirmed against both the relevant station's own Wikipedia infobox and a
+# live query against https://ds.cursed.solutions/api/stations?q=<name>,
+# which returned an exact single match for each (note: querying "Leven"
+# alone also returns an unrelated "Levenshulme" (LVM) match in Greater
+# Manchester -- disambiguated by name and by the Fife-specific Wikipedia
+# sourcing above; "Cameron Bridge" returned a single unambiguous CBX
+# match). Both agree with the Wikipedia-sourced codes with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Fife Circle Line itself, from Glenrothes with Thornton onward to
+#   Edinburgh via either the coastal (Kirkcaldy) or inland (Dunfermline
+#   City) side: already fully modelled in `scotrail-fife-circle.toml`. Not
+#   re-listed here -- see the shared-trunk note above.
+# - Future electrification and battery-electric-train operation
+#   (announced targets: infrastructure by 2029, trains by 2031): real,
+#   sourced above, but not yet built -- this file models the branch as it
+#   currently operates (diesel), and should be revisited if and when that
+#   changes.

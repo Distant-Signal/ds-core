@@ -185,13 +185,14 @@ crs = "LGE"
 role = "minor"
 segment = "emr-mml-central"
 
-# --- emr-mml-derby: shared trunk with `emr-rural-branches.toml`'s
-# Derwent Valley Line branch. Derby is the only station both files'
-# station lists literally include in common (this file's intercity
-# service does not call at Duffield/Belper/Ambergate, even though the
-# underlying Midland Main Line track is physically shared as far as
-# Ambergate Junction) - segment-sharing for matcher purposes is therefore
-# scoped to Derby itself; see `emr-rural-branches.toml`'s Branch 3 ruling
+# --- emr-mml-derby: shared trunk with `emr-derwent-valley.toml`'s
+# Derwent Valley Line (formerly one of three branches bundled into
+# `emr-rural-branches.toml`, since split one-line-per-file). Derby is the
+# only station both files' station lists literally include in common (this
+# file's intercity service does not call at Duffield/Belper/Ambergate, even
+# though the underlying Midland Main Line track is physically shared as far
+# as Ambergate Junction) - segment-sharing for matcher purposes is therefore
+# scoped to Derby itself; see `emr-derwent-valley.toml`'s own ruling comment
 # for the fuller explanation of that distinction. ---
 [[stations]]
 crs = "DBY"

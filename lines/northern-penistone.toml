@@ -1,0 +1,217 @@
+id = "northern-penistone"
+name = "Penistone Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# Gap analysis: not individually named in
+# docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, but falls
+# squarely within its Northern section's own framing ("assorted... branches
+# not yet checked in detail... flagged for the follow-up curation pass") --
+# a real, currently-operating Northern Trains service with no existing
+# `lines/*.toml` coverage. Confirmed via Wikipedia's "Penistone Line"
+# article (raw wikitext) and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference), fetched 2026-09-21.
+#
+# Huddersfield to Sheffield via Denby Dale, Penistone and Barnsley -- a
+# genuinely distinct corridor from both existing Sheffield/Huddersfield
+# Northern entries already in this catalogue:
+#   - `northern.toml`'s own Huddersfield entry (`northern-transpennine`
+#     segment) is the Standedge-route trunk running WEST from Huddersfield
+#     towards Manchester Victoria; this line runs SOUTH from Huddersfield
+#     towards Barnsley/Sheffield. Confirmed by direct read of `northern.toml`
+#     before starting this file: no station or segment overlap beyond the
+#     shared Huddersfield (HUD) station itself.
+#   - `northern-hope-valley.toml` is Manchester Piccadilly to Sheffield via
+#     Edale and Dore & Totley -- a different corridor entirely, arriving at
+#     Sheffield from the west via the Hope Valley rather than from the north
+#     via Barnsley. Confirmed by direct read of that file: the only station
+#     in common is Sheffield (SHF) itself, exactly as that file's own
+#     comment already notes for its own overlap with CrossCountry ("Sheffield
+#     is also a CrossCountry station, but only the station is common").
+#
+# Category "regional" per this batch's Northern-branch precedent (see
+# `northern-manchester-southport.toml`'s header comment). `[severity
+# overrides]` below follow `northern-hope-valley.toml`'s own two-field
+# pattern (no `reduced_service_pct` override) rather than the three-field
+# rural-branch pattern: both lines share the same "roughly hourly stopping
+# service across single-track terrain" character.
+
+sample_stations = ["HUD", "DBD", "PNS", "BNY", "SHF"]
+# Huddersfield and Sheffield (the two termini), Denby Dale and Penistone
+# (representative intermediate stops either side of the line's own
+# namesake town), and Barnsley (the junction where the unmodelled Hallam
+# Line towards Leeds splits off -- see the scope-boundaries note below).
+
+destination_crs_filter = ["HUD", "SHF"]
+# This line's own two real termini. Sheffield is shared with several other
+# operators' own trunk stations (CrossCountry, EMR, TPE) but none of those
+# other lines' own `destination_crs_filter`s list HUD, and this line has no
+# shared trunk segment with any of them (station-overlap only throughout --
+# see below), so no further disambiguation is needed here.
+
+match_keywords = ["Penistone Line"]
+# The line's own Wikipedia article title and the name used consistently by
+# the Penistone Line Partnership community-rail site. Grepped against every
+# other file's own `match_keywords` before adding: no collision, and no
+# other file uses "Penistone" anywhere in its own keywords. Kept to a single
+# high-precision phrase per SCHEMA.md's "don't overload match_keywords"
+# rule -- no other branded alternative name for this line was found.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Huddersfield to Sheffield via Denby Dale, Penistone, Barnsley and
+# Meadowhall, ordered north to south, per Wikipedia's "Penistone Line"
+# article (raw wikitext, infobox and current-stations list) fetched
+# 2026-09-21, cross-checked station order against a WebSearch-surfaced
+# summary of a live Northern Trains timetable extract (Sheffield -
+# Meadowhall - Chapeltown - Elsecar - Wombwell - Barnsley - Dodworth -
+# Silkstone Common - Penistone - Denby Dale - Shepley - Stocksmoor -
+# Brockholes - Honley - Berry Brow - Lockwood - Huddersfield), which
+# independently confirms both the ordering and that all of these are
+# genuinely called at, not merely route-diagram entries. Every CRS code
+# cross-checked against ds.cursed.solutions/api/stations the same day; no
+# discrepancies. TIPLOCs omitted throughout (none confirmed to a second
+# source in the time available).
+#
+# Infobox confirms single-track railway with passing loops (at Penistone,
+# and between Stocksmoor and Shepley) -- the basis for this file's severity
+# overrides, matching `northern-hope-valley.toml`'s own rural-stopper
+# tuning.
+#
+# --- Station-overlap-only notes ---
+# - Huddersfield (HUD): shared with `northern.toml` (`northern-transpennine`
+#   segment) and `tpe-north.toml`. Different corridor in both cases (see the
+#   header comment) -- station overlap only, no segment shared.
+# - Sheffield (SHF): shared with `cross-country.toml`, `emr-midland-main-
+#   line.toml`, `emr-regional.toml`, `tpe-south.toml` and
+#   `northern-hope-valley.toml`. None of those lines run via Barnsley/
+#   Penistone -- station overlap only, following `northern-hope-valley.
+#   toml`'s own precedent for this exact station.
+# - Meadowhall (MHS): shared with `tpe-south.toml`. Station overlap only.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Barnsley - Wakefield Kirkgate - Castleford - Leeds (the "Hallam Line"):
+#   per Elsecar and Wombwell's own Wikipedia station articles (surfaced via
+#   WebSearch), some services from Sheffield via this line's own Barnsley-
+#   Meadowhall-Sheffield stretch continue beyond Barnsley towards Leeds via
+#   Wakefield Kirkgate and Castleford rather than towards Huddersfield/
+#   Penistone -- e.g. Elsecar's own article: "two trains per hour to
+#   Barnsley (one continuing to Leeds via Castleford, the other to
+#   Huddersfield via Penistone)". This is a real, sourced, currently-
+#   unmodelled Northern service (grepped: no existing `lines/*.toml` file
+#   covers Wakefield Kirkgate or Castleford on this corridor) -- left as a
+#   documented gap for future work rather than folded into this file, since
+#   Barnsley-Sheffield is this line's own shared approach but Barnsley-Leeds
+#   is a genuinely different route this task was not scoped to cover.
+# - Sheffield Victoria/Wednesday-era historical routings and any
+#   closed intermediate halts on this corridor: not modelled, per this
+#   catalogue's convention of covering current operation only.
+[[stations]]
+crs = "HUD"
+role = "terminus"
+segment = "northern-penistone"
+
+[[stations]]
+crs = "LCK"
+role = "minor"
+segment = "northern-penistone"
+# Lockwood.
+
+[[stations]]
+crs = "BBW"
+role = "minor"
+segment = "northern-penistone"
+# Berry Brow.
+
+[[stations]]
+crs = "HOY"
+role = "minor"
+segment = "northern-penistone"
+# Honley.
+
+[[stations]]
+crs = "BHS"
+role = "minor"
+segment = "northern-penistone"
+# Brockholes.
+
+[[stations]]
+crs = "SSM"
+role = "minor"
+segment = "northern-penistone"
+# Stocksmoor -- a passing loop lies between here and Shepley (see the
+# severity-overrides sourcing above).
+
+[[stations]]
+crs = "SPY"
+role = "minor"
+segment = "northern-penistone"
+# Shepley.
+
+[[stations]]
+crs = "DBD"
+role = "minor"
+segment = "northern-penistone"
+# Denby Dale.
+
+[[stations]]
+crs = "PNS"
+role = "major"
+segment = "northern-penistone"
+# Penistone -- the line's own namesake town; a passing loop is sited here.
+
+[[stations]]
+crs = "SLK"
+role = "minor"
+segment = "northern-penistone"
+# Silkstone Common.
+
+[[stations]]
+crs = "DOD"
+role = "minor"
+segment = "northern-penistone"
+# Dodworth.
+
+[[stations]]
+crs = "BNY"
+role = "junction"
+segment = "northern-penistone"
+# Barnsley -- the unmodelled Hallam Line towards Leeds via Wakefield
+# Kirkgate/Castleford splits off here; see the scope-boundaries note above.
+
+[[stations]]
+crs = "WOM"
+role = "minor"
+segment = "northern-penistone"
+# Wombwell.
+
+[[stations]]
+crs = "ELR"
+role = "minor"
+segment = "northern-penistone"
+# Elsecar.
+
+[[stations]]
+crs = "CLN"
+role = "minor"
+segment = "northern-penistone"
+# Chapeltown (South Yorkshire) -- disambiguated from the unrelated West
+# Yorkshire place of the same name via ds.cursed.solutions/api/stations.
+
+[[stations]]
+crs = "MHS"
+role = "major"
+segment = "northern-penistone"
+# Meadowhall -- station-overlap only with `tpe-south.toml`; see the note
+# above.
+
+[[stations]]
+crs = "SHF"
+role = "terminus"
+segment = "northern-penistone"
+# Sheffield -- station-overlap only with several other operators' own
+# lines; see the note above.

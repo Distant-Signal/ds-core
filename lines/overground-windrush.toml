@@ -45,10 +45,16 @@ sample_stations = ["HHY", "SQE", "NWX", "CYP", "WCY", "CLJ"]
 # Other touchpoints are station-level overlaps only, not shared segments:
 # Whitechapel (ZLW, this file) already appears on
 # `elizabeth-line.toml`/`elizabeth-heathrow.toml`/`elizabeth-shenfield.toml`
-# — a different, exclusive segment family, no segment shared. Canada
-# Water (ZCW, this file) also already appears on `elizabeth-line.toml`
-# (segment `elizabeth-south-east`) — another station-level overlap the
-# Task 3.0 research pass didn't call out; noted here for the same reason.
+# — a different, exclusive segment family, no segment shared.
+#
+# Update (London line-definition audit, 2026-09): Canada Water (ZCW, this
+# file) was previously also noted here as overlapping `elizabeth-line.toml`'s
+# `elizabeth-south-east` segment, but that was itself a cataloguing bug —
+# elizabeth-line.toml had mistakenly listed Canada Water's own CRS at the
+# position of the real Elizabeth line station there, Canary Wharf (CWX). The
+# audit corrected elizabeth-line.toml to CWX, so there is no longer any
+# overlap between this file's ZCW and elizabeth-line.toml at all; removed
+# from this note accordingly.
 # Clapham Junction (CLJ, this file's own separate branch) is a three-way
 # station-level overlap between this line, `overground-mildmay`'s own
 # separate Clapham Junction branch, and the existing SWR catalogue's

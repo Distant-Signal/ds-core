@@ -1,0 +1,188 @@
+id = "northern-mid-cheshire"
+name = "Mid-Cheshire Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains diesel service with no existing `lines/*.toml`
+# coverage. Confirmed via Wikipedia's "Mid-Cheshire line" article and its
+# "Template:Mid-Cheshire Line" route-diagram template (both fetched as raw
+# wikitext via a direct `curl` after an AI-summarized WebFetch pass
+# hallucinated non-existent current stations such as Baguley, Northenden and
+# Sale -- discarded, not used here) and cross-checked station-by-station
+# against ds.cursed.solutions/api/stations (this app's own live production
+# CRS reference), fetched/verified 2026-09-21.
+#
+# Route: Manchester Piccadilly - Stockport (following "the Crewe line from
+# Manchester Piccadilly as far as Stockport, where the line diverges
+# westwards") - Navigation Road - Altrincham - Hale - Ashley - Mobberley -
+# Knutsford - Plumley - Lostock Gralam - Northwich - Greenbank - Cuddington
+# - Delamere - Mouldsworth - Chester (terminus). Unelectrified end to end
+# today: "coming into 2026 this has not been started," despite a March 2015
+# report naming it "a tier 1 priority for being electrified in the CP6
+# period." Class 150/156 DMUs throughout. Single track "between Stockport
+# and Altrincham"; the Mouldsworth-Mickle Trafford Junction stretch (where
+# the line rejoins the Chester-Warrington line) was also singled after
+# Chester Northgate's 1969 closure, though the source text does not restate
+# this in the present tense -- flagged as lower-confidence, not asserted as
+# a current fact.
+#
+# --- Manchester end: no shared track with the Styal Line or Metrolink ---
+# Confirmed no genuine track-sharing today. Mid-Cheshire trains take the
+# Crewe/West Coast Main Line corridor from Manchester Piccadilly to
+# Stockport before diverging west; the Styal Line (Manchester Airport route)
+# leaves the same corridor much further out and never touches this line's
+# own alignment -- the article raises only a hypothetical, explicitly unbuilt
+# future connection via the Styal Line, ruled out today by that route's own
+# lack of spare capacity. Separately, near Altrincham, Manchester Metrolink
+# trams run on a parallel-but-physically-distinct former alignment (the old
+# 1931-electrified Manchester South Junction and Altrincham Railway route via
+# Sale, converted to tram use in 1990/92): "Metrolink and main line services
+# run parallel between Deansgate Junction through Navigation Road to
+# Altrincham, where the Metrolink terminates" -- a parallel corridor with an
+# interchange at two stations, not shared running.
+#
+# --- Manchester Piccadilly - Stockport: station overlap, not shared track ---
+# Following the same reasoning already documented in `wcml-manchester.toml`
+# and reused in this batch's own `northern-buxton-line.toml` (which runs
+# over the identical Crewe-line stretch to Stockport before its own
+# divergence) -- this file's own MAN/SPT entries get their own exclusive
+# segment rather than reusing any other file's segment name; consistent with
+# the established precedent that none of the many other MAN/SPT-touching
+# files in this catalogue share a segment with each other either.
+#
+# --- Chester: station overlap only ---
+# Chester (CTR) is also a station on `tfw-marches.toml`, `tfw-north-wales-
+# coast.toml`, `wcml-north-wales.toml` and `merseyrail-wirral.toml`. The
+# route diagram in Template:Mid-Cheshire Line confirms all of these arrive at
+# Chester's station throat from a different compass direction (this line
+# from the northeast via Mickle Trafford Junction, North Wales Coast from
+# the west, Wirral line from the north via Bache, Marches/Crewe line from
+# the south) -- a shared station, no shared track, matching this whole
+# catalogue's established station-overlap-without-segment-sharing
+# convention.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Winsford and Over branch line (Winsford and Over, Whitegate): a
+#   separate, closed historic branch, shown "ex" (former) on the route
+#   diagram -- not part of the current through route.
+# - Barrow for Tarvin and Mickle Trafford East: both closed (1953 and 1951/
+#   1963 respectively per their own Wikipedia infoboxes), despite appearing
+#   on the route diagram without a closure flag; verified individually and
+#   confirmed absent from the live station API. Not modelled.
+# - Manchester Central and Chester Northgate: the line's original historic
+#   termini, both closed 1969; not modelled.
+# - A single-track freight-only branch west of Northwich to Sandbach (with a
+#   live reopening campaign) and a disused curve at Northwich to the West
+#   Coast Main Line: real, sourced junctions, but neither carries passenger
+#   service today; not modelled.
+sample_stations = ["MAN", "ALT", "NWI", "CTR"]
+destination_crs_filter = ["CTR"]
+match_keywords = ["Mid-Cheshire line"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-mid-cheshire"
+
+[[stations]]
+crs = "SPT"
+role = "junction"
+segment = "northern-mid-cheshire"
+# Stockport -- station-overlap only with several other files' own separate
+# MAN/SPT entries; see the top-of-file comment.
+
+[[stations]]
+crs = "NVR"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Navigation Road -- also a Metrolink interchange stop, parallel track only.
+
+[[stations]]
+crs = "ALT"
+role = "major"
+segment = "northern-mid-cheshire"
+# Altrincham -- also a Metrolink terminus; see the top-of-file comment.
+
+[[stations]]
+crs = "HAL"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Hale.
+
+[[stations]]
+crs = "ASY"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Ashley -- contributes the fewest passengers of any station on the line,
+# per Wikipedia's own boarding/alighting comparison.
+
+[[stations]]
+crs = "MOB"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Mobberley.
+
+[[stations]]
+crs = "KNF"
+role = "major"
+segment = "northern-mid-cheshire"
+# Knutsford -- the highest-boarding station served only by this line, per
+# the same comparison.
+
+[[stations]]
+crs = "PLM"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Plumley.
+
+[[stations]]
+crs = "LTG"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Lostock Gralam.
+
+[[stations]]
+crs = "NWI"
+role = "major"
+segment = "northern-mid-cheshire"
+# Northwich -- the freight-only Sandbach branch and a disused WCML curve
+# diverge here; see the scope-boundary note above.
+
+[[stations]]
+crs = "GBK"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Greenbank.
+
+[[stations]]
+crs = "CUD"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Cuddington.
+
+[[stations]]
+crs = "DLM"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Delamere.
+
+[[stations]]
+crs = "MLD"
+role = "minor"
+segment = "northern-mid-cheshire"
+# Mouldsworth -- the line rejoins the Chester-Warrington line at Mickle
+# Trafford Junction just beyond here.
+
+[[stations]]
+crs = "CTR"
+role = "terminus"
+segment = "northern-mid-cheshire"
+# Chester -- station-overlap only with several other files' own separate
+# routes into Chester; see the top-of-file comment.

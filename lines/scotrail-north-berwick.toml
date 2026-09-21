@@ -1,0 +1,216 @@
+id = "scotrail-north-berwick"
+name = "ScotRail North Berwick Line (Edinburgh Waverley - Drem - North Berwick)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Central Scotland/Edinburgh gap-coverage batch (2026-09-21 audit of the
+# ~50+ zero-coverage real UK lines). This East Lothian branch has no
+# existing `lines/*.toml` file: grepped `lines/scotrail-*.toml` and
+# `lines/tpe-borders.toml` before starting -- neither this route's own name
+# nor any of its intermediate stations (Musselburgh, Wallyford,
+# Prestonpans, Longniddry, Drem) appear anywhere in the catalogue.
+#
+# Category: "regional", per this batch's own precedent for a single,
+# electrified, hourly-all-stops-plus-peak-extras suburban/rural branch --
+# the same category `scotrail-shotts.toml` and `scotrail-bathgate.toml` use
+# for comparably-frequent alternate ScotRail routings, rather than
+# `scotrail-glasgow-suburban.toml`'s "commuter" (reserved for the
+# North Clyde/Argyle Line's denser, metro-style electric network).
+#
+# Electrification: energised 25 kV 50 Hz AC on 18 May 1991, per Wikipedia
+# "North Berwick Branch Line" (raw wikitext).
+
+match_keywords = ["North Berwick Line", "North Berwick branch"]
+# Two high-precision phrases per the curation rule against padding
+# match_keywords: the Wikipedia article's own title ("North Berwick Branch
+# Line") and its own redirect/common name ("North Berwick branch"). Grepped
+# `lines/*.toml` before adding -- neither phrase, nor "North Berwick" in
+# any form, appears in any other file's `match_keywords`.
+
+sample_stations = ["EDB", "DRM", "NBW"]
+# No `destination_crs_filter`: following `scotrail-fife-circle.toml`'s and
+# `scotrail-borders-railway.toml`'s own precedent (both, like this file,
+# radiate from the heavily-overlapped Edinburgh Waverley hub but sample a
+# line-specific station instead of trying to disambiguate EDB itself via
+# the filter). DRM and NBW are exclusive to this line -- no other
+# `lines/*.toml` file's `sample_stations` or `destination_crs_filter`
+# references either code.
+
+# Hourly all-stations service with peak-hour extras (Wikipedia: "ScotRail
+# operates an hourly all-stations service to Edinburgh Waverley, with
+# additional trains at peak hours"; Longniddry's own station page
+# corroborates independently: "Either 2tph to Edinburgh and 1tph to North
+# Berwick or 2tph to North Berwick and 1tph to Edinburgh with some peak
+# services extending to Glasgow or Ayr"). Tuned the same as this batch's
+# other hourly-plus-peak-extras regional branches
+# (`scotrail-fife-circle.toml`, `scotrail-borders-railway.toml`,
+# `scotrail-ayrshire.toml`).
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Station-overlap note: `scotrail-central-belt.toml`, `scotrail-fife-
+#     circle.toml`, `scotrail-borders-railway.toml` (Edinburgh Waverley) ===
+#
+# EDB is also each of those three files' own terminus. This line departs
+# Waverley in a distinct physical direction from all three: east via
+# Portobello/Niddrie towards Musselburgh, not west via Haymarket (the
+# direction `scotrail-central-belt.toml`'s Falkirk High routing and
+# `scotrail-fife-circle.toml`'s Forth Bridge approach both take), and not
+# south via Newcraighall/Shawfair (`scotrail-borders-railway.toml`'s own
+# direction). No source found during this task establishes genuine
+# track-sharing between this line and any of those three at or near
+# Waverley beyond the shared station building, so per the
+# `xc-south-coast.toml`/`xc-manchester.toml` precedent ("station overlap is
+# fine, segment-sharing is a deliberate choice"), EDB gets this file's own
+# segment name (`scotrail-north-berwick`) rather than reusing any of
+# theirs. This line also does not call at Haymarket at all (confirmed by
+# every station-page route diagram fetched for this task: Musselburgh's own
+# previous/next pair is Wallyford/Edinburgh Waverley directly), so there is
+# no Haymarket-throat overlap question to resolve here in the first place.
+#
+# === Boundary with `scotrail-borders-railway.toml`: Newcraighall/Brunstane ===
+#
+# `scotrail-borders-railway.toml`'s own Brunstane and Newcraighall entries
+# state explicitly, sourced from each station's own Wikipedia article, that
+# both are "served exclusively by the Borders Railway service today (not
+# the North Berwick line, which does not call here)". This file's own
+# station list independently confirms that boundary from the other side:
+# neither Brunstane nor Newcraighall appears in any route-diagram fetch for
+# this line's own stations (Musselburgh's confirmed previous station
+# towards Edinburgh is Waverley itself, not Newcraighall or Brunstane).
+#
+# === Junction with the East Coast Main Line at Drem ===
+#
+# Drem is where this branch leaves the ECML: per Wikipedia "North Berwick
+# Branch Line" (Drem section) and Drem's own station page, the branch
+# "joined the main line some distance east of Drem station" towards Dunbar,
+# and today "Main line trains operated by CrossCountry and London North
+# Eastern Railway pass through the station but do not stop." No
+# `lines/*.toml` file currently models the Scotland stretch of the East
+# Coast Main Line itself (confirmed by `lines/tpe-borders.toml`'s own
+# comment: "No ECML/LNER line file exists yet in this catalogue" for this
+# exact stretch), so there is no existing segment to reconcile with today --
+# flagged here for whenever one is added, per that file's own precedent for
+# flagging unmodelled-infrastructure overlaps.
+#
+# A related, genuinely sourced but out-of-scope fact for whoever picks that
+# gap up: Musselburgh's own route-diagram template lists a second branded
+# service pattern through this line's own Edinburgh-Drem stations, labelled
+# "Edinburgh-Dunbar" in the template's own line-name field, and Wallyford's
+# own station page corroborates it ("Additional trains to Dunbar: every two
+# hours on weekdays and Saturdays" and "Wallyford -> East Linton (on
+# Edinburgh-Dunbar service)"). That limited service evidently continues
+# past Drem onto the same East Coast Main Line stretch
+# `lines/tpe-borders.toml` already covers from Dunbar onward (DUN, ELT are
+# both existing `tpe-borders.toml` stations) -- TPE's own Borders route runs
+# this exact corridor without stopping at Drem, Longniddry, Prestonpans,
+# Wallyford or Musselburgh, which is why none of those five appear in
+# `tpe-borders.toml`'s own station list even though its trains physically
+# pass through the same Edinburgh-Drem throat this file models. This
+# Edinburgh-Dunbar ScotRail service itself is not named in this batch's
+# task brief and not modelled here -- a real, sourced, documented gap left
+# for future work, exactly as `scotrail-fife-circle.toml` already documents
+# the Levenmouth Rail Link's own unmodelled continuation past its own
+# terminus.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-north-berwick"
+# Edinburgh Waverley.
+
+[[stations]]
+crs = "MUB"
+role = "minor"
+segment = "scotrail-north-berwick"
+# Musselburgh: reopened 1988 (a new station, not a reopening of the
+# original Musselburgh station on a different site, which closed in 1964).
+# Confirmed open and current, with live 2024/25 patronage data, via
+# Wikipedia "Musselburgh railway station" and independently via
+# https://ds.cursed.solutions/api/stations?q=Musselburgh (returns
+# {"code":"MUB","name":"Musselburgh"}).
+
+[[stations]]
+crs = "WAF"
+role = "minor"
+segment = "scotrail-north-berwick"
+# Wallyford: opened 1988, serving the area the original Musselburgh
+# station once did.
+
+[[stations]]
+crs = "PST"
+role = "minor"
+segment = "scotrail-north-berwick"
+# Prestonpans.
+
+[[stations]]
+crs = "LND"
+role = "minor"
+segment = "scotrail-north-berwick"
+# Longniddry.
+
+[[stations]]
+crs = "DRM"
+role = "junction"
+segment = "scotrail-north-berwick"
+# Drem: where this branch leaves the East Coast Main Line. Junction role
+# per the shared-trunk rule of thumb, even though no other `lines/*.toml`
+# file currently has a station entry here to share a segment name with --
+# see the ECML scope note above.
+
+[[stations]]
+crs = "NBW"
+role = "terminus"
+segment = "scotrail-north-berwick"
+# North Berwick: eastern terminus of the branch.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "North Berwick Branch Line" (raw wikitext, redirect target
+#     of both "North Berwick Line" and "North Berwick Branch"): confirms
+#     ScotRail operation, 25 kV 50 Hz AC electrification energised 18 May
+#     1991, and the branch's junction with the East Coast Main Line east of
+#     Drem station.
+#   - Wikipedia "North Berwick railway station": confirms current terminus
+#     status and "an hourly all-stations service to Edinburgh Waverley,
+#     with additional trains at peak hours", with Drem as the immediately
+#     preceding station.
+#   - Wikipedia "Drem railway station": confirms the ECML through-running
+#     ("Main line trains operated by CrossCountry and London North Eastern
+#     Railway pass through the station but do not stop"), and the branch's
+#     own previous/next pair (North Berwick / Longniddry).
+#   - Wikipedia "Longniddry railway station", "Prestonpans railway
+#     station", "Wallyford railway station" and "Musselburgh railway
+#     station": each independently confirms ScotRail operation on the
+#     "North Berwick Line", current open status, and the ordered
+#     previous/next station sequence Edinburgh Waverley - Musselburgh -
+#     Wallyford - Prestonpans - Longniddry - Drem - North Berwick (cross-
+#     checked station-by-station: each station's own "previous"/"next"
+#     route-diagram field matches its neighbours' own fields).
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's own Wikipedia article and a live query against
+# https://ds.cursed.solutions/api/stations?q=<name>, which returned an
+# exact single match for every station in this file (MUB, WAF, PST, LND,
+# DRM, NBW), all agreeing with the Wikipedia-sourced codes with no
+# discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The East Coast Main Line itself (Edinburgh-Drem-Dunbar-Berwick-upon-
+#   Tweed and beyond): real, sourced (see the Drem junction note above),
+#   but no `lines/*.toml` file models Scotland's stretch of it yet -- a
+#   documented gap, not this task's to close.
+# - The limited "Edinburgh-Dunbar" ScotRail stopping service that shares
+#   this line's own Edinburgh-Drem throat before continuing onto ECML
+#   metals towards Dunbar/East Linton (both already `tpe-borders.toml`
+#   stations): real, sourced (see the note above), but not named in this
+#   batch's task brief and not modelled here.

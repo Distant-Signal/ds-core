@@ -205,6 +205,18 @@ segment = "chiltern-main-line"
 # Bicester North itself.
 
 [[stations]]
+crs = "KGS"  # Kings Sutton
+role = "minor"
+segment = "chiltern-main-line"
+# Kings Sutton: between Bicester North and Banbury, real and
+# Chiltern-operated at roughly a 2-hourly frequency. Follow-up audit
+# (2026-09-21, data-driven schedule audit cross-checked against
+# Wikipedia) -- confirmed real, currently-open, currently-served -- added
+# per the same "currently open, currently served, geographically on
+# route" bar this file already applies elsewhere on this stretch (see the
+# Princes Risborough comment above).
+
+[[stations]]
 crs = "BAN"
 role = "major"
 segment = "chiltern-main-line"

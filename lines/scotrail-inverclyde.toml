@@ -1,0 +1,249 @@
+id = "scotrail-inverclyde"
+name = "ScotRail Inverclyde Line (Glasgow Central - Gourock / Wemyss Bay)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Greater Glasgow batch. `lines/scotrail-argyle.toml`'s own file-level
+# comment names this line by name ("Following electrification of the
+# Inverclyde Line in 1967 ..." is Wikipedia's own Cathcart Circle Lines
+# sourcing, cited there) but does not model it -- it is not named at all
+# in `docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md`'s
+# ScotRail bullet either, making this one of the largest genuinely
+# unflagged gaps found by the follow-up full UK station-coverage audit
+# (22 stations per Wikipedia's own infobox).
+#
+# Category: "commuter". Per Wikipedia's Current operation section, "for
+# most of the day four trains an hour operate each way on the Glasgow to
+# Port Glasgow stretch, two of which run to Gourock and the other two
+# running to Wemyss Bay" -- a dense, fully electrified (1967), short-hop
+# suburban/commuter service throughout, directly comparable to this
+# catalogue's other Glasgow-suburban "commuter" lines (North Clyde,
+# Argyle, Cathcart Circle -- see `scotrail-cathcart-circle.toml`).
+
+sample_stations = ["GLC", "PYG", "PTG", "GRK", "WMS"]
+
+# GLC also samples several other lines from the same named terminus (see
+# `scotrail-glasgow-south-western.toml`'s own segment-coordination note);
+# this line's own departures terminate at Gourock or Wemyss Bay.
+destination_crs_filter = ["GRK", "WMS"]
+
+match_keywords = ["Inverclyde Line"]
+# One high-precision phrase -- this route's own, unambiguous Wikipedia
+# article title/brand name, per the curation rule against padding
+# match_keywords. Grepped clean against every other file's own
+# `match_keywords` before adding: no collisions.
+
+# Dense commuter line (4tph combined, all-electric since 1967): tighter
+# thresholds following `scotrail-cathcart-circle.toml`'s and the
+# (unmerged, sibling worktree) North Clyde/Argyle files' precedent for
+# this catalogue's other Glasgow-suburban metro-style lines.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "Inverclyde Line" (raw wikitext, infobox + prose): confirms
+#     ScotRail operation, 25 kV AC electrification (1967), and the route
+#     "from Glasgow Central station through Paisley (Gilmour Street) and a
+#     series of stations to the south of the River Clyde and the Firth of
+#     Clyde, terminating at Gourock and Wemyss Bay". Confirms "the
+#     Inverclyde line uses the same Glasgow and Paisley Joint Railway
+#     tracks as the Ayrshire Coast Line until Paisley Gilmour Street;
+#     although the two lines occupy different sets of platforms at Paisley
+#     Gilmour Street" (the basis for treating PYG as station-overlap only,
+#     not a shared segment, with `scotrail-ayrshire.toml`/`scotrail-largs-
+#     ardrossan.toml` -- see the segment-naming coordination note below).
+#     Confirms the branch point is Port Glasgow ("From Paisley, the line
+#     heads to Port Glasgow station, after which it branches"), the
+#     Gourock branch's Dunoon/Kilcreggan ferry connections and the Wemyss
+#     Bay branch's Rothesay (Isle of Bute) ferry connection.
+#   - Template:Inverclyde Line (raw wikitext routemap, via
+#     Special:Export): gives the explicit ordered station sequence Glasgow
+#     Central - Cardonald - Hillington East - Hillington West - Paisley
+#     Gilmour Street - Paisley St James - Bishopton - Langbank - Woodhall -
+#     Port Glasgow, forking into (a) Whinhill - Drumfrochar - Branchton -
+#     [IBM, closed, excluded] - Inverkip - Wemyss Bay and (b) Bogston -
+#     Cartsdyke - Greenock Central - Greenock West - Fort Matilda - Gourock.
+#   - Wikipedia "Port Glasgow railway station", "Whinhill railway
+#     station" and "Bogston railway station" (raw wikitext succession
+#     boxes, via Special:Export): independently confirm the fork itself
+#     (Port Glasgow's own succession box: `previous1 = Bogston` on the
+#     "Inverclyde Line (to Gourock)" route, `previous2 = Whinhill` on the
+#     "Inverclyde Line (to Wemyss Bay)" route) and each branch's own
+#     station order (Whinhill: previous Drumfrochar, next Port Glasgow;
+#     Bogston: previous Cartsdyke, next Port Glasgow), cross-checking the
+#     routemap template above station-by-station.
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>, matching each
+# station's Wikipedia infobox `code` field with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+
+# === Segment-naming coordination ===
+#
+# Paisley Gilmour Street (PYG) also appears in `scotrail-ayrshire.toml`
+# and `scotrail-largs-ardrossan.toml`. Per the sourcing above, this is a
+# same-named-station-but-different-platforms situation, explicitly stated
+# by Wikipedia's own Inverclyde Line article ("using different platforms")
+# -- unlike the genuine physical fork this file's own sourcing establishes
+# for Port Glasgow (Bogston/Whinhill), no track-sharing beyond the station
+# building itself was sourced here, so this file uses its own segment name
+# for PYG rather than reusing either of those files' `scotrail-ayrshire-
+# glasgow-ayr` segment, per the `xc-south-coast.toml`/`xc-manchester.toml`
+# precedent ("station overlap is fine, segment-sharing is a deliberate
+# choice").
+#
+# GLC is likewise a pure station-name overlap with several other files
+# departing the same named terminus complex on physically distinct
+# approach tracks (Cardonald/Hillington East/Hillington West, exclusive to
+# this line, are not called at by Ayrshire Coast/Largs-Ardrossan express
+# services per that line's own "all trains calling at Paisley Gilmour
+# Street, Johnstone and Kilwinning" -- implying non-stop running as far as
+# Paisley, skipping this line's own Cardonald/Hillington stops).
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-inverclyde-approach"
+
+[[stations]]
+crs = "CDO"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Cardonald.
+
+[[stations]]
+crs = "HLE"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Hillington East.
+
+[[stations]]
+crs = "HLW"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Hillington West.
+
+[[stations]]
+crs = "PYG"
+role = "junction"
+segment = "scotrail-inverclyde-approach"
+# Paisley Gilmour Street: same-named station, different platforms, as the
+# Ayrshire Coast Line/Largs-Ardrossan branches -- see the segment-naming
+# coordination note above.
+
+[[stations]]
+crs = "PYJ"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Paisley St James. The (cancelled, 2009) Glasgow Airport Rail Link would
+# have branched off near here -- historical/proposed only, not modelled.
+
+[[stations]]
+crs = "BPT"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Bishopton.
+
+[[stations]]
+crs = "LGB"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Langbank.
+
+[[stations]]
+crs = "WDL"
+role = "minor"
+segment = "scotrail-inverclyde-approach"
+# Woodhall.
+
+[[stations]]
+crs = "PTG"
+role = "junction"
+segment = "scotrail-inverclyde-approach"
+# Port Glasgow: the Gourock and Wemyss Bay branches split here. See the
+# sourcing note above.
+
+[[stations]]
+crs = "BGS"
+role = "minor"
+segment = "scotrail-inverclyde-gourock-branch"
+# Bogston.
+
+[[stations]]
+crs = "CDY"
+role = "minor"
+segment = "scotrail-inverclyde-gourock-branch"
+# Cartsdyke.
+
+[[stations]]
+crs = "GKC"
+role = "major"
+segment = "scotrail-inverclyde-gourock-branch"
+# Greenock Central.
+
+[[stations]]
+crs = "GKW"
+role = "minor"
+segment = "scotrail-inverclyde-gourock-branch"
+# Greenock West.
+
+[[stations]]
+crs = "FTM"
+role = "minor"
+segment = "scotrail-inverclyde-gourock-branch"
+# Fort Matilda.
+
+[[stations]]
+crs = "GRK"
+role = "terminus"
+segment = "scotrail-inverclyde-gourock-branch"
+# Gourock: terminus, with ferry connections to Dunoon and Kilcreggan.
+
+[[stations]]
+crs = "WNL"
+role = "minor"
+segment = "scotrail-inverclyde-wemyss-bay-branch"
+# Whinhill.
+
+[[stations]]
+crs = "DFR"
+role = "minor"
+segment = "scotrail-inverclyde-wemyss-bay-branch"
+# Drumfrochar.
+
+[[stations]]
+crs = "BCN"
+role = "minor"
+segment = "scotrail-inverclyde-wemyss-bay-branch"
+# Branchton.
+
+[[stations]]
+crs = "INP"
+role = "minor"
+segment = "scotrail-inverclyde-wemyss-bay-branch"
+# Inverkip.
+
+[[stations]]
+crs = "WMS"
+role = "terminus"
+segment = "scotrail-inverclyde-wemyss-bay-branch"
+# Wemyss Bay: terminus, with ferry connections to Rothesay (Isle of Bute).
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - IBM railway station (former, on the Wemyss Bay branch between
+#   Branchton and Inverkip): closed, per the routemap template's own "e"
+#   (historical) marker -- current operational route only, per the Global
+#   Constraints.
+# - The Paisley Canal Line and the Glasgow Airport Rail Link (cancelled
+#   2009): both diverge/would have diverged from this general corridor per
+#   the detailed routemap template, but neither is this line -- real,
+#   documented gaps (Paisley Canal) or dead proposals (GARL), out of scope
+#   here.

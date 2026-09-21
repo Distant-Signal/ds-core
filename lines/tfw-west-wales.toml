@@ -1,0 +1,279 @@
+id = "tfw-west-wales"
+name = "West Wales Line (Swansea/Carmarthen - Milford Haven/Fishguard/Pembroke Dock)"
+mode = "national-rail"
+category = "regional"
+operators = ["AW", "GW"]
+# Confirmed both are genuine, currently-timetabled operators, not just
+# track-sharers: Great Western Railway runs a two-hourly Carmarthen-London
+# Paddington service over the Swansea-Carmarthen-Whitland stretch (plus a
+# summer-Saturday extension to Pembroke Dock), and Transport for Wales runs
+# every-two-hours services from Milford Haven, Pembroke Dock and Carmarthen,
+# all via Swansea -- both confirmed in the article's own "Services" section
+# (separate "Great Western Railway" and "Transport for Wales" subsections).
+
+# Confirmed via Wikipedia's "West Wales lines" article (raw wikitext, the
+# real title -- plural, and the redirect target of "West Wales Line"): "a
+# group of railway lines from Swansea through Carmarthenshire to
+# Pembrokeshire... The main part runs from Swansea to Carmarthen and
+# Whitland, where it splits into three branches to Fishguard, Milford Haven
+# and Pembroke Dock." Full current station list and branch structure
+# confirmed via the article's own "Route" section (raw wikitext,
+# region-by-region subsections):
+#   - Trunk (Swansea to Whitland): Swansea - Gowerton - Llanelli - Pembrey
+#     and Burry Port - Kidwelly (request stop) - Ferryside (request stop) -
+#     Carmarthen - Whitland.
+#   - Whitland to Clarbeston Road (continuing trunk): Clunderwen (request
+#     stop) - Clarbeston Road (request stop, junction for the Milford Haven
+#     and Fishguard branches).
+#   - Pembroke Dock branch (from Whitland): Narberth - Kilgetty -
+#     Saundersfoot - Tenby - Penally - Manorbier - Lamphey - Pembroke -
+#     Pembroke Dock (all request stops except Tenby, Manorbier and Pembroke,
+#     per the article's own annotations).
+#   - Milford Haven branch (from Clarbeston Road): Haverfordwest - Johnston
+#     (request stop) - Milford Haven.
+#   - Fishguard branch (from Clarbeston Road): Fishguard and Goodwick -
+#     Fishguard Harbour.
+# No intermediate stop is omitted here: the article's own "Route" section
+# already restricts itself to the current, open station list (its History
+# section separately covers the pre-Beeching Cardigan/Newcastle
+# Emlyn/Llandysul/Lampeter routes, none of which survive today and none of
+# which are listed).
+#
+# `category = "regional"`: every TfW/GWR service pattern on this line is
+# two-hourly (per the sourcing above) -- sparser even than
+# `tfw-heart-of-wales.toml`'s 2-3-hourly pattern, so the same
+# proportional-impact reasoning applies at least as strongly.
+
+sample_stations = ["SWA", "CMN", "MFH", "FGW", "PMD"]
+destination_crs_filter = ["MFH", "FGW", "FGH", "PMD"]
+# The line's own genuine branch termini (Fishguard and Goodwick is a real
+# calling point short of the ultimate Fishguard Harbour terminus for some
+# workings, so both are included). Swansea and Carmarthen are deliberately
+# omitted: both carry real GWR/TfW through-services continuing well beyond
+# this line's own scope (Swansea eastward onto the South Wales Main Line,
+# Carmarthen onward via the Heart of Wales Line and beyond), so a
+# Swansea/Carmarthen-keyed filter would wrongly exclude those genuine
+# continuations from LDBWS-based sampling here.
+
+match_keywords = ["West Wales lines", "West Wales Line"]
+# The article's own actual (plural) title plus the singular form both this
+# task's brief and everyday usage favour -- both attested by the article
+# itself (the redirect from the singular is itself evidence the singular
+# form is in real use). Grepped `lines/*.toml`: no collision.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. Johnston (Pembrokeshire) is
+# JOH, not JHN -- JHN is Johnstone, Renfrewshire, already used by
+# `scotrail-ayrshire.toml`; confirmed distinct before use. TIPLOCs are
+# omitted throughout except the two shared trunk stations reused verbatim
+# from `tfw-heart-of-wales.toml` (SWA, LLE -- see below), which already
+# cross-checked them.
+#
+# ## Overlap 1: Swansea (SWA) and Llanelli (LLE) with `tfw-heart-of-wales.toml`
+# -- genuinely shared trunk, decision made here as that file's own comment
+# explicitly invited
+#
+# `tfw-heart-of-wales.toml`'s own Llanelli-Swansea note states plainly:
+# "southbound trains 'use the original LR main line to reach the West Wales
+# lines at Llandeilo Junction and thence Llanelli and Swansea, after a
+# reversal'... No West Wales / South Wales main line file exists yet
+# anywhere in this catalogue to coordinate a shared segment name with... a
+# future South Wales/West Wales line file should read this file and decide
+# deliberately whether to share that segment name." This file's own research
+# (the West Wales lines article's own "Other services" section) confirms
+# the same fact from the other side: "Heart of Wales Line services between
+# Shrewsbury and Swansea (five trains a day) travel over the Swansea to
+# Llanelli section of the West Wales Lines" -- genuine shared running track,
+# not just a coincidental same-station stop.
+#
+# Decision: SHARED. LLE and SWA below reuse `tfw-heart-of-wales.toml`'s
+# exact segment name, `tfw-heart-of-wales-swansea`, verbatim. One disclosed
+# wrinkle: Gowerton sits geographically between Llanelli and Swansea on this
+# line's own trunk, but the Heart of Wales Line's own sourced description
+# ("thence Llanelli and Swansea, after a reversal") names no intermediate
+# call there, and Gowerton is not in `tfw-heart-of-wales.toml`'s own station
+# list -- so Gowerton is deliberately kept on this file's own exclusive
+# trunk segment, not the shared one, even though it sits physically between
+# the two shared-tagged endpoints. This does not create a matching problem
+# (segment names are a matching signal, not a claim of unbroken physical
+# contiguity between every tagged station), but is recorded here so a future
+# editor understands it is a deliberate reading of the source, not an
+# oversight.
+#
+# ## Overlap 2: Swansea (SWA) with `gwr-south-wales.toml`
+#
+# SWA is also that file's own western terminus (its own `gwr-south-wales`
+# segment). This line's own route continues physically west of Swansea,
+# which the South Wales Main Line does not -- station-overlap only, per the
+# same reasoning applied throughout this batch for a shared terminus with no
+# claim of shared track beyond it.
+[[stations]]
+crs = "SWA"
+tiploc = "SWANSEA"
+role = "terminus"
+segment = "tfw-heart-of-wales-swansea"
+# See Overlap 1 and Overlap 2 above. TIPLOC reused verbatim from
+# `tfw-heart-of-wales.toml`/`gwr-south-wales.toml`, both of which already
+# cross-checked it.
+
+[[stations]]
+crs = "GWN"
+role = "minor"
+segment = "tfw-west-wales-trunk"
+# Gowerton: deliberately kept off the shared `tfw-heart-of-wales-swansea`
+# segment despite sitting between Llanelli and Swansea -- see Overlap 1
+# above.
+
+[[stations]]
+crs = "LLE"
+tiploc = "LLNLLI"
+role = "junction"
+segment = "tfw-heart-of-wales-swansea"
+# Llanelli: reused verbatim from `tfw-heart-of-wales.toml`, which already
+# tags this station `junction` on this exact segment name for the same
+# reason. See Overlap 1 above. TIPLOC reused verbatim.
+
+[[stations]]
+crs = "PBY"
+role = "minor"
+segment = "tfw-west-wales-trunk"
+# Pembrey and Burry Port.
+
+[[stations]]
+crs = "KWL"
+role = "minor"
+segment = "tfw-west-wales-trunk"
+# Kidwelly: request stop.
+
+[[stations]]
+crs = "FYS"
+role = "minor"
+segment = "tfw-west-wales-trunk"
+# Ferryside: request stop.
+
+[[stations]]
+crs = "CMN"
+role = "major"
+segment = "tfw-west-wales-trunk"
+# Carmarthen: GWR's own two-hourly London Paddington service terminates
+# here; TfW services continue west.
+
+[[stations]]
+crs = "WTL"
+role = "junction"
+segment = "tfw-west-wales-trunk"
+# Whitland: the Pembroke Dock branch diverges here (see below); the trunk
+# continues towards Clarbeston Road.
+
+[[stations]]
+crs = "CUW"
+role = "minor"
+segment = "tfw-west-wales-trunk"
+# Clunderwen: request stop, and the former junction for the long-closed
+# North Pembrokeshire and Fishguard Railway (not modelled).
+
+[[stations]]
+crs = "CLR"
+role = "junction"
+segment = "tfw-west-wales-trunk"
+# Clarbeston Road: request stop, and the junction for both the Milford
+# Haven and Fishguard branches below.
+
+# --- Pembroke Dock branch (from Whitland, above) ---
+[[stations]]
+crs = "NAR"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Narberth: request stop.
+
+[[stations]]
+crs = "KGT"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Kilgetty: request stop.
+
+[[stations]]
+crs = "SDF"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Saundersfoot: request stop.
+
+[[stations]]
+crs = "TEN"
+role = "major"
+segment = "tfw-west-wales-pembroke-dock"
+# Tenby: a scheduled stop, not a request stop, and the only passing loop
+# between Whitland and Pembroke Dock (per the article's own "Transport for
+# Wales" services note).
+
+[[stations]]
+crs = "PNA"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Penally: request stop.
+
+[[stations]]
+crs = "MRB"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Manorbier: a scheduled stop, not a request stop.
+
+[[stations]]
+crs = "LAM"
+role = "minor"
+segment = "tfw-west-wales-pembroke-dock"
+# Lamphey: request stop.
+
+[[stations]]
+crs = "PMB"
+role = "major"
+segment = "tfw-west-wales-pembroke-dock"
+# Pembroke: a scheduled stop, not a request stop.
+
+[[stations]]
+crs = "PMD"
+role = "terminus"
+segment = "tfw-west-wales-pembroke-dock"
+# Pembroke Dock: this branch's own terminus.
+
+# --- Milford Haven branch (from Clarbeston Road, above) ---
+[[stations]]
+crs = "HVF"
+role = "major"
+segment = "tfw-west-wales-milford-haven"
+# Haverfordwest.
+
+[[stations]]
+crs = "JOH"
+role = "minor"
+segment = "tfw-west-wales-milford-haven"
+# Johnston (Pembrokeshire): request stop. Confirmed distinct from Johnstone,
+# Renfrewshire (CRS JHN, on `scotrail-ayrshire.toml`) -- see the sourcing
+# note above.
+
+[[stations]]
+crs = "MFH"
+role = "terminus"
+segment = "tfw-west-wales-milford-haven"
+# Milford Haven: this branch's own terminus.
+
+# --- Fishguard branch (from Clarbeston Road, above) ---
+[[stations]]
+crs = "FGW"
+role = "major"
+segment = "tfw-west-wales-fishguard"
+# Fishguard and Goodwick.
+
+[[stations]]
+crs = "FGH"
+role = "terminus"
+segment = "tfw-west-wales-fishguard"
+# Fishguard Harbour: this branch's own terminus, and the ferry interchange
+# for Rosslare Europort, Ireland (per the article's own "Other services"
+# section -- one train per night connecting with the ferry, plus a daytime
+# service via Cardiff Central avoiding Swansea on some days).

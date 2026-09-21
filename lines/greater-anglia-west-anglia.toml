@@ -151,6 +151,21 @@ segment = "waml-trunk-london"
 # (mirrors greater-anglia-main-line.toml's own SRA role reasoning).
 
 [[stations]]
+crs = "LEB"
+role = "minor"
+segment = "waml-trunk-london"
+# Lea Bridge: reopened 2016 (Lea Valley Rail Project), sits directly between
+# Stratford and Tottenham Hale on this line's own Coppermill Junction
+# alignment. Confirmed via the station's own Wikipedia article/infobox
+# ("Greater Anglia operates all services at the station... using Class 720
+# electric multiple units", route diagram previous=Tottenham Hale/
+# next=Stratford) and cross-checked against ds.cursed.solutions's station
+# lookup. Data-driven schedule audit (this batch) found real touch counts
+# comparable to this file's other already-included minor Lea Valley stops -
+# a plain omission from the original station list, not a documented scope
+# exclusion.
+
+[[stations]]
 crs = "TOM"
 role = "major"
 segment = "waml-trunk-london"
@@ -171,6 +186,35 @@ segment = "waml-trunk-london"
 # short distance away as part of the Lea Valley Rail Project.
 
 [[stations]]
+crs = "PON"
+role = "minor"
+segment = "waml-trunk-london"
+# Ponders End: same Lea Valley physical route as Meridian Water/Cheshunt.
+# Data-driven schedule audit (this batch) found real touch counts (75-116
+# range) comparable to this file's other already-included minor stops - a
+# plain omission, not a documented scope exclusion (unlike BXB's
+# Hertford-branch or CHN's Southbury-Loop notes below, nothing in this
+# file's existing comments excludes it).
+
+[[stations]]
+crs = "BMD"
+role = "minor"
+segment = "waml-trunk-london"
+# Brimsdown: same basis as Ponders End above.
+
+[[stations]]
+crs = "ENL"
+role = "minor"
+segment = "waml-trunk-london"
+# Enfield Lock: same basis as Ponders End above.
+
+[[stations]]
+crs = "WLC"
+role = "minor"
+segment = "waml-trunk-london"
+# Waltham Cross: same basis as Ponders End above.
+
+[[stations]]
 crs = "CHN"
 role = "minor"
 segment = "waml-trunk-london"
@@ -184,6 +228,22 @@ role = "junction"
 segment = "waml-trunk-london"
 # Hertford East branch line diverges here. Not covered by any task in this
 # batch; out of scope for this file.
+#
+# HACKNEY DOWNS (HAC) - flagged, not added: this batch's data-driven audit
+# also surfaced Hackney Downs as a possible omission, but with lower
+# confidence than LEB/PON/BMD/ENL/WLC above (reached via a parallel
+# approach, not a clean single-chain interpolation). Follow-up research
+# here found Hackney Downs's own Wikipedia article gives its Greater Anglia
+# service as "2 tph to Liverpool Street, 2 tph to Hertford East" - i.e. the
+# Hertford East branch's own local stopping service, which reaches Tottenham
+# Hale via Hackney Downs/Clapton Junction, a physically different alignment
+# from this segment's own Stratford/Coppermill Junction route (the same
+# "separate route" already distinguished above for the Overground's
+# Clapton/Stoke Newington/Seven Sisters stations). Since HAC is not a clean
+# interpolation on this file's own modelled chain, it is deliberately left
+# out here rather than asserted - flagged for a future maintainer to weigh
+# whether it warrants its own branch/segment treatment alongside the
+# Hertford East branch this file already notes as out of scope.
 
 [[stations]]
 crs = "RYN"

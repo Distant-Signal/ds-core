@@ -158,15 +158,141 @@ segment = "chiltern-aylesbury-branch"
 # geography (Bicester North itself vs. a nearby curve)") was warranted:
 # the branch does leave via a nearby curve, not Bicester North.
 #
-# Because this file only lists Marylebone from that shared corridor (not
-# High Wycombe or any other chiltern-main-line-tagged station), no segment
-# is shared between this branch and chiltern-main-line.toml here - station
-# overlap only, and even that isn't triggered since neither HWY nor the
-# omitted intermediate stations appear in this file. This follows the same
-# "station overlap is fine, segment-sharing is a deliberate choice neither
-# file makes" precedent chiltern-main-line.toml itself uses for Banbury/
-# Leamington Spa against xc-south-coast.toml.
+# Follow-up audit (2026-09-21, data-driven schedule audit): the previous
+# revision of this file jumped straight from Marylebone to the Bicester
+# chord, on the reasoning quoted above that "neither HWY nor the omitted
+# intermediate stations appear in this file." That was true at the time
+# but left a real completeness gap this same paragraph had already
+# half-acknowledged: real Marylebone-Oxford trains do not teleport past
+# Neasden Junction to Bicester - they run the *entire* Chiltern Main Line
+# corridor first (per the Evergreen 3 calling pattern quoted above:
+# "Gerrards Cross, Beaconsfield, High Wycombe, Saunderton, Princes
+# Risborough, Bicester Village, Oxford Parkway"), and this file's own
+# station list needs those stations to correctly answer "does the
+# Marylebone-Oxford service call at Gerrards Cross" or resolve an
+# "incident between A and B" on this shared stretch. The 15 stations
+# below (Wembley Stadium through Haddenham & Thame Parkway) fill that gap,
+# added in true geographic order between Marylebone and the Bicester
+# chord.
 #
+# CRS codes are NOT independently re-researched here: all 15 are already
+# cited and sourced in `chiltern-main-line.toml`'s own header comment
+# (Task 10.2's catalogue-completeness pass, Evergreen 3/Wikipedia
+# succession-box/railwaycodes.org.uk/nationalrail.co.uk sourcing) and
+# reused verbatim from that file's own station list, which carries the
+# same codes under the same names. Spot-checked against
+# https://ds.cursed.solutions/api/stations?q=<name> for this pass, which
+# returned the identical codes for all 15 (Wembley Stadium=WCX, Sudbury &
+# Harrow Road=SUD, Sudbury Hill Harrow=SDH, Northolt Park=NLT, South
+# Ruislip=SRU, West Ruislip=WRU, Denham Golf Club=DGC, Denham=DNM,
+# Gerrards Cross=GER, Beaconsfield=BCF, Seer Green & Jordans=SRG, High
+# Wycombe=HWY, Saunderton=SDR, Princes Risborough=PRR, Haddenham & Thame
+# Parkway=HDM).
+#
+# Segment-naming decision: this stretch is physically the exact same
+# trunk `chiltern-main-line.toml` tags "chiltern-main-line" (and, for
+# WCX-HDM specifically, it genuinely is byte-for-byte the same set of
+# stations that file lists for that stretch). Even so, this file does NOT
+# reuse the "chiltern-main-line" segment name verbatim, because that name
+# in `chiltern-main-line.toml` also covers many stations well beyond
+# Haddenham & Thame Parkway (Bicester North, Kings Sutton, Banbury,
+# Leamington Spa, Warwick, Hatton...) that this file's Oxford branch never
+# reaches. Reusing the name here would violate this catalogue's
+# shared-segment invariant that a segment name's station set must be
+# byte-identical across every file that uses it (`SegmentRegistry::
+# is_shared` checks only the name, not which specific stations) - exactly
+# the same trap `emr-regional.toml`'s Ruling 1 documents and avoids for
+# its own Manchester Piccadilly/Stockport overlap with
+# `northern-hope-valley.toml`. So a new name exclusive to this file,
+# `chiltern-oxford-approach`, is used instead for WCX-HDM. Cost if wrong
+# (i.e. if the two files' overlapping subset should really propagate
+# jointly): bounded, same shape as that Ruling 1 precedent - both files
+# already independently match a station-level incident on this stretch
+# via StationHit regardless of segment name.
+#
+# Deliberately NOT modelled: Monks Risborough and Little Kimble sit on a
+# separate branch (the Little Kimble/Aylesbury-via-Princes-Risborough
+# route) that diverges from this same corridor - out of scope for this
+# task and not researched to this file's normal two-source bar. Flagging
+# this as a possible future whole-branch gap rather than guessing at it.
+[[stations]]
+crs = "WCX"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "SUD"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "SDH"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "NLT"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "SRU"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "WRU"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "DGC"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "DNM"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "GER"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "BCF"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "SRG"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "HWY"
+role = "major"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "SDR"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "PRR"
+role = "minor"
+segment = "chiltern-oxford-approach"
+
+[[stations]]
+crs = "HDM"
+role = "minor"
+segment = "chiltern-oxford-approach"
+# Last station on the shared corridor before the Bicester chord (see the
+# Oxford-branch comment above); next station BIT (Bicester Village) is
+# reached via the purpose-built chord, not through Bicester North.
+
 # Station list and CRS codes cross-checked the same way as the Aylesbury
 # branch above: Wikipedia's "Oxford-Bicester line" and "Bicester Village
 # railway station" articles for the route/order, nationalrail.co.uk's

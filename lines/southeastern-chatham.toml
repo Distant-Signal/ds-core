@@ -215,7 +215,16 @@ segment = "chatham-london"
 crs = "BKL"
 role = "junction"
 segment = "chatham-london"
-# Bromley North branch diverges here; not covered by this catalogue.
+# KENT/SUSSEX BATCH FIX: this comment previously claimed "Bromley North
+# branch diverges here" - that was a mistake. Confirmed while researching
+# southeastern-bromley-north.toml (part of this same batch): Wikipedia's own
+# "Bromley North Line" article states plainly that branch "connects at Grove
+# Park railway station with the South Eastern Main Line" - Grove Park (GRP,
+# southeastern-main-line.toml's own `seml-london` segment), not Bickley, is
+# the branch's only junction with the rest of the network. Bickley itself is
+# simply a through station on this line with no branch of its own; corrected
+# here rather than left as a standing factual error now that a sibling file
+# exists that would otherwise silently contradict it.
 
 [[stations]]
 crs = "SMY"
@@ -229,6 +238,14 @@ crs = "SAY"
 role = "junction"
 segment = "chatham-london"
 # Maidstone East line diverges here; not covered by this catalogue.
+
+# DATA-AUDIT FIX: Farningham Road was missing between Swanley (SAY, above)
+# and Longfield. Real CIF data shows 62% of journeys on this stretch call
+# here.
+[[stations]]
+crs = "FNR"
+role = "minor"
+segment = "chatham-medway"
 
 [[stations]]
 crs = "LGF"
@@ -271,6 +288,15 @@ crs = "RAI"
 role = "minor"
 segment = "chatham-medway"
 
+# DATA-AUDIT FIX: Newington was missing between Rainham and Sittingbourne.
+# It's a real, if low-frequency (1tph), Chatham Main Line stop - distinct
+# from southeastern-highspeed.toml's North Kent Javelin pattern, which does
+# not call here.
+[[stations]]
+crs = "NGT"
+role = "minor"
+segment = "chatham-medway"
+
 [[stations]]
 crs = "SIT"
 role = "junction"
@@ -291,6 +317,16 @@ segment = "chatham-medway"
 
 [[stations]]
 crs = "WHI"
+role = "minor"
+segment = "chatham-coastal"
+
+# DATA-AUDIT FIX: Chestfield & Swalecliffe was missing between Whitstable
+# and Herne Bay. Real CIF data shows 65% of journeys call here. Also added
+# to southeastern-highspeed.toml's `hs1-northkent` segment (same physical
+# station, station overlap - not a shared segment, matching this
+# catalogue's existing convention for such overlaps).
+[[stations]]
+crs = "CSW"
 role = "minor"
 segment = "chatham-coastal"
 
@@ -331,6 +367,14 @@ segment = "chatham-coastal"
 # Not a physical terminus - the coastal loop continues on toward Dover via
 # Minster/Sandwich/Deal/Walmer/Martin Mill, confirmed below on the new
 # `chatham-deal` segment (see the route-geography comment above).
+
+# DATA-AUDIT FIX: Thanet Parkway was missing between Ramsgate and Minster -
+# confirmed via Wikipedia that it sits directly between these two, and real
+# CIF data shows 100% (101/101) of journeys call here.
+[[stations]]
+crs = "THP"
+role = "minor"
+segment = "chatham-deal"
 
 [[stations]]
 crs = "MSR"

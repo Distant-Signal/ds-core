@@ -1,0 +1,151 @@
+id = "northern-harrogate-line"
+name = "Harrogate Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["LDS", "HGT", "YRK"]
+destination_crs_filter = ["HGT", "YRK"]
+match_keywords = ["Harrogate Line"]
+# The line's own branded/article name (Wikipedia: "Harrogate line"). Unlike
+# `lner-leeds.toml`'s own deliberate rejection of this exact phrase for its
+# handful of daily Harrogate-terminating workings ("the Harrogate line
+# itself is overwhelmingly a Northern service... so [the] phrase would pull
+# in incidents that only affect Northern"), THIS file is that Northern
+# service, so the same phrase is a precise, correct match here. Grepped
+# clean against every other file's own `match_keywords` before adding.
+
+# Leeds to York via Harrogate, ordered south-west to north-east. Wikipedia's
+# "Harrogate line" article confirms the operator split: "Service on the
+# line is operated by Northern, with a few additional workings by London
+# North Eastern Railway starting and terminating at Harrogate" -- i.e.
+# Northern runs the line end to end and LNER only overlaps a Leeds-
+# Harrogate portion of it (already modelled, station-overlap only, in
+# `lner-leeds.toml`'s own `lner-leeds-harrogate` segment).
+#
+# Full station list (14, Leeds to York) confirmed via the same article's
+# route description and cross-checked station-by-station against
+# https://ds.cursed.solutions/api/stations?q=<name>: Leeds, Burley Park,
+# Headingley, Horsforth, Weeton, Pannal, Hornbeam Park, Harrogate,
+# Starbeck, Knaresborough, Cattal, Hammerton, Poppleton, York.
+#
+# --- Segment/overlap decision ---
+# LDS, HRS (Horsforth) and HGT (Harrogate) are also `lner-leeds.toml`
+# stations, on that file's own `lner-leeds`/`lner-leeds-harrogate`
+# segments -- genuine physical track-sharing (LNER's Harrogate workings run
+# over exactly this line), but per this catalogue's established
+# cross-operator convention for the same King's Cross-adjacent group
+# (`hull-trains.toml` declining to reuse `lner-hull`'s segment name despite
+# identical physical trains; `grand-central.toml`/`grand-central-
+# bradford.toml` declining to reuse any `lner-*`/`northern-yorkshire`
+# segment at their own Doncaster/York overlaps), no segment name is shared
+# here either. Station-level overlap is expected and sufficient -- an
+# incident at LDS, Horsforth or Harrogate still matches both files by
+# station lookup regardless of segment naming.
+#
+# YRK is also a `northern.toml`/`northern-yorkshire-coast.toml` station (on
+# their shared `northern-yorkshire` segment, the direct Leeds-York main
+# line), but that is a physically different approach into York -- this
+# line arrives via Poppleton/Hammerton from the north-west, not via the
+# direct Leeds-York line those files model. Station-overlap-only, same
+# `xc-manchester.toml`/`northern-calder-valley.toml` precedent cited
+# throughout this catalogue for "station overlap is fine, segment-sharing
+# is a deliberate choice".
+#
+# No severity_overrides: frequency is comparable to the already-tuned
+# `northern-airedale.toml`/`northern-wharfedale.toml` (both left at
+# catalogue defaults) -- Wikipedia's own article records an "extra hourly
+# service from Leeds to Knaresborough" being added on top of the existing
+# pattern from December 2017, i.e. better than hourly on the busier western
+# half, not the sparse rural-branch frequency that drives overrides
+# elsewhere in this batch (`northern-settle-carlisle.toml`,
+# `northern-tyne-valley.toml`).
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-harrogate-line"
+
+[[stations]]
+crs = "BUY"
+role = "minor"
+segment = "northern-harrogate-line"
+# Burley Park.
+
+[[stations]]
+crs = "HDY"
+role = "minor"
+segment = "northern-harrogate-line"
+# Headingley.
+
+[[stations]]
+crs = "HRS"
+role = "minor"
+segment = "northern-harrogate-line"
+# Horsforth -- also an `lner-leeds.toml` station on that file's own
+# `lner-leeds-harrogate` segment; see the overlap note above.
+
+[[stations]]
+crs = "WET"
+role = "minor"
+segment = "northern-harrogate-line"
+# Weeton.
+
+[[stations]]
+crs = "PNL"
+role = "minor"
+segment = "northern-harrogate-line"
+# Pannal.
+
+[[stations]]
+crs = "HBP"
+role = "minor"
+segment = "northern-harrogate-line"
+# Hornbeam Park.
+
+[[stations]]
+crs = "HGT"
+role = "major"
+segment = "northern-harrogate-line"
+# Harrogate -- also an `lner-leeds.toml` terminus on that file's own
+# `lner-leeds-harrogate` segment; see the overlap note above. LNER's own
+# workings end here; Northern's continue on to York.
+
+[[stations]]
+crs = "SBE"
+role = "minor"
+segment = "northern-harrogate-line"
+# Starbeck.
+
+[[stations]]
+crs = "KNA"
+role = "minor"
+segment = "northern-harrogate-line"
+# Knaresborough.
+
+[[stations]]
+crs = "CTL"
+role = "minor"
+segment = "northern-harrogate-line"
+# Cattal.
+
+[[stations]]
+crs = "HMM"
+role = "minor"
+segment = "northern-harrogate-line"
+# Hammerton.
+
+[[stations]]
+crs = "POP"
+role = "minor"
+segment = "northern-harrogate-line"
+# Poppleton.
+
+[[stations]]
+crs = "YRK"
+tiploc = "YORK"
+role = "terminus"
+segment = "northern-harrogate-line"
+# York -- station-overlap only with `northern.toml`/
+# `northern-yorkshire-coast.toml`'s `northern-yorkshire` segment; see the
+# overlap note above.

@@ -34,7 +34,7 @@ sample_stations = ["INV", "DIN", "GGJ", "WCK", "THS"]
 # Inverness-terminating line was added; this is that line). `destination_crs_filter`
 # disambiguates Far North Line departures from Highland Main Line ones at
 # the shared INV sample station, mirroring `scotrail-ayrshire.toml`'s
-# identical use of the field at GLC against `scotrail-glasgow-suburban.toml`.
+# identical use of the field at GLC against `scotrail-argyle.toml`.
 destination_crs_filter = ["DIN", "GGJ", "WCK", "THS"]
 
 match_keywords = ["Far North Line"]

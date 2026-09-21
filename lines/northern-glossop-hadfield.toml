@@ -1,0 +1,178 @@
+id = "northern-glossop-hadfield"
+name = "Glossop/Hadfield Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains electric service with no existing `lines/*.toml`
+# coverage. Confirmed via Wikipedia's "Glossop line" article (raw wikitext,
+# fetched via `action=raw` after an early AI-summarized WebFetch pass
+# hallucinated non-existent intermediate stations -- discarded, not used
+# here) and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference), fetched/verified 2026-09-21.
+#
+# Electrification correction against the task brief: this line is NOT
+# 1500V DC today. It was originally electrified at 1500V DC in 1954, then
+# converted to 25kV 50Hz AC overhead in December 1984: "In December 1984,
+# the Manchester-Glossop/Hadfield line electrification was converted from
+# 1500 V DC to 25 kV AC." (Wikipedia "Glossop line"; independently confirmed
+# by Ashburys' own article: "The line was electrified at 25 kV AC on 10
+# December 1984; it replaced the 1500 V DC electrification, which was
+# inaugurated on 14 June 1954.") Category "regional" rather than "commuter"
+# per `northern-manchester-southport.toml`'s own precedent that "commuter" is
+# reserved for the electrified Merseyrail metro network specifically, even
+# though this line is itself electrified and frequent.
+#
+# Route: Manchester Piccadilly - Ashburys - Gorton - Fairfield - Guide
+# Bridge - Flowery Field - Newton for Hyde - Godley - Hattersley -
+# Broadbottom - Dinting, where the line splits at a triangular junction into
+# two short single-track stub branches to Hadfield and to Glossop. Double
+# track throughout Manchester Piccadilly-Dinting; single track on both stub
+# branches beyond Dinting. Class 323 EMUs, 3 trains per hour today (a
+# proposal to raise this to 4tph was found but is not yet in service): "the
+# same number of units to work a 4tph service when they currently can only
+# work 3 TPH." No `severity_overrides`: a genuinely frequent electrified
+# suburban corridor, not a sparse rural line, matching
+# `northern-manchester-southport.toml`'s own no-overrides precedent for a
+# comparable-density Northern branch.
+#
+# --- Shared-trunk fact: Manchester Piccadilly - Guide Bridge ---
+# This stretch (Ashburys, Gorton, Fairfield, Guide Bridge) is also the first
+# leg of `northern-rose-hill.toml` (Rose Hill Marple branch), confirmed as
+# genuine physical track-sharing, not just both routes touching Manchester
+# Piccadilly: Guide Bridge's own Wikipedia infobox states it "lies 4.75 mi
+# east of Manchester Piccadilly, on both the Glossop Line and the Hyde loop
+# of the Hope Valley Line" -- i.e. one physical approach serves both
+# services, which diverge only at Guide Bridge itself (this line continuing
+# to Flowery Field; Rose Hill Marple's trains turning onto the diesel-only
+# Hyde loop towards Hyde North). Segment `northern-guide-bridge` is shared
+# verbatim between this file and `northern-rose-hill.toml` for the whole
+# Manchester Piccadilly-Guide Bridge stretch; per SCHEMA.md's shared-trunk
+# rule of thumb, Guide Bridge itself belongs to the shared segment and this
+# file's own exclusive segment starts at the next station, Flowery Field.
+#
+# A third, unrelated service also calls at Guide Bridge: the
+# Stockport-Stalybridge ("Denton") line, a genuinely negligible parliamentary
+# service (one round trip per week, Saturdays only, run solely to avoid
+# formal closure procedures -- researched and deliberately NOT catalogued as
+# its own line this task). Neither this file nor `northern-rose-hill.toml`
+# claims that service; noted here only so a future reader doesn't assume
+# Guide Bridge's third destination pairing (Stockport <-> Stalybridge)
+# belongs to either of them.
+#
+# --- The Dinting triangular junction ---
+# Dinting is a genuine triangular junction, not a simple fork: "a signal box
+# that controls the triangular junction and single lines to both termini,"
+# with "the same train serv[ing] Glossop and Hadfield via one of three
+# routings" (a Glossop-Hadfield-Glossop shuttle round the triangle off-peak,
+# with the peak-time direction reversed morning vs evening). Modelled here as
+# a single trunk segment (`northern-glossop-hadfield-trunk`) up to and
+# including Dinting, then two single-station exclusive branch segments
+# (`northern-glossop-hadfield-hadfield`, `northern-glossop-hadfield-glossop`)
+# -- the same "trunk splits into two exclusive branches, no reconvergence"
+# shape `west-coast-main-line.toml`'s own `wcml-manchester.toml` already uses
+# for its Stoke-on-Trent/Wilmslow branches (albeit reconverging there, not
+# diverging as here).
+#
+# Caveat for future maintainers, mirroring `wcml-manchester.toml`'s own
+# documented caveat for the identical shape: `stations_between`/
+# `routes_from_stations` do an index-range lookup over this flat,
+# file-ordered station list. Because Hadfield and Glossop are both listed
+# after Dinting in file order (on genuinely different single-track
+# branches), `stations_between("DTG", "GLO")` would incorrectly also
+# implicate Hadfield, which sits on the *other* branch. Not fixed here
+# (aggregator logic, out of scope for a line-data task) -- flagged per that
+# file's own precedent for the same known hazard.
+#
+# --- Scope boundary: Godley's historical curve ---
+# Godley (GDL) was originally "Godley Junction", the junction for a now
+# fully-closed line "to Stockport Tiviot Dale, via Woodley," and later hosted
+# a short-lived second "Godley East" station (closed 1986) after the current
+# Godley/Hattersley stations were built. No current CRS/service exists for
+# either; not modelled, noted only to explain the historical naming.
+sample_stations = ["MAN", "GUI", "DTG", "HDF", "GLO"]
+destination_crs_filter = ["HDF", "GLO"]
+match_keywords = ["Glossop line", "Hadfield line"]
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-guide-bridge"
+
+[[stations]]
+crs = "ABY"
+role = "minor"
+segment = "northern-guide-bridge"
+# Ashburys.
+
+[[stations]]
+crs = "GTO"
+role = "minor"
+segment = "northern-guide-bridge"
+# Gorton.
+
+[[stations]]
+crs = "FRF"
+role = "minor"
+segment = "northern-guide-bridge"
+# Fairfield.
+
+[[stations]]
+crs = "GUI"
+role = "junction"
+segment = "northern-guide-bridge"
+# Guide Bridge -- the Hyde loop to Rose Hill Marple diverges here; shared
+# segment with `northern-rose-hill.toml` ends here. See the top-of-file
+# comment. A third, unrelated Stockport-Stalybridge parliamentary service
+# also calls here (not catalogued by any file).
+
+[[stations]]
+crs = "FLF"
+role = "minor"
+segment = "northern-glossop-hadfield-trunk"
+# Flowery Field -- first station on this line's own exclusive trunk.
+
+[[stations]]
+crs = "NWN"
+role = "minor"
+segment = "northern-glossop-hadfield-trunk"
+# Newton for Hyde.
+
+[[stations]]
+crs = "GDL"
+role = "minor"
+segment = "northern-glossop-hadfield-trunk"
+# Godley -- see the scope-boundary note above on its historical curve.
+
+[[stations]]
+crs = "HTY"
+role = "minor"
+segment = "northern-glossop-hadfield-trunk"
+# Hattersley.
+
+[[stations]]
+crs = "BDB"
+role = "minor"
+segment = "northern-glossop-hadfield-trunk"
+# Broadbottom.
+
+[[stations]]
+crs = "DTG"
+role = "junction"
+segment = "northern-glossop-hadfield-trunk"
+# Dinting -- triangular junction where the line splits into the Hadfield and
+# Glossop stub branches; see the top-of-file comment.
+
+[[stations]]
+crs = "HDF"
+role = "terminus"
+segment = "northern-glossop-hadfield-hadfield"
+# Hadfield -- one of the two Dinting stub-branch termini.
+
+[[stations]]
+crs = "GLO"
+role = "terminus"
+segment = "northern-glossop-hadfield-glossop"
+# Glossop -- the other Dinting stub-branch terminus.

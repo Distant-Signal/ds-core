@@ -10,6 +10,37 @@ match_keywords = ["Portsmouth Direct", "Portsmouth line"]
 
 # Shares Waterloo->Woking trunk with SWML and Alton.
 # Diverges at Woking; everything south of Guildford is exclusive.
+#
+# DATA-AUDIT SCOPE DECISION: a data-driven schedule audit (real CIF touch
+# rates) found this file previously modelled only the fast/limited-stop
+# Waterloo - Portsmouth pattern (Guildford, Haslemere, Petersfield, Havant,
+# Portsmouth & Southsea, Portsmouth Harbour), while the semi-fast
+# all-stations pattern was largely absent. This file's own header comment
+# never declared "fast trains only" as a deliberate scope boundary the way
+# some other catalogue files do (e.g. gwr-main-line.toml's "Principal/
+# express-pattern stations only"), so per this catalogue's own precedent
+# (station coverage should reflect what's confirmed, not what a file
+# happened to start with), the higher-confidence semi-fast stops are added
+# below rather than left out:
+#   - Fratton (FTN): 100% (101/101) of journeys - also a major interchange.
+#   - Godalming (GOD): 95%.
+#   - Farncombe (FNC): 66%.
+#   - Hilsea (HLS): 59%.
+#   - Rowlands Castle (RLN): 56%.
+#   - Liphook (LIP) / Liss (LIS): 52% each.
+# CRS/TIPLOC confirmed via railwaycodes.org.uk and Wikidata's "TIPLOC code"
+# property for each station.
+#
+# NOT added - confidence too low to confirm these are a genuine, currently
+# calling-at pattern rather than a rarer/historical one, per this
+# catalogue's two-source sourcing bar:
+#   - Worplesdon (WPL): 29%, between Woking and Guildford.
+#   - Milford (MLF) / Witley (WTY): 43% each, between Godalming and
+#     Haslemere.
+#   - Bedhampton (BDH): 28%, between Havant and Hilsea.
+# These are left for a future task with either more journey-level source
+# data or a working non-Wikipedia timetable source to confirm one way or
+# the other, rather than guessed at here.
 [[stations]]
 crs = "WAT"
 tiploc = "WATRLMN"
@@ -47,8 +78,32 @@ role = "major"
 segment = "swr-portsmouth-direct"
 
 [[stations]]
+crs = "FNC"
+tiploc = "FRNCMB"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "GOD"
+tiploc = "GDLMING"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
 crs = "HSL"
 tiploc = "HASLEMR"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "LIP"
+tiploc = "LIPHOOK"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "LIS"
+tiploc = "LISS"
 role = "minor"
 segment = "swr-portsmouth-direct"
 
@@ -59,9 +114,27 @@ role = "minor"
 segment = "swr-portsmouth-direct"
 
 [[stations]]
+crs = "RLN"
+tiploc = "RWLNDSC"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
 crs = "HAV"
 tiploc = "HAVANT"
 role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "HLS"
+tiploc = "HILSEA"
+role = "minor"
+segment = "swr-portsmouth-direct"
+
+[[stations]]
+crs = "FTN"
+tiploc = "FRATTON"
+role = "major"
 segment = "swr-portsmouth-direct"
 
 [[stations]]

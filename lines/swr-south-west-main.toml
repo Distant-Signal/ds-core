@@ -21,6 +21,31 @@ match_keywords = [
 # and the matcher treats incidents there as "shared trunk" events affecting all
 # lines that use them. Stations south of Basingstoke are exclusive to this line
 # (the Bournemouth/Weymouth corridor).
+#
+# DATA-AUDIT SCOPE DECISION: a data-driven schedule audit (real CIF touch
+# rates) found this file previously modelled only the fast-pattern
+# Winchester/Southampton/Bournemouth/Poole/Weymouth stops, with the New
+# Forest/Southampton-suburbs semi-fast stopping pattern largely absent. As
+# with swr-portsmouth-direct.toml (same audit, same judgment call), this
+# file's own header comment never declared "fast trains only" as a
+# deliberate scope boundary, so the two highest-confidence, major-station
+# gaps are added below:
+#   - Southampton Airport Parkway (SOA): 100% (65/65) of journeys, between
+#     Winchester and Southampton.
+#   - Brockenhurst (BCU): 95% (69/73) of journeys, between Southampton and
+#     Bournemouth.
+# CRS/TIPLOC confirmed via Wikidata's "TIPLOC code" property for each
+# station.
+#
+# NOT added - touch rates here are all well under 50%, suggesting these are
+# more likely a genuinely different/slower stopping service pattern than
+# this file's fast route, not a confirmed gap in this line's own coverage:
+#   New Milton / Christchurch (49% each), Pokesdown (47%), Totton (40%),
+#   Sway / Hinton Admiral (36% each), Ashurst New Forest (33%), Eastleigh
+#   (28%), Shawford (25%), Beaulieu Road (12%), St Denys (9%), Swaythling
+#   (6%), Redbridge (3%). Left for a future task to confirm (or model as a
+#   separate stopping-service line) with dedicated research, rather than
+#   guessed at here.
 [[stations]]
 crs = "WAT"
 tiploc = "WATRLMN"
@@ -64,9 +89,21 @@ role = "major"
 segment = "swr-swml-south"
 
 [[stations]]
+crs = "SOA"
+tiploc = "SOTPKWY"
+role = "minor"
+segment = "swr-swml-south"
+
+[[stations]]
 crs = "SOU"
 tiploc = "SOTON"
 role = "major"
+segment = "swr-swml-south"
+
+[[stations]]
+crs = "BCU"
+tiploc = "BKNHRST"
+role = "minor"
 segment = "swr-swml-south"
 
 [[stations]]

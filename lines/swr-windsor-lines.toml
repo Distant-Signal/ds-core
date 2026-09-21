@@ -1,0 +1,203 @@
+id = "swr-windsor-lines"
+name = "Windsor & Eton Riverside Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+# South Western Railway. en.wikipedia.org/wiki/Windsor_%26_Eton_Riverside_
+# railway_station confirms current SWR operation from London Waterloo, the
+# "Staines to Windsor Line" (also called "the Windsor Line" or "the Windsor
+# lines"). This is deliberately a DIFFERENT operator/route from
+# lines/gwr-windsor-branch.toml (this same batch), which covers GWR's
+# separate Slough-Windsor & Eton Central service to the same town — see that
+# file's own header for the two-file split rationale.
+
+destination_crs_filter = ["WNR"]
+sample_stations = ["FEL", "SNS", "WNR"]
+
+match_keywords = ["Windsor Line", "Windsor & Eton Riverside"]
+# "Windsor Line" is the route's own commonly-used current name
+# (en.wikipedia.org/wiki/Windsor_%26_Eton_Riverside_railway_station calls
+# it "the Windsor Line"). Grepped against every other file's own
+# match_keywords before adding: swr-kingston-loop.toml's own comments use
+# the plural "Windsor lines" (lowercase, describing the physical track
+# pair) extensively but that phrase is NOT itself in that file's
+# match_keywords array (its own match_keywords is just ["Kingston loop"]),
+# so no collision exists today. "Windsor & Eton Riverside" is the station's
+# own full name, kept as a second, more specific phrase per SCHEMA.md's
+# precedent for a route with both a colloquial and a formal current name.
+
+# No severity_overrides: this is a frequent (roughly half-hourly or better)
+# double-track suburban corridor for its whole SWR-operated length, much
+# like swr-kingston-loop.toml's own no-override judgment for its comparable
+# frequent suburban stretch (that file uses a commuter override, but for its
+# OWN inner-London stretch at metro-like frequency; this line's own service
+# beyond Twickenham is not as frequent as that, but was not sourced to a
+# specific tph figure this task could confidently override the defaults
+# with — left at the catalogue defaults rather than guess a value).
+
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# This line is built almost entirely from segments swr-kingston-loop.toml
+# already established and explicitly named for this exact future reuse.
+# That file's own SEGMENTS comment states: "`swr-windsor-lines` is a
+# separate segment from `swr-kingston-loop` because it is physically
+# different infrastructure... SWR's Reading, Windsor & Eton Riverside and
+# Weybridge-via-Staines services... share this file's whole
+# `swr-windsor-lines` stretch from Twickenham inward... named for the track
+# rather than for this service, so a future Reading / Windsor & Eton
+# Riverside / Hounslow Loop file can reuse the name and get correct
+# shared-trunk propagation." This file is that reuse.
+#
+# en.wikipedia.org/wiki/Windsor_%26_Eton_Riverside_railway_station's own
+# station-by-station list from Waterloo (Vauxhall, Queenstown Road, Clapham
+# Junction, Wandsworth Town, Putney, Barnes, Mortlake, North Sheen,
+# Richmond, St Margarets, Twickenham, Whitton, Feltham, Ashford, Staines,
+# Wraysbury, Sunnymeads, Datchet, Windsor & Eton Riverside) matches
+# swr-kingston-loop.toml's own `swr-trunk-waterloo` (WAT, VXH, CLJ) and
+# `swr-windsor-lines` (QRB, WNT, PUT, BNS, MTL, NSH, RMD, SMG, TWI) rows
+# exactly for the shared stretch — all copied verbatim below, same CRS,
+# same roles, same segment names, per this batch's multi-file shared-trunk
+# convention. This line does NOT use the via-Wimbledon leg
+# (EAD/WIM/RAY/NEM) — real Windsor-line trains run via Vauxhall and
+# Clapham Junction's own Windsor-lines platforms, not the SWML/slow-line
+# formation those stations sit on for the Kingston Loop's other leg.
+#
+# The exclusive segment (`swr-windsor-lines-branch`, NOT reusing the
+# `swr-windsor-lines` name itself, to avoid confusion between "the shared
+# Windsor-lines trackage" and "this line's own further-west exclusive
+# stretch") starts at Whitton, the first station past Twickenham reached
+# only by this route.
+[[stations]]
+crs = "WAT"
+tiploc = "WATRLMN"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "VXH"
+role = "major"
+segment = "swr-trunk-waterloo"
+# Vauxhall. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "QRB"
+role = "minor"
+segment = "swr-windsor-lines"
+# Queenstown Road (Battersea). Row copied from swr-kingston-loop.toml.
+# Ordered before Clapham Junction below to match the real chainage from
+# Waterloo (Queenstown Road then Clapham Junction); segment tags unchanged.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Clapham Junction. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "WNT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Wandsworth Town. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "PUT"
+role = "minor"
+segment = "swr-windsor-lines"
+# Putney. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "BNS"
+role = "junction"
+segment = "swr-windsor-lines"
+# Barnes. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "MTL"
+role = "minor"
+segment = "swr-windsor-lines"
+# Mortlake. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "NSH"
+role = "minor"
+segment = "swr-windsor-lines"
+# North Sheen. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "RMD"
+role = "major"
+segment = "swr-windsor-lines"
+# Richmond. Row copied from swr-kingston-loop.toml, including its own
+# overground-mildmay.toml station-overlap note (unaffected here).
+
+[[stations]]
+crs = "SMG"
+role = "minor"
+segment = "swr-windsor-lines"
+# St Margarets. Row copied from swr-kingston-loop.toml.
+
+[[stations]]
+crs = "TWI"
+role = "junction"
+segment = "swr-windsor-lines"
+# Twickenham. Row copied from swr-kingston-loop.toml. Junction with the
+# Kingston Loop, which rejoins here (kept on the shared trunk per the
+# junction rule, same as that file's own treatment) — this line's own
+# exclusive continuation towards Windsor begins at the next station.
+
+[[stations]]
+crs = "WTN"
+role = "minor"
+segment = "swr-windsor-lines-branch"
+# Whitton. This line's own exclusive segment starts here — not listed in
+# swr-kingston-loop.toml at all (that file's own loop rejoins the main
+# Windsor lines at Twickenham and heads back towards Waterloo, never
+# reaching this far west).
+
+[[stations]]
+crs = "FEL"
+role = "major"
+segment = "swr-windsor-lines-branch"
+# Feltham.
+
+[[stations]]
+crs = "AFS"
+role = "minor"
+segment = "swr-windsor-lines-branch"
+# Ashford (Surrey) — CRS AFS, distinct from Ashford International (AFK) in
+# Kent, verified via ds.cursed.solutions/api/stations.
+
+[[stations]]
+crs = "SNS"
+role = "major"
+segment = "swr-windsor-lines-branch"
+# Staines.
+
+[[stations]]
+crs = "WRY"
+role = "minor"
+segment = "swr-windsor-lines-branch"
+# Wraysbury.
+
+[[stations]]
+crs = "SNY"
+role = "minor"
+segment = "swr-windsor-lines-branch"
+# Sunnymeads.
+
+[[stations]]
+crs = "DAT"
+role = "minor"
+segment = "swr-windsor-lines-branch"
+# Datchet.
+
+[[stations]]
+crs = "WNR"
+role = "terminus"
+segment = "swr-windsor-lines-branch"
+# Windsor & Eton Riverside. This line's own terminus. Distinct from
+# Windsor & Eton Central (WNC, lines/gwr-windsor-branch.toml's own
+# terminus, reached from Slough by GWR) — the two stations serve the same
+# town from opposite directions with no through connection between them,
+# per that file's own header note.

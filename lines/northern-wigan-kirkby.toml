@@ -1,0 +1,235 @@
+id = "northern-wigan-kirkby"
+name = "Kirkby Branch Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# Gap analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "Assorted Manchester/West Yorkshire suburban branches not yet checked in
+# detail (e.g. Manchester-Southport, Wigan-Kirkby) -- flagged for the
+# follow-up curation pass rather than fully scoped here." Confirmed real via
+# Wikipedia's "Kirkby branch line" article (raw wikitext) and cross-checked
+# station-by-station against ds.cursed.solutions/api/stations (this app's own
+# live production CRS reference), fetched 2026-09-21.
+#
+# This is Northern Trains' own diesel-operated Wigan Wallgate - Kirkby -
+# Headbolt Lane service, recently extended (5 October 2023) from Kirkby to a
+# new Headbolt Lane terminus. It is a DIFFERENT physical route from
+# Merseyrail's own separate, already-modelled electrified Kirkby branch in
+# `merseyrail-northern.toml` (`merseyrail-northern-kirkby` segment, Liverpool
+# Central - Sandhills - Kirkdale - Rice Lane - Fazakerley - Kirkby -
+# Headbolt Lane): that route approaches from Liverpool via the underground
+# central-Liverpool tunnel, this one approaches from Wigan via Pemberton,
+# Orrell and Upholland. The two meet only at the shared Kirkby/Headbolt Lane
+# station buildings -- see the station-overlap note below. Do not touch
+# `merseyrail-northern.toml`.
+#
+# Category "regional" per this batch's Northern-branch precedent (see
+# `northern-manchester-southport.toml`'s header comment for the same
+# reasoning applied to its sibling file). `[severity_overrides]` below are
+# warranted here (unlike that sibling file) because this branch is
+# genuinely rural and low-frequency: Wikipedia's infobox states the branch
+# is single-track from Wigan Wallgate to just north of Kirkby, and its own
+# prose states plainly "the service frequency has been unchanged since the
+# 1980s" -- an hourly diesel service, same character as
+# `northern-furness.toml`/`northern-clitheroe.toml`.
+
+sample_stations = ["MCV", "WGW", "RNF", "KIR", "HBL"]
+# Manchester Victoria (origin of the through service), Wigan Wallgate (the
+# junction with the Manchester-Southport line -- see the shared-trunk note
+# below), Rainford (a representative rural intermediate stop), Kirkby and
+# Headbolt Lane (the current terminus, extended 2023).
+
+destination_crs_filter = ["KIR", "HBL"]
+# Kirkby and Headbolt Lane are this line's own two real destinations at the
+# shared Manchester Victoria/Wigan Wallgate trunk (Kirkby remains a genuine
+# calling point/timing point for this line even though Headbolt Lane is now
+# the physical terminus), distinguishing this line's own departures from
+# Manchester-Southport-line departures (destination SOP) over the same
+# trunk.
+
+match_keywords = ["Kirkby branch line", "Wigan to Kirkby line"]
+# The line's own Wikipedia article title plus the natural-language phrasing
+# used in the task brief and in general rail-enthusiast/community-rail
+# coverage. Grepped against every other file's own `match_keywords` before
+# adding: no collision. Deliberately NOT "Kirkby branch" alone or any bare
+# "Kirkby"/"Headbolt Lane" phrase without "Wigan"/branch-line context --
+# Merseyrail's own electrified Kirkby branch (`merseyrail-northern.toml`,
+# which currently carries no `match_keywords` naming Kirkby specifically)
+# is colloquially also called "the Kirkby branch" in ordinary usage, and a
+# looser phrase risks misattributing that operator's own incidents to this
+# file. Both phrases kept here name Wigan explicitly, which Merseyrail's
+# route does not touch.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Manchester Victoria to Headbolt Lane via Wigan Wallgate, Pemberton, Orrell,
+# Upholland, Rainford and Kirkby, ordered south-east to north-west, per
+# Wikipedia's "Kirkby branch line" article (raw wikitext, infobox and station
+# sequence) fetched 2026-09-21, cross-checked station order against a
+# WebSearch-surfaced summary of current station articles (Orrell's own
+# article: "trains provide services to Manchester... while on the opposite
+# platform... trains... use the Tontine Tunnel onwards towards the Headbolt
+# Lane terminus"; Upholland's own article: "In the station sequence,
+# Rainford precedes Upholland, which is followed by Orrell"). Every CRS code
+# cross-checked against ds.cursed.solutions/api/stations the same day; no
+# discrepancies. TIPLOCs omitted throughout (none confirmed to a second
+# source in the time available).
+#
+# --- Shared-trunk fact: Manchester Victoria - Wigan Wallgate ---
+# See `northern-manchester-southport.toml`'s own header comment for the full
+# sourcing (Wikipedia's "Wigan-Atherton-Manchester" naming of this corridor,
+# the Kirkby branch line infobox's own "via Manchester Victoria and Wigan
+# Wallgate" service description, and the Swinton timetable cross-check
+# showing through-running from that line's own stations onto this branch).
+# Segment `northern-atherton-line` is shared verbatim between the two files
+# for the whole Manchester Victoria - Wigan Wallgate stretch; Wigan Wallgate
+# itself belongs to that shared segment per SCHEMA.md's shared-trunk rule of
+# thumb, and this file's own exclusive `northern-wigan-kirkby` segment
+# starts at the next station, Pemberton.
+#
+# --- Station-overlap-only notes (Kirkby and Headbolt Lane vs. Merseyrail) ---
+# Researched specifically because the double-tracking of the final stretch
+# into the new Headbolt Lane station (opened 2023) raised the question of
+# whether this might now be genuine shared track with Merseyrail's own
+# electrified service, the way the Kirkby branch line's `stations` count
+# changing prompted a closer look. Two independent sources rule that out:
+#   - Headbolt Lane railway station's own Wikipedia article: the station "is
+#     the interchange between Merseyrail's Northern Line and the
+#     unelectrified Headbolt Lane branch line, operated by Northern Trains"
+#     -- explicitly two distinct lines meeting at an interchange, not one
+#     shared electrified/diesel-mixed line.
+#   - A Merseyrail announcement (via WebSearch) on the Headbolt Lane project:
+#     "The new station and reinstatement of two tracks, will mean Merseyrail
+#     and Northern can serve a greater number of passengers in the wider
+#     Kirkby area" -- i.e. two separate tracks were reinstated specifically
+#     so each operator's own service no longer has to share a single line
+#     through this section (the pre-2023 Kirkby layout required Merseyrail
+#     and Northern trains to "kiss and turn" against a shared set of
+#     buffers, per a Community Rail Lancashire retrospective also
+#     surfaced), and passengers still have to change trains at Headbolt Lane
+#     to move between the two operators' services.
+# Verdict: station-overlap only at Kirkby (KIR) and Headbolt Lane (HBL),
+# following the `merseyrail-northern.toml`/`xc-south-coast.toml` precedent
+# for a real physical interchange with no shared running track for revenue
+# service. This file's own `northern-wigan-kirkby` segment name is not
+# reused from `merseyrail-northern.toml`'s own `merseyrail-northern-kirkby`
+# segment, matching that file's own instruction to whoever wrote the
+# (not-yet-drafted, now moot) sibling file for this exact situation.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - No stations were excluded from this line's own current calling pattern:
+#   all 7 stations in Wikipedia's infobox-confirmed sequence are included.
+# - The pre-1977 non-through-running historical arrangement at Kirkby, and
+#   the pre-Beeching double-through-platform layout, are historical detail
+#   only and not modelled (this catalogue models current operation).
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "northern-atherton-line"
+# Manchester Victoria -- shared trunk with `northern-manchester-southport.toml`.
+
+[[stations]]
+crs = "SFD"
+role = "minor"
+segment = "northern-atherton-line"
+# Salford Central.
+
+[[stations]]
+crs = "SNN"
+role = "minor"
+segment = "northern-atherton-line"
+# Swinton (Manchester).
+
+[[stations]]
+crs = "MSD"
+role = "minor"
+segment = "northern-atherton-line"
+# Moorside.
+
+[[stations]]
+crs = "WKD"
+role = "minor"
+segment = "northern-atherton-line"
+# Walkden.
+
+[[stations]]
+crs = "ATN"
+role = "major"
+segment = "northern-atherton-line"
+# Atherton.
+
+[[stations]]
+crs = "HGF"
+role = "minor"
+segment = "northern-atherton-line"
+# Hag Fold.
+
+[[stations]]
+crs = "DSY"
+role = "minor"
+segment = "northern-atherton-line"
+# Daisy Hill.
+
+[[stations]]
+crs = "HIN"
+role = "minor"
+segment = "northern-atherton-line"
+# Hindley.
+
+[[stations]]
+crs = "INC"
+role = "minor"
+segment = "northern-atherton-line"
+# Ince (Manchester).
+
+[[stations]]
+crs = "WGW"
+role = "junction"
+segment = "northern-atherton-line"
+# Wigan Wallgate -- this line's own exclusive segment starts at the next
+# station, Pemberton; the Manchester-Southport line continues instead via
+# Gathurst. See the shared-trunk note above.
+
+[[stations]]
+crs = "PEM"
+role = "minor"
+segment = "northern-wigan-kirkby"
+# Pemberton -- first station on this line's own exclusive segment.
+
+[[stations]]
+crs = "ORR"
+role = "minor"
+segment = "northern-wigan-kirkby"
+# Orrell.
+
+[[stations]]
+crs = "UPL"
+role = "minor"
+segment = "northern-wigan-kirkby"
+# Upholland.
+
+[[stations]]
+crs = "RNF"
+role = "minor"
+segment = "northern-wigan-kirkby"
+# Rainford.
+
+[[stations]]
+crs = "KIR"
+role = "major"
+segment = "northern-wigan-kirkby"
+# Kirkby -- station-overlap only with Merseyrail's own separate electrified
+# Kirkby branch; see the note above. No through-running between the two
+# operators' services.
+
+[[stations]]
+crs = "HBL"
+role = "terminus"
+segment = "northern-wigan-kirkby"
+# Headbolt Lane -- opened 2023, extended from Kirkby; station-overlap only
+# with Merseyrail's own Northern Line terminus here (interchange, not
+# through-running -- see the note above).

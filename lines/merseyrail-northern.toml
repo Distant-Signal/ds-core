@@ -177,7 +177,7 @@ segment = "merseyrail-northern-core"
 # Same Link/Loop separation as Moorfields above.
 
 [[stations]]
-crs = "BRU"
+crs = "BRW"
 role = "minor"
 segment = "merseyrail-northern-core"
 

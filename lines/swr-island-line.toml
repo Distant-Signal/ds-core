@@ -1,0 +1,141 @@
+id = "swr-island-line"
+name = "Island Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SW"]
+# South Western Railway. en.wikipedia.org/wiki/Island_Line (Isle of Wight)
+# confirms current SWR operation (nationalised as of May 2025, per this
+# catalogue's existing nationalisation precedent for other SWR files — the
+# ATOC code "SW" is unchanged). This is a physically and administratively
+# distinct part of the national network from the rest of SWR's mainland
+# routes: no track connection to the mainland exists, and rolling stock/
+# infrastructure are unique to this line (see below) — but it remains part
+# of the national rail network, timetabled and ticketed as such, matching
+# this catalogue's `mode = "national-rail"` convention for other physically
+# isolated but nationally-integrated lines.
+
+# No destination_crs_filter: every station on this line is exclusive to it —
+# no other file in this catalogue's `lines/` directory touches Ryde Pier
+# Head, Ryde Esplanade, Ryde St John's Road, Smallbrook Junction, Brading,
+# Sandown, Lake or Shanklin (grepped before starting this task). There is no
+# station-level ambiguity for the destination filter to resolve, the same
+# reasoning swr-kingston-loop.toml gives for a genuinely standalone corridor
+# (though unlike that file, this line DOES have a natural single terminus in
+# each direction, so a filter would be harmless — just unnecessary).
+destination_crs_filter = ["SHN"]
+
+sample_stations = ["RYD", "SAN", "SHN"]
+
+# "Island Line" is the current infrastructure/branding name
+# (en.wikipedia.org/wiki/Island_Line is the literal article title) and
+# grepped clean against every other file's own match_keywords before adding.
+# Flagged for the controller: `lines/tfw-valley-lines-south.toml`'s own
+# comments mention (but do not add to its own match_keywords) the unrelated
+# "Barry Island Line" in south Wales — a different, real route that happens
+# to share the substring "Island Line". Neither file's current
+# match_keywords collides today (tfw-valley-lines-south.toml's own
+# match_keywords is ["Cardiff City Line", "Coryton Line", "Cardiff Bay
+# Line"], none of which contain "Island Line"), but if a future task adds
+# dedicated Barry Island Line coverage, its own match_keywords must not
+# reuse the bare phrase "Island Line" without a qualifier, or it will
+# collide with this file's own keyword.
+match_keywords = ["Island Line"]
+
+# A short (8.5 mile), fully isolated single line of route with no
+# diversionary alternative and, historically, a very small dedicated fleet
+# (currently five two-car Class 484 units, the entire rolling stock
+# allocation for the whole line — en.wikipedia.org/wiki/British_Rail_Class_
+# 484 confirms this is the sole fleet type in current use here since the
+# 2021 Class 483 replacement). A single unit failure or a single blockage
+# has an outsized effect on the whole timetable in a way a main-line branch
+# with a larger, shared fleet does not. Same override pair as
+# gwr-cotswold.toml's/scotrail-ayrshire.toml's rural/isolated precedent.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# en.wikipedia.org/wiki/Island_Line (Isle of Wight), Route/Stations sections:
+# full current stopping pattern, Ryde Pier Head to Shanklin, all 8 stations
+# below. Double track Ryde Pier Head - Ryde St John's Road and Brading -
+# Sandown; single elsewhere (including Sandown - Lake - Shanklin).
+# Electrified at 750 V DC third rail (upgraded from the line's own
+# historically nonstandard 660 V DC in January 2021, alongside the Class 484
+# introduction — a genuinely unusual piece of infrastructure history worth
+# recording: this line ran a different DC voltage from the rest of the
+# third-rail network for decades because its rolling stock was cascaded
+# former London Underground stock). Current off-peak frequency is a train
+# every 30 minutes each way (source: same article, "Service" section, dated
+# April 2023 — the most recent frequency data this task found).
+#
+# At Ryde Pier Head, this line connects with Wightlink's cross-Solent
+# passenger ferry service to/from Portsmouth Harbour (same article) — the
+# reason the line's northern terminus is on the pier itself rather than at
+# the town of Ryde proper.
+#
+# CRS codes: every code below verified via ds.cursed.solutions/api/stations
+# (returns exactly one live result per query, no ambiguity with any other
+# station in the national database for any of these eight names).
+#
+# --- Historic extension: Shanklin - Wroxall - Ventnor ---
+#
+# The line originally continued south of Shanklin to Wroxall and Ventnor;
+# en.wikipedia.org/wiki/Island_Line confirms that section "closed in April
+# 1966" and has not reopened. Wroxall and Ventnor are not modelled here —
+# genuinely closed stations, not a current gap.
+[[stations]]
+crs = "RYP"
+role = "terminus"
+segment = "swr-island-line"
+# Ryde Pier Head. Wightlink ferry connection to Portsmouth Harbour (see
+# comment above) — this line's own northern terminus, not Ryde town centre.
+
+[[stations]]
+crs = "RYD"
+role = "major"
+segment = "swr-island-line"
+# Ryde Esplanade. The town-centre station and this line's busiest
+# intermediate stop; also an interchange for Ryde's own hovercraft/bus
+# links (not modelled — outside this catalogue's national-rail scope).
+
+[[stations]]
+crs = "RYR"
+role = "minor"
+segment = "swr-island-line"
+# Ryde St John's Road. Double track ends here southbound.
+
+[[stations]]
+crs = "SAB"
+role = "minor"
+segment = "swr-island-line"
+# Smallbrook Junction — a request-only interchange stop, existing solely to
+# connect with the heritage Isle of Wight Steam Railway (a separate,
+# non-national-rail operation, not modelled here). Single track either
+# side.
+
+[[stations]]
+crs = "BDN"
+role = "minor"
+segment = "swr-island-line"
+# Brading. Double track resumes here as far as Sandown.
+
+[[stations]]
+crs = "SAN"
+role = "major"
+segment = "swr-island-line"
+# Sandown. The line's principal seaside-town intermediate stop.
+
+[[stations]]
+crs = "LKE"
+role = "minor"
+segment = "swr-island-line"
+# Lake. Single track from here to Shanklin.
+
+[[stations]]
+crs = "SHN"
+role = "terminus"
+segment = "swr-island-line"
+# Shanklin. This line's current southern terminus — the historic extension
+# to Wroxall/Ventnor closed in 1966 (see comment above).

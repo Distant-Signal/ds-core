@@ -1,0 +1,122 @@
+id = "gwr-maritime-line"
+name = "Maritime Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+
+# Devon/Cornwall branch-line batch: full UK station-coverage audit found this
+# real, currently-open GWR branch (Truro - Falmouth Docks) entirely missing
+# from the catalogue. Wikipedia "Maritime Line" infobox/lead: "a branch line
+# railway in Cornwall, England, between the city of Truro and Falmouth
+# Docks. Having opened in 1863, all passenger services and stations on the
+# line are currently operated and managed by Great Western Railway."
+# 11.75 miles, single track, "Community rail" character.
+#
+# Category: "regional", matching this catalogue's precedent for a
+# single-track community-rail branch (`northern-furness.toml`), confirmed
+# rather than assumed via the infobox's own "Community rail" character
+# field.
+
+# Exclusive-segment stations only (Truro is the shared junction with the
+# Cornish Main Line, left off in favour of stations only this line reaches).
+sample_stations = ["PYN", "PNM", "FAL"]
+
+# Truro (TRU) is also a `gwr-cornish-main-line.toml` sample/CRS entry.
+# `destination_crs_filter` disambiguates this branch's own LDBWS departures
+# (bound for FAL) from Cornish Main Line services calling at Truro,
+# mirroring `scotrail-ayrshire.toml`'s identical use of the field at GLC.
+destination_crs_filter = ["FAL"]
+
+match_keywords = ["Maritime Line"]
+# One high-precision phrase -- the line's own branded/article name. Grepped
+# `lines/*.toml` before starting: no other file uses "Maritime" in
+# `match_keywords`.
+
+# Single track, but with a passing loop at Penryn (reinstated May 2009)
+# giving a genuine half-hourly service -- "the timetable provided for 29
+# trains which allowed for a service interval of 30 minutes" -- materially
+# better than this batch's hourly-or-worse rural branches
+# (`gwr-looe-valley.toml`, `gwr-tamar-valley.toml`). This mirrors
+# `gwr-cornish-main-line.toml`'s own no-override judgment call for a
+# comparably frequent (2 tph) route, but this line remains single track
+# throughout with only one passing loop (unlike CML's double track), so a
+# lighter touch of tuning is kept rather than dropping overrides entirely --
+# a shorter delay-recovery window than the fully double-tracked main lines,
+# but not the deep single-track/low-frequency risk of this batch's
+# hourly-or-worse siblings.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 8
+
+[[stations]]
+crs = "TRU"
+role = "junction"
+segment = "gwr-maritime-line"
+# Truro: the real junction with the Cornish Main Line. Also a station entry
+# (role "major", segment "gwr-cornish-main-line") in
+# `gwr-cornish-main-line.toml` -- station overlap only, per this catalogue's
+# established convention (`xc-south-coast.toml`/`xc-manchester.toml`
+# precedent): no shared-segment name is reused here, since the two lines'
+# own physical routes diverge immediately past Truro.
+
+[[stations]]
+crs = "PRW"
+role = "minor"
+segment = "gwr-maritime-line"
+# Perranwell.
+
+[[stations]]
+crs = "PYN"
+role = "minor"
+segment = "gwr-maritime-line"
+# Penryn: site of the passing loop reinstated in 2008-09 (installed over two
+# long weekends in October 2008, formally opened 18 May 2009), which halved
+# the line's headway -- basis for this file's severity tuning above.
+
+[[stations]]
+crs = "PNM"
+role = "minor"
+segment = "gwr-maritime-line"
+# Penmere: opened 1 July 1925, per Wikipedia.
+
+[[stations]]
+crs = "FMT"
+role = "minor"
+segment = "gwr-maritime-line"
+# Falmouth Town: opened 7 December 1970 (originally "Falmouth", later "The
+# Dell"), per Wikipedia.
+
+[[stations]]
+crs = "FAL"
+role = "terminus"
+segment = "gwr-maritime-line"
+# Falmouth Docks: this line's own terminus.
+
+# === Sources (cross-checked per this batch's Global Constraints) ===
+#
+# Route structure, operator, character, service pattern:
+#   - Wikipedia "Maritime Line" (infobox + lead + body, fetched fresh for
+#     this task, including a raw-wikitext pass for the infobox): confirms
+#     GWR operation, single track, "Community rail" character, 11.75 mile
+#     length, "stations = 6"; confirms the ordered station list Truro -
+#     Perranwell - Penryn - Penmere - Falmouth Town - Falmouth Docks;
+#     confirms Penmere's 1925 opening and Falmouth Town's 1970 opening/
+#     renaming history; confirms the Penryn passing-loop reinstatement
+#     timeline and the resulting "29 trains" / 30-minute-interval timetable
+#     quoted above.
+#
+# CRS codes: every code below was verified live against
+# `https://ds.cursed.solutions/api/stations?q=<name>` during this task --
+# TRU "Truro", PRW "Perranwell", PYN "Penryn (Cornwall)", PNM "Penmere",
+# FMT "Falmouth Town", FAL "Falmouth Docks". All matched with no
+# discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live source
+# during this task, matching this batch's optional-field convention.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Cornish Main Line itself (Truro onward to Penzance, or east to
+#   Plymouth): already catalogued in `gwr-cornish-main-line.toml`; not
+#   re-derived here beyond the station-overlap note above.

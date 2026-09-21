@@ -89,7 +89,9 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the other
 # TODAY; it is named for the track rather than for this service so a future
 # `swr-epsom.toml` / `swr-new-guildford.toml` can reuse the name verbatim and
 # get correct shared-trunk propagation. Same forward-looking naming
-# southeastern-metro-north-kent.toml uses for `southeastern-lewisham-corridor`.
+# southeastern-bexleyheath.toml/southeastern-dartford-loop.toml (formerly
+# one file, southeastern-metro-north-kent.toml) use for
+# `southeastern-lewisham-corridor`.
 #
 # Motspur Park is itself the junction for the Chessington branch proper (the
 # physical divergence is at Motspur Park Junction, 766 yards south of the
@@ -103,10 +105,12 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the other
 # Both phrases are specific to this route; "Chessington" has no ambiguous
 # namesake elsewhere on the network. Kept to two per SCHEMA.md's "don't
 # overload match_keywords" rule. No `excluded_keywords`: this file's keywords
-# are narrow enough that no KeywordOnly false positive is possible, and
-# southeastern-metro-north-kent.toml's own review finding shows adding a
-# sibling line's name as an exclusion is a HARD VETO that can suppress
-# exactly the multi-line incidents these files exist to model.
+# are narrow enough that no KeywordOnly false positive is possible, and the
+# pre-split southeastern-metro-north-kent.toml's own review finding (now
+# carried in both southeastern-bexleyheath.toml and
+# southeastern-dartford-loop.toml) shows adding a sibling line's name as an
+# exclusion is a HARD VETO that can suppress exactly the multi-line
+# incidents these files exist to model.
 match_keywords = ["Chessington branch", "Chessington line"]
 
 # All four sample stations are on this line's own exclusive branch. No
@@ -144,8 +148,10 @@ sample_stations = ["CSS", "CSN", "TOL", "MAL"]
 
 # Commuter line: the same thresholds every other `category = "commuter"`
 # file uses (southeastern-hayes-line.toml - itself a comparable 2-4 tph
-# London suburban branch - southeastern-metro-north-kent.toml,
-# thameslink-core.toml, great-northern-suburban.toml).
+# London suburban branch - southeastern-bexleyheath.toml,
+# southeastern-dartford-loop.toml (formerly one file,
+# southeastern-metro-north-kent.toml), thameslink-core.toml,
+# great-northern-suburban.toml).
 #
 # Noted but deliberately NOT acted on: this branch runs a flat 2 tph with no
 # redundancy, so one cancellation is a 30-minute gap and half of that hour's

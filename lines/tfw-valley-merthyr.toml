@@ -1,0 +1,331 @@
+id = "tfw-valley-merthyr"
+name = "Merthyr Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+destination_crs_filter = ["MER", "ABA"]
+sample_stations = ["CDQ", "PPD", "MER", "ABA"]
+match_keywords = ["Merthyr Line", "Aberdare Line"]
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-north.toml` (Batch 11, Task 11.6), which bundled the
+# Rhymney, Merthyr, Aberdare and Rhondda/Treherbert lines into one
+# over-broad `id`/`name`. A later data-driven catalogue audit recommended
+# splitting that file along its own real-world community-rail branding.
+# Rhymney and Rhondda/Treherbert each split out cleanly into their own files
+# (`tfw-valley-rhymney.toml`, `tfw-valley-rhondda.toml`) since each already
+# has its own standalone, currently-live Wikipedia article. Merthyr and
+# Aberdare did not split as cleanly -- see the decision below.
+#
+# Split decision: 3 files, not 4. The task brief that requested this split
+# explicitly left open whether Merthyr and Aberdare should become two
+# separate files or stay combined, noting Wikipedia sometimes treats them as
+# one "Merthyr Line" article and sometimes as two. Checked directly against
+# Wikipedia as of 2026-09-21:
+#   - https://en.wikipedia.org/wiki/Merthyr_line ("Merthyr line") is live and
+#     opens: "The Merthyr line is a suburban rail line in South Wales; it
+#     connects Cardiff Central with Merthyr Tydfil and Aberdare." Its own
+#     Route section describes the line as dividing "at Abercynon, with
+#     separate branches to Merthyr and Aberdare up diverging valleys" --
+#     i.e. the current article already treats both termini as one line with
+#     two branches, not two lines.
+#   - https://en.wikipedia.org/wiki/Aberdare_Line does not exist as a
+#     standalone article (fetched 2026-09-21, HTTP 404) -- there is no
+#     current, separately-maintained "Aberdare Line" article to split a
+#     fourth file out to.
+# Since Wikipedia's own current article structure treats Merthyr and Aberdare
+# as one line today, this file follows suit and keeps them combined under a
+# single `id` (`tfw-valley-merthyr`), matching the catalogue's real-world-
+# branding-first convention rather than forcing a 4-way split the primary
+# source doesn't currently support. The Merthyr and Aberdare branches remain
+# individually distinguished below by their own segment names
+# (`tfw-valley-merthyr`, `tfw-valley-aberdare`), preserving the original
+# file's own internal branch structure rather than flattening it -- if a
+# future editor finds Wikipedia has since split the Aberdare branch back out
+# into its own article, the Aberdare-branch stations here can be lifted into
+# a new `tfw-valley-aberdare.toml` largely as-is, without re-deriving
+# anything.
+# (Historically these were separate railways -- the Merthyr branch is the
+# original Taff Vale Railway main line to Merthyr Tydfil, the Aberdare branch
+# a later Taff Vale Railway extension -- but that historic distinction is not
+# reflected in current Wikipedia article structure or, per the electrification
+# note below, in current TfW service branding either.)
+
+# Sourcing note (per the catalogue's "Wikipedia cross-checked against a
+# second independent source" curation standard established across Tasks
+# 11.1-11.5 of the original batch): every CRS code below was independently
+# confirmed twice -- once from that station's own Wikipedia infobox "Station
+# code" field (fetched individually, station by station, not from a bulk
+# route-diagram summary), and once from a live, verbatim-quoted row of
+# railwaycodes.org.uk's per-letter CRS pages (fetched via raw HTML and
+# grepped directly rather than trusting an AI summary of the page). All
+# matched exactly between the two sources; none of the original file's
+# disclosed bulk-fetch errors or dual-code oddities fell on the Merthyr or
+# Aberdare branches specifically (those all belonged to the Rhymney and
+# Rhondda branches -- see `tfw-valley-rhymney.toml` and
+# `tfw-valley-rhondda.toml`). The shared Taff Vale trunk stations below
+# (Cathays through Pontypridd) do carry two disclosed oddities; see the notes
+# on Treforest, Treforest Estate and Radyr below.
+#
+# TIPLOCs are included for every station because railwaycodes.org.uk's live
+# table gave one directly for all of them, matching the precedent set by
+# `tfw-north-wales-coast.toml` and `tfw-marches.toml`.
+#
+# Category: "commuter", carried over from `tfw-valley-lines-north.toml`'s own
+# framing of this whole network as "structurally more like Merseyrail's
+# two-line metro than a long-distance route" -- Merseyrail's own line file
+# likewise bundles multiple named branches (Kirkby, Ormskirk) into one `id`,
+# the same way this file bundles the Merthyr and Aberdare branches: a dense
+# commuter metro radiating from one city-centre hub, not a spine-and-arms
+# long-distance network, is this catalogue's actual dividing line for the
+# one-file-per-branch convention -- and per the split decision above,
+# Wikipedia's own current article structure agrees these two branches are
+# one line, not two.
+#
+# Confirmed frequency, sourced from the Merthyr Line's own Wikipedia article
+# (which covers both branches): "half-hourly service during the day, which
+# decreases to hourly in the evening" for each branch (2 tph each, so ~4 tph
+# combined on the shared Taff trunk below). `severity_overrides` below sits
+# between `thameslink-core.toml`'s very tight core-metro thresholds and this
+# catalogue's default: tighter than default because delays on a half-hourly
+# commuter service are proportionately more disruptive than on an hourly
+# regional service, but not as tight as Thameslink.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+
+# Electrification status: the Merthyr Line's own Wikipedia article (which, as
+# established above, covers both the Merthyr and Aberdare branches together)
+# states "electrification of the line was completed in 2023" with "25 kV 50
+# hz AC OLE (Discontinuous)" -- fully electrified, both branches, further
+# supporting treating them as one line rather than two for this file's
+# purposes.
+
+# Cardiff terminus decision: both Cardiff Central (CDF) and Cardiff Queen
+# Street (CDQ) are included below as a shared hub used by this line. See
+# `tfw-valley-rhymney.toml`'s own Cardiff terminus decision note for the
+# fuller Wikipedia sourcing of why CDF is treated as genuinely served, not
+# merely historically adjacent.
+#
+# Cardiff hub segment sharing: `tfw-valley-cardiff-hub` below is shared with
+# `tfw-valley-rhymney.toml`, `tfw-valley-rhondda.toml` and
+# `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff Bay Line).
+# See `tfw-valley-lines-south.toml`'s own "Cardiff hub segment-sharing
+# decision" comment for the full history of that call, and
+# `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+#
+# Taff Vale trunk segment sharing (a genuine behavioural change introduced by
+# this split, disclosed here rather than left implicit): `tfw-valley-taff-
+# trunk` below (Cathays through Pontypridd) is now duplicated verbatim in
+# both this file and `tfw-valley-rhondda.toml`, since both the Merthyr/
+# Aberdare and Rhondda lines genuinely run over this same corridor before
+# diverging at Pontypridd. Before this split, all four branches lived under
+# one `id` (`tfw-valley-lines-north`), so `SegmentRegistry` (which indexes
+# sharing by segment name across distinct line IDs, not by station count
+# within one file) resolved this trunk as `MatchScope::ExclusiveSegment` --
+# see the now-superseded `valley_lines_north_exclusive_pontypridd_segment_
+# does_not_propagate` regression test's own history in
+# `crates/common/src/matcher.rs`. Splitting Merthyr/Aberdare and Rhondda into
+# separate line IDs while keeping the same segment name means an incident
+# anywhere on this trunk now correctly propagates to both files as
+# `MatchScope::SharedSegment` -- which is more accurate, not a regression:
+# passengers on both lines are genuinely affected by an incident on their
+# shared approach. See the replacement test,
+# `valley_taff_trunk_shared_segment_propagates_after_split`, in
+# `crates/common/src/matcher.rs`.
+#
+# Radyr junction: this file also reuses the dedicated, Radyr-only
+# `tfw-valley-radyr-junction` segment name (rather than folding Radyr into
+# the Taff trunk segment above), matching `tfw-valley-lines-south.toml`'s own
+# City Line and the original `tfw-valley-lines-north.toml`'s treatment.
+# Segment sharing is indexed by name across the whole catalogue, not
+# per-station, so giving Radyr its own name keeps the other six Taff trunk
+# stations (Cathays, Llandaf, Taffs Well, Treforest, Treforest Estate,
+# Pontypridd) from falsely registering as shared with the City Line, which
+# only touches this corridor at Radyr itself.
+#
+# Only currently open, passenger-served stations are listed. On the Aberdare
+# branch, Abercwmboi Halt (closed 2 April 1956) and Matthewstown Halt
+# (closed 16 March 1964) are omitted, both confirmed closed via their own
+# Wikipedia articles rather than assumed. "Abercynon North", which appears in
+# some older sources as a separate station, was confirmed via Abercynon's own
+# Wikipedia article to no longer exist as a distinct station -- it was a
+# second platform/station opened in 1988 and closed again by 2007, with
+# services consolidated back onto the single station now simply named
+# Abercynon; it is not listed separately below.
+
+# --- Cardiff hub: shared with `tfw-valley-rhymney.toml`, `tfw-valley-
+# rhondda.toml` and `tfw-valley-lines-south.toml`. See the Cardiff hub
+# segment-sharing note above.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-valley-cardiff-hub"
+
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Queen Street.
+
+# --- Taff Vale trunk: shared with `tfw-valley-rhondda.toml` -- see the Taff
+# Vale trunk segment-sharing note above. Ordered south to north, Cardiff
+# Queen Street to Pontypridd, where the Rhondda line diverges.
+[[stations]]
+crs = "CYS"
+tiploc = "CATHAYS"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Cathays.
+
+[[stations]]
+crs = "LLN"
+tiploc = "LLANDAF"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Llandaf.
+
+[[stations]]
+crs = "RDR"
+tiploc = "RADYR"
+role = "junction"
+segment = "tfw-valley-radyr-junction"
+# Radyr: also the northern terminus of the Cardiff City Line (Coryton
+# branch), per this station's own Wikipedia article ("Immediately south of
+# the station, the Cardiff City line diverged southwards"). See the Radyr
+# junction note above for why this uses its own dedicated segment name
+# rather than the Taff trunk segment.
+
+[[stations]]
+crs = "TAF"
+tiploc = "TAFFSWL"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Taffs Well.
+
+[[stations]]
+crs = "TRF"
+tiploc = "TREFRST"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Treforest. railwaycodes.org.uk spells this "Trefforest" (double "f") -- a
+# real-world spelling variance, not an error: Wikipedia titles the station
+# "Treforest" (single "f", matching National Rail Enquiries' current
+# customer-facing spelling, which this file follows in comments), while
+# railwaycodes.org.uk's own location-name column spells it "Trefforest"
+# (double "f", matching the town's Welsh-derived name). Both sources agree on
+# CRS and TIPLOC; only the display spelling differs.
+
+[[stations]]
+crs = "TRE"
+tiploc = "TRFRSTE"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Treforest Estate. Same spelling variance as Treforest above ("Trefforest
+# Estate" on railwaycodes.org.uk). Its railwaycodes.org.uk row also lists two
+# TIPLOC values, "TRFRSTE" and "TREFEST" -- the first is used here, the
+# second is not.
+
+[[stations]]
+crs = "PPD"
+tiploc = "PTYPRID"
+role = "junction"
+segment = "tfw-valley-taff-trunk"
+# Pontypridd: junction where the Rhondda line diverges north-west while the
+# Merthyr/Aberdare branches continue north-east via Abercynon, confirmed via
+# this station's own Wikipedia article. Per the shared-trunk rule of thumb,
+# the junction itself stays on the shared trunk segment; each line's own
+# exclusive segment starts at the next station down its own branch (Trehafod
+# for Rhondda, Abercynon for Merthyr/Aberdare).
+
+# --- Merthyr/Aberdare junction: Abercynon, where the Merthyr and Aberdare
+# branches diverge from each other. Exclusive to this file (both branches
+# below share this single `id`), kept as its own segment name rather than
+# folded into either branch's segment, preserving the original bundled
+# file's own internal structure.
+[[stations]]
+crs = "ACY"
+tiploc = "ABRCYNS"
+role = "junction"
+segment = "tfw-valley-merthyr-aberdare-junction"
+# Abercynon.
+
+# --- Merthyr branch: diverges from Abercynon. Ordered south to north,
+# Quakers Yard to Merthyr Tydfil. Exclusive to this branch.
+[[stations]]
+crs = "QYD"
+tiploc = "QUAKRSY"
+role = "minor"
+segment = "tfw-valley-merthyr"
+# Quakers Yard.
+
+[[stations]]
+crs = "MEV"
+tiploc = "MERTHRV"
+role = "minor"
+segment = "tfw-valley-merthyr"
+# Merthyr Vale.
+
+[[stations]]
+crs = "TRD"
+tiploc = "TRDYRHW"
+role = "minor"
+segment = "tfw-valley-merthyr"
+# Troed-y-rhiw.
+
+[[stations]]
+crs = "PTB"
+tiploc = "PNTRBCH"
+role = "minor"
+segment = "tfw-valley-merthyr"
+# Pentre-bach.
+
+[[stations]]
+crs = "MER"
+tiploc = "MERTHYR"
+role = "terminus"
+segment = "tfw-valley-merthyr"
+# Merthyr Tydfil: the branch's northern terminus, confirmed via its own
+# Wikipedia article.
+
+# --- Aberdare branch: diverges from Abercynon. Ordered south to north,
+# Penrhiwceiber to Aberdare. Exclusive to this branch.
+[[stations]]
+crs = "PER"
+tiploc = "PNRHCBR"
+role = "minor"
+segment = "tfw-valley-aberdare"
+# Penrhiwceiber.
+
+[[stations]]
+crs = "MTA"
+tiploc = "MASH"
+role = "major"
+segment = "tfw-valley-aberdare"
+# Mountain Ash.
+
+[[stations]]
+crs = "FER"
+tiploc = "FERNHIL"
+role = "minor"
+segment = "tfw-valley-aberdare"
+# Fernhill.
+
+[[stations]]
+crs = "CMH"
+tiploc = "CMBH"
+role = "minor"
+segment = "tfw-valley-aberdare"
+# Cwmbach.
+
+[[stations]]
+crs = "ABA"
+tiploc = "ABDARE"
+role = "terminus"
+segment = "tfw-valley-aberdare"
+# Aberdare: the branch's northern terminus, confirmed via its own Wikipedia
+# article ("the terminus of the Aberdare branch of the Merthyr Line").

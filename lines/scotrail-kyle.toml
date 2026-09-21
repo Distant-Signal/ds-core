@@ -47,7 +47,7 @@ destination_crs_filter = ["KYL"]
 # from Far-North-bound ones (destined for GGJ/WCK/THS) -- mirroring
 # `scotrail-far-north.toml`'s own use of the field at the same shared
 # station and `scotrail-ayrshire.toml`'s identical pattern at GLC against
-# `scotrail-glasgow-suburban.toml`.
+# `scotrail-argyle.toml`.
 
 match_keywords = ["Kyle of Lochalsh Line"]
 # One high-precision phrase per the curation rule against padding

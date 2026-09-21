@@ -23,8 +23,10 @@ operators = ["GN"]  # Great Northern (GTR brand). Confirmed against the gap
 # confirmed against each station's own Wikipedia infobox "Station code"
 # field (or, for ARL, the `{{stn art lnk|ARL|...}}` template in the raw
 # wikitext, which encodes the same CRS code as a structured field) - same
-# fallback pattern `southeastern-metro-north-kent.toml` already used for its
-# own railwaycodes.org.uk truncation gaps.
+# fallback pattern `southeastern-bexleyheath.toml`/
+# `southeastern-dartford-loop.toml` (formerly one file,
+# southeastern-metro-north-kent.toml) already used for their own
+# railwaycodes.org.uk truncation gaps.
 #
 # The Digswell Junction / four-track-to-two-track bottleneck claim below is
 # corroborated by two independent Wikipedia articles ("Digswell Viaduct" and

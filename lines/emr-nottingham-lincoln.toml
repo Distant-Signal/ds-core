@@ -1,0 +1,209 @@
+id = "emr-nottingham-lincoln"
+name = "Nottingham - Lincoln Line (via Newark Castle)"
+mode = "national-rail"
+category = "regional"
+operators = ["EM"]  # East Midlands Railway
+
+# GAP-ANALYSIS PROVENANCE: brief names this "the Nottingham-Newark-Lincoln
+# local stopping service" as a sixth Midlands-batch-2 gap, and asks that
+# `emr-regional.toml` and `emr-midland-main-line.toml` be checked first for
+# overlap. Confirmed clean before starting this file:
+#   - `emr-regional.toml`'s own Liverpool-Norwich service does call at
+#     Nottingham and (further east) Grantham/Peterborough/Ely, but reaches
+#     Grantham via the separate Nottingham-Grantham line (shared with
+#     `emr-rural-branches.toml`'s Poacher Line, per that file's own Branch 2
+#     ruling) -- a different physical route from this file's own
+#     Nottingham-Newark Castle-Lincoln line, and it never touches Newark
+#     Castle, Collingham, Swinderby, Hykeham or Lincoln at all.
+#   - `emr-midland-main-line.toml` reaches Nottingham only via its own
+#     southern spur (East Midlands Parkway/Attenborough/Beeston) and never
+#     continues east of Nottingham.
+#   - `lner-lincoln.toml`'s own file-level comment already documents this
+#     exact gap directly: its King's Cross-Lincoln service runs non-stop
+#     between Newark Northgate and Lincoln, explicitly NOT calling at
+#     "Collingham, Swinderby and Hykeham" -- flagged there as "East Midlands
+#     Railway local stops this LNER service runs non-stop through... not
+#     added as stations here, and not independently CRS-verified since
+#     they're out of scope for this line." This file is exactly that
+#     named, deliberately-left-open gap.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, Wikipedia's "Nottingham-Lincoln
+# line" article, raw wikitext, infobox + route + services sections):
+#   1. Termini: Nottingham and Lincoln, running via Newark Castle (NOT
+#      Newark Northgate -- a physically separate station on the ECML,
+#      already `lner-ecml.toml`/`lner-lincoln.toml`'s own NNG; see that
+#      file's own file-level comment on the Newark flat crossing, the real
+#      physical link between the two Newark stations, for the fuller
+#      context).
+#   2. Track: two tracks (double track) throughout, per the infobox.
+#   3. Electrification: none stated in the infobox -- diesel-operated.
+#   4. Full station list, Nottingham to Lincoln (confirmed by the article's
+#      own ordered route description): Nottingham, Carlton, Burton Joyce,
+#      Lowdham, Thurgarton, Bleasby, Fiskerton, Rolleston, Newark-on-Trent
+#      [Newark Castle], Collingham, Swinderby, Hykeham, Lincoln.
+#   5. Frequency: roughly hourly in each direction on the Nottingham-Lincoln
+#      through-service, though the article's own Services section is
+#      clearer about the Sunday pattern specifically ("the Sunday service...
+#      improved to an hourly frequency each way starting from mid-morning"
+#      as of the May 2017 timetable change) than about a single, precisely
+#      quoted weekday figure -- flagged here rather than treated as
+#      precisely confirmed for every day of the week. A separate, out-of-
+#      scope working (one train daily, Monday-Saturday, continuing beyond
+#      Lincoln to London St Pancras) is also mentioned but not modelled by
+#      this file.
+#   6. Operator: East Midlands Railway. (The article also names London
+#      North Eastern Railway as an operator on this named route, but that
+#      is specifically the King's Cross-Lincoln working already modelled by
+#      `lner-lincoln.toml` over the Newark Northgate-Lincoln stretch only --
+#      not a claim that LNER runs the Nottingham-Newark Castle stopping
+#      service this file models.)
+#
+# CRS codes: NOT reused verbatim from every other EMR/`emr-*.toml` file
+# (already-verified fact). Every other code (CTO, BUJ, LOW, THU, BSB, FSK,
+# ROL, NCT, CLM, SWD, HKM) and LCN independently confirmed live via this
+# app's own production station-lookup endpoint (ds.cursed.solutions/api/
+# stations?q=<name>, 2026-09-21), single unambiguous match for each,
+# cross-checked against the Wikipedia article's own station names. No
+# TIPLOC confirmed for any of these to the two-source standard, so `tiploc`
+# is omitted throughout (LCN's own TIPLOC, if any, is left to
+# `lner-lincoln.toml` -- not duplicated here uncited).
+
+sample_stations = ["NOT", "NCT", "LCN"]
+destination_crs_filter = ["NOT", "LCN"]
+# Both of this line's real termini for the stopping service this file
+# models (the separate LNER St Pancras working isn't modelled here, per the
+# scope note above). Nottingham-only was previously omitted from this
+# filter on the theory it's "shared with too many other EMR files' own
+# sampling to be a useful filter value" -- but `destination_crs_filter`
+# gates on `destination_crs` (the departure's actual destination), not on
+# sample-station overlap, so dropping NOT here silently discarded every
+# genuine westbound (Lincoln-to-Nottingham) departure. Both directions'
+# termini are included now.
+
+match_keywords = ["Nottingham to Lincoln line", "Nottingham-Lincoln line"]
+# The line's own Wikipedia article title, in both a prose and raw-dash
+# rendering. Grep-checked against every other `lines/*.toml` file's
+# `match_keywords` before adding -- no collision (`lner-lincoln.toml`
+# deliberately carries no match_keywords of its own, per its own comment,
+# specifically to avoid exactly this kind of cross-file ambiguity).
+
+# Roughly hourly, double-track regional stopping service -- same
+# frequency-driven tuning `emr-rural-branches.toml`/`wmr-nuneaton-
+# coventry.toml` apply for comparable hourly regional lines, reused
+# verbatim.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Nottingham to Lincoln via Newark Castle, ordered west to east. One
+# segment: a single stopping service with no internal branch anywhere on
+# this file's own modelled extent, and (per the gap-analysis provenance
+# note above) no genuine shared track with any other file in this
+# catalogue at authoring time -- the whole route is exclusive to this file.
+[[stations]]
+crs = "NOT"
+role = "terminus"
+segment = "emr-nottingham-lincoln"
+# Nottingham: also served by `emr-midland-main-line.toml`'s Nottingham spur
+# (from the south, via East Midlands Parkway) and `emr-rural-branches.toml`'s
+# Robin Hood Line/Poacher Line (from the north via Bulwell, and east via
+# Grantham respectively) -- this line's own approach, east via Carlton, is
+# a fourth, physically distinct route into the same terminal station.
+# Station-overlap only, matching `emr-regional.toml`'s Ruling 3 and
+# `emr-rural-branches.toml`'s own identical reasoning for this station.
+
+[[stations]]
+crs = "CTO"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Carlton.
+
+[[stations]]
+crs = "BUJ"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Burton Joyce.
+
+[[stations]]
+crs = "LOW"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Lowdham.
+
+[[stations]]
+crs = "THU"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Thurgarton.
+
+[[stations]]
+crs = "BSB"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Bleasby.
+
+[[stations]]
+crs = "FSK"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Fiskerton (Nottinghamshire) -- distinct from a separate, closed Fiskerton
+# station in Lincolnshire on a different, unrelated line; this app's own
+# station-lookup endpoint returned only this one currently-open match for
+# the name.
+
+[[stations]]
+crs = "ROL"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Rolleston.
+
+[[stations]]
+crs = "NCT"
+role = "major"
+segment = "emr-nottingham-lincoln"
+# Newark Castle. NOT Newark Northgate (NNG) -- a physically separate
+# station on the ECML, already modelled by `lner-ecml.toml`/
+# `lner-lincoln.toml`. The two stations sit close together and are linked
+# by the short "Newark flat crossing" spur (see `lner-lincoln.toml`'s own
+# file-level comment), but that spur carries no CRS-coded stopping point of
+# its own and is not modelled here.
+
+[[stations]]
+crs = "CLM"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Collingham.
+
+[[stations]]
+crs = "SWD"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Swinderby.
+
+[[stations]]
+crs = "HKM"
+role = "minor"
+segment = "emr-nottingham-lincoln"
+# Hykeham.
+
+[[stations]]
+crs = "LCN"
+role = "terminus"
+segment = "emr-nottingham-lincoln"
+# Lincoln: reuses the CRS already established for this physical station in
+# `lner-lincoln.toml` (station renamed from "Lincoln Central" to plain
+# "Lincoln" in 2019, per that file's own comment). Station-overlap only --
+# LNER's own approach is via the ECML/Newark Northgate, a physically
+# separate route from this file's own Newark Castle approach; no segment
+# name is shared, matching `lner-lincoln.toml`'s own precedent of using an
+# exclusive `lner-lincoln` segment name for this station.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The daily EMR working continuing beyond Lincoln to London St Pancras:
+#   real, sourced (Wikipedia's own article), but a single daily working
+#   over what is otherwise this line's own route plus the entire Midland
+#   Main Line south of Nottingham -- out of this file's own scope (this
+#   file models the Nottingham-Lincoln stopping service itself, not every
+#   through-working that happens to touch its tracks).

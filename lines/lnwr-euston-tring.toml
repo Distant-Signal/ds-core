@@ -1,0 +1,272 @@
+id = "lnwr-euston-tring"
+name = "London Northwestern Railway: Euston-Tring"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution, cross-checked there against Network Rail's own References
+  # and Symbols doc) and reused verbatim by `lnwr-birmingham-crewe.toml`.
+  # Not re-verified a third time here; same fact, same source trail.
+]
+
+# GAP-ANALYSIS PROVENANCE: `lnwr-birmingham-crewe.toml`'s own header
+# comment (FOLD-IN NOTE, 2026-08-31) names this exact service as a real,
+# distinct, currently-modelled-nowhere gap: its source 1 lists four current
+# LNWR Euston-area route patterns from Wikipedia/West Midlands Trains'
+# "Services" table ("London Northwestern Railway (WCML Services)" section,
+# redirect target of the "London Northwestern Railway" article) --
+# Euston-Tring (2tph, all-stations local), Euston-Milton Keynes Central
+# (2tph, all-stations local), Euston-Birmingham New Street (2tph semi-fast),
+# Euston-Crewe via Trent Valley (1tph semi-fast) -- and explicitly flags
+# Euston-Tring as "not this file or 1.7's" (1.7 being the now-deleted
+# `lnwr-euston-commuter.toml`; see the DELETED-FILE note below). This file
+# fills that named gap. The Birmingham/Crewe semi-fasts are a genuinely
+# different, already-modelled service: they skip Harrow & Wealdstone,
+# Bushey, Kings Langley, Apsley, Hemel Hempstead, Berkhamsted and Tring
+# entirely (their own calling-point list, quoted in
+# `lnwr-birmingham-crewe.toml`'s header comment, runs Watford Junction
+# direct to Leighton Buzzard), where this line calls at every one of them.
+#
+# Re-fetched live 2026-09-21 from the West Midlands Trains article (the
+# "London Northwestern Railway" article is a redirect there), both as a
+# summarised read and as a second, independent raw-wikitext fetch of the
+# same "Services" table, word-for-word identical both times:
+#   "London Euston - Tring | 2 tph | Harrow & Wealdstone, Watford Junction,
+#    Hemel Hempstead, Berkhamsted"
+#   "London Euston - Milton Keynes Central | 2 tph | Harrow & Wealdstone,
+#    Bushey, Watford Junction, Kings Langley, Apsley, Hemel Hempstead,
+#    Berkhamsted, Tring, Cheddington, Leighton Buzzard, Bletchley"
+#
+# CALLING-POINT RESOLUTION (Bushey/Kings Langley/Apsley): the table's own
+# Euston-Tring row omits Bushey, Kings Langley and Apsley, even though they
+# sit strictly between Harrow & Wealdstone and Hemel Hempstead -- stations
+# the Euston-Tring row itself DOES list either side of them. Read literally
+# that would mean this "all-stations local" (per
+# `lnwr-birmingham-crewe.toml`'s own description of it) skips three
+# in-between stations, which is not how a stopping service works. Cross-
+# checked instead against each station's own Wikipedia article:
+#   - "Kings Langley railway station": "London Northwestern Railway
+#     operates all services" there, off-peak "2 tph to London Euston, 2 tph
+#     to Milton Keynes Central", plus peak-time trains "between London
+#     Euston, Tring, and Bletchley".
+#   - "Apsley railway station": identically worded -- LNWR operates all
+#     services, same off-peak 2+2 tph split, same peak Euston/Tring/
+#     Bletchley note.
+#   - "Bushey railway station": confirms London Northwestern Railway
+#     (alongside London Overground's separate Watford DC/Lioness line) as
+#     an operator of National Rail WCML services calling there.
+#   - "Tring railway station": off-peak "4 tph to London Euston (2
+#     semi-fast, 2 stopping)" and "2 tph to Milton Keynes Central" -- the
+#     "2 stopping" is this line; the "2 semi-fast" is
+#     `lnwr-birmingham-crewe.toml`'s Birmingham/Crewe pattern continuing
+#     past Tring without calling there in its own stopping pattern (that
+#     file's own header comment doesn't list Tring as a Birmingham/Crewe
+#     calling point either, corroborating this split).
+# Conclusion: the Services table's Euston-Tring row is an editorial
+# abridgement (a known Wikipedia route-table inconsistency, not a real
+# service difference) rather than a genuinely sparser stopping pattern.
+# Both the 2tph Euston-Tring short workings and the 2tph Euston-Milton
+# Keynes Central continuations are the same all-stations local family as
+# far as Tring; they only diverge in what happens beyond it. Bushey, Kings
+# Langley and Apsley are therefore included below as real, sourced calling
+# points of this line, cross-checked to two independent sources each
+# (their own station article plus the fuller Euston-MKC table row).
+#
+# DELETED-FILE CHECK (`lines/lnwr-euston-commuter.toml`, Task 1.7): `git
+# log --all --oneline -- 'lines/lnwr-euston*'` shows this file was added
+# (`a4f40806`), corrected once (`f012ade1`), then deleted
+# (`762445ce`, "Fold lnwr-euston-commuter.toml into
+# lnwr-birmingham-crewe.toml"). Read in full via `git show f012ade1` before
+# writing this file: it modelled "London Northwestern Railway:
+# Euston-Northampton" -- EUS, WFJ, LBZ, BLY, MKC on a `lnwr-euston-trunk`
+# segment, then WOL, NMP on its own `lnwr-northampton` segment -- i.e. the
+# Birmingham-bound SEMI-FAST truncated at Northampton (route (b) in this
+# file's own header numbering above), not the all-stations LOCAL to
+# Tring/Milton Keynes Central (route (a)). It never modelled Harrow &
+# Wealdstone, Bushey, Kings Langley, Apsley, Hemel Hempstead, Berkhamsted or
+# Tring at all -- none of this file's own stations overlapping it beyond
+# EUS/WFJ, which every WCML-area file in this catalogue already carries.
+# It was deleted because Wikipedia's Services table shows no standalone
+# Euston-Northampton short working: every LNWR train calling at Wolverton/
+# Northampton continues through to Birmingham New Street, so that file was
+# a strict data subset of `lnwr-birmingham-crewe.toml`'s Birmingham branch,
+# not a distinct real service -- unlike this line, which the same table
+# lists as its own separate 2tph pattern with a genuine short-working
+# terminus at Tring. This file does not recreate the deleted file: it
+# shares no exclusive segment or station beyond EUS/WFJ (both already
+# ubiquitous across this catalogue's WCML-area files) and models a
+# different, still-uncovered stopping pattern.
+#
+# CRS codes: EUS/WFJ/TRI reused verbatim (CRS+tiploc) from
+# `west-coast-main-line.toml`, already twice-verified there. Harrow &
+# Wealdstone (HRW) and Bushey (BSH) reused verbatim (CRS, no tiploc
+# confirmed) from `overground-lioness.toml`, which curates the same two
+# stations for the physically distinct Watford DC/Lioness line sharing the
+# same station buildings. Kings Langley (KGL), Apsley (APS), Hemel
+# Hempstead (HML) and Berkhamsted (BKM) were not previously curated by any
+# file in this catalogue; each was independently confirmed live via this
+# app's own production station-lookup endpoint
+# (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21), single
+# unambiguous match for each, cross-checked against the Wikipedia station
+# articles cited above giving the same CRS-implied names. No TIPLOC
+# confirmed for any of these four to the same standard (railwaycodes.org.uk
+# was not consulted station-by-station for this pass), so `tiploc` is
+# omitted, matching this catalogue's established optional-field convention.
+
+destination_crs_filter = ["TRI"]
+# The true terminus of this line's own short workings, per the Tring
+# station article's "2 stopping" tph split above. NOT ["MKC"] or ["BLY"]:
+# those are the real destinations of the related-but-distinct
+# Euston-Milton Keynes Central all-stations pattern (out of this task's
+# scope, see below) and of this line's own occasional peak-time Bletchley
+# extensions (Kings Langley/Apsley articles above) respectively. A peak
+# short-working extended to Bletchley will therefore not be counted by this
+# filter -- a documented, deliberate narrowing (matching this file's own
+# scope to the genuine Euston-Tring short-working pattern) rather than an
+# oversight, following the same "match the real destination_crs value, not
+# a station this file merely lists" principle
+# `lnwr-euston-commuter.toml`'s own post-review correction established.
+sample_stations = ["EUS", "HRW", "HML", "TRI"]
+# Start, a busy interchange partway out, a substantial mid-route town, and
+# the terminus -- geographic order.
+
+# No match_keywords: same reasoning `lnwr-birmingham-crewe.toml` gives for
+# its own Birmingham/Crewe branches -- no confirmed Knowledgebase-used
+# route name for this specific short working (it has no separate brand;
+# it's simply described by its own origin/destination pair in the sources
+# above), and a bare "Tring" would be a weak, ambiguous match that would
+# also false-positive against `west-coast-main-line.toml`,
+# `wcml-birmingham.toml`, `wcml-manchester.toml`, `wcml-liverpool.toml` and
+# `wcml-north-wales.toml` -- all five of which already list Tring as a
+# station of their own (see the segment-sharing note below) without
+# claiming it as a keyword. Station and operator evidence carries it
+# instead.
+
+# No severity_overrides: this is a dense inner-suburban/outer-commuter
+# corridor (Harrow, Watford, Hemel Hempstead are all well within the London
+# commuter belt), the same character `lnwr-birmingham-crewe.toml`'s own
+# comment contrasts its "long-distance/sparser-service" branches against --
+# it explicitly cites the now-deleted `lnwr-euston-commuter.toml`'s "dense
+# inner-suburban stretch" as the reason THAT file carried no overrides
+# either. This line is if anything denser (all-stations, not semi-fast),
+# so default thresholds are the right fit, same conclusion.
+
+# London Euston to Tring, ordered south-east to north-west, all-stations.
+# One segment, `lnwr-euston-tring`: this is a single short working with no
+# internal branch.
+#
+# Segment-sharing decisions (grep-checked against every `lines/*.toml`
+# file's `crs =` lines before writing this):
+#   - EUS and WFJ are also modelled by `west-coast-main-line.toml`,
+#     `wcml-birmingham.toml`, `wcml-manchester.toml`, `wcml-liverpool.toml`
+#     and `wcml-north-wales.toml` (all five sharing that file's own
+#     `wcml-london` segment) and by `lnwr-birmingham-crewe.toml` (its own
+#     `lnwr-euston-trunk` segment). None of those segment names are reused
+#     here. Per `lnwr-birmingham-crewe.toml`'s own precedent for Rugby
+#     (overlapping `west-coast-main-line.toml`'s `wcml-midlands` by station
+#     only) and `xc-south-coast.toml`'s convention more generally: station
+#     overlap alone, without a sourced fact that this line's own trains are
+#     the same physical workings as those files' intercity/semi-fast
+#     services, doesn't force segment-sharing. This line's stopping pattern
+#     (calling at Harrow & Wealdstone, Bushey, Kings Langley, Apsley) is
+#     demonstrably NOT the same working as the WCML intercity or LNWR
+#     semi-fast trains sampled by those six files, which skip all four of
+#     those stations -- unlike the deleted `lnwr-euston-commuter.toml`,
+#     which shared `lnwr-euston-trunk` with `lnwr-birmingham-crewe.toml`
+#     precisely because research showed they WERE the same real trains.
+#     Incidents on the shared EUS-WFJ stretch still match every affected
+#     file by station regardless of segment name.
+#   - TRI is also modelled by the same five `wcml*` files above (on their
+#     shared `wcml-london` segment) -- station overlap only, same
+#     reasoning: Tring station is real and shared, but no source here
+#     establishes this line's own stopping short-working as the same train
+#     as WCML's intercity service passing through.
+#   - Harrow & Wealdstone (HRW) and Bushey (BSH) are also modelled by
+#     `overground-lioness.toml` (its own `overground-lioness` segment,
+#     the physically separate Watford DC/Lioness line sharing the same
+#     station buildings on different tracks/platforms) -- station overlap
+#     only, no segment shared, matching that file's own established
+#     precedent for exactly this kind of same-building/different-line
+#     overlap.
+#   - No other existing file in this catalogue touches Kings Langley,
+#     Apsley, Hemel Hempstead or Berkhamsted, so those four are exclusive
+#     to this file's own `lnwr-euston-tring` segment for now.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Euston-Milton Keynes Central (the other 2tph all-stations pattern named
+#   in the same Services table row above): a real, sourced, currently
+#   uncovered service continuing past Tring to Cheddington, Leighton
+#   Buzzard and Bletchley before reaching Milton Keynes Central. This
+#   task's brief scopes this file specifically to the Euston-Tring
+#   short-working; the MKC-continuing pattern is left as a documented,
+#   real gap for a future task, not folded in here.
+#   `lnwr-birmingham-crewe.toml`'s own header comment independently notes
+#   the same 2tph/2tph split without modelling either.
+# - Peak-time extensions to Bletchley (Kings Langley/Apsley articles
+#   above): real, but not distinguished from the Euston-MKC pattern by any
+#   source consulted here to the two-source standard, and already excluded
+#   by design from `destination_crs_filter` above rather than guessed at.
+# - Watford DC/Lioness line (Euston-Watford Junction via Queen's Park,
+#   Kenton, Harrow & Wealdstone, Headstone Lane, Hatch End, Carpenders
+#   Park, Bushey, Watford High Street): real, sourced, but already fully
+#   modelled by `overground-lioness.toml` -- a different operator (London
+#   Overground) on physically separate tracks, not this line.
+
+[[stations]]
+crs = "EUS"
+tiploc = "EUSTON"
+role = "terminus"
+segment = "lnwr-euston-tring"
+
+[[stations]]
+crs = "HRW"
+role = "major"
+segment = "lnwr-euston-tring"
+# Harrow & Wealdstone: also a London Underground Bakerloo line and London
+# Overground Lioness line terminus/interchange (see the segment-sharing
+# note above), hence "major" rather than "minor".
+
+[[stations]]
+crs = "BSH"
+role = "minor"
+segment = "lnwr-euston-tring"
+
+[[stations]]
+crs = "WFJ"
+tiploc = "WATFDJ"
+role = "major"
+segment = "lnwr-euston-tring"
+
+[[stations]]
+crs = "KGL"
+role = "minor"
+segment = "lnwr-euston-tring"
+# Kings Langley: strictly between Watford Junction and Apsley.
+
+[[stations]]
+crs = "APS"
+role = "minor"
+segment = "lnwr-euston-tring"
+# Apsley: strictly between Kings Langley and Hemel Hempstead.
+
+[[stations]]
+crs = "HML"
+role = "major"
+segment = "lnwr-euston-tring"
+# Hemel Hempstead: a substantial town station, strictly between Apsley and
+# Berkhamsted.
+
+[[stations]]
+crs = "BKM"
+role = "minor"
+segment = "lnwr-euston-tring"
+# Berkhamsted: strictly between Hemel Hempstead and Tring.
+
+[[stations]]
+crs = "TRI"
+tiploc = "TRING"
+role = "terminus"
+segment = "lnwr-euston-tring"

@@ -106,10 +106,15 @@ role = "major"
 segment = "wcml-london"
 
 [[stations]]
-crs = "HMP"
-tiploc = "HAMPTON"
+crs = "HML"
+tiploc = "HEMLHMP"
 role = "minor"
 segment = "wcml-london"
+# Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
+# cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
+# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# Kept identical across all five WCML files that carry this shared-trunk
+# row.
 
 [[stations]]
 crs = "TRI"

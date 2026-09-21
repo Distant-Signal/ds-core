@@ -57,8 +57,12 @@ operators = [
 # pre-flight ruling (recorded in this task's own progress log), Newcastle
 # is each route's own terminus/boundary, not a shared trunk either route's
 # exclusive territory continues through — no segment name is shared with
-# `tpe-north` at Newcastle (mirrors how `west-coast-main-line.toml` and
-# `xc-manchester.toml` treat their own Crewe overlap). Every station below
+# `tpe-north` at Newcastle (mirrors how `emr-regional.toml` and
+# `northern-hope-valley.toml` treat their own Stockport overlap: station-
+# level only, distinct segment names on each side. This replaces a prior
+# analogy to `xc-manchester.toml`'s own Crewe entry, which no longer exists
+# after that file's 2026-09-21 route correction -- see its own comment).
+# Every station below
 # uses the single `tpe-borders` segment, so NCL is naturally tagged with
 # this file's own segment name rather than any `tpe-north` name — this
 # holds regardless of whether `tpe-north.toml` exists yet when this file

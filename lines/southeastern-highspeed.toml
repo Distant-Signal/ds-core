@@ -229,6 +229,13 @@ crs = "GRV"
 role = "minor"
 segment = "hs1-northkent"
 
+# DATA-AUDIT FIX: Higham was missing between Gravesend and Strood on the
+# North Kent Line branch. Real CIF data shows 54% of journeys call here.
+[[stations]]
+crs = "HGM"
+role = "minor"
+segment = "hs1-northkent"
+
 [[stations]]
 crs = "SOO"
 role = "junction"
@@ -276,6 +283,15 @@ segment = "hs1-northkent"
 
 [[stations]]
 crs = "WHI"
+role = "minor"
+segment = "hs1-northkent"
+
+# DATA-AUDIT FIX: Chestfield & Swalecliffe was missing between Whitstable
+# and Herne Bay. Real CIF data shows 65% of journeys call here. Also on
+# southeastern-chatham.toml's `chatham-coastal` - station overlap only, not
+# a shared segment; see header comment.
+[[stations]]
+crs = "CSW"
 role = "minor"
 segment = "hs1-northkent"
 

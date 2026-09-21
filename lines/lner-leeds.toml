@@ -44,41 +44,53 @@ delay_threshold_minutes = 10
 # apply for incident-matching purposes even where this line's own trains
 # don't stop.
 #
-# Harrogate/Skipton fold-in (per the gap analysis's suggestion): verified
-# LNER genuinely operates both, but only one is modeled as stations here.
+# Harrogate/Bradford Forster Square/Skipton fold-in (per the gap analysis's
+# suggestion): LNER genuinely operates all three. Harrogate was already
+# modeled as real stations; Bradford Forster Square and Skipton were
+# previously left unmodeled for lack of independently-verified CRS codes for
+# their shared Shipley/Keighley stretch -- this audit's CIF-schedule
+# cross-check has now resolved both.
 #   - Harrogate: confirmed via Wikipedia's "Harrogate line" article ("a few
 #     additional workings by London North Eastern Railway starting and
 #     terminating at Harrogate") and Wikipedia's "Harrogate railway
 #     station" article ("LNER operates six daily services to and from
 #     London King's Cross on Mondays to Saturdays... a third hourly
-#     clockface service to Leeds every two hours"). This is modeled below
-#     as the file's own ordered extension past Leeds (LDS -> HRS -> HGT).
+#     clockface service to Leeds every two hours"). Modeled below as the
+#     file's own ordered extension past Leeds (LDS -> HRS -> HGT).
 #   - Skipton: confirmed via Wikipedia's "Skipton railway station" article
 #     ("London North Eastern Railway operates a daily return service from
 #     Skipton to London King's Cross, via Leeds; the morning southbound
 #     train does not run on Sundays") and cross-checked against Wikipedia's
 #     "Airedale Line" article ("LNER currently operate a small number of
 #     daily services... between Skipton/Bradford and London King's Cross").
-#     Only one daily return working, versus Harrogate's six-a-day-plus
-#     pattern. Both Harrogate (via Horsforth) and Skipton (via Shipley and
-#     Keighley, on the Airedale Line) are genuine forks that diverge from
-#     this line's own Leeds-bound path at Leeds itself, not a continuation
-#     of one another — the same "a single ordered station list can't
-#     honestly represent two forks" situation `lner-ecml.toml` hit with its
-#     own Aberdeen/Inverness choice (see that file's comments), and SCHEMA.md's
-#     own curation rule ("branches noted in comments"). Following that
-#     precedent and picking the higher-frequency, better-established
-#     service (mirroring the Aberdeen-over-Inverness choice there):
-#     Harrogate is modeled as real stations; Skipton is documented here,
-#     sourced, but deliberately left unmodeled rather than force a false
-#     shared path or invent intermediate CRS codes (Shipley/Keighley) I
-#     didn't independently verify to the two-source standard.
-#   - A possible LNER Leeds<->Bradford Forster Square working also turned
-#     up in one source (Leeds station's own Wikipedia article), but I could
-#     not confirm it against a second source to the required standard (the
-#     Airedale Line article's own coverage of it is flagged
-#     citation-needed) — left out entirely per the no-invented-facts rule,
-#     not even as a station-list entry.
+#     RESOLVED: this audit's CIF-schedule cross-check confirms the 1
+#     train/day return working, and the Shipley/Keighley CRS codes this file
+#     previously declined to invent are already independently verified
+#     in-repo -- `lines/northern-airedale.toml` (Task 8.3) models this exact
+#     Leeds/Bradford-Shipley-Keighley-Skipton corridor with SHY (Shipley,
+#     role `junction`), KEI (Keighley, role `major`) and SKI (Skipton, role
+#     `terminus`) all two-source verified there. Reused verbatim below
+#     rather than re-derived. Modeled as `lner-leeds-skipton`.
+#   - Bradford Forster Square: previously left out entirely (the one source
+#     that mentioned it, the Airedale Line article, flagged its own coverage
+#     citation-needed). RESOLVED the same way as Skipton: this audit's
+#     CIF-schedule cross-check confirms LNER genuinely runs it -- two
+#     services each way (one on Sundays) -- and `northern-airedale.toml`
+#     already independently verifies BDQ (Bradford Forster Square, role
+#     `terminus`). Reused verbatim below. Modeled as `lner-leeds-bradford`.
+#   - Both Bradford Forster Square and Skipton physically diverge from the
+#     Airedale Line at Shipley, not at Leeds itself (per
+#     `northern-airedale.toml`'s own header comment: "the two approaches
+#     converge at Shipley"). Shipley is modeled once below, tagged
+#     `junction`, on its own new `lner-leeds-airedale` segment (LNER's own
+#     station overlap with `northern-shipley-trunk`, deliberately NOT
+#     sharing that segment name -- same "station overlap is fine,
+#     segment-sharing is a deliberate choice" precedent this file already
+#     applies to LDS against Northern's segments below) -- the exclusive
+#     `lner-leeds-bradford` and `lner-leeds-skipton` segments each start at
+#     the next station after Shipley on their own branch, per SCHEMA.md's
+#     shared-trunk rule of thumb applied within this file (same pattern
+#     `wcml-manchester.toml` uses for its own Stafford/Crewe double-fork).
 #
 # Northern-sharing decision (`northern-yorkshire`, LDS<->YRK, shared today
 # between `northern.toml` and `northern-yorkshire-coast.toml`): NOT shared.
@@ -155,9 +167,11 @@ crs = "LDS"
 tiploc = "LEEDS"
 role = "junction"
 segment = "lner-leeds"
-# Harrogate (via Horsforth) and Skipton (via Shipley/Keighley) both diverge
-# from here — see the file-level comment above for why only Harrogate is
-# modeled as stations and the Northern-sharing decision for this station.
+# Harrogate (via Horsforth) diverges from here directly; Bradford Forster
+# Square and Skipton also diverge from Leeds-bound LNER services but their
+# real physical fork point is Shipley, further on (see the file-level
+# comment above for the full resolution and the Northern-sharing decision
+# for this station).
 
 [[stations]]
 crs = "HRS"
@@ -168,3 +182,38 @@ segment = "lner-leeds-harrogate"
 crs = "HGT"
 role = "terminus"
 segment = "lner-leeds-harrogate"
+
+[[stations]]
+crs = "SHY"
+role = "junction"
+segment = "lner-leeds-airedale"
+# Shipley. CRS/role reused verbatim from `northern-airedale.toml`'s own
+# verified SHY entry, not re-derived here -- see the file-level comment
+# above. This is where LNER's Bradford Forster Square and Skipton workings
+# genuinely fork.
+
+[[stations]]
+crs = "BDQ"
+role = "terminus"
+segment = "lner-leeds-bradford"
+# Bradford Forster Square. LNER runs two services each way (one on
+# Sundays) -- confirmed by this audit's CIF-schedule cross-check, resolving
+# this file's previous citation-needed gap. CRS/role reused verbatim from
+# `northern-airedale.toml`'s own verified BDQ entry.
+
+[[stations]]
+crs = "KEI"
+role = "major"
+segment = "lner-leeds-skipton"
+# Keighley. CRS/role reused verbatim from `northern-airedale.toml`'s own
+# verified KEI entry.
+
+[[stations]]
+crs = "SKI"
+role = "terminus"
+segment = "lner-leeds-skipton"
+# Skipton. LNER runs 1 train per day return via Shipley and Keighley on the
+# Airedale Line -- confirmed by this audit's CIF-schedule cross-check,
+# resolving this file's previous "CRS codes not independently verified"
+# blocker. CRS/role reused verbatim from `northern-airedale.toml`'s own
+# verified SKI entry.

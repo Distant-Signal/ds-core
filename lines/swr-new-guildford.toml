@@ -1,0 +1,194 @@
+id = "swr-new-guildford"
+name = "New Guildford Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SW"]
+
+# ============================================================================
+# CORRECTION TO THIS TASK'S OWN BRIEF - checked against Wikipedia, not assumed
+# ============================================================================
+# The brief describes this as "Woking-Guildford via Aldershot/Ash". That
+# route genuinely exists, but it is NOT what Wikipedia calls the "New
+# Guildford line" - it is the western section of the North Downs Line
+# (swr-north-downs.toml, Ash/Wanborough/Guildford, already covered in this
+# same batch). Wikipedia's actual "New Guildford line" article describes a
+# completely different route: it "branches from the South West Main Line at
+# Hampton Court Junction (near Surbiton)" and reaches Guildford via Claygate,
+# Oxshott and Cobham - opened 1885 as a bypass avoiding the original
+# Woking route, which is why it is called "New". This file models the real
+# Wikipedia-sourced route, per this task's own "verify via Wikipedia rather
+# than assuming" instruction (applied here even though it was written
+# against a different line in the brief) - filed under the requested
+# filename since it is the batch's intended slot for this branch.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "New Guildford line" infobox (termini
+# "Hampton Court Junction" and "Guildford railway station", operator "South
+# Western Railway") and its "Stations and locations" section, which lists in
+# order: Hampton Court Junction (a physical junction, not a passenger stop) -
+# Hinchley Wood - Claygate - Oxshott - Cobham & Stoke d'Abernon - Effingham
+# Junction - Horsley - Clandon - London Road (Guildford) - Guildford. Service
+# frequency ("twice per hour off-peak, once on Sundays", plus peak
+# Surbiton-Waterloo non-stop workings) from the same article.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Hinchley Wood=HYW, Claygate=CLG, Oxshott=OXS, Cobham & Stoke d'Abernon=CSD,
+# Effingham Junction=EFF, Horsley=HSY, Clandon=CLA, London Road (Guildford)
+# =LRD (distinct from London Road (Brighton)=LRB - confirmed both ways),
+# Surbiton=SUR, Guildford=GLD.
+# Grepped clean before starting: no other `lines/*.toml` file lists Hinchley
+# Wood, Claygate, Oxshott, Cobham & Stoke d'Abernon, Effingham Junction,
+# Horsley, Clandon or London Road (Guildford).
+#
+# ============================================================================
+# JUNCTION AND SEGMENTS
+# ============================================================================
+# Hampton Court Junction itself has no CRS code and is not a passenger
+# station, so per the same convention swr-chessington.toml uses for Motspur
+# Park Junction, the shared/exclusive boundary is drawn at the nearest real
+# station either side of it. Surbiton (SUR) - already `swr-trunk-waterloo`,
+# role "junction", in all three pre-existing swr-*.toml files - is that
+# station on the trunk side; this line's own exclusive segment starts at the
+# next real station, Hinchley Wood.
+#
+# The historical Leatherhead branch (Effingham Junction - Bookham -
+# Leatherhead), per the same Wikipedia article, is a separate branch off
+# this line at Effingham Junction - real, sourced, but not part of this
+# task's assignment and not modelled here; Effingham Junction is marked
+# "junction" rather than "minor" to record it, and the branch itself is a
+# documented, uncovered gap for future work.
+#
+#   WAT - CLJ - WIM - SUR | HYW - CLG - OXS - CSD - EFF | HSY - CLA - LRD - GLD
+#   [--- swr-trunk-waterloo ---|------- swr-new-guildford-line -----------]
+#                          junction        (Leatherhead branch at EFF,
+#                                            not modelled)
+
+match_keywords = ["New Guildford line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's match_keywords before adding - no collision with
+# swr-portsmouth-direct.toml's "Portsmouth line"/"Portsmouth Direct" or
+# swr-alton.toml's "Alton line"/"Alton branch", the two other Guildford-area
+# entries in the catalogue.
+
+sample_stations = ["OXS", "HSY", "CLA"]
+# All three on this line's own exclusive segment, past the Hampton Court
+# Junction/Surbiton boundary and past the Leatherhead-branch split at
+# Effingham Junction - a clean read served only by this line.
+
+destination_crs_filter = ["GLD"]
+# Every booked working on this branch is Waterloo <-> Guildford (the
+# off-peak "twice per hour" pattern per the sourcing above; peak
+# Surbiton-Waterloo non-stops don't call at this line's own exclusive
+# stations at all, so they don't pollute the sample). Unlike
+# swr-chessington.toml's own dropped filter, no early/late Wimbledon-only
+# short working is documented anywhere in the sourcing above for this
+# route - if one surfaces later, drop this filter per that file's own
+# precedent rather than patch around it.
+
+# Commuter line, same tuning as swr-chessington.toml (a comparable 2 tph
+# SW suburban branch off the same Surbiton-area junction complex).
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Leatherhead branch (Effingham Junction - Bookham - Leatherhead): real
+#   per the sourcing above, not assigned to this task, left as a documented
+#   gap.
+# - The Hampton Court branch (Thames Ditton - Hampton Court), which also
+#   uses Hampton Court Junction: a different physical spur, not this line,
+#   not modelled here.
+# - Woking-Guildford via Aldershot/Ash: covered instead by
+#   swr-north-downs.toml (see the CORRECTION note above).
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WAT"
+role = "terminus"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "WIM"
+role = "major"
+segment = "swr-trunk-waterloo"
+
+[[stations]]
+crs = "SUR"
+role = "junction"
+segment = "swr-trunk-waterloo"
+# Surbiton. Hampton Court Junction, where this line's own route diverges
+# from the South West Main Line, is under a mile further on and has no CRS
+# code - per the shared-trunk rule of thumb, the boundary is drawn here,
+# the nearest real station, and this line's exclusive segment starts at the
+# next station, Hinchley Wood.
+
+[[stations]]
+crs = "HYW"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Hinchley Wood.
+
+[[stations]]
+crs = "CLG"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Claygate.
+
+[[stations]]
+crs = "OXS"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Oxshott.
+
+[[stations]]
+crs = "CSD"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Cobham & Stoke d'Abernon.
+
+[[stations]]
+crs = "EFF"
+role = "junction"
+segment = "swr-new-guildford-line"
+# Effingham Junction. Where the Leatherhead branch (Bookham, Leatherhead)
+# diverges - real, not modelled, see SCOPE BOUNDARIES above.
+
+[[stations]]
+crs = "HSY"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Horsley.
+
+[[stations]]
+crs = "CLA"
+role = "minor"
+segment = "swr-new-guildford-line"
+# Clandon.
+
+[[stations]]
+crs = "LRD"
+role = "minor"
+segment = "swr-new-guildford-line"
+# London Road (Guildford). Distinct from London Road (Brighton), LRB - see
+# CRS sourcing note above.
+
+[[stations]]
+crs = "GLD"
+role = "terminus"
+segment = "swr-new-guildford-line"
+# Guildford. Station overlap with swr-portsmouth-direct.toml (its own
+# `swr-portsmouth-direct` segment, the Waterloo-via-Woking approach) and
+# swr-north-downs.toml (its own `north-downs-reading-guildford` segment,
+# the Reading/Ash approach) - three physically different approaches into
+# the same station, none sharing a segment name, matching this catalogue's
+# established convention for multi-route termini.

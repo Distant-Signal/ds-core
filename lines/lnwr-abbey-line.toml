@@ -1,0 +1,150 @@
+id = "lnwr-abbey-line"
+name = "Abbey Line (Watford Junction - St Albans Abbey)"
+mode = "national-rail"
+category = "regional"
+operators = ["LM"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Part of the SE/SWR suburban-loop gap-analysis batch (grouped in here for
+# batch convenience despite being a WCML-side branch, not SW/Southern). The
+# Abbey Line had zero coverage in `lines/` before this file: Watford North,
+# Garston, Bricket Wood, How Wood, Park Street and St Albans Abbey appeared
+# in no line definition at all.
+#
+# Operator "LM" (West Midlands Trains, covering both West Midlands Railway
+# and London Northwestern Railway brands) reused from lnwr-birmingham-crewe.
+# toml - per Wikipedia, "passenger services are operated by London
+# Northwestern Railway", the same brand/ATOC code that file already uses.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Abbey Line" gives the order Watford
+# Junction - Watford North - Garston - Bricket Wood - How Wood - Park
+# Street - St Albans Abbey. Electrification: "single track... electrified
+# at 25 kV AC using overhead line equipment", max speed 50 mph. Frequency:
+# capped at "one train per 45 minutes" by the single-track layout - a 30
+# minute service would need the Bricket Wood passing loop reinstated, a
+# proposal "rejected for funding in June 2022" (per the article).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Watford Junction=WFJ, Watford North=WFN, Garston (Hertfordshire)=GSN,
+# Bricket Wood=BWO, How Wood (Hertfordshire)=HWW, Park Street=PKT, St
+# Albans Abbey=SAA.
+# Grepped clean before starting: no other `lines/*.toml` file lists Watford
+# North, Garston, Bricket Wood, How Wood, Park Street or St Albans Abbey.
+# Watford Junction (WFJ) is already in several WCML-family files.
+#
+# ============================================================================
+# STATION OVERLAP AT WATFORD JUNCTION - the WCML family
+# ============================================================================
+# WFJ is already in west-coast-main-line.toml (`wcml-london`) and
+# lnwr-birmingham-crewe.toml (`lnwr-euston-trunk`), the latter also operator
+# "LM". Even though the operator matches, this task found no evidence the
+# Abbey Line's own single-track branch shares running lines with the
+# Euston-Birmingham/Crewe fast/slow lines beyond both physically starting
+# from platforms at the same station complex - the Abbey Line uses its own
+# dedicated bay platform and a separate single-track spur (per the
+# electrification/single-track facts above), not the WCML's own four-track
+# formation. Per the xc-south-coast.toml/southern-coastway-west.toml
+# precedent for exactly this situation (a converging station without
+# sourced evidence of genuine shared running track), this is treated as
+# station overlap only: WFJ gets this file's own new segment name below,
+# not `lnwr-euston-trunk` or `wcml-london`.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# Single segment, `lnwr-abbey-line`, covering the whole route. It is a
+# short, wholly self-contained single-track branch with no junction to any
+# other passenger route between its two termini - no case for splitting it,
+# matching the "one line per file, don't over-segment a genuinely
+# standalone route" precedent scotrail-ayrshire.toml sets for its own
+# from-scratch branch.
+
+match_keywords = ["Abbey Line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's match_keywords - no collision (thameslink-bedford.toml's own
+# comment mentions "the separate Abbey Line branch" only in prose, at St
+# Albans City, not as a match_keywords entry, and correctly disclaims
+# covering it).
+
+sample_stations = ["GSN", "HWW", "SAA"]
+# All three are on this line's own wholly exclusive route - no other line
+# in the catalogue touches any station on the Abbey Line.
+
+destination_crs_filter = ["SAA", "WFJ"]
+# A single-track shuttle with exactly two possible advertised destinations
+# (the line's own two termini) and no intermediate branching - both ends
+# are safe to whitelist without risking a silent sample drop, unlike the
+# Kingston Loop's genuinely ambiguous circular case.
+
+# Single-track rural/suburban shuttle capped at one train per 45 minutes
+# (see SOURCING above) - far lower frequency than this catalogue's other
+# London-suburban commuter branches, so "regional"-style tuning applies,
+# matching swr-alton.toml's own comparable branch (no override needed
+# there) and the wider precedent (scotrail-ayrshire.toml,
+# northern-furness.toml) for a low-frequency single-track line: a missed
+# connection or short delay is proportionally more disruptive here than on
+# a 4 tph commuter branch, but per swr-chessington.toml's own recorded
+# caution against inventing untested severity numbers for a line with no
+# real sample data yet, no override is set - left for a future tuning pass.
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - Any Watford Junction WCML/DC-line service: covered by
+#   west-coast-main-line.toml and lnwr-birmingham-crewe.toml, on physically
+#   different track - see STATION OVERLAP note above.
+# - The unbuilt Bricket Wood passing loop / 30-minute-frequency proposal:
+#   not current infrastructure, not modelled.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "WFJ"
+role = "terminus"
+segment = "lnwr-abbey-line"
+# Watford Junction. Station overlap with west-coast-main-line.toml and
+# lnwr-birmingham-crewe.toml - see STATION OVERLAP note above.
+
+[[stations]]
+crs = "WFN"
+role = "minor"
+segment = "lnwr-abbey-line"
+# Watford North.
+
+[[stations]]
+crs = "GSN"
+role = "minor"
+segment = "lnwr-abbey-line"
+# Garston (Hertfordshire).
+
+[[stations]]
+crs = "BWO"
+role = "minor"
+segment = "lnwr-abbey-line"
+# Bricket Wood. Site of the unreinstated passing loop - see SOURCING above.
+
+[[stations]]
+crs = "HWW"
+role = "minor"
+segment = "lnwr-abbey-line"
+# How Wood (Hertfordshire).
+
+[[stations]]
+crs = "PKT"
+role = "minor"
+segment = "lnwr-abbey-line"
+# Park Street.
+
+[[stations]]
+crs = "SAA"
+role = "terminus"
+segment = "lnwr-abbey-line"
+# St Albans Abbey. Note: a separate walk (not a rail connection) links this
+# terminus to St Albans City, the MML station already in
+# thameslink-bedford.toml - that file's own comment flags this as "a
+# different line, not covered by this file", confirmed here as accurate.

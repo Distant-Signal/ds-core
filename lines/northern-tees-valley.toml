@@ -1,0 +1,231 @@
+id = "northern-tees-valley"
+name = "Tees Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["BIA", "DAR", "MBR", "SLB"]
+destination_crs_filter = ["BIA", "DAR", "SLB"]
+# Three real termini for this line's own turn-back patterns: Bishop
+# Auckland and Darlington on the western/Bishop Line end (see the
+# frequency note below -- not every working starts from Bishop Auckland),
+# Saltburn on the eastern end.
+
+# --- Two files, not one: Tees Valley Line vs Durham Coast Line ---
+# The task brief flagged these as possibly one file. Verified they are
+# genuinely distinct, separately-sourced Wikipedia articles/infoboxes
+# describing two different physical routes that merely cross at
+# Middlesbrough/Thornaby: the Tees Valley Line runs broadly west-east
+# (Bishop Auckland/Darlington to Saltburn, via Middlesbrough), while the
+# Durham Coast Line (`northern-tees-valley.toml`'s sibling,
+# `lines/northern-durham-coast.toml`) runs broadly north-south (Newcastle
+# to Middlesbrough, via Sunderland and Hartlepool). Two files, matching the
+# task's own "your call, document reasoning" steer.
+match_keywords = ["Tees Valley Line"]
+# The line's own branded/article name. Not vetoed for TransPennine
+# Express's own overlapping Redcar-Manchester Airport service (see the
+# overlap note below) -- but that IS a real risk: TPE independently
+# operates "hourly services from Redcar Central to Manchester Airport
+# calling at Middlesbrough, Thornaby, Eaglescliffe..." over part of this
+# same line (Wikipedia's own "Tees Valley Line" article, Services
+# section), and a TPE-only incident using this exact phrase would
+# misattribute to this Northern file. Kept anyway (rather than dropped
+# entirely, unlike this batch's Selby Line/Wakefield Line/Durham Coast Line
+# calls) because Northern is unambiguously the line's PRIMARY/eponymous
+# operator here (half-hourly Northern vs. TPE's hourly partial-route
+# overlay) -- flagged honestly as a documented, accepted imprecision rather
+# than treated as a non-issue.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# "a half hourly service from Saltburn to Darlington, of which one train
+# every hour extends to all stations on the Bishop Line through to Bishop
+# Auckland" -- Wikipedia's "Tees Valley Line" article, Services section.
+# Same values as `emr-regional.toml`'s comparable half-hourly-or-better
+# cross-city stopping service; no reduced_service_pct, since (unlike this
+# batch's rural single-track branches) this is a consistently frequent,
+# largely double-track suburban/inter-town service.
+
+# Bishop Auckland/Darlington to Saltburn, ordered west to east, via
+# Shildon, Newton Aycliffe, Heighington, North Road, Dinsdale, Teesside
+# Airport, Allens West, Eaglescliffe, Thornaby, Middlesbrough, South Bank,
+# Redcar Central, Redcar East, Longbeck and Marske. Full station list
+# confirmed via Wikipedia's "Tees Valley Line" article, Stations section
+# (raw wikitext fetched via Special:Export, including precise open/closed/
+# suspended status for every named place along the route) -- itself
+# described there as "The combined Bishop/Tees Valley Line route", i.e. one
+# single article/route covering both the Bishop Auckland branch and the
+# Darlington-Saltburn main stretch, matching this file's own one-file
+# treatment.
+#
+# --- Stations excluded, and why ---
+# Cargo Fleet (closed 1990), Grangetown (closed 1991), Warrenby Halt
+# (closed 1978) and the historical Zetland Hotel platform (closed 1983) are
+# explicitly marked closed in the article's own Stations table and are
+# correctly omitted.
+#
+# Redcar British Steel is explicitly marked "Suspended 2019" in that same
+# table, and the article's own "Least-used stations" section confirms this
+# is a real, ongoing suspension, not a closure that might read as
+# ambiguous: "Prior to service suspension in December 2019, it was served
+# by two trains during the morning peak and two during the evening peak" --
+# past tense, no current service. Omitted on the same "not currently open
+# AND served" bar this catalogue applies to closed stations generally.
+#
+# Teesside Airport (TEA) is ALSO excluded, on that identical bar -- reversed
+# from an earlier draft of this file, which included it as a documented
+# judgement call under contradictory sourcing (the article's own Stations
+# section said "currently served by a once-weekly parliamentary service"
+# while its "Least-used stations" subsection said service was suspended
+# since May 2022, platform condemned unsafe). Three independent research
+# passes since then have each checked Teesside Airport's own dedicated
+# Wikipedia article directly (rather than the combined line article) and
+# confirmed the suspension reading: 0 passengers recorded in both 2023/24
+# and 2024/25, the one operational platform still condemned as unsafe, and
+# no funded reopening before 2027. That puts it squarely in the same
+# category as Redcar British Steel above -- not currently open and served --
+# so it is excluded here for internal consistency with this file's own
+# stated bar, rather than left in on a now-resolved ambiguity.
+#
+# --- Segment/overlap decisions ---
+# Thornaby and Middlesbrough are genuinely shared trunk with this file's
+# own sibling, `northern-durham-coast.toml` (Durham Coast Line trains from
+# Stockton continue through Thornaby to Middlesbrough over the same
+# tracks this line's own Eaglescliffe-Middlesbrough approach uses) --
+# both being written in this same batch, so the shared segment name,
+# `teesside-trunk`, is coined fresh here and reused verbatim in the
+# sibling file; see that file's own comment for the same claim from its
+# side.
+#
+# Eaglescliffe is also a `northern-durham-coast.toml`... no -- checked
+# directly: the Durham Coast Line's own real stations (Newcastle-
+# Middlesbrough via Sunderland/Hartlepool/Stockton) do not include
+# Eaglescliffe (that approach reaches Middlesbrough via Stockton, not
+# Eaglescliffe) -- so Eaglescliffe itself is exclusive to this file, not
+# part of the shared `teesside-trunk` segment; only Thornaby and
+# Middlesbrough are genuinely common to both routes.
+#
+# CRS codes for every station below verified against
+# https://ds.cursed.solutions/api/stations?q=<name> (one unambiguous result
+# each) and cross-checked against each station's own Wikipedia infobox.
+# Middlesbrough (MBR, tiploc MDLSBRO) reused unchanged from
+# `northern-esk-valley.toml`, already verified there.
+[[stations]]
+crs = "BIA"
+role = "terminus"
+segment = "northern-tees-valley"
+# Bishop Auckland -- only one of the two hourly-extended trains a week
+# actually starts here (see the frequency note above); still this line's
+# own genuine western terminus for those workings.
+
+[[stations]]
+crs = "SHD"
+role = "minor"
+segment = "northern-tees-valley"
+# Shildon.
+
+[[stations]]
+crs = "NAY"
+role = "minor"
+segment = "northern-tees-valley"
+# Newton Aycliffe.
+
+[[stations]]
+crs = "HEI"
+role = "minor"
+segment = "northern-tees-valley"
+# Heighington.
+
+[[stations]]
+crs = "NRD"
+role = "minor"
+segment = "northern-tees-valley"
+# North Road (Darlington) -- distinct from Darlington itself, per the
+# cursed.solutions lookup.
+
+[[stations]]
+crs = "DAR"
+role = "junction"
+segment = "northern-tees-valley"
+# Darlington -- also a `cross-country.toml`/`tpe-north.toml` station on
+# the ECML's own `xc-north-east`/`tpe-north` segments (a different route
+# crossing this one) -- station-overlap only, matching those files' own
+# treatment of Darlington. Real terminus for the half-hourly Saltburn
+# workings that don't extend to Bishop Auckland.
+
+[[stations]]
+crs = "DND"
+role = "minor"
+segment = "northern-tees-valley"
+# Dinsdale.
+
+[[stations]]
+crs = "ALW"
+role = "minor"
+segment = "northern-tees-valley"
+# Allens West.
+
+[[stations]]
+crs = "EAG"
+role = "minor"
+segment = "northern-tees-valley"
+# Eaglescliffe -- also a `grand-central.toml` station (that file's own
+# `gc-sunderland` segment, a different service entirely) and served by TPE
+# per the operator-overlap note above; station-overlap only, exclusive to
+# this file's own segment (not part of the `teesside-trunk` shared with
+# `northern-durham-coast.toml` -- see the overlap note above).
+
+[[stations]]
+crs = "TBY"
+role = "junction"
+segment = "teesside-trunk"
+# Thornaby -- genuine shared trunk with `northern-durham-coast.toml`; see
+# the overlap note above.
+
+[[stations]]
+crs = "MBR"
+tiploc = "MDLSBRO"
+role = "junction"
+segment = "teesside-trunk"
+# Middlesbrough -- reused CRS/tiploc from `northern-esk-valley.toml`,
+# already verified there. Genuine shared trunk with
+# `northern-durham-coast.toml`; also where the (separately modelled)
+# Esk Valley Line to Whitby begins -- station-overlap only with that file
+# too, per its own existing comment.
+
+[[stations]]
+crs = "SBK"
+role = "minor"
+segment = "northern-tees-valley"
+# South Bank.
+
+[[stations]]
+crs = "RCC"
+role = "major"
+segment = "northern-tees-valley"
+# Redcar Central -- also served by TPE per the operator-overlap note above.
+
+[[stations]]
+crs = "RCE"
+role = "minor"
+segment = "northern-tees-valley"
+# Redcar East.
+
+[[stations]]
+crs = "LGK"
+role = "minor"
+segment = "northern-tees-valley"
+# Longbeck.
+
+[[stations]]
+crs = "MSK"
+role = "minor"
+segment = "northern-tees-valley"
+# Marske.
+
+[[stations]]
+crs = "SLB"
+role = "terminus"
+segment = "northern-tees-valley"
+# Saltburn.

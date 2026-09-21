@@ -1,0 +1,115 @@
+id = "tfw-maesteg"
+name = "Maesteg Line (Bridgend - Maesteg)"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+# Confirmed via Wikipedia's "Maesteg Line" article (raw wikitext): infobox
+# `start = Bridgend`, `end = Maesteg`, 7 stations, currently operated by
+# Transport for Wales. Since December 2024 the regular service pattern is
+# "an hourly service to and from Ebbw Vale Town to Maesteg via Cardiff
+# Central and Bridgend" -- a genuine through-service onto this batch's own
+# `tfw-ebbw-vale.toml`, noted below as a service-pattern fact rather than a
+# shared-segment claim (the two lines' own exclusive stretches don't
+# physically overlap; they only meet at the Cardiff Central/Bridgend hub
+# stations both already reach independently). Before December 2024 the
+# service instead ran to/from Cheltenham Spa via Newport and Gloucester;
+# that older pattern is out of scope (superseded, not current).
+#
+# Station list and order confirmed via Template:Maesteg_Line (raw wikitext
+# route diagram): 7 currently-open stations, Maesteg to Bridgend -- Maesteg,
+# Maesteg (Ewenny Road), Garth (Bridgend), Tondu, Sarn, Wildmill, Bridgend
+# (matching the infobox's own `stations = 7` count exactly). Three
+# historical intermediate stops shown on the same diagram (Troedyrhiw Garth,
+# Llangynwyd, Aberkenfig) are closed and not listed.
+#
+# `category = "commuter"`: infobox `type = Heavy rail`, article lead
+# "commuter rail line", and an hourly through-service onto Cardiff Central
+# matching this catalogue's other short TfW Valley-Lines-adjacent branches.
+# No severity overrides: single-track throughout but a straightforward
+# hourly branch without the sparse multi-hour gaps of, e.g., the Heart of
+# Wales Line -- nothing in the research surfaced a reason to deviate from
+# config.py's base thresholds either direction.
+sample_stations = ["MST", "TDU", "BGN"]
+destination_crs_filter = ["MST", "EBB", "CDF"]
+# MST is this line's own terminus. EBB and CDF are the current
+# through-service's own real destinations beyond Bridgend (see the sourcing
+# note above) -- included so LDBWS-based sampling at Maesteg/Tondu/Bridgend
+# correctly recognises the genuine through-working rather than only
+# matching a Bridgend-only destination that the current timetable doesn't
+# actually use.
+
+match_keywords = ["Maesteg Line"]
+# The article's own single consistently-used title; nothing else attested
+# by a second, independent phrase within this task's research budget, so
+# left at one keyword per SCHEMA.md's "don't pad" rule. Grepped
+# `lines/*.toml`: no collision.
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. Garth (Bridgend County),
+# GMG, is confirmed distinct from `tfw-heart-of-wales.toml`'s existing GTH
+# (Garth, Powys) -- same place-name, different county, different code, no
+# collision. TIPLOCs are omitted throughout except the one shared terminus
+# (BGN), reused verbatim from `gwr-south-wales.toml`.
+#
+# ## Overlap: Bridgend (BGN) -- station-overlap only
+#
+# Already in `gwr-south-wales.toml` (South Wales Main Line's own western
+# end) and this batch's own `tfw-vale-of-glamorgan.toml` (that line's own
+# western terminus). Bridgend's own Wikipedia article confirms it is
+# genuinely "the point where the Maesteg Line diverges from the South Wales
+# Main Line" and "also the western terminus of the Vale of Glamorgan Line" --
+# three lines meeting at one station, none of them sharing exclusive track
+# with either of the other two beyond the platforms themselves. Station-
+# overlap only in every direction, this file's own segment name throughout.
+[[stations]]
+crs = "MST"
+role = "terminus"
+segment = "tfw-maesteg"
+# Maesteg: this line's own northern terminus. The historical line beyond
+# Maesteg through Caerau and the Cymmer Tunnel to Cymmer/Abergwynfi closed
+# to passengers in 1970 and its track was lifted in 2004 -- not modelled,
+# a genuinely closed route rather than an omitted current one.
+
+[[stations]]
+crs = "MEW"
+role = "minor"
+segment = "tfw-maesteg"
+# Maesteg (Ewenny Road).
+
+[[stations]]
+crs = "GMG"
+role = "minor"
+segment = "tfw-maesteg"
+# Garth (Bridgend County) -- confirmed distinct from Garth (Powys, GTH) on
+# `tfw-heart-of-wales.toml`. See the sourcing note above.
+
+[[stations]]
+crs = "TDU"
+role = "minor"
+segment = "tfw-maesteg"
+# Tondu: historically also a junction for the Ogmore Valley and Garw Valley
+# Railways (per the route-diagram template), both long closed to passenger
+# traffic and not modelled.
+
+[[stations]]
+crs = "SRR"
+role = "minor"
+segment = "tfw-maesteg"
+# Sarn.
+
+[[stations]]
+crs = "WMI"
+role = "minor"
+segment = "tfw-maesteg"
+# Wildmill.
+
+[[stations]]
+crs = "BGN"
+tiploc = "BRGEND"
+role = "terminus"
+segment = "tfw-maesteg"
+# Bridgend: this line's own southern terminus, and the point of the current
+# through-service's reversal/continuation onto the South Wales Main Line
+# towards Cardiff Central and (since December 2024) `tfw-ebbw-vale.toml`'s
+# own Ebbw Vale Town branch. See the overlap note above.

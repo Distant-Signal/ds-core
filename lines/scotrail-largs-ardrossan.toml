@@ -1,0 +1,209 @@
+id = "scotrail-largs-ardrossan"
+name = "ScotRail Largs and Ardrossan Harbour Branches"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Greater Glasgow batch. `lines/scotrail-ayrshire.toml`'s own scope-
+# boundaries note flags this exact gap: "Largs and Ardrossan Harbour
+# branches: per the Ayrshire Coast Line article, these split from the Ayr
+# branch at/around Kilwinning and run north along the coast ... left as a
+# real, sourced, documented gap for whoever eventually picks it up."
+#
+# === One file, not two: how the branches relate ===
+#
+# Wikipedia's "Ayrshire Coast Line" article describes three branches
+# radiating from one shared approach: "There are three branches, to Largs,
+# Ardrossan Harbour and Ayr, all running into the high level at Glasgow
+# Central" -- and its Route section confirms the fork sequence: the shared
+# approach reaches Kilwinning, where "the line branches in two, with one
+# branch running south along the coast to Troon and Ayr [modelled in
+# `scotrail-ayrshire.toml`]. The other branch runs north along the coast
+# to Ardrossan or Largs." Both the Largs and Ardrossan Harbour branches
+# therefore share a further stretch of track north of Kilwinning before
+# splitting from EACH OTHER. Station-level succession-box sourcing (below)
+# pins the actual second fork to Ardrossan South Beach, not "after
+# Saltcoats" as the prose alone might suggest (that phrase describes where
+# the branch becomes single-track for passenger trains, a separate fact).
+# Given this genuine two-level shared-trunk shape (Glasgow-Kilwinning
+# shared with the Ayr branch, then Kilwinning-Ardrossan South Beach shared
+# between these two branches), one file with three internal segments
+# models this far more faithfully than two files that would each have to
+# either duplicate the Kilwinning-Ardrossan South Beach stretch or
+# arbitrarily assign it to one branch -- mirroring
+# `scotrail-ayrshire.toml`'s own trunk+branch precedent one level deeper.
+#
+# Category: "regional", following `scotrail-ayrshire.toml`'s own category
+# for the branch it splits from (hourly-or-worse off-peak frequency per
+# branch, single-track sections north of Ardrossan South Beach) and this
+# batch's identical `scotrail-glasgow-south-western.toml`/`scotrail-fife-
+# borders.toml` precedent for a mixed commuter-approach/rural-branch shape.
+
+sample_stations = ["GLC", "KWN", "ADS", "LAR"]
+
+# GLC/KWN also sample `scotrail-ayrshire.toml`; `destination_crs_filter`
+# disambiguates this file's own Largs/Ardrossan Harbour-bound departures.
+destination_crs_filter = ["ADS", "LAR"]
+
+match_keywords = ["Largs branch", "Ardrossan Harbour"]
+# Two high-precision phrases, one per branch, per the curation rule
+# against padding match_keywords. "Ayrshire Coast Line" itself is
+# deliberately NOT reused here even though Wikipedia's own infobox covers
+# all three branches under that name -- `scotrail-ayrshire.toml` already
+# claims it exclusively in its own `match_keywords`, and reusing it here
+# would make a KeywordOnly match ambiguous between the two files (the same
+# reasoning `scotrail-glasgow-south-western.toml` documents for not
+# reusing "Glasgow South Western Line"). Grepped clean against every other
+# file's own `match_keywords` before adding.
+
+# Regional trunk+branch shape (hourly-or-worse off-peak, single-track
+# beyond Ardrossan South Beach): identical override values to
+# `scotrail-ayrshire.toml` (the line this file splits from) and
+# `scotrail-fife-borders.toml`, rather than the tighter commuter defaults.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Ayrshire Coast Line" (raw wikitext, infobox + Route
+#     sections): see the file-level comment above for the three-branch/
+#     fork-at-Kilwinning quotes. Also confirms "the other branch [becomes]
+#     a single track for passenger trains after Saltcoats" and that the
+#     line "connects with ferries at Ardrossan to Brodick on the Isle of
+#     Arran and at Largs to Great Cumbrae" -- both branches' harbour/pier
+#     purpose.
+#   - Wikipedia "Ardrossan South Beach railway station" (raw wikitext, via
+#     Special:Export): its own succession box gives `previous1 = West
+#     Kilbride` (the Largs-branch direction) and `previous2 = Ardrossan
+#     Town` (the Ardrossan Harbour-branch direction), both converging with
+#     `next = Saltcoats` -- confirming Ardrossan South Beach, not
+#     Saltcoats itself, as the real fork point between the two branches.
+#   - Wikipedia "Stevenston railway station" and "Saltcoats railway
+#     station": succession boxes confirm the shared-trunk order Kilwinning
+#     - Stevenston - Saltcoats - Ardrossan South Beach.
+#   - Wikipedia "Ardrossan Town railway station": succession box confirms
+#     Ardrossan Harbour - Ardrossan Town - Ardrossan South Beach.
+#   - Wikipedia "Fairlie railway station" and "West Kilbride railway
+#     station": succession boxes confirm Largs - Fairlie - West Kilbride -
+#     Ardrossan South Beach.
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>. Stevenston (STV),
+# Saltcoats (SLT), Ardrossan South Beach (ASB), Ardrossan Town (ADN),
+# Ardrossan Harbour (ADS), West Kilbride (WKB), Fairlie (FRL) and Largs
+# (LAR) all matched their Wikipedia infobox `code` fields with no
+# discrepancies. GLC/PYG/JHN/KWN are shared verbatim with
+# `scotrail-ayrshire.toml` (verified there).
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+
+# === Segment-naming coordination with `scotrail-ayrshire.toml` ===
+#
+# `scotrail-ayrshire-glasgow-ayr` (Glasgow Central, Paisley Gilmour
+# Street, Johnstone, Kilwinning) is reused verbatim from
+# `scotrail-ayrshire.toml` -- a genuine shared trunk, sourced above (both
+# branches physically run the same Glasgow and Paisley Joint Railway/
+# Glasgow, Paisley, Kilmarnock and Ayr Railway metals as far as
+# Kilwinning, where the routes to Ayr and to Ardrossan/Largs diverge).
+# Kilwinning keeps its existing `role = "junction"` designation (already
+# correct in `scotrail-ayrshire.toml`) and stays on the shared segment per
+# the shared-trunk rule of thumb; this file's own exclusive continuation
+# starts at the next station, Stevenston. `scotrail-ayrshire.toml`'s own
+# scope-boundary and segment-coordination comments have been updated
+# alongside this file to reflect that the Largs/Ardrossan gap they
+# flagged is now filled here, and that Paisley Gilmour Street/Johnstone/
+# Kilwinning are no longer exclusive to that file.
+#
+# A THIRD level of shared trunk exists within this file itself: Kilwinning
+# through Ardrossan South Beach is shared between the Largs and Ardrossan
+# Harbour branches (see the file-level comment above). This is handled
+# with this file's own `scotrail-largs-ardrossan-trunk` segment rather
+# than a cross-file shared name, since both branches live in this one
+# file.
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "PYG"
+role = "junction"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "JHN"
+role = "minor"
+segment = "scotrail-ayrshire-glasgow-ayr"
+
+[[stations]]
+crs = "KWN"
+role = "junction"
+segment = "scotrail-ayrshire-glasgow-ayr"
+# Kilwinning: this file's own Largs/Ardrossan branches split from the Ayr
+# branch here. See the segment-naming coordination note above.
+
+[[stations]]
+crs = "STV"
+role = "minor"
+segment = "scotrail-largs-ardrossan-trunk"
+# Stevenston.
+
+[[stations]]
+crs = "SLT"
+role = "minor"
+segment = "scotrail-largs-ardrossan-trunk"
+# Saltcoats: track becomes single (for passenger trains) beyond here per
+# the Ayrshire Coast Line article, though the branch fork itself is one
+# station further on, at Ardrossan South Beach.
+
+[[stations]]
+crs = "ASB"
+role = "junction"
+segment = "scotrail-largs-ardrossan-trunk"
+# Ardrossan South Beach: the real fork point between the Largs and
+# Ardrossan Harbour branches -- see the sourcing note above.
+
+[[stations]]
+crs = "ADN"
+role = "minor"
+segment = "scotrail-largs-ardrossan-ardrossan-branch"
+# Ardrossan Town.
+
+[[stations]]
+crs = "ADS"
+role = "terminus"
+segment = "scotrail-largs-ardrossan-ardrossan-branch"
+# Ardrossan Harbour: terminus, with ferry connections to Brodick (Isle of
+# Arran).
+
+[[stations]]
+crs = "WKB"
+role = "minor"
+segment = "scotrail-largs-ardrossan-largs-branch"
+# West Kilbride.
+
+[[stations]]
+crs = "FRL"
+role = "minor"
+segment = "scotrail-largs-ardrossan-largs-branch"
+# Fairlie.
+
+[[stations]]
+crs = "LAR"
+role = "terminus"
+segment = "scotrail-largs-ardrossan-largs-branch"
+# Largs: terminus, with ferry connections to Great Cumbrae.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Ayr branch itself (Kilwinning-Irvine-Barassie-Troon-...-Ayr): see
+#   `scotrail-ayrshire.toml`.
+# - Fairlie's own former pier/ferry-terminal branch and any other
+#   long-closed infrastructure: out of scope, current operational route
+#   only, per the Global Constraints.

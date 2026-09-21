@@ -47,9 +47,36 @@ role = "minor"
 segment = "elizabeth-trunk-west"
 
 [[stations]]
+crs = "HAN"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# Hanwell: real, currently-served Elizabeth line stop between Southall and
+# Ealing Broadway, missing from the original catalogue — a data-driven audit
+# against real CIF schedule calling-point data confirmed it (also WEA/AML
+# below); confirmed against Wikipedia and TfL's own official timetable.
+# Shared `elizabeth-trunk-west` segment with elizabeth-line.toml — row copied
+# verbatim to keep the two files' shared rows in sync (this catalogue's
+# established convention, e.g. gwr-cornish-main-line.toml's and
+# cross-country.toml's shared `xc-south-west` segment rows).
+
+[[stations]]
+crs = "WEA"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# West Ealing: see Hanwell's note above.
+
+[[stations]]
 crs = "EAL"
 role = "major"
 segment = "elizabeth-trunk-west"
+
+[[stations]]
+crs = "AML"
+role = "minor"
+segment = "elizabeth-trunk-west"
+# Acton Main Line: real, currently-served Elizabeth line stop between Ealing
+# Broadway and Paddington — see Hanwell's note above for the same
+# data-driven audit, sourcing and cross-file sync convention.
 
 [[stations]]
 crs = "PAD"

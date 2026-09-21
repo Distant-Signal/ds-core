@@ -134,11 +134,21 @@ match_keywords = ["Airedale Line"]
 #     (https://en.wikipedia.org/wiki/Thwaites_railway_station). Not added,
 #     same "not currently open" reasoning. No other currently-open station
 #     was found on either the Shipley-Keighley or Keighley-Skipton stretch
-#     beyond what's listed below. (The Leeds-Shipley stretch - Kirkstall
-#     Forge, Apperley Bridge, etc. - was out of scope for this task's
-#     completeness check per the task brief, which scoped it to
-#     Shipley-Keighley/Keighley-Skipton plus the two named Bradford-approach
-#     halts; not evaluated here.)
+#     beyond what's listed below. (The Leeds-Shipley stretch was out of
+#     scope for this task's completeness check per the task brief, which
+#     scoped it to Shipley-Keighley/Keighley-Skipton plus the two named
+#     Bradford-approach halts; not evaluated here.)
+#
+# --- [FILL-IN] resolved (data-driven schedule audit, 2026-09-21): Leeds-Shipley gap ---
+# Apperley Bridge (APY) and Kirkstall Forge (KLF) are both real, currently-
+# open stations strictly between Leeds (LDS) and Shipley (SHY), confirmed via
+# real CIF schedule data (67 of 1284 audited services run this exact route)
+# and Wikipedia, which confirms both are served every 30 minutes by Leeds-
+# Bradford Forster Square trains. LDS and SHY are both already tagged
+# `northern-shipley-trunk`, so per this file's own shared-trunk corollary (a
+# station strictly between two already-shared-segment stations on the same
+# stretch inherits that segment too - see the Frizinghall RESOLUTION above)
+# both are added below on `northern-shipley-trunk`, not a new segment.
 #
 # --- RESOLUTION for Task 2.10 (`northern-wharfedale.toml`) ---
 # Frizinghall (FZH) sits strictly between BDQ and SHY, which are both
@@ -170,6 +180,24 @@ crs = "LDS"
 tiploc = "LEEDS"
 role = "terminus"
 segment = "northern-shipley-trunk"
+
+[[stations]]
+crs = "KLF"
+role = "minor"
+segment = "northern-shipley-trunk"
+# Kirkstall Forge - on the Leeds approach to Shipley, strictly between LDS
+# and SHY; inherits `northern-shipley-trunk` per this file's shared-trunk
+# corollary (see the resolved [FILL-IN] comment above). No `tiploc`:
+# not confirmed to the two-source bar this session.
+
+[[stations]]
+crs = "APY"
+role = "minor"
+segment = "northern-shipley-trunk"
+# Apperley Bridge - further along the Leeds approach to Shipley, between
+# Kirkstall Forge and SHY; inherits `northern-shipley-trunk` for the same
+# reason as Kirkstall Forge above. No `tiploc`: not confirmed to the
+# two-source bar this session.
 
 [[stations]]
 crs = "BDQ"
@@ -206,12 +234,32 @@ segment = "northern-airedale"
 # Airedale segment, per SCHEMA.md's shared-trunk rule of thumb. No `tiploc`:
 # see the top-of-file note on the FRIZINHAL/SALTAIRE correction.
 
+# --- Bingley/Keighley/Skipton: reconciled during integration merge ---
+#
+# `northern-settle-carlisle.toml` (a later Yorkshire/North East batch)
+# genuinely shares this stretch for its own Leeds-Skipton working, calling
+# only at Bingley, Keighley and Skipton (skipping Saltaire, Crossflatts,
+# Steeton & Silsden and Cononley - see that file's own Route comment). Its
+# first draft reused this file's `northern-airedale` segment name verbatim
+# for that subset - but since `northern-airedale` is ALSO this file's own
+# name for the stations Settle-Carlisle does NOT call at (Saltaire,
+# Crossflatts, Steeton & Silsden, Cononley), that would have falsely
+# promoted those exclusive stations to SharedSegment too (segment sharing
+# is evaluated per segment NAME across the whole catalogue, not per
+# individual station) - the same over-broad-reuse mistake this catalogue's
+# other corrected-scope notes document and fix elsewhere. Fixed by
+# introducing a new, narrower segment name, `northern-airedale-skipton-
+# approach`, used below ONLY for Bingley/Keighley/Skipton - the exact
+# subset both files' own sourcing agrees on - leaving Saltaire/Crossflatts/
+# Steeton & Silsden/Cononley correctly exclusive to this file's own
+# `northern-airedale` segment.
+
 [[stations]]
 crs = "BIY"
 tiploc = "BNGY"
 role = "minor"
-segment = "northern-airedale"
-# Bingley.
+segment = "northern-airedale-skipton-approach"
+# Bingley. See the reconciliation note above.
 
 [[stations]]
 crs = "CFL"
@@ -222,7 +270,8 @@ segment = "northern-airedale"
 [[stations]]
 crs = "KEI"
 role = "major"
-segment = "northern-airedale"
+segment = "northern-airedale-skipton-approach"
+# Keighley. See the reconciliation note above.
 
 [[stations]]
 crs = "SON"
@@ -239,4 +288,5 @@ segment = "northern-airedale"
 [[stations]]
 crs = "SKI"
 role = "terminus"
-segment = "northern-airedale"
+segment = "northern-airedale-skipton-approach"
+# Skipton. See the reconciliation note above.

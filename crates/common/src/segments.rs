@@ -110,6 +110,14 @@ mod tests {
     // has five users. Both new files' own headers work through why reusing
     // the name is correct here (and why it is not the situation
     // `great-northern-suburban.toml` warns about).
+    //
+    // Grew to seven with the Wessex/Thames-Valley/Isle-of-Wight batch:
+    // `lines/swr-west-of-england.toml` (Waterloo-Salisbury-Exeter, sharing
+    // the same Waterloo-Woking approach as the other SWR expresses) and
+    // `lines/swr-windsor-lines.toml` (Waterloo-Windsor & Eton Riverside,
+    // reaching WAT/VXH/CLJ on the trunk before diverging onto the separate
+    // `swr-windsor-lines` segment — see the next test) both reuse
+    // `swr-trunk-waterloo` verbatim too.
     #[test]
     fn shared_trunk_segment_is_shared_across_every_swr_line() {
         let lines = load_all_lines();
@@ -117,14 +125,23 @@ mod tests {
         assert!(registry.is_shared("swr-trunk-waterloo"));
         let mut users = registry.lines_for_segment("swr-trunk-waterloo");
         users.sort();
+        // Updated by the SE/SWR-loops batch: swr-chertsey-loop.toml,
+        // swr-hounslow-loop.toml and swr-new-guildford.toml all also reuse
+        // `swr-trunk-waterloo` verbatim for their own genuine Waterloo
+        // approach.
         assert_eq!(
             users,
             vec![
                 "swr-alton",
+                "swr-chertsey-loop",
                 "swr-chessington",
+                "swr-hounslow-loop",
                 "swr-kingston-loop",
+                "swr-new-guildford",
                 "swr-portsmouth-direct",
                 "swr-south-west-main",
+                "swr-west-of-england",
+                "swr-windsor-lines",
             ]
         );
     }
@@ -182,11 +199,36 @@ mod tests {
 
         // Each line's post-junction segments are exclusive to it.
         assert!(registry.is_exclusive_to("swr-kingston-loop", "swr-kingston-loop"));
-        assert!(registry.is_exclusive_to("swr-windsor-lines", "swr-kingston-loop"));
         assert!(registry.is_exclusive_to("swr-chessington-branch", "swr-chessington"));
         assert!(registry.is_exclusive_to("swr-epsom-line", "swr-chessington"));
         assert!(!registry.is_shared("swr-kingston-loop"));
         assert!(!registry.is_shared("swr-chessington-branch"));
+
+        // `swr-windsor-lines` (Twickenham inward to Waterloo via Richmond)
+        // used to be exclusive to this file too, but that file's own header
+        // deliberately named it "for the track rather than for this
+        // service, so a future Reading / Windsor & Eton Riverside...  file
+        // can reuse the name and get correct shared-trunk propagation." The
+        // Wessex/Thames-Valley/Isle-of-Wight batch's own
+        // `lines/swr-windsor-lines.toml` is that reuse: it genuinely shares
+        // this same track from Twickenham inward, so the segment is now
+        // shared, not exclusive to the Kingston Loop.
+        assert!(!registry.is_exclusive_to("swr-windsor-lines", "swr-kingston-loop"));
+        assert!(registry.is_shared("swr-windsor-lines"));
+        let mut windsor_users = registry.lines_for_segment("swr-windsor-lines");
+        windsor_users.sort();
+        // Updated by the SE/SWR-loops batch: swr-chertsey-loop.toml and
+        // swr-hounslow-loop.toml both also reuse `swr-windsor-lines`
+        // verbatim for their own genuine shared stretch of this track.
+        assert_eq!(
+            windsor_users,
+            vec![
+                "swr-chertsey-loop",
+                "swr-hounslow-loop",
+                "swr-kingston-loop",
+                "swr-windsor-lines",
+            ]
+        );
 
         // And the trunk is touched together with each line's own exclusive
         // segment -- same shape as `segments_touched_by_finds_shared_and_

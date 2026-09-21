@@ -1,0 +1,140 @@
+id = "southeastern-canterbury-west"
+name = "Ashford to Ramsgate Line (via Canterbury West)"
+mode = "national-rail"
+category = "regional"
+operators = ["SE"]
+
+sample_stations = ["CBW", "STU", "THP"]
+match_keywords = ["Ashford to Ramsgate line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP - southeastern-main-line.toml's own AFK comment already
+# flags this: "the Canterbury West (to Ramsgate) ... line[s] diverge here"
+# (not covered by that file). southeastern-chatham.toml's own MSR (Minster)
+# comment independently repeats it, twice: "Junction with the separate
+# Ashford - Canterbury West - Ramsgate line; not covered by this catalogue."
+# This file is that line.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Ashford-Ramsgate line" article infobox (raw
+# wikitext: "stations = 11", "operator = Southeastern", "tracks = 2",
+# electric stock "375\"Electrostar\", 395\"Javelin\""), cross-checked
+# station-by-station against each intermediate station's own Wikipedia
+# infobox (Chartham, Sturry, Thanet Parkway all independently confirm their
+# preceding/following neighbours, forming one consistent chain), and every
+# CRS code independently verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>.
+#
+# The infobox's "11 stations" figure is reconciled as follows: 9 currently-
+# operating stations (Ashford International, Wye, Chilham, Chartham,
+# Canterbury West, Sturry, Minster, Thanet Parkway, Ramsgate) plus 2
+# currently-closed intermediate halts the infobox count still includes
+# (Chislet Colliery Halt and Grove Ferry and Upstreet, the latter confirmed
+# closed to passengers "3 January 1966" via its own Wikipedia article,
+# preceding station "Chislet Colliery Halt", following station "Minster
+# station" - i.e. both sat between Sturry and Minster and are correctly
+# excluded from the live station list below).
+#
+# CRS note: Chartham's code is CRT - confirmed both via its own Wikipedia
+# infobox and the live API, and deliberately checked against confusion with
+# Chatham's own code CTM (southeastern-chatham.toml) - the two are
+# completely distinct strings, no risk of mix-up in `match_keywords` or
+# station data despite the similar station names.
+#
+# Junction with the Chatham Main Line's own coastal loop: per this line's own
+# Wikipedia infobox prose, "the line ran through Minster ... to Ramsgate."
+# Minster (MSR) is where this line's own tracks join the route
+# southeastern-chatham.toml already models as its own `chatham-deal` segment
+# (MSR-SDW-DEA-WAM-MTM, continuing south to Dover) - both routes then share
+# the final short stretch through Thanet Parkway into Ramsgate. MSR and RAM
+# are therefore genuine station overlap with southeastern-chatham.toml, not
+# a shared segment (this file uses its own segment name throughout, per the
+# xc-south-coast.toml/xc-manchester.toml precedent).
+#
+# Thanet Parkway (THP) is a genuinely new (opened 31 July 2023, per its own
+# Wikipedia article) station on this exact stretch, sitting between Minster
+# and Ramsgate - confirmed via its own infobox ("preceding station: Minster;
+# following station: Ramsgate") and the live CRS API.
+#
+# Double track, third rail 750V DC throughout (per the line's own infobox);
+# no single-track sections found in sourcing for this file.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 8
+
+# ============================================================================
+# STATIONS - ordered Ashford International to Ramsgate. One segment for the
+# whole line, matching southeastern-hastings-line.toml's own precedent for a
+# comparably-shaped standalone regional branch with no further internal
+# junction another file would plausibly want to share.
+# ============================================================================
+[[stations]]
+crs = "AFK"
+role = "junction"
+segment = "canterbury-west-line"
+# Ashford International. Also southeastern-main-line.toml's own station
+# (already commented "the Canterbury West (to Ramsgate) and Marshlink (to
+# Hastings) lines diverge here") and southeastern-highspeed.toml's own
+# station - station overlap only with both. The Marshlink line (Ashford to
+# Hastings via Rye) also diverges here; not covered by this file or any
+# other in this catalogue - a real, documented, remaining gap.
+
+[[stations]]
+crs = "WYE"
+role = "minor"
+segment = "canterbury-west-line"
+# Wye.
+
+[[stations]]
+crs = "CIL"
+role = "minor"
+segment = "canterbury-west-line"
+# Chilham.
+
+[[stations]]
+crs = "CRT"
+role = "minor"
+segment = "canterbury-west-line"
+# Chartham. CRS confirmed as CRT, distinct from Chatham's CTM - see ROUTE
+# AND SOURCING above.
+
+[[stations]]
+crs = "CBW"
+role = "major"
+segment = "canterbury-west-line"
+# Canterbury West. The historic 1953-closed curve linking this station
+# toward the separate Faversham-Canterbury East-Dover inland route
+# (southeastern-chatham.toml's own `chatham-dover` segment) is long
+# disused, per Wikipedia, and carries no current passenger service - not
+# modelled as any kind of junction here.
+
+[[stations]]
+crs = "STU"
+role = "minor"
+segment = "canterbury-west-line"
+# Sturry.
+
+[[stations]]
+crs = "MSR"
+role = "junction"
+segment = "canterbury-west-line"
+# Minster. Also southeastern-chatham.toml's own station (`chatham-deal`
+# segment, already commented as the junction with this exact line) - station
+# overlap only, see ROUTE AND SOURCING above.
+
+[[stations]]
+crs = "THP"
+role = "minor"
+segment = "canterbury-west-line"
+# Thanet Parkway. Opened 2023, genuinely new to the catalogue - see ROUTE
+# AND SOURCING above.
+
+[[stations]]
+crs = "RAM"
+role = "terminus"
+segment = "canterbury-west-line"
+# Ramsgate. Also southeastern-chatham.toml's own station (`chatham-coastal`
+# segment terminus, approached from the physically different Faversham/
+# Margate direction) - station overlap only, see ROUTE AND SOURCING above.

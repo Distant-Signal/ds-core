@@ -1,0 +1,297 @@
+id = "scotrail-glasgow-south-western"
+name = "ScotRail Glasgow South Western Line (Glasgow - Kilmarnock - Dumfries - Carlisle)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Greater Glasgow batch (largest single cluster of missing coverage in the
+# full UK station-coverage audit). `lines/scotrail-ayrshire.toml`'s own
+# scope-boundaries note flags this exact gap: "Glasgow South Western main
+# line proper (Glasgow Central-Barrhead-Kilmarnock-Dumfries-Carlisle) and
+# its East Kilbride branch: real, sourced ... but not named anywhere in the
+# gap analysis's ScotRail bullet ... a genuine, documented gap left for
+# future work, not modelled here." This file covers the Carlisle main line;
+# `scotrail-east-kilbride.toml` (this same batch) covers the East Kilbride
+# branch as its own file, since it has its own distinct Wikipedia article
+# ("East Kilbride-Glasgow Central line") and a genuinely different service
+# character (short, dense, fully electrified commuter branch vs. this
+# file's long, largely diesel, rural-tailed main line).
+#
+# Scope: this file models Wikipedia's "Glasgow South Western Line" article
+# EXCLUDING its own "Stranraer line" branch (Troon-Prestwick-Ayr-Maybole-
+# Girvan-Barrhill-Stranraer) and its East Kilbride branch -- both handled
+# elsewhere (see the scope-boundaries and segment-coordination notes below).
+# Colloquially the Kilmarnock-Dumfries-Carlisle stretch is also known as
+# the "Nith Valley Line" (it follows the River Nith south of Sanquhar);
+# confirmed as a real, currently-used regional name (not just a river
+# name) by two independent non-Wikipedia sources -- a Dumfries and
+# Galloway MSP's own site ("Local MSP makes the case for investment on
+# Nith Valley rail line", colinsmythmsp.com, 3 June 2019) and the Daily
+# Record ("Dumfries and Galloway's Nith Valley Line spared from
+# coronavirus [cuts]", dailyrecord.co.uk) -- so it's used as this file's
+# sole `match_keywords` entry (see that field's own comment below for why
+# "Glasgow South Western Line" itself is deliberately NOT used).
+#
+# Category: "regional", mirroring `scotrail-ayrshire.toml`'s own
+# trunk+branch precedent. Like that file, this one has a split character --
+# a frequent, recently-electrified (December 2023) commuter corridor
+# Glasgow Central-Barrhead, grafted onto an hourly-or-worse, entirely
+# diesel, largely single-track rural run on to Kilmarnock, Dumfries and
+# Carlisle (Wikipedia's own infobox: "tracks: Double track from Glasgow
+# Central to Barrhead ... Single line with Passing loops from ... Lugton
+# to Stewarton, Stewarton to Kilmarnock, Kilmarnock to Troon"). "Regional"
+# matches `scotrail-ayrshire.toml`'s and `scotrail-fife-borders.toml`'s
+# precedent for exactly this shape, rather than
+# `scotrail-glasgow-suburban.toml`'s (now split) uniform-density
+# "commuter" category.
+
+sample_stations = ["GLC", "BRR", "KMK", "DMF", "CAR"]
+
+# GLC is also a sample station for `scotrail-ayrshire.toml`,
+# `scotrail-east-kilbride.toml`, `scotrail-cathcart-circle.toml` and
+# several other files -- all separate physical departures from the same
+# named station (see the segment-coordination note below). LDBWS sampling
+# at GLC doesn't distinguish platform/route, so `destination_crs_filter`
+# disambiguates this line's own Kilmarnock/Dumfries/Carlisle-bound
+# departures from those other services sharing the terminus name.
+destination_crs_filter = ["BRR", "KMK", "AUK", "DMF", "CAR"]
+
+match_keywords = ["Nith Valley Line"]
+# NOT "Glasgow South Western Line", even though that is this route's own
+# Wikipedia article title: `scotrail-ayrshire.toml` already claims that
+# exact phrase in its own `match_keywords` (added when it modelled only
+# the Ayr/Stranraer coastal portion of that Wikipedia article -- itself a
+# slightly broad claim, but not this task's to revisit). Reusing it here
+# would make a KeywordOnly Knowledgebase match ambiguous between the two
+# files. "Nith Valley Line" is this file's own high-precision, sourced
+# alternative (see the file-level comment above) and doesn't collide with
+# anything else in the catalogue (grepped clean against every other file's
+# `match_keywords` before adding).
+
+# Split-character regional line: not as tight as a pure commuter line
+# (`scotrail-cathcart-circle.toml`'s 0.20/4min), not as loose as a
+# fully rural single-track branch (`northern-furness.toml`). A compromise
+# reflecting the electrified Barrhead commuter end and the hourly-or-worse
+# Nith Valley rural end sharing one line definition.
+[severity_overrides]
+minor_delays_pct = 0.28
+reduced_service_pct = 0.40
+delay_threshold_minutes = 8
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Glasgow South Western Line" (raw wikitext, infobox +
+#     Route section): confirms ScotRail operation; confirms the line "runs
+#     from Glasgow to Kilmarnock, and then either Carlisle via Dumfries, or
+#     Stranraer via Ayr, with a branch to East Kilbride"; the Route
+#     section's own "Main Line" list gives the exact ordered station
+#     sequence used below (Glasgow Central, Crossmyloof, Pollokshaws West
+#     ["East Kilbride-Glasgow Central line diverges"], Kennishead,
+#     Priesthill & Darnley, Nitshill, Barrhead, Dunlop, Stewarton,
+#     Kilmaurs, Kilmarnock ["Stranraer line diverges"], Auchinleck, New
+#     Cumnock, Kirkconnel, Sanquhar, Dumfries, Annan, Gretna Green,
+#     Carlisle ["line converges with the West Coast Main Line"]).
+#   - Wikipedia "Barrhead railway station": confirms Barrhead "is on the
+#     Glasgow South Western Line", that the section south towards
+#     Kilmarnock is the only remaining route from Kilmarnock to Glasgow
+#     (the original G&SWR main line via Dalry having closed in 1973), and
+#     that "December 2023 marked completion of a £63 million
+#     electrification project which allowed introduction of electric
+#     passenger services between Glasgow Central and Barrhead. Local
+#     Barrhead terminating services utilise Class 380 electric multiple
+#     units while Class 156 diesel multiple units continue to operate
+#     through the station on longer distance Kilmarnock, Dumfries and
+#     Carlisle services" -- confirming both the electrified-commuter/
+#     diesel-rural split character behind this file's category choice and
+#     that Barrhead-terminating locals and this file's own longer-distance
+#     workings share the same Glasgow Central-Barrhead track (no separate
+#     "Barrhead local" line is modelled in this catalogue; both patterns
+#     are one line here, per SCHEMA.md's "one line per file" rule applying
+#     to physical routes, not service patterns).
+#   - Wikipedia "East Kilbride-Glasgow Central line": confirms this branch
+#     "is a branch line of the Glasgow South Western Line that runs
+#     between Pollokshaws West and East Kilbride", diverging at "Busby
+#     Junction, between Pollokshaws West and Kennishead" -- the basis for
+#     this file's shared segment with `scotrail-east-kilbride.toml` (see
+#     below).
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name> and cross-checked
+# against each station's own Wikipedia infobox `code` field (via
+# Special:Export raw wikitext, since `action=raw` was intermittently
+# unreliable during this task). All matched with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by `scotrail-ayrshire.toml`/`scotrail-central-belt.toml`.
+
+# === Segment-naming coordination ===
+#
+# `scotrail-gsw-approach` (Glasgow Central, Crossmyloof, Pollokshaws West)
+# is reused verbatim by `scotrail-east-kilbride.toml`'s own opening three
+# stations -- a genuine shared trunk, sourced above (the East Kilbride
+# branch's own Wikipedia article states outright it diverges from this
+# line at Busby Junction, just past Pollokshaws West). Pollokshaws West
+# is tagged `role = "junction"` and stays on this shared segment per the
+# shared-trunk rule of thumb; the East Kilbride branch's own exclusive
+# segment starts at the next station past the junction (Thornliebank),
+# and this file's own exclusive continuation starts at Kennishead.
+#
+# GLC also appears in `scotrail-ayrshire.toml`, `scotrail-cathcart-
+# circle.toml`, `scotrail-shotts.toml` and `tpe-anglo-scottish.toml`, all
+# for their own distinct departures from the same named station complex.
+# No genuine track-sharing was sourced between this file's own approach
+# track and any of those (this line's own Crossmyloof/Pollokshaws West
+# approach is a physically distinct route out of Glasgow Central from,
+# say, the Cathcart Circle's own Pollokshields East/West throat -- see
+# `scotrail-cathcart-circle.toml`'s own sourcing), so station overlap only,
+# per the `xc-south-coast.toml`/`xc-manchester.toml` precedent. Carlisle
+# (CAR) is likewise a pure station-name overlap with `west-coast-main-
+# line.toml` and several TPE/Northern files -- this line reaches Carlisle
+# via the Glasgow South Western route, not the WCML, joining it only in
+# the station throat itself (Wikipedia: "line converges with the West
+# Coast Main Line" at Carlisle, a shared final approach too short and
+# unresearched to responsibly model as a shared segment here).
+#
+# Barrhead (BRR) does NOT belong to `scotrail-cathcart-circle.toml`: that
+# file's own sourcing (Wikipedia "Cathcart Circle Lines") establishes its
+# Neilston branch terminates at Neilston, cut back from a former
+# connection to this line at Lugton during the Beeching cuts -- Barrhead
+# itself was never part of the Cathcart Circle family. Barrhead's own
+# infobox `original` field is the Glasgow, Barrhead and Neilston Direct
+# Railway, and its current `route` template names this line by name. See
+# `scotrail-cathcart-circle.toml`'s own file-level comment for the fuller
+# reasoning on why Barrhead/Neilston are NOT modelled as a shared cluster.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Stranraer line (Kilmarnock's own "Stranraer line diverges" branch,
+#   rejoining the coast at/around Barassie): real, sourced (same Wikipedia
+#   article), but deliberately out of scope here. `scotrail-ayrshire.toml`
+#   does not reach Kilmarnock (its own stations stop at Troon/Ayr/Girvan/
+#   Stranraer via the Paisley coastal approach), so there is no
+#   `[[stations]]`-level overlap to reconcile between the two files today
+#   -- station-overlap, not shared segment, and in fact no overlap at all
+#   given this file's own scope stops at Kilmarnock. Left as a real,
+#   documented gap (a third, inland approach to the same Stranraer/Girvan
+#   stations `scotrail-ayrshire.toml` already covers via the coast) for
+#   whoever eventually picks it up.
+# - Milliken Park/Howwood/Lochwinnoch/Glengarnock/Dalry, Mauchline (a live
+#   campaign per Wikipedia, not yet reopened): not on this file's own
+#   route at all (they sit on the Ayrshire coastal approach or the
+#   Kilmarnock-Dalry route, neither modelled here).
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-gsw-approach"
+
+[[stations]]
+crs = "CMY"
+role = "minor"
+segment = "scotrail-gsw-approach"
+
+[[stations]]
+crs = "PWW"
+role = "junction"
+segment = "scotrail-gsw-approach"
+# Pollokshaws West: East Kilbride branch diverges just beyond here at
+# Busby Junction. See the segment-naming coordination note above.
+
+[[stations]]
+crs = "KNS"
+role = "minor"
+segment = "scotrail-gsw-barrhead"
+
+[[stations]]
+crs = "PTL"
+role = "minor"
+segment = "scotrail-gsw-barrhead"
+
+[[stations]]
+crs = "NIT"
+role = "minor"
+segment = "scotrail-gsw-barrhead"
+
+[[stations]]
+crs = "BRR"
+role = "major"
+segment = "scotrail-gsw-barrhead"
+# Barrhead: electrified terminus for local Glasgow Central-Barrhead
+# services (Class 380) since December 2023; also the point where the
+# original Glasgow, Barrhead and Neilston Direct Railway continues south
+# (as this line, now Glasgow and Kilmarnock Joint Railway metals) towards
+# Kilmarnock -- not a track-divergence junction in itself, so `major`
+# rather than `junction`.
+
+[[stations]]
+crs = "DNL"
+role = "minor"
+segment = "scotrail-gsw-kilmarnock"
+
+[[stations]]
+crs = "STT"
+role = "minor"
+segment = "scotrail-gsw-kilmarnock"
+
+[[stations]]
+crs = "KLM"
+role = "minor"
+segment = "scotrail-gsw-kilmarnock"
+# Kilmaurs.
+
+[[stations]]
+crs = "KMK"
+role = "junction"
+segment = "scotrail-gsw-kilmarnock"
+# Kilmarnock: the Stranraer line diverges here (not modelled -- see the
+# scope-boundaries note above).
+
+[[stations]]
+crs = "AUK"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+
+[[stations]]
+crs = "NCK"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+# New Cumnock.
+
+[[stations]]
+crs = "KRK"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+# Kirkconnel.
+
+[[stations]]
+crs = "SQH"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+# Sanquhar.
+
+[[stations]]
+crs = "DMF"
+role = "major"
+segment = "scotrail-gsw-nith-valley"
+# Dumfries.
+
+[[stations]]
+crs = "ANN"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+# Annan.
+
+[[stations]]
+crs = "GEA"
+role = "minor"
+segment = "scotrail-gsw-nith-valley"
+# Gretna Green.
+
+[[stations]]
+crs = "CAR"
+role = "terminus"
+segment = "scotrail-gsw-nith-valley"
+# Carlisle: line converges with the West Coast Main Line here (station
+# overlap only -- see the segment-naming coordination note above).

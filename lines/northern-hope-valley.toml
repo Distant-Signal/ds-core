@@ -45,16 +45,32 @@ delay_threshold_minutes = 10
 # stopper, so these are real gaps on this file specifically, not there. Do
 # not add these stations to `emr-regional.toml`.
 #
-# Not re-litigated by this task (out of scope, pre-existing before Task
-# 2.7): whether SPT (Stockport) is itself correctly positioned as the
-# second stop after MAN. Some research surfaced during this task suggests
-# the Northern Manchester Piccadilly-Sheffield stopper may physically run
-# via Ashburys/Reddish North/Bredbury/Romiley/Marple/New Mills Central
-# rather than via Stockport, which would imply a different, larger set of
-# intermediate stations upstream of Chinley than this task's named scope
-# covers - `destination_crs_filter`/`sample_stations` already reference SPT
-# and predate this task, so that decision is left as-is; flagging here for
-# a future task rather than silently re-deriving it. Fetched 2026-09-01.
+# --- [FILL-IN] resolved (data-driven schedule audit, 2026-09-21): Manchester-end gap ---
+# Ashburys (ABY), Belle Vue (BLV), Ryder Brow (RRB), Reddish North (RDN),
+# Brinnington (BNT), Bredbury (BDY), Romiley (RML), Marple (MPL), Strines
+# (SRN) and New Mills Central (NMC) are all real, currently-open,
+# Northern-operated stations between Manchester Piccadilly and Chinley -
+# added below in that geographic order. Confirmed via real CIF schedule
+# data: of 34 "pure" Manchester Piccadilly<->Sheffield all-stations
+# services audited, 32 run via this route (Ashburys/Reddish North) and only
+# 2 via Stockport (SPT); Wikipedia's Hope Valley line article independently
+# confirms this is the regular hourly Northern Trains stopping pattern. No
+# `tiploc` confirmed to a second source for any of the 10, so none is
+# included.
+#
+# FLAGGED FOR MANUAL REVIEW, not resolved by this task: SPT (Stockport) was
+# already listed as the second stop after MAN before this task, but the
+# schedule audit above indicates the dominant (32/34) Manchester
+# Piccadilly-Sheffield stopping pattern runs via Ashburys and does not call
+# at Stockport at all - Stockport sits on a physically different route
+# (only 2/34 audited services), so SPT's current `role`/`segment`/position
+# here likely reflects that other, minority routing rather than the
+# Ashburys stopping pattern documented above. Not confident enough to
+# reposition, re-segment, or remove SPT without further research, so it is
+# left in its existing place unchanged; a future task should investigate
+# whether SPT needs its own segment/route distinction from the Ashburys
+# stations added here. Fetched 2026-09-01; audit and this comment
+# 2026-09-21.
 [[stations]]
 crs = "MAN"
 role = "terminus"
@@ -64,6 +80,71 @@ segment = "northern-hope-valley"
 crs = "SPT"
 role = "junction"
 segment = "northern-hope-valley"
+# Stockport - pre-existing entry, position not re-derived by this task. See
+# the FLAGGED FOR MANUAL REVIEW comment above: the schedule audit suggests
+# this station belongs to a different, minority physical routing than the
+# Ashburys stations added below, not the dominant Ashburys stopping
+# pattern. Left in place rather than guessed at.
+
+[[stations]]
+crs = "ABY"
+role = "minor"
+segment = "northern-hope-valley"
+# Ashburys.
+
+[[stations]]
+crs = "BLV"
+role = "minor"
+segment = "northern-hope-valley"
+# Belle Vue.
+
+[[stations]]
+crs = "RRB"
+role = "minor"
+segment = "northern-hope-valley"
+# Ryder Brow.
+
+[[stations]]
+crs = "RDN"
+role = "minor"
+segment = "northern-hope-valley"
+# Reddish North.
+
+[[stations]]
+crs = "BNT"
+role = "minor"
+segment = "northern-hope-valley"
+# Brinnington.
+
+[[stations]]
+crs = "BDY"
+role = "minor"
+segment = "northern-hope-valley"
+# Bredbury.
+
+[[stations]]
+crs = "RML"
+role = "minor"
+segment = "northern-hope-valley"
+# Romiley.
+
+[[stations]]
+crs = "MPL"
+role = "minor"
+segment = "northern-hope-valley"
+# Marple.
+
+[[stations]]
+crs = "SRN"
+role = "minor"
+segment = "northern-hope-valley"
+# Strines.
+
+[[stations]]
+crs = "NMC"
+role = "minor"
+segment = "northern-hope-valley"
+# New Mills Central.
 
 [[stations]]
 crs = "CLY"

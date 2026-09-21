@@ -177,6 +177,15 @@ role = "minor"
 segment = "ecml-borders"
 
 [[stations]]
+crs = "RSN"
+role = "minor"
+segment = "ecml-borders"
+# Reston. Reopened 2022 on the ECML between Berwick-upon-Tweed and Dunbar --
+# LNER runs one train per day in the morning to Edinburgh and a late evening
+# southbound working. Confirmed by this audit's CIF-schedule cross-check,
+# cross-checked against Wikipedia's "Reston railway station" article.
+
+[[stations]]
 crs = "DUN"
 role = "minor"
 segment = "ecml-borders"

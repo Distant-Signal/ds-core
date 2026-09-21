@@ -206,19 +206,19 @@ segment = "scotrail-central-belt-edinburgh-throat"
 # Junction (see the Haymarket comment above) as a fact 10.2 may want when
 # deciding its own segment names.
 #
-# Resolution (added when Task 10.2 ran): `scotrail-glasgow-suburban.toml`
+# Resolution (added when Task 10.2 ran): `scotrail-north-clyde.toml`
 # deliberately stops its North Clyde eastern branch at Airdrie (a real,
 # sourced North Clyde terminus service pattern) and does not model the
 # Drumgelloch-Bathgate-Edinburgh continuation, so it has no `[[stations]]`
 # entry that coincides with this file's actual stations -- the
 # `scotrail-central-belt-edinburgh-throat` segment name above remains
-# unshared for now. See `scotrail-glasgow-suburban.toml`'s own comments
+# unshared for now. See `scotrail-north-clyde.toml`'s own comments
 # for the sourcing behind that boundary decision.
 #
 # RESOLUTION: `lines/scotrail-bathgate.toml` now models this routing in
 # full, with verified CRS codes for every station named above. It reuses
-# `scotrail-glasgow-suburban.toml`'s own `scotrail-glasgow-suburban-core`
-# and `scotrail-glasgow-suburban-airdrie-branch` segment names for its own
+# `scotrail-north-clyde.toml`'s own `scotrail-north-clyde-core`
+# and `scotrail-north-clyde-airdrie-branch` segment names for its own
 # western stations (through Airdrie), and this file's own
 # `scotrail-central-belt-edinburgh-throat` segment name for its own
 # Haymarket/Edinburgh Waverley entries -- see that file's own sourcing and

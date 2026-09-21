@@ -1,0 +1,191 @@
+id = "scotrail-cumbernauld"
+name = "ScotRail Cumbernauld Line (Glasgow Queen Street - Cumbernauld - Falkirk Grahamston)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Greater Glasgow batch. The (unmerged, sibling worktree) `lines/scotrail-
+# north-clyde.toml` -- itself split out of the former `scotrail-glasgow-
+# suburban.toml` this session -- explicitly flags this exact gap in its
+# own Springburn (SPR) station comment: "Springburn is a terminus of a
+# short spur from Bellgrove, with a Cumbernauld Line interchange there
+# (Cumbernauld Line itself not currently modelled in any `lines/*.toml`
+# file)."
+#
+# Scope: this file models Wikipedia's full "Cumbernauld Line" article,
+# which covers the whole Glasgow-Falkirk corridor via Cumbernauld, not
+# just the Glasgow-Cumbernauld electrified stretch -- Wikipedia's own
+# opening line: "a suburban railway line linking Glasgow to Falkirk via
+# Cumbernauld". The electrified Springburn-Cumbernauld section became "an
+# extension of the North Clyde network" in 2014 (Class 385 EMUs today);
+# the Cumbernauld-Falkirk Grahamston tail remains a separate, less
+# frequent diesel working over part of the same route (per the Cumbernauld
+# Line routemap template, this tail also carries the physically distinct
+# "Croy Line"/Glasgow-Edinburgh via Falkirk High services past Cumbernauld
+# -- not modelled here, see the scope-boundaries note below).
+#
+# Category: "regional", not "commuter": despite the electrified core being
+# a genuine North Clyde extension, the whole line as Wikipedia defines it
+# includes the less-frequent, non-electrified Cumbernauld-Falkirk
+# Grahamston tail (via Camelon) -- the same commuter-core/rural-tail shape
+# `scotrail-ayrshire.toml` and `scotrail-fife-borders.toml` already
+# establish "regional" as the precedent category for in this catalogue.
+
+sample_stations = ["GLQ", "SPR", "CUB", "FKG"]
+
+match_keywords = ["Cumbernauld Line"]
+# One high-precision phrase -- this route's own Wikipedia article title/
+# brand name. Grepped clean against every other file's own
+# `match_keywords` before adding: no collisions.
+
+# Mixed commuter-core (electrified Springburn-Cumbernauld North Clyde
+# extension) / rural-tail (diesel Cumbernauld-Falkirk Grahamston) shape:
+# same reasoning and values as `scotrail-glasgow-south-western.toml`.
+[severity_overrides]
+minor_delays_pct = 0.28
+reduced_service_pct = 0.40
+delay_threshold_minutes = 8
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Cumbernauld Line" (raw wikitext): confirms ScotRail
+#     operation; confirms "since May 2014, the newly electrified track
+#     between Springburn and Cumbernauld has become an extension of the
+#     North Clyde network"; confirms "trains must reverse from Springburn"
+#     due to the cancelled Garngad Chord; confirms Class 385 EMUs now
+#     operate the (electrified) line, replacing diesel units.
+#   - Template:Cumbernauld Line (raw wikitext routemap, via
+#     Special:Export): gives the explicit ordered station sequence Glasgow
+#     Queen Street - Springburn - Barnhill - Robroyston - Stepps - Gartcosh
+#     - Greenfaulds - Cumbernauld - [Croy Line to Stirling/Glasgow-
+#     Edinburgh via Falkirk line split off here, not modelled] - Camelon -
+#     Falkirk Grahamston.
+#   - Wikipedia "Barnhill railway station" (raw wikitext, via
+#     Special:Export): confirms Barnhill is a currently-open, served
+#     station "3 mi north of Glasgow Queen Street ... on the Springburn
+#     branch of the North Clyde Line", cross-checking its inclusion (and
+#     open status) against the routemap template.
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>, matching each
+# station's Wikipedia infobox `code` field with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+
+# === Segment-naming coordination ===
+#
+# Reconciled during integration merge (both branches now coexist in the
+# same tree): Springburn (SPR) is also a `[[stations]]` entry in
+# `lines/scotrail-north-clyde.toml`, tagged `scotrail-north-clyde-
+# springburn-spur` there -- a segment used for that single station only
+# (the terminus of the Bellgrove-Springburn spur), so reusing it verbatim
+# here is safe and accurate: it does not pull in any station this line
+# doesn't actually reach, unlike the broader `scotrail-north-clyde-core`
+# segment (see the GLQ note below). SPR below now reuses that exact segment
+# name, making this a genuine SharedSegment pair -- the real-world fact of
+# a same-station reversal there was already sourced when this file was
+# first written, this only fixes how the segment tags are reconciled.
+#
+# GLQ here is the Low Level terminus: per the Cumbernauld Line article,
+# "services from Cumbernauld arrived at Glasgow Queen Street Low Level
+# platforms, freeing up capacity in the High Level station." This file's
+# own GLQ entry is therefore the same physical platforms as
+# `scotrail-north-clyde.toml`'s own GLQ entry -- but unlike SPR, that
+# file's GLQ segment (`scotrail-north-clyde-core`) spans its entire North
+# Clyde core, covering many stations this line never reaches, so reusing
+# it verbatim would misrepresent that whole core as "shared" with this
+# line too (the same over-broad-reuse mistake this catalogue's other
+# corrected-scope notes already document and avoid elsewhere). Station
+# overlap only is used instead: GLQ keeps this file's own segment name.
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "scotrail-cumbernauld-core"
+# Glasgow Queen Street (Low Level) -- see the segment-naming coordination
+# note above.
+
+[[stations]]
+crs = "SPR"
+role = "junction"
+segment = "scotrail-north-clyde-springburn-spur"
+# Springburn: trains reverse here (the Garngad Chord that would have
+# avoided this was cancelled in 2011) before continuing towards
+# Cumbernauld. See the segment-naming coordination note above.
+
+[[stations]]
+crs = "BNL"
+role = "minor"
+segment = "scotrail-cumbernauld-branch"
+# Barnhill.
+
+[[stations]]
+crs = "RRN"
+role = "minor"
+segment = "scotrail-cumbernauld-branch"
+# Robroyston.
+
+[[stations]]
+crs = "SPS"
+role = "minor"
+segment = "scotrail-cumbernauld-branch"
+# Stepps.
+
+[[stations]]
+crs = "GRH"
+role = "minor"
+segment = "scotrail-cumbernauld-branch"
+# Gartcosh.
+
+[[stations]]
+crs = "GRL"
+role = "minor"
+segment = "scotrail-cumbernauld-branch"
+# Greenfaulds.
+
+[[stations]]
+crs = "CUB"
+role = "junction"
+segment = "scotrail-cumbernauld-branch"
+# Cumbernauld: the physically distinct "Croy Line" (Glasgow Queen Street
+# High Level - Croy - Falkirk High/Stirling, part of the separate
+# Edinburgh-Glasgow via Falkirk High route) also passes through this area,
+# per the routemap template -- not modelled here, see the scope-boundaries
+# note below. Electrification (Class 385) ends here; the continuation to
+# Falkirk Grahamston is diesel-only.
+
+[[stations]]
+crs = "CMO"
+role = "minor"
+segment = "scotrail-cumbernauld-falkirk-tail"
+# Camelon. Also a `scotrail-stirling-dunblane.toml` station (that file's
+# own Edinburgh-Dunblane route reaches Falkirk Grahamston/Camelon from the
+# opposite direction), which reuses this exact segment name -- reconciled
+# during integration merge, a genuine SharedSegment pair. See that file's
+# own Falkirk Grahamston row for the full writeup.
+
+[[stations]]
+crs = "FKG"
+role = "terminus"
+segment = "scotrail-cumbernauld-falkirk-tail"
+# Falkirk Grahamston: distinct station from Falkirk High (on the separate
+# Edinburgh-Glasgow via Falkirk High route) -- no *unintentional* collision
+# with any other `lines/*.toml` file at the time this file was written
+# (grepped before adding); the genuine, deliberate share with
+# `scotrail-stirling-dunblane.toml` above was reconciled later, during
+# integration merge.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The "Croy Line" (Glasgow Queen Street High Level - Croy - Falkirk
+#   High/Stirling): a physically distinct route from this file's own
+#   Springburn-Barnhill-...-Cumbernauld electrified branch, per the
+#   routemap template. Real, but this file's own scope is the Cumbernauld
+#   Line proper as Wikipedia defines it; the Croy Line/Falkirk High route
+#   is out of scope here.
+# - Allandale/Castlecary (a proposed, never-built station between
+#   Cumbernauld and Falkirk): per Wikipedia, abandoned in favour of a
+#   Bannockburn park-and-ride -- not a real station, not modelled.

@@ -19,8 +19,8 @@ operators = ["TL"]
 # three confirmed).
 #
 # CRS codes for every station this file shares with
-# `great-northern-kings-lynn.toml` (FPK, SVG, HIT, ARL, BIW, SDY, SNO, HUN,
-# PBO, LET, BDK, AWM, RYS, CMS, CBG) are reused unchanged from that file,
+# `great-northern-kings-lynn.toml` (FPK, SVG, HIT, KBW, ARL, BIW, SDY, SNO,
+# HUN, PBO, LET, BDK, AWM, RYS, CMS, CBG) are reused unchanged from that file,
 # where they were already independently confirmed against
 # railwaycodes.org.uk and/or each station's own Wikipedia infobox - not
 # re-verified from scratch here, same reuse pattern
@@ -49,8 +49,9 @@ operators = ["TL"]
 # (low-level Thameslink platforms) -> Canal Tunnels -> East Coast Main Line
 # near King's Cross -> Finsbury Park -> (non-stop through Alexandra
 # Palace/Potters Bar/Hatfield/Welwyn Garden City - see WGC EXCLUSION below)
-# -> Digswell Junction/Welwyn North/Knebworth (non-stop) -> Stevenage ->
-# Hitchin, where it splits into the same two branches
+# -> Digswell Junction/Welwyn North (non-stop) -> Knebworth (AM peak-only -
+# see KNEBWORTH ADDITION below) -> Stevenage -> Hitchin, where it splits
+# into the same two branches
 # `great-northern-kings-lynn.toml` already documents (direct Peterborough
 # branch, and the Cambridge Line towards Cambridge).
 #
@@ -82,11 +83,30 @@ operators = ["TL"]
 # (b) Welwyn North through Hitchin (that file's `gn-welwyn-hitchin-trunk`
 # segment, physically a single two-track pair after slow merges into fast at
 # Digswell Junction - see that file's own LNER HAND-OFF comment): this line
-# calls at Stevenage and Hitchin, both on that segment, but not at Welwyn
-# North or Knebworth (also on that segment) - a different calling pattern on
-# the same named segment, the identical situation as (a). Per the same
-# precedent, SVG and HIT are kept on this file's own segment, not
-# `gn-welwyn-hitchin-trunk`.
+# calls at Stevenage, Hitchin and (AM peak-only, see KNEBWORTH ADDITION
+# below) Knebworth, all on that segment, but not at Welwyn North (also on
+# that segment) - a different calling pattern on the same named segment, the
+# identical situation as (a). Per the same precedent, SVG, KBW and HIT are
+# kept on this file's own segment, not `gn-welwyn-hitchin-trunk`.
+#
+# ============================================================================
+# KNEBWORTH ADDITION - AM-peak-only, confirmed via real booked timings
+# ============================================================================
+# A later data-driven schedule audit found this file's own claim above (that
+# Thameslink "does not stop" between Welwyn North and Stevenage other than
+# the trunk's own SVG/HIT) needed correcting for Knebworth specifically:
+# real, booked Peterborough-Horsham Thameslink workings call here, AM-peak
+# only - 8 services/day, 05:23-08:53 ex-Peterborough, confirmed against real
+# booked arrival/departure times, and distinguished from Great Northern
+# trains (which don't run through the Thameslink core via the Canal Tunnels
+# and don't call at Knebworth at all - see `gn-welwyn-hitchin-trunk` in
+# `great-northern-kings-lynn.toml`, where KBW IS an all-day GN stop). Welwyn
+# North itself is unaffected by this correction - no Thameslink service of
+# any kind calls there, so that half of the original claim stands. KBW is
+# added below as `role = "minor"` (AM-peak-only, not this line's standard
+# all-day pattern), station overlap only against
+# `great-northern-kings-lynn.toml`'s `gn-welwyn-hitchin-trunk` segment, same
+# treatment as SVG/HIT immediately above.
 #
 # (c) The direct Peterborough branch past Hitchin (`gn-peterborough-branch`:
 # Arlesey, Biggleswade, Sandy, St Neots, Huntingdon, Peterborough) - this is
@@ -209,6 +229,15 @@ segment = "thameslink-cambridge-peterborough-trunk"
 # Finsbury Park. Where the Canal Tunnels' connection to the ECML surfaces.
 # Station overlap only with great-northern-kings-lynn.toml and
 # great-northern-suburban.toml - see OVERLAP (a) above.
+
+[[stations]]
+crs = "KBW"
+role = "minor"
+segment = "thameslink-cambridge-peterborough-trunk"
+# Knebworth. AM-peak-only (8 Peterborough-Horsham workings/day, 05:23-08:53
+# ex-Peterborough) - see KNEBWORTH ADDITION above. Station overlap only with
+# great-northern-kings-lynn.toml's `gn-welwyn-hitchin-trunk` segment (an
+# all-day GN stop there), same treatment as SVG/HIT below.
 
 [[stations]]
 crs = "SVG"

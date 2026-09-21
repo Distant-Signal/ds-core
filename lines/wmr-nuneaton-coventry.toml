@@ -1,0 +1,199 @@
+id = "wmr-nuneaton-coventry"
+name = "West Midlands Railway: Elephant & Bear Line (Nuneaton-Coventry)"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution) and reused verbatim by `wmr-snow-hill.toml`/
+  # `lnwr-birmingham-crewe.toml`. This specific route is West Midlands
+  # Railway-branded, not London Northwestern -- confirmed by every source
+  # below, which describe it consistently as "West Midlands Railway"/"West
+  # Midlands Trains" with no LNWR mention -- but WMR has no ATOC code of
+  # its own distinct from LM, so the operator field is unchanged from the
+  # other WMT-family files.
+]
+
+# GAP-ANALYSIS PROVENANCE: `lnwr-birmingham-crewe.toml`'s own "TASK 9.2
+# FRESH VERIFICATION" comment (point 4a) names this exact route as a real,
+# distinct, currently-modelled-nowhere gap, flagged rather than folded in
+# during that task: "the Nuneaton-Bedworth-Coventry Arena-Coventry
+# 'Elephant & Bear Line' is a distinct West-Midlands-Railway-only stopping
+# service on different metals to this file's Rugby-Coventry Birmingham
+# branch, confirmed via Wikipedia's 'Coventry to Nuneaton line' article."
+# This file fills that named gap.
+#
+# Route research, re-fetched live 2026-09-21, cross-checked across multiple
+# independent sources (the "Coventry to Nuneaton line"/"Coventry-Nuneaton
+# line" article -- the latter is the current title, the former a redirect
+# to it -- fetched both as a summarised read and as an independent raw-
+# wikitext fetch, word-for-word consistent both times):
+#   1. Infobox: operator West Midlands Trains, type "Commuter rail, Rail
+#      freight transport", 5 stations, double track ("Tracks: 2"),
+#      operational. Not single-track, unlike some of this catalogue's other
+#      hourly regional lines (e.g. `scotrail-ayrshire.toml`'s Stranraer
+#      extension) -- noted here since it affects the severity-overrides
+#      reasoning below.
+#   2. Route/station list, Nuneaton to Coventry: Nuneaton, Bermuda Park,
+#      Bedworth, Coventry Arena, Coventry -- five stations, confirmed
+#      identically by the article's own infobox count and body text.
+#   3. Services: "All passenger services on the line are operated by West
+#      Midlands Trains who run an hourly service in each direction between
+#      Nuneaton and Leamington Spa via Coventry and Kenilworth." Branded
+#      "the Elephant & Bear Line" since 2023.
+#   4. Electrification: none. A proposed 25kV AC scheme under the Electric
+#      Spine project was scrapped along with other electrification
+#      projects -- confirmed here as a real, sourced, still-current fact
+#      rather than assumed from the line's rural character.
+#   5. Freight: the line also carries freight to the Bedworth Murco Oil
+#      Terminal and Prologis Park industrial estate -- noted for context,
+#      not modelled (this catalogue only tracks passenger-facing lines).
+#   6. Independently corroborated by two of the individual station
+#      articles: "Bermuda Park railway station" ("opened...18 January
+#      2016"; "Southbound trains continue toward Coventry, Kenilworth, and
+#      Leamington Spa, while northbound service terminates at Nuneaton...
+#      one train per hour in each direction Monday through Saturday during
+#      daytime hours") and "Coventry Arena railway station" (opened the
+#      same day, same branding quote) -- both confirm the hourly frequency,
+#      the Leamington Spa through-running, and the "Elephant & Bear Line"
+#      name a second and third time.
+#   7. Nuneaton's own "railway station" article independently confirms West
+#      Midlands Trains as operator and the same Nuneaton-Leamington Spa via
+#      Bedworth/Coventry/Kenilworth pattern, not just a Nuneaton-Coventry
+#      short-working.
+#
+# CRS codes: Nuneaton (NUN) reused verbatim from `lnwr-birmingham-crewe.toml`
+# (already twice-verified there, on the physically separate Trent Valley
+# line -- see the segment-sharing note below). Bermuda Park (BEP), Bedworth
+# (BEH), Coventry Arena (CAA) and Coventry (COV, reused verbatim from
+# `lnwr-birmingham-crewe.toml`/`xc-south-coast.toml`) were each
+# independently confirmed live via this app's own production station-
+# lookup endpoint (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21),
+# single unambiguous match for each of BEP/BEH/CAA, cross-checked against
+# the Wikipedia articles cited above giving matching station names. No
+# TIPLOC confirmed for BEP/BEH/CAA to the same two-source standard, so
+# `tiploc` is omitted for all three.
+
+sample_stations = ["BEP", "BEH", "CAA"]
+# Deliberately excludes NUN and COV, both busy multi-line stations shared
+# with other catalogued files (`lnwr-birmingham-crewe.toml`'s Crewe branch
+# at Nuneaton; that file's Birmingham branch and `xc-south-coast.toml` at
+# Coventry). Bermuda Park, Bedworth and Coventry Arena are exclusive to
+# this line -- no other file's LDBWS sampling would compete for them --
+# same reasoning `northern-esk-valley.toml` gives for excluding
+# Middlesbrough (shared with the unmodelled Tees Valley line) in favour of
+# its own line-exclusive stations.
+# No destination_crs_filter needed for the same reason: at these three
+# line-exclusive stations, an operator-only filter is already unambiguous.
+# (A filter would need BOTH ["NUN", "LMS"] to cover the two real directions
+# -- Bermuda Park's own article: "Southbound trains continue toward
+# Coventry, Kenilworth, and Leamington Spa, while northbound service
+# terminates at Nuneaton" -- but it isn't needed given the sampling choice
+# above, so it's left out rather than added just to pad the schema.)
+
+match_keywords = ["Elephant & Bear Line", "Coventry to Nuneaton line"]
+# Two high-precision phrases: the line's own real branded name (adopted
+# 2023, confirmed identically across three independent Wikipedia articles
+# above) and its Wikipedia article's own title/route name. Grep-checked
+# against every other `lines/*.toml` file's `match_keywords` before adding
+# -- no collision (no other file mentions "Elephant", "Bear", "Coventry to
+# Nuneaton" or "Coventry-Nuneaton" in its own keywords).
+
+# Hourly, double-track regional stopping service -- same frequency-driven
+# case `northern-esk-valley.toml`/`scotrail-ayrshire.toml` make for tuning
+# thresholds down from the commuter-line defaults, even though (unlike
+# those two) this line is fully double-tracked throughout, per the infobox
+# above: a single delayed working on an hourly service is proportionally a
+# much bigger service-percentage hit than the same delay on a 2-4tph line,
+# regardless of how many tracks it runs on. Values reused verbatim from
+# `northern-esk-valley.toml`.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Nuneaton to Coventry, ordered north to south (source 2 above). One
+# segment, `wmr-nuneaton-coventry`: a single stopping service with no
+# internal branch within this file's own modelled extent.
+#
+# On different metals from `lnwr-birmingham-crewe.toml`'s own
+# Rugby-Coventry approach into Coventry (that file's Birmingham branch
+# runs Rugby-Coventry-Canley-...-Birmingham New Street, entering Coventry
+# from the east) -- this line enters from the north via Bedworth, a
+# genuinely separate physical route per the gap-analysis provenance note
+# above, not a segment-sharing candidate. Station overlap only at Coventry
+# and Nuneaton (both already covered by other files -- see the
+# `sample_stations` note above); no segment name is reused, matching
+# `lnwr-birmingham-crewe.toml`'s own precedent for not forcing
+# segment-sharing onto WCML/XC's coarser Coventry/Nuneaton coverage.
+#
+# No other existing `lines/*.toml` file touches Bermuda Park, Bedworth or
+# Coventry Arena (grepped before starting this task), so the whole route is
+# exclusive to this file's own segment for now.
+[[stations]]
+crs = "NUN"
+tiploc = "NNTN"
+role = "terminus"
+segment = "wmr-nuneaton-coventry"
+# Nuneaton: the genuine terminus of this line's northbound short-working
+# (Bermuda Park's own article, quoted above: "northbound service terminates
+# at Nuneaton"). Also served by `lnwr-birmingham-crewe.toml`'s Crewe branch
+# and other WCML-area files on the physically separate Trent Valley line --
+# station-level overlap only, see the segment note above.
+
+[[stations]]
+crs = "BEP"
+role = "minor"
+segment = "wmr-nuneaton-coventry"
+# Bermuda Park: opened 18 January 2016, strictly between Nuneaton and
+# Bedworth.
+
+[[stations]]
+crs = "BEH"
+role = "minor"
+segment = "wmr-nuneaton-coventry"
+# Bedworth: strictly between Bermuda Park and Coventry Arena.
+
+[[stations]]
+crs = "CAA"
+role = "minor"
+segment = "wmr-nuneaton-coventry"
+# Coventry Arena: opened 18 January 2016 alongside Bermuda Park, strictly
+# between Bedworth and Coventry. Serves the adjacent Coventry Building
+# Society Arena.
+
+[[stations]]
+crs = "COV"
+role = "major"
+segment = "wmr-nuneaton-coventry"
+# Coventry: NOT "terminus" -- the real southbound working continues beyond
+# here to Leamington Spa via Kenilworth (source 3/6 above), this file
+# simply stops modelling the working here, per this task's own scope (see
+# below). Same "major, not terminus" treatment the now-deleted
+# `lnwr-euston-commuter.toml` gave Northampton for an analogous reason.
+# Also served by `lnwr-birmingham-crewe.toml`'s Birmingham branch (from the
+# east, via Rugby) and `xc-south-coast.toml` (also from the east, via
+# Leamington Spa/Kenilworth in the other direction) -- station-level
+# overlap only, no segment shared; see the segment-sharing note above.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Coventry to Leamington Spa via Kenilworth: real, sourced (source 3/6
+#   above), the genuine continuation of this line's own southbound
+#   service. This task's brief scopes this file specifically to
+#   "Nuneaton-Bedworth-Coventry Arena-Coventry", so the Leamington Spa leg
+#   isn't modelled here. It is worth flagging precisely because it is
+#   physically the SAME track as `xc-south-coast.toml`'s own
+#   Coventry-Leamington Spa stretch (that file's own Coventry, Kenilworth,
+#   Leamington Spa entries, on its `xc-south-coast` segment) -- a genuine
+#   shared-trunk candidate for whoever picks up this extension, unlike the
+#   Rugby-approach overlap noted above. Left as a documented, real gap
+#   rather than folded in here, since it falls outside this line's own
+#   named scope.
+# - Freight-only workings (Bedworth Murco Oil Terminal, Prologis Park):
+#   real (source 4/5 above) but not passenger services; out of scope for
+#   this catalogue entirely, not just this file.
+# - Electrification: confirmed NOT electrified (source 4 above); no
+#   `severity_overrides` implication beyond the frequency-driven tuning
+#   already applied.

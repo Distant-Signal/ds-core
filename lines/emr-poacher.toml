@@ -1,0 +1,270 @@
+id = "emr-poacher"
+name = "Poacher Line"
+mode = "national-rail"
+category = "regional"
+# "regional" chosen to match `northern-furness.toml`/`northern-hope-valley.toml`'s
+# category choice for comparable hourly, single/double-track DMU branches -
+# this is not part of the electrified intercity core (`emr-midland-main-line.toml`,
+# category "main-line").
+operators = ["EM"]  # East Midlands Railway
+
+# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "East Midlands Railway (EMR)" section (a): "...rural branches (Robin Hood
+# Line Nottingham-Worksop, the Poacher/Skegness line, Derby-Matlock)." Those
+# three branches originally shared one file, `lines/emr-rural-branches.toml`,
+# under an explicitly-scoped one-line-per-file exception. A later audit
+# recommended splitting it: the three lines are unrelated, separately
+# community-rail-branded routes with no shared trunk between them (see the
+# Nottingham note below), so one-line-per-file is restored here. This file
+# is the Poacher Line's share of that split; see `lines/emr-robin-hood.toml`
+# and `lines/emr-derwent-valley.toml` for the other two, and git history for
+# the original combined file's full station-by-station sourcing.
+#
+# Wikipedia's own "Poacher Line" article scopes the branded name narrowly to
+# the Grantham-Skegness stretch ("for 55 miles (89 km) between Grantham and
+# Skegness"), but the actual passenger service - and this catalogue's
+# `match_keywords`/station list - runs the full advertised Nottingham-
+# Skegness route via the separate Nottingham-Grantham line, matching this
+# file's pre-split scope and the gap analysis's own framing ("the
+# Poacher/Skegness line").
+
+# Terminus plus the Grantham waypoint (shared-trunk boundary, see below).
+destination_crs_filter = ["NOT", "SKG"]
+
+sample_stations = ["NOT", "GRA", "SKG"]
+
+match_keywords = ["Poacher Line", "Grantham-Skegness line"]
+
+# Confirmed per-branch: "an hourly service in each direction between
+# Nottingham and Skegness", Wikipedia "Nottingham-Grantham line" article.
+# Thresholds follow `northern-furness.toml`'s identical rationale/values for
+# a comparable hourly branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# --- Data-model note: Nottingham is exclusive to this file's own station
+# list, tagged with this file's own segment name ---
+# Nottingham is also the starting point of `lines/emr-robin-hood.toml`'s
+# Robin Hood Line (now a separate file after the split), but the two
+# branches approach/leave Nottingham via physically distinct routes (this
+# line via Netherfield/Colwick and Grantham to the east; the Robin Hood Line
+# via Bulwell to the north) - station-overlap only, not a shared trunk. This
+# mirrors `emr-regional.toml`'s Ruling 3 (Nottingham is station-overlap-only
+# between its Erewash Valley approach and MML's Nottingham spur). Since the
+# split, each file simply lists Nottingham once under its own segment name;
+# no cross-file segment name is shared at Nottingham.
+[[stations]]
+crs = "NOT"
+role = "junction"
+segment = "emr-poacher-skegness"
+# Nottingham: starting junction for the Poacher Line. See the data-model
+# note above.
+
+# =====================================================================
+# Nottingham - Grantham (via Netherfield, Radcliffe-on-Trent, Bingham,
+# Aslockton, Elton & Orston, Bottesford)
+# =====================================================================
+#
+# --- Segment-sharing ruling: Nottingham-Grantham IS genuine shared TRACK
+# with `emr-regional.toml`, but NO segment name is shared ---
+# The Wikipedia "Nottingham-Grantham line" article states plainly: "All
+# services on the line are provided by East Midlands Railway. There is an
+# hourly service in each direction between Liverpool Lime Street and
+# Norwich, generally calling only at Nottingham and Grantham [...] and an
+# hourly service in each direction between Nottingham and Skegness, via
+# Grantham, calling at most stations along the route." This is a dedicated
+# infrastructure article (not just a train-service article) confirming both
+# EMR services use the *same physical line* between Nottingham and Grantham
+# - genuine track-sharing, not mere station overlap.
+#
+# However, the segment name is deliberately NOT shared. `emr-regional.toml`
+# tags its own Nottingham-Grantham stations with `emr-regional-east` - but
+# that same segment name also spans that file's Alfreton station (Erewash
+# Valley approach, `emr-regional.toml`'s own Ruling 3: deliberately
+# NOT shared with anything) and its entire Peterborough-Ely-Thetford-Norwich
+# continuation beyond Grantham. Because `SegmentRegistry::is_shared` and
+# `is_exclusive_to` operate per segment *name* across the whole catalogue,
+# not per station, reusing `emr-regional-east` here would incorrectly
+# promote that file's Alfreton (and Peterborough/Ely/Norwich) stations to
+# "shared" too, even though nothing in this file touches them - this is
+# exactly the coarse-segment-granularity mismatch `emr-regional.toml`'s own
+# Ruling 4 describes for its Peterborough-Ely overlap with `xc-stansted.toml`
+# ("that line uses one coarse segment name... spanning far more track than
+# any possible overlap... mirrors `xc-manchester.toml`'s deliberate non-
+# sharing with `wcml` for the identical coarse-segment-granularity reason").
+# Confirmed empirically too: an earlier draft of the original combined file
+# that did reuse `emr-regional-east` broke the pre-existing
+# `emr_regional_erewash_incident_stays_on_its_own_line` regression test by
+# making Alfreton incidents classify as SharedSegment. This file's own
+# `emr-poacher-skegness` segment name is used instead, for the entire
+# Poacher Line uniformly - the "if research confirms these branches share
+# no *segment* with any sibling line... skip the shared-trunk propagation
+# assertion" case, just arrived at via a coarse-mismatch ruling rather than
+# an absence of physical sharing. Cost if wrong (i.e. if a finer split of
+# `emr-regional.toml`'s segment would have been preferable): bounded - a
+# Nottingham/Bingham/Grantham incident still matches both lines
+# independently via StationHit/ExclusiveSegment (both already list these
+# CRS codes under their own segment names); the only effect is that neither
+# line reports SharedSegment for the other at this specific overlap. See
+# the regression test in `crates/common/src/matcher.rs` confirming both
+# lines independently match a Grantham incident without over-propagating.
+#
+# Intermediate stations between Nottingham and Grantham on the real service
+# (per the same "Nottingham-Grantham line" article's places-served list:
+# Netherfield & Colwick, Radcliffe-on-Trent, Bingham, Aslockton & Whatton,
+# Elton & Orston, Bottesford) are all included below, in that exact
+# geographic order, each independently confirmed two-source (Wikipedia
+# infobox, cross-checked against nationalrail.co.uk/stations/<crs>/details.html).
+[[stations]]
+crs = "NET"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Netherfield. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/net (address "Chaworth Road, Colwick,
+# Nottinghamshire" on the National Rail page confirms this is the same
+# station the Wikipedia places-served list calls "Netherfield & Colwick" -
+# that was the station's own name until a 6 May 1974 rename to plain
+# "Netherfield" per the Wikipedia article's history section; current
+# National Rail branding is "Netherfield" without the "& Colwick" suffix.
+
+[[stations]]
+crs = "RDF"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Radcliffe-on-Trent. CRS confirmed via Wikipedia infobox, cross-checked
+# against nationalrail.co.uk/stations/rdf (page header "Radcliffe
+# (Nottinghamshire) (RDF)"). Wikipedia's own article title is "Radcliffe
+# railway station", noting it is "also known as Radcliffe-on-Trent and
+# Radcliffe (Notts)" - same station as this task's named "Radcliffe-on-Trent".
+
+[[stations]]
+crs = "BIN"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Bingham. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/bin.
+
+[[stations]]
+crs = "ALK"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Aslockton. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/alk (page header "Aslockton (ALK)"). This
+# task's named-station list calls it "Aslockton & Whatton" (it serves the
+# neighbouring village of Whatton-in-the-Vale too), but neither source
+# uses that longer form for the station's own name - Wikipedia and
+# National Rail both call it plainly "Aslockton"; no evidence found of an
+# "& Whatton" suffix ever being part of the station's official name
+# (contrast Netherfield above, which genuinely was "Netherfield & Colwick"
+# until 1974). Included as the same real, currently-open station either way.
+
+[[stations]]
+crs = "ELO"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Elton & Orston. CRS confirmed via Wikipedia infobox, cross-checked
+# against nationalrail.co.uk/stations/elo (page header "Elton & Orston
+# (ELO)"). "Now provides minimal rail services" per the Wikipedia article
+# (one train to Nottingham and one to Skegness on a typical weekday) but
+# is still a currently-open, currently-served station.
+
+[[stations]]
+crs = "BTF"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Bottesford. CRS confirmed via Wikipedia infobox, cross-checked against
+# nationalrail.co.uk/stations/btf (page header "Bottesford (BTF)").
+
+[[stations]]
+crs = "GRA"
+role = "junction"
+segment = "emr-poacher-skegness"
+# Grantham: real physical junction where this branch diverges from
+# `emr-regional`'s own continuation towards Peterborough/Norwich (both
+# genuinely reach Grantham via the same Nottingham-Grantham line - see
+# ruling above), but not a shared *segment name* - see ruling above.
+
+# =====================================================================
+# Grantham - Skegness (via Sleaford and Boston) - the Wikipedia-branded
+# "Poacher Line" stretch proper.
+# =====================================================================
+[[stations]]
+crs = "ANC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Ancaster. The two intermediate stations between Grantham and Ancaster on
+# the original line - Barkston and Honington - are both long-closed
+# (Barkston: passenger service withdrawn 1955; Honington: withdrawn 1962),
+# confirmed via their own Wikipedia infobox "status = Disused" fields, and
+# are correctly omitted as closed rather than flagged as unverified.
+
+[[stations]]
+crs = "RAU"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Rauceby.
+
+[[stations]]
+crs = "SLR"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Sleaford.
+
+[[stations]]
+crs = "HEC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Heckington.
+
+[[stations]]
+crs = "SWE"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Swineshead.
+
+[[stations]]
+crs = "HBB"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Hubberts Bridge (no apostrophe - confirmed via nationalrail.co.uk's own
+# spelling, which differs from some informal renderings as "Hubbert's
+# Bridge").
+
+[[stations]]
+crs = "BSN"
+role = "major"
+segment = "emr-poacher-skegness"
+# Boston. The next two intermediate stations on the original line - Sibsey
+# and Old Leake - are both long-closed (Sibsey: passenger service withdrawn
+# 1961; Old Leake: withdrawn 1956), confirmed via their own Wikipedia
+# infobox "status = Disused" fields ("The line through the station continues
+# to be used by services on the Poacher Line" per Sibsey's own article,
+# confirming the *track* is still in use even though the station itself is
+# not), and are correctly omitted as closed rather than flagged as
+# unverified.
+
+[[stations]]
+crs = "TPC"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Thorpe Culvert.
+
+[[stations]]
+crs = "WFL"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Wainfleet (Wainfleet All Saints).
+
+[[stations]]
+crs = "HVN"
+role = "minor"
+segment = "emr-poacher-skegness"
+# Havenhouse.
+
+[[stations]]
+crs = "SKG"
+role = "terminus"
+segment = "emr-poacher-skegness"
+# Skegness.

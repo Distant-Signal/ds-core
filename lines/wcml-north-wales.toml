@@ -57,8 +57,12 @@ operators = [
 # shared WCML spine to Crewe, then Chester and the North Wales coast --
 # like `wcml-liverpool.toml`, no second physically distinct branch to
 # model here (the one-train/day Wrexham dividing portion is a real fork
-# but too infrequent to model as a full branch, same threshold judgment
-# `wcml-liverpool.toml` applied to its own Hartford footnote).
+# but too infrequent to model as a full branch). `wcml-liverpool.toml` faced
+# an analogous one-train/day footnote for its own Hartford stop, but this
+# audit's CIF-schedule cross-check found Avanti has since added a daily
+# each-way service there from December 2025, upgrading it to a modelled
+# station (see that file's HTF entry) -- no equivalent schedule upgrade was
+# found for the Wrexham dividing portion, so it remains unmodeled here.
 
 # Most Avanti Euston-Chester/North Wales trains terminate at Chester
 # (1tph); only a minority (6/day) continue on to Holyhead. Both are
@@ -160,10 +164,15 @@ role = "major"
 segment = "wcml-london"
 
 [[stations]]
-crs = "HMP"
-tiploc = "HAMPTON"
+crs = "HML"
+tiploc = "HEMLHMP"
 role = "minor"
 segment = "wcml-london"
+# Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
+# cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
+# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# Kept identical across all five WCML files that carry this shared-trunk
+# row.
 
 [[stations]]
 crs = "TRI"

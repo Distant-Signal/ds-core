@@ -1,0 +1,240 @@
+id = "lnwr-chase-line"
+name = "London Northwestern Railway: Chase Line (Birmingham - Rugeley Trent Valley)"
+mode = "national-rail"
+category = "commuter"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution), reused verbatim by every other WMT-family file in this
+  # catalogue (`wmr-snow-hill.toml`, `wmr-cross-city.toml`,
+  # `lnwr-birmingham-crewe.toml`). Not re-verified again from scratch here.
+]
+
+# GAP-ANALYSIS PROVENANCE: named as an uncovered gap in the "50+ entire real
+# UK lines with zero coverage" audit that produced this Midlands batch 2
+# brief. Branded "Chase Line" throughout (a genuine, currently-used route
+# name -- confirmed by Wikipedia's own "Chase Line" article title, not an
+# invented amalgamation).
+#
+# Route research, fetched live 2026-09-21 (Wikipedia's "Chase Line"
+# article, raw wikitext, infobox + route + services sections):
+#   1. Termini: Birmingham New Street in the south; TWO northern termini,
+#      Walsall (some short workings) and Rugeley Trent Valley (the line's
+#      full-length service) -- confirmed by the infobox's own `terminus`
+#      field listing both.
+#   2. Electrification: 25kV AC overhead throughout. Birmingham-Walsall
+#      electrified in 1966; Walsall-Rugeley completed electrification in
+#      December 2018, with electric services starting May 2019 (previously
+#      diesel-only north of Walsall).
+#   3. Track: shared with the Cross-City Line (`wmr-cross-city.toml`)
+#      between Birmingham New Street and Aston -- see the Aston/Duddeston
+#      segment-sharing note below.
+#   4. Service pattern: Monday-Saturday daytime, 4tph New Street-Walsall (2
+#      via Aston calling all stations, 2 via the direct Soho route), with
+#      2tph of those continuing to Rugeley Trent Valley (1tph in late
+#      evenings). Since the May 2019 electrification completion, some
+#      services north of Walsall also extend through to Birmingham
+#      International or as far as Northampton/London Euston -- those
+#      through-workings run over WCML/Cross-City metals not modelled by
+#      this file and are out of scope here (this file only claims the
+#      Chase Line's own New Street-Walsall-Rugeley route).
+#   5. Full station list (Birmingham to Rugeley, confirmed by the article's
+#      own ordered route section): Birmingham New Street, Duddeston, Aston,
+#      Witton, Perry Barr, Hamstead, Tame Bridge Parkway, Bescot [Stadium],
+#      Walsall, Bloxwich, Bloxwich North, Landywood, Cannock, Hednesford,
+#      Rugeley Town, Rugeley Trent Valley.
+#
+# CRS codes: BHM/DUD/AST reused verbatim from `wmr-cross-city.toml` (already
+# twice-verified there). RGL reused verbatim from `lnwr-birmingham-crewe.toml`.
+# Every other code (WTT, PRY, HSD, TAB, BSC, WSL, BLX, BWN, LAW, CAO, HNF,
+# RGT) independently confirmed live via this app's own production
+# station-lookup endpoint (ds.cursed.solutions/api/stations?q=<name>,
+# 2026-09-21), single unambiguous match for each, cross-checked against the
+# Wikipedia article's own station names. No TIPLOC confirmed for any of
+# these to the two-source standard, so `tiploc` is omitted throughout.
+
+sample_stations = ["BHM", "TAB", "WSL", "RGL"]
+# One sample station on the shared New Street throat, one at the internal
+# Walsall/Rugeley split point's approach, and one per named terminus.
+
+destination_crs_filter = ["WSL", "RGL"]
+# The line's two real termini -- disambiguates Chase Line short workings
+# from Cross-City/WCML-area services also sampled at Birmingham New Street.
+
+match_keywords = ["Chase Line"]
+# The line's own branded/article name. Grep-checked against every other
+# `lines/*.toml` file's `match_keywords` before adding -- no collision.
+
+# Roughly a 15-minute-headway inner core (New Street-Walsall) thinning to a
+# 30-minute-headway outer tail (Walsall-Rugeley) -- structurally close to
+# `wmr-cross-city.toml`'s Four Oaks-Barnt Green/outer-tail shape, but this
+# file doesn't split per-branch severity, so no override is set: default
+# thresholds already fit a service this frequent, and (per
+# `wmr-snow-hill.toml`'s identical reasoning) there's no per-segment
+# override mechanism to tune only the sparser Rugeley tail without
+# misrepresenting the busier Walsall core.
+
+# Birmingham New Street to Rugeley Trent Valley, ordered south to north.
+#
+# --- Segment-sharing ruling: New Street-Duddeston-Aston IS genuine shared
+# track with `wmr-cross-city.toml`, but NOT a shared segment name ---
+# `wmr-cross-city.toml`'s own station list runs ...Gravelly Hill, Aston,
+# Duddeston, [Birmingham New Street] on its way south, tagged
+# `wmr-cross-city-trunk` -- the same three stations this line also calls at
+# on its own way out of New Street, before the two lines' real physical
+# divergence at Aston (Cross-City continues north-east via Gravelly
+# Hill/Erdington towards Sutton Coldfield/Lichfield; this line continues
+# north-west via Witton/Perry Barr/Hamstead towards Walsall). Genuine
+# track-sharing, confirmed by both files' own station lists agreeing on the
+# same three-station approach.
+#
+# However, `wmr-cross-city-trunk` is NOT reused here. That segment name
+# already spans `wmr-cross-city.toml`'s entire 22-station trunk (Lichfield
+# Trent Valley through Barnt Green), far more track than this line's own
+# three-station overlap. Because `SegmentRegistry::is_shared`/
+# `is_exclusive_to` operate per segment name across the whole catalogue and
+# check only which *files* use a name (not which specific stations), reusing
+# it here for just BHM/DUD/AST would incorrectly promote every other
+# station under that name (Sutton Coldfield, Erdington, Wylde Green, etc.)
+# to "shared with this line" too, even though none of that track is
+# anywhere near the Chase Line -- the exact coarse-segment-granularity
+# mismatch `emr-regional.toml`'s Ruling 1 and `emr-rural-branches.toml`'s
+# Branch 3 ruling both already establish precedent for. So: this file mints
+# its own new, exclusive segment name (`lnwr-chase-line-newstreet`) for
+# BHM/DUD/AST instead. Cost if wrong (i.e. if a finer split of
+# `wmr-cross-city.toml`'s own trunk segment would have been preferable):
+# bounded -- a Duddeston or Aston incident still matches both lines
+# independently via StationHit regardless of segment name.
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "lnwr-chase-line-newstreet"
+# Reuses the TIPLOC already established for this physical station in
+# `wcml-birmingham.toml`/`cross-country.toml`/`wmr-cross-city.toml`.
+
+[[stations]]
+crs = "DUD"
+role = "minor"
+segment = "lnwr-chase-line-newstreet"
+# Duddeston. Also a `wmr-cross-city.toml` station -- station-overlap only,
+# see the ruling above.
+
+[[stations]]
+crs = "AST"
+role = "junction"
+segment = "lnwr-chase-line-newstreet"
+# Aston: the real physical junction where this line's own Witton/Perry
+# Barr approach diverges from `wmr-cross-city.toml`'s Gravelly Hill/
+# Erdington approach. Per the shared-trunk rule of thumb the junction stays
+# on this file's own segment; the exclusive Chase-Line-only stretch starts
+# at the next station, Witton. See the ruling above for why no segment name
+# is shared with `wmr-cross-city.toml` despite the genuine physical overlap.
+
+# --- Shared trunk with `wmr-darlaston-line.toml`: Witton through Tame
+# Bridge Parkway. Both this file and that one model the same real physical
+# WCML-area approach out of Birmingham as far as Tame Bridge Parkway, where
+# the reopened Walsall-Wolverhampton-via-Darlaston service diverges onto
+# its own reinstated curve while this line continues to Bescot/Walsall.
+# Both files were authored together in this batch and deliberately keep
+# this segment's extent byte-identical (exactly WTT/PRY/HSD/TAB in both),
+# so `wmr-chase-darlaston-trunk` is a genuinely shared segment name here,
+# unlike the New Street-Aston stretch above. See
+# `wmr-darlaston-line.toml`'s own matching comment. ---
+[[stations]]
+crs = "WTT"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+# Witton.
+
+[[stations]]
+crs = "PRY"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+# Perry Barr.
+
+[[stations]]
+crs = "HSD"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+# Hamstead.
+
+[[stations]]
+crs = "TAB"
+role = "junction"
+segment = "wmr-chase-darlaston-trunk"
+# Tame Bridge Parkway: real physical junction where the reinstated
+# Darlaston curve diverges (`wmr-darlaston-line.toml`'s own Darlaston
+# station entry lists Tame Bridge Parkway as its immediately preceding
+# station, per that station's own Wikipedia infobox route diagram). Per
+# the shared-trunk rule of thumb, the junction stays on the shared segment;
+# this line's own exclusive segment resumes at the next station, Bescot.
+
+[[stations]]
+crs = "BSC"
+role = "major"
+segment = "lnwr-chase-line-walsall"
+# Bescot Stadium.
+
+[[stations]]
+crs = "WSL"
+role = "junction"
+segment = "lnwr-chase-line-walsall"
+# Walsall: a genuine partial terminus for some services (not every working
+# continues to Rugeley) -- the same "major/junction, not exclusively the
+# final terminus" treatment `scotrail-ayrshire.toml` gives Ayr on its own
+# Stranraer-bound exclusive segment. Also the southern terminus of the
+# historic South Staffordshire line (Wikipedia's own "South Staffordshire
+# line" article: today "partially mothballed", carrying only a weekly
+# diversion working between Lichfield and Burton -- not a real, current,
+# regularly-timetabled passenger service, and not modelled in this
+# catalogue by any file). No other `lines/*.toml` file lists WSL as of this
+# task (grep-checked), so no shared-segment question arises here today.
+
+[[stations]]
+crs = "BLX"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Bloxwich.
+
+[[stations]]
+crs = "BWN"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Bloxwich North.
+
+[[stations]]
+crs = "LAW"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Landywood.
+
+[[stations]]
+crs = "CAO"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Cannock.
+
+[[stations]]
+crs = "HNF"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Hednesford.
+
+[[stations]]
+crs = "RGT"
+role = "minor"
+segment = "lnwr-chase-line-rugeley"
+# Rugeley Town.
+
+[[stations]]
+crs = "RGL"
+role = "terminus"
+segment = "lnwr-chase-line-rugeley"
+# Rugeley Trent Valley: reuses the CRS already established for this
+# physical station in `lnwr-birmingham-crewe.toml` (its own Crewe branch,
+# via the separate Trent Valley Line -- a different physical route into
+# this same station, not a shared-track claim; no segment name is shared
+# with that file for the same "different approach, same terminal station"
+# reasoning `emr-regional.toml`'s Ruling 3 documents for Nottingham).

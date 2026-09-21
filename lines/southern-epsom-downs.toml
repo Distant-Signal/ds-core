@@ -1,0 +1,135 @@
+id = "southern-epsom-downs"
+name = "Epsom Downs Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SN"]
+
+# ============================================================================
+# WHY THIS IS A SEPARATE FILE FROM Caterham/Tattenham Corner
+# ============================================================================
+# See southern-caterham.toml's own header for the full reasoning. In short:
+# this branch genuinely does diverge from Sutton, matching the brief's own
+# "Sutton/Epsom suburban network" framing - unlike Caterham and Tattenham
+# Corner, which both diverge from Purley, several miles east on a different
+# corridor entirely (checked via Wikipedia, not assumed). No shared segment
+# with either of those two files: Sutton and Purley are not the same
+# junction and this task found no sourced evidence of any physical
+# track-sharing between the two corridors.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Epsom Downs Branch" ("a 3-mile-65-chain
+# railway line in Greater London and Surrey... runs from Sutton to its
+# southern terminus" at Epsom Downs), with Belmont and Banstead confirmed as
+# the two intermediate stations by their own Wikipedia articles (Belmont
+# "on the line between other key stops"; Banstead "on the Epsom Downs
+# branch line between Belmont and Epsom Downs") and by Sutton's own station
+# article ("a branch to Epsom Downs was opened on 22 May 1865"). Operator
+# Southern, per the sibling articles' consistent branding and this
+# corridor's own Southern-suburban character (no Thameslink or SWR service
+# is documented reaching Belmont, Banstead or Epsom Downs by any source
+# checked for this task).
+# No Wikipedia source found bundling this branch with Tattenham Corner or
+# Caterham as a single named service group ("Sutton and Mole Valley lines"
+# is the umbrella article covering Sutton's own wider network, including
+# this branch, the Wimbledon-Sutton loop and the Sutton-Epsom/Dorking
+# Mole Valley services - but it is a network-level article, not evidence of
+# a bundled passenger "line" the way, say, "Coastway West" is a single
+# branded service) - so this branch is filed on its own rather than folded
+# into another file, matching this task's own "your call, document
+# reasoning" instruction.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Sutton (London)=SUO, Belmont=BLM, Banstead=BAD, Epsom Downs=EPD.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Belmont, Banstead or Epsom Downs. Sutton (SUO) is already in
+# thameslink-southern.toml (its own `thameslink-sutton-loop` segment,
+# operator TL).
+#
+# ============================================================================
+# STATION OVERLAP AT SUTTON - thameslink-southern.toml
+# ============================================================================
+# Sutton is "the loop's own midpoint/interchange" per that file's own
+# comment, served by Thameslink's Sutton Loop service (operator TL). This
+# branch's own Epsom Downs service is a different operator (SN) on what
+# this task's research did not establish to be the same physical platforms
+# or running lines - per the xc-south-coast.toml/southern-coastway-west.toml
+# precedent for a different-operator convergence (see the latter's own
+# "STATION-OVERLAP AT HAVANT/PORTSMOUTH" note), this is treated as station
+# overlap only: Sutton gets this file's own new segment name below, not
+# `thameslink-sutton-loop`.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   SUO | BLM - BAD - EPD
+#   [junction]  [-- southern-epsom-downs-branch (exclusive) --]
+#
+# Single exclusive segment past the Sutton junction, per the shared-trunk
+# rule of thumb - no genuine shared trunk exists anywhere else in the
+# catalogue for this branch (see STATION OVERLAP note above).
+
+match_keywords = ["Epsom Downs line", "Epsom Downs branch"]
+# The line's own branded/article names. Grepped clean against every other
+# file's match_keywords - no collision (thameslink-southern.toml's own
+# comment mentions "Epsom Downs branches" only in prose, not as a
+# match_keywords entry).
+
+sample_stations = ["BLM", "BAD", "EPD"]
+# All three on this line's own exclusive branch, past the Sutton junction -
+# no other line in the catalogue touches any of them.
+
+destination_crs_filter = ["EPD"]
+# A short single-terminus branch; Belmont and Banstead's own station
+# articles describe no other advertised destination for this route. All
+# three sample stations are exclusive to this branch, so the filter carries
+# no risk of dropping a real sample.
+
+# Commuter line, same tuning as this catalogue's other short London
+# suburban commuter branches (southern-caterham.toml,
+# southern-tattenham-corner.toml, swr-chessington.toml).
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The wider "Sutton and Mole Valley lines" network (Wimbledon-Sutton loop,
+#   Sutton-Epsom-Dorking/Horsham Mole Valley services, and the Thameslink
+#   Sutton Loop already in thameslink-southern.toml): real, but a much
+#   larger scope than this one branch and not part of this task's
+#   assignment - a documented, still-open gap beyond what
+#   thameslink-southern.toml already covers.
+# - The Caterham and Tattenham Corner lines: genuinely separate, Purley-side
+#   branches - southern-caterham.toml and southern-tattenham-corner.toml.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "SUO"
+role = "junction"
+segment = "southern-epsom-downs-sutton"
+# Sutton (London). Station overlap with thameslink-southern.toml's own
+# `thameslink-sutton-loop` segment (operator TL) - see STATION OVERLAP note
+# above.
+
+[[stations]]
+crs = "BLM"
+role = "minor"
+segment = "southern-epsom-downs-branch"
+# Belmont.
+
+[[stations]]
+crs = "BAD"
+role = "minor"
+segment = "southern-epsom-downs-branch"
+# Banstead.
+
+[[stations]]
+crs = "EPD"
+role = "terminus"
+segment = "southern-epsom-downs-branch"
+# Epsom Downs. Named for, and primarily used on race days for, Epsom Downs
+# Racecourse.

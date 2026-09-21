@@ -1,0 +1,143 @@
+id = "greater-anglia-southend-victoria"
+name = "Shenfield - Southend Victoria Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["LE"]
+# LE = Greater Anglia's ATOC code, already verified and cited in
+# greater-anglia-main-line.toml (Task 2.1) -- not re-derived here.
+
+# Confirmed via Wikipedia's "Shenfield-Southend line" article (raw
+# wikitext): infobox `start = Shenfield`, `end = Southend Victoria`, 9
+# stations, `type = Commuter rail`, double track and electrified (25kV)
+# throughout, max line speed 80mph (90mph joining the Great Eastern Main
+# Line). "The vast majority of services connect to or from the Great
+# Eastern Main Line and its London terminus at Liverpool Street... although
+# a limited service operates only between Shenfield and Southend Victoria."
+#
+# Full current station list and order confirmed via the article's own
+# "Stations" table (raw wikitext, ordered by mileage from London Liverpool
+# Street): Shenfield - Billericay - Wickford - Rayleigh - Hockley - Rochford
+# - Southend Airport - Prittlewell - Southend Victoria (9 stations, matching
+# the infobox count exactly).
+#
+# `category = "commuter"`: matches the infobox's own classification and a
+# genuinely double-tracked, electrified, London-through-running corridor.
+# No severity overrides: nothing in the research surfaced a reason to
+# deviate from config.py's base thresholds, matching
+# `greater-anglia-west-anglia.toml`'s identical no-override call for a
+# comparably solid outer-suburban corridor.
+sample_stations = ["SNF", "WIC", "RLG", "SOV"]
+destination_crs_filter = ["SOV"]
+# The line's own genuine terminus. Shenfield is deliberately omitted: it is
+# a through-junction on the Great Eastern Main Line, not a clean
+# destination-only anchor (per `greater-anglia-main-line.toml`'s own
+# treatment of the same station).
+
+match_keywords = ["Shenfield-Southend line", "Southend Victoria line"]
+# The article's own title (rendered here with a plain ASCII hyphen rather
+# than its own en dash, matching this catalogue's existing convention of
+# plain-hyphen match_keywords) plus a second, terminus-anchored phrasing
+# that distinguishes this line from `c2c.toml`'s own, physically separate
+# Southend Central/Southend East route -- confirmed as a genuinely distinct
+# real-world naming pair (Southend "Victoria" vs Southend "Central"), not a
+# padded synonym. Grepped `lines/*.toml`: no collision with either phrase;
+# `elizabeth-shenfield.toml`'s own existing "Shenfield branch"/"Shenfield
+# line" keywords are distinct strings for a different (Liverpool
+# Street-Shenfield Elizabeth line) route.
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. TIPLOCs are omitted
+# throughout except the two shared junction stations (SNF, WIC), neither of
+# which carries a recorded TIPLOC in the files they're reused from either.
+#
+# ## Overlap 1: Shenfield (SNF) -- a three-way station overlap, all
+# station-overlap only
+#
+# SNF is already a `geml-london-shenfield`-tagged junction in
+# `greater-anglia-main-line.toml`, whose own comment already names this
+# exact line ("Shenfield-Southend line diverges here") and independently a
+# terminus in `elizabeth-shenfield.toml`. This file's own segment name is
+# used at SNF -- reusing `geml-london-shenfield` would, per that file's own
+# already-documented reasoning for the identical Romford/Ilford situation,
+# incorrectly widen the claim onto Liverpool Street/Stratford/Romford,
+# none of which this line touches.
+#
+# ## Overlap 2: Wickford (WIC) with `greater-anglia-essex-branches.toml` --
+# a junction this catalogue was already waiting on
+#
+# WIC is already a `crouch-valley-line`-tagged junction in
+# `greater-anglia-essex-branches.toml`, whose own comment states the exact
+# situation this file now resolves: "Wickford: junction with the
+# Shenfield-Southend line (not itself a GEML station)... the intervening
+# Shenfield-Southend Victoria line is not covered by any file or task in
+# this catalogue, so there is no existing segment name for Wickford... to
+# reuse." Now one exists. Station-overlap only, not a shared segment: this
+# line's own trunk continues east to Rayleigh/Southend, while the Crouch
+# Valley Line is its own exclusive branch south to Southminster -- the two
+# meet only at Wickford's own platforms.
+#
+# ## Not an overlap with c2c.toml
+#
+# c2c's own Fenchurch Street-Shoeburyness system (via Basildon) and its
+# Ockendon loop (via Grays to Southend Central) are a physically separate
+# route and company, reaching a different Southend terminus (Southend
+# Central, CRS SOC, vs. this line's own Southend Victoria, CRS SOV) with no
+# shared CRS code anywhere in either file's station list -- confirmed by
+# grepping `c2c.toml` for every CRS this file introduces. No overlap note is
+# needed at either terminus.
+[[stations]]
+crs = "SNF"
+role = "junction"
+segment = "greater-anglia-southend-victoria"
+# Shenfield: this line's own western terminus/junction with the Great
+# Eastern Main Line. See Overlap 1 above.
+
+[[stations]]
+crs = "BIC"
+role = "minor"
+segment = "greater-anglia-southend-victoria"
+# Billericay.
+
+[[stations]]
+crs = "WIC"
+role = "junction"
+segment = "greater-anglia-southend-victoria"
+# Wickford: the Crouch Valley Line diverges here. See Overlap 2 above.
+
+[[stations]]
+crs = "RLG"
+role = "major"
+segment = "greater-anglia-southend-victoria"
+# Rayleigh.
+
+[[stations]]
+crs = "HOC"
+role = "minor"
+segment = "greater-anglia-southend-victoria"
+# Hockley (Essex).
+
+[[stations]]
+crs = "RFD"
+role = "minor"
+segment = "greater-anglia-southend-victoria"
+# Rochford.
+
+[[stations]]
+crs = "SIA"
+role = "minor"
+segment = "greater-anglia-southend-victoria"
+# Southend Airport.
+
+[[stations]]
+crs = "PRL"
+role = "minor"
+segment = "greater-anglia-southend-victoria"
+# Prittlewell.
+
+[[stations]]
+crs = "SOV"
+role = "terminus"
+segment = "greater-anglia-southend-victoria"
+# Southend Victoria: this line's own eastern terminus. Confirmed distinct
+# from c2c's Southend Central (SOC) and Southend East (SOE) -- see the
+# c2c note above.

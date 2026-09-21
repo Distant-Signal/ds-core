@@ -1,0 +1,198 @@
+id = "northern-buxton-line"
+name = "Buxton Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains service with no existing `lines/*.toml`
+# coverage. Confirmed via Wikipedia's "Buxton line" article (the article
+# title is "Buxton line", not "Manchester to Buxton line" -- that URL 404s)
+# and cross-checked station-by-station against ds.cursed.solutions/api/stations
+# (this app's own live production CRS reference), fetched/verified
+# 2026-09-21.
+#
+# Route: Manchester Piccadilly - Stockport (leaving the West Coast Main Line
+# at Edgeley Junction, half a mile south of Stockport) - Davenport -
+# Woodsmoor - Hazel Grove - Middlewood - Disley - New Mills Newtown -
+# Furness Vale - Whaley Bridge - Chapel-en-le-Frith - Dove Holes - Buxton
+# (terminus). Electrified 25kV AC Manchester-Hazel Grove only ("The line was
+# electrified, at 25 kV AC overhead, between Manchester and Hazel Grove in
+# 1981"); diesel (Class 150/156) throughout Hazel Grove-Buxton. Generally
+# hourly Manchester-Buxton, with an extra Manchester-Hazel Grove-only service
+# most hours ("Two Northern Trains services per hour operate northbound to
+# Manchester Piccadilly and southbound to Hazel Grove during Monday to
+# Saturday daytimes, with one train per hour continuing to Buxton"),
+# two-hourly on Sundays. Only alternate trains call at Dove Holes.
+#
+# --- Not the same corridor as the Hope Valley Line ---
+# `northern-hope-valley.toml` (Manchester Piccadilly - Chinley - Edale -
+# Hope - Bamford - Hathersage - Grindleford - Dore & Totley - Sheffield) is
+# a genuinely separate physical corridor for almost its entire length: per
+# Wikipedia's own "Hope Valley line" article, west of Chinley the line
+# splits into two branches, "the northern branch runs via New Mills Central
+# towards Manchester Piccadilly" (the everyday Chinley/Edale local stopper's
+# own route, via Marple/Bredbury/Ashburys, not via Stockport at all) while
+# "the southern branch passes through the Disley Tunnel before merging with
+# the Buxton line just south of Hazel Grove and then heading to Stockport."
+# That second, newer (1986) chord is the ONLY point of physical connection
+# between the two lines -- confirmed by Hazel Grove's own article: "The
+# Hazel Grove Chord opened in 1986. This allowed trains to/from Stockport
+# and Manchester Piccadilly to access the former Manchester Central - New
+# Mills South Junction line, just south of Hazel Grove station... It
+# provides a faster route between Manchester and Sheffield than the former
+# route via Romiley and New Mills Central." It carries only a handful of
+# longer-distance workings today (mostly EMR/TPE fast trains, plus one
+# Northern Hope Valley service per day: "The station is also served by one
+# train per day on the Hope Valley Line to Sheffield") -- Davenport and
+# Woodsmoor's own articles confirm most Hope Valley/Chinley traffic passes
+# through non-stop on this stretch: "Services on the Hope Valley Line
+# to/from Chinley or Sheffield pass through the station but do not stop."
+# No other `lines/*.toml` file currently models any station reached via the
+# Hazel Grove Chord, so no shared segment is invented for it here -- Hazel
+# Grove (HAZ) is tagged with this file's own exclusive segment throughout,
+# with the chord noted as a real junction fact only.
+#
+# New Mills Newtown (this file, on the Buxton line) and New Mills Central
+# (`northern-hope-valley.toml`, on the Hope Valley Line) are two physically
+# separate stations, about 15 minutes' walk apart across the Goyt Valley, not
+# a shared-station or shared-track situation: "New Mills Newtown railway
+# station serves the Newtown area of New Mills... on the Buxton line," while
+# "New Mills Central... lies on the Hope Valley Line."
+#
+# Housekeeping note for whoever next revises `northern-hope-valley.toml`
+# (not fixed here, out of this task's scope): that file's own long-standing
+# comment questions "whether SPT (Stockport) is itself correctly positioned
+# as the second stop after MAN" for its Chinley/Edale local stopper. This
+# task's research answers that: SPT is correct for THIS file's own Buxton
+# line stopper (confirmed repeatedly, e.g. "There is generally one train per
+# hour between Manchester Piccadilly and Buxton, via Stockport"), but is NOT
+# accurate for the Hope Valley Line's own Chinley/Edale/Hope/Bamford/
+# Hathersage/Grindleford local stopper, which runs via Ashburys/Marple/New
+# Mills Central and never touches Stockport. Flagging for a future task
+# rather than editing that file here.
+#
+# --- Manchester Piccadilly - Stockport: station overlap, not shared track ---
+# This stretch runs over the same Crewe/West Coast Main Line metals also
+# used by `wcml-manchester.toml` and `xc-manchester.toml`'s own MAN/SPT
+# entries, and by `northern-hope-valley.toml`'s own (separately-modelled)
+# MAN/SPT entries. Following the established precedent already documented in
+# `wcml-manchester.toml` ("Stockport (SPT) and Manchester Piccadilly (MAN)
+# are also stations on xc-manchester.toml and northern-hope-valley.toml,
+# again station-overlap-only") -- this file's own MAN/SPT entries get their
+# own exclusive segment rather than reusing any of those other files'
+# segment names, consistent with how none of those several other MAN/SPT-
+# touching files share a segment with each other either.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Middlewood-Macclesfield curve: a former junction (1885-1954) allowing
+#   Buxton-Macclesfield running via the Macclesfield, Bollington and Marple
+#   Railway; long closed, no current infrastructure, not modelled.
+# - Rose Hill Marple: a separate spur of the Hope Valley Line (Marple's own
+#   article: "Rose Hill Marple also serves the town at the end of a short
+#   spur of the Hope Valley Line"), unrelated to this line -- covered
+#   separately by `northern-rose-hill.toml`.
+# - Occasional Hazel Grove-Blackpool North "through running" workings
+#   (stopped again December 2022): a Manchester-side operational curiosity
+#   on some Buxton line electric services, not a Peak District junction; not
+#   modelled.
+sample_stations = ["MAN", "SPT", "HAZ", "NMN", "BUX"]
+destination_crs_filter = ["BUX"]
+match_keywords = ["Buxton line"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-buxton-line"
+
+[[stations]]
+crs = "LVM"
+role = "minor"
+segment = "northern-buxton-line"
+# Levenshulme.
+
+[[stations]]
+crs = "HTC"
+role = "minor"
+segment = "northern-buxton-line"
+# Heaton Chapel.
+
+[[stations]]
+crs = "SPT"
+role = "junction"
+segment = "northern-buxton-line"
+# Stockport -- station-overlap only with several other files' own separate
+# MAN/SPT entries; see the top-of-file comment.
+
+[[stations]]
+crs = "DVN"
+role = "minor"
+segment = "northern-buxton-line"
+# Davenport.
+
+[[stations]]
+crs = "WSR"
+role = "minor"
+segment = "northern-buxton-line"
+# Woodsmoor.
+
+[[stations]]
+crs = "HAZ"
+role = "junction"
+segment = "northern-buxton-line"
+# Hazel Grove -- the 1986 Hazel Grove Chord to the Hope Valley Line diverges
+# here; see the top-of-file comment. No segment shared: no other catalogue
+# file currently models a station reached via that chord.
+
+[[stations]]
+crs = "MDL"
+role = "minor"
+segment = "northern-buxton-line"
+# Middlewood -- see the scope-boundary note above on its historical
+# Macclesfield curve.
+
+[[stations]]
+crs = "DSL"
+role = "minor"
+segment = "northern-buxton-line"
+# Disley.
+
+[[stations]]
+crs = "NMN"
+role = "minor"
+segment = "northern-buxton-line"
+# New Mills Newtown -- distinct from New Mills Central on
+# `northern-hope-valley.toml`; see the top-of-file comment.
+
+[[stations]]
+crs = "FNV"
+role = "minor"
+segment = "northern-buxton-line"
+# Furness Vale.
+
+[[stations]]
+crs = "WBR"
+role = "minor"
+segment = "northern-buxton-line"
+# Whaley Bridge.
+
+[[stations]]
+crs = "CEF"
+role = "minor"
+segment = "northern-buxton-line"
+# Chapel-en-le-Frith.
+
+[[stations]]
+crs = "DVH"
+role = "minor"
+segment = "northern-buxton-line"
+# Dove Holes -- only alternate trains stop here.
+
+[[stations]]
+crs = "BUX"
+role = "terminus"
+segment = "northern-buxton-line"

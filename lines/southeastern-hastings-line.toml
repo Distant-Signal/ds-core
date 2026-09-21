@@ -1,0 +1,185 @@
+id = "southeastern-hastings-line"
+name = "Hastings Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["SE"]
+
+sample_stations = ["TON", "TBW", "BAT", "HGS"]
+match_keywords = ["Hastings line"]
+
+# ============================================================================
+# BACKGROUND - a self-flagged gap, now filled
+# ============================================================================
+# southeastern-main-line.toml's own header comment states plainly: "The
+# Hastings line ... is a distinct, separate Southeastern corridor (diverging
+# from the SEML at Tonbridge, not from anywhere on this line) ... The
+# Hastings line via Tunbridge Wells currently has no line-catalogue task
+# anywhere in this plan and is a known coverage gap." That file also carried
+# an `excluded_keywords = ["Hastings line"]` entry, justified at the time
+# because "no file in the catalogue models that route... so it causes no
+# such harm." Both of those statements are now out of date - this file is
+# that route, and it shares a real station (TON) with southeastern-main-
+# line.toml. See the REVIEW FIX note added to that file's own
+# `excluded_keywords` comment for the corresponding removal (same fix
+# pattern as the "REVIEW FIX" notes already present in
+# southeastern-chatham.toml/southeastern-metro-north-kent.toml/
+# southeastern-hayes-line.toml for the identical `is_excluded`-hard-veto
+# failure mode). southeastern-chatham.toml's own `excluded_keywords`
+# ("Hastings line") is untouched: that file shares no station whatsoever
+# with this one (verified against both files' full CRS lists), so its
+# exclusion causes none of that harm.
+#
+# ============================================================================
+# SOURCING AND VERIFICATION
+# ============================================================================
+# Station list and order confirmed via Wikipedia's "Hastings line" article
+# (lead + History section, which dates each station's opening in order),
+# cross-checked station-by-station against nationalrail.co.uk's own
+# /stations/<crs>/details.html pages, and every CRS code independently
+# verified live against https://ds.cursed.solutions/api/stations?q=<name>.
+# Two codes were not what a naive guess would produce and are flagged here
+# because they're easy to get wrong: Crowhurst (East Sussex, on this line)
+# is CWU, not "CWH"; West St Leonards is WLD, not "WSL".
+#
+# Electrification: third rail 750V DC throughout, completed 1986 (Wikipedia
+# infobox) - several tunnels (e.g. at Mountfield, Wadhurst) were reduced to
+# single-track during that electrification scheme, a real infrastructure
+# fact noted here for context but not modelled (this catalogue doesn't
+# track individual tunnel bores).
+#
+# Operator: Wikipedia's own infobox lists "Southeastern" as the line's
+# primary operator, with "Southern (Govia Thameslink Railway)" named
+# separately for "Hastings area only". This most plausibly reflects
+# southern-coastway-east.toml's own Southern services reaching Hastings/St
+# Leonards from the Bexhill direction over the final shared stretch into
+# Hastings itself (see the SLQ/HGS overlap note below) rather than Southern
+# running its own booked services further up this line - but that specific
+# attribution was not confirmed to a two-source bar within this task's
+# budget, so `operators` here stays `["SE"]` only, matching this task's own
+# scope, and the Southern-area caveat is disclosed here rather than acted
+# on.
+#
+# ============================================================================
+# SCOPE BOUNDARIES (documented, not modelled)
+# ============================================================================
+# - Redhill-Tonbridge line: already noted as an uncovered gap by
+#   southeastern-main-line.toml's own TON comment ("Redhill-Tonbridge line
+#   joins here from the west"); not this line's own concern either.
+# - Rother Valley Railway / Kent & East Sussex Railway: a closed-then-
+#   heritage-reopened line junctioning at Robertsbridge per Wikipedia's own
+#   "Hastings line" History section; not part of the National Rail network
+#   and not modelled by this catalogue.
+# - Bexhill West branch: closed 1964, historically diverged at Crowhurst
+#   per Wikipedia's own "Crowhurst railway station" article; long closed,
+#   not modelled.
+# - Mountfield Halt: closed 1969 per Wikipedia; not a current station, not
+#   listed below.
+# - Marshlink line (Hastings-Ashford International via Rye and Ore): a real,
+#   separate, lightly-used Southeastern route diverging at Hastings itself
+#   per Wikipedia's own "Hastings line" article ("junction with Marshlink
+#   line to Ashford"). Not covered by this catalogue - a genuine remaining
+#   gap, noted here rather than folded in, since southeastern-main-line.toml
+#   already separately confirmed it is "not documented as SE's usual booked
+#   route to Hastings" and treats it as distinct from this line.
+#
+# ============================================================================
+# STATION OVERLAP
+# ============================================================================
+# TON (Tonbridge): also southeastern-main-line.toml's own station (its
+# `seml-weald` segment, where that file's own comment already names this
+# line as the thing diverging there). Station overlap only, own segment
+# name below - not a shared trunk, per the xc-south-coast.toml/
+# xc-manchester.toml precedent used throughout this catalogue (and the
+# identical treatment SEML/Chatham/metro-north-kent already give every
+# other cross-file junction station).
+#
+# SLQ (St Leonards Warrior Square) and HGS (Hastings): both already
+# southern-coastway-east.toml's own stations (that file's own
+# `coastway-east-hastings` segment, where they are that file's own
+# terminus pair reached from Brighton via Bexhill). Wikipedia confirms both
+# lines physically converge for the final approach into Hastings. Station
+# overlap only, own segment name below.
+[[stations]]
+crs = "TON"
+role = "junction"
+segment = "southeastern-hastings"
+# Tonbridge. South Eastern Main Line continues toward Ashford from here;
+# this line branches off via Tunbridge Wells. See STATION OVERLAP above.
+
+[[stations]]
+crs = "HIB"
+role = "minor"
+segment = "southeastern-hastings"
+# High Brooms (formerly Southborough).
+
+[[stations]]
+crs = "TBW"
+role = "major"
+segment = "southeastern-hastings"
+# Tunbridge Wells.
+
+[[stations]]
+crs = "FRT"
+role = "minor"
+segment = "southeastern-hastings"
+# Frant.
+
+[[stations]]
+crs = "WAD"
+role = "minor"
+segment = "southeastern-hastings"
+# Wadhurst.
+
+[[stations]]
+crs = "SOG"
+role = "minor"
+segment = "southeastern-hastings"
+# Stonegate (formerly Witherenden, then Ticehurst Road).
+
+[[stations]]
+crs = "ETC"
+role = "minor"
+segment = "southeastern-hastings"
+# Etchingham.
+
+[[stations]]
+crs = "RBR"
+role = "minor"
+segment = "southeastern-hastings"
+# Robertsbridge. Junction with the heritage Kent & East Sussex Railway
+# (formerly the Rother Valley Railway) - not part of National Rail, not
+# modelled. See SCOPE BOUNDARIES above.
+
+[[stations]]
+crs = "BAT"
+role = "major"
+segment = "southeastern-hastings"
+# Battle.
+
+[[stations]]
+crs = "CWU"
+role = "minor"
+segment = "southeastern-hastings"
+# Crowhurst. Former junction for the Bexhill West branch, closed 1964 - see
+# SCOPE BOUNDARIES above.
+
+[[stations]]
+crs = "WLD"
+role = "minor"
+segment = "southeastern-hastings"
+# West St Leonards.
+
+[[stations]]
+crs = "SLQ"
+role = "major"
+segment = "southeastern-hastings"
+# St Leonards Warrior Square. Also southern-coastway-east.toml's own
+# station - see STATION OVERLAP above.
+
+[[stations]]
+crs = "HGS"
+role = "terminus"
+segment = "southeastern-hastings"
+# Hastings. Also southern-coastway-east.toml's own terminus - see STATION
+# OVERLAP above. Also a junction with the Marshlink line toward Ashford
+# International (via Rye) - see SCOPE BOUNDARIES above.

@@ -1,0 +1,226 @@
+id = "northern-durham-coast"
+name = "Durham Coast Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["NCL", "SUN", "HPL", "MBR"]
+destination_crs_filter = ["NCL", "MBR", "CAR"]
+# CAR (Carlisle) is included because the real current service through-runs
+# beyond both ends of the Durham Coast Line itself -- see the frequency
+# note below -- and LDBWS sampling at Newcastle needs to recognise
+# Carlisle-bound departures as this line's own trains, not just
+# Middlesbrough-bound ones.
+#
+# No match_keywords: Wikipedia's own "Durham Coast Line" infobox lists
+# THREE current operators -- Grand Central, Northern Trains and Tyne and
+# Wear Metro -- all genuinely running over this exact track. "Durham Coast
+# Line" would misattribute a Grand Central-only or Metro-only incident to
+# this Northern file; `grand-central.toml` itself doesn't claim this
+# phrase either (it uses only "Grand Central" as its own keyword). Station
+# and operator evidence carries this file instead.
+
+# --- Two files, not one: see `northern-tees-valley.toml`'s own comment ---
+# The task brief flagged Tees Valley Line/Durham Coast Line as possibly one
+# file. They are genuinely distinct: this line runs broadly north-south
+# (Newcastle to Middlesbrough via Sunderland and Hartlepool); the sibling
+# `northern-tees-valley.toml` runs broadly west-east (Bishop Auckland/
+# Darlington to Saltburn via Middlesbrough). They cross, and share a real
+# trunk, at Thornaby/Middlesbrough only -- see the overlap note below.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Hourly (fast) plus a second, slower, hourly all-stations service,
+# confirmed via a very recent (dated May 2026, i.e. current at the time of
+# this file's authoring, 2026-09-21) update to Sunderland station's own
+# Wikipedia article, Northern Trains section: "Sunderland is served by two
+# Northern services an hour on weekdays. The first service operates between
+# Middlesbrough and Carlisle via Newcastle Central and only calls at
+# Thornaby, Stockton, Hartlepool and Sunderland on the Durham Coast Line. A
+# second, slower, service runs between Nunthorpe and Newcastle Central via
+# Middlesbrough, calling at all National Rail stations en route." Same
+# values as `emr-regional.toml`'s comparable hourly-or-better cross-city
+# stopping service.
+
+# Newcastle to Middlesbrough, ordered north to south, via Sunderland,
+# Seaham, Horden and Hartlepool. Route history and current calling pattern
+# confirmed against Wikipedia's "Durham Coast Line" article (raw wikitext
+# fetched via Special:Export) and, for the exact current station list and
+# calling pattern, the same recent (May 2026) update to Sunderland railway
+# station's own article quoted above.
+#
+# --- A genuine through service with the Tyne Valley Line and Esk Valley
+# Line, but no shared segment names ---
+# Sunderland's own article (quoted above, and its History-of-timetable
+# paragraph) confirms this line's real passenger service does not
+# terminate at either Newcastle or Middlesbrough: "The service between
+# Carlisle and Middlesbrough was increased to run hourly... It will travel
+# through to Middlesbrough, stopping at Sunderland, Hartlepool, Stockton
+# and Thornaby" (quoting a December 2025 BBC News report on the timetable
+# change) -- i.e. the fast service is one continuous working from Carlisle
+# (`northern-tyne-valley.toml`'s own territory, via Hexham) through
+# Newcastle and down the coast to Middlesbrough; the slower, all-stations
+# service continues from Newcastle through to Nunthorpe (and some workings
+# to Whitby, `northern-esk-valley.toml`'s own territory) beyond
+# Middlesbrough. `northern-esk-valley.toml`'s own top-of-file comment
+# already flags exactly this: "A handful of weekday/Saturday services
+# extend beyond Middlesbrough towards Hartlepool, Sunderland and
+# Newcastle... Northern also runs the separate, unmodelled Tees Valley
+# service... through the same station" -- now resolved, in the sense that
+# this file models that previously-unmodelled service, but per this
+# catalogue's established convention (`grand-central.toml`'s own identical
+# treatment of its ECML-adjacent overlaps, `hull-trains.toml`'s declining
+# to reuse `lner-hull`'s segment name) this real through-running is
+# documented, not turned into a shared segment name. NCL and MBR are
+# therefore tagged "junction" (real through-points for this line's own
+# service, not termini) but keep this file's own exclusive segment name --
+# station-overlap only with `northern-tyne-valley.toml` at NCL and with
+# `northern-esk-valley.toml` at MBR.
+#
+# --- Stations excluded, and why (this took real digging -- an earlier
+# pass at this research, later discarded, wrongly included several closed
+# stations sourced from an AI-summarised secondary read rather than the
+# primary wikitext; corrected here) ---
+# Greatham (closed fully 24 November 1991, per the article's own Decline
+# section) is correctly omitted.
+#
+# Blackhall Rocks and Blackhall Colliery are BOTH permanently closed --
+# confirmed via each station's own dedicated Wikipedia article/infobox:
+# Blackhall Rocks' infobox gives `status = Disused`, closed to passengers 4
+# January 1960, closed completely 7 December 1964; Blackhall Colliery's
+# infobox likewise gives `status` implying closure, "Station closed" 4 May
+# 1964, and its own article places it "north of Blackhall Rocks and south
+# of Horden" for context. Neither reopened. Also Easington: its own
+# Wikipedia article's entire route-diagram section sits under a
+# "Historical Rail Start" heading with no current-service entry at all --
+# confirmed closed, not currently served.
+#
+# "Hart" (a station name that turns up in some secondary summaries of this
+# line) is ALSO a closed, historical-only station -- its own Wikipedia
+# article's route diagrams are both headed "Historical Rail Start"/closed,
+# describing the old Hartlepool Dock and Railway alignment. Not a current
+# stop; omitted.
+#
+# Horden itself reopened 29 June 2020 (Wikipedia's own "Durham Coast Line"
+# article, Recent history section: "the new Horden station opened on 29
+# June 2020") after closure in 1964 -- included below as a genuine, current
+# reopening, the ONLY one of the four Blackhall-area/Easington closures
+# that has actually come back.
+#
+# Ryhope: returns no current CRS code at all
+# (https://ds.cursed.solutions/api/stations?q=Ryhope) -- confirmed closed,
+# not a current station, and omitted (unlike the historical "Ryhope East"
+# name sometimes seen in older sources).
+#
+# Heworth: DOES have a current CRS code (HEW). An earlier pass at this file
+# treated it as Tyne and Wear Metro-only for National Rail purposes, since
+# neither of Sunderland's own two explicit service-pattern quotes above
+# named it by name -- but that reading doesn't survive re-checking those
+# same quotes: the slower, all-stations service is explicitly described as
+# calling "at all National Rail stations en route" between Newcastle and
+# Middlesbrough, and Heworth now carries live National Rail platforms (per
+# the same May 2026 Sunderland-article source already cited above), not
+# just Metro ones. Included below as a genuine current stop for that slower
+# service tier. The purpose-built/converted Metro-only stops between Pelaw
+# Junction and Sunderland (Fellgate, Stadium of Light, St Peter's, Brockley
+# Whins, East Boldon, Seaburn) remain correctly excluded -- those are not
+# National Rail stations at all, unlike Heworth.
+#
+# --- Segment/overlap decisions ---
+# NCL is also a `cross-country.toml`/`tpe-north.toml`/`tpe-borders.toml`/
+# `northern-tyne-valley.toml` station -- station-overlap only in every
+# case, matching this catalogue's universal treatment of Newcastle.
+#
+# Thornaby and Middlesbrough are genuine shared trunk with this file's own
+# sibling, `northern-tees-valley.toml` -- both being written in this same
+# batch, the shared segment name `teesside-trunk` is coined in that file
+# and reused verbatim here; see that file's own comment.
+#
+# CRS codes for every station below verified against
+# https://ds.cursed.solutions/api/stations?q=<name> (one unambiguous result
+# each) and cross-checked against each station's own Wikipedia infobox.
+# NCL (tiploc NWCSTLE) reused unchanged from `northern-tyne-valley.toml`;
+# Thornaby (TBY) and Middlesbrough (MBR, tiploc MDLSBRO) reused unchanged
+# from `northern-tees-valley.toml`/`northern-esk-valley.toml`.
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "junction"
+segment = "northern-durham-coast"
+# Newcastle -- through-point, not a terminus, for this line's real service
+# (see the through-running note above). Station-overlap only with every
+# other file that lists NCL.
+
+[[stations]]
+crs = "HEW"
+role = "minor"
+segment = "northern-durham-coast"
+# Heworth -- see the exclusion-candidate note above: now carries live
+# National Rail platforms and is called at by the slower, all-stations
+# service tier, not Tyne and Wear Metro-only as an earlier pass assumed.
+
+[[stations]]
+crs = "SUN"
+role = "major"
+segment = "northern-durham-coast"
+# Sunderland -- also a `grand-central.toml` terminus (that file's own
+# `gc-sunderland` segment); different service, station-overlap only.
+
+[[stations]]
+crs = "SEA"
+role = "minor"
+segment = "northern-durham-coast"
+# Seaham -- also a `grand-central.toml` station (4 of that operator's 6
+# daily workings call here); only the slower, all-stations Northern
+# service calls here (see the frequency note above) -- still listed as an
+# ordinary station on this line, matching this catalogue's convention of
+# not splitting a file over partial/select-service calling patterns.
+
+[[stations]]
+crs = "HRE"
+role = "minor"
+segment = "northern-durham-coast"
+# Horden -- reopened 2020; see the exclusion-candidate note above for why
+# its Blackhall-area neighbours are NOT included. Also only called at by
+# the slower, all-stations service.
+
+[[stations]]
+crs = "HPL"
+role = "major"
+segment = "northern-durham-coast"
+# Hartlepool -- also a `grand-central.toml` station; called at by both of
+# this line's own service tiers (see the frequency note above).
+
+[[stations]]
+crs = "STK"
+role = "minor"
+segment = "northern-durham-coast"
+# Stockton -- called at by both of this line's own service tiers.
+
+[[stations]]
+crs = "BIL"
+role = "minor"
+segment = "northern-durham-coast"
+# Billingham -- on the original Stockton and Hartlepool Railway alignment
+# this line still follows between Hartlepool and Stockton; only the
+# slower, all-stations service is confirmed to call here (not named in the
+# fast service's own explicit calling-point list above).
+
+[[stations]]
+crs = "TBY"
+role = "junction"
+segment = "teesside-trunk"
+# Thornaby -- genuine shared trunk with `northern-tees-valley.toml`; see
+# the overlap note above and that file's own comment.
+
+[[stations]]
+crs = "MBR"
+tiploc = "MDLSBRO"
+role = "junction"
+segment = "teesside-trunk"
+# Middlesbrough -- this line's own southern end for the fast service; the
+# slower service continues beyond it towards Nunthorpe/Whitby
+# (`northern-esk-valley.toml`'s own territory, station-overlap only, per
+# that file's own existing comment). Genuine shared trunk with
+# `northern-tees-valley.toml`.

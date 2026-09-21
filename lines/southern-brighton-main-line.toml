@@ -19,8 +19,9 @@ match_keywords = ["Brighton Main Line", "Gatwick Express"]
 # CRS codes independently spot-checked against railwaycodes.org.uk's
 # crs*.shtm pages where those loaded (some, e.g. crsb.shtm, hit the same
 # alphabetical-page-truncation issue already flagged in
-# southeastern-metro-north-kent.toml's own sourcing comment - the
-# per-station-infobox fallback that file used was used for those; crst.shtm
+# southeastern-bexleyheath.toml's/southeastern-dartford-loop.toml's own
+# sourcing comment (formerly one file, southeastern-metro-north-kent.toml) -
+# the per-station-infobox fallback that file used was used for those; crst.shtm
 # loaded fully and independently confirms TBD). This is the first GTR-brand
 # file in the catalogue (thameslink-core.toml predates this batch);
 # Southern's other services - the West/East Coastway lines (Eastbourne,
@@ -101,11 +102,13 @@ match_keywords = ["Brighton Main Line", "Gatwick Express"]
 # THIS IS WIKIPEDIA-ONLY SOURCED AND FALLS BELOW THIS BATCH'S CONFIRMATION
 # BAR - treat it as an unconfirmed lead, not a confirmed fact. In particular,
 # do NOT treat "this is a genuine standing everyday service, not an
-# engineering diversion" as established the way Task 5.4's
-# southeastern-metro-north-kent.toml FINDING 2 established the opposite for
-# the unrelated London Bridge-Lewisham stretch (that file's finding rested
-# on the same kind of single-article claim too, for what it's worth, but
-# that's Task 5.4's own call, not license to treat this one as settled).
+# engineering diversion" as established the way Task 5.4's pre-split
+# southeastern-metro-north-kent.toml FINDING 2 (now carried in both
+# southeastern-bexleyheath.toml and southeastern-dartford-loop.toml)
+# established the opposite for the unrelated London Bridge-Lewisham stretch
+# (that finding rested on the same kind of single-article claim too, for
+# what it's worth, but that's Task 5.4's own call, not license to treat
+# this one as settled).
 # Wikipedia's account here is plausible and specific enough to be worth
 # recording as a lead, but it is NOT independently verified.
 #
@@ -127,8 +130,10 @@ match_keywords = ["Brighton Main Line", "Gatwick Express"]
 # below) therefore remains this file's own segment name only; it was NOT
 # reused by thameslink-southern.toml, which instead treats its own LBG/ECR
 # stations as station overlap only, matching this file's own fallback
-# instruction and the same treatment southeastern-metro-north-kent.toml
-# already gives its own unconfirmed Lewisham stretch. See
+# instruction and the same treatment southeastern-bexleyheath.toml/
+# southeastern-dartford-loop.toml (formerly one file,
+# southeastern-metro-north-kent.toml) already gives its own unconfirmed
+# Lewisham stretch. See
 # thameslink-southern.toml's own BRIGHTON BRANCH header comment for the full
 # writeup of what was tried and why it still doesn't clear the bar. No test
 # in this file or thameslink-southern.toml asserts SharedSegment for this

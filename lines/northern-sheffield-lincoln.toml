@@ -1,0 +1,153 @@
+id = "northern-sheffield-lincoln"
+name = "Sheffield - Lincoln Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["SHF", "WRK", "RET", "LCN"]
+destination_crs_filter = ["LCN"]
+match_keywords = ["Sheffield to Lincoln Line", "Sheffield-Lincoln line"]
+# The line's own branded/article name (Wikipedia's article, "Sheffield to
+# Lincoln Line", redirects from "Sheffield-Lincoln line"). Grepped clean
+# against every other file's own `match_keywords` before adding -- no
+# collision. Not vetoed for the Brigg branch/Cleethorpes fork this file
+# doesn't model (see the scope note below): that fork is branded "Brigg
+# branch line" in the same article, a distinct enough phrase that this
+# file's own keywords shouldn't cross-match it.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# "An hourly service provided by Northern runs along this route" --
+# Wikipedia's "Sheffield to Lincoln Line" article, Current services
+# section. Same values as `emr-regional.toml`'s comparable hourly
+# cross-city stopping service.
+
+# Sheffield to Lincoln, ordered south-west to north-east, via Darnall,
+# Woodhouse, Kiveton Bridge, Kiveton Park, Shireoaks, Worksop, Retford,
+# Gainsborough Lea Road and Saxilby. Station list, order and frequency
+# confirmed via Wikipedia's "Sheffield to Lincoln Line" article
+# (Routes/Current services/Main line route section, raw wikitext fetched
+# via Special:Export), which explicitly separates this "main line route"
+# from a second, distinct "Brigg branch line route" (Sheffield-Cleethorpes
+# via Gainsborough Central and Barnetby) that this task's brief does not
+# ask for and this file does not model.
+#
+# --- Segment/overlap decisions ---
+# SHF (Sheffield) is also a `cross-country.toml`/`emr-midland-main-line.
+# toml`/`emr-regional.toml` station, each on its own different physical
+# approach -- station-overlap only, matching `emr-regional.toml`'s own
+# Ruling 3 for the identical Sheffield/Nottingham situation.
+#
+# RET (Retford) is also an `lner-leeds.toml`/`lner-hull.toml`/
+# `hull-trains.toml` station on the ECML's own `ecml-doncaster`/
+# `ht-kings-cross-hull` segments -- a different physical line (the ECML
+# itself) crossing this one at Retford, not a shared trunk. Station-
+# overlap only.
+#
+# WRK (Worksop) is also an `emr-rural-branches.toml` station, on that
+# file's own Robin Hood Line (`emr-robin-hood` segment, Nottingham-Worksop
+# via Mansfield/Shirebrook). That file's own comment on its WRK entry
+# explicitly left this decision open for whoever wrote this file: "no
+# northern*.toml file in this catalogue lists WRK at authoring time...
+# if a future Northern Sheffield-Lincoln-Leeds line file lands and turns
+# out to genuinely share track through Worksop, that file's author should
+# reconcile segment names then." Reconciled here: the Robin Hood Line
+# approaches Worksop from the south (via Whitwell/Creswell/Shirebrook) and
+# this line approaches from the west (via Shireoaks) and continues east
+# (to Retford) -- two different physical approaches converging on the same
+# station, the same "three separate approaches, one shared terminus"
+# shape `emr-rural-branches.toml`'s own Ruling documents for Nottingham
+# itself. No genuine track-sharing found, so no segment name is shared;
+# station-overlap only, same as everywhere else in this file.
+#
+# Gainsborough Lea Road is also served by a separate, real, currently
+# unmodelled East Midlands Railway service (Doncaster-Lincoln line, per
+# this line's own Wikipedia article: "Additional services provided by
+# East Midlands Railway serve the section between Lincoln and Gainsborough
+# Lea Road en route to Doncaster") -- a real, sourced, documented gap for
+# a future EMR batch, not modelled here.
+#
+# Every station below uses this file's own single exclusive segment,
+# `northern-sheffield-lincoln`.
+#
+# CRS codes for every station below verified against
+# https://ds.cursed.solutions/api/stations?q=<name> (one unambiguous result
+# each) and cross-checked against each station's own Wikipedia infobox.
+# SHF and RET tiploc/CRS reused unchanged from `cross-country.toml`/
+# `emr-regional.toml`/`emr-midland-main-line.toml` and `lner-hull.toml`
+# respectively, already verified there. WRK and LCN CRS reused unchanged
+# from `emr-rural-branches.toml` and `lner-lincoln.toml` respectively.
+[[stations]]
+crs = "SHF"
+tiploc = "SHEFFLD"
+role = "terminus"
+segment = "northern-sheffield-lincoln"
+
+[[stations]]
+crs = "DAN"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Darnall.
+
+[[stations]]
+crs = "WDH"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Woodhouse. CRS confirmed WDH, distinct from MSW (Mansfield Woodhouse) via
+# the cursed.solutions lookup.
+
+[[stations]]
+crs = "KIV"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Kiveton Bridge.
+
+[[stations]]
+crs = "KVP"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Kiveton Park.
+
+[[stations]]
+crs = "SRO"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Shireoaks.
+
+[[stations]]
+crs = "WRK"
+role = "junction"
+segment = "northern-sheffield-lincoln"
+# Worksop -- also an `emr-rural-branches.toml` station (Robin Hood Line);
+# see the overlap note above.
+
+[[stations]]
+crs = "RET"
+role = "junction"
+segment = "northern-sheffield-lincoln"
+# Retford -- crosses the ECML here (also an `lner-leeds.toml`/
+# `lner-hull.toml`/`hull-trains.toml` station); see the overlap note above.
+# The Brigg branch line route (Sheffield-Cleethorpes, not modelled) also
+# continues east from Retford via a different pair of junctions
+# (West/East Trent Junction) per this line's own Wikipedia article.
+
+[[stations]]
+crs = "GBL"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Gainsborough Lea Road -- see the EMR overlap note above.
+
+[[stations]]
+crs = "SXY"
+role = "minor"
+segment = "northern-sheffield-lincoln"
+# Saxilby.
+
+[[stations]]
+crs = "LCN"
+role = "terminus"
+segment = "northern-sheffield-lincoln"
+# Lincoln (Central) -- also an `lner-lincoln.toml` terminus; different
+# physical approach (LNER arrives via Newark/the Nottingham-Lincoln line),
+# station-overlap only.

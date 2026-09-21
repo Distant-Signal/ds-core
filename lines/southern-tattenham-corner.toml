@@ -1,0 +1,149 @@
+id = "southern-tattenham-corner"
+name = "Tattenham Corner Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Sibling to southern-caterham.toml, added in the same pass - see that
+# file's own header for why Caterham/Tattenham Corner (both off Purley) are
+# kept separate from Epsom Downs (off Sutton, a different corridor) despite
+# the brief's own "Sutton/Epsom suburban network" framing for all three.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Tattenham Corner line" gives the order
+# Reedham - Coulsdon Town - Woodmansterne - Chipstead - Kingswood -
+# Tadworth - Tattenham Corner (terminus), with mileages confirming Reedham
+# (15 mi 65 ch) as the first station past Purley (15 mi 13 ch per
+# southern-caterham.toml's own sourcing) and Tattenham Corner (23 mi 37 ch)
+# as the terminus, an 8-mile-14-ch route in total. Operator "Southern"
+# (infobox).
+# Junction confirmed at Purley: Purley's own article states plainly it "is
+# a junction, with branches to Caterham and Tattenham Corner" from its own
+# platforms 5/6 (see southern-caterham.toml's own SOURCING for the full
+# quote). CORRECTION (re-checked against both lines' own infoboxes,
+# matching the correction recorded in southern-caterham.toml's own header):
+# an earlier draft of this comment read that as the two branches leaving
+# Purley fully independently, with no Caterham-line trackage-sharing - that
+# has it backwards. This line's own infobox route actually shows it joining
+# the Caterham line's track for a short stretch (~200m) immediately south
+# of Purley before diverging again onto its own alignment towards Reedham.
+# No functional/data impact (no CRS-coded station exists at that
+# unstationed junction point, so PUR remains correctly the only shared
+# stop), so the station list and segment choices below are unaffected -
+# this just corrects the topology description.
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Reedham (London)=RHM (distinct from Reedham (Norfolk)=REE - confirmed
+# both codes), Coulsdon Town=CDN, Woodmansterne=WME, Chipstead=CHP,
+# Kingswood=KND, Tadworth=TAD, Tattenham Corner=TAT.
+# Grepped clean before starting: no other `lines/*.toml` file lists
+# Reedham, Coulsdon Town, Woodmansterne, Chipstead, Kingswood, Tadworth or
+# Tattenham Corner. Purley (PUR) is this file's own sibling's junction
+# station, reused here (see SEGMENTS).
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   PUR | RHM - CDN - WME - CHP - KND - TAD - TAT
+#   [southern-purley-branches, shared]
+#   [------ southern-tattenham-corner-branch (exclusive) ---------------]
+#
+# Purley reused verbatim from southern-caterham.toml's own
+# `southern-purley-branches` segment - see that file's SEGMENTS section for
+# the full reasoning (a genuine same-operator sibling junction, not a
+# station-overlap convenience). This line's own exclusive segment starts at
+# the next station past the junction, Reedham, per the shared-trunk rule of
+# thumb.
+
+match_keywords = ["Tattenham Corner line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's match_keywords - no collision. "Tattenham Corner" alone (without
+# "line") was considered as an additional entry but rejected: it is a
+# strict substring of "Tattenham Corner line" and per the plain-substring
+# matcher (see swr-kingston-loop.toml's own note on this exact point) could
+# never add a match the longer phrase doesn't already make.
+
+sample_stations = ["WME", "KND", "TAT"]
+# All three on this line's own exclusive branch, past the Purley junction -
+# no other line in the catalogue touches any of them.
+
+destination_crs_filter = ["TAT"]
+# A single-terminus branch; per southern-caterham.toml's own sourcing,
+# workings on this pair of branches split/join specifically as "a train
+# travelling to or from Caterham" vs Tattenham Corner at Purley, so this
+# branch's own workings are consistently Tattenham Corner-bound. All three
+# sample stations are exclusive to this branch, so the filter carries no
+# risk of dropping a real sample.
+
+# Commuter line, same tuning as southern-caterham.toml and this catalogue's
+# other London suburban commuter files.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Purley/Coulsdon South/Merstham "slow" Brighton Main Line approach
+#   from London: see southern-caterham.toml's own identical note - a real,
+#   still-open gap.
+# - The Caterham line: southern-caterham.toml, this file's own sibling via
+#   the shared Purley junction segment.
+# - The Epsom Downs line: a different, non-adjacent branch off Sutton -
+#   southern-epsom-downs.toml, not a sibling of this file.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "PUR"
+role = "junction"
+segment = "southern-purley-branches"
+# Purley. Shared verbatim with southern-caterham.toml - see SEGMENTS above.
+
+[[stations]]
+crs = "RHM"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Reedham (London). Distinct from Reedham (Norfolk), REE - see CRS
+# sourcing note above.
+
+[[stations]]
+crs = "CDN"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Coulsdon Town.
+
+[[stations]]
+crs = "WME"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Woodmansterne.
+
+[[stations]]
+crs = "CHP"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Chipstead.
+
+[[stations]]
+crs = "KND"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Kingswood.
+
+[[stations]]
+crs = "TAD"
+role = "minor"
+segment = "southern-tattenham-corner-branch"
+# Tadworth.
+
+[[stations]]
+crs = "TAT"
+role = "terminus"
+segment = "southern-tattenham-corner-branch"
+# Tattenham Corner. Named for its proximity to Epsom Downs Racecourse.

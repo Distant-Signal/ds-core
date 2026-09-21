@@ -1,0 +1,188 @@
+id = "northern-bentham-line"
+name = "Bentham Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains service with no existing `lines/*.toml`
+# coverage. "Bentham line" is a Wikipedia redirect to "Leeds-Morecambe line"
+# (`#REDIRECT [[Leeds-Morecambe line]]`); that article's own lead confirms
+# the synonym: "The Leeds-Morecambe line, also known as the Bentham line, is
+# a railway line running between Leeds, Skipton, Lancaster and Morecambe."
+# Fetched as raw wikitext and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference), fetched/verified 2026-09-21.
+#
+# --- Leeds-Skipton: already claimed by `northern-airedale.toml`, not
+# re-modelled here ---
+# `northern-airedale.toml`'s own header comment already researched and
+# explicitly decided this exact question: "Northern itself treats the
+# onward services as separate named lines, not as the Airedale Line
+# continuing... the Leeds-Morecambe/Bentham Line (two-hourly service...
+# between Leeds, Lancaster, Carnforth and Morecambe)[is] listed as its own
+# line serving Skipton... Skipton is kept as this line's terminus rather
+# than extending the station list further." Consistent with that file's own
+# deliberate choice, this file does NOT reuse `northern-airedale`'s own
+# `northern-shipley-trunk`/`northern-airedale` segment names for Leeds,
+# Bradford Forster Square, Shipley or Keighley, and does not re-list them:
+# this file's own station list starts at Skipton, where it picks up
+# station-overlap-only (not shared-track) with that file's own terminus.
+#
+# Route from Skipton: Skipton - Gargrave - Hellifield - Long Preston -
+# Giggleswick - Clapham (North Yorkshire) - Bentham - Wennington - Carnforth
+# - Lancaster, then on to Morecambe via Bare Lane. Important correction
+# against an initial assumption: Settle itself is NOT served by this line --
+# "The market town is also served by the railway station at Giggleswick...
+# it is on the Bentham Line" (Settle station itself sits on the separate
+# Settle-Carlisle Line). Settle Junction, where the Settle-Carlisle Line
+# diverges north, is confirmed as a junction only, never a passenger
+# station: "at Settle Junction the Settle-Carlisle line... continues" -- no
+# CRS/station entry exists for it and none is added here.
+#
+# The historical Y-split at Wennington (where the Furness & Midland Joint
+# Railway once met this line) closed in 1966; today the line runs as one
+# route through Wennington to Carnforth, and the real, current
+# Lancaster/Morecambe split happens at Lancaster itself, onto the West Coast
+# Main Line-adjacent Morecambe branch: "The line branches from the West
+# Coast Main Line at Lancaster, running northwest to Morecambe." Modelled
+# here as a single trunk (Skipton-Lancaster) plus a short exclusive branch
+# (Lancaster-Bare Lane-Morecambe).
+#
+# --- Carnforth/Lancaster: station and short track overlap, no shared
+# segment ---
+# Carnforth to Lancaster is genuine shared running with the southern end of
+# the West Coast Main Line ("Trains now continue via Carnforth," joining
+# WCML metals into Lancaster), and Lancaster itself is also a station on
+# `west-coast-main-line.toml`, `northern-furness.toml` and `tpe-anglo-
+# scottish.toml`. Following the precedent already set by
+# `northern-furness.toml` -- which itself touches this exact Carnforth/
+# Lancaster stretch of WCML track but tags both stations with its own
+# exclusive `northern-furness-branch` segment rather than reusing
+# `west-coast-main-line.toml`'s `wcml-northwest` segment -- this file does
+# the same: CNF and LAN get their own exclusive segment, station/track
+# overlap only, no segment shared with any of those three other files.
+#
+# --- Service pattern and severity_overrides ---
+# Northern Trains, Class 158 DMUs since December 2019. "Seven [trains] in
+# each direction on weekdays/Saturdays and five on Sundays" between Leeds
+# and Lancaster, but frequency thins noticeably west of Long Preston (a
+# Modern Railways report cited an hourly service as achievable only "as far
+# as Long Preston", implying today's actual service beyond that point runs
+# below hourly). "There are currently no intermediate signals anywhere
+# between Settle Junction and Carnforth, the block section of more than 24
+# miles being the longest in the country" -- a genuinely rural, long-block,
+# passing-loop-dependent operation. "All stations between Skipton and
+# Carnforth (except Hellifield) were reduced to unstaffed halt status in
+# October 1970." Tuned thresholds follow `northern-clitheroe.toml`'s own
+# three-field rural-branch pattern.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Settle-Carlisle Line: diverges north at Settle Junction (no passenger
+#   station there) and continues via Settle, Horton-in-Ribblesdale,
+#   Ribblehead, Dent, Appleby to Carlisle -- a separate, currently
+#   unmodelled route in this catalogue; explicitly out of scope here.
+# - Bell Busk (closed 1959), Melling (closed 1952), Arkholme (closed 1960)
+#   and Borwick (closed 1960): real former stations on this route, all
+#   confirmed closed via their own Wikipedia articles. Not modelled.
+# - "Low Bentham": a distinct, short-lived 19th-century station (1850-1853),
+#   not the current Bentham station and not a modern candidate stop.
+sample_stations = ["SKI", "LPR", "BEN", "LAN", "MCM"]
+destination_crs_filter = ["LAN", "MCM"]
+match_keywords = ["Bentham line", "Leeds-Morecambe line"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "SKI"
+role = "junction"
+segment = "northern-bentham-line"
+# Skipton -- station-overlap only with `northern-airedale.toml`'s own
+# terminus here; that file's own comment deliberately declines to extend
+# its coverage or a shared segment this far. See the top-of-file comment.
+
+[[stations]]
+crs = "GGV"
+role = "minor"
+segment = "northern-bentham-trunk"
+# Gargrave -- genuine shared trunk with `northern-settle-carlisle.toml`'s
+# own Leeds-Carlisle working, which coined `northern-bentham-trunk` for
+# this exact Gargrave/Hellifield/Long Preston stretch and explicitly asked
+# for it to be reused once this file existed; see that file's own
+# route-level comment.
+
+[[stations]]
+crs = "HLD"
+role = "minor"
+segment = "northern-bentham-trunk"
+# Hellifield -- one of the few stations on this stretch that kept staffing
+# after the October 1970 unstaffing round; see the top-of-file comment.
+# Shared trunk with `northern-settle-carlisle.toml` -- see the Gargrave
+# entry above.
+
+[[stations]]
+crs = "LPR"
+role = "minor"
+segment = "northern-bentham-trunk"
+# Long Preston. Shared trunk with `northern-settle-carlisle.toml` -- see
+# the Gargrave entry above.
+
+[[stations]]
+crs = "GIG"
+role = "minor"
+segment = "northern-bentham-line"
+# Giggleswick -- serves the nearby market town of Settle; Settle's own
+# station is on the separate Settle-Carlisle Line. See the top-of-file
+# comment.
+
+[[stations]]
+crs = "CPY"
+role = "minor"
+segment = "northern-bentham-line"
+# Clapham (North Yorkshire) -- disambiguated via
+# ds.cursed.solutions/api/stations from the unrelated London stations
+# Clapham High Street (CLP) and Clapham Junction (CLJ).
+
+[[stations]]
+crs = "BEN"
+role = "minor"
+segment = "northern-bentham-line"
+# Bentham -- the line's own namesake town.
+
+[[stations]]
+crs = "WNN"
+role = "minor"
+segment = "northern-bentham-line"
+# Wennington -- a historical junction (see the top-of-file comment); today
+# the line runs through as a single route.
+
+[[stations]]
+crs = "CNF"
+role = "junction"
+segment = "northern-bentham-line"
+# Carnforth -- station/short track overlap only with West Coast Main Line-
+# touching files; see the top-of-file comment.
+
+[[stations]]
+crs = "LAN"
+tiploc = "LANCSTR"
+role = "junction"
+segment = "northern-bentham-line"
+# Lancaster -- the real current Lancaster/Morecambe split point; station
+# overlap only with `west-coast-main-line.toml`, `northern-furness.toml` and
+# `tpe-anglo-scottish.toml`'s own separate Lancaster entries.
+
+[[stations]]
+crs = "BAR"
+role = "minor"
+segment = "northern-bentham-line-morecambe"
+# Bare Lane -- first station exclusive to the Morecambe branch.
+
+[[stations]]
+crs = "MCM"
+role = "terminus"
+segment = "northern-bentham-line-morecambe"
+# Morecambe.

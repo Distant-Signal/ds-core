@@ -1,0 +1,224 @@
+id = "northern-erewash-valley"
+name = "Northern: Erewash Valley Line (Nottingham - Chesterfield)"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]  # Northern Trains -- the primary current-day passenger
+# operator on this stretch, per the sourcing below; reused verbatim from
+# `northern.toml`, an already-verified fact.
+
+# GAP-ANALYSIS PROVENANCE AND SCOPE DECISION: the brief asked this task to
+# check carefully "whether this actually has meaningful CURRENT passenger
+# service... if the passenger service is negligible/non-existent today, say
+# so and skip rather than inventing a thin file." Conclusion after research:
+# DO NOT SKIP -- this line carries a genuine, substantial, currently-running
+# hourly passenger service, just not the one the brief's own framing (and
+# `emr-regional.toml`'s existing comments) implied.
+#
+# RESEARCH (fetched live 2026-09-21, Wikipedia's "Erewash Valley line"
+# article plus the individual Langley Mill, Alfreton and Chesterfield
+# station articles, cross-checked against each other):
+#   1. The line article itself is thin on current operations -- it
+#      documents the line's freight-dominated history and the 2 January
+#      1967 withdrawal of LOCAL passenger trains in detail, but only states
+#      once, in passing, that "the Erewash Valley Line continues in use at
+#      the present day," without naming a current operator or service.
+#      Taken alone, this could read as the "negligible/freight-only today"
+#      case the brief anticipated.
+#   2. However, three independent, separately-authored station articles on
+#      this exact stretch tell a different, consistent, and much more
+#      concrete story: Langley Mill's own article states the line it sits
+#      on is the "Erewash Valley Line" and names two current operators --
+#      Northern Trains running "an hourly service between Nottingham and
+#      Leeds via Sheffield," and East Midlands Railway running "a few
+#      services per day" (its own separate Liverpool/Sheffield-Nottingham/
+#      Norwich peak-hour workings, already modelled by `emr-regional.toml`).
+#      Alfreton's own article independently corroborates the identical
+#      Northern "hourly service between Nottingham and Leeds that stops at
+#      Alfreton," alongside EMR's own separate hourly Liverpool-Norwich
+#      pattern (again, `emr-regional.toml`'s own service, not this one).
+#      Chesterfield's own article, a third independently-authored page,
+#      again corroborates: Northern Trains "runs an hourly service between
+#      Nottingham and Leeds," with Chesterfield itself an intermediate stop.
+#      Three separate station articles, none of them merely re-quoting the
+#      line article, agree on the same real, current, hourly Northern
+#      service -- a materially different and stronger finding than the line
+#      article's own thin one-line mention.
+#   3. This directly corrects an assumption embedded in this catalogue's
+#      own existing comments: `emr-regional.toml`'s Ruling 3 and
+#      `emr-rural-branches.toml`'s Branch 3 ruling both describe the
+#      Erewash Valley Line only in terms of EMR's own limited peak-hour
+#      Liverpool/Sheffield-Nottingham/Norwich workings (calling only at
+#      Alfreton and Nottingham on this stretch, not Langley Mill or
+#      Ilkeston) -- neither existing file's authors appear to have
+#      independently checked for a Northern-operated all-stations service
+#      on the same physical route. This file fills that gap; it does not
+#      contradict either existing file's own EMR-specific claims, which
+#      remain accurate as far as they go.
+#   4. Full station list on this file's own scope (Nottingham to
+#      Chesterfield, the genuinely Northern-operated all-stations stretch;
+#      see the scope-boundary note below for why this file stops at
+#      Chesterfield rather than continuing to Sheffield/Leeds): Nottingham,
+#      Ilkeston, Langley Mill, Alfreton, Chesterfield. Trowell -- named in
+#      `emr-regional.toml`'s own comment as historically on this route --
+#      was independently checked this session and confirmed closed (closed
+#      to passengers and goods 2 January 1967, never reopened, "Disused"
+#      per its own infobox) -- correctly omitted as a real, currently-closed
+#      station, not an unverified gap.
+#   5. Naming note: Wikipedia's own sourcing is internally inconsistent
+#      about which "line" name applies here -- Langley Mill's and
+#      Alfreton's own articles both say "Erewash Valley line," while
+#      Ilkeston's own article instead says "Midland Main Line." This file
+#      follows the 2-vs-1 majority and the name already established and
+#      used consistently elsewhere in this catalogue (`emr-regional.toml`'s
+#      own repeated "Erewash Valley Line" references for this exact
+#      stretch), flagging the Ilkeston-article discrepancy here rather than
+#      silently ignoring it.
+#
+# CRS codes: NOT reused verbatim from every other EMR/`emr-*.toml` file;
+# ALF and CHD reused verbatim from `emr-regional.toml`/
+# `emr-midland-main-line.toml` (already-verified facts). ILN (Ilkeston) and
+# LGM (Langley Mill) independently confirmed live via this app's own
+# production station-lookup endpoint (ds.cursed.solutions/api/stations?
+# q=<name>, 2026-09-21), single unambiguous match for each. No TIPLOC
+# confirmed for ILN/LGM to the two-source standard, so `tiploc` is omitted
+# for both.
+
+sample_stations = ["ILN", "LGM"]
+# Both exclusive to this line (no other file's LDBWS sampling would compete
+# for them -- grep-checked against `lines/*.toml`); NOT and ALF/CHD are all
+# shared with other EMR files' own sampling, per the precedent
+# `wmr-nuneaton-coventry.toml` sets for preferring line-exclusive stations.
+
+# No `destination_crs_filter`: an earlier draft set `["NOT"]`, reasoning
+# that NOT was the one terminus wholly exclusive to this working's own
+# southbound direction -- but that dropped every genuine northbound
+# (Leeds/Sheffield-bound) departure, since `destination_crs_filter` only
+# counts departures whose destination is IN the list. Per this catalogue's
+# own precedent (operator-only filtering is sufficient when the sample
+# stations are exclusive), no filter is needed here: ILN and LGM are both
+# confirmed exclusive to this file (see the `sample_stations` comment
+# above), so the `operators = ["NT"]` gate alone already disambiguates any
+# incident sampled from them without dropping legitimate departures in
+# either direction.
+
+match_keywords = ["Erewash Valley Line"]
+# The line's own name, confirmed in current use by two of the three
+# station-article sources above (see the naming note). Grep-checked against
+# every other `lines/*.toml` file's `match_keywords` before adding -- no
+# collision (only used in comments elsewhere in this catalogue, not in any
+# other file's own `match_keywords`). An earlier draft also listed a
+# lowercase "Erewash Valley line" variant, but matching is case-insensitive
+# so that was a redundant duplicate; dropped.
+
+# Hourly regional stopping service -- same frequency-driven tuning
+# `emr-rural-branches.toml`/`wmr-nuneaton-coventry.toml`/`northern-esk-
+# valley.toml` apply for comparable hourly regional lines, reused verbatim.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Nottingham to Chesterfield, ordered south to north.
+[[stations]]
+crs = "NOT"
+role = "terminus"
+segment = "northern-erewash-valley"
+# Nottingham: also served by `emr-midland-main-line.toml`'s own southern
+# spur, `emr-rural-branches.toml`'s Robin Hood/Poacher Lines, and
+# `emr-nottingham-lincoln.toml`'s own eastern approach -- this line's own
+# approach (north via Ilkeston) is a fifth, physically distinct route into
+# the same terminal station. Station-overlap only, matching this
+# catalogue's established precedent at this station (see e.g.
+# `emr-regional.toml`'s Ruling 3).
+
+[[stations]]
+crs = "ILN"
+role = "minor"
+segment = "northern-erewash-valley"
+# Ilkeston: reopened 2017. Per the sourcing above, most calls here are this
+# file's own Northern Nottingham-Leeds service; EMR's own limited peak-hour
+# service also calls here, per a later follow-up audit of
+# `emr-regional.toml` that added an ILN entry to that file's own
+# `emr-regional-east` segment (a small-number-of-peak-services stop, per
+# that file's own comment) -- a genuine overlap this file's earlier
+# comment missed. Same treatment as the Alfreton entry below: genuine
+# physical track-sharing, but NOT a shared segment name (that file's own
+# `emr-regional-east` segment spans its entire Grantham-Peterborough-Ely-
+# Norwich continuation, far more track than this file's own overlap here),
+# so this file's own `northern-erewash-valley` segment name is used
+# uniformly instead. Cost if wrong: bounded, as with the Alfreton case --
+# an Ilkeston incident still matches both lines independently via
+# StationHit regardless of segment name.
+
+[[stations]]
+crs = "LGM"
+role = "minor"
+segment = "northern-erewash-valley"
+# Langley Mill: reopened 1986. Also called at by EMR's own limited
+# peak-hour service per this station's own article, but (same reasoning as
+# Ilkeston) `emr-regional.toml`'s own station list has no LGM entry either
+# -- station-overlap only in principle, no shared segment name needed since
+# the other file doesn't independently list this station.
+
+[[stations]]
+crs = "ALF"
+role = "minor"
+segment = "northern-erewash-valley"
+# Alfreton (& Mansfield Parkway): ALSO an `emr-regional.toml` station
+# (that file's own `emr-regional-east` segment) -- genuine physical
+# track-sharing (both services call at the same platform on the same
+# stretch), but NOT a shared segment name, for the identical coarse-
+# segment-granularity reason `emr-regional.toml`'s own Ruling 1 and
+# `emr-rural-branches.toml`'s Branch 3 ruling already establish: that
+# file's `emr-regional-east` segment also spans its entire Grantham-
+# Peterborough-Ely-Norwich continuation, far more track than this file's
+# own overlap here. This file's own `northern-erewash-valley` segment name
+# is used uniformly instead. Cost if wrong: bounded, as in every other
+# instance of this pattern in this catalogue -- an Alfreton incident still
+# matches both lines independently via StationHit regardless of segment
+# name.
+
+# --- Shared trunk with `emr-midland-main-line.toml`/`emr-regional.toml`:
+# Chesterfield itself. Both this file's own Nottingham-Leeds service and
+# those two EMR files' own Chesterfield-Sheffield stretch (`emr-mml-north`)
+# run over the same physical Midland Main Line metals from Chesterfield
+# northward towards Sheffield -- but this file does not reuse
+# `emr-mml-north`. That name is reserved for the two same-operator (EMR)
+# files that already share it with a byte-identical two-station extent
+# (CHD, SHF in both); extending it to a third file on a different operator
+# (Northern) would still be technically byte-identical in extent here, but
+# this task found no independent confirmation this session that Northern's
+# own Nottingham-Leeds working calls at Sheffield via the exact same
+# Chesterfield-Sheffield alignment `emr-mml-north` models (as opposed to
+# diverging onto a different route towards Dronfield/Sheffield, which
+# Chesterfield's own article's route-table entry -- "Chesterfield... an
+# intermediate stop between Alfreton and Dronfield" -- suggests it might,
+# via Dronfield, a station neither existing EMR file lists at all). Left as
+# station-overlap only pending that confirmation, per this catalogue's
+# "if a fact can't be confirmed, don't guess" rule. ---
+[[stations]]
+crs = "CHD"
+role = "terminus"
+segment = "northern-erewash-valley"
+# Chesterfield: this file's own modelled extent ends here -- see the scope
+# boundary below for the real, sourced, but out-of-scope continuation
+# towards Sheffield and Leeds.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - Chesterfield to Sheffield to Leeds: the real, sourced continuation of
+#   this exact Northern service (all three station-article sources above
+#   name "Nottingham and Leeds" as the service's own full extent, not just
+#   Nottingham-Chesterfield). Not modelled here: north of Chesterfield the
+#   route is not independently confirmed to run over the same
+#   `emr-mml-north` alignment `emr-midland-main-line.toml`/
+#   `emr-regional.toml` already model (see the Chesterfield entry's own
+#   comment above -- Dronfield is a real, sourced complication), and
+#   Sheffield-Leeds itself is a distinct corridor with no line file in this
+#   catalogue yet. A genuine, documented gap for a future task, not folded
+#   in here on a guess.
+# - EMR's own limited peak-hour service on this same stretch: already
+#   modelled, unaffected, by `emr-regional.toml`'s own `emr-regional-east`
+#   segment (Alfreton and Nottingham only, per that file's existing
+#   station list) -- this file does not duplicate or alter that file's own
+#   claims.

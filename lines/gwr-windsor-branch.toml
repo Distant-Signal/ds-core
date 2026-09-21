@@ -1,0 +1,91 @@
+id = "gwr-windsor-branch"
+name = "Slough to Windsor & Eton Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway, Class 165/166 diesel multiple units — the branch
+# remains unelectrified despite the electrified Great Western Main Line it
+# diverges from (en.wikipedia.org/wiki/Slough_to_Windsor_%26_Eton_Line).
+# This is deliberately a DIFFERENT operator/route from
+# lines/swr-windsor-lines.toml (this same batch), which covers South
+# Western Railway's separate Waterloo-Windsor & Eton Riverside service to
+# the same town — see the two-file split rationale below.
+
+# --- Two operators, two stations called "Windsor", two files ---
+#
+# This task's own brief flagged the possibility that Windsor & Eton
+# Riverside and Windsor & Eton Central might need separate files for
+# separate operators, and this task's research confirms that is exactly the
+# case: Windsor & Eton Riverside is served by South Western Railway from
+# London Waterloo via Staines (lines/swr-windsor-lines.toml, this same
+# batch); Windsor & Eton Central is served by Great Western Railway from
+# Slough (this file). The two stations are in the same town but on two
+# historically separate railways with no through connection between them —
+# en.wikipedia.org/wiki/Slough_to_Windsor_%26_Eton_Line confirms this
+# branch "never extended to Datchet or Staines," ruling out any physical
+# link to the SWR route.
+
+destination_crs_filter = ["WNC"]
+sample_stations = ["WNC"]
+
+match_keywords = ["Windsor & Eton Central", "Slough to Windsor"]
+# The station's own full name and the route's own current Wikipedia article
+# title (shortened slightly; "Slough to Windsor & Eton Line" itself would be
+# a strict superset match of "Slough to Windsor" and adds nothing a
+# substring test wouldn't already catch, so only the shorter form is kept,
+# per SCHEMA.md's "don't overload match_keywords" rule). Grepped clean
+# against every other file's own match_keywords before adding — no
+# collision, including with swr-windsor-lines.toml's own "Windsor Line" /
+# "Windsor & Eton Riverside" pair (this file's own "Windsor & Eton Central"
+# is a distinct phrase, not a substring of either).
+
+# A minimal two-station single-track shuttle (en.wikipedia.org/wiki/
+# Slough_to_Windsor_%26_Eton_Line: "a 20-minute interval service... using
+# dedicated bay platform 1 at Slough") with no diversionary alternative —
+# the same isolated-branch reasoning as gwr-marlow-branch.toml's/
+# gwr-henley-branch.toml's own overrides, from this same batch.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# en.wikipedia.org/wiki/Slough_to_Windsor_%26_Eton_Line: this branch
+# consists of exactly two stations, Slough and Windsor & Eton Central,
+# single track, opened 1849. An eastern chord junction at Slough (still
+# used) connects to the Great Western Main Line; a western "Royal"/"Queen's"
+# curve closed in 1964. Electrification was approved in 2014 but remained
+# undelivered as of the most recent source checked for this task (November
+# 2016) — left unelectrified in current fact, per the operators/rolling-
+# stock note above.
+#
+# --- Slough: real shared waypoint, kept as station overlap only ---
+#
+# Slough (SLO) is already gwr-thames-valley.toml's own exclusive
+# `gwr-thames-valley` segment and elizabeth-line.toml's own `elizabeth-west`
+# segment — neither of which reaches Windsor & Eton Central. Following this
+# batch's established single-waypoint-overlap treatment (see
+# gwr-marlow-branch.toml's MAI note and gwr-henley-branch.toml's TWY note
+# for the identical shape), SLO is tagged with this line's own exclusive
+# segment below rather than either sibling's.
+[[stations]]
+crs = "SLO"
+tiploc = "SLOUGH"
+role = "junction"
+segment = "gwr-windsor-branch"
+# Slough. Row's tiploc copied from gwr-thames-valley.toml/elizabeth-
+# line.toml. Real shared waypoint with those two files, kept as station
+# overlap only — see comment above. This branch's own dedicated bay
+# platform 1 here is exclusive to this service.
+
+[[stations]]
+crs = "WNC"
+role = "terminus"
+segment = "gwr-windsor-branch"
+# Windsor & Eton Central. This line's own terminus. Distinct from Windsor &
+# Eton Riverside (WNR, lines/swr-windsor-lines.toml's own terminus, reached
+# from Waterloo by SWR) — see the two-file split note above. Chalvey Halt,
+# the branch's own historic intermediate stop, closed long ago and is not
+# modelled (per that Wikipedia article's own "Line open, station closed"
+# note).

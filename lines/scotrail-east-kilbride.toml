@@ -1,0 +1,189 @@
+id = "scotrail-east-kilbride"
+name = "ScotRail East Kilbride Line (Glasgow Central - East Kilbride)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Greater Glasgow batch. `lines/scotrail-argyle.toml`'s own scope-
+# boundaries note flags this exact gap: "East Kilbride Line: Hamilton
+# West's own Argyle Line succession continues onward to Blantyre and,
+# beyond it, East Kilbride -- a separate, currently unmodelled ScotRail
+# line in its own right ... not part of the original Hamilton Circle/
+# Larkhall/Lanark research pass." That historical Blantyre approach is
+# real (Wikipedia's own "East Kilbride-Glasgow Central line" article notes
+# the line "formerly extended beyond East Kilbride to Huntly Junction,
+# where it joined the Argyle Line between Blantyre and Hamilton West"),
+# but it has since been cut back -- "the line has since been cut back to
+# East Kilbride, where it terminates today." This file therefore models
+# today's real, single, electrified route via Pollokshaws West and Busby,
+# NOT a through Hamilton-East Kilbride service; there is no live
+# connection to reconcile with `scotrail-argyle.toml` today.
+#
+# This branch is in fact part of the Glasgow South Western Line family
+# (Wikipedia's own dedicated article for it opens: "is a branch line of
+# the Glasgow South Western Line that runs between Pollokshaws West and
+# East Kilbride"), and is modelled as its own file rather than folded into
+# `scotrail-glasgow-south-western.toml` because: (a) it has its own
+# distinct, actively-maintained Wikipedia article and historical name
+# ("Busby Railway"), (b) its service character is a genuinely different
+# shape -- short, fully double/single-with-loops electrified (December
+# 2025) commuter branch at 2 trains/hour 7 days a week, vs. the GSW main
+# line's long, largely diesel, hourly-or-worse rural run to Carlisle -- and
+# (c) `SCHEMA.md`'s "one line per file" curation rule favours the split.
+# This mirrors `scotrail-ayrshire.toml`/`scotrail-glasgow-south-
+# western.toml` both being separate files despite common Glasgow South
+# Western Line ancestry.
+#
+# Category: "commuter". Per Wikipedia, "There is 2 trains per hour between
+# Glasgow and East Kilbride 7 days a week with extra trains during peak
+# times", and the branch was fully electrified (Class 380 EMUs) from 14
+# December 2025 -- a genuinely dense, modern suburban service, unlike the
+# rural-tailed "regional" `scotrail-glasgow-south-western.toml`.
+
+sample_stations = ["GLC", "EKL"]
+destination_crs_filter = ["EKL"]
+# GLC also serves several other lines from the same named terminus (see
+# `scotrail-glasgow-south-western.toml`'s own segment-coordination note);
+# `destination_crs_filter` disambiguates this line's own East Kilbride-
+# bound departures for LDBWS sampling.
+
+match_keywords = ["East Kilbride Line", "East Kilbride-Glasgow Central line", "Busby Railway"]
+# Three high-precision phrases: the plain, commonly-used name for the
+# route; its current Wikipedia article title, confirmed as the phrase used
+# by recent coverage of the 2025 electrification (Rail Technology
+# Magazine, Network Rail Media Centre, both cited in the sourcing below);
+# and its well-attested historical name, still used as an alternate title.
+# Grepped clean against every other file's own `match_keywords` before
+# adding -- no collisions.
+
+# Dense commuter branch (2tph, 7 days/week, recently electrified):
+# following `scotrail-cathcart-circle.toml`'s and the (unmerged, sibling
+# worktree) North Clyde/Argyle files' precedent for this catalogue's other
+# dense Glasgow-suburban metro-style lines, rather than the looser
+# defaults that would misjudge a short delay on a 30-minute-frequency
+# service.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "East Kilbride-Glasgow Central line" (raw wikitext, via
+#     Special:Export -- `action=raw` was intermittently unreliable during
+#     this task): confirms ScotRail operation; confirms the line "is a
+#     branch line of the Glasgow South Western Line that runs between
+#     Pollokshaws West and East Kilbride"; confirms it "diverges from the
+#     Glasgow South Western Line at Busby Junction, between Pollokshaws
+#     West railway station and Kennishead railway station"; gives the
+#     explicit ordered station list "from northwest to southeast" (Glasgow
+#     Central, Crossmyloof, Pollokshaws West, Thornliebank, Giffnock,
+#     Clarkston, Busby, Thorntonhall, Hairmyres, East Kilbride -- 10
+#     stations, matching the infobox's own `stations = 10` field), sourced
+#     there to Network Rail's own March 2025 Scotland Sectional Appendix
+#     and Jowett's Railway Atlas; confirms double track to Busby, single
+#     track Busby-Hairmyres, redoubled Hairmyres-East Kilbride; confirms
+#     25 kV AC OHLE electrification completed 14 December 2025 (Class 380
+#     EMUs, cited to Network Rail Media Centre, "East Kilbride-Glasgow
+#     line goes electric after £144m transformation"); and confirms the
+#     historical Huntly Junction connection to the Argyle Line (Hamilton
+#     Branch) beyond East Kilbride has since been cut back, leaving East
+#     Kilbride a real terminus today.
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>. GLC/CMY/PWW are
+# shared verbatim with `scotrail-glasgow-south-western.toml` (verified
+# there); Thornliebank (THB), Giffnock (GFN), Clarkston (CKS), Busby
+# (BUS), Thorntonhall (THT), Hairmyres (HMY) and East Kilbride (EKL) were
+# independently confirmed via the same API with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+
+# === Segment-naming coordination ===
+#
+# `scotrail-gsw-approach` (Glasgow Central, Crossmyloof, Pollokshaws West)
+# is reused verbatim from `scotrail-glasgow-south-western.toml` -- see that
+# file's own segment-naming coordination note for the full sourcing. This
+# file's own exclusive segment picks up at the first station genuinely
+# unique to this branch, Thornliebank (the East Kilbride-bound continuation
+# past Busby Junction).
+
+[[stations]]
+crs = "GLC"
+role = "terminus"
+segment = "scotrail-gsw-approach"
+
+[[stations]]
+crs = "CMY"
+role = "minor"
+segment = "scotrail-gsw-approach"
+
+[[stations]]
+crs = "PWW"
+role = "junction"
+segment = "scotrail-gsw-approach"
+# Pollokshaws West: this branch diverges just beyond here, at Busby
+# Junction, from the Glasgow South Western main line. See the
+# segment-naming coordination note above.
+
+[[stations]]
+crs = "THB"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Thornliebank.
+
+[[stations]]
+crs = "GFN"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Giffnock.
+
+[[stations]]
+crs = "CKS"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Clarkston. The disused Clarkston curves formerly connected this branch
+# to the Cathcart Circle's own Neilston line at Muirend/Williamwood --
+# both curves are long closed (the last, the "West curve", by the late
+# 1980s per Wikipedia) so no shared-segment claim is made with
+# `scotrail-cathcart-circle.toml` here.
+
+[[stations]]
+crs = "BUS"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Busby: the original 1868 terminus of the Busby Railway, and the point
+# where double track gives way to single track towards Hairmyres.
+
+[[stations]]
+crs = "THT"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Thorntonhall.
+
+[[stations]]
+crs = "HMY"
+role = "minor"
+segment = "scotrail-east-kilbride-branch"
+# Hairmyres: relocated and rebuilt as part of the 2025 electrification
+# project; redoubling of the line resumes here through to East Kilbride.
+
+[[stations]]
+crs = "EKL"
+role = "terminus"
+segment = "scotrail-east-kilbride-branch"
+# East Kilbride: rebuilt terminus building completed as part of the 2025
+# electrification project. The historical Huntly Junction continuation
+# towards the Argyle Line's Hamilton branch no longer exists -- see the
+# file-level comment above.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The historical through route to Hamilton West via Blantyre (Huntly
+#   Junction): closed; East Kilbride is a genuine terminus today. No live
+#   connection to reconcile with `scotrail-argyle.toml`.
+# - The disused Clarkston curves connecting to the Cathcart Circle's
+#   Neilston line: real per Wikipedia, but long closed -- see the CKS
+#   entry's own comment above.

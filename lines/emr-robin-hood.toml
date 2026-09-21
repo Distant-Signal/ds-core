@@ -1,0 +1,172 @@
+id = "emr-robin-hood"
+name = "Robin Hood Line"
+mode = "national-rail"
+category = "regional"
+# "regional" chosen to match `northern-furness.toml`/`northern-hope-valley.toml`'s
+# category choice for comparable hourly, single/double-track DMU branches -
+# this is not part of the electrified intercity core (`emr-midland-main-line.toml`,
+# category "main-line").
+operators = ["EM"]  # East Midlands Railway
+
+# Gap-analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "East Midlands Railway (EMR)" section (a): "...rural branches (Robin Hood
+# Line Nottingham-Worksop, the Poacher/Skegness line, Derby-Matlock)." Those
+# three branches originally shared one file, `lines/emr-rural-branches.toml`,
+# under an explicitly-scoped one-line-per-file exception. A later audit
+# recommended splitting it: the three lines are unrelated, separately
+# community-rail-branded routes with no shared trunk between them (see the
+# Nottingham note below), so one-line-per-file is restored here. This file
+# is the Robin Hood Line's share of that split; see `lines/emr-poacher.toml`
+# and `lines/emr-derwent-valley.toml` for the other two, and git history for
+# the original combined file's full station-by-station sourcing.
+
+destination_crs_filter = ["NOT", "WRK"]
+
+sample_stations = ["NOT", "WRK"]
+
+match_keywords = ["Robin Hood Line"]
+
+# Confirmed per-branch: "trains run at hourly intervals between Nottingham
+# and Worksop", Wikipedia "Robin Hood Line" article. Thresholds follow
+# `northern-furness.toml`'s identical rationale/values for a comparable
+# hourly branch.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# --- Data-model note: Nottingham is exclusive to this file's own station
+# list, tagged with this file's own segment name ---
+# Nottingham is also the starting point of `lines/emr-poacher.toml`'s
+# Poacher Line (now a separate file after the split) and is served by
+# `emr-midland-main-line.toml`'s Nottingham spur (approaching from the
+# south via East Midlands Parkway/Trent Junction/Attenborough/Beeston) -
+# but the Robin Hood Line leaves Nottingham heading north via Bulwell, a
+# third, physically distinct approach into the same terminal station. This
+# mirrors `emr-regional.toml`'s Ruling 3 (Nottingham is station-overlap-only
+# between its Erewash Valley approach and MML's Nottingham spur) - same
+# station, three different physical approaches, no shared track. Since the
+# split, each file simply lists Nottingham once under its own segment name;
+# no cross-file segment name is shared at Nottingham (see the ruling below).
+[[stations]]
+crs = "NOT"
+role = "junction"
+segment = "emr-robin-hood"
+# Nottingham: starting junction for the Robin Hood Line. See the data-model
+# note above.
+
+# Station list and CRS codes verified station-by-station against Wikipedia
+# infobox pages, each independently cross-checked against nationalrail.co.uk's
+# own per-station pages (`/stations/<CRS>/details.html`) - WebSearch was
+# exhausted this session (confirmed by trying it first), so this task used
+# WebFetch against Wikipedia's Special:Export raw-wikitext endpoint plus
+# nationalrail.co.uk, per the task brief's documented fallback. The line's
+# own infobox states "13" stations; the list below - Nottingham, Bulwell,
+# Hucknall, Newstead, Kirkby-in-Ashfield, Sutton Parkway, Mansfield,
+# Mansfield Woodhouse, Shirebrook, Langwith-Whaley Thorns, Creswell,
+# Whitwell, Worksop - totals exactly 13, confirming completeness. Several
+# other place names turn up in the Wikipedia "Robin Hood Line" article's
+# prose/history (Lenton, Radford, Basford Vernon, Linby, Annesley, Kirkby-
+# in-Ashfield East, Sutton-in-Ashfield, a separate former "Langwith"
+# station) but these are pre-Beeching-era stations on the original
+# Nottingham-Worksop line that were NOT reinstated when the Robin Hood Line
+# reopened in stages 1993-1998 (or, for Langwith, were superseded half a
+# mile away by the current Langwith-Whaley Thorns station per that station's
+# own article) - they are omitted here as they are not currently open/
+# servable stations, not as an uncertain-verification omission.
+#
+# Frequency: "During the day, trains run at hourly intervals between
+# Nottingham and Worksop, the full journey taking 67 minutes" (Wikipedia
+# "Robin Hood Line" article).
+#
+# --- Segment-sharing ruling: NO genuine shared trunk anywhere on this
+# branch ---
+# None of this branch's other CRS codes (BLW, HKN, NSD, KKB, SPK, MFT, MSW,
+# SHB, LAG, CWD, WWL, WRK) appear in any other file in this catalogue at
+# authoring time (checked via grep across `lines/*.toml`). Nothing is shared
+# with `emr-midland-main-line` or any other line beyond the Nottingham
+# station itself, so no shared-trunk propagation test is written for this
+# line (see the regression tests in `crates/common/src/matcher.rs` for the
+# exclusive-segment case instead, at Worksop). The rest of this branch
+# (Bulwell onward) is exclusively this line's own territory.
+[[stations]]
+crs = "BLW"
+role = "minor"
+segment = "emr-robin-hood"
+# Bulwell.
+
+[[stations]]
+crs = "HKN"
+role = "minor"
+segment = "emr-robin-hood"
+# Hucknall.
+
+[[stations]]
+crs = "NSD"
+role = "minor"
+segment = "emr-robin-hood"
+# Newstead.
+
+[[stations]]
+crs = "KKB"
+role = "minor"
+segment = "emr-robin-hood"
+# Kirkby-in-Ashfield.
+
+[[stations]]
+crs = "SPK"
+role = "minor"
+segment = "emr-robin-hood"
+# Sutton Parkway.
+
+[[stations]]
+crs = "MFT"
+role = "minor"
+segment = "emr-robin-hood"
+# Mansfield.
+
+[[stations]]
+crs = "MSW"
+role = "minor"
+segment = "emr-robin-hood"
+# Mansfield Woodhouse.
+
+[[stations]]
+crs = "SHB"
+role = "minor"
+segment = "emr-robin-hood"
+# Shirebrook.
+
+[[stations]]
+crs = "LAG"
+role = "minor"
+segment = "emr-robin-hood"
+# Langwith-Whaley Thorns.
+
+[[stations]]
+crs = "CWD"
+role = "minor"
+segment = "emr-robin-hood"
+# Creswell.
+
+[[stations]]
+crs = "WWL"
+role = "minor"
+segment = "emr-robin-hood"
+# Whitwell.
+
+[[stations]]
+crs = "WRK"
+role = "terminus"
+segment = "emr-robin-hood"
+# Worksop. Also served by Northern's Sheffield-Lincoln-Leeds regional
+# service (Wikipedia "Worksop railway station": "an intermediate stop on
+# the regional service between Lincoln Central and Leeds"), but no
+# `northern*.toml` file in this catalogue lists WRK at authoring time
+# (checked via grep) - nothing to cite/reuse a segment name from, so this
+# is not asserted as a shared segment. Cost if wrong: none today (no other
+# line's file references this station at all yet); if a future Northern
+# Sheffield-Lincoln-Leeds line file lands and turns out to genuinely share
+# track through Worksop, that file's author should reconcile segment names
+# then, per the same pattern as `emr-midland-main-line.toml`'s own
+# Thameslink/Bedford cross-batch-dependency ruling.

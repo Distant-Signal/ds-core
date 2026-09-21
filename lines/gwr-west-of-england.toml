@@ -146,7 +146,7 @@ match_keywords = ["Reading to Taunton line", "Berks and Hants line"]
 # off the direct Castle Cary route that principal London-Devon/Cornwall
 # expresses use — consistent with the gap-analysis text itself, which
 # names only "Westbury/Castle Cary" for this stretch, not Frome. Frome (and
-# Bruton) are this line's own exclusive-to-gwr-bristol-suburban.toml
+# Bruton) are this line's own exclusive-to-gwr-heart-of-wessex.toml
 # territory: they sit on the Heart of Wessex line's own local pattern, not
 # on the through Reading-Taunton route this file claims, so they never
 # belong on this file's segment at all (see the corrected shared-segment
@@ -170,25 +170,28 @@ match_keywords = ["Reading to Taunton line", "Berks and Hants line"]
 # --- Corrected shared-segment scope: `gwr-westbury-castle-cary` (WSB/CLC
 #     only), not the whole `gwr-west-of-england` segment ---
 #
-# An earlier draft of this file (and of gwr-bristol-suburban.toml) reused
-# this line's own exclusive segment name, `gwr-west-of-england`, verbatim
-# for WSB and CLC to represent the genuine Westbury-Castle Cary track
-# sharing with the Heart of Wessex line. That was wrong: it pulled the
-# whole `gwr-west-of-england` segment name — including Newbury (NBY), which
-# gwr-bristol-suburban.toml's service never reaches — into "shared" status
-# catalogue-wide, purely because segment sharing is tracked per segment
-# *name*, not per individual station. It also, transitively, mislabelled
-# Frome and Bruton (gwr-bristol-suburban.toml's own exclusive stations,
-# reached only via a loop off this line's through route, per the comment
-# above) as belonging to a segment this file's own text says isn't really
-# on this line's route. Fixed by introducing a new, narrower segment name,
+# An earlier draft of this file (and of the file now split into
+# gwr-severn-beach.toml/gwr-heart-of-wessex.toml) reused this line's own
+# exclusive segment name, `gwr-west-of-england`, verbatim for WSB and CLC to
+# represent the genuine Westbury-Castle Cary track sharing with the Heart of
+# Wessex line. That was wrong: it pulled the whole `gwr-west-of-england`
+# segment name — including Newbury (NBY), which gwr-heart-of-wessex.toml's
+# service never reaches — into "shared" status catalogue-wide, purely
+# because segment sharing is tracked per segment *name*, not per individual
+# station. It also, transitively, mislabelled Frome and Bruton
+# (gwr-heart-of-wessex.toml's own exclusive stations, reached only via a
+# loop off this line's through route, per the comment above) as belonging
+# to a segment this file's own text says isn't really on this line's route.
+# Fixed by introducing a new, narrower segment name,
 # `gwr-westbury-castle-cary`, used below ONLY for WSB and CLC — the two
-# stations both this file's and gwr-bristol-suburban.toml's own cited
+# stations both this file's and gwr-heart-of-wessex.toml's own cited
 # sources (Castle Cary's own Wikipedia page and the Heart of Wessex Line's
 # own lead paragraph) actually name as shared, and the only two stations
 # both real services actually call at. NBY reverts to this line's own
-# exclusive `gwr-west-of-england` segment, since gwr-bristol-suburban.toml
-# never reaches Newbury.
+# exclusive `gwr-west-of-england` segment, since gwr-heart-of-wessex.toml
+# never reaches Newbury. (This segment name and rationale carried over
+# unchanged through the later gwr-bristol-suburban.toml -> gwr-severn-beach.
+# toml/gwr-heart-of-wessex.toml split — see that file's own split note.)
 #
 # --- Taunton/Exeter: genuine shared trunk with cross-country.toml ---
 #
@@ -320,7 +323,7 @@ segment = "gwr-westbury-castle-cary"
 # comment above — neither Heywood Road nor Fairwood Junction has its own
 # CRS/TIPLOC. On `gwr-westbury-castle-cary`, not this line's own exclusive
 # segment — see the corrected segment-naming comment above (WSB/CLC are the
-# only two stations genuinely shared with gwr-bristol-suburban.toml).
+# only two stations genuinely shared with gwr-heart-of-wessex.toml).
 
 [[stations]]
 crs = "CLC"
@@ -328,7 +331,8 @@ tiploc = "CCARY"
 role = "minor"
 segment = "gwr-westbury-castle-cary"
 # On `gwr-westbury-castle-cary` — see comment above and the segment-naming
-# comment further up.
+# comment further up. Genuinely shared with gwr-heart-of-wessex.toml (WSB
+# and CLC only) — see that comment above.
 
 [[stations]]
 crs = "TAU"
@@ -337,6 +341,21 @@ role = "minor"
 segment = "xc-south-west"
 # Shared trunk with cross-country.toml from here onward — see segment-
 # naming comment above. Row copied verbatim from cross-country.toml.
+
+# Tiverton Parkway (TVP): a real, currently-open, currently-served station
+# directly between Taunton and Exeter St Davids, previously missing from
+# this file. Found by a data-driven schedule audit. It sits on the same
+# physical Bristol-Exeter shared trunk as the TAU/EXD rows either side of it
+# (see segment-naming comment above), so it stays on `xc-south-west` rather
+# than inventing a new segment name for this one stretch — but note
+# cross-country.toml does not currently list this station itself; that is a
+# separate, pre-existing potential gap in that file, out of scope here (this
+# fix is scoped to lines/gwr-west-of-england.toml only, per this task's
+# brief — cross-country.toml is not touched).
+[[stations]]
+crs = "TVP"
+role = "minor"
+segment = "xc-south-west"
 
 [[stations]]
 crs = "EXD"

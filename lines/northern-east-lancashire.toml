@@ -1,0 +1,199 @@
+id = "northern-east-lancashire"
+name = "East Lancashire Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): the task brief's own
+# framing ("Manchester Victoria - Bury - Accrington - Blackburn - Clitheroe")
+# does NOT describe a real current National Rail route, and this file
+# deliberately does not model it as given -- see the correction below,
+# researched and confirmed via Wikipedia before writing any station list.
+#
+# --- Correcting the brief: there is no current Manchester-Bury rail line ---
+# The heavy-rail Manchester Victoria-Bury line closed to National Rail
+# passengers in 1991 and was converted to Manchester Metrolink: "Railway
+# operations ended after 17 August 1991, in order for the line to be
+# converted to Metrolink," which "opened on 6 April 1992 as the first
+# Metrolink line to enter service" (Wikipedia "Bury Line"). The only other
+# rail service in the Bury area is the preserved "East Lancashire Railway"
+# heritage line (Bury Bolton Street - Rawtenstall/Heywood) -- a distinct
+# entity from this file's "East Lancashire Line" despite the near-identical
+# name, and not a National Rail passenger service at all: "Passenger
+# services between Bury and Rawtenstall were withdrawn by British Rail on 3
+# June 1972" before volunteer preservation reopened it as a heritage
+# attraction (Wikipedia "East Lancashire Railway"). `excluded_keywords`
+# below guards against misattributing heritage-line news to this file.
+#
+# The REAL current "East Lancashire line" runs Preston - Blackburn -
+# Accrington - Burnley - Nelson - Colne, confirmed by its own Wikipedia
+# article's opening sentence: "The East Lancashire line is a railway route
+# in Lancashire, England. It connects Preston and Colne, via Blackburn,
+# Accrington, Burnley Central and Nelson." Operator confirmed Northern
+# Trains throughout. Community rail designation: "It was designated by the
+# Department for Transport as a community rail line in November 2006."
+# Mainly double track, "singled from Burnley Barracks to Colne." Pleasington,
+# Hapton and Burnley Barracks are request stops: "Services on this line stop
+# at every station, although Pleasington, Hapton and Burnley Barracks are
+# now request stops."
+#
+# --- Blackburn: genuine junction, station-overlap only with the Ribble
+# Valley Line ---
+# `northern-clitheroe.toml` (Ribble Valley Line: Manchester Victoria - Bolton
+# - Blackburn - Clitheroe) already models Blackburn (BBN) on its own
+# exclusive `northern-clitheroe` segment. This file's own Blackburn entry is
+# a genuine physical junction, not a coincidental same-station touch: the
+# East Lancashire line's own route-diagram infobox shows both "Ribble Valley
+# line to Clitheroe" and "Ribble Valley line to Bolton" as separate branch
+# labels at Blackburn -- i.e. trains for both lines call at the same
+# platforms and diverge onto physically different routes from there (this
+# line continuing towards Preston one way and Accrington/Colne the other;
+# the Ribble Valley Line towards Bolton/Manchester Victoria one way and
+# Clitheroe the other). Per this catalogue's established `xc-manchester.toml`
+# precedent ("station overlap is fine, segment-sharing is a deliberate
+# choice"), and following `northern-ormskirk.toml`'s identical treatment of
+# its own shared-but-not-through-running Preston entry, this file's own
+# Blackburn entry stays on its own exclusive `northern-east-lancashire`
+# segment rather than reusing `northern-clitheroe`'s segment name -- no
+# sourced fact here establishes actual through-running between the two
+# lines' own physical branches beyond both calling at the same station.
+#
+# Preston (PRE) is likewise station-overlap only with `west-coast-main-
+# line.toml`, `northern-blackpool.toml` and `tpe-anglo-scottish.toml`'s own
+# separate Preston entries -- this line's own trains join none of those
+# routes' own exclusive tracks.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Hoghton: a real former station on this stretch, but closed: "closed on
+#   12 September 1960," "status... 'Disused'." Not added.
+# - Great Harwood and Padiham: both real, but sit on a separate, long-closed
+#   loop line (the "North Lancashire Loop"/"Great Harwood Loop") that
+#   bypassed Accrington, not on the current East Lancashire line itself.
+#   Both closed to regular passengers 2 December 1957 and closed completely
+#   in 1964/1968 respectively. Not added.
+sample_stations = ["PRE", "BBN", "ACR", "CNE"]
+destination_crs_filter = ["PRE", "CNE"]
+match_keywords = ["East Lancashire line"]
+excluded_keywords = ["East Lancashire Railway"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "PRE"
+role = "terminus"
+segment = "northern-east-lancashire"
+# Preston -- station-overlap only with several other files' own separate
+# Preston entries; see the top-of-file comment.
+
+[[stations]]
+crs = "LOH"
+role = "minor"
+segment = "northern-east-lancashire"
+# Lostock Hall.
+
+[[stations]]
+crs = "BMB"
+role = "minor"
+segment = "northern-east-lancashire"
+# Bamber Bridge.
+
+[[stations]]
+crs = "PLS"
+role = "minor"
+segment = "northern-east-lancashire"
+# Pleasington -- request stop.
+
+[[stations]]
+crs = "CYT"
+role = "minor"
+segment = "northern-east-lancashire"
+# Cherry Tree.
+
+[[stations]]
+crs = "MLH"
+role = "minor"
+segment = "northern-east-lancashire"
+# Mill Hill (Lancs).
+
+[[stations]]
+crs = "BBN"
+role = "junction"
+segment = "northern-east-lancashire"
+# Blackburn -- station-overlap only with `northern-clitheroe.toml`'s own
+# exclusive Blackburn entry; see the top-of-file comment.
+
+[[stations]]
+crs = "RIS"
+role = "minor"
+segment = "northern-east-lancashire"
+# Rishton.
+
+[[stations]]
+crs = "CTW"
+role = "minor"
+segment = "northern-east-lancashire"
+# Church & Oswaldtwistle.
+
+[[stations]]
+crs = "ACR"
+role = "major"
+segment = "northern-east-lancashire"
+# Accrington.
+
+[[stations]]
+crs = "HCT"
+role = "minor"
+segment = "northern-east-lancashire"
+# Huncoat.
+
+[[stations]]
+crs = "HPN"
+role = "minor"
+segment = "northern-east-lancashire"
+# Hapton -- request stop.
+
+[[stations]]
+crs = "RSG"
+role = "minor"
+segment = "northern-east-lancashire"
+# Rose Grove.
+
+[[stations]]
+crs = "BYM"
+role = "minor"
+segment = "northern-east-lancashire"
+# Burnley Manchester Road.
+
+[[stations]]
+crs = "BUB"
+role = "minor"
+segment = "northern-east-lancashire"
+# Burnley Barracks -- request stop.
+
+[[stations]]
+crs = "BNC"
+role = "major"
+segment = "northern-east-lancashire"
+# Burnley Central.
+
+[[stations]]
+crs = "BRF"
+role = "minor"
+segment = "northern-east-lancashire"
+# Brierfield.
+
+[[stations]]
+crs = "NEL"
+role = "major"
+segment = "northern-east-lancashire"
+# Nelson.
+
+[[stations]]
+crs = "CNE"
+role = "terminus"
+segment = "northern-east-lancashire"
+# Colne -- single track from Burnley Barracks onward, see the top-of-file
+# comment.

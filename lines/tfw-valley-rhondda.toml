@@ -1,0 +1,267 @@
+id = "tfw-valley-rhondda"
+name = "Rhondda Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["AW"]
+
+destination_crs_filter = ["TRB"]
+sample_stations = ["CDQ", "PPD", "TRB"]
+match_keywords = ["Rhondda Line", "Treherbert Line"]
+
+# Split history: this file was carved out of the former
+# `tfw-valley-lines-north.toml` (Batch 11, Task 11.6), which bundled the
+# Rhymney, Merthyr, Aberdare and Rhondda/Treherbert lines into one
+# over-broad `id`/`name`. A later data-driven catalogue audit recommended
+# splitting that file along its own real-world community-rail branding, and
+# this file is the Rhondda Line's share of that split -- its own standalone,
+# currently-live Wikipedia article (https://en.wikipedia.org/wiki/Rhondda_line,
+# confirmed as of 2026-09-21, opening "The Rhondda line, also known as the
+# Treherbert line, is a commuter railway line in South Wales from Cardiff to
+# Treherbert") made this an easy, undisputed split, unlike the
+# Merthyr/Aberdare question -- see `tfw-valley-merthyr.toml`'s own comments
+# for that 3-vs-4-file reasoning. `match_keywords` above adds "Treherbert
+# Line" alongside "Rhondda Line" per that article's own dual naming.
+
+# Sourcing note (per the catalogue's "Wikipedia cross-checked against a
+# second independent source" curation standard established across Tasks
+# 11.1-11.5 of the original batch): every CRS code below was independently
+# confirmed twice -- once from that station's own Wikipedia infobox "Station
+# code" field (fetched individually, station by station, not from a bulk
+# route-diagram summary), and once from a live, verbatim-quoted row of
+# railwaycodes.org.uk's per-letter CRS pages (fetched via raw HTML and
+# grepped directly rather than trusting an AI summary of the page). All
+# matched exactly between the two sources except one disclosed oddity, not
+# invented:
+#   - Dinas Rhondda's railwaycodes.org.uk row lists two CRS values in one
+#     cell, "DMG" and "DNR". DMG is confirmed as the live/primary code by the
+#     station's own Wikipedia infobox; DNR is not used below. (The sibling
+#     Lisvane & Thornhill dual-code disclosure that used to sit alongside
+#     this note now lives in `tfw-valley-rhymney.toml`, since Lisvane &
+#     Thornhill is on that line.)
+# See `tfw-valley-merthyr.toml`'s own sourcing note for the two further
+# disclosed oddities (Treforest/Treforest Estate) that fall on the shared
+# Taff Vale trunk this file duplicates below.
+#
+# TIPLOCs are included for every station because railwaycodes.org.uk's live
+# table gave one directly for all of them, matching the precedent set by
+# `tfw-north-wales-coast.toml` and `tfw-marches.toml`.
+#
+# Category: "commuter", carried over from `tfw-valley-lines-north.toml`'s own
+# framing of this whole network as "structurally more like Merseyrail's
+# two-line metro than a long-distance route" -- see `tfw-valley-merthyr.toml`
+# for the fuller discussion of why the original file bundled these lines
+# together in the first place, now superseded by this split.
+#
+# Confirmed frequency, sourced from the Rhondda/Treherbert line's own
+# Wikipedia article: "half-hourly service Monday to Saturday daytime...
+# decreasing to hourly in the evening... two-hourly" on Sundays.
+# `severity_overrides` below sits between `thameslink-core.toml`'s very tight
+# core-metro thresholds and this catalogue's default: tighter than default
+# because delays on a half-hourly commuter service are proportionately more
+# disruptive than on an hourly regional service, but not as tight as
+# Thameslink.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 5
+
+# Electrification status: the Rhondda/Treherbert line's own Wikipedia article
+# only says the line "is now being electrified... in preparation for new
+# Class 398 tram-train rolling stock" and gives no completion date; its own
+# "current rolling stock" list still includes diesel Class 150 DMUs alongside
+# bi/tri-mode Class 231 and Class 756 units. This file does not claim the
+# line is fully electrified -- that would be inventing a fact the source
+# doesn't establish -- and instead leaves it disclosed here as
+# in-progress/unconfirmed as of this research pass (2026-09-21), matching
+# `tfw-valley-lines-north.toml`'s own original disclosure before this split.
+
+# Cardiff terminus decision: both Cardiff Central (CDF) and Cardiff Queen
+# Street (CDQ) are included below as a shared hub used by this line. See
+# `tfw-valley-rhymney.toml`'s own Cardiff terminus decision note for the
+# fuller Wikipedia sourcing of why CDF is treated as genuinely served, not
+# merely historically adjacent.
+#
+# Cardiff hub segment sharing: `tfw-valley-cardiff-hub` below is shared with
+# `tfw-valley-rhymney.toml`, `tfw-valley-merthyr.toml` and
+# `tfw-valley-lines-south.toml` (City Line, Coryton Line, Cardiff Bay Line).
+# See `tfw-valley-lines-south.toml`'s own "Cardiff hub segment-sharing
+# decision" comment for the full history of that call, and
+# `valley_lines_cardiff_hub_shared_segment_propagates` in
+# `crates/common/src/matcher.rs` for the regression test.
+#
+# Taff Vale trunk segment sharing (a genuine behavioural change introduced by
+# this split): `tfw-valley-taff-trunk` below (Cathays through Pontypridd) is
+# now duplicated verbatim in both this file and `tfw-valley-merthyr.toml`,
+# since both the Rhondda and Merthyr/Aberdare lines genuinely run over this
+# same corridor before diverging at Pontypridd. See `tfw-valley-merthyr.toml`'s
+# own note on this for the full explanation of why this now resolves as
+# `MatchScope::SharedSegment` (it did not before the split, when all four
+# branches shared one `id`). See `valley_taff_trunk_shared_segment_
+# propagates_after_split` in `crates/common/src/matcher.rs`.
+#
+# Radyr junction: this file also reuses the dedicated, Radyr-only
+# `tfw-valley-radyr-junction` segment name (rather than folding Radyr into
+# the Taff trunk segment above), matching `tfw-valley-lines-south.toml`'s own
+# City Line and `tfw-valley-merthyr.toml`'s treatment. Segment sharing is
+# indexed by name across the whole catalogue, not per-station, so giving
+# Radyr its own name keeps the other six Taff trunk stations from falsely
+# registering as shared with the City Line, which only touches this corridor
+# at Radyr itself.
+#
+# Only currently open, passenger-served stations are listed.
+
+# --- Cardiff hub: shared with `tfw-valley-rhymney.toml`, `tfw-valley-
+# merthyr.toml` and `tfw-valley-lines-south.toml`. See the Cardiff hub
+# segment-sharing note above.
+[[stations]]
+crs = "CDF"
+tiploc = "CRDFCEN"
+role = "terminus"
+segment = "tfw-valley-cardiff-hub"
+
+[[stations]]
+crs = "CDQ"
+tiploc = "CARDFQS"
+role = "junction"
+segment = "tfw-valley-cardiff-hub"
+# Cardiff Queen Street.
+
+# --- Taff Vale trunk: shared with `tfw-valley-merthyr.toml` -- see the Taff
+# Vale trunk segment-sharing note above. Ordered south to north, Cardiff
+# Queen Street to Pontypridd, where this line's own Trehafod-to-Treherbert
+# branch diverges.
+[[stations]]
+crs = "CYS"
+tiploc = "CATHAYS"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Cathays.
+
+[[stations]]
+crs = "LLN"
+tiploc = "LLANDAF"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Llandaf.
+
+[[stations]]
+crs = "RDR"
+tiploc = "RADYR"
+role = "junction"
+segment = "tfw-valley-radyr-junction"
+# Radyr: also the northern terminus of the Cardiff City Line (Coryton
+# branch), per this station's own Wikipedia article ("Immediately south of
+# the station, the Cardiff City line diverged southwards"). See the Radyr
+# junction note above for why this uses its own dedicated segment name
+# rather than the Taff trunk segment.
+
+[[stations]]
+crs = "TAF"
+tiploc = "TAFFSWL"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Taffs Well.
+
+[[stations]]
+crs = "TRF"
+tiploc = "TREFRST"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Treforest. See `tfw-valley-merthyr.toml`'s own note on this station for the
+# Treforest/Trefforest spelling variance disclosure.
+
+[[stations]]
+crs = "TRE"
+tiploc = "TRFRSTE"
+role = "minor"
+segment = "tfw-valley-taff-trunk"
+# Treforest Estate. See `tfw-valley-merthyr.toml`'s own note on this station
+# for the same spelling variance and its dual-TIPLOC row disclosure.
+
+[[stations]]
+crs = "PPD"
+tiploc = "PTYPRID"
+role = "junction"
+segment = "tfw-valley-taff-trunk"
+# Pontypridd: junction where this line's own branch diverges north-west
+# while the Merthyr/Aberdare branches continue north-east via Abercynon,
+# confirmed via this station's own Wikipedia article. Per the shared-trunk
+# rule of thumb, the junction itself stays on the shared trunk segment; this
+# line's own exclusive segment starts at the next station, Trehafod.
+
+# --- Rhondda/Treherbert branch: diverges from Pontypridd. Ordered
+# south-east to north-west, Trehafod to Treherbert. Exclusive to this line.
+[[stations]]
+crs = "TRH"
+tiploc = "TREHAFD"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Trehafod.
+
+[[stations]]
+crs = "POR"
+tiploc = "PORH"
+role = "major"
+segment = "tfw-valley-rhondda"
+# Porth. The line's own Wikipedia article states it "was singled north of
+# here in 1981" -- the single-track stretch through the remaining Rhondda
+# Fawr valley stations starts here. Porth was also historically a junction
+# with the Rhondda Fach line to Maerdy (closed to passengers), per this
+# station's own article; that closed branch is not listed.
+
+[[stations]]
+crs = "DMG"
+tiploc = "DINASR"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Dinas Rhondda. See the sourcing note above on the DMG/DNR dual-code row.
+
+[[stations]]
+crs = "TNP"
+tiploc = "TNYPNDY"
+role = "major"
+segment = "tfw-valley-rhondda"
+# Tonypandy.
+
+[[stations]]
+crs = "LLY"
+tiploc = "LLWYNYP"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Llwynypia.
+
+[[stations]]
+crs = "YSR"
+tiploc = "YTRHOND"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Ystrad Rhondda. Has a passing loop on the single-track stretch, per the
+# line's own Wikipedia article.
+
+[[stations]]
+crs = "TPN"
+tiploc = "TONPNTR"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Ton Pentre.
+
+[[stations]]
+crs = "TRY"
+tiploc = "TREORCY"
+role = "major"
+segment = "tfw-valley-rhondda"
+# Treorchy.
+
+[[stations]]
+crs = "YNW"
+tiploc = "YNYSWEN"
+role = "minor"
+segment = "tfw-valley-rhondda"
+# Ynyswen.
+
+[[stations]]
+crs = "TRB"
+tiploc = "TREHRBT"
+role = "terminus"
+segment = "tfw-valley-rhondda"
+# Treherbert: the line's northern terminus, confirmed via its own Wikipedia
+# article ("the northern terminus of the Rhondda Line after Ynyswen").

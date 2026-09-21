@@ -42,14 +42,14 @@ operators = ["SR"]
 # a real, useful alternate Glasgow-Edinburgh link, not the flagship route,
 # with a split character similar to `scotrail-ayrshire.toml`'s own
 # precedent (a denser electrified suburban stretch at the western end,
-# shared with `scotrail-glasgow-suburban.toml`'s North Clyde network,
+# shared with `scotrail-north-clyde.toml`'s North Clyde network,
 # grafted onto a more modest, hourly-ish through corridor for the rest of
 # its length -- see the Sources section below).
 
 sample_stations = ["GLQ", "BHG", "EDP", "EDB"]
 # GLQ (Glasgow Queen Street, Low Level) is also a `sample_stations` entry
 # in `scotrail-central-belt.toml` (its own separate High Level terminus)
-# and `scotrail-glasgow-suburban.toml` (the same Low Level platforms this
+# and `scotrail-north-clyde.toml` (the same Low Level platforms this
 # file's own GLQ entry uses) -- see the station-overlap/segment-sharing
 # notes below. BHG (Bathgate) and EDP (Edinburgh Park) are this line's own
 # distinguishing mid-corridor stations.
@@ -68,7 +68,7 @@ match_keywords = ["Bathgate line"]
 # match_keywords. Sourced from Wikipedia's "Edinburgh-Bathgate line"
 # article title (the eastern half of this corridor's own branded name) and
 # grepped clean against every other file's own `match_keywords` before
-# adding -- no collision with `scotrail-glasgow-suburban.toml`'s "North
+# adding -- no collision with `scotrail-north-clyde.toml`'s "North
 # Clyde"/"Argyle Line" keywords or any other file in the catalogue.
 
 # Regional-line thresholds, matching `scotrail-shotts.toml`'s and this
@@ -90,7 +90,7 @@ delay_threshold_minutes = 10
 # continue onto genuinely exclusive Bathgate-line track (Drumgelloch
 # onward) before rejoining `scotrail-central-belt.toml`'s own shared
 # Haymarket-Waverley throat at the Edinburgh end. This is not a guess: it
-# is exactly what `scotrail-glasgow-suburban.toml`'s own Bellgrove and
+# is exactly what `scotrail-north-clyde.toml`'s own Bellgrove and
 # Airdrie comments already say -- "eastbound North Clyde services split
 # three ways here [Bellgrove] -- Airdrie (15 min), Springburn (30 min), and
 # Edinburgh Waverley via Bathgate (hourly)" and "[Airdrie:] real electrified
@@ -103,17 +103,17 @@ delay_threshold_minutes = 10
 # === Segment structure: three real shared trunks, one exclusive middle ===
 #
 # 1. Charing Cross - Glasgow Queen Street (Low Level) - Bellgrove: this
-#    file reuses `scotrail-glasgow-suburban.toml`'s own
-#    `scotrail-glasgow-suburban-core` segment name for these three stations
+#    file reuses `scotrail-north-clyde.toml`'s own
+#    `scotrail-north-clyde-core` segment name for these three stations
 #    (its own CHC/GLQ/BLG entries), a genuine physical fact per that file's
 #    own Bellgrove comment (Bathgate-bound trains are one of the three
 #    services splitting at Bellgrove, having shared this same core trackage
 #    from Glasgow Queen Street). `SegmentRegistry::is_shared` now reports
-#    this segment shared between `scotrail-glasgow-suburban` and
+#    this segment shared between `scotrail-north-clyde` and
 #    `scotrail-bathgate`.
 #
-# 2. Airdrie: this file reuses `scotrail-glasgow-suburban.toml`'s own
-#    `scotrail-glasgow-suburban-airdrie-branch` segment name for its own
+# 2. Airdrie: this file reuses `scotrail-north-clyde.toml`'s own
+#    `scotrail-north-clyde-airdrie-branch` segment name for its own
 #    ADR entry. Per that file's own comment (quoted above), Airdrie is
 #    real, current North Clyde terminus for some workings, but "real
 #    electrified track continues beyond here" for Bathgate-bound services
@@ -121,7 +121,7 @@ delay_threshold_minutes = 10
 #    physically a through station, so per the shared-trunk rule of thumb it
 #    stays on the shared segment; this file's own exclusive segment starts
 #    at the next station, Drumgelloch. This makes
-#    `scotrail-glasgow-suburban-airdrie-branch` a second segment shared
+#    `scotrail-north-clyde-airdrie-branch` a second segment shared
 #    between the same two lines.
 #
 # 3. Drumgelloch through Edinburgh Park: genuinely exclusive to this file
@@ -155,26 +155,26 @@ delay_threshold_minutes = 10
 [[stations]]
 crs = "CHC"
 role = "major"
-segment = "scotrail-glasgow-suburban-core"
-# Charing Cross: genuine shared trunk with `scotrail-glasgow-suburban.toml`
+segment = "scotrail-north-clyde-core"
+# Charing Cross: genuine shared trunk with `scotrail-north-clyde.toml`
 # -- see the segment-structure note above.
 
 [[stations]]
 crs = "GLQ"
 role = "junction"
-segment = "scotrail-glasgow-suburban-core"
+segment = "scotrail-north-clyde-core"
 # Glasgow Queen Street (Low Level): this line's own western terminus,
-# physically the same Low Level platforms `scotrail-glasgow-suburban.toml`
+# physically the same Low Level platforms `scotrail-north-clyde.toml`
 # already models on this exact segment (genuine sharing, unlike the
 # High-Level/Low-Level GLQ split documented between `scotrail-central-
-# belt.toml` and `scotrail-glasgow-suburban.toml` themselves -- this file's
+# belt.toml` and `scotrail-north-clyde.toml` themselves -- this file's
 # own GLQ is the same physical platforms as that second file's, not a third
 # distinct one).
 
 [[stations]]
 crs = "BLG"
 role = "junction"
-segment = "scotrail-glasgow-suburban-core"
+segment = "scotrail-north-clyde-core"
 # Bellgrove: the real split point where Bathgate-bound services diverge
 # from the rest of the North Clyde core, per that file's own Bellgrove
 # comment (quoted above).
@@ -182,11 +182,11 @@ segment = "scotrail-glasgow-suburban-core"
 [[stations]]
 crs = "ADR"
 role = "junction"
-segment = "scotrail-glasgow-suburban-airdrie-branch"
-# Airdrie: genuine shared trunk with `scotrail-glasgow-suburban.toml` -- see
+segment = "scotrail-north-clyde-airdrie-branch"
+# Airdrie: genuine shared trunk with `scotrail-north-clyde.toml` -- see
 # the segment-structure note above. Marked `role = "junction"` here (this
 # file's own accurate description of Airdrie's role in the Bathgate
-# routing); `scotrail-glasgow-suburban.toml`'s own ADR entry keeps its
+# routing); `scotrail-north-clyde.toml`'s own ADR entry keeps its
 # existing `role = "terminus"`, describing that file's own North Clyde
 # service pattern -- the two files' `role` values intentionally differ
 # because they describe different real service patterns at the same
@@ -306,7 +306,7 @@ segment = "scotrail-central-belt-edinburgh-throat"
 #     Grahamston & Cumbernauld" services also calling there -- see the EDP
 #     station comment above for why this doesn't create a
 #     `scotrail-central-belt.toml` overlap.
-#   - `scotrail-glasgow-suburban.toml`'s own Bellgrove and Airdrie
+#   - `scotrail-north-clyde.toml`'s own Bellgrove and Airdrie
 #     comments (already-vetted, cross-checked in that file's own prior
 #     research against Wikipedia's "Bellgrove railway station" article):
 #     the basis for this file's western shared-segment decisions -- see the

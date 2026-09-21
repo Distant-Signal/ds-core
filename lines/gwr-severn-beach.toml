@@ -1,0 +1,155 @@
+id = "gwr-severn-beach"
+name = "Severn Beach Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here, since it's the same operator running this route.
+# en.wikipedia.org/wiki/Severn_Beach_line: "Great Western Railway operates
+# all services."
+
+# --- Split from lines/gwr-bristol-suburban.toml ---
+#
+# This file, together with lines/gwr-heart-of-wessex.toml, replaces
+# lines/gwr-bristol-suburban.toml (Task 4.6's original file, "Bristol area
+# suburban services" — a generic, non-Wikipedia-sourced name that was itself
+# a sign the file bundled two unrelated real lines). A follow-up audit found
+# the two groups that file covered — the Severn Beach line and the Heart of
+# Wessex line — are two separately-titled, separately-branded real
+# Wikipedia lines (en.wikipedia.org/wiki/Severn_Beach_line and
+# en.wikipedia.org/wiki/Heart_of_Wessex_Line, cross-checked live: both
+# titles and their "Great Western Railway operates all/most services"
+# framing still hold) that diverge in opposite directions from Bristol
+# Temple Meads with zero shared track beyond the terminus itself (this line
+# heads north-west along the Avon Gorge to the Severn estuary; the Heart of
+# Wessex line heads south-east via Bath and Westbury). Split into one file
+# per real line, following this catalogue's usual one-file-per-branded-line
+# convention. All station-level sourcing/citations below are carried over
+# verbatim from the original file's own "Group 1: Severn Beach line"
+# section; only this note, and the destination_crs_filter/sample_stations/
+# match_keywords/severity_overrides framing, are newly written for the
+# split.
+
+destination_crs_filter = ["SVB"]
+# This line's own real, verified terminus.
+
+# For a clean read of this line's own service (mirrors the original file's
+# "one per group" sample_stations rationale).
+sample_stations = ["AVN"]
+
+# The line's own well-established current infrastructure/branding name — a
+# literal Wikipedia article title (en.wikipedia.org/wiki/Severn_Beach_line).
+# Kept to one high-precision phrase per SCHEMA.md's "don't overload
+# match_keywords" rule.
+match_keywords = ["Severn Beach line"]
+
+# Genuine suburban service (en.wikipedia.org/wiki/Severn_Beach_line's own
+# "Service" section: "Monday to Friday, two trains per hour run from
+# Bristol Temple Meads to Avonmouth... on weekends, a roughly hourly
+# service"). Mirroring gwr-thames-valley.toml's identical judgment call for
+# its own 2tph Paddington-Didcot core: this is a single-track branch with no
+# double-tracked express alternative to fall back on, so this file applies
+# the same override gwr-cotswold.toml/gwr-thames-valley.toml already settled
+# on for GWR secondary lines in that shape, rather than inventing a third
+# value pair.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# --- Bristol Temple Meads: shared departure point, station overlap only ---
+#
+# BRI is also lines/gwr-heart-of-wessex.toml's own departure point — both
+# lines genuinely leave from here, in opposite directions (see split note
+# above), but share no track beyond the terminus itself, so this is deliberate
+# station overlap only, not a shared segment (the two files use distinct
+# segment names). BRI is also gwr-main-line.toml's own terminus (its own
+# exclusive `gwr-main-line` segment, covering CPM-BTH-BRI) — again station
+# overlap only, since this line heads away via the Avon Gorge and never
+# touches gwr-main-line's own Bristol-Bath-Chippenham route. BRI is tagged
+# with this line's own exclusive segment name below purely as a
+# documentation choice; an incident here matches all three lines as station
+# overlap regardless of which segment name is used.
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "terminus"
+segment = "gwr-severn-beach"
+
+# --- Severn Beach line (Bristol Temple Meads - Avonmouth - Severn Beach) ---
+#
+# en.wikipedia.org/wiki/Severn_Beach_line's own route diagram, cross-checked
+# station-by-station against each station's own Wikipedia infobox (to catch
+# any since-closed halts — several nearby stations on the sibling Heart of
+# Wessex line turned out to be closed, so this was checked carefully rather
+# than assumed), confirms the current full stopping pattern below. Every
+# station is currently open with live GWR service; none are omitted as
+# "non-principal" the way the express-line siblings in this batch omit minor
+# halts, since this whole branch is an all-stations suburban service with no
+# faster alternative calling pattern to compare against (matching
+# gwr-thames-valley.toml's precedent of listing every real current stop on a
+# local/stopping-only branch, e.g. its own thinly-served Appleford). CRS
+# codes verified individually against each station's own Wikipedia infobox.
+# Portway Park & Ride (PRI) is the newest addition — its own page confirms
+# it "opened on 1 August 2023 as part of the MetroWest package of
+# improvements", with GWR-operated services, and its own infobox route
+# diagram confirms its position (preceding: Shirehampton; following:
+# Avonmouth) used below.
+[[stations]]
+crs = "LWH"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SRD"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "MTP"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "RDA"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "CFN"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SML"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SHH"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "PRI"
+role = "minor"
+segment = "gwr-severn-beach"
+# Opened 1 August 2023 (MetroWest) — see comment above.
+
+[[stations]]
+crs = "AVN"
+role = "major"
+segment = "gwr-severn-beach"
+# The branch's principal intermediate stop (Avonmouth, an industrial town
+# and port); most weekday services turn back here (see comment above), with
+# only some continuing to St Andrews Road/Severn Beach.
+
+[[stations]]
+crs = "SAR"
+role = "minor"
+segment = "gwr-severn-beach"
+
+[[stations]]
+crs = "SVB"
+role = "terminus"
+segment = "gwr-severn-beach"

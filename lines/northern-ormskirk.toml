@@ -1,0 +1,160 @@
+id = "northern-ormskirk"
+name = "Preston to Ormskirk Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# Gap analysis: not individually named in
+# docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md, but falls
+# within its Northern section's own framing ("assorted... branches not yet
+# checked in detail... flagged for the follow-up curation pass") -- a real,
+# currently-operating Northern Trains service with no existing
+# `lines/*.toml` coverage. Confirmed via Wikipedia's "Ormskirk branch line"
+# article and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference), fetched 2026-09-21.
+#
+# Wikipedia's own current article title for this route is "Ormskirk branch
+# line" (there is no current "West Lancashire Line" article -- that name
+# belongs to a long-defunct 19th-century company, per WebSearch; the modern
+# route is documented under "Ormskirk branch line"). This file's own `id`
+# follows this catalogue's destination-based naming convention (matching
+# `northern-clitheroe.toml`, `northern-penistone.toml`), but the `name`
+# field deliberately does NOT reuse "Ormskirk branch line" verbatim: that
+# phrase is genuinely ambiguous in ordinary usage between this line (Preston
+# to Ormskirk, Northern Trains, diesel, single-track/token-block south of
+# Rufford) and Merseyrail's own separate, already-modelled electrified
+# branch to Ormskirk from Liverpool via Kirkdale (`merseyrail-northern.toml`,
+# `merseyrail-northern-ormskirk` segment) -- the two meet only at the shared
+# Ormskirk station building, cross-platform, per that station's own
+# Wikipedia article ("a cross-platform interchange between Merseyrail
+# services from Liverpool Central and Northern Trains services from Preston
+# on the Ormskirk branch line"). "Preston to Ormskirk Line" is used instead
+# for the display name, and neither "Ormskirk branch" nor "Ormskirk branch
+# line" is used in `match_keywords` below, for the same disambiguation
+# reason. Do not touch `merseyrail-northern.toml`.
+#
+# Category "regional" per this batch's Northern-branch precedent (see
+# `northern-manchester-southport.toml`'s header comment). `[severity_
+# overrides]` below are warranted: this is a genuinely rural single-track
+# branch, signalled by One Train Working (No Staff) regulations from Rufford
+# to Ormskirk per the line's own Wikipedia article -- the most restrictive
+# signalling method on any line in this catalogue's Northern-branch set,
+# stronger justification than most for tuned thresholds.
+
+sample_stations = ["PRE", "CSO", "RUF", "OMS"]
+# Preston (origin), Croston and Rufford (the line's own two intermediate
+# stops), and Ormskirk (terminus).
+
+destination_crs_filter = ["OMS"]
+# OMS is this line's own unambiguous destination among the many other
+# services also departing the much busier Preston station (shared with
+# `west-coast-main-line.toml`, `northern-blackpool.toml` and
+# `tpe-anglo-scottish.toml` -- station overlap only in all three cases; this
+# branch diverges from the WCML slow lines at Farington Curve Junction, a
+# non-passenger junction not listed as a station in any of those files, so
+# no segment is shared with them here).
+
+match_keywords = ["Preston to Ormskirk", "Preston-Ormskirk line"]
+# Deliberately NOT "Ormskirk branch" or "Ormskirk branch line" -- see the
+# header comment above: both phrases are genuinely ambiguous with
+# Merseyrail's own, separately-modelled Ormskirk branch, and a Knowledgebase
+# incident using either phrase to describe a Merseyrail problem would
+# otherwise be misattributed to this file. Both keywords kept here name
+# Preston explicitly, which Merseyrail's own route does not serve. Grepped
+# against every other file's own `match_keywords` before adding: no
+# collision.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Preston to Ormskirk via Croston, Rufford and Burscough Junction, ordered
+# north to south, per Wikipedia's "Ormskirk branch line" article (fetched
+# 2026-09-21) and cross-checked via a WebSearch summary aggregating that
+# article with Rufford, Croston and Burscough Junction's own station
+# articles, which independently confirm the same three intermediate
+# stations and their order ("There are three intermediate stations along
+# the line at Croston, Rufford and Burscough Junction"; "From July 1970,
+# Rufford became the only passing point on the truncated Preston-Ormskirk
+# branch line after the Midge Hall to Ormskirk section was singled"). Every
+# CRS code cross-checked against ds.cursed.solutions/api/stations the same
+# day; no discrepancies. TIPLOCs omitted throughout (none confirmed to a
+# second source in the time available).
+#
+# Service frequency: per the line's own Wikipedia article, "Preston -
+# Ormskirk services were increased to hourly all day in May 2018 (apart
+# from Sundays)" -- the basis, together with the single-track/token-working
+# signalling noted above, for this file's severity overrides.
+#
+# --- Station-overlap-only notes ---
+# - Preston (PRE): see the `destination_crs_filter` comment above.
+# - Ormskirk (OMS): shared with `merseyrail-northern.toml`'s own terminus,
+#   confirmed by that station's own Wikipedia article as a cross-platform
+#   interchange between the two operators, not a through-running junction --
+#   station-overlap only, no segment shared. This file's own
+#   `northern-ormskirk` segment name is not reused from that file's
+#   `merseyrail-northern-ormskirk` segment.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Lostock Hall: real, currently-open station south of Preston, but
+#   confirmed (via its own Wikipedia article, which places it on "the East
+#   Lancashire Line") to sit on the separate Preston-Bamber Bridge-Blackburn
+#   corridor, not on this branch -- genuinely not on this route, not an
+#   oversight.
+# - Midge Hall: a real former station on this exact line, closed to
+#   passengers 2 October 1961; the platforms still stand and the site is a
+#   live token-exchange/signalling point (per the line's own Wikipedia
+#   article, trains still stop there to exchange the token even though no
+#   passenger station remains), and several reopening studies (1991, 2003,
+#   2012, 2014) have found it uneconomic so far. Not modelled as a station
+#   since it currently has no passenger service, matching this catalogue's
+#   convention of covering current operation only; flagged here rather than
+#   silently omitted.
+# - Burscough Curves: a proposed (not reinstated) pair of curves that would
+#   physically connect this line, at Burscough Junction (BCJ), to the
+#   Manchester-Southport line's own Burscough Bridge (BCB) station
+#   (`northern-manchester-southport.toml`), enabling through services from
+#   Preston/Liverpool to Southport via Ormskirk. Per the line's own
+#   Wikipedia article this reinstatement is only a proposal; the curves
+#   were lifted between the 1960s and early 1980s and carry no current
+#   passenger service, so no segment or shared track is modelled between
+#   the two files today -- a real, sourced, documented non-overlap rather
+#   than an assumed one.
+# - A separate Liverpool City Region Combined Authority strategy proposal
+#   (October 2017, via WebSearch) to extend Merseyrail's own Northern Line
+#   electrification from Ormskirk to Preston, bringing Burscough Junction,
+#   Rufford and Croston onto the Merseyrail network: a proposal only, not
+#   current operation, not modelled.
+[[stations]]
+crs = "PRE"
+role = "terminus"
+segment = "northern-ormskirk"
+
+[[stations]]
+crs = "CSO"
+role = "minor"
+segment = "northern-ormskirk"
+# Croston.
+
+[[stations]]
+crs = "RUF"
+role = "minor"
+segment = "northern-ormskirk"
+# Rufford -- the branch's sole passing point since 1970 (see the
+# severity-overrides sourcing above).
+
+[[stations]]
+crs = "BCJ"
+role = "minor"
+segment = "northern-ormskirk"
+# Burscough Junction -- physically distinct from Burscough Bridge (BCB) on
+# `northern-manchester-southport.toml`; see the scope-boundaries note above.
+
+[[stations]]
+crs = "OMS"
+role = "terminus"
+segment = "northern-ormskirk"
+# Ormskirk -- station-overlap only with Merseyrail's own terminus here; see
+# the note above.

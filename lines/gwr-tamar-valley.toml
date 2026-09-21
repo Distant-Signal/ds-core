@@ -1,0 +1,219 @@
+id = "gwr-tamar-valley"
+name = "Tamar Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+
+# Devon/Cornwall branch-line batch: full UK station-coverage audit found this
+# real, currently-open GWR branch (Plymouth - Gunnislake) entirely missing
+# from the catalogue. Wikipedia "Tamar Valley Line" infobox/lead: "a railway
+# line from Plymouth, Devon, to Gunnislake, Cornwall, in England, also known
+# as the Gunnislake branch line ... Like all railway lines in Devon and
+# Cornwall, it is unelectrified and all trains are diesel powered. The
+# entire line is single track past St. Budeaux Junction." 14 miles,
+# "Community railway" character, `stations = 9`.
+#
+# Category: "regional", matching this catalogue's precedent for a
+# single-track community-rail branch (`northern-furness.toml`), confirmed
+# rather than assumed via the infobox's own "Community railway" character
+# field.
+
+# Exclusive-segment stations only (Plymouth is the shared junction with the
+# Cornish Main Line/CrossCountry, left off in favour of stations only this
+# line reaches).
+sample_stations = ["SBV", "BAS", "GSL"]
+
+# Plymouth (PLY) is also a `gwr-cornish-main-line.toml`/`cross-country.toml`
+# sample/CRS entry. `destination_crs_filter` disambiguates this branch's own
+# LDBWS departures (bound for GSL) from other services calling at Plymouth,
+# mirroring `scotrail-ayrshire.toml`'s identical use of the field at GLC.
+destination_crs_filter = ["GSL"]
+
+match_keywords = ["Tamar Valley Line", "Gunnislake branch"]
+# "Tamar Valley Line" is the line's own current branded/article name.
+# "Gunnislake branch" ("Gunnislake branch line") is the well-established
+# historic/infrastructure name still given in the same Wikipedia lead
+# sentence ("also known as the Gunnislake branch line"). Grepped
+# `lines/*.toml` before starting: neither phrase collides with any existing
+# file's `match_keywords`.
+
+# Single track throughout past St Budeaux Junction, with a real reversal at
+# Bere Alston (see the station comment below) and a sparse timetable (nine
+# services each way Mondays-Fridays, eight on Saturdays, five on Sundays,
+# per Wikipedia's own "Bere Alston railway station" article) -- comparable
+# to `northern-furness.toml`'s/`scotrail-kyle.toml`'s rural single-track
+# branches, so the same tuned thresholds are used.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "PLY"
+role = "junction"
+segment = "gwr-tamar-valley"
+# Plymouth: the real junction with the Cornish Main Line and CrossCountry's
+# own South West trunk. Also a station entry in both `cross-country.toml`
+# (segment "xc-south-west") and `gwr-cornish-main-line.toml` (segment
+# "xc-south-west", row copied verbatim from `cross-country.toml`) --
+# deliberately NOT reusing "xc-south-west" here. This line's own physical
+# route (via Devonport/Dockyard/Keyham to St Budeaux) genuinely runs over
+# the same double-track approach out of Plymouth used by Cornish Main Line
+# trains (see the DPT/DOC/KEY comment below for the sourced detail), but
+# reusing "xc-south-west" verbatim would also pull CrossCountry's own
+# Exeter-Newton Abbot-Plymouth stations into an apparent shared trunk with
+# this branch, which no source here establishes -- CrossCountry trains
+# never run towards Gunnislake. Station overlap only, per this catalogue's
+# established convention (`xc-south-coast.toml`/`xc-manchester.toml`
+# precedent), matching the same conservative choice made for the other
+# branch junctions in this batch (Liskeard, Par, Truro, St Erth).
+
+[[stations]]
+crs = "DPT"
+role = "minor"
+segment = "gwr-tamar-valley"
+# Devonport: real, currently-open, genuinely shared physical track with the
+# Cornish Main Line. `gwr-cornish-main-line.toml`'s own comment for this
+# same CRS code (segment "gwr-cornish-main-line" there) already documents
+# this: "a request stop with 'a few [GWR Cornish Main Line] trains ... to
+# and from Penzance, some of which continue eastwards beyond Plymouth
+# towards Exeter St Davids or London Paddington', primarily served by Tamar
+# Valley Line trains to/from Gunnislake." This file does NOT reuse the
+# literal `gwr-cornish-main-line` segment name here: doing so would flip
+# that file's own Liskeard-Penzance exclusive segment into an apparent
+# catalogue-wide shared trunk with this line, which is not true west of St
+# Budeaux (see the SBV/St Budeaux Junction comment below) -- the same
+# segment-name pitfall `northern-furness.toml`'s own comments describe
+# avoiding. Station overlap only; the genuine Plymouth-St Budeaux track
+# sharing is documented here in prose rather than modelled as a shared
+# segment, per this batch's own steer to avoid inventing new shared
+# segments without a controller's sign-off.
+
+[[stations]]
+crs = "DOC"
+role = "minor"
+segment = "gwr-tamar-valley"
+# Dockyard: same shared-track situation as Devonport above; see
+# `gwr-cornish-main-line.toml`'s own comment for this CRS code.
+
+[[stations]]
+crs = "KEY"
+role = "minor"
+segment = "gwr-tamar-valley"
+# Keyham: same shared-track situation as Devonport above; see
+# `gwr-cornish-main-line.toml`'s own comment for this CRS code.
+
+# St Budeaux Ferry Road (CRS SBF) is NOT this line's own station: it is the
+# Cornish Main Line's own stop at St Budeaux, distinct from this line's own
+# St Budeaux Victoria Road below. St Budeaux Ferry Road's own Wikipedia
+# article: "For the station on the [Tamar Valley Line] ... see St Budeaux
+# Victoria Road." Confirmed via `gwr-cornish-main-line.toml`'s own identical
+# note for SBF. This is the real point (Wikipedia's "St. Budeaux Junction")
+# where the two lines' shared track diverges: the Cornish Main Line
+# continues west via SBF towards Saltash and Cornwall, while this line
+# turns north via SBV towards Bere Ferrers -- confirmed independently by
+# this line's own infobox ("The entire line is single track past St.
+# Budeaux Junction").
+
+[[stations]]
+crs = "SBV"
+role = "minor"
+segment = "gwr-tamar-valley"
+# St Budeaux Victoria Road: this line's own exclusive stop at St Budeaux,
+# where the shared Plymouth approach ends and the single-track-only section
+# begins (see the St Budeaux Junction note above).
+
+# Tamerton Foliot (between St Budeaux Victoria Road and Bere Ferrers)
+# deliberately excluded: its own Wikipedia article confirms it "closed" on
+# "10 September 1962" and is "Disused" -- no current CRS code (confirmed via
+# the lookup below). This also reconciles the infobox's own `stations = 9`
+# count: Plymouth, Devonport, Dockyard, Keyham, St Budeaux Victoria Road,
+# Bere Ferrers, Bere Alston, Calstock, Gunnislake is exactly nine currently-
+# open stations once St Budeaux Ferry Road (the Cornish Main Line's own
+# stop, not this line's) and Tamerton Foliot (closed 1962) are excluded.
+
+[[stations]]
+crs = "BFE"
+role = "minor"
+segment = "gwr-tamar-valley"
+# Bere Ferrers: site of a 1917 accident in which ten New Zealand soldiers
+# were killed by an oncoming express while alighting on the wrong side of
+# their troop train (memorial plaque unveiled 2001), per Wikipedia. Nine
+# weekday / eight Saturday / five Sunday services, per Wikipedia's own
+# "Bere Alston railway station" article -- basis for this file's severity
+# tuning above.
+
+[[stations]]
+crs = "BAS"
+role = "junction"
+segment = "gwr-tamar-valley"
+# Bere Alston: a genuine reversal point -- Wikipedia's own article on this
+# station describes trains reversing direction here before continuing to
+# Calstock/Gunnislake, a legacy of this station's former role as a through
+# junction on the one-time main line towards Tavistock and Okehampton
+# (that further route is long closed and not modelled here). Tagged
+# "junction" to reflect this real operational role, distinct from the
+# request-stop-style minor halts elsewhere on the line.
+
+[[stations]]
+crs = "CSK"
+role = "minor"
+segment = "gwr-tamar-valley"
+# Calstock: crosses the Tamar via the Calstock Viaduct into Cornwall.
+
+[[stations]]
+crs = "GSL"
+role = "terminus"
+segment = "gwr-tamar-valley"
+# Gunnislake: this line's own terminus.
+
+# === Sources (cross-checked per this batch's Global Constraints) ===
+#
+# Route structure, operator, character, service pattern:
+#   - Wikipedia "Tamar Valley Line" (infobox + lead + body, fetched fresh
+#     for this task, including a raw-wikitext pass for the infobox):
+#     confirms GWR operation, "Community railway" character, single track
+#     past St Budeaux Junction, 14 mile length, "stations = 9"; confirms the
+#     line is "also known as the Gunnislake branch line."
+#   - Wikipedia "St Budeaux Ferry Road railway station": confirms this CRS
+#     (SBF) is the Cornish Main Line's own stop, explicitly distinct from
+#     this line's own St Budeaux Victoria Road (SBV).
+#   - Wikipedia "Tamerton Foliot railway station" (fetched independently,
+#     own article): confirms closure to passengers on 10 September 1962,
+#     "Disused" status, no current CRS code.
+#   - Wikipedia "Bere Alston railway station" (fetched independently, own
+#     article): confirms the current service count ("nine services each way
+#     on Mondays to Fridays, eight on Saturdays and five on Sundays") and
+#     the reversal-here operational pattern.
+#   - Wikipedia "Bere Ferrers railway station" (fetched independently, own
+#     article): confirms current GWR operation and the 1917 accident
+#     history.
+#   - `gwr-cornish-main-line.toml`'s own existing comments for CRS DPT, DOC,
+#     KEY and SBF: independently corroborate the shared-track finding above
+#     (these stations are "primarily... Tamar Valley Line stops" sharing
+#     track with the Cornish Main Line "as far as St Budeaux, where the
+#     Tamar Valley Line's own St Budeaux Victoria Road stop, CRS SBV,
+#     diverges").
+#
+# CRS codes: every code below was verified live against
+# `https://ds.cursed.solutions/api/stations?q=<name>` during this task --
+# PLY "Plymouth", DPT "Devonport", DOC "Dockyard (Devonport)", KEY "Keyham",
+# SBV "St Budeaux Victoria Road", BFE "Bere Ferrers", BAS "Bere Alston", CSK
+# "Calstock", GSL "Gunnislake". "Tamerton Foliot" returned no match,
+# confirming no current CRS code. All matched with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live source
+# during this task, matching this batch's optional-field convention.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Cornish Main Line itself, and the genuine Plymouth-St Budeaux
+#   shared-track fact: already catalogued/noted in
+#   `gwr-cornish-main-line.toml`; this file deliberately does not introduce
+#   a new shared-segment name spanning both files for it (see the PLY/DPT
+#   station comments above) -- a real, sourced, but conservatively
+#   unmodelled shared-trunk relationship, flagged here for a controller to
+#   decide on rather than invented unilaterally.
+# - The historic Tavistock/Okehampton route beyond Bere Alston: real (per
+#   that station's reversal-point role, noted above) but long closed and
+#   out of scope for this task.

@@ -56,8 +56,10 @@ match_keywords = ["Oxted line", "Uckfield line", "East Grinstead branch"]
 # and its shared approach through East Croydon are also stations in one or
 # more already-curated files: VIC (southern-brighton-main-line.toml,
 # southeastern-chatham.toml), LBG (thameslink-core.toml,
-# southeastern-main-line.toml, southeastern-metro-north-kent.toml,
-# southeastern-hayes-line.toml, southern-brighton-main-line.toml), ECR
+# southeastern-main-line.toml, southeastern-bexleyheath.toml,
+# southeastern-dartford-loop.toml (formerly one file,
+# southeastern-metro-north-kent.toml), southeastern-hayes-line.toml,
+# southern-brighton-main-line.toml), ECR
 # (southern-brighton-main-line.toml). Whether Oxted line services
 # physically share the same fast/slow tracks as those other services
 # between these hubs and East Croydon was not established to COMMON.md's
@@ -154,9 +156,10 @@ role = "terminus"
 segment = "oxted-london-bridge-approach"
 # London Bridge. Usual London terminus for the Uckfield branch service (see
 # LONDON TERMINI above). Station overlap only with thameslink-core.toml/
-# southeastern-main-line.toml/southeastern-metro-north-kent.toml/
-# southeastern-hayes-line.toml/southern-brighton-main-line.toml - see
-# STATION OVERLAP above.
+# southeastern-main-line.toml/southeastern-bexleyheath.toml/
+# southeastern-dartford-loop.toml (formerly one file,
+# southeastern-metro-north-kent.toml)/southeastern-hayes-line.toml/
+# southern-brighton-main-line.toml - see STATION OVERLAP above.
 
 [[stations]]
 crs = "ECR"

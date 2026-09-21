@@ -1,0 +1,285 @@
+id = "swr-north-downs"
+name = "North Downs Line (Reading - Guildford - Redhill)"
+mode = "national-rail"
+category = "regional"
+operators = ["GW", "SW", "SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# Part of the SE/SWR suburban-loop gap-analysis batch. The North Downs Line
+# (Reading-Guildford-Redhill) had zero coverage in `lines/` before this file:
+# none of Reading, Wokingham, Ash, Wanborough, Guildford's cross-country
+# platforms, Gomshall, Dorking (West/Deepdene), Reigate or Redhill appeared
+# in any existing line definition on this specific route.
+#
+# ============================================================================
+# OPERATOR - checked rather than assumed, per this task's own brief
+# ============================================================================
+# Wikipedia's "North Downs Line" infobox lists all three of Great Western
+# Railway, South Western Railway and Southern as current operators, and its
+# Services section gives the actual split: "Reading to Redhill and Gatwick
+# Airport, operated by GWR" (the core, all-the-way service); a South Western
+# Railway "Farnham and Aldershot to Guildford" service that joins this line's
+# own Ash-Wanborough-Guildford section for its final leg (the Alton line's
+# own Aldershot branch is a physically different route into Aldershot from
+# Woking - swr-alton.toml - but this SW service continues on from Aldershot
+# over THIS line's own metals to reach Guildford, hence SW is a genuine
+# operator here, not a copy-paste error); and Southern/Thameslink calling at
+# Reigate and Redhill only, where this line's own Reigate-Redhill section is
+# the sole electrified stretch east of Guildford and doubles as the final
+# approach shared with Southern's Brighton Main Line "slow"/Redhill-corridor
+# stopping pattern (that corridor itself - Purley/Coulsdon South/Merstham/
+# Redhill/Earlswood/Salfords/Horley - is explicitly NOT modelled by
+# southern-brighton-main-line.toml, per that file's own documented scope
+# note; not re-modelled here either, since it isn't part of the North Downs
+# Line proper). So: "mostly GWR/SWR operated west of Redhill" per this
+# task's own steer is confirmed, with Southern/GWR sharing the short
+# Reigate-Redhill tail.
+#
+# The line's western end no longer reaches Tonbridge (a historical
+# through-route); Wikipedia's own Services section confirms it now
+# terminates at Redhill/Gatwick Airport. Not modelled beyond Redhill here.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Station list, order and operator split: Wikipedia "North Downs Line"
+# (infobox + Services section), cross-checked station-by-station against
+# each station's own Wikipedia infobox.
+# CRS codes: verified live against https://ds.cursed.solutions/api/stations
+# for every station below (Earley=EAR, Winnersh Triangle=WTI, Winnersh=WNS,
+# Wokingham=WKM, Crowthorne=CRN, Sandhurst (Berks)=SND, Blackwater=BAW,
+# Farnborough North=FNN, North Camp=NCM, Ash=ASH, Wanborough=WAN,
+# Shalford (Surrey)=SFR, Chilworth=CHL, Gomshall=GOM, Dorking West=DKT,
+# Dorking (Deepdene)=DPD, Betchworth=BTO, Reigate=REI, Redhill=RDH,
+# Reading=RDG). Guildford (GLD) reused from swr-portsmouth-direct.toml
+# (station overlap only, see below).
+# Electrification: Wikipedia confirms 750V DC third rail on
+# Wokingham-Reading and Aldershot South Jn-Guildford, with the middle
+# ~29 route miles (Guildford-Redhill via this line, minus the short
+# Reigate-Redhill tail) unelectrified - diesel-worked GWR trains cover this.
+#
+# Grepped clean before starting: no other `lines/*.toml` file lists Earley,
+# Winnersh (Triangle), Wokingham, Crowthorne, Sandhurst, Blackwater,
+# Farnborough North, North Camp, Ash, Wanborough, Shalford, Chilworth,
+# Gomshall, either Dorking station, Betchworth, Reigate or Redhill.
+# gwr-thames-valley.toml (Paddington-Reading-Newbury/Oxford) does not reach
+# Wokingham or beyond on this line - confirmed by grep, a clean gap.
+#
+# ============================================================================
+# STATION OVERLAP - Reading and Guildford
+# ============================================================================
+# Reading (RDG) is already in several files (gwr-main-line, gwr-cotswold,
+# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line,
+# etc.) as a multi-line hub; those files already apply the
+# "station overlap, own segment name" precedent for RDG (see
+# gwr-thames-valley.toml's own note). This file follows the identical
+# precedent: RDG gets its own `north-downs-reading-guildford` segment name,
+# not any of theirs - this line's own physical route east from Reading is
+# on none of their metals.
+# Guildford (GLD) is already in swr-portsmouth-direct.toml (its own
+# `swr-portsmouth-direct` segment, the Waterloo-via-Woking approach). This
+# line reaches Guildford from a different direction (via Ash) - same
+# station, different physical approach, station overlap only, own segment
+# name here too, matching that file's own precedent for exactly this kind
+# of convergence (see its Havant/Portsmouth note).
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# Two segments, split at Guildford, which the electrification gap and the
+# operator mix both independently point to as the natural break:
+#   `north-downs-reading-guildford`: Reading to Guildford (the GWR/SWR
+#     western section, mixed electrified/diesel).
+#   `north-downs-guildford-redhill`: Guildford to Redhill (unelectrified
+#     Shalford-Reigate, then the short electrified Reigate-Redhill tail
+#     shared operationally with Southern).
+# No cross-file segment reuse: this line shares no genuine running track
+# with any other file in the catalogue (checked above) beyond the two
+# station-overlap points already covered.
+#
+# ============================================================================
+# MATCH KEYWORDS / SAMPLE STATIONS
+# ============================================================================
+match_keywords = ["North Downs Line"]
+# The line's own branded/article name; grepped clean against every other
+# file's match_keywords before adding.
+
+sample_stations = ["WKM", "ASH", "GOM", "REI"]
+# One per logical stretch, all exclusive to this file: Wokingham (west,
+# electrified GWR suburban end), Ash (the Ash-Wanborough-Guildford SW/GWR
+# shared stretch), Gomshall (unelectrified rural-diesel middle), Reigate
+# (electrified Southern-adjacent east end).
+
+# Mixed-frequency cross-country regional line (frequent electrified
+# suburban ends, an hourly-or-worse diesel middle) - same category and
+# tuning precedent as scotrail-ayrshire.toml's own trunk+rural-extension
+# shape, rather than a uniform commuter/main-line default.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The historical Redhill-Tonbridge continuation: per Wikipedia, current
+#   North Downs Line services terminate at Redhill/Gatwick Airport; not a
+#   live gap.
+# - The Reigate/Redhill-adjacent Purley/Coulsdon South/Merstham "slow"
+#   Brighton Main Line stopping corridor: real, sourced, but explicitly out
+#   of southern-brighton-main-line.toml's own scope and not part of the
+#   North Downs Line proper - a separate, still-uncovered gap.
+# - Any Reading-Ascot-Virginia Water-Waterloo SWR service that also touches
+#   Reading: a different physical route (Waterloo to Reading Line), not
+#   this one - not modelled here, not this task's scope either.
+
+# ============================================================================
+# STATIONS - Reading to Redhill
+# ============================================================================
+[[stations]]
+crs = "RDG"
+role = "terminus"
+segment = "north-downs-reading-guildford"
+# Reading. Station overlap with several other files (gwr-main-line,
+# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line
+# among them) - own segment name here, see STATION OVERLAP note above.
+
+[[stations]]
+crs = "EAR"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Earley.
+
+[[stations]]
+crs = "WTI"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Winnersh Triangle.
+
+[[stations]]
+crs = "WNS"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Winnersh.
+
+[[stations]]
+crs = "WKM"
+role = "major"
+segment = "north-downs-reading-guildford"
+# Wokingham. End of the Wokingham-Reading electrified (750V DC third rail)
+# section per Wikipedia's infobox.
+
+[[stations]]
+crs = "CRN"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Crowthorne. Unelectrified, GWR diesel-worked from here to Ash.
+
+[[stations]]
+crs = "SND"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Sandhurst (Berks).
+
+[[stations]]
+crs = "BAW"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Blackwater.
+
+[[stations]]
+crs = "FNN"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Farnborough North.
+
+[[stations]]
+crs = "NCM"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# North Camp.
+
+[[stations]]
+crs = "ASH"
+role = "junction"
+segment = "north-downs-reading-guildford"
+# Ash. Start of the Aldershot South Junction-Guildford electrified section;
+# also where SWR's own Farnham/Aldershot-Guildford service (see OPERATOR
+# note above) joins this line's metals from the Alton line's own Aldershot
+# branch (a physically different route, swr-alton.toml, not modelled as a
+# junction here since the physical connection is at Aldershot, one stop
+# further west and outside this line's own station list).
+
+[[stations]]
+crs = "WAN"
+role = "minor"
+segment = "north-downs-reading-guildford"
+# Wanborough.
+
+[[stations]]
+crs = "GLD"
+role = "junction"
+segment = "north-downs-reading-guildford"
+# Guildford. Station overlap with swr-portsmouth-direct.toml's own
+# `swr-portsmouth-direct` segment (a different physical approach, via
+# Woking) - see STATION OVERLAP note above. Junction role: this line's own
+# route continues east via Shalford Junction.
+
+[[stations]]
+crs = "SFR"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Shalford (Surrey). First station past Shalford Junction, where this
+# line's eastward route diverges from the Guildford-Portsmouth/Havant line
+# - exclusive segment starts here per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "CHL"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Chilworth.
+
+[[stations]]
+crs = "GOM"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Gomshall.
+
+[[stations]]
+crs = "DKT"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Dorking West.
+
+[[stations]]
+crs = "DPD"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Dorking (Deepdene).
+
+[[stations]]
+crs = "BTO"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Betchworth. Unelectrified section ends just past here.
+
+[[stations]]
+crs = "REI"
+role = "minor"
+segment = "north-downs-guildford-redhill"
+# Reigate. Start of the short Reigate-Redhill electrified tail per
+# Wikipedia's infobox ("only the 1 mi 67 ch section between Reigate and
+# Redhill is electrified").
+
+[[stations]]
+crs = "RDH"
+role = "terminus"
+segment = "north-downs-guildford-redhill"
+# Redhill. Current eastern terminus of North Downs Line services (Reading
+# to Redhill/Gatwick Airport, per Wikipedia's Services section); also a
+# Southern/Thameslink Brighton Main Line and Sutton Loop hub, not shared as
+# a segment here (station overlap only - Southern's own approach into
+# Redhill is via the separate Purley/Coulsdon South corridor documented as
+# a scope boundary above, not this line's own metals).

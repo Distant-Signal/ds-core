@@ -40,10 +40,19 @@ delay_threshold_minutes = 10
 # real, open, currently-served candidates there too (Barnt Green, Bromsgrove,
 # Ashchurch for Tewkesbury, Worcestershire Parkway) -- those stations sit on
 # a segment shared verbatim with `cross-country.toml`'s own `xc-birmingham`/
-# `xc-west` entries (byte-identical BHM/UNI/CNM today), which is out of this
+# `xc-west` entries (byte-identical BHM/UNI/CNM today), which was out of this
 # task's single-file scope to edit. Flagging for a follow-up task scoped to
 # `cross-country.toml` (or a coordinated multi-file task) rather than forking
 # the shared trunk unilaterally here.
+#
+# RESOLVED (later cross-country.toml-scoped audit): Worcestershire Parkway
+# (WOP) is now added to the shared row in both files -- CrossCountry runs
+# southbound-only/select-service stops there on the Bristol-Manchester and
+# Bournemouth-Manchester patterns, confirmed by this audit's CIF-schedule
+# cross-check. See the WOP entry below, kept byte-identical with
+# `cross-country.toml`'s own copy of this BHM/UNI/WOP/CNM stretch. Barnt
+# Green, Bromsgrove and Ashchurch for Tewkesbury remain unaddressed and
+# still out of this file's single-file scope.
 #
 # Remaining minor intermediate calls on the shared `xc-birmingham`/`xc-west`
 # stretch (see above) are omitted for that reason; the exclusive
@@ -59,6 +68,16 @@ segment = "xc-birmingham"
 crs = "UNI"
 role = "minor"
 segment = "xc-west"
+
+[[stations]]
+crs = "WOP"
+role = "minor"
+segment = "xc-west"
+# Worcestershire Parkway. CrossCountry runs southbound-only/select-service
+# stops here on both the Bristol-Manchester and Bournemouth-Manchester
+# patterns -- confirmed by this audit's CIF-schedule cross-check. Kept
+# byte-identical with `cross-country.toml`'s own copy of this BHM/UNI/WOP/CNM
+# stretch (see the RESOLVED note above).
 
 [[stations]]
 crs = "CNM"

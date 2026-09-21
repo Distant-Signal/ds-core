@@ -1,0 +1,80 @@
+id = "gwr-marlow-branch"
+name = "Marlow Branch Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway, Class 165/166 "Turbo" diesel multiple units
+# (en.wikipedia.org/wiki/Marlow_branch_line).
+
+destination_crs_filter = ["MLW"]
+sample_stations = ["FZP", "BNE", "MLW"]
+
+match_keywords = ["Marlow branch"]
+# The line's own current name. Grepped clean against every other file's own
+# match_keywords before adding — no collision.
+
+# A short, single-track, request-stop-heavy branch with no diversionary
+# alternative and a trailing-connection reversal at Bourne End limiting
+# train length to two coaches (en.wikipedia.org/wiki/Marlow_branch_line) —
+# the same "small isolated service, outsized effect from any one fault"
+# reasoning as swr-island-line.toml's own override.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# en.wikipedia.org/wiki/Marlow_branch_line: this line diverges from the
+# Great Western Main Line at Maidenhead, running Maidenhead - Furze Platt -
+# Cookham - Bourne End - Marlow, single track throughout, "one train per
+# hour in each direction" off-peak with a peak shuttle enhancement (two
+# separate shorter workings either side of Bourne End, where all trains
+# must stop and reverse due to the branch's trailing-connection layout).
+#
+# --- Maidenhead: real shared waypoint, kept as station overlap only ---
+#
+# Maidenhead (MAI) is already gwr-thames-valley.toml's own exclusive
+# `gwr-thames-valley` segment (its Reading-Newbury/Didcot-Oxford local
+# network) and elizabeth-line.toml's own `elizabeth-west` segment — neither
+# of which reaches Furze Platt, Cookham, Bourne End or Marlow. Following
+# this batch's established "single-waypoint overlap against a differently-
+# scoped sibling segment" treatment (see swr-west-of-england.toml's BSK
+# note, gwr-golden-valley.toml's GCR note, gwr-transwilts.toml's CPM/TRO
+# notes), MAI is tagged with this line's own exclusive segment below rather
+# than either sibling's.
+[[stations]]
+crs = "MAI"
+role = "junction"
+segment = "gwr-marlow-branch"
+# Maidenhead. Real shared waypoint with gwr-thames-valley.toml/
+# elizabeth-line.toml, kept as station overlap only — see comment above.
+# This line's own exclusive branch begins here.
+
+[[stations]]
+crs = "FZP"
+role = "minor"
+segment = "gwr-marlow-branch"
+# Furze Platt.
+
+[[stations]]
+crs = "COO"
+role = "minor"
+segment = "gwr-marlow-branch"
+# Cookham.
+
+[[stations]]
+crs = "BNE"
+role = "junction"
+segment = "gwr-marlow-branch"
+# Bourne End. All trains reverse here (see comment above) — the branch
+# effectively splits into two shorter workings either side of this station
+# at peak times, though it carries no other line's traffic and so stays a
+# "junction" role for its own operational significance rather than for any
+# shared-segment reason.
+
+[[stations]]
+crs = "MLW"
+role = "terminus"
+segment = "gwr-marlow-branch"
+# Marlow.

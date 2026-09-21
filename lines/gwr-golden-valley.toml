@@ -1,0 +1,169 @@
+id = "gwr-golden-valley"
+name = "Golden Valley Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+# Great Western Railway. ATOC code, FirstGroup-to-public-ownership timeline
+# and sourcing already documented in gwr-main-line.toml (Task 4.1) — not
+# re-derived here.
+
+# --- Checked first, per this task's own brief: does gwr-cotswold.toml
+#     already cover this? ---
+#
+# It does not. gwr-cotswold.toml's own route is Paddington-Reading-Didcot,
+# then diverging onto the Cherwell Valley line towards Oxford, Charlbury,
+# Kingham, Moreton-in-Marsh, Honeybourne, Evesham, Pershore and Worcester —
+# a geographically separate corridor running north-west from Oxford. It does
+# not touch Swindon, Kemble, Stroud or Gloucester at all (grepped and read in
+# full before starting this task). This is a wholly new line, not a gap-fill
+# of an existing file.
+
+# Deliberately unset. Real GWR services on this route are a mix of
+# Paddington-Cheltenham Spa through workings and shorter Swindon-Cheltenham
+# locals (en.wikipedia.org/wiki/Golden_Valley_line, "Services" section:
+# "roughly hourly" Paddington-Cheltenham, plus additional Swindon-Cheltenham
+# services Monday-Saturday). This task's own scope (per the brief) ends at
+# Gloucester, short of the real Cheltenham terminus, so a filter naming only
+# GCR would wrongly exclude the through Cheltenham-bound majority of this
+# line's actual services. Left unset rather than invent or under-scope it,
+# mirroring gwr-cotswold.toml's/gwr-west-of-england.toml's identical
+# judgment call for the same "through service continues past this file's own
+# scope boundary" situation.
+
+# Exclusive-segment stations only, for a clean read of this line's own
+# service (mirrors the other GWR siblings' sample_stations rationale).
+sample_stations = ["KEM", "STD", "GCR"]
+
+match_keywords = ["Golden Valley line"]
+# The line's own current infrastructure/branding name
+# (en.wikipedia.org/wiki/Golden_Valley_line is the literal article title —
+# named for the Golden Valley of the River Frome around Chalford/Brimscombe,
+# not the unrelated Golden Valley in Herefordshire). Grepped clean against
+# every other file's own match_keywords before adding — no collision.
+
+# Kemble-Gloucester is double track (redoubled from single track by October
+# 2014, after 46 years single line — see comment below), but the
+# Swindon-Kemble stretch was ALSO redoubled in the same scheme, so this file
+# does not carry the same "rural single-track" override its GWR regional
+# siblings (gwr-cotswold.toml, gwr-thames-valley.toml) use for genuinely
+# single-track corridors. No severity_overrides: roughly-hourly, now fully
+# double-track throughout, matching gwr-main-line.toml's/gwr-south-wales.
+# toml's no-override judgment call for a comparable double-track secondary
+# main line.
+
+# --- Segment naming (read gwr-main-line.toml's own comment block first) ---
+#
+# `gwr-trunk-paddington` is the shared-trunk segment name established by
+# Task 4.1 (gwr-main-line.toml) for the Paddington-Reading-Didcot-Swindon
+# stretch. en.wikipedia.org/wiki/Golden_Valley_line's own route description
+# confirms this line's London-connected service runs over that same
+# Paddington-Reading-Didcot-Swindon approach before diverging south-west at
+# Swindon itself onto the original Golden Valley route via Kemble — the
+# genuine multi-station shared trunk gwr-main-line.toml's own header
+# anticipates for exactly this situation ("South Wales Main Line services
+# diverge just west of here [Swindon], at Wootton Bassett Junction... SWI is
+# the last station shared with that arm" — this line diverges even later,
+# at Swindon itself, so it shares one station further than the South Wales
+# arm does). PAD/RDG/DID/SWI rows are copied verbatim from gwr-main-line.toml
+# rather than re-derived.
+#
+# The exclusive segment (`gwr-golden-valley`, following the established
+# line-id-as-exclusive-segment-name convention) starts at Kemble (KEM), the
+# first station reached only by this route.
+#
+# --- Gloucester: real junction, kept as station overlap only ---
+#
+# Gloucester (GCR) is also xc-cardiff.toml's own exclusive `xc-cardiff`
+# segment (its Birmingham-Cheltenham-Gloucester-Newport-Cardiff route). This
+# task's research found the two lines approach Gloucester from genuinely
+# different directions — this line from the south-east via Stroud/
+# Stonehouse/Standish Junction, xc-cardiff.toml's route from the north via
+# Cheltenham and onward south-west via the Gloucester to Newport line — with
+# no sourced evidence of shared track between them beyond both calling at
+# the same station building (the same "single-waypoint station overlap, not
+# a shared corridor" shape as the EXD case in gwr-west-of-england.toml/
+# swr-west-of-england.toml). Reusing `xc-cardiff` verbatim for just this
+# file's GCR row would also incorrectly pull xc-cardiff.toml's own
+# Cheltenham/Newport/Cardiff stations into "shared" status catalogue-wide.
+# Station overlap only is used instead: GCR is tagged with this line's own
+# exclusive segment below.
+[[stations]]
+crs = "PAD"
+tiploc = "PADTON"
+role = "terminus"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "RDG"
+tiploc = "RDNGSTN"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "DID"
+tiploc = "DIDCOTP"
+role = "junction"
+segment = "gwr-trunk-paddington"
+
+[[stations]]
+crs = "SWI"
+tiploc = "SDON"
+role = "junction"
+segment = "gwr-trunk-paddington"
+# This line's own exclusive route diverges at Swindon itself (see
+# segment-naming comment above) — one station further along the shared
+# trunk than gwr-main-line.toml's own Chippenham-bound arm, and one further
+# than gwr-south-wales.toml's Wootton Bassett Junction split.
+
+[[stations]]
+crs = "KEM"
+role = "junction"
+segment = "gwr-golden-valley"
+# Kemble. This line's own exclusive segment starts here (see segment-naming
+# comment above). Formerly also the junction for the Cirencester and
+# Tetbury branch lines, both closed to passengers 6 April 1964
+# (en.wikipedia.org/wiki/Golden_Valley_line) — not modelled.
+
+[[stations]]
+crs = "STD"
+role = "major"
+segment = "gwr-golden-valley"
+# Stroud.
+
+[[stations]]
+crs = "SHU"
+role = "minor"
+segment = "gwr-golden-valley"
+# Stonehouse. The Golden Valley line rejoins/merges with the Bristol-
+# Birmingham main line at Standish Junction, just west of here (no CRS/
+# TIPLOC of its own) — en.wikipedia.org/wiki/Golden_Valley_line.
+
+[[stations]]
+crs = "GCR"
+role = "major"
+segment = "gwr-golden-valley"
+# Gloucester. This task's own scope ends here (the brief's own "Swindon-
+# Kemble-Stroud-Gloucester" wording); real GWR services continue on to
+# Cheltenham Spa, and Gloucester is also served by cross-country.toml/
+# xc-cardiff.toml from other directions — station overlap only, see comment
+# above.
+
+# ============================================================================
+# SCOPE BOUNDARIES — historic halts checked and excluded
+# ============================================================================
+# The intermediate halts between Swindon and Gloucester listed on this
+# line's Wikipedia infobox as "closed to passengers 2 November 1964" —
+# Ebley Crossing, Cashes Green, Downfield Crossing, Bowbridge Crossing, Ham
+# Mill, Brimscombe Bridge, Brimscombe, St Mary's Crossing, Chalford, Tetbury
+# Road, Oaksey Halt, Minety and Ashton Keynes, and Purton — are all long
+# closed and correctly excluded. Not each individually re-verified against a
+# second source within this task's budget (taken from the same infobox's own
+# "Intermediate stations" list), flagged here for the controller on the same
+# low-risk basis as the equivalent note in swr-west-of-england.toml.
+#
+# Cheltenham Spa (CNM) is real, currently open and the true endpoint of most
+# of this line's London-through services, but sits outside this task's own
+# "Swindon-Kemble-Stroud-Gloucester" scope and is already referenced (though
+# not as a full stations entry) by cross-country.toml/xc-cardiff.toml — left
+# for a future task to properly extend this file or add a dedicated one,
+# rather than guessed here.

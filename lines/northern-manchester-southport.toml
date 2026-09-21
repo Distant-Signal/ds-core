@@ -1,0 +1,291 @@
+id = "northern-manchester-southport"
+name = "Manchester to Southport Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# Gap analysis source: docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "Assorted Manchester/West Yorkshire suburban branches not yet checked in
+# detail (e.g. Manchester-Southport, Wigan-Kirkby) -- flagged for the
+# follow-up curation pass rather than fully scoped here." This is that
+# follow-up: a real, currently-operating Northern Trains passenger service,
+# confirmed via Wikipedia's "Manchester-Southport line" article (raw
+# wikitext) and cross-checked station-by-station against
+# ds.cursed.solutions/api/stations (this app's own live production CRS
+# reference) 2026-09-21.
+#
+# `northern-clitheroe.toml`'s own header comment explicitly calls this route
+# (and Wigan-Kirkby) "out-of-scope for this plan" -- i.e. a different task's
+# scope, not evidence this line doesn't exist. It does: Northern Trains
+# currently runs Manchester Victoria - Southport via Wigan Wallgate, distinct
+# from Merseyrail's own separately-modelled (`merseyrail-northern.toml`)
+# electrified Northern Line service into Southport via central Liverpool --
+# two different operators, two different physical routes, meeting only at
+# the shared Southport station building (see the station-overlap note below).
+#
+# Category "regional" per this batch's Northern-branch precedent
+# (`northern-blackpool.toml`, `northern-clitheroe.toml`,
+# `northern-hope-valley.toml`, `northern-calder-valley.toml`,
+# `northern-furness.toml` are all "regional"; only the electrified Merseyrail
+# metro network uses "commuter"). This line is diesel-operated throughout
+# (Class 150/156/158 DMUs and Class 769 BMUs per the Wikipedia article's
+# rolling-stock section) with a mixed stopping/semi-fast pattern, closer in
+# character to the denser end of this catalogue's "regional" Northern
+# branches (e.g. `northern-blackpool.toml`) than to a rural single-track
+# line -- hence no `[severity_overrides]` here, matching
+# `northern-blackpool.toml`'s and `northern-calder-valley.toml`'s own
+# decision to leave thresholds at their defaults for a broadly 2tph corridor.
+
+sample_stations = ["MCV", "ATN", "WGW", "SOP"]
+# Manchester Victoria (origin), Atherton (the largest intermediate town,
+# representative of the Manchester-Wigan leg), Wigan Wallgate (the junction
+# with the Wigan-Kirkby branch -- see the shared-trunk note below) and
+# Southport (terminus).
+
+destination_crs_filter = ["SOP"]
+# SOP is this line's own unambiguous ultimate destination at the shared
+# Manchester Victoria/Wigan Wallgate trunk (see below), distinguishing it
+# from Wigan-Kirkby-branch departures (destination KIR/HBL) over the same
+# trunk. Not every Manchester-bound working continues through to Southport
+# (Wikipedia: several intermediate stations get "infrequent service" and
+# others are "not served by semi-fast services", implying a mixed
+# fast/stopper/short-working pattern), but SOP remains the correct filter
+# value for services that are this line's own through workings.
+
+match_keywords = ["Manchester to Southport line", "Manchester-Southport line"]
+# The line's own Wikipedia article title (rendered with a hyphen here since
+# match_keywords is matched against free-text incident copy, which won't
+# reliably use an en dash) plus the natural-language phrasing. Grepped
+# against every other file's own `match_keywords` before adding (see
+# `grep -h match_keywords lines/*.toml`): no collision. Deliberately not
+# "Southport line" alone -- too generic, and Merseyrail's own Southport
+# branch (`merseyrail-northern.toml`) is plausibly described the same way
+# in Knowledgebase copy; a bare "Southport" phrase would misattribute that
+# operator's incidents to this file.
+
+# Manchester Victoria to Southport via Salford, Swinton, Walkden, Atherton,
+# Wigan Wallgate, Appley Bridge and Burscough, ordered south-east to
+# north-west, per Wikipedia's "Manchester-Southport line" article (raw
+# wikitext, opening route description and current-stations list) fetched
+# 2026-09-21. Every CRS code below cross-checked against
+# ds.cursed.solutions/api/stations (this app's own live production
+# reference data) the same day; no discrepancies found. TIPLOCs are omitted
+# throughout -- none were confirmed to a second source in the time
+# available, matching the optional-field convention already used by
+# `merseyrail-northern.toml`/`scotrail-ayrshire.toml`.
+#
+# --- Shared-trunk fact: Manchester Victoria - Wigan Wallgate (the "via
+# Atherton" line) ---
+# Wikipedia's Manchester-Southport line article opens: the line "runs in a
+# north-western direction through the towns, villages and suburbs of the
+# City of Salford and Wigan" from Manchester Victoria, and separately notes
+# ongoing "feasibility into the conversion of parts of this line
+# (Wigan-Atherton-Manchester) to operate as a Manchester Metrolink service"
+# -- confirming "Wigan-Atherton-Manchester" as this corridor's own
+# established name. Wigan Wallgate is the only Wigan station reachable from
+# Manchester Victoria other than via this route (Wigan North Western, the
+# WCML station, is a physically separate building reached by a different
+# line entirely), so any Manchester Victoria - Wigan Wallgate working must
+# run over this same trunk.
+#
+# The Kirkby branch line's own Wikipedia infobox confirms its hourly service
+# runs "between Blackburn and Headbolt Lane via Manchester Victoria and
+# Wigan Wallgate" -- i.e. Northern's Wigan-Kirkby/Headbolt Lane branch
+# service (`northern-wigan-kirkby.toml`) shares this exact
+# Manchester Victoria-Wigan Wallgate trunk with this line, cross-checked
+# against a WebSearch-surfaced RailUK Forums/community-rail summary of the
+# current Northern timetable at Swinton: "Monday to Saturday daytimes, two
+# trains per hour go eastbound to Manchester Victoria and two per hour
+# towards Wigan, with both trains continuing to Wigan Wallgate westbound,
+# and one continuing to Headbolt Lane" -- direct confirmation that the same
+# physical service group serving this line's own Swinton/Atherton stations
+# continues on to the Kirkby branch beyond Wigan Wallgate.
+#
+# This is genuine confirmed track-sharing (only one physical route connects
+# Manchester Victoria to Wigan Wallgate), not just both lines touching the
+# same terminus -- per the `xc-manchester.toml`/`northern-clitheroe.toml`
+# precedent this catalogue follows for the distinction. Segment
+# `northern-atherton-line` is shared between this file and
+# `northern-wigan-kirkby.toml` for the whole Manchester Victoria - Wigan
+# Wallgate stretch. Per SCHEMA.md's shared-trunk rule of thumb, Wigan
+# Wallgate itself (the junction where the Southport and Kirkby branches
+# split) belongs to the shared segment; this file's own exclusive
+# `northern-manchester-southport` segment starts at the next station,
+# Gathurst.
+#
+# Note: this file's own MCV entry is a DIFFERENT physical departure route
+# from Manchester Victoria than the `northern-manchester` segment shared by
+# `northern.toml`/`northern-blackpool.toml`/`northern-clitheroe.toml` (which
+# leaves via Salford Crescent towards Bolton). This line leaves via Salford
+# Central towards Swinton/Atherton instead -- confirmed by
+# `northern-clitheroe.toml`'s own station list, which places Salford Central
+# (SFD) *before* Salford Crescent (SLD) on its route to Bolton, i.e. the
+# Bolton-bound route also touches Salford Central but then continues to a
+# different junction (Salford Crescent) that this line's own route never
+# reaches. Two genuinely different lines out of the same terminus, so this
+# file does NOT reuse the `northern-manchester` segment name for its own MCV
+# entry, matching the Ayrshire GLC/Argyle-Line precedent (station overlap,
+# not segment-sharing, without a sourced fact establishing shared track).
+#
+# --- Station-overlap-only notes ---
+# - Southport (SOP): also `merseyrail-northern.toml`'s own terminus, reached
+#   there via a wholly separate electrified route through central Liverpool.
+#   Same station building, no shared track -- station-overlap only.
+# - Wigan Wallgate (WGW): shared with `northern-wigan-kirkby.toml` as the
+#   junction, per the shared-trunk note above (not merely station overlap --
+#   see that note).
+# - Burscough Bridge (BCB): a different, physically separate station from
+#   Burscough Junction (BCJ) on `northern-ormskirk.toml`'s own route, despite
+#   both sitting in the same town. The historical Burscough Curves once
+#   linked the two; per that file's own scope-boundary note they are
+#   currently lifted/non-operational, so no segment or shared track exists
+#   between the two stations today.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Ince (INC) and Hag Fold (HGF): per Wikipedia, "not served by semi-fast
+#   services" -- included as real, currently-open, all-stations-only stops,
+#   not omitted.
+# - Bescar Lane, New Lane and Hoscar: per Wikipedia, receive "infrequent
+#   service" -- included as real, currently-open stations rather than
+#   excluded for low frequency (this catalogue models real stations
+#   regardless of calling-pattern density, per the Global Constraints
+#   convention already established by `xc-south-coast.toml`).
+# - Any Piccadilly-based working: an earlier draft of the Wikipedia article
+#   text mentions Manchester Piccadilly/Oxford Road/Deansgate in its opening
+#   framing, but the article's own current-stations list and every other
+#   source checked (Kirkby branch line infobox, live timetable summaries)
+#   describe only a Manchester Victoria-based service today. Not modelled
+#   absent a second source confirming a live Piccadilly-originating working
+#   on this line.
+
+[[stations]]
+crs = "MCV"
+role = "terminus"
+segment = "northern-atherton-line"
+# Manchester Victoria - shared trunk with `northern-wigan-kirkby.toml`; see
+# the top-of-file comment. Station-level-only overlap with `northern.toml`/
+# `northern-blackpool.toml`/`northern-clitheroe.toml`'s own MCV entries
+# (different physical departure route -- see above).
+
+[[stations]]
+crs = "SFD"
+role = "minor"
+segment = "northern-atherton-line"
+# Salford Central.
+
+[[stations]]
+crs = "SNN"
+role = "minor"
+segment = "northern-atherton-line"
+# Swinton (Manchester) -- disambiguated from Swinton (South Yorks, SWN) via
+# ds.cursed.solutions/api/stations.
+
+[[stations]]
+crs = "MSD"
+role = "minor"
+segment = "northern-atherton-line"
+# Moorside.
+
+[[stations]]
+crs = "WKD"
+role = "minor"
+segment = "northern-atherton-line"
+# Walkden.
+
+[[stations]]
+crs = "ATN"
+role = "major"
+segment = "northern-atherton-line"
+# Atherton -- the largest intermediate town on the Manchester-Wigan leg.
+
+[[stations]]
+crs = "HGF"
+role = "minor"
+segment = "northern-atherton-line"
+# Hag Fold -- not served by semi-fast services (see scope-boundaries note).
+
+[[stations]]
+crs = "DSY"
+role = "minor"
+segment = "northern-atherton-line"
+# Daisy Hill.
+
+[[stations]]
+crs = "HIN"
+role = "minor"
+segment = "northern-atherton-line"
+# Hindley.
+
+[[stations]]
+crs = "INC"
+role = "minor"
+segment = "northern-atherton-line"
+# Ince (Manchester) -- disambiguated from Ince & Elton (Cheshire, INE) via
+# ds.cursed.solutions/api/stations. Not served by semi-fast services.
+
+[[stations]]
+crs = "WGW"
+role = "junction"
+segment = "northern-atherton-line"
+# Wigan Wallgate -- the Wigan-Kirkby/Headbolt Lane branch
+# (`northern-wigan-kirkby.toml`) splits off here; this line's own exclusive
+# segment starts at the next station, Gathurst. See the shared-trunk note
+# above.
+
+[[stations]]
+crs = "GST"
+role = "minor"
+segment = "northern-manchester-southport"
+# Gathurst -- first station on this line's own exclusive segment.
+
+[[stations]]
+crs = "APB"
+role = "minor"
+segment = "northern-manchester-southport"
+# Appley Bridge.
+
+[[stations]]
+crs = "PBL"
+role = "minor"
+segment = "northern-manchester-southport"
+# Parbold.
+
+[[stations]]
+crs = "HSC"
+role = "minor"
+segment = "northern-manchester-southport"
+# Hoscar -- infrequent service (see scope-boundaries note).
+
+[[stations]]
+crs = "BCB"
+role = "major"
+segment = "northern-manchester-southport"
+# Burscough Bridge -- physically distinct from Burscough Junction (BCJ) on
+# `northern-ormskirk.toml`; see the station-overlap-only note above.
+
+[[stations]]
+crs = "NLN"
+role = "minor"
+segment = "northern-manchester-southport"
+# New Lane -- infrequent service.
+
+[[stations]]
+crs = "BES"
+role = "minor"
+segment = "northern-manchester-southport"
+# Bescar Lane -- infrequent service.
+
+[[stations]]
+crs = "MEC"
+role = "minor"
+segment = "northern-manchester-southport"
+# Meols Cop -- on this line's own approach to Southport from the east;
+# distinct from and not shared with Merseyrail's own Southport-Liverpool
+# coastal branch, which approaches from the south and does not call here.
+
+[[stations]]
+crs = "SOP"
+role = "terminus"
+segment = "northern-manchester-southport"
+# Southport -- station-overlap only with `merseyrail-northern.toml`'s own
+# terminus; see the note above.

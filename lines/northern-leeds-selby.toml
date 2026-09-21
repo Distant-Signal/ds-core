@@ -1,0 +1,204 @@
+id = "northern-leeds-selby"
+name = "Selby Line (Leeds - Selby - Hull local stopping service)"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["LDS", "SBY", "HUL"]
+destination_crs_filter = ["LDS", "HUL"]
+# No match_keywords: Wikipedia's "Selby Line" infobox lists FOUR operators
+# over this route -- Hull Trains, LNER, Northern and TransPennine Express
+# -- so "Selby Line" alone would misattribute a Hull Trains/LNER/TPE-only
+# incident to this Northern local-stopping file. Same reasoning
+# `lner-hull.toml` used to reject "Hull line"/"Selby line" for its own,
+# different (King's Cross-Hull) service on part of the same physical
+# route. Station and operator evidence carries this file instead.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+# Hourly Monday-Saturday and hourly Sunday (Selby-Leeds only on Sundays),
+# confirmed via South Milford railway station's own Wikipedia article,
+# Services section: "On Monday to Saturday daytimes, the station is served
+# by a Northern hourly local service, which runs in each direction between
+# Hull Paragon Interchange and Halifax via Leeds and Bradford Interchange
+# ... On Sundays, there is also an hourly service each way, though running
+# between Selby and Leeds only." Same values as `emr-regional.toml`'s
+# comparable hourly cross-city stopping service.
+
+# Leeds to Hull via Micklefield, South Milford and Selby -- the "Selby
+# Line" per Wikipedia's own article of that name and, more precisely, per
+# Template:Selby Line (a Wikipedia-hosted routemap reproducing the National
+# Rail-recognised line diagram; raw wikitext fetched via Special:Export),
+# which gives the definitive ordered, open/closed station list used below.
+#
+# --- Scope: this is genuinely one continuous route, Leeds to Hull ---
+# The "Leeds-Selby Line" and "Hull Trains"/"LNER Hull"/"TPE" services this
+# task's brief distinguishes are not two separate physical lines meeting at
+# Selby -- Template:Selby Line shows one unbroken routemap from Leeds
+# through Micklefield/South Milford/Selby/Howden/Brough/Hessle to Hull, and
+# Wikipedia's "Selby Line" article confirms this directly: "linking Leeds
+# to Selby via Micklefield and then on to Kingston upon Hull". This file
+# therefore models the whole Leeds-Hull corridor as this task's brief
+# names it, not a truncated Leeds-Selby-only stub.
+#
+# South Milford railway station's own Wikipedia article independently
+# confirms this is a genuine through-running local-stopping pattern (not
+# two separate services end-to-end): "a Northern hourly local service,
+# which runs in each direction between Hull Paragon Interchange and
+# Halifax via Leeds and Bradford Interchange" -- i.e. the real service
+# actually continues WEST of Leeds to Bradford Interchange/Halifax too.
+# That western extension is `northern-calder-valley.toml` territory (not
+# touched by this file) and is flagged here as a real, sourced, documented
+# gap for whoever reconciles the two files' shared Leeds terminus in
+# future -- station-overlap only for now, since this file doesn't list any
+# Bradford Interchange/Halifax-side station.
+#
+# --- Segment/overlap decision: no shared segment name anywhere ---
+# SBY (Selby), HOW (Howden), BUH (Brough) and HUL (Hull Paragon) are also
+# `lner-hull.toml`/`hull-trains.toml` stations (their own King's Cross-Hull
+# approach joins this same physical track at/after Selby). Per this
+# catalogue's established convention for this exact group -- `hull-
+# trains.toml`'s own explicit choice NOT to reuse `lner-hull.toml`'s
+# segment name despite running literally the same physical trains
+# alongside LNER ("per the task brief's standalone-operator exception...
+# NO segment name here is shared with any lner-*.toml file") -- this file
+# also uses its own single exclusive segment, `northern-leeds-selby`, for
+# every station. This is reinforced by this being a genuinely different
+# service tier: Northern's local stopping pattern calls at Eastrington and
+# Wressle, which neither LNER's nor Hull Trains' own station lists include
+# at all. Station-level overlap at SBY/HOW/BUH/HUL is expected and
+# sufficient.
+#
+# LDS is a station-overlap-only situation with every other Leeds-terminating
+# file in this catalogue (`northern-airedale.toml`/`northern-wharfedale.
+# toml`'s `northern-shipley-trunk`, `lner-leeds.toml`'s `lner-leeds`, this
+# batch's own `northern-harrogate-line.toml`) -- the Cross Gates/Garforth
+# approach used by this line is a physically distinct corridor out of
+# Leeds from all of those (which leave via Holbeck/Whitehall Junction
+# towards Bradford/Shipley/Harrogate, not east towards Micklefield), so no
+# segment name is shared, matching this catalogue's standard "different
+# physical approach, same terminus" treatment.
+#
+# --- Station list, open/closed status and CRS sourcing ---
+# Per Template:Selby Line's own routemap icons (current/open stations
+# unmarked or "l"-prefixed; "ex"-prefixed or under a Historical Rail
+# heading are closed): Leeds, Cross Gates, Garforth, East Garforth,
+# Micklefield, South Milford, Selby, Eastrington, Howden, Wressle,
+# Gilberdyke, Broomfleet, Brough, Ferriby, Hessle, Hull are all current;
+# Ridge Bridge, Manston, Osmondthorpe, both former Marsh Lane sites, Melton
+# Halt and Hemingbrough (on the closed Selby-Driffield spur) are explicitly
+# closed and are correctly omitted. Every CRS code below cross-checked
+# against https://ds.cursed.solutions/api/stations?q=<name> (one
+# unambiguous result each) and each station's own Wikipedia infobox. SBY,
+# BUH and HUL CRS/naming reused unchanged from `lner-hull.toml`; HOW reused
+# unchanged from `hull-trains.toml`.
+[[stations]]
+crs = "LDS"
+tiploc = "LEEDS"
+role = "terminus"
+segment = "northern-leeds-selby"
+
+[[stations]]
+crs = "CRG"
+role = "minor"
+segment = "northern-leeds-selby"
+# Cross Gates.
+
+[[stations]]
+crs = "GRF"
+role = "minor"
+segment = "northern-leeds-selby"
+# Garforth.
+
+[[stations]]
+crs = "EGF"
+role = "minor"
+segment = "northern-leeds-selby"
+# East Garforth.
+
+[[stations]]
+crs = "MIK"
+role = "minor"
+segment = "northern-leeds-selby"
+# Micklefield -- western boundary of the "Selby Line" brand proper per
+# South Milford's own Wikipedia article ("previous=Micklefield... route=
+# Selby Line" in that page's own route-diagram template).
+
+[[stations]]
+crs = "SOM"
+role = "minor"
+segment = "northern-leeds-selby"
+# South Milford. A short curve south of here links to the separate,
+# unmodelled Dearne Valley Line (Sheffield-York via Sherburn-in-Elmet/
+# Church Fenton, at Gascoigne Wood Junction) -- a real, sourced, documented
+# gap; no station on that curve is listed here or by any other file in
+# this catalogue, so nothing to share a segment with.
+
+[[stations]]
+crs = "SBY"
+role = "junction"
+segment = "northern-leeds-selby"
+# Selby -- also an `lner-hull.toml`/`hull-trains.toml` station (their own
+# King's Cross approach joins here). See the overlap note above.
+
+[[stations]]
+crs = "EGN"
+role = "minor"
+segment = "northern-leeds-selby"
+# Eastrington -- not called at by LNER's or Hull Trains' own King's
+# Cross-Hull services.
+
+[[stations]]
+crs = "HOW"
+role = "minor"
+segment = "northern-leeds-selby"
+# Howden -- also an `hull-trains.toml` station; CRS reused unchanged from
+# that file.
+
+[[stations]]
+crs = "WRS"
+role = "minor"
+segment = "northern-leeds-selby"
+# Wressle -- not called at by LNER's or Hull Trains' own King's Cross-Hull
+# services.
+
+[[stations]]
+crs = "GBD"
+role = "junction"
+segment = "northern-leeds-selby"
+# Gilberdyke -- the "Hull and Doncaster Branch" (a direct Doncaster route,
+# unmodelled by any file in this catalogue) diverges here per
+# Template:Selby Line.
+
+[[stations]]
+crs = "BMF"
+role = "minor"
+segment = "northern-leeds-selby"
+# Broomfleet.
+
+[[stations]]
+crs = "BUH"
+role = "minor"
+segment = "northern-leeds-selby"
+# Brough -- also an `lner-hull.toml`/`hull-trains.toml` station; CRS reused
+# unchanged from those files.
+
+[[stations]]
+crs = "FRY"
+role = "minor"
+segment = "northern-leeds-selby"
+# Ferriby.
+
+[[stations]]
+crs = "HES"
+role = "minor"
+segment = "northern-leeds-selby"
+# Hessle.
+
+[[stations]]
+crs = "HUL"
+role = "terminus"
+segment = "northern-leeds-selby"
+# Hull Paragon Interchange -- also an `lner-hull.toml`/`hull-trains.toml`
+# terminus; CRS reused unchanged from those files.

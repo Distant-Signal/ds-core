@@ -1,0 +1,177 @@
+id = "wmr-shrewsbury-local"
+name = "Wolverhampton - Shrewsbury Line"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "LM",  # West Midlands Railway (West Midlands Trains' ATOC code) -- the
+  # higher-frequency of the two operators on this route, see below.
+  "AW",  # Transport for Wales Rail -- reused verbatim from
+  # `tfw-marches.toml`/`tfw-cambrian.toml`/`tfw-heart-of-wales.toml`, all
+  # already-verified facts, not re-derived here.
+]
+
+# GAP-ANALYSIS PROVENANCE: brief names this "the Wolverhampton-Shrewsbury
+# local stopping service" as a fifth Midlands-batch-2 gap, explicitly
+# distinct from any existing Cambrian/Marches Line file, and asks that
+# `tfw-*.toml` and `lnwr-birmingham-crewe.toml` be checked first to confirm
+# scope. Confirmed clean before starting this file:
+#   - `tfw-marches.toml` models Newport-Shrewsbury-Chester (the Welsh
+#     Marches line and the separate Shrewsbury-Chester line via Wrexham) --
+#     it touches Shrewsbury itself but does not run east of it towards
+#     Wolverhampton at all.
+#   - `tfw-cambrian.toml`/`tfw-heart-of-wales.toml` both terminate/touch at
+#     Shrewsbury from the west/south-west (Cambrian Coast, Heart of Wales)
+#     -- again, station-overlap only, no track east of Shrewsbury.
+#   - `lnwr-birmingham-crewe.toml` runs Euston-Birmingham/Crewe; its own
+#     "TASK 9.2 FRESH VERIFICATION" comment explicitly notes Stafford-Crewe
+#     via Stoke-on-Trent as a separate alignment it doesn't model, but says
+#     nothing about Wolverhampton-Shrewsbury at all -- that file never
+#     touches Shrewsbury or this corridor.
+# So the entire Wolverhampton-Shrewsbury stopping service was a genuine,
+# fully uncovered gap before this file.
+#
+# NAMING: filename/operator-prefix decision per the brief's own instruction
+# ("depending on which operator Wikipedia names as primary"). Wikipedia's
+# "Wolverhampton-Shrewsbury line" article (fetched live 2026-09-21, raw
+# wikitext) names two operators with explicit, differing frequencies: West
+# Midlands Railway "two services per hour in each direction" and Transport
+# for Wales "one service per hour in each direction" -- WMR runs double
+# TfW's frequency, so this file is filed as `wmr-shrewsbury-local.toml`
+# with `id`/`name` unprefixed by either brand (matching this catalogue's
+# existing convention for genuinely multi-operator lines, e.g.
+# `chiltern-main-line.toml`/`west-coast-main-line.toml` not carrying a
+# single-operator prefix either).
+#
+# ROUTE RESEARCH (Wikipedia's "Wolverhampton-Shrewsbury line" article, raw
+# wikitext, infobox + route sections):
+#   1. Termini: Wolverhampton and Shrewsbury.
+#   2. Electrification: none for passenger purposes -- the infobox notes
+#      only a short trolley-wire stub from Stafford Road Junction to Oxley,
+#      solely for depot access at Alstom's Oxley works, not a passenger
+#      electrification scheme.
+#   3. Full station list (west to east): Wolverhampton, Bilbrook, Codsall,
+#      Albrighton, Cosford, Shifnal, Telford [Central], Oakengates,
+#      Wellington, Shrewsbury.
+#   4. Stock: Class 150/153/158/196 DMUs; the article also notes Class 221s
+#      formerly worked a through London Euston service on this route
+#      through June 2024 (a since-withdrawn through-working, not part of
+#      this file's current-day scope).
+#
+# CRS codes: WVH reused verbatim from `wcml-birmingham.toml`/
+# `xc-manchester.toml`; SHR reused verbatim from `tfw-marches.toml`/
+# `tfw-cambrian.toml`/`tfw-heart-of-wales.toml`. Every other code (BBK, CSL,
+# ALB, COS, SFN, TFC, OKN, WLN) independently confirmed live via this app's
+# own production station-lookup endpoint (ds.cursed.solutions/api/stations?
+# q=<name>, 2026-09-21), single unambiguous match for each. No TIPLOC
+# confirmed for any of these eight to the two-source standard, so `tiploc`
+# is omitted for all of them.
+
+sample_stations = ["WVH", "TFC", "SHR"]
+destination_crs_filter = ["WVH", "SHR"]
+# The line's two real termini (per the route research above). This station
+# also feeds `tfw-cambrian.toml`/`tfw-heart-of-wales.toml`/`tfw-marches.toml`
+# (all AW-operated, sharing the SHR sample station), so an explicit filter
+# is needed here to stop those files' own destinations being misattributed
+# to this line.
+
+match_keywords = ["Wolverhampton to Shrewsbury line", "Wolverhampton-Shrewsbury line"]
+# The line's own Wikipedia article title, in both a prose and raw-dash
+# rendering. Grep-checked against every other `lines/*.toml` file's
+# `match_keywords` before adding -- no collision.
+
+# Roughly hourly-to-half-hourly combined (2tph WMR + 1tph TfW, per source
+# above) rural/regional stopping service, comparable to `tfw-marches.toml`'s
+# own roughly-hourly-or-better main-line cadence -- but unlike that file,
+# this route is a genuinely local stopping service with no confirmed
+# double-track/high-speed characteristics researched this session, so
+# tuned down per the `northern-furness.toml`-style hourly-branch precedent
+# rather than left at main-line defaults.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# Wolverhampton to Shrewsbury, ordered west to east.
+#
+# --- Shared trunk with `wmr-darlaston-line.toml`: this entire file's
+# route (Wolverhampton through Shrewsbury inclusive) is also run by that
+# line's own hourly Birmingham-Shrewsbury working, per source 2 in that
+# file's own comment ("...between Birmingham New Street and Shrewsbury via
+# Tame Bridge Parkway and Wolverhampton"). Both files were authored
+# together in this batch and deliberately keep this segment's extent
+# byte-identical (`wmr-wolverhampton-shrewsbury`, WVH through SHR inclusive,
+# in both) -- a genuinely shared segment, not a coarse-mismatch case, since
+# both files fully control the extent and neither claims any station the
+# other doesn't. ---
+[[stations]]
+crs = "WVH"
+role = "terminus"
+segment = "wmr-wolverhampton-shrewsbury"
+# Wolverhampton: also `wmr-darlaston-line.toml`'s own junction station
+# where its exclusive Darlaston-curve approach ends -- see that file's
+# comment. This file's own terminus role reflects that WMR's/TfW's own
+# Wolverhampton-Shrewsbury service genuinely starts/ends its named route
+# here, independent of whatever else also happens to originate at this
+# busy multi-line station (WCML, Chase Line, Cannock/Rugeley approaches,
+# this line's own sibling file).
+
+[[stations]]
+crs = "BBK"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Bilbrook.
+
+[[stations]]
+crs = "CSL"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Codsall.
+
+[[stations]]
+crs = "ALB"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Albrighton.
+
+[[stations]]
+crs = "COS"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Cosford.
+
+[[stations]]
+crs = "SFN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Shifnal.
+
+[[stations]]
+crs = "TFC"
+role = "major"
+segment = "wmr-wolverhampton-shrewsbury"
+# Telford Central: the largest intermediate station on this route, serving
+# the town of Telford.
+
+[[stations]]
+crs = "OKN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Oakengates.
+
+[[stations]]
+crs = "WLN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Wellington (Shropshire).
+
+[[stations]]
+crs = "SHR"
+tiploc = "SHRWBY"
+role = "terminus"
+segment = "wmr-wolverhampton-shrewsbury"
+# Shrewsbury: also a station on `tfw-marches.toml`, `tfw-cambrian.toml` and
+# `tfw-heart-of-wales.toml`, and (per `wmr-darlaston-line.toml`'s own
+# comment) the eastern-approach end of this file's own shared segment with
+# that sibling file. Station-overlap only with the three tfw-* files (this
+# line approaches from the east via Wellington; none of those three share
+# that approach) -- matching `tfw-marches.toml`'s own established
+# precedent at this exact station.

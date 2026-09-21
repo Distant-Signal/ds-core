@@ -1,0 +1,147 @@
+id = "northern-rose-hill"
+name = "Rose Hill Marple Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+# North West England line-coverage audit (2026-09-21): a real, currently
+# operating Northern Trains diesel service with no existing `lines/*.toml`
+# coverage. Confirmed via Wikipedia's "Rose Hill Marple railway station",
+# "Romiley railway station", "Hyde Central railway station" and "Guide
+# Bridge railway station" articles (raw wikitext) and cross-checked
+# station-by-station against ds.cursed.solutions/api/stations (this app's
+# own live production CRS reference), fetched/verified 2026-09-21.
+#
+# Naming note: the task brief's "Rose Hill Marple / Hazel Grove branch" bundles
+# two DIFFERENT, unconnected branches. Hazel Grove sits on the Hope Valley
+# Line's own separate southern approach near Stockport ("the southern branch
+# passes through the Disley Tunnel before merging with the Buxton line just
+# south of Hazel Grove") -- that is `northern-buxton-line.toml`'s own
+# Hazel Grove Chord territory, unrelated to Rose Hill Marple, which is
+# reached via Guide Bridge and the Hyde loop instead. This file covers only
+# the genuine Rose Hill Marple branch; Hazel Grove is not modelled here.
+#
+# Route: Manchester Piccadilly - Ashburys - Gorton - Fairfield - Guide Bridge
+# - [Hyde loop] - Hyde North - Hyde Central - Woodley - Romiley - Rose Hill
+# Marple. Diesel throughout (Class 150/195), unlike the electrified Glossop
+# line sharing its first leg: Hyde Central's own article confirms "diesel
+# multiple units, normally Class 150s or Class 195s."
+#
+# --- Shared-trunk fact: Manchester Piccadilly - Guide Bridge ---
+# Shared verbatim with `northern-glossop-hadfield.toml` as segment
+# `northern-guide-bridge` (Manchester Piccadilly, Ashburys, Gorton,
+# Fairfield, Guide Bridge) -- see that file's own top-of-file comment for the
+# full sourcing (confirmed genuine track-sharing via Guide Bridge's own
+# infobox, which places it "on both the Glossop Line and the Hyde loop of
+# the Hope Valley Line"). Per SCHEMA.md's shared-trunk rule of thumb, Guide
+# Bridge belongs to the shared segment and this file's own exclusive segment
+# (`northern-rose-hill`) starts at the next station, Hyde North.
+#
+# --- Romiley: a genuine three(-plus)-way junction, only one leg modelled ---
+# Romiley's own Wikipedia route-diagram data shows it sitting on three
+# distinct lines: the Hyde-loop route this file uses (previous station
+# Woodley), a separate "direct" Hope Valley Line route via Bredbury towards
+# Marple/New Mills Central/Chinley (previous station Bredbury, next station
+# Marple), and a historical, fully-closed Great Central and Midland Joint
+# Railway route towards the long-demolished Stockport Tiviot Dale (closed to
+# passengers January 1967). The direct Bredbury-Marple-New Mills Central
+# stretch is real, currently open, and genuinely part of Wikipedia's own
+# "Hope Valley Line" article scope, but it is NOT covered by the existing
+# `northern-hope-valley.toml` catalogue file (whose own station list is
+# MAN/SPT/CLY/EDL/HOP/BAM/HSG/GRN/DOR/SHF -- no Bredbury, Marple or New Mills
+# Central) -- a real, sourced, documented gap left for future work, not
+# folded into this file, which only ever claims the Hyde-loop leg through
+# Romiley. Marple itself (a different station from this file's own Rose Hill
+# Marple terminus, despite the shared place name) belongs to that unmodelled
+# leg, not to this file.
+#
+# --- Service pattern and severity_overrides ---
+# "Northern Trains operates a typical service of three trains every two
+# hours to Manchester Piccadilly, via the Hyde loop, reducing to hourly in
+# the evening" and "There is no service on Sundays" (Hyde Central). The
+# Romiley-Rose Hill Marple spur itself is single track: "the spur to the
+# main Hope Valley Line is now operated as a single track" (Rose Hill Marple,
+# referring to post-1970 rationalisation). Sparse, single-track, no-Sunday
+# service -- tuned thresholds follow `northern-clitheroe.toml`'s own
+# three-field rural-branch pattern rather than the suburban defaults.
+#
+# --- Scope boundaries (documented, not modelled) ---
+# - Marple (the separate station on the unmodelled Bredbury direct route,
+#   see the Romiley note above): not modelled.
+# - The historical Stockport Tiviot Dale - Romiley - Marple through route:
+#   closed to passengers January 1967; not modelled.
+# - A June 2022 consultation proposed a NEW chord linking Rose Hill Marple to
+#   Stockport via Reddish Vale Country Park: a live proposal only, no current
+#   infrastructure exists, not modelled.
+# - Guide Bridge's third, unrelated Stockport-Stalybridge parliamentary
+#   service: researched separately and found too sparse (one round trip a
+#   week) to catalogue as its own line; not part of this file either.
+sample_stations = ["GUI", "HYC", "RML", "RSH"]
+destination_crs_filter = ["RSH"]
+match_keywords = ["Rose Hill Marple", "Hyde loop"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "MAN"
+role = "terminus"
+segment = "northern-guide-bridge"
+
+[[stations]]
+crs = "ABY"
+role = "minor"
+segment = "northern-guide-bridge"
+# Ashburys.
+
+[[stations]]
+crs = "GTO"
+role = "minor"
+segment = "northern-guide-bridge"
+# Gorton.
+
+[[stations]]
+crs = "FRF"
+role = "minor"
+segment = "northern-guide-bridge"
+# Fairfield.
+
+[[stations]]
+crs = "GUI"
+role = "junction"
+segment = "northern-guide-bridge"
+# Guide Bridge -- the Hyde loop diverges here; shared segment with
+# `northern-glossop-hadfield.toml` ends here. See the top-of-file comment.
+
+[[stations]]
+crs = "HYT"
+role = "minor"
+segment = "northern-rose-hill"
+# Hyde North -- served Mondays-Saturdays only, per its own infobox.
+
+[[stations]]
+crs = "HYC"
+role = "major"
+segment = "northern-rose-hill"
+# Hyde Central.
+
+[[stations]]
+crs = "WLY"
+role = "minor"
+segment = "northern-rose-hill"
+# Woodley.
+
+[[stations]]
+crs = "RML"
+role = "junction"
+segment = "northern-rose-hill"
+# Romiley -- also a junction with the separate, unmodelled Bredbury-Marple-
+# New Mills Central leg of the Hope Valley Line; see the top-of-file comment.
+
+[[stations]]
+crs = "RSH"
+role = "terminus"
+segment = "northern-rose-hill"
+# Rose Hill Marple -- reached via a single-track spur from Romiley.

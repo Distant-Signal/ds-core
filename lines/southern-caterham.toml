@@ -1,0 +1,154 @@
+id = "southern-caterham"
+name = "Caterham Line"
+mode = "national-rail"
+category = "commuter"
+operators = ["SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS, AND WHY THIS IS 3 FILES NOT 1
+# ============================================================================
+# The brief groups Caterham, Tattenham Corner and Epsom Downs together as
+# "off the Sutton/Epsom suburban network". Checked against Wikipedia rather
+# than assumed: that framing is only accurate for Epsom Downs
+# (southern-epsom-downs.toml), which genuinely diverges from Sutton. The
+# Caterham line and the Tattenham Corner line both diverge from PURLEY, on
+# the Brighton Main Line, several miles east of Sutton - a geographically
+# and operationally separate part of the Southern suburban network. This
+# file and southern-tattenham-corner.toml are kept separate from
+# southern-epsom-downs.toml for that reason (different junction, different
+# corridor), but ARE kept as genuine siblings of each other (see SEGMENTS),
+# since Purley's own Wikipedia article confirms Platforms 5 and 6 there
+# serve "the branch lines to Tattenham Corner and Caterham" directly.
+# CORRECTION (re-checked against both lines' own infoboxes): an earlier
+# draft of this comment claimed the two branches "leave Purley itself, not
+# one via the other" - that has it backwards. The Tattenham Corner line's
+# own infobox route actually shows it joining the Caterham line's track for
+# a short stretch (~200m) immediately south of Purley before diverging
+# again onto its own alignment - a genuine, if very short, shared-track
+# arrangement, not two fully independent departures from the platform. This
+# has no functional/data impact on this file (no CRS-coded station exists
+# at that unstationed junction point, so PUR remains correctly the only
+# station either branch's `[[stations]]` list needs to share), but the
+# prose is corrected here for accuracy.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations: Wikipedia "Caterham line" (infobox: operator
+# "Southern", terminus "Caterham"; Infrastructure section: "runs for 4
+# miles 40 ch... from its terminus at Caterham... to an at-grade junction
+# with the Brighton Main Line at Purley station, 15 mi 13 ch down the line
+# from London Charing Cross"), giving the order Purley - Kenley -
+# Whyteleafe - Whyteleafe South - Caterham.
+# Purley's own junction role cross-checked against Wikipedia "Purley
+# railway station" ("a junction, with branches to Caterham and Tattenham
+# Corner"; "Platform 5 and 6 serve the branch lines to Tattenham Corner and
+# Caterham").
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Purley=PUR (distinct from Purley Oaks=PUO, on the Brighton Main Line
+# proper, not this branch - confirmed both codes), Kenley=KLY,
+# Whyteleafe=WHY, Whyteleafe South=WHS, Caterham=CAT.
+# Grepped clean before starting: no other `lines/*.toml` file lists Purley,
+# Kenley, Whyteleafe, Whyteleafe South or Caterham. Purley itself is
+# explicitly and deliberately NOT in southern-brighton-main-line.toml's own
+# station list - that file's own scope-boundaries note documents Purley/
+# Coulsdon South/Merstham/Redhill as a genuinely different "slow"/Redhill-
+# alignment stopping pattern it does not model. This file is therefore the
+# first (and, per the sourcing above, correct) place Purley enters this
+# catalogue.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+#   PUR | KLY - WHY - WHS - CAT
+#   [junction, shared with southern-tattenham-corner.toml]
+#   [---- southern-caterham-branch (exclusive) -----------]
+#
+# Purley is given its own new segment, `southern-purley-branches`, shared
+# verbatim with southern-tattenham-corner.toml (a genuine same-operator
+# sibling relationship - both branches leave Purley directly, confirmed by
+# that station's own Wikipedia article above) - an incident at Purley is a
+# real shared-trunk event between the two branches, matching the same
+# reasoning scotrail-ayrshire.toml documents for a from-scratch junction
+# with no prior segment name to reuse. This line's own exclusive segment,
+# `southern-caterham-branch`, starts at the next station past the junction,
+# Kenley, per the shared-trunk rule of thumb.
+#
+# No approach into Purley from London is modelled here: that would be the
+# separate Purley/Coulsdon South Brighton Main Line stopping corridor,
+# explicitly out of southern-brighton-main-line.toml's own scope (see
+# SOURCING above) and not part of either branch itself - a real, documented,
+# still-open gap, not silently absorbed into this file.
+
+match_keywords = ["Caterham line"]
+# The line's own branded/article name. Grepped clean against every other
+# file's match_keywords - no collision. A bare "Caterham" is deliberately
+# not added: Caterham Barracks and other non-rail Caterham content could
+# false-match a Knowledgebase search, and the branded phrase is already
+# unambiguous.
+
+sample_stations = ["KLY", "WHY", "CAT"]
+# All three on this line's own exclusive branch, past the Purley junction -
+# no other line in the catalogue touches any of them.
+
+destination_crs_filter = ["CAT"]
+# A short single-track-effectively branch terminus with one advertised
+# destination; per the Infrastructure section above, "trains join with or
+# split from a train travelling to or from Caterham" at Purley, i.e. every
+# working on this branch is destined for Caterham. All three sample
+# stations are exclusive to this branch (see above), so this filter carries
+# no risk of silently dropping a real sample the way an unverified filter
+# did in an earlier draft of swr-chessington.toml.
+
+# Commuter line, same tuning as southern-oxted-uckfield.toml's own
+# Southern suburban precedent and this catalogue's other London suburban
+# commuter files.
+[severity_overrides]
+minor_delays_pct = 0.20
+delay_threshold_minutes = 4
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Purley/Coulsdon South/Merstham "slow" Brighton Main Line approach
+#   from London: real, sourced, explicitly out of
+#   southern-brighton-main-line.toml's own scope - a genuine open gap this
+#   file does not attempt to close.
+# - The Tattenham Corner line: southern-tattenham-corner.toml, this file's
+#   own sibling via the shared Purley junction segment.
+# - The Epsom Downs line: a different, non-adjacent branch off Sutton, not
+#   Purley - southern-epsom-downs.toml, not a sibling of this file.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "PUR"
+role = "junction"
+segment = "southern-purley-branches"
+# Purley. Shared verbatim with southern-tattenham-corner.toml - see
+# SEGMENTS above.
+
+[[stations]]
+crs = "KLY"
+role = "minor"
+segment = "southern-caterham-branch"
+# Kenley.
+
+[[stations]]
+crs = "WHY"
+role = "minor"
+segment = "southern-caterham-branch"
+# Whyteleafe.
+
+[[stations]]
+crs = "WHS"
+role = "minor"
+segment = "southern-caterham-branch"
+# Whyteleafe South.
+
+[[stations]]
+crs = "CAT"
+role = "terminus"
+segment = "southern-caterham-branch"
+# Caterham.

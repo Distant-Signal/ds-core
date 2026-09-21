@@ -1,0 +1,200 @@
+id = "tfw-borderlands"
+name = "Borderlands Line (Wrexham Central - Bidston)"
+mode = "national-rail"
+category = "regional"
+operators = ["AW"]
+
+# Confirmed via Wikipedia's "Borderlands line" article (raw wikitext):
+# infobox `start = Wrexham Central`, `end = Bidston (Birkenhead)`, 15
+# stations, currently sole passenger operator Transport for Wales. Also
+# known as "Bidston-Wrexham"/"Wrexham-Bidston", and, per the Welsh
+# Government's May 2025 "Network North Wales" announcement, being rebranded
+# in official communications as the "Wrexham-Liverpool line" going forward
+# (both names noted, "Borderlands line" used as this file's `id`/`name`
+# since it remains the article's own primary title and the name still in
+# general use as of this task).
+#
+# Current station list and order confirmed via Template:Borderlands_Line
+# (raw wikitext route diagram), cross-checked against the article's own
+# infrastructure-history prose: 15 open stations, Bidston to Wrexham
+# Central -- Bidston, Upton, Heswall, Neston, Hawarden Bridge, Shotton,
+# Hawarden, Buckley, Penyffordd, Hope, Caergwrle, Cefn-y-Bedd, Gwersyllt,
+# Wrexham General, Wrexham Central. A further ~10 historical stations shown
+# on the same diagram (Woodchurch (proposed, not yet open), Storeton, Burton
+# Point, Sealand Rifle Range Halt, Birkenhead Junction Golf Club Platform,
+# Deeside Parkway (proposed), Chester Golf Club Halt, Hope Exchange, Rhosddu
+# Halt, Six Mile Bottom-style request halts) are closed, proposed-but-not-yet-
+# built, or (Hope Exchange) served a different, closed line -- none listed.
+#
+# Frequency: currently ~hourly (2tph service increase approved by the ORR in
+# November 2022 but, per the article's own "Recent service developments"
+# section, still being phased in as of the cited May 2025 Network North
+# Wales announcement, which targets full 2tph "within three years"). Not a
+# uniform commuter frequency and single-track Wrexham General-Wrexham
+# Central besides being double-track elsewhere but shared with active
+# freight (GB Railfreight to Hanson Cement near Penyffordd) -- `category =
+# "regional"`, and severity overrides matching this catalogue's other
+# hourly-ish single-operator branch lines (`tfw-heart-of-wales.toml`,
+# `tfw-conwy-valley.toml`), rather than a commuter line's tighter defaults.
+
+sample_stations = ["WXC", "WRX", "SHT", "BID"]
+destination_crs_filter = ["WXC", "BID"]
+# The line's two genuine termini, most services running end to end (a
+# minority terminate at Wrexham General for turnaround/cab-cleaning
+# purposes per the article's own "Recent service developments" section, but
+# WRX itself is also a genuine mid-route calling point, not a clean
+# destination-only anchor, so it is left off this filter).
+
+match_keywords = ["Borderlands line", "Borderlands Line"]
+# The line's own consistently-used branded name (both capitalisations occur
+# in the article's own running text and infobox). "Wrexham-Liverpool line"
+# is deliberately not added: per the sourcing above it is a newly announced
+# rebrand, not yet confirmed as the phrasing any live Knowledgebase incident
+# actually uses. Grepped `lines/*.toml` before adding: no collision.
+
+# All CRS codes cross-checked against https://ds.cursed.solutions/api/stations,
+# matching each station's own Wikipedia infobox. Two near-miss codes worth
+# flagging: Johnston (Pembs), on this batch's own West Wales Line file, is
+# JOH, not JHN (JHN is Johnstone, Renfrewshire, already used by
+# `scotrail-ayrshire.toml` -- not relevant to this file but checked while
+# cross-referencing the API); Hope (Flintshire), on this line, is HPE, not
+# HOP (HOP is Hope, Derbyshire, on the unrelated Hope Valley line). Neither
+# mix-up made it into this file, but both are recorded here since they were
+# genuinely easy to get wrong. TIPLOCs are omitted throughout: no second
+# live source was fetched for them within this task's budget, matching this
+# catalogue's optional-TIPLOC convention.
+#
+# ## Overlaps: Bidston, Shotton, Wrexham General -- all station-overlap only
+#
+# Bidston (BID): already the Liverpool-end terminus of
+# `merseyrail-wirral.toml`'s West Kirby branch, whose own comment already
+# names this exact line ("Also the Transport for Wales Borderlands Line's
+# Liverpool-end terminus"). The two lines run physically distinct alignments
+# west of Bidston (Merseyrail's West Kirby branch runs along the north
+# Wirral coast via Hoylake/Meols/Moreton; this line runs west then south
+# through Upton/Heswall/Neston into Wales) -- confirmed via both lines'
+# own station lists sharing no other CRS code. Station-overlap only, this
+# file's own segment name throughout.
+#
+# Shotton (SHT): already a `tfw-north-wales-coast`-tagged junction in
+# `tfw-north-wales-coast.toml`, whose own comment already names this line
+# ("Shotton is also the junction for the Borderlands Line ... no line in
+# this catalogue reaches the Borderlands Line yet"). Now one does --
+# station-overlap only, per that file's own reasoning and this catalogue's
+# established pattern for a real interchange with no shared track claim.
+#
+# Wrexham General (WRX): already a `tfw-marches-north`-tagged junction in
+# `tfw-marches.toml`, whose own comment already names this line by the same
+# reasoning as Shotton above ("a live junction with the Borderlands Line
+# ... no shared-segment question arises here today"). Station-overlap only,
+# for the same reason: the Shrewsbury-Chester line and this line meet only
+# at Wrexham General's own platforms, not on shared running track.
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+# Matches this catalogue's other hourly-ish single-operator branch lines
+# (`tfw-heart-of-wales.toml`, `tfw-conwy-valley.toml`), rather than a
+# commuter line's tighter defaults.
+
+[[stations]]
+crs = "BID"
+role = "junction"
+segment = "tfw-borderlands"
+
+[[stations]]
+crs = "UPT"
+role = "minor"
+segment = "tfw-borderlands"
+# Upton (Merseyside).
+
+[[stations]]
+crs = "HSW"
+role = "minor"
+segment = "tfw-borderlands"
+# Heswall.
+
+[[stations]]
+crs = "NES"
+role = "minor"
+segment = "tfw-borderlands"
+# Neston. The England-Wales border is crossed a short distance beyond here,
+# per the route diagram's own "England | Wales border" marker.
+
+[[stations]]
+crs = "HWB"
+role = "minor"
+segment = "tfw-borderlands"
+# Hawarden Bridge, over the River Dee.
+
+[[stations]]
+crs = "SHT"
+tiploc = "SHOTTON"
+role = "junction"
+segment = "tfw-borderlands"
+# Shotton: interchange with the North Wales Coast Line. See the overlap
+# note above. TIPLOC reused verbatim from `tfw-north-wales-coast.toml`,
+# which already cross-checked it.
+
+[[stations]]
+crs = "HWD"
+role = "minor"
+segment = "tfw-borderlands"
+# Hawarden.
+
+[[stations]]
+crs = "BCK"
+role = "minor"
+segment = "tfw-borderlands"
+# Buckley: GB Railfreight's Hanson Cement traffic joins near here (see the
+# frequency note above) -- a freight-only connection, not a passenger
+# junction, so not tagged `junction`.
+
+[[stations]]
+crs = "PNF"
+role = "minor"
+segment = "tfw-borderlands"
+# Penyffordd.
+
+[[stations]]
+crs = "HPE"
+role = "minor"
+segment = "tfw-borderlands"
+# Hope (Flintshire) -- confirmed distinct from Hope (Derbyshire, CRS HOP) on
+# the unrelated Hope Valley line. See the sourcing note above.
+
+[[stations]]
+crs = "CGW"
+role = "minor"
+segment = "tfw-borderlands"
+# Caergwrle.
+
+[[stations]]
+crs = "CYB"
+role = "minor"
+segment = "tfw-borderlands"
+# Cefn-y-Bedd.
+
+[[stations]]
+crs = "GWE"
+role = "minor"
+segment = "tfw-borderlands"
+# Gwersyllt.
+
+[[stations]]
+crs = "WRX"
+tiploc = "WREXHMG"
+role = "junction"
+segment = "tfw-borderlands"
+# Wrexham General: interchange with the Shrewsbury-Chester line
+# (`tfw-marches.toml`). See the overlap note above. TIPLOC reused verbatim
+# from `tfw-marches.toml`, which already cross-checked it.
+
+[[stations]]
+crs = "WXC"
+role = "terminus"
+segment = "tfw-borderlands"
+# Wrexham Central: this line's own southern terminus, reached via a short
+# single-track spur off Wrexham General (the only single-track stretch on
+# an otherwise double-tracked line, per the infobox `tracks` field).

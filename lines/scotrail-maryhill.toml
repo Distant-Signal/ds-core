@@ -1,0 +1,163 @@
+id = "scotrail-maryhill"
+name = "ScotRail Maryhill Line (Glasgow Queen Street - Anniesland)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SR"]
+
+# Greater Glasgow batch. Not named in `docs/superpowers/specs/2026-08-29-
+# line-coverage-gap-analysis.md`'s ScotRail bullet, and the (unmerged,
+# sibling worktree) `lines/scotrail-north-clyde.toml`'s own Anniesland
+# (ANL) comment notes it is "also a Maryhill Line terminus, but that line
+# is not modelled in any `lines/*.toml` file" -- one of the genuinely
+# unflagged gaps found by the follow-up full UK station-coverage audit.
+#
+# Category: "commuter". A short, suburban, stopping-service branch
+# ("part of the Strathclyde Partnership for Transport network") -- though,
+# unlike this catalogue's other dense Glasgow-suburban commuter lines
+# (North Clyde, Argyle, Cathcart Circle, Inverclyde), it is NOT electrified
+# (Wikipedia: "the line is not electrified, though there have been calls
+# ... to do so"), and this task did not establish a frequency figure to
+# the two-source standard. "Commuter" still fits better than "regional"
+# here: this is a short, single, entirely urban/suburban branch with no
+# rural tail, matching this catalogue's category definition ("drives
+# default sampling strategy") more closely than a mixed-character line.
+
+sample_stations = ["GLQ", "MYH", "ANL"]
+destination_crs_filter = ["ANL"]
+# GLQ also samples several other lines from the same named terminus
+# complex (see the segment-naming coordination note below); this line's
+# own departures terminate at Anniesland.
+
+match_keywords = ["Maryhill Line"]
+# One high-precision phrase -- this route's own Wikipedia article title/
+# brand name. Grepped clean against every other file's own
+# `match_keywords` before adding: no collisions.
+
+# No frequency figure was sourced to the two-source standard, so this file
+# does not assert commuter-tight overrides it cannot justify; it inherits
+# the schema's global defaults (`src/config.py`) rather than guessing.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure and operator:
+#   - Wikipedia "Maryhill Line" (raw wikitext): confirms ScotRail
+#     operation; confirms the route "linking central Glasgow and
+#     Anniesland via Maryhill"; gives the explicit ordered station list
+#     "Glasgow Queen Street, Ashfield, Possilpark and Parkhouse,
+#     Gilshochill, Summerston, Maryhill, Kelvindale, Anniesland" (matching
+#     the infobox's own `stations = 7` field, which excludes the
+#     pre-existing Queen Street terminus); confirms the 2005 extension to
+#     Anniesland via a new station at Kelvindale; confirms the line "forms
+#     a part of the West Highland Line (linking the WHL and North Clyde
+#     Line with the former Edinburgh and Glasgow Railway main line out of
+#     Glasgow Queen Street High Level)"; confirms services terminate at
+#     Anniesland "in a bay platform" (no through-running onto North
+#     Clyde/Argyle metals there); confirms the line is not electrified;
+#     confirms the 2015 diversionary connection installed at Anniesland
+#     onto the Glasgow-bound North Clyde route.
+#
+# CRS codes: every code below was verified live against
+# https://ds.cursed.solutions/api/stations?q=<name>. One initial guess was
+# wrong and caught by this verification: Summerston is SUM, not the
+# initially-assumed SMU -- confirmed against the API with no ambiguity
+# (only one "Summerston" result).
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used elsewhere in this catalogue.
+
+# === Segment-naming coordination ===
+#
+# GLQ here is the HIGH Level terminus (Wikipedia: "out of Glasgow Queen
+# Street High Level"), the same physical platforms as `scotrail-central-
+# belt.toml`'s own GLQ entry (`scotrail-central-belt` segment) and both
+# West Highland files' own GLQ entries (`scotrail-west-highland-glasgow-
+# terminus` segment, itself deliberately NOT shared with
+# `scotrail-central-belt.toml` despite being the same platforms, per
+# those files' own Glasgow-area sourcing note). Following that same
+# established precedent -- same physical platforms, no `[[stations]]`-
+# level overlap beyond the terminus itself established to the two-source
+# standard within this task's budget -- this file uses its own segment
+# name for GLQ rather than reusing either of theirs.
+#
+# Genuine real-world track-sharing exists beyond the terminus itself:
+# Wikipedia's own sourcing above states this line's Glasgow-Maryhill
+# stretch physically "forms a part of the West Highland Line" formation,
+# and that the Maryhill Junction-Westerton connection is used by Oban and
+# Mallaig trains. However, neither West Highland file's own `[[stations]]`
+# list includes any station between GLQ and Dalmuir/Dumbarton Central
+# (their own long-distance services run non-stop over this stretch), and
+# this file's own intermediate stops (Ashfield, Possilpark and Parkhouse,
+# Gilshochill, Summerston) are not West Highland-file entries either -- so
+# there is no shared `[[stations]]`-level segment to declare, mirroring
+# the identical "real sharing, no station-level overlap to model" call the
+# (unmerged, sibling worktree) `scotrail-north-clyde.toml`/`scotrail-
+# argyle.toml` files make for their own western-reach overlap. Documented
+# here rather than modelled.
+#
+# Anniesland (ANL) is also the (unmerged, sibling worktree)
+# `scotrail-north-clyde.toml`'s own western-approach terminus for its
+# Milngavie branch. Per the sourcing above, this line's own services
+# terminate at Anniesland "in a bay platform" with no through-running onto
+# North Clyde/Argyle metals -- station overlap only, not a shared segment,
+# mirroring how `scotrail-north-clyde.toml` and `scotrail-argyle.toml`
+# already treat their own mutual western-reach overlap.
+
+[[stations]]
+crs = "GLQ"
+role = "terminus"
+segment = "scotrail-maryhill-line"
+# Glasgow Queen Street (High Level). See the segment-naming coordination
+# note above.
+
+[[stations]]
+crs = "ASF"
+role = "minor"
+segment = "scotrail-maryhill-line"
+# Ashfield.
+
+[[stations]]
+crs = "PPK"
+role = "minor"
+segment = "scotrail-maryhill-line"
+# Possilpark and Parkhouse.
+
+[[stations]]
+crs = "GSC"
+role = "minor"
+segment = "scotrail-maryhill-line"
+# Gilshochill.
+
+[[stations]]
+crs = "SUM"
+role = "minor"
+segment = "scotrail-maryhill-line"
+# Summerston.
+
+[[stations]]
+crs = "MYH"
+role = "major"
+segment = "scotrail-maryhill-line"
+# Maryhill.
+
+[[stations]]
+crs = "KVD"
+role = "minor"
+segment = "scotrail-maryhill-line"
+# Kelvindale: opened 2005 as part of the Anniesland extension.
+
+[[stations]]
+crs = "ANL"
+role = "terminus"
+segment = "scotrail-maryhill-line"
+# Anniesland: terminates in its own bay platform. Station overlap only
+# with `scotrail-north-clyde.toml` -- see the segment-naming coordination
+# note above.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Maryhill Junction-Westerton connection used by West Highland Line
+#   (Oban/Mallaig) diversions, and the wider "forms a part of the West
+#   Highland Line" track-sharing: real per the sourcing above, but not
+#   modelled as a shared segment -- see the segment-naming coordination
+#   note above.

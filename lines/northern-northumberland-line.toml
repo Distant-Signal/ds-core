@@ -1,0 +1,160 @@
+id = "northern-northumberland-line"
+name = "Northumberland Line"
+mode = "national-rail"
+category = "regional"
+operators = ["NT"]
+
+sample_stations = ["NCL", "SEJ", "ASL"]
+destination_crs_filter = ["ASL"]
+match_keywords = ["Northumberland Line"]
+# The line's own branded/article name (Wikipedia: "Northumberland Line"),
+# and unlike this batch's Selby Line/Wakefield Line/Durham Coast Line/Tees
+# Valley Line calls, no other operator runs this route at all yet --
+# Northern is the sole operator per every source used below. Grepped clean
+# against every other file's own `match_keywords` before adding.
+
+# No severity_overrides: half-hourly daytime frequency (see below) is
+# comparable to the already-tuned `northern-airedale.toml`/
+# `northern-wharfedale.toml`/`northern-harrogate-line.toml` (all left at
+# catalogue defaults), not the sparse rural-branch frequency that drives
+# overrides elsewhere in this batch.
+
+# Newcastle to Ashington, reopened in phases 2024-2026, on the former
+# Ashington, Blyth and Tyne Line/Bedlington branch. This line got explicit
+# extra scrutiny per the task's own brief, since it is a genuinely
+# recently-and-still-phasing-in reopening -- every opening date below is
+# cross-checked against the line's own Wikipedia article (raw wikitext
+# fetched via Special:Export) which is itself very current (its own
+# History section cites events as late as February 2026, and today's date
+# for this file's authoring is 2026-09-21), so all six new/reopened
+# stations named below are confirmed OPEN as of the file's authoring date,
+# not still-pending:
+#
+#   - 15 December 2024: passenger service began, opening Ashington and
+#     Seaton Delaval ("Passenger service on the line began on 15 December
+#     2024 with the opening of Ashington and Seaton Delaval.")
+#   - 17 March 2025: Newsham opened ("Newsham followed suit four months
+#     later on 17 March 2025.")
+#   - 19 October 2025: Blyth Bebside opened.
+#   - 22 February 2026: Northumberland Park opened (a new National Rail
+#     platform at the existing Tyne and Wear Metro station of the same
+#     name).
+#   - 29 March 2026: Bedlington opened, the last of the six new/reopened
+#     stations -- "with Bedlington later opening on 29 March 2026."
+#
+# All six are therefore open today (2026-09-21), roughly six months after
+# the last (Bedlington) opened. No further phases remain pending for the
+# CURRENT scheme; a possible future extension to Newbiggin-by-the-Sea and a
+# reinstated Woodhorn station are both explicitly still at the "formal bid"/
+# feasibility-study stage as of December 2025 per the article's own Future
+# proposals section -- real, but not yet built, and correctly NOT modelled
+# here.
+#
+# Route: Newcastle, then along the East Coast Main Line via Manors (an
+# existing station, not new) to Benton Junction, then onto the former
+# freight-only Ashington/Blyth alignment via a new platform at the existing
+# Northumberland Park (Tyne and Wear Metro) station, then Seaton Delaval,
+# Newsham, Blyth Bebside, Bedlington and Ashington -- per the article's own
+# Stations section, which gives this exact ordered list "from south to
+# north" for the new/reopened stations and separately confirms Newcastle
+# and Manors as the pre-existing stations the new service also calls at.
+#
+# Frequency: "Passenger service runs every 30 minutes between 6:00 am and
+# 7:30 pm Monday to Saturday, with hourly services provided in the
+# evenings and all-day on Sundays... end-to-end journey time of 36
+# minutes." (article's own Service section).
+#
+# --- CRS disambiguation warning (the kind of trap this task's brief
+# specifically asked to watch for) ---
+# "Northumberland Park" is NOT a unique station name in the National Rail
+# network: https://ds.cursed.solutions/api/stations?q=Northumberland%20Park
+# returns TWO results -- NUM ("Northumberland Park London", on the West
+# Anglia Main Line in north London) and NOP ("Northumberland Park (Tyne &
+# Wear)"), the actual station on this line. NOP is used below; NUM would be
+# a serious, easy-to-make mistake given the identical station name.
+#
+# --- Segment/overlap decisions ---
+# NCL is also a `cross-country.toml`/`tpe-north.toml`/`tpe-borders.toml`/
+# `northern-tyne-valley.toml`/`northern-durham-coast.toml` station --
+# station-overlap only in every case, matching this catalogue's universal
+# treatment of Newcastle (see e.g. `tpe-borders.toml`'s own identical
+# reasoning for its own NCL entry).
+#
+# Manors and Northumberland Park sit on the East Coast Main Line as far as
+# Benton Junction, per the article's own Stations section -- no ECML/
+# LNER-North file exists yet in this catalogue to overlap with north of
+# Newcastle (checked: `lner-ecml.toml`'s own scope is the London-Doncaster-
+# York-Edinburgh spine; `tpe-borders.toml`'s own ECML-adjacent stretch is
+# north of Berwick, nowhere near here), so nothing to reconcile today --
+# flagged here for whenever such a file is added, mirroring
+# `tpe-borders.toml`'s own identical flag for its own Berwick-Edinburgh
+# ECML stretch.
+#
+# Every station below uses this file's own single exclusive segment,
+# `northern-northumberland-line` -- this is a standalone reopening with no
+# genuine current track-sharing beyond the Newcastle-Manors-Benton Junction
+# ECML approach noted above (which has no station this catalogue could
+# share a segment name with today).
+#
+# CRS codes for every new/reopened station below verified against
+# https://ds.cursed.solutions/api/stations?q=<name> (cross-checked for the
+# Northumberland Park ambiguity specifically, as noted above) and against
+# each station's own Wikipedia infobox/article. NCL tiploc "NWCSTLE" reused
+# unchanged from `northern-tyne-valley.toml`. No tiploc is given for any of
+# the other stations below -- none was independently confirmed to a second
+# source this session, so omitted rather than guessed.
+[[stations]]
+crs = "NCL"
+tiploc = "NWCSTLE"
+role = "terminus"
+segment = "northern-northumberland-line"
+
+[[stations]]
+crs = "MAS"
+role = "minor"
+segment = "northern-northumberland-line"
+# Manors -- pre-existing station, gained a stop on this new service; not
+# itself new or reopened.
+
+[[stations]]
+crs = "NOP"
+role = "minor"
+segment = "northern-northumberland-line"
+# Northumberland Park (Tyne & Wear) -- opened for National Rail 22 February
+# 2026, a new platform at the existing Tyne and Wear Metro station of the
+# same name. NOT to be confused with NUM (Northumberland Park, London) --
+# see the CRS disambiguation warning above.
+
+[[stations]]
+crs = "SEJ"
+role = "minor"
+segment = "northern-northumberland-line"
+# Seaton Delaval -- opened 15 December 2024, one of the line's first two
+# stations.
+
+[[stations]]
+crs = "NWH"
+role = "minor"
+segment = "northern-northumberland-line"
+# Newsham -- opened 17 March 2025.
+
+[[stations]]
+crs = "BLI"
+role = "minor"
+segment = "northern-northumberland-line"
+# Blyth Bebside -- opened 19 October 2025.
+
+[[stations]]
+crs = "BEJ"
+role = "minor"
+segment = "northern-northumberland-line"
+# Bedlington -- opened 29 March 2026, the last station to open.
+
+[[stations]]
+crs = "ASL"
+role = "terminus"
+segment = "northern-northumberland-line"
+# Ashington -- opened 15 December 2024, one of the line's first two
+# stations, and its current terminus. Built to allow a future extension
+# towards Newbiggin-by-the-Sea/Woodhorn, which is real but not yet built
+# (see the route-level comment above) and is not modelled here.

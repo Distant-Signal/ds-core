@@ -1,0 +1,252 @@
+id = "swr-netley-line"
+name = "Netley Line (Southampton - Fareham - Portsmouth)"
+mode = "national-rail"
+category = "regional"
+operators = ["SW", "SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS
+# ============================================================================
+# southern-coastway-west.toml (an earlier file in this catalogue, Brighton-
+# Portsmouth) explicitly documents this exact stretch as a known, deliberate
+# gap: "Fareham, Portchester and Cosham are not on this file's own
+# Brighton-Portsmouth route at all... a real coverage gap (Southampton via
+# Fareham/Cosham/Portsmouth), noted here rather than silently absorbed."
+# This file closes that gap: Southampton, St Denys, Sholing, Netley, Hamble,
+# Bursledon, Swanwick, Fareham, Portchester and Cosham had zero coverage in
+# `lines/` before this file.
+#
+# ============================================================================
+# NAMING AND OPERATOR - checked against Wikipedia, not assumed
+# ============================================================================
+# Netley railway station's own Wikipedia infobox states plainly "the
+# station... is on the West Coastway Line" - i.e. this is not a separate
+# Wikipedia-branded line, it is the Southampton-ward continuation of the
+# SAME "West Coastway line" article southern-coastway-west.toml already
+# covers, just the half that file deliberately scoped out (see above). This
+# task's own brief calls it the "Netley line", a real informal/colloquial
+# name with no dedicated Wikipedia article of its own (checked: "Netley
+# line" 404s), so the requested filename is kept for batch consistency,
+# with this finding recorded rather than silently assumed.
+# Operator: Netley's own Services section is explicit that this is NOT an
+# SWR-exclusive service - "almost all services at Netley are operated by
+# South Western Railway... Southern also provide a small number of
+# additional services" - so both SW and SN are listed, unlike this task's
+# "SWR local service" framing.
+#
+# ============================================================================
+# SOURCING
+# ============================================================================
+# Route and stations, in order Southampton Central - St Denys - Sholing -
+# Netley - Hamble - Bursledon - Swanwick - Fareham - Portchester - Cosham:
+# Wikipedia "Netley railway station" (Services section, quoted above:
+# "one train per hour in each direction between Portsmouth & Southsea and
+# Southampton Central") cross-checked against southern-coastway-west.toml's
+# own sourcing for the Fareham/Portchester/Cosham names and against
+# "Cosham railway station" (junction layout, see next section).
+# CRS codes verified live against https://ds.cursed.solutions/api/stations:
+# Southampton Central=SOU, St Denys=SDN, Sholing=SHO, Netley=NTL,
+# Hamble=HME, Bursledon=BUO, Swanwick=SNW, Fareham=FRM, Portchester=PTC,
+# Cosham=CSA, Hilsea=HLS, Fratton=FTN.
+# Grepped clean before starting: no other `lines/*.toml` file lists St
+# Denys, Sholing, Netley, Hamble, Bursledon, Swanwick, Fareham, Portchester
+# or Cosham.
+#
+# ============================================================================
+# JUNCTION LAYOUT AT COSHAM - why this line rejoins via Hilsea, not Havant
+# ============================================================================
+# Per Wikipedia "Cosham railway station": westward "the line through Cosham
+# leads to Portchester and Fareham"; eastward it is "a junction (part of
+# the local 'Railway Triangle') between lines leading south to Hilsea and
+# Portsmouth and east to Bedhampton and Havant." Separately, per Wikipedia
+# "Hilsea railway station", Hilsea sits "between Fratton (toward Portsmouth)
+# and Bedhampton" for BOTH the Portsmouth Direct Line and the West Coastway
+# Line - i.e. the Havant-Bedhampton-Hilsea-Fratton approach (used by
+# swr-portsmouth-direct.toml and southern-coastway-west.toml's own stopping
+# pattern) is a DIFFERENT chord from the Cosham-Hilsea leg this line uses to
+# reach Portsmouth. This line, arriving from Fareham, joins the "Railway
+# Triangle" at Cosham and continues south via Hilsea and Fratton into
+# Portsmouth - it does not touch Havant or Bedhampton at all. (The
+# Portcreek Junction chord southern-coastway-west.toml describes, which lets
+# Southampton-bound Coastway trains bypass Portsmouth entirely via a direct
+# Havant-Cosham chord, is a third, separate piece of this same triangle -
+# not used by this line either, since this line's own trains call at
+# Portsmouth.)
+#
+# ============================================================================
+# STATION OVERLAP - Southampton Central, Hilsea/Fratton, and Portsmouth
+# ============================================================================
+# Southampton Central (SOU) is already in swr-south-west-main.toml (its own
+# `swr-swml-south` segment). Same operator (SW) but no genuine shared
+# running track: the SWML continues west from Southampton Central via
+# Redbridge/Totton toward Brockenhurst/Bournemouth, while this line heads
+# east via St Denys - the two diverge essentially at the terminus itself,
+# not after a shared stretch. Station overlap only, own segment name below.
+#
+# Hilsea and Fratton are already in southern-coastway-west.toml (its own
+# `coastway-west-portsmouth` segment, operator SN); Portsmouth & Southsea
+# and Portsmouth Harbour are in BOTH that file and swr-portsmouth-direct.
+# toml (`swr-portsmouth-direct`, operator SW, arriving via Havant instead -
+# see JUNCTION LAYOUT above). This is genuinely the same three-way
+# convergence southern-coastway-west.toml's own "STATION-OVERLAP AT HAVANT/
+# PORTSMOUTH" note already documents for the Havant side; the same
+# established precedent applies here (different-operator convergence, or a
+# same-operator one with no sourced evidence of a fully shared physical
+# route end-to-end, gets its own segment name, matched by CRS only) - so
+# this file's own segment name is used throughout, not either sibling's.
+#
+# ============================================================================
+# SEGMENTS
+# ============================================================================
+# Single segment, `swr-netley-line`, covering the whole route from
+# Southampton Central to Portsmouth Harbour. No genuine shared trunk exists
+# with any other file (see STATION OVERLAP above), and the route has no
+# internal junction of its own to split on.
+
+match_keywords = ["Netley line"]
+# The colloquial/brief's own name for this route (no dedicated Wikipedia
+# article exists - see NAMING note above). Grepped clean against every
+# other file's match_keywords. A bare "Netley" was considered and kept out:
+# station name alone risks false-matching unrelated Netley Abbey/Netley
+# Hospital local news content that a Knowledgebase search might surface.
+
+sample_stations = ["SHO", "NTL", "SNW"]
+# All three are on this line's own wholly exclusive middle stretch (past
+# Southampton, before the Cosham/Portsmouth convergence) - no other line in
+# the catalogue touches any of them.
+
+destination_crs_filter = ["SOU", "PMH", "PMS"]
+# Per Netley's own Services section, the advertised pattern is a clean
+# there-and-back Southampton Central <-> Portsmouth & Southsea/Portsmouth
+# Harbour working, 1 tph. All three sample stations are exclusive to this
+# line (see above), so the filter carries no risk of dropping a real
+# sample the way an unverified filter did in an earlier draft of
+# swr-chessington.toml.
+
+# Hourly local stopping service (1 tph per Netley's own Services section) -
+# regional-branch tuning, matching southern-coastway-west.toml's own
+# category choice for the physically adjacent, comparably-frequent
+# Brighton-Portsmouth stopping service this line continues from.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+# ============================================================================
+# SCOPE BOUNDARIES - not modelled here
+# ============================================================================
+# - The Portcreek Junction direct Havant-Cosham chord (Southampton-Brighton
+#   Coastway trains that bypass Portsmouth): per southern-coastway-west.
+#   toml's own note, a genuine separate service, not modelled by any file
+#   including this one.
+# - Southampton Central westward (Redbridge, Totton, Brockenhurst,
+#   Bournemouth): swr-south-west-main.toml, a different physical route -
+#   see STATION OVERLAP above.
+
+# ============================================================================
+# STATIONS
+# ============================================================================
+[[stations]]
+crs = "SOU"
+role = "terminus"
+segment = "swr-netley-line"
+# Southampton Central. Station overlap with swr-south-west-main.toml - see
+# STATION OVERLAP note above.
+
+[[stations]]
+crs = "SDN"
+role = "junction"
+segment = "swr-netley-line"
+# St Denys. Where this line's own route diverges from the South West Main
+# Line just east of Southampton Central.
+
+[[stations]]
+crs = "BTE"
+role = "minor"
+segment = "swr-netley-line"
+# Bitterne.
+
+[[stations]]
+crs = "WLS"
+role = "minor"
+segment = "swr-netley-line"
+# Woolston.
+
+[[stations]]
+crs = "SHO"
+role = "minor"
+segment = "swr-netley-line"
+# Sholing.
+
+[[stations]]
+crs = "NTL"
+role = "major"
+segment = "swr-netley-line"
+# Netley. The route's namesake station.
+
+[[stations]]
+crs = "HME"
+role = "minor"
+segment = "swr-netley-line"
+# Hamble.
+
+[[stations]]
+crs = "BUO"
+role = "minor"
+segment = "swr-netley-line"
+# Bursledon.
+
+[[stations]]
+crs = "SNW"
+role = "minor"
+segment = "swr-netley-line"
+# Swanwick.
+
+[[stations]]
+crs = "FRM"
+role = "major"
+segment = "swr-netley-line"
+# Fareham. Also a junction for SWR's own Eastleigh/Botley/Romsey-area
+# services (not modelled by any file yet) - a real, documented, still-open
+# gap, not addressed here.
+
+[[stations]]
+crs = "PTC"
+role = "minor"
+segment = "swr-netley-line"
+# Portchester.
+
+[[stations]]
+crs = "CSA"
+role = "junction"
+segment = "swr-netley-line"
+# Cosham. The "Railway Triangle" junction - see JUNCTION LAYOUT AT COSHAM
+# above for why this line continues via Hilsea/Fratton rather than Havant.
+
+[[stations]]
+crs = "HLS"
+role = "minor"
+segment = "swr-netley-line"
+# Hilsea. Station overlap with southern-coastway-west.toml (its own
+# `coastway-west-portsmouth` segment) - see STATION OVERLAP note above.
+
+[[stations]]
+crs = "FTN"
+role = "minor"
+segment = "swr-netley-line"
+# Fratton. Station overlap with southern-coastway-west.toml - see STATION
+# OVERLAP note above.
+
+[[stations]]
+crs = "PMS"
+role = "major"
+segment = "swr-netley-line"
+# Portsmouth & Southsea. Station overlap with both southern-coastway-west.
+# toml and swr-portsmouth-direct.toml (arriving via Havant instead) - see
+# STATION OVERLAP note above.
+
+[[stations]]
+crs = "PMH"
+role = "terminus"
+segment = "swr-netley-line"
+# Portsmouth Harbour. Station overlap with both southern-coastway-west.toml
+# and swr-portsmouth-direct.toml - see STATION OVERLAP note above.

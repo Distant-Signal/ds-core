@@ -42,10 +42,17 @@ role = "major"
 segment = "wcml-london"
 
 [[stations]]
-crs = "HMP"
-tiploc = "HAMPTON"
+crs = "HML"
+tiploc = "HEMLHMP"
 role = "minor"
 segment = "wcml-london"
+# Hemel Hempstead. This audit's data-driven CIF-schedule cross-check found
+# the previous entry here, "HMP"/"HAMPTON", was a bogus CRS/TIPLOC pair --
+# no such station exists between Watford Junction and Tring. HML/HEMLHMP
+# confirmed via Wikipedia's "Hemel Hempstead railway station" article and
+# railwaycodes.org.uk. Shared verbatim across all five WCML files that carry
+# this row (`west-coast-main-line.toml`, `wcml-birmingham.toml`,
+# `wcml-liverpool.toml`, `wcml-manchester.toml`, `wcml-north-wales.toml`).
 
 [[stations]]
 crs = "TRI"

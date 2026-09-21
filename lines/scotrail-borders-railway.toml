@@ -1,0 +1,159 @@
+id = "scotrail-borders-railway"
+name = "ScotRail Borders Railway"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Split out of the former `scotrail-fife-borders.toml` (Task 10.4 of the
+# Batch 10 ScotRail line-catalogue effort) per a line-definition audit's
+# recommendation (2026-09-21). That file's own header already admitted the
+# bundling was questionable: it bundled "two genuinely separate routes with
+# no shared track" -- the Fife Circle Line and the Borders Railway diverge
+# from Edinburgh Waverley in opposite directions, with zero shared
+# infrastructure, not even a throat. This file models the Borders Railway;
+# the Fife Circle Line is now `scotrail-fife-circle.toml`. All sourcing
+# below is carried over unchanged from the original file's own research --
+# nothing new was fetched for the split itself, only redistributed to
+# whichever route it actually documents.
+#
+# Original Task 10.4 background, preserved: gap analysis source
+# docs/superpowers/specs/2026-08-29-line-coverage-gap-analysis.md,
+# "ScotRail" section (a): "Fife Circle, the Borders Railway (Edinburgh-
+# Tweedbank)"; section (b) suggested grouping them, which the original file
+# did as a deliberate exception to SCHEMA.md's "one line per file" Global
+# Constraint. This split reverses that exception now that a dedicated
+# audit has judged the two routes' total lack of shared track makes them
+# better modelled as separate lines -- the cleanest split in the whole
+# catalogue, per that audit's own assessment.
+#
+# Category: "regional", per the original brief's own steer -- this route's
+# modest, largely single-track rural character (see below) is a clear fit
+# regardless of the split. This file keeps the same `[severity_overrides]`
+# block the original bundled file used (`scotrail-ayrshire.toml`,
+# `scotrail-highland-main-line.toml`, `scotrail-far-north.toml`,
+# `scotrail-kyle.toml` and both West Highland files all use the identical
+# regional-line override values too).
+
+match_keywords = ["Borders Railway"]
+# The line's own branded name, unchanged from the original bundled file.
+# Doesn't collide with anything else in the catalogue. "Fife Circle" -- the
+# original bundled file's other keyword -- now belongs solely to
+# `scotrail-fife-circle.toml`.
+
+sample_stations = ["EDB", "GAL", "TWB"]
+
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Reopened 6 September 2015 (the "Waverley Route" reinstatement, in
+# stages from the original line closed in 1969). Per Wikipedia: OHLE
+# (overhead electrification) Waverley to Newcraighall, unelectrified
+# Newcraighall to Tweedbank; 21.25 of the line's 35 miles 25 chains are
+# single-track with three "dynamic" passing loops. This file's whole-line
+# `category = "regional"` reflects this route's modest, largely
+# single-track rural character (see the file-level category note above).
+#
+# Edinburgh Waverley (EDB) is this route's terminus, modelled here as its
+# own independent `[[stations]]` entry -- not shared with `scotrail-fife-
+# circle.toml`'s own EDB entry, since the two routes share no track at all
+# once they leave Waverley (they diverge in opposite directions, and this
+# task's own research, carried over from the original bundled file, found
+# no genuine shared infrastructure between them, "not even a throat" per
+# that file's own header). This is the same station-overlap-without-
+# segment-sharing pattern `xc-south-coast.toml`/`xc-manchester.toml`
+# already establish elsewhere in the catalogue.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-borders"
+# Edinburgh Waverley: this route's own terminus. Also `scotrail-fife-
+# circle.toml`'s own terminus (same physical station), modelled there as
+# a separate `[[stations]]` entry rather than shared -- see the note above.
+
+[[stations]]
+crs = "BSU"
+role = "minor"
+segment = "scotrail-borders"
+# Brunstane: opened 2002, predating the Borders Railway reopening proper,
+# but per Wikipedia is served exclusively by the Borders Railway service
+# today (not the North Berwick line, which does not call here and is not
+# modelled in this catalogue in any case).
+
+[[stations]]
+crs = "NEW"
+role = "minor"
+segment = "scotrail-borders"
+# Newcraighall: also opened 2002, same service pattern as Brunstane.
+
+[[stations]]
+crs = "SFI"
+role = "minor"
+segment = "scotrail-borders"
+# Shawfair: opened with the 2015 Borders Railway reinstatement.
+
+[[stations]]
+crs = "EKB"
+role = "minor"
+segment = "scotrail-borders"
+# Eskbank.
+
+[[stations]]
+crs = "NEG"
+role = "minor"
+segment = "scotrail-borders"
+# Newtongrange.
+
+[[stations]]
+crs = "GBG"
+role = "minor"
+segment = "scotrail-borders"
+# Gorebridge.
+
+[[stations]]
+crs = "SOI"
+role = "minor"
+segment = "scotrail-borders"
+# Stow: on the unelectrified, single-track southern section.
+
+[[stations]]
+crs = "GAL"
+role = "major"
+segment = "scotrail-borders"
+# Galashiels: the largest town on the route south of Edinburgh.
+
+[[stations]]
+crs = "TWB"
+role = "terminus"
+segment = "scotrail-borders"
+# Tweedbank: southern terminus.
+
+# === Sources (cross-checked per the plan's Global Constraints; carried
+#     over verbatim from `scotrail-fife-borders.toml`, filtered to what
+#     actually documents this route's own stations) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "Borders Railway": confirms the 6 September 2015 reopening
+#     date, the ordered station list Edinburgh Waverley-Brunstane-
+#     Newcraighall-Shawfair-Eskbank-Newtongrange-Gorebridge-Stow-
+#     Galashiels-Tweedbank (9 stations besides Waverley, matching the
+#     infobox's `stations = 9` field, which excludes the pre-existing
+#     Waverley terminus), the OHLE Waverley-Newcraighall/unelectrified
+#     Newcraighall-Tweedbank electrification split, and the single-track-
+#     with-passing-loops character of most of the route.
+#   - Wikipedia "Brunstane railway station" and "Newcraighall railway
+#     station": both confirm exclusive service by the Borders Railway
+#     today (not the North Berwick line), cross-checking their inclusion
+#     in this file's station list rather than treating them as North
+#     Berwick line stations.
+#
+# CRS codes: every code in `stations` above was cross-checked between each
+# station's Wikipedia infobox "code" field and National Rail Enquiries'
+# own station page (nationalrail.co.uk/stations/<crs>/details.html). All
+# matched with no discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source, matching the optional-field convention already used by every
+# other file in this batch.

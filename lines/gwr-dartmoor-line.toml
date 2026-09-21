@@ -1,0 +1,204 @@
+id = "gwr-dartmoor-line"
+name = "Dartmoor Line"
+mode = "national-rail"
+category = "regional"
+operators = ["GW"]
+
+# Devon/Cornwall branch-line batch: full UK station-coverage audit found this
+# real, currently-open GWR branch (Exeter - Okehampton) entirely missing
+# from the catalogue. This is the "Beeching reversal" reopening: passenger
+# services to Okehampton had been withdrawn in 1972 and only summer/heritage
+# trains ran for decades afterward; the line reopened to a full year-round
+# GWR passenger service on 20 November 2021. Wikipedia "Dartmoor line"
+# infobox: GWR operator, single track, standard gauge, `stations = 2`
+# (Crediton and Okehampton -- see the station-count note below), 15.5 mile
+# length, opened 1865, "ridership of 0.361 million in 2023."
+#
+# Category: "regional", matching this batch's other reopened/rural single-
+# track branches, confirmed rather than assumed: unlike `gwr-avocet-line.
+# toml` (whose own infobox self-describes as "Commuter"), this line's own
+# Wikipedia infobox carries no "Commuter" framing, and its real service
+# level (currently hourly, historically two-hourly) and recent-reopening
+# character match `northern-furness.toml`'s/`scotrail-kyle.toml`'s
+# "regional" precedent much more closely.
+#
+# This file is one of three created together in this same task
+# (`gwr-tarka-line.toml`, `gwr-avocet-line.toml`) for the three GWR local
+# routes that fan out from Exeter -- see `gwr-tarka-line.toml`'s own comment
+# block for the full shared-trunk research; not re-derived in full here.
+
+# Exclusive-segment stations only (Exeter St Davids/Central and Crediton/
+# Yeoford are genuinely shared with `gwr-tarka-line.toml`, see below).
+sample_stations = ["OKI", "OKE"]
+
+# Exeter St Davids/Central are shared with both `gwr-tarka-line.toml` and
+# `gwr-avocet-line.toml`; Crediton/Yeoford are additionally shared with
+# `gwr-tarka-line.toml` alone. `destination_crs_filter` disambiguates this
+# line's own LDBWS departures (bound for OKE, or the new OKI stop just
+# short of it) from Tarka-bound (BNP) and Avocet-bound (EXM) services
+# sampled at the same shared stations, mirroring `scotrail-ayrshire.toml`'s
+# identical use of the field at GLC.
+destination_crs_filter = ["OKE", "OKI"]
+
+match_keywords = ["Dartmoor Line"]
+# One high-precision phrase -- the line's own branded/article name. Grepped
+# `lines/*.toml` before starting: no other file uses "Dartmoor" in
+# `match_keywords`.
+
+# Single track throughout, currently hourly (upgraded from the original
+# 2021 two-hourly reopening timetable in May 2022, per Wikipedia) -- a
+# recently-reopened rural branch with the same delay-recovery profile as
+# `northern-furness.toml`'s/`scotrail-kyle.toml`'s comparable single-track
+# branches, so the same tuned thresholds are used.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Shared trunk 1: Exeter St Davids - Exeter Central ===
+#
+# See `gwr-tarka-line.toml`'s own comment block for the full sourcing
+# (Wikipedia "Exeter Central railway station", fetched fresh for this task:
+# "Further trains operate, generally once an hour, on both the Tarka Line
+# to Barnstaple ... and on the Dartmoor Line to Okehampton" calling at
+# Exeter Central). Segment name `gwr-exeter-central-approach`, reused
+# verbatim from `gwr-tarka-line.toml`/`gwr-avocet-line.toml` for the same
+# two stations.
+[[stations]]
+crs = "EXD"
+role = "junction"
+segment = "gwr-exeter-central-approach"
+# Exeter St Davids: also a station entry in `cross-country.toml`,
+# `gwr-cornish-main-line.toml` and `gwr-west-of-england.toml` (segment
+# "xc-south-west" there) -- a different, non-overlapping segment name from
+# this file's own `gwr-exeter-central-approach`; station overlap only with
+# those files, per this catalogue's established convention.
+
+[[stations]]
+crs = "EXC"
+role = "junction"
+segment = "gwr-exeter-central-approach"
+# Exeter Central: reached via St Davids Tunnel. Per Wikipedia, "five trains,
+# including peak-time commuter services" continue here on weekdays.
+
+# === Shared trunk 2: Newton St Cyres - Crediton - Yeoford, genuinely
+#     shared with `gwr-tarka-line.toml` only ===
+#
+# See `gwr-tarka-line.toml`'s own comment block for the full sourcing
+# (Wikipedia "Newton St Cyres railway station": "Both the Tarka Line and
+# Dartmoor Line call at this station"; Wikipedia "Dartmoor line": "the line
+# runs alongside the Tarka Line to the site of the former Coleford Junction
+# where it diverges west to Okehampton"). Segment name
+# `gwr-crediton-yeoford-trunk`, reused verbatim from `gwr-tarka-line.toml`
+# for the same three stations. Per SCHEMA.md's shared-trunk rule of thumb,
+# this line's own exclusive segment starts at the next station past Yeoford
+# -- see the station-exclusion note below for why that is Okehampton
+# Interchange rather than the intermediate historical stops.
+[[stations]]
+crs = "NTC"
+role = "minor"
+segment = "gwr-crediton-yeoford-trunk"
+# Newton St Cyres: request stop -- see `gwr-tarka-line.toml`'s own comment.
+
+[[stations]]
+crs = "CDI"
+role = "major"
+segment = "gwr-crediton-yeoford-trunk"
+# Crediton.
+
+[[stations]]
+crs = "YEO"
+role = "junction"
+segment = "gwr-crediton-yeoford-trunk"
+# Yeoford: the real physical junction, Coleford Junction, sits immediately
+# past this station on the Okehampton side.
+
+# Bow and North Tawton (between Yeoford and Okehampton on the historic
+# route) are deliberately excluded: Wikipedia's own "North Tawton railway
+# station" article confirms it "closed to passengers" on "5 June 1972," and
+# the same article states "North Tawton, Bow, Sampford Courtenay and
+# Okehampton lost their regular passenger services from 1972" -- i.e. Bow
+# closed the same date. Neither has a current CRS code (confirmed via the
+# lookup below).
+#
+# Sampford Courtenay is also deliberately excluded, despite being nearer to
+# today's reopening: its own Wikipedia article confirms "Since 2021 the
+# railway has enjoyed a reinstated hourly service from Exeter to Okehampton
+# operated by GWR, however the trains do not call at Sampford Courtenay,"
+# and explicitly, "Sampford Courtenay is not part of the scheme, and there
+# are currently no plans to reopen the station." Real, closed, and
+# deliberately not reopened -- not modelled here.
+
+# === This line's own exclusive segment ===
+
+[[stations]]
+crs = "OKI"
+role = "minor"
+segment = "gwr-dartmoor-line"
+# Okehampton Interchange: a genuinely new station, not a historical
+# reopening -- Wikipedia's own "Dartmoor line" article: "Following the
+# reopening in 2021, plans and funding were announced for a new station
+# named Okehampton Interchange east of Okehampton in November 2023,"
+# opening "on 1 August 2026." Verified as a real, currently-open CRS-bearing
+# station via the live lookup below (code OKI), consistent with its very
+# recent opening date relative to this task.
+
+[[stations]]
+crs = "OKE"
+role = "terminus"
+segment = "gwr-dartmoor-line"
+# Okehampton: this line's own terminus. "The new service started on 20
+# November 2021, with Great Western Railway running eight trains a day (one
+# every two hours) to Exeter St Davids... The frequency has increased to
+# hourly from May 2022, with more trains serving Exeter Central" -- basis
+# for this file's severity tuning and reopening framing above.
+
+# Meldon Viaduct (built as a heritage-railway station in 2000, beyond
+# Okehampton) is deliberately excluded: heritage train services there
+# "ceased in December 2019" per Wikipedia, and it was never part of the
+# GWR National Rail reopening -- not modelled here.
+
+# === Sources (cross-checked per this batch's Global Constraints) ===
+#
+# Route structure, operator, reopening history, service pattern:
+#   - Wikipedia "Dartmoor line" (raw wikitext + rendered article, fetched
+#     fresh for this task): confirms GWR operation, single track, 15.5
+#     miles, `stations = 2`, 1865 opening; confirms the 20 November 2021
+#     reopening ("eight trains a day... one every two hours"), the May 2022
+#     hourly upgrade, the Okehampton Interchange funding/opening timeline
+#     (announced November 2023, opened 1 August 2026, "east of Okehampton"),
+#     and the Meldon Viaduct heritage-service closure (December 2019).
+#   - Wikipedia "North Tawton railway station" (fetched fresh, own
+#     article): confirms Bow's and North Tawton's shared 1972 closure date.
+#   - Wikipedia "Sampford Courtenay railway station" (fetched fresh, own
+#     article): confirms it remains closed and is explicitly out of scope
+#     for the 2021 reopening scheme.
+#   - Wikipedia "Newton St Cyres railway station" and "Exeter Central
+#     railway station" (fetched fresh for this task): see
+#     `gwr-tarka-line.toml`'s own comment block for the exact quotes
+#     underpinning both shared-trunk segments above.
+#
+# CRS codes: every code below was verified live against
+# `https://ds.cursed.solutions/api/stations?q=<name>` during this task --
+# EXD "Exeter St Davids", EXC "Exeter Central", NTC "Newton St Cyres", CDI
+# "Crediton", YEO "Yeoford", OKI "Okehampton Interchange", OKE
+# "Okehampton". "North Tawton" and "Bow" (in this context) returned no
+# match, confirming no current CRS code; "Sampford Courtenay" does return a
+# code (SMC) but its own Wikipedia article confirms it is not currently
+# served (see above) -- deliberately excluded despite having a CRS on
+# record. All matched with no other discrepancies.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live source
+# during this task, matching this batch's optional-field convention.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Tarka Line itself (Copplestone onward to Barnstaple): already
+#   catalogued in `gwr-tarka-line.toml`; not re-derived here beyond the
+#   shared-trunk segments above.
+# - SWR's own West of England Line, sharing the Exeter St Davids-Exeter
+#   Central approach: see `gwr-tarka-line.toml`'s identical scope note.
+# - Meldon Viaduct heritage services and the historic Okehampton-Tavistock-
+#   Plymouth route beyond Meldon: real history, but heritage-only since
+#   2019 and out of scope for this task's real-and-served National Rail
+#   bar.

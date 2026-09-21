@@ -18,10 +18,12 @@ operators = [
 #      roughly-hourly patterns that both converge on the same physical
 #      route beyond Crewe -- one calling "Milton Keynes Central, Crewe,
 #      Runcorn, Liverpool South Parkway" (with a footnote that one train
-#      per day additionally calls at Hartford -- not modelled here, too
-#      infrequent to treat as a regular stop, same convention
-#      `wcml-birmingham.toml` used for omitting West Midlands Trains local
-#      calls), the other calling "Tamworth, Lichfield Trent Valley,
+#      per day additionally calls at Hartford -- originally left unmodeled
+#      here as too infrequent, same convention `wcml-birmingham.toml` used
+#      for omitting West Midlands Trains local calls; UPDATED by this
+#      audit's CIF-schedule cross-check, see the HTF station entry below and
+#      its comment for why that judgment is now outdated), the other calling
+#      "Tamworth, Lichfield Trent Valley,
 #      Runcorn" (i.e. the slower-stopping pattern over the same
 #      Trent-Valley spine already modelled in `west-coast-main-line.toml`).
 #      Both patterns reach Liverpool via Crewe and Runcorn.
@@ -94,10 +96,15 @@ role = "major"
 segment = "wcml-london"
 
 [[stations]]
-crs = "HMP"
-tiploc = "HAMPTON"
+crs = "HML"
+tiploc = "HEMLHMP"
 role = "minor"
 segment = "wcml-london"
+# Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
+# cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
+# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# Kept identical across all five WCML files that carry this shared-trunk
+# row.
 
 [[stations]]
 crs = "TRI"
@@ -146,6 +153,17 @@ crs = "CRE"
 tiploc = "CREWE"
 role = "junction"
 segment = "wcml-northwest"
+
+[[stations]]
+crs = "HTF"
+role = "minor"
+segment = "wcml-liverpool-branch"
+# Hartford. Originally omitted as "one train per day, too infrequent" (see
+# the route-research comment above) -- that judgment is now outdated: this
+# audit's CIF-schedule cross-check found Avanti (VT, this file's own
+# operator) adding a daily service each way here from December 2025, on top
+# of West Midlands Trains' existing hourly local service. CRS confirmed via
+# Wikipedia's "Hartford railway station" article and railwaycodes.org.uk.
 
 [[stations]]
 crs = "RUN"

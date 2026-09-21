@@ -32,9 +32,10 @@ match_keywords = ["Heart of Wales Line"]
 # column ("KNIGHTN") -- a column-misread in the original curation, fixed
 # below (see that station's own comment). Llangynllo (LGO/LLU) and Cilmeri
 # (CIM/GIY) each have a two-CRS-value row on railwaycodes.org.uk, the same
-# pattern `tfw-valley-lines-north.toml` discloses for Lisvane & Thornhill
-# and Dinas Rhondda; in both cases the value already used here (LGO, CIM)
-# is confirmed as the live/primary code, so no change was needed there.
+# pattern `tfw-valley-rhymney.toml` discloses for Lisvane & Thornhill and
+# `tfw-valley-rhondda.toml` discloses for Dinas Rhondda; in both cases the
+# value already used here (LGO, CIM) is confirmed as the live/primary code,
+# so no change was needed there.
 #
 # TIPLOCs are now included for every station, all sourced from
 # railwaycodes.org.uk's TIPLOC column directly (that field isn't shown on
@@ -204,8 +205,9 @@ role = "minor"
 segment = "tfw-heart-of-wales"
 # Llangynllo: railwaycodes.org.uk's row lists two CRS values, "LGO" and
 # "LLU", in one cell (the same two-code-in-one-cell pattern
-# `tfw-valley-lines-north.toml` discloses for Lisvane & Thornhill and
-# Dinas Rhondda). LGO is confirmed as the live/primary code -- matching
+# `tfw-valley-rhymney.toml` discloses for Lisvane & Thornhill and
+# `tfw-valley-rhondda.toml` discloses for Dinas Rhondda). LGO is confirmed
+# as the live/primary code -- matching
 # the value this file already used, sourced from Wikipedia before this
 # task -- and is used below; LLU is not used.
 

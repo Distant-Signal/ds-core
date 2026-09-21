@@ -120,6 +120,16 @@ segment = "lner-hull"
 # cross-checked against nationalrail.co.uk's own station detail page.
 
 [[stations]]
+crs = "HOW"
+role = "minor"
+segment = "lner-hull"
+# Howden. LNER's daily King's Cross-Hull working genuinely calls here --
+# confirmed by this audit's CIF-schedule cross-check. Already correctly
+# modelled at this exact position (between Selby and Brough) in the sibling
+# `hull-trains.toml` file, whose own HOW entry supplied the CRS
+# cross-reference used here.
+
+[[stations]]
 crs = "BUH"
 role = "minor"
 segment = "lner-hull"

@@ -68,9 +68,10 @@ delay_threshold_minutes = 10
 # Stockport - Sheffield IS genuine physical track-sharing with
 # `northern-hope-valley.toml`'s Hope Valley Line, but is NOT a shared
 # *segment name* - a coarse-granularity mismatch, the same shape as
-# Ruling 4 below (Peterborough/Ely vs `xc-stansted.toml`) and this file's
-# own sibling `emr-rural-branches.toml`'s Poacher Line ruling. The Hope
-# Valley Line ("Hope Valley Line" Wikipedia article) is the *only* direct
+# Ruling 4 below (Peterborough/Ely vs `xc-stansted.toml`) and
+# `emr-poacher.toml`'s own Poacher Line ruling (formerly bundled with two
+# other branches in `emr-rural-branches.toml`, since split one-line-per-file).
+# The Hope Valley Line ("Hope Valley Line" Wikipedia article) is the *only* direct
 # passenger route between Manchester Piccadilly and Sheffield; that
 # article's own services section separately confirms EMR's Liverpool-
 # Norwich service as one of three operators running over it (alongside
@@ -217,6 +218,22 @@ segment = "emr-regional-east"
 # Alfreton (& Mansfield Parkway). Erewash Valley Line.
 
 [[stations]]
+crs = "ILN"  # Ilkeston
+role = "minor"
+segment = "emr-regional-east"
+# Ilkeston: Erewash Valley Line, between Alfreton and Nottingham. Follow-up
+# audit (2026-09-21, data-driven schedule audit cross-checked against
+# Wikipedia). Lower-confidence than Attleborough/Wymondham below: per
+# Wikipedia, only "a small number of peak-period services" call here on
+# this route, a genuinely minority-of-services stop rather than the
+# dominant pattern - included per this file's "real, currently open,
+# currently served" bar (the same bar Bordesley is included under
+# elsewhere in this catalogue, e.g. `wmr-snow-hill.toml`/
+# `chiltern-main-line.toml`'s own Bordesley comments), but flagged
+# honestly here as a partial/minority service level, not a typical EMR
+# Regional calling point.
+
+[[stations]]
 crs = "NOT"
 role = "major"
 segment = "emr-regional-east"
@@ -252,6 +269,21 @@ segment = "emr-regional-east"
 # Peterborough - also an `xc-stansted.toml` station. See Ruling 4 above.
 
 [[stations]]
+crs = "MCH"  # March
+role = "minor"
+segment = "emr-regional-east"
+# March: on the direct Ely-Peterborough line, between the two. Follow-up
+# audit (2026-09-21, data-driven schedule audit cross-checked against
+# Wikipedia). Lower-confidence, same shape as Ilkeston above: per
+# Wikipedia, only "a small number of peak-period services" call here - a
+# real, confirmed, currently-open stop, but a minority-of-services one,
+# not the dominant Peterborough-Ely calling pattern. Included per this
+# file's "currently open, currently served" bar and flagged honestly as
+# partial service, matching this catalogue's existing convention for
+# documenting minority-of-trains stops (see Ilkeston above, and Bordesley
+# elsewhere in this catalogue).
+
+[[stations]]
 crs = "ELY"
 role = "major"
 segment = "emr-regional-east"
@@ -266,6 +298,28 @@ crs = "TTF"
 role = "minor"
 segment = "emr-regional-east"
 # Thetford. Breckland Line.
+
+[[stations]]
+crs = "ATL"  # Attleborough
+role = "minor"
+segment = "emr-regional-east"
+# Attleborough: Breckland Line, between Thetford and Norwich. Follow-up
+# audit (2026-09-21, data-driven schedule audit cross-checked against
+# Wikipedia). Higher-confidence than Ilkeston/March: per Wikipedia, EMR
+# runs "three trains per day in each direction via Nottingham" here,
+# atop the dominant Greater Anglia service on this stretch - real but
+# low-frequency, the same "some but not most trains" shape this catalogue
+# already documents elsewhere for partial-service stations (see the
+# Ilkeston/March comments above, and Bordesley elsewhere in this
+# catalogue). `role = "minor"` per that same convention.
+
+[[stations]]
+crs = "WMD"  # Wymondham
+role = "minor"
+segment = "emr-regional-east"
+# Wymondham: Breckland Line, between Attleborough and Norwich. Same
+# sourcing and reasoning as Attleborough above (Wikipedia: EMR "three
+# trains per day in each direction via Nottingham" call here too).
 
 [[stations]]
 crs = "NRW"

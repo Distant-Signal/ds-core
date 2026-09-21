@@ -1,0 +1,127 @@
+id = "southern-seaford-branch"
+name = "Seaford Branch"
+mode = "national-rail"
+category = "regional"
+operators = ["SN"]
+
+sample_stations = ["LWS", "NVN", "SEF"]
+match_keywords = ["Seaford branch", "Seaford line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP - southern-coastway-east.toml's own LWS (Lewes) comment
+# already flags this: "the Seaford branch (via Southerham Junction, not
+# covered by this file) ... join[s]/diverge[s] here. Kept on the
+# Brighton-side segment ... in case a future file for either of those
+# routes wants to share a trunk segment name up to and including Lewes."
+# This file is that Seaford branch, and the segment-sharing question that
+# comment invited is addressed directly below.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Seaford branch line" article: stations Lewes,
+# Southease, Newhaven Town, Newhaven Harbour, Bishopstone, Seaford (in that
+# order; Bishopstone Beach Halt is a separate, long-closed station, not
+# included), each cross-checked against nationalrail.co.uk's own
+# /stations/<crs>/details.html pages, and every CRS code independently
+# verified live against https://ds.cursed.solutions/api/stations?q=<name>.
+#
+# Newhaven Harbour: genuinely open and served today (Southern), not a
+# seasonal/ferry-only halt in current operation - Wikipedia's own article
+# states the off-peak Brighton-Seaford service alternates "between calling
+# at Southease and Newhaven Harbour" (i.e. each gets 1 of the 2 tph, not a
+# reduced/seasonal service specifically). The historic Newhaven Marine
+# "ghost station" (the actual former boat-train/ferry terminal, officially
+# closed 2018) is a different, separate, already-closed station and is not
+# modelled here.
+#
+# ============================================================================
+# SEGMENT-SHARING DECISION AT LEWES (the question southern-coastway-
+# east.toml's own comment explicitly invited)
+# ============================================================================
+# Per Wikipedia's own "Seaford branch line" article, the off-peak service is
+# "two trains per hour between Brighton and Seaford", calling at "London
+# Road (Brighton), Moulsecoomb, Falmer, Lewes, Southease (1 tph only),
+# Newhaven Town, Newhaven Harbour (1 tph only), Bishopstone and Seaford" -
+# i.e. this is described as one continuous, genuine, everyday through
+# service over southern-coastway-east.toml's own `coastway-east-brighton`
+# segment (BTN through LWS) and then this branch, not two separately-booked
+# services that merely both happen to call at Lewes.
+#
+# This is more specific and more service-pattern-direct than most of this
+# catalogue's other "documented lead, not confirmed" write-ups (it names
+# the through-running pattern itself, not just shared station identity),
+# but it is still, in the end, sourced from a single Wikipedia article - no
+# second, non-Wikipedia source of the type COMMON.md requires (railwaycodes.
+# org.uk, Network Rail's own route pages, National Rail Enquiries, or the
+# TOC's own site) could be found describing this specific through-running
+# claim within this task's budget (nationalrail.co.uk's own Lewes station
+# page, checked directly, covers accessibility/facilities only and says
+# nothing about calling patterns; southernrailway.com continues to 403
+# automated fetches, the same experience southern-brighton-main-line.toml's
+# and southern-coastway-east.toml's own sourcing notes already record).
+#
+# Per this catalogue's dominant, consistently-applied convention for
+# exactly this situation (southern-oxted-uckfield.toml's own VIC/LBG/ECR
+# decision; thameslink-southern.toml's own LBG/ECR decision, explicitly
+# declining to reuse `chatham-london` even after finding three consistent
+# Wikipedia articles pointing the same way) - this file therefore does NOT
+# reuse `coastway-east-brighton` at Lewes. It uses its own segment name
+# instead, treating LWS as station overlap only. This is disclosed here as
+# a real, well-corroborated, but Wikipedia-only lead: a future task with
+# the budget to find a qualifying second source for this specific
+# through-running pattern could reasonably upgrade LWS (and, if the
+# through-running extends that far as the calling-point list suggests,
+# BTN/LRB/MCB/FMR too) to a genuine `SharedSegment` with
+# southern-coastway-east.toml - not done here.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 8
+
+# ============================================================================
+# STATIONS - ordered Lewes to Seaford. One segment throughout: this file's
+# own name, not reused from southern-coastway-east.toml's own
+# `coastway-east-brighton`, per the SEGMENT-SHARING DECISION above.
+# ============================================================================
+[[stations]]
+crs = "LWS"
+role = "junction"
+segment = "southern-seaford-branch"
+# Lewes. Also southern-coastway-east.toml's own station (`coastway-east-
+# brighton` segment, already commented as this exact junction, inviting
+# but not requiring this file's own segment-sharing decision - see above) -
+# station overlap only, own segment name here.
+
+[[stations]]
+crs = "SEE"
+role = "minor"
+segment = "southern-seaford-branch"
+# Southease. 1 tph only per Wikipedia's own article - see ROUTE AND
+# SOURCING above.
+
+[[stations]]
+crs = "NVN"
+role = "major"
+segment = "southern-seaford-branch"
+# Newhaven Town.
+
+[[stations]]
+crs = "NVH"
+role = "minor"
+segment = "southern-seaford-branch"
+# Newhaven Harbour. 1 tph only per Wikipedia's own article - see ROUTE AND
+# SOURCING above (genuinely open and served, not the separate closed
+# Newhaven Marine station).
+
+[[stations]]
+crs = "BIP"
+role = "minor"
+segment = "southern-seaford-branch"
+# Bishopstone (Sussex) - not to be confused with any other "Bishopstone" in
+# this catalogue; confirmed as a distinct CRS code via the live API.
+
+[[stations]]
+crs = "SEF"
+role = "terminus"
+segment = "southern-seaford-branch"
+# Seaford.

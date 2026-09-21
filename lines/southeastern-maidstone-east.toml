@@ -1,0 +1,269 @@
+id = "southeastern-maidstone-east"
+name = "Maidstone East Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SE"]
+
+sample_stations = ["MDE", "LEN", "BRG"]
+match_keywords = ["Maidstone East line"]
+
+# ============================================================================
+# SELF-FLAGGED GAP - southeastern-chatham.toml's own SAY (Swanley) comment
+# already flags this: "Maidstone East line diverges here; not covered by
+# this catalogue." lines/thameslink-southern.toml's own OTF (Otford) comment
+# independently repeats it: "the Maidstone East line continues towards
+# Ashford International (not covered by this catalogue)." This file is that
+# line.
+#
+# ============================================================================
+# ROUTE AND SOURCING
+# ============================================================================
+# Confirmed via Wikipedia's "Maidstone East line" article (infobox + prose,
+# cross-checked station-by-station against individual station infoboxes for
+# the trickier stretch - see below) plus live CRS verification of every code
+# against https://ds.cursed.solutions/api/stations?q=<name>.
+#
+# From London, Southeastern's own booked service is "one hourly train from
+# Ashford to Victoria via Bromley South and Swanley, stopping at all
+# intermediate stations" - i.e. this line's London approach is the exact
+# same Victoria-Bromley South-Swanley formation southeastern-chatham.toml
+# already models in full as its own `chatham-london` segment (VIC, HNH, WDU,
+# SYH, PNE, KTH, BKJ, SRT, BMS, BKL, SMY, SAY). All twelve of those stations
+# are therefore genuine station overlap with southeastern-chatham.toml here
+# too - not a shared segment (this file uses its own segment name, per the
+# xc-south-coast.toml/xc-manchester.toml precedent used throughout this
+# catalogue for exactly this kind of un-confirmed-to-bar or simply
+# not-yet-attempted track-sharing claim).
+#
+# Past Swanley, per Wikipedia's own "Swanley railway station" article, "the
+# Maidstone Line branches from the main line east of Swanley" through
+# Eynsford, Shoreham (Kent) and Otford - the EXACT same three-station stretch
+# lines/thameslink-southern.toml already models (as its own
+# `thameslink-sevenoaks-shortlands-swanley`/`thameslink-sevenoaks-otford`
+# segments), because Thameslink's Blackfriars-Sevenoaks service runs via
+# Catford and this identical Eynsford/Shoreham/Otford stretch before
+# diverging onto its own Bat & Ball/Sevenoaks branch at Otford. That file's
+# own OTF comment independently confirms the Southeastern/Maidstone-line
+# split happens at Otford: "the lines to Bat & Ball and Maidstone diverge
+# here." Station overlap only against thameslink-southern.toml too, same
+# reasoning and same precedent - its own segment names are not reused, for
+# the identical "granularity mismatch" reason that file's own SEGMENT NAMING
+# comment gives for not reusing southeastern-chatham.toml's `chatham-london`
+# (this file's own Victoria approach touches VIC/HNH/BKJ, which
+# thameslink-southern's Sevenoaks branch never calls at - reusing either
+# sibling's name across the wrong-shaped set of stations would be actively
+# misleading).
+#
+# Past Otford, the Maidstone line's own exclusive stretch (confirmed via
+# Wikipedia's "Otford railway station", "Barming railway station" and "East
+# Malling railway station" articles, cross-checked station-to-station via
+# each one's own preceding/following infobox fields - Otford -> Kemsing ->
+# Borough Green & Wrotham -> West Malling -> East Malling -> Barming ->
+# Maidstone East -> Bearsted -> Hollingbourne -> Harrietsham -> Lenham ->
+# Charing -> Ashford International): Hothfield Halt, an intermediate stop
+# between Charing and Ashford shown in some historical route diagrams, is
+# confirmed CLOSED ("closed to passengers on 2 November 1959") via its own
+# Wikipedia article and correctly excluded below.
+#
+# Double track and 750V DC third rail throughout (electrified in stages,
+# 1939 to Maidstone East, 1961 on to Ashford, per the line's own Wikipedia
+# infobox) - no single-track sections, unlike several of this batch's other
+# new files.
+#
+# CRS notes: "Charing" (CHG, the Kent village station on this line) is
+# easily confused with "Charing Cross" (CHX, the London terminus used by
+# several sibling files) or "Charing Cross (Glasgow)" (CHC) - all three are
+# distinct, live, verified codes; CHG is the correct one for this file.
+[severity_overrides]
+minor_delays_pct = 0.30
+delay_threshold_minutes = 8
+
+# ============================================================================
+# STATIONS - ordered London (Victoria) to Ashford International. Three
+# segments: the Victoria approach (station overlap with southeastern-
+# chatham.toml's `chatham-london`), the Swanley-Otford stretch (station
+# overlap with thameslink-southern.toml's own segments there), and this
+# line's own exclusive stretch from Kemsing onward.
+# ============================================================================
+[[stations]]
+crs = "VIC"
+role = "terminus"
+segment = "maidstone-east-victoria"
+# London Victoria. Also southeastern-chatham.toml's own terminus and
+# southern-brighton-main-line.toml's own terminus - station overlap only
+# with both, see ROUTE AND SOURCING above.
+
+[[stations]]
+crs = "HNH"
+role = "major"
+segment = "maidstone-east-victoria"
+# Herne Hill.
+
+[[stations]]
+crs = "WDU"
+role = "minor"
+segment = "maidstone-east-victoria"
+# West Dulwich.
+
+[[stations]]
+crs = "SYH"
+role = "minor"
+segment = "maidstone-east-victoria"
+# Sydenham Hill.
+
+[[stations]]
+crs = "PNE"
+role = "minor"
+segment = "maidstone-east-victoria"
+# Penge East.
+
+[[stations]]
+crs = "KTH"
+role = "minor"
+segment = "maidstone-east-victoria"
+# Kent House.
+
+[[stations]]
+crs = "BKJ"
+role = "major"
+segment = "maidstone-east-victoria"
+# Beckenham Junction.
+
+[[stations]]
+crs = "SRT"
+role = "junction"
+segment = "maidstone-east-victoria"
+# Shortlands. Catford Loop Line diverges here (also thameslink-southern.toml's
+# own station, approached from a physically different direction via
+# Blackfriars - station overlap only).
+
+[[stations]]
+crs = "BMS"
+role = "major"
+segment = "maidstone-east-victoria"
+# Bromley South.
+
+[[stations]]
+crs = "BKL"
+role = "junction"
+segment = "maidstone-east-victoria"
+# Bickley. Bromley North branch diverges here (southeastern-bromley-
+# north.toml, part of this same batch).
+
+[[stations]]
+crs = "SMY"
+role = "junction"
+segment = "maidstone-east-victoria"
+# St Mary Cray.
+
+[[stations]]
+crs = "SAY"
+role = "junction"
+segment = "maidstone-east-victoria"
+# Swanley. This file's `maidstone-east-victoria` segment ends here; the
+# Maidstone line's own exclusive-to-this-corridor stretch (still shared with
+# Thameslink's Sevenoaks service, see below) begins at the next station.
+
+[[stations]]
+crs = "EYN"
+role = "minor"
+segment = "maidstone-east-otford"
+# Eynsford. Also thameslink-southern.toml's own station (its own
+# `thameslink-sevenoaks-otford` segment) - station overlap only, see ROUTE
+# AND SOURCING above.
+
+[[stations]]
+crs = "SEH"
+role = "minor"
+segment = "maidstone-east-otford"
+# Shoreham (Kent) - not to be confused with Shoreham-by-Sea on Southern's
+# West Coastway line, a different station entirely.
+
+[[stations]]
+crs = "OTF"
+role = "junction"
+segment = "maidstone-east-otford"
+# Otford. Thameslink's own Bat & Ball/Sevenoaks branch diverges here (not
+# covered by this file); this line's own exclusive stretch continues to
+# Kemsing, below.
+
+[[stations]]
+crs = "KMS"
+role = "minor"
+segment = "maidstone-east-line"
+# Kemsing. Exclusive segment starts here, one station past the Otford
+# junction, per the shared-trunk rule of thumb.
+
+[[stations]]
+crs = "BRG"
+role = "minor"
+segment = "maidstone-east-line"
+# Borough Green & Wrotham.
+
+[[stations]]
+crs = "WMA"
+role = "minor"
+segment = "maidstone-east-line"
+# West Malling.
+
+[[stations]]
+crs = "EML"
+role = "minor"
+segment = "maidstone-east-line"
+# East Malling.
+
+[[stations]]
+crs = "BMG"
+role = "minor"
+segment = "maidstone-east-line"
+# Barming.
+
+[[stations]]
+crs = "MDE"
+role = "major"
+segment = "maidstone-east-line"
+# Maidstone East - the line's namesake. Not to be confused with Maidstone
+# West (MDW) or Maidstone Barracks (MDB), both on the physically distinct
+# Medway Valley Line (southeastern-medway-valley.toml, part of this same
+# batch) on the other side of the town - confirmed as genuinely distinct,
+# non-overlapping CRS codes.
+
+[[stations]]
+crs = "BSD"
+role = "minor"
+segment = "maidstone-east-line"
+# Bearsted.
+
+[[stations]]
+crs = "HBN"
+role = "minor"
+segment = "maidstone-east-line"
+# Hollingbourne.
+
+[[stations]]
+crs = "HRM"
+role = "minor"
+segment = "maidstone-east-line"
+# Harrietsham.
+
+[[stations]]
+crs = "LEN"
+role = "minor"
+segment = "maidstone-east-line"
+# Lenham.
+
+[[stations]]
+crs = "CHG"
+role = "minor"
+segment = "maidstone-east-line"
+# Charing (Kent) - CRS CHG, distinct from Charing Cross (CHX)/Charing Cross
+# (Glasgow) (CHC). See CRS notes above.
+
+[[stations]]
+crs = "AFK"
+role = "terminus"
+segment = "maidstone-east-line"
+# Ashford International. Also southeastern-main-line.toml's own station
+# (that file's own comment already notes "the Maidstone East line ... join[s]
+# here") and southeastern-highspeed.toml's own station - station overlap
+# only with both.

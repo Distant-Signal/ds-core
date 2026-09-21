@@ -1,0 +1,296 @@
+id = "wmr-darlaston-line"
+name = "West Midlands Railway: Walsall - Wolverhampton Line (via Darlaston)"
+mode = "national-rail"
+category = "regional"
+operators = [
+  "LM",  # West Midlands Trains, single ATOC code covering both the West
+  # Midlands Railway and London Northwestern Railway brands -- per
+  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # resolution). Wikipedia's own "Walsall-Wolverhampton line" article and
+  # the "Darlaston railway station" article both describe the operator as
+  # "West Midlands Railway" specifically (not the LNWR brand), consistent
+  # with every other WMT-family file in this catalogue using "LM" for the
+  # WMR-branded services.
+]
+
+# GAP-ANALYSIS PROVENANCE: this is one of the two very-recent reopenings the
+# batch brief flagged for extra care (real-world reopening date 19 March
+# 2026, ~6 months before this task). Named in the brief as "Walsall-
+# Wolverhampton Line via Darlaston (reopened 19 March 2026)".
+#
+# NAMING: Wikipedia's own current article title for this route is
+# "Walsall-Wolverhampton line" (en dash) -- NOT "Darlaston Line" (that
+# phrase does not appear as an article title or redirect target found
+# during this research). Confirmed by directly fetching the article (raw
+# wikitext, 2026-09-21) after first ruling out several plausible titles
+# that turned out to be unrelated or redirects: "South Staffordshire line"
+# (a different, mostly-mothballed historic route through Wednesbury/
+# Darlaston that only touches Darlaston via a branch, not this line -- see
+# the scope note below) and a bare "Walsall to Wolverhampton Railway" guess
+# (no such article exists). The file's own `id`/filename keeps the
+# brief's "Darlaston" naming per this task's explicit instruction, but
+# `name` above reflects Wikipedia's real, current title.
+#
+# ROUTE RESEARCH (fetched live 2026-09-21, cross-checked across the line
+# article, the Darlaston/Willenhall station articles, and this app's own
+# station-lookup endpoint):
+#   1. History: original 1837 Grand Junction Railway alignment passed
+#      around, not through, either town; the through Walsall-Wolverhampton
+#      passenger link took shape in 1881 (LNWR spurs at Walsall/Wolverhampton
+#      via Pleck Junction and the High Level station). Passenger services
+#      were withdrawn in 1965; Centro funded a brief 1998 resumption of
+#      direct through running, itself withdrawn in 2005 (Strategic Rail
+#      Authority citing low patronage/rolling-stock shortage) -- so this is
+#      a reopening of a real, previously-existing 1998-2005 passenger
+#      working, not a wholly novel service. West Midlands Combined
+#      Authority planning applications were submitted March 2020;
+#      construction began autumn 2021 (paused September 2023 for a
+#      contractor transition); Willenhall and Darlaston stations reopened
+#      19 March 2026, closing a ~60-year gap since the Beeching-era
+#      closures.
+#   2. Real routing (established by cross-checking each new station's own
+#      infobox route diagram against the line article's services
+#      description, since the line article's own prose was internally
+#      ambiguous about whether Walsall/Bescot are called at): Darlaston's
+#      own infobox lists its preceding station as Willenhall and its
+#      following station as Tame Bridge Parkway; Willenhall's own infobox
+#      lists its preceding station as Wolverhampton and its following
+#      station as Darlaston. Neither shows Walsall or Bescot Stadium
+#      anywhere in the chain. This confirms the reopened service runs over
+#      a reinstated curve linking Wolverhampton to the Chase Line's own
+#      Tame Bridge Parkway-New Street approach WITHOUT calling at Walsall
+#      or Bescot Stadium themselves (those sit on the physically separate
+#      Chase Line proper, `lnwr-chase-line.toml`) -- i.e. despite the
+#      Wikipedia article's own title ("Walsall-Wolverhampton line"), the
+#      real reinstated passenger service is Birmingham New Street-
+#      Wolverhampton(-Shrewsbury) via Darlaston, not a Walsall-Wolverhampton
+#      shuttle. This reading is corroborated by the line article's own
+#      services line: "an hourly service in each direction between
+#      Birmingham New Street and Shrewsbury via Tame Bridge Parkway and
+#      Wolverhampton six days a week" (no service on Sundays) -- Tame
+#      Bridge Parkway and Wolverhampton named as the route waypoints, not
+#      Walsall.
+#   3. Full route accordingly modelled as: Birmingham New Street (shared
+#      Chase Line approach, see below) - Tame Bridge Parkway (junction) -
+#      Darlaston - Willenhall - Wolverhampton - [continues over the
+#      existing Wolverhampton-Shrewsbury local stopping route, see below] -
+#      Shrewsbury.
+#   4. Flagged uncertainty (per the brief's own instruction to be honest
+#      about thin/evolving sourcing for this specific reopening): Wikipedia
+#      coverage of the exact calling pattern is comparatively thin for a
+#      six-month-old service and largely triangulated from station infobox
+#      route diagrams rather than a single authoritative services
+#      paragraph. The line article's prose does still carry the historic
+#      "Walsall-Wolverhampton" framing in its own title/lead despite the
+#      cited Services text describing a Birmingham-Shrewsbury working, and
+#      no official West Midlands Railway network map was consulted this
+#      session to independently corroborate (unlike
+#      `lnwr-birmingham-crewe.toml`'s own network-map cross-check) -- flagged
+#      here rather than silently trusted. If this later turns out to be a
+#      genuine two-tier service (some short workings terminating at
+#      Walsall/Wolverhampton in addition to the Birmingham-Shrewsbury
+#      through-service), this file's station list and shared-segment
+#      choices should be revisited.
+#
+# CRS codes: DAS (Darlaston) and WIA (Willenhall) independently confirmed
+# live via this app's own production station-lookup endpoint
+# (ds.cursed.solutions/api/stations?q=<name>, 2026-09-21), single
+# unambiguous match for each. BHM, TAB (reused verbatim from
+# `lnwr-chase-line.toml`, this same task's own sibling file) and WVH
+# (reused verbatim from `wcml-birmingham.toml`/`xc-manchester.toml`) are
+# already-verified facts, not re-derived here. No TIPLOC confirmed for
+# DAS/WIA to the two-source standard, so `tiploc` is omitted for both.
+
+sample_stations = ["DAS", "WIA"]
+# Both exclusive to this line (no other file's LDBWS sampling would compete
+# for them, unlike BHM/TAB/WVH -- grep-checked against `lines/*.toml`).
+
+# No `destination_crs_filter`: an earlier draft set `["SHR"]`, but that
+# dropped every genuine Birmingham New Street-bound departure, since
+# `destination_crs_filter` only counts departures whose destination is IN
+# the list -- self-contradicting this file's own point that this line's
+# exclusive sample stations (DAS/WIA) already disambiguate any incident
+# local to them regardless. Operator-only filtering is sufficient given
+# those exclusive sample stations.
+
+match_keywords = ["Walsall-Wolverhampton line", "Walsall to Wolverhampton line"]
+# The line's own Wikipedia article title, in both the raw-dash and prose
+# renderings a Knowledgebase entry might use. Grep-checked against every
+# other `lines/*.toml` file's `match_keywords` before adding -- no
+# collision (no other file mentions "Walsall" and "Wolverhampton" together).
+
+# Hourly, six-days-a-week regional stopping service on a route freshly
+# reinstated after six decades closed -- same frequency-driven tuning
+# `northern-esk-valley.toml`/`scotrail-ayrshire.toml`/
+# `wmr-nuneaton-coventry.toml` apply for comparable hourly regional lines.
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# Birmingham New Street to Wolverhampton via the reinstated Darlaston curve,
+# then onward to Shrewsbury over the pre-existing Wolverhampton-Shrewsbury
+# local route -- ordered west/south to east/north matching the "Birmingham
+# New Street and Shrewsbury" framing in source 2 above.
+#
+# --- Shared trunk with `lnwr-chase-line.toml`: Birmingham New Street
+# through Tame Bridge Parkway. See that file's own matching comment for the
+# full derivation -- both files were authored together in this batch and
+# deliberately keep this segment's extent byte-identical (BHM/DUD/AST/
+# WTT/PRY/HSD/TAB in both). ---
+[[stations]]
+crs = "BHM"
+tiploc = "BHAMNWS"
+role = "terminus"
+segment = "lnwr-chase-line-newstreet"
+# See `lnwr-chase-line.toml`'s own BHM/DUD/AST entries and comment for why
+# this 3-station stretch is its own exclusive-to-those-two-files segment
+# name, not `wmr-cross-city-trunk`.
+
+[[stations]]
+crs = "DUD"
+role = "minor"
+segment = "lnwr-chase-line-newstreet"
+
+[[stations]]
+crs = "AST"
+role = "junction"
+segment = "lnwr-chase-line-newstreet"
+
+[[stations]]
+crs = "WTT"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+
+[[stations]]
+crs = "PRY"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+
+[[stations]]
+crs = "HSD"
+role = "minor"
+segment = "wmr-chase-darlaston-trunk"
+
+[[stations]]
+crs = "TAB"
+role = "junction"
+segment = "wmr-chase-darlaston-trunk"
+# Tame Bridge Parkway: real physical junction where this line's own
+# reinstated Darlaston curve diverges from the Chase Line's own approach to
+# Bescot/Walsall. Per the shared-trunk rule of thumb, this line's own
+# exclusive segment resumes at the next station, Darlaston.
+
+[[stations]]
+crs = "DAS"
+role = "minor"
+segment = "wmr-darlaston-exclusive"
+# Darlaston: reopened 19 March 2026, closed since 1965. See the routing
+# note above -- immediately preceded by Tame Bridge Parkway, not Walsall or
+# Bescot, per this station's own Wikipedia infobox route diagram.
+
+[[stations]]
+crs = "WIA"
+role = "minor"
+segment = "wmr-darlaston-exclusive"
+# Willenhall: reopened the same day as Darlaston, on the same reinstated
+# curve. Historically "Willenhall Bilston Street" (1837-1965); the current
+# station drops that suffix, per its own Wikipedia article.
+
+# --- Shared trunk with `wmr-shrewsbury-local.toml`: Wolverhampton through
+# Shrewsbury. Both this file and that one model the same real physical
+# Wolverhampton-Shrewsbury stopping route -- this line's own hourly
+# Birmingham-Shrewsbury working runs over the identical pre-existing local
+# stopping pattern beyond Wolverhampton (source 2 above: "...between
+# Birmingham New Street and Shrewsbury via Tame Bridge Parkway and
+# Wolverhampton"). Both files were authored together in this batch and
+# deliberately keep this segment's extent byte-identical (WVH through SHR
+# inclusive, in both). See `wmr-shrewsbury-local.toml`'s own matching
+# comment and sourcing for the intermediate station list. ---
+[[stations]]
+crs = "WVH"
+role = "junction"
+segment = "wmr-wolverhampton-shrewsbury"
+# Wolverhampton: this line's own exclusive Darlaston-curve approach ends
+# here; the shared Shrewsbury-bound stretch begins at the next station,
+# Bilbrook (per the shared-trunk rule of thumb, the junction itself stays
+# on the shared segment).
+
+[[stations]]
+crs = "BBK"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+
+[[stations]]
+crs = "CSL"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+
+[[stations]]
+crs = "ALB"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+
+[[stations]]
+crs = "COS"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Cosford: also serves RAF Cosford/the Defence School of Transport, per
+# that station's own Wikipedia article -- noted for context, not a
+# passenger-service distinction.
+
+[[stations]]
+crs = "SFN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+
+[[stations]]
+crs = "TFC"
+role = "major"
+segment = "wmr-wolverhampton-shrewsbury"
+# Telford Central.
+
+[[stations]]
+crs = "OKN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+
+[[stations]]
+crs = "WLN"
+role = "minor"
+segment = "wmr-wolverhampton-shrewsbury"
+# Wellington (Shropshire) -- distinct from Wellington, Somerset (a
+# different, closed station) and Wellington College (unrelated); confirmed
+# via this app's own station-lookup endpoint returning "Wellington
+# (Shropshire)" as the unambiguous match for this name.
+
+[[stations]]
+crs = "SHR"
+tiploc = "SHRWBY"
+role = "terminus"
+segment = "wmr-wolverhampton-shrewsbury"
+# Shrewsbury: reuses the CRS+TIPLOC already established in
+# `tfw-marches.toml`/`tfw-cambrian.toml`/`tfw-heart-of-wales.toml` for this
+# physical station -- station-overlap only with all three (this line
+# approaches from the east via Wellington, none of those three lines share
+# that approach), matching `tfw-marches.toml`'s own precedent of not
+# forcing segment-sharing at a busy multi-line junction station without a
+# corroborated genuine track-sharing claim beyond the station itself.
+
+# === Scope boundaries (documented, not modelled) ===
+#
+# - South Staffordshire line (Wednesbury-Darlaston-Walsall branch, and the
+#   wider Burton-Lichfield-Walsall-Dudley route): real, sourced (Wikipedia's
+#   own "South Staffordshire line" article), and does physically touch
+#   Darlaston via its own separate Wednesbury branch -- but that route is
+#   "partially mothballed", carries no regular timetabled passenger service
+#   today (only a weekly Lichfield-Burton diversion working), and is not the
+#   route this task's brief or the reopened 19 March 2026 service uses. Not
+#   modelled here or anywhere else in this catalogue; a genuine, documented
+#   gap for whoever eventually finds a real current passenger service to
+#   justify it.
+# - A possible genuine Walsall-Wolverhampton short working distinct from the
+#   Birmingham-Shrewsbury through-service this file models: flagged as an
+#   open uncertainty in the routing research above, not modelled since no
+#   source found during this task corroborates it as a real, separately
+#   timetabled service.

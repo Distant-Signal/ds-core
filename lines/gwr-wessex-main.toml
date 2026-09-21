@@ -1,0 +1,229 @@
+id = "gwr-wessex-main"
+name = "Wessex Main Line"
+mode = "national-rail"
+category = "main-line"
+operators = ["GW"]
+# Great Western Railway. en.wikipedia.org/wiki/Wessex_Main_Line's own lead
+# paragraph and Services section name GWR as the current operator
+# ("Great Western Railway services between Portsmouth Harbour and Cardiff
+# Central" run over this route) — this is the basis for the gwr- filename
+# prefix chosen for this file per the task brief's own steer to check which
+# operator's Wikipedia article names as primary. South Western Railway does
+# NOT currently run a scheduled service over this route (its own Bristol-
+# area or Salisbury-area services are the separate, already-catalogued
+# swr-west-of-england.toml and swr-south-west-main.toml corridors).
+
+# Deliberately unset. Real GWR services on this route continue past both
+# ends of this task's own scope: north-west to Cardiff Central (per the
+# Services quote above) and south-east from Salisbury on towards
+# Southampton/Portsmouth (same source: "Portsmouth Harbour and Cardiff
+# Central"). This task's own scope (per the brief: "Bristol-Bath-Warminster-
+# Salisbury") ends at Salisbury, well short of that real Portsmouth-bound
+# continuation, so a filter naming only BRI/SAL would misrepresent the
+# line's actual service pattern in one direction and under-scope it in the
+# other. Left unset rather than invent it, mirroring gwr-cotswold.toml's/
+# gwr-west-of-england.toml's identical judgment call.
+
+# Exclusive-segment stations only (mirrors the other GWR siblings'
+# sample_stations rationale) — one per genuinely-exclusive stretch. WMN
+# (Warminster) is the only sample station on this line's own segment that no
+# other file in this catalogue lists at all (see the segment-naming comment
+# below for why BRI/BTH/TRO/WSB are all real overlaps with sibling files).
+sample_stations = ["WMN"]
+
+# "Wessex Main Line" is the route's own current infrastructure/branding name
+# (en.wikipedia.org/wiki/Wessex_Main_Line is the literal article title).
+# Grepped clean against every other file's own match_keywords before adding
+# — no collision (gwr-heart-of-wessex.toml's own match_keywords is
+# ["Severn Beach line", "Heart of Wessex line"], a different phrase, though
+# see the segment-naming comment below for the real infrastructure overlap
+# between the two routes).
+match_keywords = ["Wessex Main Line"]
+
+# No severity_overrides: this whole route (Bristol-Bath-Westbury-Dilton
+# Marsh-Warminster-Salisbury) is double track throughout with a regular GWR
+# calling pattern, not a sparse single-track regional branch — matching
+# gwr-main-line.toml's/gwr-south-wales.toml's no-override judgment call for
+# a comparable double-track secondary main line. gwr-heart-of-wessex.toml's
+# own override (for its Bristol-Weymouth group as a whole, including the
+# sparser stretch beyond Westbury this file does not reach) is that file's
+# own separate judgment call and is not inherited here — this file's own
+# stations use their own segment, not gwr-heart-of-wessex.toml's, per the
+# segment-naming comment below.
+
+# ============================================================================
+# SEGMENTS — this line is almost entirely built from real, sourced overlaps
+# with three sibling files, per this batch's own multi-file shared-trunk
+# convention. Read each note below before assuming a station is new.
+# ============================================================================
+#
+# --- Bristol-Westbury: the SAME physical track as gwr-heart-of-wessex.
+#     toml's own "Heart of Wessex line" Group 2 (formerly part of the
+#     combined gwr-bristol-suburban.toml, before that file's later split),
+#     kept as station overlap only ---
+#
+# en.wikipedia.org/wiki/Heart_of_Wessex_Line's own lead paragraph: the Heart
+# of Wessex line "shares the Wessex Main Line as far as Westbury" — i.e.
+# this is not two parallel routes that happen to overlap, it is the SAME
+# railway under two different route brands for this whole stretch.
+# gwr-heart-of-wessex.toml (formerly part of the combined
+# gwr-bristol-suburban.toml, before that file's later split — all other
+# gwr-heart-of-wessex.toml references below refer to the same,
+# post-split file) — its own Group 2 station list (Bristol Temple Meads
+# - Keynsham - Oldfield Park - Bath Spa - Freshford - Avoncliff - Bradford-
+# on-Avon - Trowbridge - Westbury) is exactly, station-for-station, this
+# line's own Bristol-Westbury calling pattern too
+# (en.wikipedia.org/wiki/Wessex_Main_Line's own station list independently
+# confirms the identical sequence).
+#
+# An earlier draft of this file reused gwr-heart-of-wessex.toml's own
+# `gwr-bristol-weymouth` segment name verbatim for this whole stretch,
+# reasoning that the two station lists align exactly here. That was wrong,
+# for the same reason this batch's other corrected-scope notes already
+# apply: `gwr-bristol-weymouth` is ONE segment name covering this file's
+# entire Bristol-Weymouth group, including Westbury through to Weymouth
+# itself (Frome, Bruton, Castle Cary, Yeovil Pen Mill, Yetminster, Weymouth,
+# etc.) — none of which this line reaches. Segment sharing is tracked per
+# segment NAME, not per individual station, so reusing it verbatim here
+# would have incorrectly marked that whole far Yeovil/Weymouth stretch as
+# "shared trunk" with this Salisbury-bound line too. This is exactly the
+# `gwr-west-of-england`/`gwr-main-line` over-broad-reuse mistake
+# gwr-heart-of-wessex.toml's and gwr-west-of-england.toml's own comments
+# already document and fix elsewhere (the WSB/CLC-only carve-out, the NBY
+# revert) — a technically correct fix here needs gwr-heart-of-wessex.toml's
+# own segment split at Westbury into a narrower Bristol-Westbury-only name,
+# out of this task's file scope (lines/gwr-wessex-main.toml only). Station
+# overlap only is used instead: BRI/KYN/OLF/BTH/FFD/AVF/BOA/TRO are all
+# tagged with this line's own exclusive segment below, flagged here (and in
+# this task's report) for the controller, on the same basis as this batch's
+# other single-file-scope-constrained findings (BSK in
+# swr-west-of-england.toml, GCR in gwr-golden-valley.toml, CPM/TRO in
+# gwr-transwilts.toml) — except this one is a full multi-station corridor,
+# not just a single waypoint, so it is the largest of this batch's flagged
+# findings and the one most worth the controller's attention.
+[[stations]]
+crs = "BRI"
+tiploc = "BRSTLTM"
+role = "terminus"
+segment = "gwr-wessex-main"
+# Bristol Temple Meads. Real, physically-identical shared track with
+# gwr-heart-of-wessex.toml (its own `gwr-bristol-weymouth` segment) and
+# gwr-main-line.toml (its own `gwr-main-line` segment) as far as Westbury —
+# kept as station overlap only in both directions; see comment above.
+
+[[stations]]
+crs = "KYN"
+role = "minor"
+segment = "gwr-wessex-main"
+# Keynsham. Real shared waypoint with gwr-heart-of-wessex.toml — station
+# overlap only, see comment above.
+
+[[stations]]
+crs = "OLF"
+role = "minor"
+segment = "gwr-wessex-main"
+# Oldfield Park. Real shared waypoint with gwr-heart-of-wessex.toml —
+# station overlap only, see comment above.
+
+[[stations]]
+crs = "BTH"
+tiploc = "BATHSPA"
+role = "major"
+segment = "gwr-wessex-main"
+# Bath Spa. Real shared waypoint with gwr-heart-of-wessex.toml and
+# gwr-main-line.toml (tiploc copied from both, which already agree) —
+# station overlap only, see comment above.
+
+[[stations]]
+crs = "FFD"
+role = "minor"
+segment = "gwr-wessex-main"
+# Freshford. Real shared waypoint with gwr-heart-of-wessex.toml — station
+# overlap only, see comment above.
+
+[[stations]]
+crs = "AVF"
+role = "minor"
+segment = "gwr-wessex-main"
+# Avoncliff. Real shared waypoint with gwr-heart-of-wessex.toml — station
+# overlap only, see comment above.
+
+[[stations]]
+crs = "BOA"
+role = "minor"
+segment = "gwr-wessex-main"
+# Bradford-on-Avon. Real shared waypoint with gwr-heart-of-wessex.toml —
+# station overlap only, see comment above. Also the rejoining point for the
+# TransWilts line (lines/gwr-transwilts.toml, this same batch), which
+# reaches this corridor via a separate junction a short distance towards
+# Trowbridge — no station or segment change needed here since
+# gwr-transwilts.toml treats its own overlap as station-overlap-only at
+# Trowbridge, not here.
+
+[[stations]]
+crs = "TRO"
+role = "major"
+segment = "gwr-wessex-main"
+# Trowbridge. Real shared waypoint with gwr-heart-of-wessex.toml — station
+# overlap only, see comment above. Also a real, single-station overlap with
+# lines/gwr-transwilts.toml (this same batch), which joins the Wessex Main
+# Line here from Melksham — kept as station overlap only in that file too
+# (its own segment covers Swindon/Chippenham/Melksham, none of which this
+# line reaches).
+
+# --- Westbury: shared with the multi-file `gwr-westbury-castle-cary`
+#     junction segment ---
+#
+# Westbury is where the Heart of Wessex line's own onward route (towards
+# Frome/Castle Cary/Yeovil/Weymouth, gwr-heart-of-wessex.toml's own
+# territory beyond here) and the Reading to Taunton Line's own approach
+# (gwr-west-of-england.toml) both meet this line's own southward
+# continuation towards Warminster/Salisbury — en.wikipedia.org/wiki/
+# Castle_Cary_railway_station: "the Reading to Taunton Line and the Heart of
+# Wessex Line... share tracks between Westbury and Castle Cary stations."
+# WSB itself is already a two-file shared segment (`gwr-westbury-castle-
+# cary`, established by gwr-west-of-england.toml and gwr-heart-of-
+# wessex.toml); this file reuses that same segment name verbatim for its
+# own WSB row (a third file sharing the name), rather than inventing a
+# fourth.
+[[stations]]
+crs = "WSB"
+tiploc = "WSTBRYW"
+role = "junction"
+segment = "gwr-westbury-castle-cary"
+# Westbury. Row's tiploc copied verbatim from gwr-west-of-england.toml/
+# gwr-heart-of-wessex.toml, per this batch's convention for rows genuinely
+# shared with sibling files. This line's own exclusive segment (below)
+# starts at the next station south, Dilton Marsh.
+
+# --- Westbury-Salisbury: this line's own exclusive territory ---
+#
+# en.wikipedia.org/wiki/Wessex_Main_Line's own station list and route
+# description confirm the continuation south from Westbury via Dilton
+# Marsh and Warminster to Salisbury is this line's own exclusive stretch —
+# not shared with any other file in this catalogue (Dilton Marsh and
+# Warminster were grepped clean before starting this task; Salisbury's own
+# overlap, with swr-west-of-england.toml, is documented below).
+[[stations]]
+crs = "DMH"
+role = "minor"
+segment = "gwr-wessex-main"
+
+[[stations]]
+crs = "WMN"
+role = "major"
+segment = "gwr-wessex-main"
+# Warminster.
+
+[[stations]]
+crs = "SAL"
+role = "junction"
+segment = "gwr-wessex-main"
+# Salisbury. This task's own scope ends here (the brief's own "Bristol-Bath-
+# Warminster-Salisbury" wording); real GWR services continue on towards
+# Southampton/Portsmouth (see destination_crs_filter comment above). Also
+# swr-west-of-england.toml's own junction station, approached from a
+# completely different direction (east, via Andover) with no sourced
+# evidence of shared track — station overlap only, not a shared segment;
+# see that file's own SAL note, which documents the same finding from its
+# side.

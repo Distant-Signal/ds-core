@@ -1,0 +1,328 @@
+id = "scotrail-stirling-dunblane"
+name = "ScotRail Edinburgh to Dunblane Line (via Falkirk Grahamston, Larbert & Stirling)"
+mode = "national-rail"
+category = "regional"
+operators = ["SR"]
+
+# Central Scotland/Edinburgh gap-coverage batch (2026-09-21 audit of the
+# ~50+ zero-coverage real UK lines). `scotrail-central-belt.toml` (Task
+# 10.1) already models the flagship Edinburgh-Glasgow Queen Street express
+# pattern via Falkirk High; this file covers the genuinely distinct local
+# stopping pattern between Edinburgh and Dunblane via a different Falkirk
+# station (Grahamston, not High) and a different line onward from Polmont.
+# Read `scotrail-central-belt.toml` in full before this file's own
+# stations below -- the two routes share physical track from Edinburgh out
+# to Polmont, which this file's segment naming deliberately reflects (see
+# the shared-trunk note below), then diverge.
+#
+# This route's own branded name, confirmed consistently across every
+# station page fetched for this task (Falkirk Grahamston, Camelon, Larbert,
+# Polmont, Dunblane): ScotRail and Network Rail both call it the "Edinburgh
+# to Dunblane Line" / "Edinburgh-Dunblane Line". Grepped `lines/*.toml`
+# before starting -- no existing file's `stations` touches Falkirk
+# Grahamston, Camelon, Larbert, Stirling, Bridge of Allan or Dunblane.
+#
+# Category: "regional", matching `scotrail-shotts.toml` and
+# `scotrail-bathgate.toml` -- this is another alternate ScotRail routing
+# with a similar half-hourly-ish frequency, not the flagship quarter-hourly
+# core `scotrail-central-belt.toml` itself models as "main-line".
+#
+# Electrification: this line was electrified in stages -- Edinburgh-
+# Polmont-Falkirk Grahamston-Stirling was completed as part of the same
+# December 2017 Edinburgh Glasgow Improvement Programme that electrified
+# the Falkirk High route (`scotrail-central-belt.toml`'s own header cites
+# this date for that route); Stirling-Dunblane followed in November 2018,
+# per Dunblane's own Wikipedia page, which calls Dunblane "the northernmost
+# station on the National Rail network to be electrified."
+
+match_keywords = ["Edinburgh to Dunblane Line", "Edinburgh-Dunblane line"]
+# The line's own branded name, in the two forms actually used verbatim by
+# the station pages sourced below ("Edinburgh to Dunblane Line" and
+# "Edinburgh-Dunblane Line"/"Edinburgh-Dunblane line"), per the curation
+# rule against padding match_keywords. Grepped `lines/*.toml` first: no
+# other file's `match_keywords` mentions "Dunblane" in any form. Deliberately
+# does NOT include "Croy Line" -- that is a real, different, currently
+# unmodelled ScotRail routing (Glasgow Queen Street-Stirling/Dunblane/
+# Alloa) that happens to share this file's own Larbert-Stirling-Dunblane
+# stretch; see the Croy Line scope note below. Claiming that keyword here
+# would misattribute Croy Line-specific Knowledgebase incidents (e.g. ones
+# naming Bishopbriggs or Cumbernauld) to this file.
+
+sample_stations = ["EDB", "FKG", "DBL"]
+# No `destination_crs_filter`: following `scotrail-fife-circle.toml`'s and
+# `scotrail-borders-railway.toml`'s own precedent of sampling a line-
+# specific station (FKG, DBL) alongside the shared EDB hub rather than
+# trying to disambiguate EDB itself via the filter.
+
+# Half-hourly-ish alternate ScotRail routing: per Polmont's own station
+# page, "2 trains per hour to Dunblane via Stirling" (plus "4 tph to
+# Edinburgh Waverley" overall, shared with the Falkirk High trains); per
+# Camelon's own page, "Trains on the Edinburgh-Dunblane route run every
+# half hour... the Edinburgh to Dunblane route operates hourly each way"
+# on Sundays. Tuned identically to this batch's other alternate-routing
+# regional lines (`scotrail-shotts.toml`, `scotrail-bathgate.toml`).
+[severity_overrides]
+minor_delays_pct = 0.30
+reduced_service_pct = 0.35
+delay_threshold_minutes = 10
+
+# === Shared trunk with `scotrail-central-belt.toml`: Edinburgh-Polmont ===
+#
+# This line's own approach into Edinburgh is not a separate, parallel
+# route -- it is the *same physical track* `scotrail-central-belt.toml`'s
+# own Falkirk High routing uses from Edinburgh Waverley out to Polmont,
+# diverging only after Polmont. Sourced independently, station by station:
+#   - Polmont's own Wikipedia page states plainly that both "Glasgow to
+#     Edinburgh via Falkirk Line" and "Edinburgh to Dunblane Line" serve
+#     the station, gives both routes the identical previous station
+#     westbound (Linlithgow), and explains the historical junction: "It
+#     opened with the line in 1842 and became a junction eight years later
+#     with the opening of the Stirlingshire Middle Junction Railway"
+#     towards Larbert and Falkirk Grahamston -- i.e. Polmont is the
+#     physical point where this file's own route splits off the Falkirk
+#     High route, not a station this file's route merely happens to also
+#     visit.
+#   - Falkirk Grahamston's own Wikipedia page lists "ScotRail on Edinburgh
+#     to Dunblane Line" as a real, current calling service there, distinct
+#     from "ScotRail on Cumbernauld Line" (see the Cumbernauld Line scope
+#     note below) -- confirming Grahamston, not Falkirk High, is this
+#     route's own Falkirk station.
+#
+# This is the same genuine, sourced, physical-track-sharing situation
+# `scotrail-central-belt.toml`'s own Haymarket comment already anticipated
+# and reserved `scotrail-central-belt-edinburgh-throat` for (that comment
+# names Shotts and Bathgate specifically, both of which now reuse it, but
+# frames the reservation generally: "whoever writes [a routing that shares
+# this track]... reusing this exact segment name would make the matcher
+# treat an incident there as a shared-segment event across both lines,
+# which matches the physical reality"). Per the shared-trunk rule of
+# thumb (junction stations belong to the shared segment; the exclusive
+# segment starts at the *next* station past the junction), this file
+# reuses `scotrail-central-belt-edinburgh-throat` for its own Edinburgh
+# Waverley and Haymarket entries (identical to Shotts's and Bathgate's own
+# reuse, and identical stations/CRS codes, reused verbatim from
+# `scotrail-central-belt.toml`) -- confirmed with a build check that this
+# segment holds only HYM and EDB in `scotrail-central-belt.toml` itself, so
+# reusing it here narrowly marks only those two stations shared, nothing
+# further west.
+#
+# Linlithgow and Polmont are a different case, despite being genuinely on
+# the same shared physical approach per the sourcing above: `scotrail-
+# central-belt.toml` tags *both* of them, and also its own exclusive
+# Glasgow-side stations (Glasgow Queen Street, Bishopbriggs, Lenzie, Croy,
+# Falkirk High), with the single, undifferentiated `scotrail-central-belt`
+# segment name -- it does not carve Linlithgow/Polmont out into their own
+# narrower segment the way it already did for the Haymarket/Waverley
+# throat. Reusing that same broad name here for just Linlithgow and Polmont
+# would incorrectly mark Glasgow Queen Street, Bishopbriggs, Lenzie, Croy
+# and Falkirk High as shared with this file too, even though this file's
+# own route never goes anywhere near them (confirmed the hard way: an
+# earlier draft of this file did exactly that and broke four unrelated,
+# pre-existing matcher tests that assert `scotrail-central-belt` stays
+# `ExclusiveSegment` at Falkirk High and Glasgow Queen Street).
+# `scotrail-central-belt.toml` isn't touched by this task, so rather than
+# retroactively splitting its own segment tagging, Linlithgow and Polmont
+# get this file's own `scotrail-stirling-dunblane` segment name instead --
+# a deliberate "station overlap without segment sharing" choice, the same
+# category of decision `scotrail-fife-circle.toml` documents for its own
+# Edinburgh Waverley/Haymarket entries (there, made because no genuine
+# track-sharing was established at all; here, made because the genuine
+# sharing that *is* sourced can't be expressed without over-broadening an
+# existing segment this task isn't touching). Flagged here for whoever
+# next touches `scotrail-central-belt.toml`: carving Linlithgow and Polmont
+# out into their own dedicated segment (mirroring how
+# `scotrail-central-belt-edinburgh-throat` was carved out from the start)
+# would let this file reuse it cleanly.
+#
+# The corresponding matcher regression test
+# (`scotrail_central_belt_edinburgh_throat_shared_incident_propagates` in
+# `crates/common/src/matcher.rs`) has been updated to expect this file
+# among the `MatchScope::SharedSegment` matches for a Haymarket incident,
+# alongside `scotrail-central-belt`, `scotrail-shotts` and
+# `scotrail-bathgate`.
+
+[[stations]]
+crs = "EDB"
+role = "terminus"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Edinburgh Waverley. Reused verbatim (CRS + segment) from
+# `scotrail-central-belt.toml` -- see the shared-trunk note above.
+
+[[stations]]
+crs = "HYM"
+role = "junction"
+segment = "scotrail-central-belt-edinburgh-throat"
+# Haymarket. Reused verbatim from `scotrail-central-belt.toml`.
+
+[[stations]]
+crs = "LIN"
+role = "major"
+segment = "scotrail-stirling-dunblane"
+# Linlithgow: genuinely on the shared approach with `scotrail-central-
+# belt.toml`'s own Falkirk High routing (Polmont's own page gives this as
+# both routes' identical previous station westbound), but given this
+# file's own segment name rather than reusing `scotrail-central-belt` --
+# see the shared-trunk note above for why.
+
+[[stations]]
+crs = "PMT"
+role = "junction"
+segment = "scotrail-stirling-dunblane"
+# Polmont: the physical junction where this route diverges from the
+# Falkirk High routing. Tagged `junction` here (this file's own, accurate
+# perspective) even though `scotrail-central-belt.toml` itself tags this
+# same station `major` for its own purposes -- role is per-file
+# documentation, not a cross-file constraint. Given this file's own
+# segment name, not `scotrail-central-belt` -- see the shared-trunk note
+# above for why.
+
+[[stations]]
+crs = "FKG"
+role = "junction"
+segment = "scotrail-cumbernauld-falkirk-tail"
+# Falkirk Grahamston: the first station past the Polmont junction (per the
+# shared-trunk rule of thumb) is genuinely shared, not this file's own
+# exclusive segment -- reconciled during integration merge: `scotrail-
+# cumbernauld.toml` (a later Greater Glasgow batch addition) also
+# terminates here, on its own already-narrow `scotrail-cumbernauld-
+# falkirk-tail` segment (used there for only Camelon and Falkirk
+# Grahamston, so reusing it verbatim is safe and accurate). Tagged
+# `junction`, not just `major`: per Falkirk Grahamston's own Wikipedia
+# page, the Cumbernauld Line to Glasgow Queen Street also splits here --
+# see the Cumbernauld Line scope note below, updated to reflect that the
+# line is now modelled.
+
+[[stations]]
+crs = "CMO"
+role = "minor"
+segment = "scotrail-cumbernauld-falkirk-tail"
+# Camelon: also shared with `scotrail-cumbernauld.toml` -- see the
+# reconciliation note on the Falkirk Grahamston row above. Confirmed
+# between Falkirk Grahamston and Larbert by its own Wikipedia page's
+# route-diagram fields
+# ("next={{Stnlnk|Larbert}}|previous={{Stnlnk|Falkirk Grahamston}}"), also
+# served by the Cumbernauld Line (`scotrail-cumbernauld.toml`).
+
+[[stations]]
+crs = "LBT"
+role = "junction"
+segment = "scotrail-stirling-dunblane"
+# Larbert: per its own Wikipedia page, sits "on the main line from Glasgow
+# Queen Street to Stirling and Perth near to the triangular junction with
+# the line to Falkirk Grahamston and Edinburgh Waverley" -- the point
+# where this file's own route joins the same tracks the (unmodelled) Croy
+# Line uses from Glasgow. Tagged `junction` for that real, sourced
+# topology; see the Croy Line scope note below for why no segment is
+# shared with it today.
+
+[[stations]]
+crs = "STG"
+role = "junction"
+segment = "scotrail-stirling-dunblane"
+# Stirling: per its own Wikipedia page, served by this line, the
+# (unmodelled) Croy Line, and the Highland Main Line/Glasgow-Aberdeen Line
+# northbound. `scotrail-highland-main-line.toml` (already merged, Batch 10)
+# starts its own southern terminus at Perth (PTH) and does not reach
+# Stirling, so there is no live schema-level overlap to reconcile with
+# that file today -- see the scope note below.
+
+[[stations]]
+crs = "BEA"
+role = "minor"
+segment = "scotrail-stirling-dunblane"
+# Bridge of Allan: between Stirling and Dunblane, also served by the
+# (unmodelled) Croy Line per its own Wikipedia page.
+
+[[stations]]
+crs = "DBL"
+role = "terminus"
+segment = "scotrail-stirling-dunblane"
+# Dunblane: this route's own terminus, and "the northernmost station on
+# the National Rail network to be electrified" (electrified November
+# 2018) per its own Wikipedia page. Some services continue north towards
+# Perth/Dundee/Aberdeen or overnight to Inverness/London Euston
+# (Caledonian Sleeper) -- real per that same page, but not part of this
+# route's own core stopping pattern and not modelled as further stations
+# here; see the scope note below.
+
+# === Sources (cross-checked per the plan's Global Constraints) ===
+#
+# Route structure, electrification and operator:
+#   - Wikipedia "Polmont railway station": confirms the Edinburgh to
+#     Dunblane Line and Glasgow to Edinburgh via Falkirk Line both call
+#     here, the shared Linlithgow approach, and the historical 1850
+#     Stirlingshire Middle Junction Railway opening that created "a direct
+#     route from Edinburgh to Stirling & Dunblane."
+#   - Wikipedia "Falkirk Grahamston railway station": confirms current
+#     ScotRail operation of both the Edinburgh to Dunblane Line and the
+#     Cumbernauld Line (now modelled by `scotrail-cumbernauld.toml`), plus
+#     non-stop Highland Chieftain/Caledonian Sleeper passage.
+#   - Wikipedia "Camelon railway station": confirms its position between
+#     Falkirk Grahamston and Larbert on the Edinburgh-Dunblane route, and
+#     current half-hourly weekday frequency.
+#   - Wikipedia "Larbert railway station": confirms the triangular-junction
+#     topology with the Polmont line and the main Glasgow-Stirling-Perth
+#     line, half-hourly Glasgow/Edinburgh frequency, and that "four hourly
+#     northbound trains to Stirling" split "three continuing to Dunblane,
+#     one to Alloa" (the Alloa continuation is not modelled -- see below).
+#   - Wikipedia "Stirling railway station" (Scotland): confirms Edinburgh-
+#     Dunblane Line, Croy Line and Highland Main Line/Glasgow-Aberdeen Line
+#     service, and the station's position between Larbert and Bridge of
+#     Allan/Dunblane.
+#   - Wikipedia "Bridge of Allan railway station": confirms current
+#     three-trains-per-hour service and position between Stirling and
+#     Dunblane.
+#   - Wikipedia "Dunblane railway station": confirms 2 tph to Edinburgh via
+#     Falkirk Grahamston, 1 tph to Glasgow Queen Street via Stirling (the
+#     Croy Line), the November 2018 electrification, and further Perth/
+#     Dundee/Aberdeen/Inverness continuations.
+#   - Wikipedia "Croy Line": independently confirms the Glasgow Queen
+#     Street-Greenhill Junction-Larbert-Stirling-Dunblane/Alloa routing and
+#     that it shares track with the Falkirk High route "only between
+#     Glasgow Queen Street and Greenhill Junction", diverging onto "the
+#     Scottish Central Railway corridor toward Dunblane" beyond that --
+#     i.e. the same Larbert-Stirling-Dunblane track this file models, from
+#     the opposite (Glasgow) end.
+#
+# CRS codes: FKG, CMO, LBT, STG, BEA and DBL were each independently
+# confirmed against both the relevant station's own Wikipedia infobox and
+# a live query against https://ds.cursed.solutions/api/stations?q=<name>,
+# which returned an exact single match for every one of them, agreeing
+# with the Wikipedia-sourced codes with no discrepancies. EDB, HYM, LIN and
+# PMT are reused verbatim from `scotrail-central-belt.toml`, itself already
+# live-verified there.
+#
+# TIPLOCs are omitted throughout: none were confirmed against a live
+# source during this task, matching the optional-field convention already
+# used by every other file in this batch.
+#
+# === Scope boundaries (documented, not modelled) ===
+#
+# - The Croy Line (Glasgow Queen Street-Greenhill Junction-Larbert-
+#   Stirling-Dunblane/Alloa): real, sourced above, and genuinely shares
+#   this file's own Larbert-Stirling-Dunblane track from the opposite
+#   (Glasgow) end -- but is not named in this batch's task brief and no
+#   other `lines/*.toml` file models it yet, so there is no sibling to
+#   share a segment name with today. Flagged here, mirroring
+#   `scotrail-central-belt.toml`'s own Haymarket-throat pre-registration,
+#   for whoever eventually writes it: reusing `scotrail-stirling-dunblane`
+#   for that file's own Larbert/Stirling/Bridge of Allan/Dunblane entries
+#   would correctly mark this real shared trunk.
+# - The Cumbernauld Line (Glasgow Queen Street-Cumbernauld-Falkirk
+#   Grahamston-Camelon, "2 trains per hour... via Cumbernauld" per Falkirk
+#   Grahamston's own page): real, sourced, shares Falkirk Grahamston and
+#   Camelon with this file. Not named in this batch's task brief, but now
+#   modelled by `scotrail-cumbernauld.toml` (a later Greater Glasgow batch
+#   addition) -- reconciled during integration merge: FKG and CMO above now
+#   reuse that file's own already-narrow `scotrail-cumbernauld-falkirk-
+#   tail` segment name, a genuine SharedSegment pair. See the FKG row's own
+#   reconciliation note above.
+# - The Alloa branch (Stirling-Alloa, reopened 2008, one of Larbert's own
+#   "four hourly northbound trains to Stirling" continuing "one to Alloa"
+#   per Larbert's own page): real, sourced, but a distinct terminus from
+#   Dunblane and not named in this batch's task brief -- not modelled.
+# - Highland Main Line/Glasgow-Aberdeen continuations north of Dunblane
+#   (Perth, Dundee, Aberdeen, Inverness): `scotrail-highland-main-line.toml`
+#   already covers the Perth-Inverness stretch under its own PTH terminus,
+#   with no station this far south -- no overlap to reconcile, and the
+#   Dunblane-Perth stretch itself remains an unmodelled, documented gap.
