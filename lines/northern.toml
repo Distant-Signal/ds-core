@@ -4,7 +4,7 @@ mode = "national-rail"
 category = "operator"
 operators = ["NT"]
 
-destination_crs_filter = ["LIV", "MCV", "MAN", "LDS", "YRK", "HUD"]
+destination_crs_filter = ["LIV", "MCV", "LDS", "YRK", "HUD"]
 sample_stations = ["LIV", "MCV", "HUD", "LDS", "YRK"]
 # "Northern" alone is far too loose — it matches "northern section",
 # "northbound" and the Underground's Northern line.

@@ -5,7 +5,13 @@ category = "commuter"
 operators = ["TL"]
 
 sample_stations = ["STP", "ZFD", "LBG"]
-match_keywords = ["Thameslink", "Thameslink core"]
+# A bare "Thameslink" would collide with every branch file in this catalogue
+# ("Thameslink Bedford", "Thameslink Cambridge", "Thameslink Sevenoaks", ...
+# — match_one does substring containment), matching the exact collision
+# `thameslink-cambridge.toml`/`thameslink-southern.toml` already document
+# avoiding. "Thameslink core" alone is specific enough and unique in this
+# catalogue (checked: no other file's match_keywords contains it).
+match_keywords = ["Thameslink core"]
 
 # Commuter line: tighter thresholds. A 5-minute delay on a service running
 # every 8 minutes during peak is more disruptive than the same delay on an
