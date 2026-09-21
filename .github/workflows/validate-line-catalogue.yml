@@ -1,0 +1,240 @@
+name: Validate line catalogue (live, weekly)
+
+# Thorough, live-external-source tier of `crates/line-catalogue-validator`
+# (`--live`) -- the counterpart to the fast, no-secrets tier that runs on
+# every PR/push as a step in ci.yml's `rust-test` job. See
+# `crates/line-catalogue-validator/src/main.rs`'s module doc and
+# `reference-data/line-catalogue-validation.md` for the full two-tier
+# design and where each tier's data comes from.
+#
+# ============================================================================
+# WHY THE `schedule:` TRIGGER BELOW IS COMMENTED OUT, AND EXACTLY WHAT'S
+# NEEDED TO TURN IT BACK ON
+# ============================================================================
+#
+# `--live` re-fetches railwaycodes.org.uk directly (see `reference.rs`'s
+# `fetch_live`) for CRS/TIPLOC data -- that half needs **no secret at all**,
+# it's a plain public site. Confirmed working during this validator's
+# development (it does 403 a request with no `User-Agent` header at all,
+# which `fetch_live` already sends around).
+#
+# The operator-code half is where a real credential decision lives. Without
+# one, `--live` silently falls back to the *same* railwaycodes.org.uk
+# operator-codes page the fast tier's vendored `toc-codes.csv` already came
+# from (see `fetch_live`'s fallback branch) -- which makes the "thorough"
+# tier no more authoritative than the fast one for operator codes
+# specifically. To make it genuinely more authoritative, `--live` can hit
+# the real RDM Train Operating Company List feed instead -- the same feed
+# `crates/poller-tocs` already polls in production (RSPS5050 P-03-00 Rev A
+# §3) -- given two env vars:
+#
+#   - `RDM_API_KEY`      -- sent as the `x-apikey` header (see
+#                            `common::ingest::RDM_AUTH_HEADER_NAME`).
+#   - `RDM_TOCS_BASE_URL` -- the feed's actual URL. As of this writing,
+#                            **no confirmed endpoint path for this product
+#                            exists in the published RSPS5050 spec edition**
+#                            (see `crates/poller-tocs/src/config.rs`'s own
+#                            doc comment, which reaches the identical
+#                            conclusion for the exact same feed) -- so this
+#                            isn't only a "go add a secret" gap, the value
+#                            to put in it isn't fully known yet either.
+#
+# To enable this job once both of those are sorted out:
+#   1. Confirm the real RDM TOC-list endpoint path (RSPS5050 or direct
+#      contact with whoever issued this app's other RDM credentials).
+#   2. Add `RDM_API_KEY` and `RDM_TOCS_BASE_URL` as **repository secrets**
+#      (Settings -> Secrets and variables -> Actions -> New repository
+#      secret) -- note these are GitHub Actions secrets, a different store
+#      from the Helm/k8s secrets `charts/distant-signal` wires into
+#      `poller-tocs`'s own runtime env vars of the same name; both need to
+#      exist, they aren't shared automatically.
+#   3. Uncomment the `schedule:` block below.
+#   4. Uncomment the `RDM_API_KEY`/`RDM_TOCS_BASE_URL` lines in the `env:`
+#      block on the `validate` step further down.
+#
+# Until then, `workflow_dispatch` still lets anyone run this manually
+# (Actions tab -> this workflow -> "Run workflow") -- useful for testing
+# the live tier or the issue-filing logic below without waiting a week.
+#
+# ============================================================================
+# ISSUE-FILING PERMISSIONS -- NOT A SECRETS BLOCKER
+# ============================================================================
+#
+# Auto-filing a GitHub issue on failure (the `report-findings` job below)
+# only needs `issues: write` on the default `GITHUB_TOKEN` -- granted below
+# via the `permissions:` block -- **not** a new secret. Confirmed: opening
+# issues via `actions/github-script` with the default token is standard,
+# documented GitHub Actions behaviour requiring no PAT/app credential. The
+# only pending-credential blocker described above is specific to making the
+# *operator-code* half of `--live` hit the real RDM feed instead of falling
+# back to the community-site scrape.
+on:
+  workflow_dispatch: {}
+  # TODO: enable once RDM_API_KEY and RDM_TOCS_BASE_URL exist as repository
+  # secrets -- see the big comment block above for exactly why, and
+  # reference-data/line-catalogue-validation.md for what running without
+  # them still does (falls back to a live scrape, no secret needed, just
+  # less authoritative for operator codes).
+  # schedule:
+  #   - cron: '17 4 * * 1' # 04:17 UTC every Monday -- arbitrary early-UTC
+  #                         # off-peak slot, no significance to the exact
+  #                         # minute chosen beyond avoiding the very top of
+  #                         # the hour.
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: validate-line-catalogue
+  cancel-in-progress: false
+
+jobs:
+  validate-live:
+    runs-on: ubuntu-24.04
+    outputs:
+      exit_code: ${{ steps.validate.outputs.exit_code }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Cache cargo registry/target
+        uses: Swatinem/rust-cache@v2
+
+      # No rdkafka/sasl2 system packages installed here (unlike ci.yml's
+      # `rust-test` job): `cargo run -p line-catalogue-validator` only
+      # builds this crate and its dependency graph (common + a handful of
+      # small, pure-Rust/reqwest deps), which never touches
+      # trust-consumer's rdkafka feature -- see this crate's own Cargo.toml.
+      - name: Run the live validator tier
+        id: validate
+        run: |
+          set +e
+          cargo run -p line-catalogue-validator -- --live > validator-output.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat validator-output.txt
+          exit 0
+        env:
+          RUST_LOG: info
+          # TODO: uncomment once both secrets exist (see the workflow's
+          # top-of-file comment) -- until then `--live` falls back to the
+          # railwaycodes.org.uk operator-codes scrape and prints a notice
+          # saying so, it does not fail.
+          # RDM_API_KEY: ${{ secrets.RDM_API_KEY }}
+          # RDM_TOCS_BASE_URL: ${{ secrets.RDM_TOCS_BASE_URL }}
+
+      - name: Upload validator output
+        uses: actions/upload-artifact@v4
+        with:
+          name: validator-output
+          path: validator-output.txt
+
+  report-findings:
+    needs: validate-live
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download validator output
+        uses: actions/download-artifact@v4
+        with:
+          name: validator-output
+
+      # De-duplication design: rather than diff this run's individual
+      # findings against the previous run's (which would need persisted
+      # state -- a committed "last known findings" file, or parsing the
+      # last comment back out -- real complexity for a job that's disabled
+      # today), this keeps at most ONE open tracking issue for this
+      # validator at a time, labeled `line-catalogue-validation`:
+      #   - a failing run with no open tracking issue opens one;
+      #   - a failing run with one already open adds a fresh, timestamped
+      #     comment to it instead of opening a second (this is the
+      #     duplicate-spam guard the task asked for -- every subsequent
+      #     failure while the issue is open becomes a comment, not a new
+      #     issue);
+      #   - a passing run closes the tracking issue if one is open, with a
+      #     closing comment -- this is what makes the *next* distinct
+      #     failure open a fresh issue rather than silently having nowhere
+      #     to go (an issue closed by a human before it's actually fixed
+      #     would have this same effect; documented here as an accepted
+      #     tradeoff of the simpler design, not treated as a bug to solve).
+      # This does not tell a maintainer whether today's failure is the same
+      # finding as yesterday's or a brand new one -- every comment carries
+      # the full current output, so that's always answerable by reading it,
+      # just not automatically flagged. Revisit if that granularity turns
+      # out to matter in practice.
+      - name: Open, update, or close the tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const label = 'line-catalogue-validation';
+            const exitCode = '${{ needs.validate-live.outputs.exit_code }}';
+            const passed = exitCode === '0';
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            if (passed) {
+              for (const issue of openIssues) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `The live line-catalogue validation run is passing again: ${runUrl}`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                });
+              }
+              return;
+            }
+
+            let output = '(no output captured)';
+            try {
+              output = fs.readFileSync('validator-output.txt', 'utf8');
+            } catch (err) {
+              output = `(failed to read validator-output.txt: ${err.message})`;
+            }
+            if (output.length > 55000) {
+              output = output.slice(0, 55000) + '\n... (truncated, see the full log at the workflow run link below)';
+            }
+
+            const body = [
+              `The weekly live line-catalogue validation run (exit code ${exitCode}) found problems.`,
+              '',
+              `Workflow run: ${runUrl}`,
+              '',
+              '```',
+              output,
+              '```',
+            ].join('\n');
+
+            if (openIssues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: openIssues[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Line catalogue validation: live check found problems',
+                body,
+                labels: [label],
+              });
+            }
