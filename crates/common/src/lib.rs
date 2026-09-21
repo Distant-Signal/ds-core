@@ -643,6 +643,20 @@ pub struct TrackPinRequest {
     pub destination_crs: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
+    /// CRS codes of scheduled calling points the departure-board row the
+    /// user picked (`TrackTrainForm.tsx`'s `pickDeparture`) reported as
+    /// skipped TODAY, per Darwin's own per-calling-point `isCancelled` flag
+    /// -- a same-shape copy of `StationDeparture.skipped_stations`' own
+    /// doc comment, carried through this request so the pin's snapshot of
+    /// that signal survives past the moment the picker's live board result
+    /// itself expires. `#[serde(default)]` so an older frontend build (or
+    /// the CIF-picker/manual-entry path, which has no such signal at all)
+    /// omitting this field entirely still deserializes, as an empty list --
+    /// "no known skip" -- rather than failing the whole pin. See
+    /// `data::trains::find_or_create_train_with_schedule_match`'s own doc
+    /// comment for where this ends up.
+    #[serde(default)]
+    pub skipped_stations: Vec<String>,
 }
 
 /// Manual ticket-entry payload for `POST /Train/{trackingId}/tickets`

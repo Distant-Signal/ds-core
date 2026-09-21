@@ -114,6 +114,17 @@ pub async fn attempt_schedule_match(
     pin_scheduled_departure: DateTime<Utc>,
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
+    // Darwin's own explicit skipped-calling-point snapshot, captured at
+    // pin creation time from whichever departure-board row the user picked
+    // (`common::TrackPinRequest.skipped_stations`) and carried through the
+    // pending row's own `train_subscriptions.pin_skipped_stations` column
+    // by every caller of this function (`post_track`'s synchronous
+    // attempt, and `run_schedule_match_sweep`'s retry of the same pending
+    // row) -- an empty slice for a pin with no such signal (the CIF-picker
+    // or manual-entry path, or an older frontend build). See
+    // `data::trains::find_or_create_train_with_schedule_match`'s own doc
+    // comment for where this ends up.
+    pin_skipped_stations: &[String],
 ) -> anyhow::Result<bool> {
     let Some(matched) = find_schedule_match(
         pool,
@@ -142,6 +153,7 @@ pub async fn attempt_schedule_match(
             matched.destination_crs.as_deref(),
             &matched.line_id,
             &matched.calling_points_json,
+            pin_skipped_stations,
         )
         .await?;
         sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
@@ -317,6 +329,10 @@ pub async fn attempt_schedule_match_for_shared_train(
         matched.destination_crs.as_deref(),
         &matched.line_id,
         &matched.calling_points_json,
+        // The NR-primary path has no departure-board pin at all (see this
+        // function's own doc comment) -- nothing to capture a Darwin skip
+        // snapshot from.
+        &[],
     )
     .await?;
     Ok(true)
@@ -361,6 +377,7 @@ pub async fn run_schedule_match_sweep(
             pin_scheduled_departure,
             row.service_date,
             crs_line_index,
+            &row.pin_skipped_stations,
         )
         .await
         {
@@ -557,6 +574,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            &[],
         )
         .await
         .expect("attempt schedule match");
@@ -711,6 +729,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            &[],
         )
         .await
         .expect("attempt schedule match");
@@ -867,6 +886,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            &[],
         )
         .await
         .expect("attempt schedule match");
@@ -945,6 +965,7 @@ mod db_tests {
             "2026-09-05T19:15:00Z".parse().unwrap(),
             service_date,
             &HashMap::new(), // no candidate lines at all
+            &[],
         )
         .await
         .expect("attempt schedule match");
@@ -1031,6 +1052,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            &[],
         )
         .await
         .expect("attempt schedule match");
