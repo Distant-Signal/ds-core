@@ -1437,6 +1437,104 @@ mod defaults_tests {
     }
 }
 
+/// Combines several already-computed [`SampleStats`] (one per line) into a
+/// single rolled-up `SampleStats` -- the aggregation
+/// `api::data::operators::build_rollup` needs to turn "N lines' own
+/// representative stats" into "one operator's rollup stats." Weights
+/// `avg_delay_minutes` by each input's own running (non-cancelled) count,
+/// the same denominator [`compute_sample_stats`] itself averages over, so a
+/// multi-line rollup's average agrees with what re-running
+/// `compute_sample_stats` over the union of every line's raw departures
+/// would have produced -- not a naive unweighted per-line average, which
+/// would let a low-volume line's number count as much as a high-volume
+/// one's.
+///
+/// Returns `None` for an empty slice: "no lines had stats to combine" is a
+/// real, distinct outcome from "the combined total was zero," and a caller
+/// should render the former as "no data" rather than a claimed 0-delay,
+/// 0%-cancelled figure.
+pub fn merge_sample_stats(all: &[SampleStats]) -> Option<SampleStats> {
+    if all.is_empty() {
+        return None;
+    }
+    let total: usize = all.iter().map(|s| s.total).sum();
+    let delayed: usize = all.iter().map(|s| s.delayed).sum();
+    let cancelled: usize = all.iter().map(|s| s.cancelled).sum();
+    let skipped: usize = all.iter().map(|s| s.skipped).sum();
+    let running = total.saturating_sub(cancelled);
+    let avg_delay_minutes = if running == 0 {
+        0.0
+    } else {
+        all.iter()
+            .map(|s| s.avg_delay_minutes * s.total.saturating_sub(s.cancelled) as f64)
+            .sum::<f64>()
+            / running as f64
+    };
+
+    Some(SampleStats {
+        total,
+        delayed,
+        cancelled,
+        skipped,
+        avg_delay_minutes,
+    })
+}
+
+#[cfg(test)]
+mod merge_sample_stats_tests {
+    use super::*;
+
+    fn stats(
+        total: usize,
+        delayed: usize,
+        cancelled: usize,
+        skipped: usize,
+        avg: f64,
+    ) -> SampleStats {
+        SampleStats {
+            total,
+            delayed,
+            cancelled,
+            skipped,
+            avg_delay_minutes: avg,
+        }
+    }
+
+    #[test]
+    fn an_empty_slice_is_none() {
+        assert_eq!(merge_sample_stats(&[]), None);
+    }
+
+    #[test]
+    fn a_single_input_is_returned_unchanged() {
+        let s = stats(10, 2, 1, 0, 4.5);
+        assert_eq!(merge_sample_stats(std::slice::from_ref(&s)), Some(s));
+    }
+
+    #[test]
+    fn counts_sum_and_avg_delay_is_weighted_by_running_count() {
+        // Line A: 8 running (10 total, 2 cancelled), avg delay 10.0.
+        // Line B: 2 running (2 total, 0 cancelled), avg delay 0.0.
+        // Weighted avg = (8*10.0 + 2*0.0) / 10 = 8.0, NOT the naive
+        // unweighted (10.0 + 0.0) / 2 = 5.0 a per-line average would give.
+        let a = stats(10, 5, 2, 1, 10.0);
+        let b = stats(2, 0, 0, 0, 0.0);
+        let merged = merge_sample_stats(&[a, b]).unwrap();
+        assert_eq!(merged.total, 12);
+        assert_eq!(merged.delayed, 5);
+        assert_eq!(merged.cancelled, 2);
+        assert_eq!(merged.skipped, 1);
+        assert_eq!(merged.avg_delay_minutes, 8.0);
+    }
+
+    #[test]
+    fn every_input_fully_cancelled_gives_zero_avg_delay_not_a_division_by_zero() {
+        let a = stats(3, 0, 3, 0, 0.0);
+        let merged = merge_sample_stats(&[a]).unwrap();
+        assert_eq!(merged.avg_delay_minutes, 0.0);
+    }
+}
+
 #[cfg(test)]
 mod compute_sample_stats_tests {
     use super::*;
