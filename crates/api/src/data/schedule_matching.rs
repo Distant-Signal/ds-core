@@ -107,6 +107,7 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
 /// uniformly: no candidate line, no `stanox_crs` rows for this CRS, no
 /// `schedule_line_population` published yet for any candidate, or no
 /// calling point within tolerance.
+#[allow(clippy::too_many_arguments)]
 pub async fn attempt_schedule_match(
     pool: &PgPool,
     tracked_train_id: i64,
@@ -125,6 +126,12 @@ pub async fn attempt_schedule_match(
     // `data::trains::find_or_create_train_with_schedule_match`'s own doc
     // comment for where this ends up.
     pin_skipped_stations: &[String],
+    // Same idea as `pin_skipped_stations` immediately above, for the
+    // picked row's origin-platform snapshot instead
+    // (`common::TrackPinRequest.platform`/`planned_platform`, carried
+    // through `train_subscriptions.pin_platform`/`pin_planned_platform`).
+    pin_platform: Option<&str>,
+    pin_planned_platform: Option<&str>,
 ) -> anyhow::Result<bool> {
     let Some(matched) = find_schedule_match(
         pool,
@@ -154,6 +161,8 @@ pub async fn attempt_schedule_match(
             &matched.line_id,
             &matched.calling_points_json,
             pin_skipped_stations,
+            pin_platform,
+            pin_planned_platform,
         )
         .await?;
         sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
@@ -331,8 +340,10 @@ pub async fn attempt_schedule_match_for_shared_train(
         &matched.calling_points_json,
         // The NR-primary path has no departure-board pin at all (see this
         // function's own doc comment) -- nothing to capture a Darwin skip
-        // snapshot from.
+        // (or platform) snapshot from.
         &[],
+        None,
+        None,
     )
     .await?;
     Ok(true)
@@ -378,6 +389,8 @@ pub async fn run_schedule_match_sweep(
             row.service_date,
             crs_line_index,
             &row.pin_skipped_stations,
+            row.pin_platform.as_deref(),
+            row.pin_planned_platform.as_deref(),
         )
         .await
         {
@@ -575,6 +588,8 @@ mod db_tests {
             service_date,
             &crs_line_index,
             &[],
+            None,
+            None,
         )
         .await
         .expect("attempt schedule match");
@@ -730,6 +745,8 @@ mod db_tests {
             service_date,
             &crs_line_index,
             &[],
+            None,
+            None,
         )
         .await
         .expect("attempt schedule match");
@@ -887,6 +904,8 @@ mod db_tests {
             service_date,
             &crs_line_index,
             &[],
+            None,
+            None,
         )
         .await
         .expect("attempt schedule match");
@@ -966,6 +985,8 @@ mod db_tests {
             service_date,
             &HashMap::new(), // no candidate lines at all
             &[],
+            None,
+            None,
         )
         .await
         .expect("attempt schedule match");
@@ -1053,6 +1074,8 @@ mod db_tests {
             service_date,
             &crs_line_index,
             &[],
+            None,
+            None,
         )
         .await
         .expect("attempt schedule match");

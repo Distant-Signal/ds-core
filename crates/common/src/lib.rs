@@ -446,6 +446,26 @@ pub struct StationDeparture {
     /// service reports no skipped calls.
     #[serde(default)]
     pub skipped_stations: Vec<String>,
+    /// The CURRENT platform this station's own board reports for this
+    /// service, straight from RDM's `platform` field
+    /// (`poller-ldbws::schema::RdmServiceItem::platform`) -- `None` both
+    /// when it's absent and when it's an unallocated `null`, since this
+    /// feed gives no way to tell those apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    /// The EARLIEST platform this poller process has observed for this
+    /// exact service at this station since it last started, filled in by
+    /// `poller-ldbws::platform_history::PlatformHistory` -- a
+    /// reconstruction of "planned" platform, since RDM/Darwin's live board
+    /// exposes only ever the current merged value and never the originally
+    /// published one. `None` until a platform has been observed at all
+    /// (still unallocated), or after a poller restart until this service is
+    /// next seen. `platform != planned_platform` (both `Some`) is this
+    /// codebase's whole signal for "the platform changed" -- see
+    /// `api::render::station_departure_json`, which derives that boolean at
+    /// serialization time rather than storing it separately.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planned_platform: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -657,6 +677,22 @@ pub struct TrackPinRequest {
     /// comment for where this ends up.
     #[serde(default)]
     pub skipped_stations: Vec<String>,
+    /// Same idea as `skipped_stations` immediately above, for Darwin's
+    /// platform signal instead of its skip signal: the CURRENT platform the
+    /// picked departure-board row reported (`DepartureRow.platform`),
+    /// carried through so the journey page can show the origin calling
+    /// point's platform once a `trains` row exists. See
+    /// `StationDeparture.platform`'s own doc comment for why this is only
+    /// ever "current", never a distinct "planned" value from Darwin's own
+    /// API.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    /// The EARLIEST platform this poller process had observed for the
+    /// picked row's service at pin time (`DepartureRow.plannedPlatform`),
+    /// carried through the same way. See
+    /// `StationDeparture.planned_platform`'s own doc comment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planned_platform: Option<String>,
 }
 
 /// Manual ticket-entry payload for `POST /Train/{trackingId}/tickets`
@@ -1426,6 +1462,8 @@ mod compute_sample_stats_tests {
             delay_reason: None,
             headcode: None,
             skipped_stations: skipped_stations.into_iter().map(str::to_string).collect(),
+            platform: None,
+            planned_platform: None,
         }
     }
 
