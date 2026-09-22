@@ -695,6 +695,40 @@ pub struct TrackPinRequest {
     pub planned_platform: Option<String>,
 }
 
+/// A reusable, named "after/before" bound pair on a `NaiveTime` --
+/// closes a real, named gap
+/// (docs/superpowers/specs/2026-09-22-journey-tracking-design.md §0.5,
+/// §2.1): every existing before/after pair in this codebase (e.g.
+/// `queries::search_schedule_calling_point_departures`'s own
+/// `scheduled_from`/`to_time` and `stop_arrival_from`/`stop_arrival_to`
+/// parameters, `TrainSearchParams::from`/`to`/`arrival_from`/`arrival_to`)
+/// is two sibling `Option<NaiveTime>` fields, duplicated at each layer
+/// rather than named once. Used by `CreateJourneyLegRequest::Window`
+/// (`crates/api/src/routes/journeys.rs`) for its `departWindow`/
+/// `arriveWindow` fields -- the request-body/write side only. The read
+/// side (`JourneyLegDetailResponse`, same file) deliberately flattens back
+/// to four individual `departAfter`/`departBefore`/`arriveAfter`/
+/// `arriveBefore` fields, matching how every other optional time pair in
+/// this codebase's existing wire responses is already shaped, rather than
+/// introducing a new nested-object convention on the read side too.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct TimeWindow {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<chrono::NaiveTime>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<chrono::NaiveTime>,
+}
+
+impl TimeWindow {
+    /// `true` if neither bound is set -- an entirely unbounded window.
+    /// `journeys::validate_window_leg` (`crates/api/src/data/journeys.rs`)
+    /// rejects a leg whose `depart`/`arrive` windows are BOTH empty --
+    /// see that function's own doc comment for why.
+    pub fn is_empty(&self) -> bool {
+        self.after.is_none() && self.before.is_none()
+    }
+}
+
 /// Manual ticket-entry payload for `POST /Train/{trackingId}/tickets`
 /// (`crates/api/src/routes/train.rs`) -- the durable v1 backbone every
 /// ingestion tier ultimately funnels through (see
