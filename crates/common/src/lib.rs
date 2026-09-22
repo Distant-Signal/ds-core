@@ -468,6 +468,101 @@ pub struct StationDeparture {
     pub planned_platform: Option<String>,
 }
 
+/// Finds the live Darwin/LDBWS departure-board sample matching a specific
+/// service among several sampled at one station, by its reported
+/// destination CRS. This is the shared matching step behind both
+/// `eta_blend::find_darwin_eta`'s ETA overlay (`crates/api`) and this
+/// crate's own `departure_skips_station` (used by both `crates/api`'s
+/// journey-view skip badge and `crates/notifier`'s skip notification) --
+/// it lives here, not in `eta_blend.rs`, because `crates/notifier` cannot
+/// depend on `crates/api` (see that crate's own `skip_check.rs` doc
+/// comment) but both crates already depend on this one. Never matches an
+/// already-cancelled departure -- whole-service cancellation is a distinct,
+/// already-handled signal (`train_current_state.status = 'cancelled'`, via
+/// TRUST, not Darwin), not this function's job. Case-insensitive
+/// (`eq_ignore_ascii_case`), matching every other CRS comparison in this
+/// codebase that isn't guaranteed pre-normalized.
+pub fn match_darwin_departure<'a>(
+    samples: &'a [StationDeparture],
+    target_destination: Option<&str>,
+) -> Option<&'a StationDeparture> {
+    let target = target_destination?;
+    samples
+        .iter()
+        .find(|d| !d.is_cancelled && d.destination_crs.eq_ignore_ascii_case(target))
+}
+
+/// Whether a matched Darwin departure reports `crs` as one of today's
+/// skipped calling points (Darwin's per-calling-point `isCancelled`,
+/// `StationDeparture::skipped_stations`) -- the one-line predicate shared
+/// by every caller of [`match_darwin_departure`] that cares about skips, so
+/// "how do we test skipped_stations membership" has exactly one
+/// implementation, not several independently-written
+/// `eq_ignore_ascii_case` loops that could quietly drift apart.
+pub fn departure_skips_station(matched: &StationDeparture, crs: &str) -> bool {
+    matched
+        .skipped_stations
+        .iter()
+        .any(|skipped| skipped.eq_ignore_ascii_case(crs))
+}
+
+#[cfg(test)]
+mod darwin_departure_matching_tests {
+    use super::*;
+
+    fn departure(destination_crs: &str, is_cancelled: bool, skipped: Vec<&str>) -> StationDeparture {
+        StationDeparture {
+            service_id: "test".to_string(),
+            operator: "SW".to_string(),
+            destination_crs: destination_crs.to_string(),
+            scheduled: "18:32".to_string(),
+            estimated: "18:41".to_string(),
+            is_cancelled,
+            delay_minutes: 0,
+            cancel_reason: None,
+            delay_reason: None,
+            headcode: None,
+            skipped_stations: skipped.into_iter().map(str::to_string).collect(),
+            // These tests are about destination/skip matching only and never
+            // read the platform fields -- `None` ("platform not known") keeps
+            // the fixture honest rather than inventing a value.
+            platform: None,
+            planned_platform: None,
+        }
+    }
+
+    #[test]
+    fn matches_by_destination_case_insensitively() {
+        let samples = vec![departure("wok", false, vec![])];
+        assert!(match_darwin_departure(&samples, Some("WOK")).is_some());
+    }
+
+    #[test]
+    fn never_matches_a_cancelled_departure() {
+        let samples = vec![departure("WOK", true, vec![])];
+        assert!(match_darwin_departure(&samples, Some("WOK")).is_none());
+    }
+
+    #[test]
+    fn no_target_destination_means_no_match() {
+        let samples = vec![departure("WOK", false, vec![])];
+        assert!(match_darwin_departure(&samples, None).is_none());
+    }
+
+    #[test]
+    fn departure_skips_station_is_case_insensitive() {
+        let matched = departure("WOK", false, vec!["rdg"]);
+        assert!(departure_skips_station(&matched, "RDG"));
+        assert!(!departure_skips_station(&matched, "WAT"));
+    }
+
+    #[test]
+    fn empty_skipped_stations_never_matches_anything() {
+        let matched = departure("WOK", false, vec![]);
+        assert!(!departure_skips_station(&matched, "RDG"));
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthStatus {
     pub message: String,
