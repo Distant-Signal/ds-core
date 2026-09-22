@@ -527,7 +527,11 @@ pub fn departure_skips_station(matched: &StationDeparture, crs: &str) -> bool {
 mod darwin_departure_matching_tests {
     use super::*;
 
-    fn departure(destination_crs: &str, is_cancelled: bool, skipped: Vec<&str>) -> StationDeparture {
+    fn departure(
+        destination_crs: &str,
+        is_cancelled: bool,
+        skipped: Vec<&str>,
+    ) -> StationDeparture {
         StationDeparture {
             service_id: "test".to_string(),
             operator: "SW".to_string(),

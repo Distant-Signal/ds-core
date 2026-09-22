@@ -109,10 +109,7 @@ pub const MAX_TIMESTAMP_SKEW_AHEAD_OF_RECEIPT: chrono::Duration = chrono::Durati
 /// and `api::data::trust_event_backlog_match::find_backlog_match`. Kept as
 /// a single shared predicate rather than three separate inline checks so
 /// the threshold and its reasoning live in exactly one place.
-pub fn is_plausible_actual_timestamp(
-    candidate: DateTime<Utc>,
-    received_at: DateTime<Utc>,
-) -> bool {
+pub fn is_plausible_actual_timestamp(candidate: DateTime<Utc>, received_at: DateTime<Utc>) -> bool {
     candidate <= received_at + MAX_TIMESTAMP_SKEW_AHEAD_OF_RECEIPT
 }
 
@@ -454,7 +451,7 @@ mod tests {
 
     #[test]
     fn the_autumn_fallback_overlap_resolves_to_whichever_candidate_is_nearer_received_at_bst_case()
-     {
+    {
         // UK clocks fall back at 02:00 BST -> 01:00 GMT on 2026-10-25 --
         // 01:30 local occurs twice: once at 00:30 UTC (BST) and once at
         // 01:30 UTC (GMT). `received_at` is set right next to the BST
@@ -478,7 +475,7 @@ mod tests {
     /// GMT candidate instead.
     #[test]
     fn the_autumn_fallback_overlap_resolves_to_whichever_candidate_is_nearer_received_at_gmt_case()
-     {
+    {
         let raw = "1792891800000"; // 2026-10-25T01:30:00Z as millis
         let received_at: DateTime<Utc> = "2026-10-25T01:31:00Z".parse().unwrap();
 
@@ -583,19 +580,16 @@ mod tests {
             "actual's own correction is plausible on its own"
         );
         assert_eq!(
-            independently_corrected_planned, "2026-07-15T20:00:00Z".parse::<DateTime<Utc>>().unwrap(),
+            independently_corrected_planned,
+            "2026-07-15T20:00:00Z".parse::<DateTime<Utc>>().unwrap(),
             "planned's own correction (to 19:00Z) is NOT plausible against this received_at, so \
              calling parse_trust_epoch_millis independently falls back to the RAW value here -- \
              this is the split-correction bug Finding #1 fixed"
         );
 
         // Now the fix: the pairwise function must not split these.
-        let pair = parse_trust_epoch_millis_pair(
-            Some(planned_raw),
-            Some(actual_raw),
-            received_at,
-            true,
-        );
+        let pair =
+            parse_trust_epoch_millis_pair(Some(planned_raw), Some(actual_raw), received_at, true);
         assert_eq!(pair.was_corrected, Some(true));
         assert_eq!(
             pair.actual,
@@ -648,7 +642,10 @@ mod tests {
         let pair = parse_trust_epoch_millis_pair(Some(planned_raw), None, received_at, true);
 
         assert_eq!(pair.actual, None);
-        assert_eq!(pair.was_corrected, None, "nothing to decide without an anchor");
+        assert_eq!(
+            pair.was_corrected, None,
+            "nothing to decide without an anchor"
+        );
         assert_eq!(
             pair.planned,
             Some("2026-07-15T12:00:00Z".parse::<DateTime<Utc>>().unwrap()),
@@ -662,12 +659,8 @@ mod tests {
         let actual_raw = "1784142000000"; // 2026-07-15T19:00:00Z as millis
         let received_at: DateTime<Utc> = "2026-07-15T18:01:00Z".parse().unwrap();
 
-        let pair = parse_trust_epoch_millis_pair(
-            Some(planned_raw),
-            Some(actual_raw),
-            received_at,
-            false,
-        );
+        let pair =
+            parse_trust_epoch_millis_pair(Some(planned_raw), Some(actual_raw), received_at, false);
 
         assert_eq!(
             pair.actual,

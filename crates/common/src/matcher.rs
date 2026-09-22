@@ -2423,12 +2423,15 @@ mod tests {
                 | "tpe-north-scarborough"
                 | "tpe-north-hull"
                 | "cross-country" => MatchScope::ExclusiveSegment,
-                "northern" | "northern-yorkshire-coast" | "northern-airedale"
-                | "northern-settle-carlisle" | "northern-leeds-selby"
-                | "northern-leeds-york" | "northern-hallam-line"
-                | "northern-pontefract-line" | "northern-wakefield-line" => {
-                    MatchScope::SharedSegment
-                }
+                "northern"
+                | "northern-yorkshire-coast"
+                | "northern-airedale"
+                | "northern-settle-carlisle"
+                | "northern-leeds-selby"
+                | "northern-leeds-york"
+                | "northern-hallam-line"
+                | "northern-pontefract-line"
+                | "northern-wakefield-line" => MatchScope::SharedSegment,
                 other => panic!("unexpected line in Leeds overlap test: {other}"),
             };
             assert_eq!(m.scope, expected, "{} scope mismatch", m.line.id);
@@ -4982,9 +4985,7 @@ mod tests {
         );
         for m in &matches {
             let expected = match m.line.id.as_str() {
-                "tfw-valley-rhymney"
-                | "tfw-valley-merthyr"
-                | "tfw-valley-rhondda"
+                "tfw-valley-rhymney" | "tfw-valley-merthyr" | "tfw-valley-rhondda"
                 | "tfw-city-line" => MatchScope::SharedSegment,
                 _ => MatchScope::ExclusiveSegment,
             };
@@ -5047,13 +5048,17 @@ mod tests {
         let line = lines
             .get("xc-manchester")
             .expect("xc-manchester should load");
-        for crs in ["MAC", "SOT", "PKG", "CSY", "TIP", "DDP", "SAD", "SGB", "SMR"] {
+        for crs in [
+            "MAC", "SOT", "PKG", "CSY", "TIP", "DDP", "SAD", "SGB", "SMR",
+        ] {
             assert!(
                 line.has_station(crs),
                 "{crs} should now be recognised on xc-manchester"
             );
         }
-        for crs in ["LVM", "HTC", "CHU", "HTH", "WML", "ALD", "CEL", "GTR", "HCH", "SDB", "CRE"] {
+        for crs in [
+            "LVM", "HTC", "CHU", "HTH", "WML", "ALD", "CEL", "GTR", "HCH", "SDB", "CRE",
+        ] {
             assert!(
                 !line.has_station(crs),
                 "{crs} was on the old, physically-wrong Wilmslow/Crewe route and \
@@ -5676,7 +5681,10 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from(["gwr-thames-valley".to_string(), "elizabeth-line".to_string()])
+            HashSet::from([
+                "gwr-thames-valley".to_string(),
+                "elizabeth-line".to_string()
+            ])
         );
         for m in &matches {
             assert_eq!(
@@ -6338,12 +6346,12 @@ mod tests {
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "tfw-north-wales-coast" || m.line.id == "wcml-north-wales"
-            {
-                MatchScope::SharedSegment
-            } else {
-                MatchScope::ExclusiveSegment
-            };
+            let expected =
+                if m.line.id == "tfw-north-wales-coast" || m.line.id == "wcml-north-wales" {
+                    MatchScope::SharedSegment
+                } else {
+                    MatchScope::ExclusiveSegment
+                };
             assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
@@ -6926,8 +6934,7 @@ mod tests {
     // Ashford/Canterbury West rather than Faversham/Margate) - untouched by
     // this review, stays independently ExclusiveSegment.
     #[test]
-    fn hs1_northkent_ramsgate_incident_matches_chatham_shared_and_canterbury_west_exclusive()
-     {
+    fn hs1_northkent_ramsgate_incident_matches_chatham_shared_and_canterbury_west_exclusive() {
         let lines = load_all_lines();
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
@@ -6953,11 +6960,7 @@ mod tests {
             } else {
                 MatchScope::SharedSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -7170,11 +7173,7 @@ mod tests {
                 | "thameslink-southern" => MatchScope::SharedSegment,
                 _ => MatchScope::ExclusiveSegment,
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -7558,11 +7557,7 @@ mod tests {
             } else {
                 MatchScope::ExclusiveSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -7778,11 +7773,7 @@ mod tests {
             } else {
                 MatchScope::ExclusiveSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -8461,11 +8452,7 @@ mod tests {
             } else {
                 MatchScope::SharedSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -8839,9 +8826,7 @@ mod tests {
         );
         for m in &matches {
             let expected = match m.line.id.as_str() {
-                "scotrail-fife-circle" | "scotrail-edinburgh-aberdeen" => {
-                    MatchScope::SharedSegment
-                }
+                "scotrail-fife-circle" | "scotrail-edinburgh-aberdeen" => MatchScope::SharedSegment,
                 _ => MatchScope::ExclusiveSegment,
             };
             assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
@@ -9290,10 +9275,7 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
-        assert_eq!(
-            matched_ids,
-            HashSet::from(["scotrail-argyle".to_string()])
-        );
+        assert_eq!(matched_ids, HashSet::from(["scotrail-argyle".to_string()]));
         assert_eq!(matches[0].scope, MatchScope::ExclusiveSegment);
     }
 
@@ -9545,10 +9527,7 @@ mod tests {
         let matched_ids: HashSet<String> = matches.iter().map(|m| m.line.id.clone()).collect();
         assert_eq!(
             matched_ids,
-            HashSet::from([
-                "scotrail-shotts".to_string(),
-                "scotrail-argyle".to_string()
-            ])
+            HashSet::from(["scotrail-shotts".to_string(), "scotrail-argyle".to_string()])
         );
         for m in &matches {
             assert_eq!(
@@ -10203,11 +10182,7 @@ mod tests {
             } else {
                 MatchScope::SharedSegment
             };
-            assert_eq!(
-                m.scope, expected,
-                "{} should be {:?}",
-                m.line.id, expected
-            );
+            assert_eq!(m.scope, expected, "{} should be {:?}", m.line.id, expected);
         }
     }
 
@@ -11207,7 +11182,9 @@ mod tests {
         );
 
         assert!(
-            matcher.affected_line_ids(&inc).contains(&"elizabeth-line".to_string()),
+            matcher
+                .affected_line_ids(&inc)
+                .contains(&"elizabeth-line".to_string()),
             "documenting the known gap: with no structured operator list there is nothing to \
              contradict a bare keyword hit, so the mention matches"
         );
