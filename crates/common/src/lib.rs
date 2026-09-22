@@ -345,9 +345,26 @@ pub struct AffectedRoute {
     pub to_crs: String,
 }
 
+/// Fallback for a `Disruption` row written before `category` was added to
+/// the schema. `line_status_history` stores this struct as JSONB and is
+/// read back by `crates/api/src/data/queries.rs`'s
+/// `line_status_history_for_range` -- a historical row predating this field
+/// must still deserialize rather than 500ing the history endpoint, the same
+/// backward-compatibility contract `impact_type` and `source` already
+/// follow on this struct. `"Unknown"` is deliberately not one of the real
+/// category values (`"RealTime"` | `"PlannedWork"` | `"Information"`) so it
+/// reads unambiguously as "predates this field" rather than as a guessed
+/// real category.
+fn unknown_disruption_category_default() -> String {
+    "Unknown".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Disruption {
-    /// `"RealTime"` | `"PlannedWork"` | `"Information"`
+    /// `"RealTime"` | `"PlannedWork"` | `"Information"`, or `"Unknown"` for
+    /// a historical row written before this field existed -- see
+    /// `unknown_disruption_category_default`.
+    #[serde(default = "unknown_disruption_category_default")]
     pub category: String,
     pub description: String,
     #[serde(default)]
@@ -1780,6 +1797,19 @@ mod disruption_impact_type_tests {
         let disruption: Disruption =
             serde_json::from_value(json).expect("pre-change row must still parse");
         assert_eq!(disruption.impact_type, None);
+    }
+
+    #[test]
+    fn a_pre_change_disruption_json_with_no_category_key_deserializes_to_unknown() {
+        let json = serde_json::json!({
+            "description": "Signal failure",
+            "affected_stops": [],
+            "affected_routes": [],
+            "source": null
+        });
+        let disruption: Disruption =
+            serde_json::from_value(json).expect("pre-category-field row must still parse");
+        assert_eq!(disruption.category, "Unknown");
     }
 
     #[test]
