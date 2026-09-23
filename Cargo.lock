@@ -5392,6 +5392,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "trip-planner"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "schedule-query",
+]
+
+[[package]]
 name = "trust-backlog-consumer"
 version = "0.1.0"
 dependencies = [
