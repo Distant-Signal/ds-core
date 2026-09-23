@@ -1067,6 +1067,38 @@ pub struct StanoxCrsRecord {
     /// from -- provenance a live source benefits from that the static CSV
     /// never needed.
     pub source_sequence: i32,
+    /// Raw minimum-change-time minutes from the matching MSN `A` record,
+    /// or `None` if no MSN record matched this TIPLOC at all -- see
+    /// docs/superpowers/plans/2026-09-22-dynamic-trip-planning-phase1-cif-interchange-ingestion-plan.md's
+    /// Judgment Call 3 for why this is never defaulted/sentinel-resolved
+    /// here. `#[serde(default)]` so a `stanox_crs` publish from a
+    /// not-yet-upgraded `schedule-reference` build still deserializes (as
+    /// `None`, the same "assume the older, narrower shape" posture
+    /// `CallingPoint::day_offset`'s own `#[serde(default)]` establishes for
+    /// an analogous additive field).
+    #[serde(default)]
+    pub change_time_minutes: Option<i32>,
+}
+
+/// One resolved CIF `ALF` fixed-link row, as published between
+/// `crates/schedule-reference` (writer, `POST /private/fixed-links`) and
+/// `crates/api` (reader/storage). `from_crs`/`to_crs` are CRS codes, not
+/// TIPLOCs -- ALF's own identifier space (see
+/// `crates/schedule-reference/src/alf.rs`'s module doc). See
+/// docs/superpowers/specs/2026-09-22-dynamic-trip-planning-design.md §0.4.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FixedLinkRecord {
+    pub mode: String,
+    pub from_crs: String,
+    pub to_crs: String,
+    pub minutes: i32,
+    /// Raw "HHMM", 4 ASCII digits -- see `alf::ParsedFixedLink`'s own doc
+    /// comment for why this is not a parsed time type.
+    pub valid_from: String,
+    pub valid_to: String,
+    /// Raw 7-char '0'/'1' bitmask, Monday-first.
+    pub days_mask: String,
+    pub source_sequence: i32,
 }
 
 /// Reference data for a Train Operating Company, as published by the
