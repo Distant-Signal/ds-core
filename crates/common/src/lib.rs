@@ -11,6 +11,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 pub mod config;
 pub mod ingest;
 pub mod island_of_ireland;
+pub mod log_once;
 pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;

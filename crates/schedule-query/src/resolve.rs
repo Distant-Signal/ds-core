@@ -513,6 +513,78 @@ fn unresolved_destination_key(terminus_tiploc: &str) -> String {
     format!("~{terminus_tiploc}")
 }
 
+/// The observability counterpart to [`departures_by_crs`]/
+/// [`departures_by_destination_crs`]'s own "drop, never fabricate" posture:
+/// both of those silently drop exactly the calling points this function
+/// surfaces (a calling point's own TIPLOC, or a schedule's terminating
+/// TIPLOC, absent from `tiploc_to_crs` entirely -- see each function's own
+/// doc comment), which is correct for what THEY produce (a bucket needs a
+/// real CRS key/field, not a guess), but on its own leaves no visibility
+/// into which TIPLOCs are actually being dropped. This crate is
+/// deliberately I/O- and `tracing`-free (see this module's own doc
+/// comment), so it hands back plain data for a caller with a logging
+/// dependency to act on -- see `crates/schedule-reference/src/main.rs`'s
+/// `log_new_unresolved_booked_tiplocs` and
+/// `crates/api/src/data/journey.rs`'s `log_if_unresolved_booked_stop` for
+/// the two real callers.
+///
+/// Returns every distinct, normalized (see [`normalize_tiploc`]) TIPLOC
+/// across `index`'s resolved, non-cancelled schedules for `date` that BOTH:
+///
+/// - carries at least one booked time of its own (`booked_arrival` or
+///   `booked_departure` -- i.e. this schedule's own working timetable
+///   records a genuine timed stop here, not a bare pass-through with
+///   neither field set), and
+/// - has NO entry in `tiploc_to_crs` at all.
+///
+/// The second condition is the load-bearing "looks like it could be a real
+/// station" signal, not merely "didn't resolve": every real caller builds
+/// `tiploc_to_crs` directly from the FULL resolved `stanox_crs` table,
+/// X-prefixed rows included (see e.g. `main.rs`'s own `tiploc_to_crs`
+/// construction, shared verbatim by `departures_by_crs`/
+/// `departures_by_destination_crs`'s own call sites) -- so a TIPLOC that
+/// resolves to an X-prefixed Network Rail pseudo-CRS (a junction, siding,
+/// or depot; see `crates/api/src/data/journey.rs::is_bookable_crs`'s own
+/// doc comment for the convention and real examples) is present as a KEY
+/// here and never returned by this function. Only a TIPLOC with no
+/// `stanox_crs` row of any kind at all -- not even an X-prefixed one --
+/// reaches this function's result, exactly inverting `is_bookable_crs`'s
+/// own "resolved but not bookable" case to get at "not resolved, therefore
+/// possibly a real, unmapped station" instead.
+///
+/// Sorted (a `BTreeSet` collected to `Vec`, not insertion order) purely so
+/// this function's own output -- and any test asserting on it -- is
+/// deterministic regardless of `index`'s internal `HashMap` iteration
+/// order.
+pub fn unresolved_booked_tiplocs(
+    index: &ScheduleIndex,
+    date: NaiveDate,
+    tiploc_to_crs: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut unresolved: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    for uid in index.uids() {
+        let Some(resolved) = index.schedule_for_uid(uid, date) else {
+            continue;
+        };
+        if resolved.cancelled {
+            continue;
+        }
+        for cp in &resolved.calling_points {
+            if cp.booked_arrival.is_none() && cp.booked_departure.is_none() {
+                continue;
+            }
+            let key = normalize_tiploc(&cp.tiploc);
+            if tiploc_to_crs.contains_key(key) {
+                continue;
+            }
+            unresolved.insert(key.to_string());
+        }
+    }
+
+    unresolved.into_iter().collect()
+}
+
 /// A thin wrapper grouping `Vec<RawSchedule>` by `uid`, built once, so
 /// [`ScheduleIndex::schedule_for_uid`]/[`schedules_touching`] aren't
 /// re-scanning a flat `Vec` on every call.
@@ -1901,5 +1973,169 @@ mod tests {
             .find(|cp| normalize_tiploc(&cp.tiploc) == "BARKING")
             .unwrap();
         assert_eq!(barking.day_offset, 1);
+    }
+
+    // `unresolved_booked_tiplocs`'s own tests. Real TIPLOC/CRS values reused
+    // from this crate's own doc comments and the checked-in 2026-09-23
+    // Northampton/Hanslope Junction incident this function exists for
+    // (`NMPTN`/no CRS at all is the real genuine-gap case; `HANSLPJ`/`XHN`
+    // is the real legitimate-non-station case -- see `is_bookable_crs`'s own
+    // doc comment in `crates/api/src/data/journey.rs`).
+    mod unresolved_booked_tiplocs_tests {
+        use super::*;
+
+        fn schedule_with_one_calling_point(uid: &str, cp: CallingPoint) -> RawSchedule {
+            RawSchedule {
+                basic: basic(
+                    uid,
+                    StpIndicator::Permanent,
+                    "2026-05-18",
+                    "2026-12-11",
+                    ALL_DAYS,
+                ),
+                calling_points: vec![cp],
+            }
+        }
+
+        #[test]
+        fn a_tiploc_that_resolves_to_a_real_crs_is_not_returned() {
+            let index = ScheduleIndex::build(vec![schedule_with_one_calling_point(
+                "T00001",
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+            )]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert!(unresolved.is_empty());
+        }
+
+        #[test]
+        fn a_tiploc_resolved_to_an_x_prefixed_pseudo_crs_is_not_returned() {
+            // HANSLPJ (Hanslope Junction) resolving to XHN is present as a
+            // KEY in tiploc_to_crs -- exactly like the real production case
+            // -- so this is the legitimate-non-station branch, not a gap.
+            let index = ScheduleIndex::build(vec![schedule_with_one_calling_point(
+                "T00002",
+                calling_point_with_departure("HANSLPJ", CallingPointKind::Intermediate, "10:05"),
+            )]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = tiploc_map(&[("HANSLPJ", "XHN")]);
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert!(
+                unresolved.is_empty(),
+                "an X-prefixed pseudo-CRS is still a resolved entry -- not this function's job"
+            );
+        }
+
+        #[test]
+        fn a_tiploc_with_no_crs_row_at_all_but_a_booked_time_is_returned() {
+            // The real Northampton case: NMPTN has a genuine booked time but
+            // no stanox_crs row of any kind.
+            let index = ScheduleIndex::build(vec![schedule_with_one_calling_point(
+                "T00003",
+                calling_point_with_departure("NMPTN  ", CallingPointKind::Intermediate, "09:15"),
+            )]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = HashMap::new(); // NMPTN entirely absent
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert_eq!(unresolved, vec!["NMPTN".to_string()]);
+        }
+
+        #[test]
+        fn a_pure_pass_with_no_booked_time_and_no_crs_row_is_not_returned() {
+            // Neither booked_arrival nor booked_departure set at all -- a
+            // bare pass-through location, not a genuine timed stop, even
+            // though it also has no stanox_crs row. Must not be mistaken
+            // for a "looks like a station" gap.
+            let index = ScheduleIndex::build(vec![schedule_with_one_calling_point(
+                "T00004",
+                calling_point("PUREPSJ", CallingPointKind::Intermediate),
+            )]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = HashMap::new();
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert!(
+                unresolved.is_empty(),
+                "no booked time at all means this is not a genuine timed stop"
+            );
+        }
+
+        #[test]
+        fn the_same_unresolved_tiploc_across_two_schedules_is_returned_only_once() {
+            let index = ScheduleIndex::build(vec![
+                schedule_with_one_calling_point(
+                    "T00005",
+                    calling_point_with_departure(
+                        "NMPTN  ",
+                        CallingPointKind::Intermediate,
+                        "09:15",
+                    ),
+                ),
+                schedule_with_one_calling_point(
+                    "T00006",
+                    calling_point_with_departure(
+                        "NMPTN  ",
+                        CallingPointKind::Intermediate,
+                        "14:40",
+                    ),
+                ),
+            ]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = HashMap::new();
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert_eq!(unresolved, vec!["NMPTN".to_string()]);
+        }
+
+        #[test]
+        fn a_cancelled_schedules_calling_points_are_not_considered() {
+            let raw = vec![RawSchedule {
+                basic: basic(
+                    "T00007",
+                    StpIndicator::Cancellation,
+                    "2026-09-23",
+                    "2026-09-23",
+                    ALL_DAYS,
+                ),
+                calling_points: Vec::new(),
+            }];
+            let index = ScheduleIndex::build(raw);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = HashMap::new();
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert!(unresolved.is_empty());
+        }
+
+        #[test]
+        fn results_are_sorted_regardless_of_hashmap_iteration_order() {
+            let index = ScheduleIndex::build(vec![
+                schedule_with_one_calling_point(
+                    "T00008",
+                    calling_point_with_departure(
+                        "ZULU   ",
+                        CallingPointKind::Intermediate,
+                        "09:15",
+                    ),
+                ),
+                schedule_with_one_calling_point(
+                    "T00009",
+                    calling_point_with_departure(
+                        "ALPHA  ",
+                        CallingPointKind::Intermediate,
+                        "09:16",
+                    ),
+                ),
+            ]);
+            let date = NaiveDate::from_ymd_opt(2026, 9, 23).unwrap();
+            let tiploc_to_crs = HashMap::new();
+
+            let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
+            assert_eq!(unresolved, vec!["ALPHA".to_string(), "ZULU".to_string()]);
+        }
     }
 }
