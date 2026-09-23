@@ -302,18 +302,38 @@ pub fn departures_by_crs(
 /// parse and no resident index (that constraint is restated verbatim in the
 /// design doc's §6).
 ///
-/// Two deliberate asymmetries with [`departures_by_crs`], both about the
-/// "drop, never fabricate" rule applied to a value that is now a bucket
-/// KEY rather than a field:
+/// **(2026-09-23, revised)** A schedule whose terminating TIPLOC has no
+/// `tiploc_to_crs` entry is no longer dropped entirely. It used to be --
+/// see [`unresolved_destination_key`]'s own doc comment for why that was a
+/// real, live completeness bug (not a hypothetical one: STANOX `89428`,
+/// `52215` and `89530` in `reference-data/stanox-crs.md`'s own documented
+/// ambiguity list are Ashford International, Stratford International and
+/// Ebbsfleet International -- real major stations, real genuine schedule
+/// termini, permanently unresolvable via this map) rather than a justified
+/// tradeoff, and was fixed the same way the analogous
+/// `crates/api/src/data/journey.rs` pre-tracking calling-point gap was
+/// fixed: don't require CRS resolution to succeed just to know the
+/// schedule exists. The bucket key is now the resolved CRS when one
+/// exists, or [`unresolved_destination_key`]'s always-distinguishable
+/// fallback (built from the terminus's own TIPLOC, which is always known)
+/// when it doesn't -- so the schedule's other, resolvable calling points
+/// still surface under `station=<their own CRS>` search instead of the
+/// entire train vanishing from the whole-network search everywhere it
+/// calls, just because its OWN terminus happens to sit on one of these
+/// STANOX-ambiguity stations.
 ///
-/// * A schedule whose terminating TIPLOC has no `tiploc_to_crs` entry is
-///   dropped **entirely** -- there is no honest bucket to file it under.
-///   `departures_by_crs` can degrade the same case to
-///   `destination_crs: None` because there the destination is only a
-///   field; here it is the key.
-/// * A calling point whose OWN TIPLOC has no `tiploc_to_crs` entry drops
-///   just that entry, leaving the schedule's other entries in the bucket --
-///   identical to `departures_by_crs`'s own per-calling-point drop.
+/// One asymmetry with [`departures_by_crs`] remains, both about the
+/// "drop, never fabricate a CRS" rule:
+///
+/// * A calling point whose OWN TIPLOC has no `tiploc_to_crs` entry still
+///   drops just that entry, leaving the schedule's other entries in the
+///   bucket -- identical to `departures_by_crs`'s own per-calling-point
+///   drop. This is unchanged: it is a genuinely different situation from
+///   the bucket-key case above, because that calling point's own
+///   `origin_crs` is a required, non-optional field on
+///   [`crate::records::DestinationDeparture`] (unlike the bucket key,
+///   there is no fallback string to fall back to that would not misrepresent
+///   a real search filter as matching a station it cannot honestly confirm).
 ///
 /// **There is no cap, here or anywhere downstream.** This function returns
 /// every matching calling point, unsorted, exactly like
@@ -346,13 +366,22 @@ pub fn departures_by_destination_crs(
         if resolved.cancelled {
             continue;
         }
-        let Some(destination_crs) = resolved
-            .calling_points
-            .last()
-            .and_then(|last| tiploc_to_crs.get(normalize_tiploc(&last.tiploc)))
-        else {
+        // A schedule with no calling points at all has no terminus TIPLOC
+        // to fall back to either -- still `continue`, same as before. Every
+        // real, non-cancelled `ResolvedSchedule` has at least one calling
+        // point, so this is a defensive no-op in practice, not a live case.
+        let Some(last) = resolved.calling_points.last() else {
             continue;
         };
+        let terminus_tiploc = normalize_tiploc(&last.tiploc);
+        // `.cloned().unwrap_or_else(...)`, NOT the old `let Some(...) else
+        // { continue }`: see this function's own doc comment (2026-09-23
+        // revision) for why a schedule is never dropped just because its
+        // terminus's own TIPLOC fails to resolve to a CRS any more.
+        let destination_crs = tiploc_to_crs
+            .get(terminus_tiploc)
+            .cloned()
+            .unwrap_or_else(|| unresolved_destination_key(terminus_tiploc));
         // Computed once per schedule, exactly like destination_crs above,
         // and attached unchanged to every entry this schedule contributes
         // -- NOT recomputed per calling point, which is what would make it
@@ -417,6 +446,71 @@ pub fn departures_by_destination_crs(
     }
 
     by_destination
+}
+
+/// The bucket key [`departures_by_destination_crs`] uses in place of a real
+/// CRS when the terminating calling point's own TIPLOC has no
+/// `tiploc_to_crs` entry.
+///
+/// **This is a real, live gap, confirmed against this repo's own checked-in
+/// reference data, not a hypothetical one.** `reference-data/stanox-crs.md`
+/// documents 5 real STANOX values that are permanently excluded from CRS
+/// resolution because two genuinely distinct, non-`X`-prefixed CRS codes
+/// share one physical STANOX with no principled tiebreaker (see that file's
+/// "Extraction and exclusion policy" section, and this crate's own
+/// `crates/schedule-reference/src/parser.rs::resolve_tests`, which pins the
+/// exact same 5 exclusions in code). Three of those five are not junctions
+/// or sidings -- they are the domestic/international platform split at
+/// three major, real, high-frequency HS1 stations, every one of which is a
+/// genuine, regular schedule terminus:
+///
+/// * STANOX `89428`: TIPLOC `ASHFKI`/CRS `ASI` vs TIPLOC `ASHFKY`/CRS `AFK`
+///   -- Ashford International / Ashford (Kent).
+/// * STANOX `52215`: TIPLOC `STFORDI`/CRS `SDI` vs TIPLOC `STFODOM`/CRS
+///   `SFA` -- Stratford International (domestic vs international
+///   platforms).
+/// * STANOX `89530`: TIPLOC `EBSFLTI`/CRS `EBF` vs TIPLOC `EBSFDOM`/CRS
+///   `EBD` -- Ebbsfleet International (same split).
+///
+/// Before this function existed, ANY schedule terminating at one of these
+/// stations (e.g. a Southeastern "Javelin" domestic service from London St
+/// Pancras terminating at Ashford International) was dropped ENTIRELY from
+/// `departures_by_destination_crs`'s output -- not just its own terminating
+/// calling point, every departure-bearing calling point of the whole
+/// schedule, including ones at ordinary, perfectly resolvable stations
+/// earlier in its route. That made the train invisible to
+/// `GET /public/trains/search?station=<any other calling point on its own
+/// route>`, which is precisely the search this table exists to serve, for a
+/// reason that has nothing to do with whether that OTHER station is
+/// findable.
+///
+/// The fix mirrors `crates/api/src/data/journey.rs`'s pre-tracking
+/// calling-point fallback fix (2026-09-23, same session): don't require CRS
+/// resolution to succeed just to know the schedule -- and its OTHER,
+/// resolvable calling points -- exist. The bucket key becomes this
+/// fallback, built from the one thing always genuinely known (the
+/// terminus's own TIPLOC), rather than a value invented out of nothing.
+///
+/// **Never collides with a real CRS.** Every real CRS (including
+/// `X`-prefixed pseudo-codes) is exactly 3 uppercase ASCII letters by
+/// Network Rail's own convention -- see `reference-data/stanox-crs.md`.
+/// `~` is not a valid CRS byte, so prefixing with it makes this key
+/// unambiguously distinguishable from a real CRS regardless of the
+/// TIPLOC's own length (some real TIPLOCs, e.g. `ASH`/`LEE`/`ORE` in
+/// `reference-data/crs-tiploc.csv`, are themselves exactly 3 letters and so
+/// would otherwise risk looking like a real CRS on the wire).
+///
+/// A caller-supplied `stops_at=<CRS>`/`destination` filter can never match
+/// this key (a real caller never types a `~`-prefixed value), which is the
+/// correct degrade: the code correctly declines to claim a station this
+/// schedule's terminus cannot be honestly named as. `GET
+/// /public/trains/search`'s own `destinationCrs` response field passes this
+/// value straight through unenriched (`render::calling_point_departure_json`
+/// does not look up a display name for `destinationCrs` today, for any
+/// value), so this degrades to a visibly-not-a-station-code string on the
+/// wire rather than silently pretending to be a real one.
+fn unresolved_destination_key(terminus_tiploc: &str) -> String {
+    format!("~{terminus_tiploc}")
 }
 
 /// A thin wrapper grouping `Vec<RawSchedule>` by `uid`, built once, so
@@ -1106,13 +1200,19 @@ mod tests {
     }
 
     #[test]
-    fn departures_by_destination_crs_drops_a_schedule_whose_destination_tiploc_is_unresolved() {
-        // The asymmetry with departures_by_crs, and it is deliberate: THERE,
-        // an unresolved destination degrades to `destination_crs: None` and
-        // the row is still returned under its own origin. HERE the
-        // destination IS the bucket key, so there is no honest bucket to
-        // file this schedule under -- it is dropped entirely rather than
-        // guessed at or filed under a fabricated key.
+    fn departures_by_destination_crs_falls_back_to_a_tiploc_keyed_bucket_when_the_destination_is_unresolved()
+     {
+        // (2026-09-23, revised) This used to assert the OPPOSITE: that an
+        // unresolved destination TIPLOC dropped the whole schedule, because
+        // "there is no honest bucket key to file it under". That was a
+        // real, live completeness bug, not a justified tradeoff -- see
+        // `unresolved_destination_key`'s own doc comment for the real,
+        // checked-in-reference-data evidence (Ashford International,
+        // Stratford International, Ebbsfleet International are all
+        // permanently unresolvable via `tiploc_to_crs` for exactly this
+        // reason). The schedule is no longer dropped: its EUSTON entry
+        // (which resolves fine) must still surface, bucketed under a
+        // TIPLOC-derived fallback key instead of vanishing.
         let raw = vec![RawSchedule {
             basic: basic(
                 "C11052",
@@ -1133,9 +1233,60 @@ mod tests {
 
         let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
         assert!(
-            by_destination.is_empty(),
-            "an unresolved DESTINATION tiploc drops the whole schedule -- there is no bucket key"
+            !by_destination.contains_key("CREWE") && !by_destination.contains_key("crewe"),
+            "the fallback key must be visibly distinct from a bare TIPLOC, never the raw string"
         );
+        let bucket = by_destination
+            .get("~CREWE")
+            .expect("EUSTON's resolvable entry must surface under the CREWE fallback key");
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0].origin_crs, "EUS");
+        assert_eq!(bucket[0].uid, "C11052");
+    }
+
+    #[test]
+    fn departures_by_destination_crs_falls_back_for_the_real_ashford_international_ambiguity() {
+        // Grounded in real, checked-in reference data, not a synthetic
+        // worst case: reference-data/stanox-crs.md documents STANOX 89428
+        // as genuinely irresolvable -- TIPLOC ASHFKI/CRS ASI (Ashford
+        // International) and TIPLOC ASHFKY/CRS AFK (Ashford (Kent)) share
+        // one physical STANOX with no principled tiebreaker between two
+        // real, non-X-prefixed CRS codes, so NEITHER TIPLOC ever appears in
+        // a real `tiploc_to_crs` map built from this data (see
+        // crates/schedule-reference/src/parser.rs::resolve_tests's own
+        // `ambiguous_stanox_with_two_non_x_candidates_is_excluded_entirely`
+        // and `all_14_real_ambiguous_stanox_values_...` for the same
+        // exclusion pinned at the source). A real Southeastern "Javelin"
+        // service terminating at Ashford International after calling at
+        // Tonbridge (a perfectly ordinary, resolvable intermediate station)
+        // must still be findable by searching from Tonbridge.
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "Z12345",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("TONBRDG", CallingPointKind::Origin, "18:04"),
+                calling_point("ASHFKI ", CallingPointKind::Terminate),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::from_hms_opt(8, 0, 0).unwrap();
+        // ASHFKI deliberately absent -- exactly like a real tiploc_to_crs
+        // map built from stanox-crs.md's own documented exclusion.
+        let tiploc_to_crs = tiploc_map(&[("TONBRDG", "TON")]);
+
+        let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
+        let bucket = by_destination
+            .get("~ASHFKI")
+            .expect("Tonbridge's resolvable entry must not vanish just because Ashford International's own TIPLOC is unresolvable");
+        assert_eq!(bucket.len(), 1);
+        assert_eq!(bucket[0].origin_crs, "TON");
+        assert_eq!(bucket[0].uid, "Z12345");
     }
 
     #[test]
