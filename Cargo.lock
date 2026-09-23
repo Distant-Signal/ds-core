@@ -206,6 +206,7 @@ dependencies = [
  "tower-http 0.6.11",
  "tracing",
  "tracing-subscriber",
+ "trip-planner",
  "trust-schema",
  "wiremock",
  "zip",
