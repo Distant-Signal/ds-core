@@ -263,7 +263,17 @@ async fn find_schedule_match(
                 queries::crs_for_tiploc(pool, schedule_query::normalize_tiploc(&cp.tiploc)).await?
             }
             None => None,
-        };
+        }
+        // See `queries::is_bookable_crs`'s own doc comment: this value
+        // flows straight into `trains.destination_crs`, which the frontend
+        // renders as `train.destinationName ?? train.destinationCrs` on the
+        // single-train page (`frontend/lib/types.ts`'s `TrainDetail`) -- an
+        // X-prefixed pseudo-CRS must not survive into that field any more
+        // than it survives into a journey stop's own `crs`
+        // (`journey::stops_from_calling_points`, the original call site of
+        // this same filter). Blanked to `None` here, the same "treat like
+        // unresolved" degrade every other call site uses.
+        .filter(|crs| queries::is_bookable_crs(crs));
 
         return Ok(Some(ScheduleMatch {
             uid: matched.uid.clone(),
@@ -795,6 +805,223 @@ mod db_tests {
             .execute(&pool)
             .await
             .expect("cleanup user");
+    }
+
+    /// Regression test for the destination-CRS half of the shared
+    /// `queries::is_bookable_crs` filter -- see that function's own doc
+    /// comment. `VICTRCR` (a real TIPLOC, a common empty-coaching-stock
+    /// terminus) resolves to the X-prefixed pseudo-CRS `XVR` via the
+    /// `tiploc_crs` crosswalk (the exact "widened resolution" case the
+    /// 2026-09-24 `tiploc_crs` crosswalk plan introduced -- this TIPLOC
+    /// previously returned `None` from `crs_for_tiploc`, not a pseudo-CRS,
+    /// before that plan landed). Before this fix, `find_schedule_match`'s
+    /// `destination_crs` carried `XVR` straight through into
+    /// `trains.destination_crs`, which the single-train page renders as
+    /// `train.destinationName ?? train.destinationCrs` -- so a tracked ECS
+    /// working terminating at Victoria Carriage Sidings would have shown
+    /// destination "XVR" instead of correctly showing nothing. Exercises
+    /// `find_schedule_match` directly (private to this module, visible via
+    /// `use super::*` in this same file) rather than the full
+    /// `attempt_schedule_match` write path -- the bug is entirely in this
+    /// pure read half.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                find_schedule_match -- --ignored --test-threads=1`"]
+    async fn find_schedule_match_blanks_an_x_prefixed_pseudo_crs_destination() {
+        let pool = connect().await;
+
+        sqlx::query(
+            "INSERT INTO tiploc_crs (tiploc, crs, station_name, stanox, source_sequence) \
+             VALUES ('VICTRCR', 'XVR', 'VICTORIA C.S.', 'TEST-VICTRCR-STANOX', 1) \
+             ON CONFLICT (tiploc) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed tiploc_crs");
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-ECSORIG-STANOX', 'ZEC', 'ECSORIG', 'TEST ECS ORIGIN', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let population = serde_json::json!([{
+            "uid": "TEST-ECSXVR",
+            "calling_points": [
+                {
+                    "tiploc": "ECSORIG",
+                    "kind": "Origin",
+                    "booked_arrival": null,
+                    "booked_departure": "23:10:00",
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 0
+                },
+                {
+                    "tiploc": "VICTRCR",
+                    "kind": "Terminate",
+                    "booked_arrival": "23:40:00",
+                    "booked_departure": null,
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 0
+                }
+            ]
+        }]);
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-ecs-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(&population)
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T23:10:00+01:00".parse().unwrap();
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("ZEC".to_string(), vec!["test-ecs-line".to_string()]);
+
+        let matched = find_schedule_match(
+            &pool,
+            "ZEC",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("find_schedule_match")
+        .expect("should match the seeded TEST-ECSXVR population entry");
+
+        assert_eq!(matched.uid, "TEST-ECSXVR");
+        assert_eq!(
+            matched.destination_crs, None,
+            "VICTRCR resolves to the X-prefixed pseudo-CRS XVR, which must blank to None \
+             here rather than leak into trains.destination_crs as if it were a real station"
+        );
+
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-ecs-line' AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .expect("cleanup population");
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-ECSORIG-STANOX'")
+            .execute(&pool)
+            .await
+            .expect("cleanup stanox_crs");
+        sqlx::query("DELETE FROM tiploc_crs WHERE tiploc = 'VICTRCR'")
+            .execute(&pool)
+            .await
+            .expect("cleanup tiploc_crs");
+    }
+
+    /// The mirror of the test directly above: a genuine, non-X-prefixed
+    /// destination CRS must still resolve normally through the same
+    /// `find_schedule_match` call -- `queries::is_bookable_crs` only
+    /// excludes the `X`-prefixed convention, never a real station code.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                find_schedule_match -- --ignored --test-threads=1`"]
+    async fn find_schedule_match_keeps_a_genuine_non_x_crs_destination() {
+        let pool = connect().await;
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-BSKORIG-STANOX', 'ZBS', 'BSKORIG', 'TEST BSK ORIGIN', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs origin");
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-BSKDEST-STANOX', 'BSK', 'BSKDEST', 'BASINGSTOKE', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs destination");
+
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let population = serde_json::json!([{
+            "uid": "TEST-REALBSK",
+            "calling_points": [
+                {
+                    "tiploc": "BSKORIG",
+                    "kind": "Origin",
+                    "booked_arrival": null,
+                    "booked_departure": "12:00:00",
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 0
+                },
+                {
+                    "tiploc": "BSKDEST",
+                    "kind": "Terminate",
+                    "booked_arrival": "12:30:00",
+                    "booked_departure": null,
+                    "is_half_minute_arrival": false,
+                    "is_half_minute_departure": false,
+                    "day_offset": 0
+                }
+            ]
+        }]);
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-real-bsk-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(&population)
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T12:00:00+01:00".parse().unwrap();
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("ZBS".to_string(), vec!["test-real-bsk-line".to_string()]);
+
+        let matched = find_schedule_match(
+            &pool,
+            "ZBS",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("find_schedule_match")
+        .expect("should match the seeded TEST-REALBSK population entry");
+
+        assert_eq!(matched.uid, "TEST-REALBSK");
+        assert_eq!(
+            matched.destination_crs,
+            Some("BSK".to_string()),
+            "a genuine, non-X-prefixed destination CRS must resolve normally"
+        );
+
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-real-bsk-line' AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .expect("cleanup population");
+        sqlx::query(
+            "DELETE FROM stanox_crs WHERE stanox IN ('TEST-BSKORIG-STANOX', 'TEST-BSKDEST-STANOX')",
+        )
+        .execute(&pool)
+        .await
+        .expect("cleanup stanox_crs");
     }
 
     fn fixture_line_with_no_toml_tiploc(id: &str, crs: &str) -> LineDefinition {
