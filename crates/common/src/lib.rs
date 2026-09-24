@@ -1081,6 +1081,31 @@ pub struct StanoxCrsRecord {
     pub change_time_minutes: Option<i32>,
 }
 
+/// One directly-resolved TIPLOC->CRS row: the TIPLOC-primary sibling of
+/// [`StanoxCrsRecord`], as `crates/schedule-reference` derives it via
+/// `parser::resolve_tiploc_crs` and POSTs to `api`'s
+/// `/private/tiploc-crs`. Unlike `StanoxCrsRecord`, this crosswalk keeps
+/// EVERY TIPLOC with its own resolvable CRS as its own row -- no
+/// STANOX-based grouping or "one row per STANOX" exclusion -- so a real
+/// station whose STANOX is shared by more than one genuine calling-point
+/// TIPLOC (e.g. Vauxhall's `VAUXHLM`/`VAUXHLW`, both CRS `VXH`; Clapham
+/// Junction's `CLPHMJM`/`CLPHMJW`, both CRS `CLJ`) has a row for EACH of
+/// them, not just whichever one `StanoxCrsRecord`'s STANOX-level
+/// disambiguation happened to keep. See
+/// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md and
+/// `crates/api/src/data/journey.rs`'s `tiploc_key` doc comment ("What this
+/// does NOT fix" item 1) for the gap this closes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TiplocCrsRecord {
+    pub tiploc: String,
+    pub crs: String,
+    pub station_name: String,
+    pub stanox: String,
+    pub source_sequence: i32,
+    #[serde(default)]
+    pub change_time_minutes: Option<i32>,
+}
+
 /// One resolved CIF `ALF` fixed-link row, as published between
 /// `crates/schedule-reference` (writer, `POST /private/fixed-links`) and
 /// `crates/api` (reader/storage). `from_crs`/`to_crs` are CRS codes, not

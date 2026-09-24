@@ -29,8 +29,16 @@ use crate::data::{queries, train_tracking};
 /// This index only ever needs to answer "which line(s) claim this CRS," not
 /// "what is this CRS's real TIPLOC" -- `find_schedule_match`, below,
 /// resolves the actual TIPLOC(s) to match against from the real,
-/// CIF-derived `stanox_crs` table via `queries::list_stanox_crs_for_crs`,
-/// which does not depend on this TOML catalogue at all. Gating this index
+/// CIF-derived data via `queries::list_stanox_crs_for_crs`, which does not
+/// depend on this TOML catalogue at all. As of Task 3 of
+/// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md,
+/// `list_stanox_crs_for_crs` itself reads the UNION of `stanox_crs` and the
+/// newer, richer `tiploc_crs` table (preferring a `tiploc_crs` row when a
+/// TIPLOC is present in both), so the TIPLOC(s) `find_schedule_match`
+/// matches against for a station like Vauxhall or Clapham Junction can now
+/// include EVERY real calling-point TIPLOC sharing that station's STANOX,
+/// not just whichever one `stanox_crs`'s one-row-per-STANOX schema
+/// happened to keep. Gating this index
 /// on the TOML `tiploc` field used to make it an inaccurate proxy for "does
 /// this station appear in real CIF data" -- ~83% of catalogued CRS codes
 /// have no TOML `tiploc` set (39 of 109 `lines/*.toml` files have none at
