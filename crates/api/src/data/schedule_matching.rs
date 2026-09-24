@@ -226,9 +226,59 @@ pub struct ScheduleMatch {
 /// before.
 ///
 /// `Some(train_uid)` for [`attempt_schedule_match_for_shared_train`], which
-/// already knows the real identity. **Real production bug this closes**
-/// (2026-09-24 investigation, train `Y80908`, Birmingham New Street ->
-/// London Euston via the Northampton loop): `pin_origin_crs` can easily
+/// already knows the real identity. Two distinct bugs have been found and
+/// fixed on this path, in two rounds, both described below newest-first.
+/// Round 3 is the one that actually kept train `Y80908` schedule-less in
+/// production; round 2 is a real bug of the same family that simply was
+/// not the one biting this train.
+///
+/// ---
+///
+/// **Round 3 (2026-09-24), the real `Y80908` root cause: an exact-minute
+/// tie inside ONE candidate line's population.** Measured against live
+/// production data, not reasoned about: `Y80908` (Birmingham New Street
+/// 16:06 -> London Euston 18:18, 2026-09-24) has a perfectly good CIF
+/// schedule -- `GET /public/trains/search?station=BHM&date=2026-09-24`
+/// returns it, with `true_origin_crs` `BHM` -- and
+/// `W75898` (Birmingham New Street -> Lichfield) departs Birmingham New
+/// Street in the SAME MINUTE, 16:06. 32 further services depart within
+/// `common::MATCH_TOLERANCE` of it.
+///
+/// `schedule_query::match_pin` returns the single globally-closest entry of
+/// the population it is given and has no uid concept at all; on a tie it
+/// keeps whichever entry it saw first. The correct schedule's delta here is
+/// always exactly zero (`true_origin_departure`'s
+/// `schedule_destination_departures.scheduled` and this function's
+/// `schedule_line_population` `booked_departure` are two products of the
+/// same CIF delivery describing the same calling point), so the correct
+/// schedule can only ever tie for best -- never win outright. When the tie
+/// goes the other way, `match_pin` hands back `W75898`, the uid check
+/// rejects it, and the correct schedule is unreachable.
+///
+/// Round 2's candidate-line loop (below) cannot rescue this, which is
+/// exactly why deploying it changed nothing for `Y80908`: `schedules_touching`
+/// puts EVERY schedule calling at a station into the population of EVERY
+/// line that lists that station, so `W75898` wins the same tie on every
+/// candidate line for `BHM`. The loop just exhausts them all.
+///
+/// The live population-level confirmation, over the 267 schedules whose
+/// true origin is `BHM` on 2026-09-24: of a 10-sample of the 161 with a
+/// departure minute they hold alone, 10/10 had a matched schedule
+/// (`originCrs` set); of a 10-sample of the 106 sharing their departure
+/// minute with another service, 8/10 had none. The two exceptions are the
+/// ones that happened to win their own tie. This is not a `Y80908` quirk --
+/// it silently cost roughly 40% of every busy station's schedules.
+///
+/// Fixed by filtering the population to `expected_uid` BEFORE matching (see
+/// the code below), so an identity-known match is actually identity-scoped
+/// rather than a proximity contest the right answer can only draw. The uid
+/// check further down is consequently unreachable now, and kept only as a
+/// cheap invariant guard.
+///
+/// ---
+///
+/// **Round 2 (2026-09-24), a real bug, but not `Y80908`'s**:
+/// `pin_origin_crs` can easily
 /// have several candidate lines (`crs_line_index`'s `CRS -> Vec<line_id>`,
 /// built from every `lines/*.toml` file that lists the station -- Birmingham
 /// New Street alone appears on a dozen of them, from `cross-country` to
@@ -250,6 +300,15 @@ pub struct ScheduleMatch {
 /// match -- only `Ok(None)` (or a line whose match genuinely agrees) ends
 /// the search. The untargeted (`None`) path is completely unaffected: it
 /// still returns on the very first tolerance match, same as always.
+///
+/// Correction to that round's own account, for the record: it named
+/// `Y80908` as its motivating case and guessed its route/line from the
+/// symptom. Round 3 measured the real data -- `Y80908` runs Birmingham New
+/// Street 16:06 to London Euston, and its rival for the match is on the
+/// SAME line's population, not an earlier candidate line. Round 2 fixes a
+/// genuine bug (a schedule reachable only from a later candidate line was
+/// unreachable), and its own regression test exercises exactly that shape;
+/// it simply was never what `Y80908` was hitting.
 async fn find_schedule_match(
     pool: &PgPool,
     pin_origin_crs: &str,
@@ -275,6 +334,33 @@ async fn find_schedule_match(
         };
         let entries: Vec<LinePopulationEntry> = serde_json::from_value(json)?;
 
+        // **The whole fix for the real Y80908 production bug** (2026-09-24
+        // round-3 investigation -- see this function's own doc comment).
+        // When the caller already knows which identity it wants, narrow the
+        // population to THAT schedule BEFORE matching, instead of matching
+        // across the whole line and checking the winner's uid afterwards.
+        //
+        // `schedule_query::match_pin` returns the single globally-CLOSEST
+        // entry in the population it is handed, and knows nothing about
+        // uids: on an exact tie it keeps the first entry it saw (its
+        // `*best_delta <= delta` comparison). The correct schedule's own
+        // delta is always exactly zero here -- `true_origin_departure` reads
+        // `schedule_destination_departures.scheduled` and this reads
+        // `schedule_line_population`'s `booked_departure`, two products
+        // published from the SAME CIF delivery for the same calling point --
+        // so the correct schedule can only ever TIE for best, never beat a
+        // rival outright. Any other service departing the same station in
+        // the same minute therefore wins the tie roughly half the time, and
+        // the caller's uid check then threw the correct match away.
+        // Filtering first removes the rivalry entirely.
+        let entries: Vec<LinePopulationEntry> = match expected_uid {
+            Some(expected) => entries
+                .into_iter()
+                .filter(|entry| entry.uid == expected)
+                .collect(),
+            None => entries,
+        };
+
         let Some(matched) = schedule_query::match_pin(
             &entries,
             &tiplocs,
@@ -299,12 +385,14 @@ async fn find_schedule_match(
         if let Some(expected) = expected_uid
             && matched.uid != expected
         {
-            // Do NOT return this -- keep searching the remaining candidate
-            // lines. See this function's own doc comment for the real
-            // production bug (train `Y80908`) this closes: returning here
-            // (the old behavior) is exactly what let a wrong-line,
-            // wrong-uid tolerance match permanently starve out the correct
-            // one on a later candidate line.
+            // Unreachable as of the round-3 fix above: the population this
+            // matched against was already filtered to `expected`, so
+            // `matched.uid` cannot disagree. Kept as a cheap invariant
+            // guard -- if that filter is ever loosened, this restores
+            // round 2's behavior (keep searching the remaining candidate
+            // lines) rather than silently writing another train's calling
+            // points onto this shared row. See this function's own doc
+            // comment for both rounds' full account.
             tracing::debug!(
                 expected_uid = expected,
                 matched_uid = matched.uid,
@@ -377,16 +465,18 @@ async fn find_schedule_match(
 /// `Ok(false)` for that, same as for "no match at all".
 ///
 /// Passes `Some(train_uid)` as `find_schedule_match`'s `expected_uid` --
-/// see that function's own doc comment for the real production bug
-/// (train `Y80908`, 2026-09-24) this closes: it now keeps trying every
-/// remaining candidate line for `origin_crs` until one actually agrees with
-/// `train_uid`, rather than giving up the instant the FIRST candidate
-/// line's tolerance match happens to be some other, unrelated service. The
-/// check just below is therefore a defense-in-depth invariant now, not the
-/// primary correctness mechanism it used to be -- `find_schedule_match`
-/// itself should never hand this function a disagreeing uid any more; if
-/// this branch ever fires, treat it as a bug in that guarantee, not an
-/// expected "busy terminus" outcome.
+/// see that function's own doc comment for the two real production bugs
+/// (train `Y80908`, 2026-09-24) this closes. As of round 3 it narrows each
+/// candidate line's population to `train_uid` BEFORE matching, so the
+/// correct schedule can no longer lose an exact-minute tie to an unrelated
+/// service departing the same station in the same minute (the actual
+/// `Y80908` failure); as of round 2 it also keeps trying the remaining
+/// candidate lines rather than giving up on the first one. The check just
+/// below is therefore a defense-in-depth invariant now, not the primary
+/// correctness mechanism it used to be -- `find_schedule_match` itself
+/// should never hand this function a disagreeing uid any more; if this
+/// branch ever fires, treat it as a bug in that guarantee, not an expected
+/// "busy terminus" outcome.
 ///
 /// Writes through `find_or_create_train_with_schedule_match`, whose every
 /// column is `COALESCE`d against the existing value -- so this can never
@@ -603,17 +693,33 @@ mod db_tests {
     }
 
     fn population_json(uid: &str, tiploc: &str, departure: &str) -> serde_json::Value {
-        serde_json::json!([{
-            "uid": uid,
-            "calling_points": [{
-                "tiploc": tiploc,
-                "kind": "Origin",
-                "booked_arrival": null,
-                "booked_departure": departure,
-                "is_half_minute_arrival": false,
-                "is_half_minute_departure": false
-            }]
-        }])
+        population_json_multi(&[(uid, tiploc, departure)])
+    }
+
+    /// [`population_json`]'s many-schedule sibling: ONE line's population
+    /// carrying several schedules, in the given order. Needed because the
+    /// real `Y80908` bug lives entirely INSIDE one line's population (two
+    /// services departing the same station in the same minute), not across
+    /// two lines -- see `find_schedule_match`'s own doc comment.
+    fn population_json_multi(entries: &[(&str, &str, &str)]) -> serde_json::Value {
+        serde_json::Value::Array(
+            entries
+                .iter()
+                .map(|(uid, tiploc, departure)| {
+                    serde_json::json!({
+                        "uid": uid,
+                        "calling_points": [{
+                            "tiploc": tiploc,
+                            "kind": "Origin",
+                            "booked_arrival": null,
+                            "booked_departure": departure,
+                            "is_half_minute_arrival": false,
+                            "is_half_minute_departure": false
+                        }]
+                    })
+                })
+                .collect(),
+        )
     }
 
     #[tokio::test]
@@ -1578,6 +1684,251 @@ mod db_tests {
         .await
         .ok();
         sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-BHM-STANOX'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// **The real `Y80908` regression test** (2026-09-24 round-3
+    /// investigation) -- the shape the round-2 test directly above got
+    /// wrong, and the reason deploying round 2 changed nothing in
+    /// production.
+    ///
+    /// Measured live, not invented: on 2026-09-24 `Y80908` departs
+    /// Birmingham New Street at 16:06 for London Euston, and `W75898`
+    /// departs Birmingham New Street at 16:06 for Lichfield. Both call at
+    /// `BHM`, so `schedules_touching` puts BOTH into the population of
+    /// EVERY line that lists `BHM` -- the rival is not on some other
+    /// candidate line, it is sitting right next to the correct schedule in
+    /// the SAME one. `schedule_query::match_pin` picks the globally-closest
+    /// entry with no regard for uid, and keeps the first on a tie, so the
+    /// correct schedule (whose own delta is always exactly zero, and which
+    /// therefore can only ever draw) loses -- on every candidate line
+    /// identically, which is precisely why round 2's "try the next line"
+    /// loop could not help.
+    ///
+    /// So this fixture deliberately uses ONE candidate line, with the rival
+    /// FIRST in the population and the same booked departure minute. Before
+    /// the round-3 fix this returned `Ok(false)` and wrote nothing; now the
+    /// population is narrowed to `expected_uid` before matching, so there
+    /// is no tie to lose.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_for_shared_train_wins_an_exact_minute_tie_inside_one_lines_population \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_for_shared_train_wins_an_exact_minute_tie_inside_one_lines_population()
+     {
+        let pool = connect().await;
+        let train_uid = "TEST-Y80908-TIE";
+        let rival_uid = "TEST-W75898-TIE";
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+
+        let trains_id = crate::data::trains::find_or_create_train(&pool, train_uid, service_date)
+            .await
+            .expect("find_or_create_train for fixture");
+        crate::data::trains::mark_train_resolved(&pool, trains_id, "TEST-Y80908-TIE-HC")
+            .await
+            .expect("mark_train_resolved for fixture");
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-TIE-STANOX', 'TTB', 'BHAMNWS', 'TEST BIRMINGHAM NEW STREET', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs for the busy origin station");
+
+        // ONE candidate line, both services in it, the RIVAL first -- so
+        // `match_pin`'s first-wins tie-break hands back the wrong schedule
+        // unless the population is narrowed by uid beforehand.
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-bhm-peak-shape', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json_multi(&[
+            (rival_uid, "BHAMNWS", "16:06"),
+            (train_uid, "BHAMNWS", "16:06"),
+        ]))
+        .execute(&pool)
+        .await
+        .expect("seed the busy line's population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("TTB".to_string(), vec!["test-bhm-peak-shape".to_string()]);
+
+        let matched = attempt_schedule_match_for_shared_train(
+            &pool,
+            train_uid,
+            "TTB",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt_schedule_match_for_shared_train");
+        assert!(
+            matched,
+            "a known-identity match must not be lost to another service departing the same \
+             station in the same minute"
+        );
+
+        let (origin_crs, matched_line_id): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT origin_crs, matched_line_id FROM trains WHERE id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back the shared trains row");
+        assert_eq!(
+            origin_crs,
+            Some("TTB".to_string()),
+            "the whole point of the fix: originCrs stops being NULL, so the public train page \
+             stops rendering \"Unknown station\""
+        );
+        assert_eq!(matched_line_id, Some("test-bhm-peak-shape".to_string()));
+
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-bhm-peak-shape' \
+             AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-TIE-STANOX'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// The guard on the round-3 fix's blast radius: the UNTARGETED
+    /// (`expected_uid: None`) legacy pin path must be completely unaffected
+    /// by the uid narrowing. It has no identity to narrow BY -- discovering
+    /// one is the entire point -- so it must still take the closest entry
+    /// in the whole population, whatever uid that turns out to be.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_still_takes_the_closest_entry_of_the_whole_population \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_still_takes_the_closest_entry_of_the_whole_population() {
+        let pool = connect().await;
+        let user_id = "TEST-SCHEDULE-MATCH-UNTARGETED";
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("untargeted@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-UNT-STANOX', 'TTU', 'BHAMNWS', 'TEST BIRMINGHAM NEW STREET', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-untargeted-shape', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json_multi(&[
+            ("TEST-UNT-FAR", "BHAMNWS", "16:16"),
+            ("TEST-UNT-NEAR", "BHAMNWS", "16:06"),
+        ]))
+        .execute(&pool)
+        .await
+        .expect("seed population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("TTU")
+        .bind(scheduled_departure)
+        .fetch_one(&pool)
+        .await
+        .expect("seed fixture subscription");
+
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("TTU".to_string(), vec!["test-untargeted-shape".to_string()]);
+
+        let matched = attempt_schedule_match(
+            &pool,
+            tracked_train_id,
+            "TTU",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+            &[],
+            None,
+            None,
+        )
+        .await
+        .expect("attempt_schedule_match");
+        assert!(matched);
+
+        let (trains_id,): (Option<i64>,) =
+            sqlx::query_as("SELECT trains_id FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back trains_id");
+        let (train_uid,): (String,) = sqlx::query_as("SELECT train_uid FROM trains WHERE id = $1")
+            .bind(trains_id.expect("a successful match sets trains_id"))
+            .fetch_one(&pool)
+            .await
+            .expect("read back the shared trains row");
+        assert_eq!(
+            train_uid, "TEST-UNT-NEAR",
+            "the untargeted path still discovers the CLOSEST schedule's identity, unnarrowed"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid IN ('TEST-UNT-NEAR', 'TEST-UNT-FAR')")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-untargeted-shape' \
+             AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-UNT-STANOX'")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
             .execute(&pool)
             .await
             .ok();
