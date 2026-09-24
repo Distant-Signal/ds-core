@@ -225,8 +225,13 @@ pub fn match_pin<'a>(
 /// points (`Origin`/`Intermediate`, i.e. `booked_departure.is_some()` --
 /// `Terminate` never has one, see [`crate::records::CallingPointKind::Terminate`]'s
 /// own doc), bucketed by CRS via `tiploc_to_crs` (normalized-TIPLOC keyed,
-/// built by the caller from the SAME cycle's already-resolved
-/// `stanox_crs` rows -- no second lookup table, no new parse). A calling
+/// built by the caller from the SAME cycle's already-resolved crosswalk
+/// rows -- no second lookup table, no new parse; that is the TIPLOC-primary
+/// `tiploc_crs` set as of Task 4 of
+/// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md, not the
+/// STANOX-keyed `stanox_crs` one this doc comment originally named, see
+/// `crates/schedule-reference/src/main.rs`'s
+/// `publish_schedule_network_departures`). A calling
 /// point whose TIPLOC has no `tiploc_to_crs` entry is dropped, not guessed
 /// at -- a real, if rare, honest gap (see the design doc's Open Question
 /// 4), not a silent one: the caller simply never sees that departure
@@ -497,6 +502,29 @@ pub fn departures_by_destination_crs(
 /// fallback, built from the one thing always genuinely known (the
 /// terminus's own TIPLOC), rather than a value invented out of nothing.
 ///
+/// **Status update (2026-09-24): those three specific HS1 examples no
+/// longer reach this fallback, but this fallback is still load-bearing.**
+/// Task 4 of
+/// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md switched
+/// the real caller's `tiploc_to_crs` map
+/// (`crates/schedule-reference/src/main.rs`'s
+/// `publish_schedule_destination_departures`) from the STANOX-keyed
+/// `stanox_crs` set to the TIPLOC-primary `tiploc_crs` one, and
+/// `parser::resolve_tiploc_crs` applies NO STANOX-level exclusion at all --
+/// so `ASHFKI`/`ASHFKY`, `STFORDI`/`STFODOM` and `EBSFLTI`/`EBSFDOM` each
+/// now carry their own row and resolve to their own real CRS (see that
+/// function's own
+/// `ambiguous_stanox_with_two_genuine_non_x_candidates_now_resolves_both_instead_of_neither`
+/// test). What still reaches this fallback is the residual case: a schedule
+/// whose terminating TIPLOC has no resolvable CRS ANYWHERE -- no `TI` CRS
+/// and no matching `MSN` `A` record, i.e. a genuine non-station terminus
+/// such as a carriage siding or depot (the `WATRLWC` shape
+/// `resolve_tiploc_crs`'s own
+/// `a_junction_tiploc_sharing_a_stations_stanox_with_no_own_crs_anywhere_still_does_not_resolve`
+/// test pins). Do not read the now-resolved HS1 examples above as evidence
+/// that this fallback can be removed; read them as the history of why it
+/// was added.
+///
 /// **Never collides with a real CRS.** Every real CRS (including
 /// `X`-prefixed pseudo-codes) is exactly 3 uppercase ASCII letters by
 /// Network Rail's own convention -- see `reference-data/stanox-crs.md`.
@@ -545,7 +573,7 @@ fn unresolved_destination_key(terminus_tiploc: &str) -> String {
 ///
 /// The second condition is the load-bearing "looks like it could be a real
 /// station" signal, not merely "didn't resolve": every real caller builds
-/// `tiploc_to_crs` directly from the FULL resolved `stanox_crs` table,
+/// `tiploc_to_crs` directly from the FULL resolved CRS crosswalk,
 /// X-prefixed rows included (see e.g. `main.rs`'s own `tiploc_to_crs`
 /// construction, shared verbatim by `departures_by_crs`/
 /// `departures_by_destination_crs`'s own call sites) -- so a TIPLOC that
@@ -553,10 +581,23 @@ fn unresolved_destination_key(terminus_tiploc: &str) -> String {
 /// or depot; see `crates/api/src/data/journey.rs::is_bookable_crs`'s own
 /// doc comment for the convention and real examples) is present as a KEY
 /// here and never returned by this function. Only a TIPLOC with no
-/// `stanox_crs` row of any kind at all -- not even an X-prefixed one --
+/// crosswalk row of any kind at all -- not even an X-prefixed one --
 /// reaches this function's result, exactly inverting `is_bookable_crs`'s
 /// own "resolved but not bookable" case to get at "not resolved, therefore
 /// possibly a real, unmapped station" instead.
+///
+/// "The crosswalk" here is the TIPLOC-primary `tiploc_crs` set as of Task 4
+/// of docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md, not
+/// the STANOX-keyed `stanox_crs` one this doc comment originally named:
+/// `crates/schedule-reference/src/main.rs`'s
+/// `log_new_unresolved_booked_tiplocs` now builds its map from
+/// `tiploc_crs_records`, so it sees the same superset
+/// `departures_by_crs`/`departures_by_destination_crs` do. That makes this
+/// function's "no row of any kind" bar STRICTER than before (a TIPLOC that
+/// `stanox_crs`'s one-row-per-STANOX schema dropped, but that carries its
+/// own CRS, is now a key and so is correctly no longer warned about), which
+/// is exactly the intent -- fewer false "possibly a real, unmapped station"
+/// warnings, not fewer real ones.
 ///
 /// Sorted (a `BTreeSet` collected to `Vec`, not insertion order) purely so
 /// this function's own output -- and any test asserting on it -- is
