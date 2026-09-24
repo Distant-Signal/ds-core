@@ -13,7 +13,6 @@ ABO,,Aboyne (Main Street)
 ABR,ABRCYNN,Abercynon North
 ABW,ABBEYWD,Abbey Wood
 ABW,ABWD,Abbey Wood
-ABW,CODE,Abbey Wood
 ABX,ABWDXR,Abbey Wood Crossrail
 ABY,ASHBRYS,Ashburys
 ACB,ACBG,Acton Bridge
@@ -25,7 +24,6 @@ ACK,ACKLNGT,Acklington
 ACL,ACLE,Acle
 ACM,ADDISMB,Addiscombe
 ACM,ADSCMB,Addiscombe
-ACM,CODE,Addiscombe
 ACN,ACHNSHN,Achnasheen
 ACR,ACRNGTN,Accrington
 ACT,ASCOT,Ascot
@@ -44,10 +42,8 @@ AER,ABARASQ,Aberaeron (Alban Square)
 AFD,ABRFRWD,Aberffrwd
 AFK,ASHFKY,Ashford (Kent)
 AFK,ASHFRDK,Ashford (Kent)
-AFK,CODE,Ashford (Kent)
 AFS,ASFDMSX,Ashford (Surrey/Middlesex)
 AFS,ASHFDM,Ashford (Surrey/Middlesex)
-AFS,CODE,Ashford (Surrey/Middlesex)
 AFV,ANSDELL,Ansdell & Fairhaven
 AGL,ABGLELE,Abergele & Pensarn
 AGR,ANGELRD,Angel Road
@@ -96,12 +92,9 @@ AMT,ALDMSTN,Aldermaston
 AMW,AMLWCH,Amlwch
 AMY,AMBERLY,Amberley
 AMY,AMLY,Amberley
-AMY,CODE,Amberley
 ANC,ANCASTR,Ancaster
 AND,ANDRSTN,Anderston
-AND,CNDAW,Anderston
 ANF,LYNDHRD,Ashurst New Forest
-ANF,ROAD,Ashurst New Forest
 ANG,ANGMRNG,Angmering
 ANH,MNCRANC,Manchester Anchorage Metrolink
 ANL,ANSL,Anniesland
@@ -117,7 +110,6 @@ AON,ALTON,Alton
 APB,APLYBDG,Appley Bridge
 APD,APDR,Appledore (Kent)
 APD,APPLED,Appledore (Kent)
-APD,CODE,Appledore (Kent)
 APF,APPLEFD,Appleford
 APG,ASPLEYG,Aspley Guise
 APN,AIRP,Airport [Tyne & Wear Metro]
@@ -148,7 +140,6 @@ ASF,ASFIELD,Ashfield
 ASG,ALSAGER,Alsager
 ASH,ASH,Ash
 ASH,ASHH,Ash
-ASH,CODE,Ash
 ASI,ASHFKI,Ashford International
 ASK,ASKAM,Askam
 ASL,ASHGTN,Ashington
@@ -194,11 +185,9 @@ AWP,SCARALP,Scarborough Alpamare Water Park
 AWT,ARMTHWT,Armathwaite
 AXM,AXMNSTR,Axminster
 AXM,AXMNSTS,Axminster
-AXM,CODE,Axminster
 AXP,ALXPD,Alexandra Parade
 AYH,ALSHAM,Aylesham
 AYH,AYLESHM,Aylesham
-AYH,CODE,Aylesham
 AYL,AYLESFD,Aylesford
 AYP,ALBNYPK,Albany Park
 AYR,AYRR,Ayr
@@ -206,7 +195,6 @@ AYS,AYLSBRY,Aylesbury
 AYW,ABRYSTH,Aberystwyth
 BAA,BARNHAM,Barnham
 BAA,BRHM,Barnham
-BAA,CODE,Barnham
 BAB,BALCOMB,Balcombe
 BAC,BACHE,Bache
 BAD,BANSTED,Banstead
@@ -232,7 +220,6 @@ BAU,BRTHMBR,Barton On Humber
 BAV,BARWHVN,Barrow Haven
 BAW,BCKWATR,Blackwater
 BAW,BLCKWTR,Blackwater
-BAW,CODE,Blackwater
 BAX,CATZBAX,Ballina
 BAY,BAYFORD,Bayford
 BAZ,BALA,Bala (by bus)
@@ -254,7 +241,6 @@ BCF,BCNSFLD,Beaconsfield
 BCG,BCHGRV,Birchgrove
 BCH,BCNGNOS,Birchington-on-Sea
 BCH,BRCHNOS,Birchington-on-Sea
-BCH,CODE,Birchington-on-Sea
 BCJ,BRSCGHJ,Burscough Junction
 BCK,BCKY,Buckley
 BCN,BRNCHTN,Branchton
@@ -263,7 +249,6 @@ BCS,BCSTN,Bicester North
 BCT,BCSTRTN,Bicester Town
 BCU,BKNHRST,Brockenhurst
 BCU,BRCKNHR,Brockenhurst
-BCU,CODE,Brockenhurst
 BCV,BRUCGRV,Bruce Grove
 BCW,BLENCWM,Blaencwm (by bus)
 BCY,BROCKLY,Brockley
@@ -282,7 +267,6 @@ BDL,BKDLE,Birkdale
 BDM,BEDFDM,Bedford
 BDN,BRADING,Brading
 BDN,BRDING,Brading
-BDN,CODE,Brading
 BDQ,BRADFS,Bradford Forster Square
 BDS,BONDST,Bond Street
 BDT,BRDLNGT,Bridlington
@@ -317,7 +301,6 @@ BFB,BELFBUS,Belford Bus
 BFC,BLFSTCL,Belfast Central
 BFD,BNTFORD,Brentford
 BFD,BRNTFD,Brentford
-BFD,CODE,Brentford
 BFE,BEREFRS,Bere Ferrers
 BFF,BLAENAU,Blaenau Ffestiniog
 BFL,BUCFAST,Buckfastleigh
@@ -328,7 +311,6 @@ BFP,HULLBFP,Hull Boothferry Park
 BFQ,BLFSTDQ,Belfast Donegall Quay
 BFR,BLCKFRR,Blackfriars
 BFR,BLFR,Blackfriars
-BFR,CODE,Blackfriars
 BFS,CATZ131,Bradford Yorkshire Stations
 BFX,CATZ036,Blackfriars For The Games
 BGA,BRUNDLG,Brundall Gardens
@@ -346,7 +328,6 @@ BGS,BOGSTON,Bogston
 BGT,BTSDE,Brightside
 BGV,BARKRIV,Barking Riverside
 BGV,BKRVS,Barking Riverside
-BGV,CODE,Barking Riverside
 BGY,BLGRY,Balgray
 BHA,BOMOHAP,Bournemouth Hurn Airport
 BHC,BALLOCH,Balloch
@@ -371,7 +352,6 @@ BID,BDSTON,Bidston
 BIF,BAROW,Barrow-In-Furness
 BIG,BILSHST,Billingshurst
 BIG,BLNGSHR,Billingshurst
-BIG,CODE,Billingshurst
 BIH,CATZBIH,Birdhill
 BIK,BIRKBCK,Birkbeck
 BIL,BLNGHM,Billingham On Tees
@@ -379,7 +359,6 @@ BIN,BINGHAM,Bingham
 BIO,BALISTN,Baillieston
 BIP,BSHPSTN,Bishopstone
 BIP,BSSN,Bishopstone
-BIP,CODE,Bishopstone
 BIR,BSHPSFY,Birmingham Stations
 BIR,BSSNBUS,Birmingham Stations
 BIR,CATZ130,Birmingham Stations
@@ -393,7 +372,6 @@ BKD,BLAKEDN,Blakedown
 BKG,BARKING,Barking
 BKH,BLCKHTH,Blackheath
 BKH,BLKHTH,Blackheath
-BKH,CODE,Blackheath
 BKI,BRKNIOM,Birkenhead Isle Of Man Steam Packet Company 12 Quay
 BKJ,BCKNHMJ,Beckenham Junction [station]
 BKL,BICKLEY,Bickley
@@ -403,7 +381,6 @@ BKN,BRKNHDN,Birkenhead North
 BKN,BRKNHN3,Birkenhead North
 BKO,BRKWOOD,Brookwood
 BKO,BROOKWD,Brookwood
-BKO,CODE,Brookwood
 BKP,BRKNHDP,Birkenhead Park
 BKQ,HAMTSQ,Hamilton Square [Birkenhead]
 BKQ,HAMTSQ2,Hamilton Square [Birkenhead]
@@ -429,7 +406,6 @@ BLK,BLRD,Blackrod
 BLL,BRDNML,Bardon Mill
 BLM,BELM,Belmont
 BLM,BELMONT,Belmont
-BLM,CODE,Belmont
 BLN,BLNDLAC,Blundellsands & Crosby
 BLO,BLAYDON,Blaydon
 BLP,BELPER,Belper
@@ -451,7 +427,6 @@ BMF,BRFT,Broomfleet
 BMG,BARMING,Barming
 BMH,BOMO,Bournemouth
 BMH,BRNMTH,Bournemouth
-BMH,CODE,Bournemouth
 BMK,BRNAMKT,Burnham Market
 BML,BMHL,Bramhall
 BMM,BLMMTLK,Barlow Moor Road Metrolink
@@ -464,7 +439,6 @@ BMT,BDMNSTR,Bedminster
 BMV,BRMSGRV,Bromsgrove
 BMY,BMLY,Bramley (Hampshire)
 BMY,BRAMLEY,Bramley (Hampshire)
-BMY,CODE,Bramley (Hampshire)
 BNA,BAGE,Burnage
 BNC,BURNLYC,Burnley Central
 BND,BNDON,Brandon
@@ -474,7 +448,6 @@ BNG,BANGOR,Bangor (Gwynedd)
 BNH,BRNHRST,Barnehurst
 BNI,BARNESB,Barnes Bridge
 BNI,BNSBDGE,Barnes Bridge
-BNI,CODE,Barnes Bridge
 BNJ,BONNHBF,Bonn Hbf
 BNK,BENMTLK,Benchill Metrolink
 BNK,WACB,Benchill Metrolink
@@ -499,7 +472,6 @@ BOD,BODMNPW,Bodmin Parkway
 BOE,BOTLEY,Botley
 BOG,BOGNOR,Bognor Regis
 BOG,BOGNORR,Bognor Regis
-BOG,CODE,Bognor Regis
 BOH,BOSHAM,Bosham
 BOK,BRKLNDS,Brooklands
 BOM,BRMB,Bromborough
@@ -533,7 +505,6 @@ BRE,BRTWOOD,Brentwood
 BRF,BRIERFL,Brierfield
 BRG,BOROGAW,Borough Green & Wrotham
 BRG,BORWGAW,Borough Green & Wrotham
-BRG,CODE,Borough Green & Wrotham
 BRH,BORTH,Borth
 BRI,BRSTLTM,Bristol Temple Meads
 BRJ,,Bridgetown
@@ -547,7 +518,6 @@ BRP,BRAMPTN,Brampton (Suffolk)
 BRR,BRHD,Barrhead
 BRS,BRLANDS,Berrylands
 BRS,BRYLNDS,Berrylands
-BRS,CODE,Berrylands
 BRT,BARLSTN,Barlaston
 BRU,BRUTON,Bruton
 BRV,BOURNVL,Bournville
@@ -561,7 +531,6 @@ BSB,BLEASBY,Bleasby
 BSC,BSCTSTA,Bescot Stadium
 BSD,BRSTDAT,Bearsted
 BSD,BSTD,Bearsted
-BSD,CODE,Bearsted
 BSE,BSTEDMS,Bury St Edmunds
 BSG,CATZBSG,Ballinasloe
 BSH,BUSHEY,Bushey
@@ -572,13 +541,11 @@ BSK,BSNGSTK,Basingstoke
 BSL,BEASDAL,Beasdale
 BSM,BRANKSM,Branksome
 BSM,BRNKSME,Branksome
-BSM,CODE,Branksome
 BSN,BOSTON,Boston
 BSO,BASILDN,Basildon
 BSP,BRBYPK,Brondesbury Park
 BSR,BRDSTRS,Broadstairs
 BSR,BRSR,Broadstairs
-BSR,CODE,Broadstairs
 BSS,BARASIE,Barassie
 BST,BSSNBUS,Birmingham Stations
 BST,CATZ130,Birmingham Stations
@@ -597,7 +564,6 @@ BTH,BATHSPA,Bath Spa
 BTL,BATLEY,Batley
 BTN,BRGHTN,Brighton
 BTN,BRIGHTN,Brighton
-BTN,CODE,Brighton
 BTO,BTCHWTH,Betchworth
 BTP,BRAINFP,Braintree Freeport
 BTR,BRAINTR,Braintree
@@ -606,7 +572,6 @@ BTT,BTRSBY,Battersby
 BTW,BULTWLS,Builth Wells Groe 1 Strand
 BTY,BENTLEY,Bentley (Hants)
 BTY,BNTEY,Bentley (Hants)
-BTY,CODE,Bentley (Hants)
 BUA,BUDESTD,Bude Strand
 BUB,BURNLYB,Burnley Barracks
 BUC,BUCKNHM,Buckenham
@@ -624,7 +589,6 @@ BUO,BURSLDN,Bursledon
 BUR,BURY,Bury
 BUS,BUSBY,Busby
 BUT,BURTNOT,Burton-On-Trent
-BUT,RTFDTHR,Burton-On-Trent
 BUU,BRNMONC,Burnham-On-Crouch
 BUW,BURLYIW,Burley In Wharfedale
 BUX,BUXTON,Buxton
@@ -646,10 +610,8 @@ BWY,CATZBWY,Broadway (Worcestershire)
 BXB,BROXBRN,Broxbourne
 BXD,BUXTED,Buxted
 BXD,BXTD,Buxted
-BXD,CODE,Buxted
 BXH,BEXLEYH,Bexleyheath
 BXH,BXLYHTH,Bexleyheath
-BXH,CODE,Bexleyheath
 BXS,BRUXMID,Bruxelles Midi
 BXT,BRXHMTS,Brixham Town Square
 BXW,BOXHAWH,Boxhill & Westhumble
@@ -684,7 +646,6 @@ CAK,CARK,Cark & Cartmel
 CAL,CALAISM,Calais Maritime
 CAM,CAMBRLY,Camberley
 CAM,CMBLEY,Camberley
-CAM,CODE,Camberley
 CAN,CNST,Carnoustie
 CAO,CNCK,Cannock
 CAP,CAPCSBC,Capel Curig Siabod Café
@@ -702,7 +663,6 @@ CBC,COATBDC,Coatbridge Central
 CBD,CONONBR,Conon Bridge
 CBE,CNTBE,Canterbury East
 CBE,CNTBYE,Canterbury East
-CBE,CODE,Canterbury East
 CBG,CAMBDGE,Cambridge
 CBH,CAMHTH,Cambridge Heath
 CBK,CBRK,Cranbrook
@@ -715,7 +675,6 @@ CBT,CAMPBLT,Campbeltown
 CBU,,Callander
 CBW,CANTWST,Canterbury West
 CBW,CNTBW,Canterbury West
-CBW,CODE,Canterbury West
 CBX,CMRNBDG,Cameron Bridge
 CBY,CHBURY,Charlbury
 CBZ,PBROCOR,Peterborough Corby Bus Station
@@ -723,7 +682,6 @@ CCB,CRDFBUS,Cardiff Central Bus Station
 CCC,CRICCTH,Criccieth
 CCH,CHCHSTE,Chichester
 CCH,CHCHSTR,Chichester
-CCH,CODE,Chichester
 CCK,CATZ012,Chinnor By Rail
 CCL,CATZ114,Colchester Stations
 CCN,CATZCCN,Castleconnell
@@ -755,7 +713,6 @@ CES,CRESING,Cressing
 CET,CLCHRTN,Colchester Town
 CEY,CONONLY,Cononley
 CFB,CATFBDG,Catford Bridge
-CFB,CODE,Catford Bridge
 CFB,CTFDBDG,Catford Bridge
 CFC,SWNACFC,Swanage Corfe Castle
 CFD,CASTLFD,Castleford
@@ -765,14 +722,10 @@ CFI,CHFIELD,Charfield
 CFL,CFLATTS,Crossflatts
 CFN,CLFDOWN,Clifton Down
 CFO,CHLFNAL,Chalfont & Latimer
-CFR,BEFORE,Chandlers Ford
 CFR,CHNDLSF,Chandlers Ford
-CFR,CODE,Chandlers Ford
 CFR,CSFD,Chandlers Ford
-CFR,STATION,Chandlers Ford
 CFS,CAEFBST,Caernarfon Bus Station
 CFT,CFPK,Crofton Park
-CFT,CODE,Crofton Park
 CFT,CRFTNPK,Crofton Park
 CFX,,Camelford
 CGD,CRGDRN,Craigendoran
@@ -788,23 +741,19 @@ CHD,CHFD,Chesterfield
 CHE,CHEAM,Cheam
 CHF,CHFN,Church Fenton
 CHG,CHARING,Charing
-CHG,CODE,Charing
 CHG,CRNG,Charing
 CHH,CHRSTHS,Christs Hospital
 CHH,CHRSTSH,Christs Hospital
-CHH,CODE,Christs Hospital
 CHI,CHINGFD,Chingford
 CHJ,CATZCHJ,Charleville
 CHK,CHISWCK,Chiswick
 CHL,CHILWTH,Chilworth
 CHL,CHLWTH,Chilworth
-CHL,CODE,Chilworth
 CHM,CHLMSFD,Chelmsford
 CHN,CHESHNT,Cheshunt
 CHO,CHOLSEY,Cholsey
 CHP,CHIPSTD,Chipstead
 CHP,CHSD,Chipstead
-CHP,CODE,Chipstead
 CHQ,CATZ037,Charing Cross For The Games
 CHR,CHRISTC,Christchurch
 CHS,CATZ114,Churston Torbay & Dartmouth Railway
@@ -816,15 +765,12 @@ CHV,CLVMEZR,Charleville-Mezieres
 CHW,CHLKWEL,Chalkwell
 CHX,CHARNGX,Charing Cross
 CHX,CHRX,Charing Cross
-CHX,CODE,Charing Cross
 CHY,CHERTSY,Chertsey
 CHY,CHTSEY,Chertsey
-CHY,CODE,Chertsey
 CHZ,,Chatsworth House
 CIC,CIVI,Park Lane (Sunderland) originally to have been named Civic Centre
 CIL,CHILHAM,Chilham
 CIL,CLMN,Chilham
-CIL,CODE,Chilham
 CIM,CILMERY,Cilmeri
 CIN,SHEFCIR,Sheffield Cricket Inn Road [Sheffield Supertram]
 CIR,CLDNNRB,Caledonian Road & Barnsbury
@@ -834,7 +780,6 @@ CJX,CATZ049,Clapham Junction For The Games
 CKA,CATZCKA,Carrick-On-Shannon
 CKH,CKHL,Corkerhill
 CKL,CRCK,Corkickle
-CKN,CODE,Crewkerne
 CKN,CREWKRN,Crewkerne
 CKN,CRKRN,Crewkerne
 CKS,CLRKSTN,Clarkston
@@ -852,9 +797,7 @@ CLH,CLITHRO,Clitheroe
 CLI,CLTN,Clifton
 CLJ,CLAPHMJ,Clapham Junction
 CLJ,CLPHMJN,Clapham Junction
-CLJ,CODE,Clapham Junction
 CLK,CLOCKHS,Clock House
-CLL,CODE,Collington
 CLL,COLNGTN,Collington
 CLL,CTNG,Collington
 CLM,CLHM,Collingham
@@ -862,7 +805,6 @@ CLN,CHPLTWN,Chapeltown
 CLO,COLL,Coll
 CLP,CLAPHAM,Clapham High Street
 CLP,CLPHHS,Clapham High Street
-CLP,CODE,Clapham High Street
 CLQ,CATZCLQ,Clara
 CLR,CLARBRD,Clarbeston Road
 CLS,CLST,Chester-Le-Street
@@ -962,39 +904,11 @@ CRP,CNRYNP,Cairnryan Loch Ryan Port
 CRQ,MNCRCRM,Manchester Cemetery Road Metrolink
 CRR,CORROUR,Corrour
 CRS,CRSTRS,Carstairs
-CRS,GLGC,Carstairs
-CRS,GLGCLL,Carstairs
-CRS,GLGQHL,Carstairs
-CRS,GLGQLL,Carstairs
-CRS,HEWOMTR,Carstairs
-CRS,HEWORTH,Carstairs
-CRS,HGHI,Carstairs
-CRS,HIGHBYA,Carstairs
-CRS,HIGHBYE,Carstairs
-CRS,LCHTTVH,Carstairs
-CRS,LCHTTVL,Carstairs
-CRS,LVRPLSH,Carstairs
-CRS,LVRPLSL,Carstairs
-CRS,LVRPSPH,Carstairs
-CRS,LVRPSPY,Carstairs
-CRS,RTFD,Carstairs
-CRS,RTFDLL,Carstairs
-CRS,STPANCI,Carstairs
-CRS,STPX,Carstairs
-CRS,STPXBOX,Carstairs
-CRS,TMWTHHL,Carstairs
-CRS,TMWTHLL,Carstairs
-CRS,WLSD,Carstairs
-CRS,WLSDJHL,Carstairs
-CRS,WLSDNJL,Carstairs
-CRS,WORCPHL,Carstairs
-CRS,WORCPWY,Carstairs
 CRT,CHARTHM,Chartham
 CRU,CRGURE,Craignure
 CRV,CRAVENA,Craven Arms
 CRW,CRAWLEY,Crawley
 CRX,CRXLYG,Croxley Green
-CRY,CODE,Crayford
 CRY,CRAYFRD,Crayford
 CRY,CRFD,Crayford
 CRZ,CATZCRZ,Cricklade
@@ -1009,30 +923,25 @@ CSL,CODSALL,Codsall
 CSM,CTNM,Castleton Moor
 CSN,CHSNGTN,Chessington North
 CSN,CHSSN,Chessington North
-CSN,CODE,Chessington North
 CSO,CROT,Croston
 CSQ,CAEUSQU,Caerau Square
 CSR,CHASNRD,Chassen Road
 CSS,CHSNGTS,Chessington South
 CSS,CHSSS,Chessington South
-CSS,CODE,Chessington South
 CST,CANONST,Cannon Street
 CSW,CHSTASW,Chestfield & Swalecliffe
 CSW,CHSW,Chestfield & Swalecliffe
-CSW,CODE,Chestfield & Swalecliffe
 CSX,CATZ062,Cannon Street For The Games
 CSY,COSELEY,Coseley
 CTB,CSBY,Castlebay via Oban Ship
 CTE,CHTLRT,Chatelherault
 CTF,CATFORD,Catford
 CTH,CHDWLHT,Chadwell Heath
-CTK,CODE,City Thameslink
 CTK,CTMSLNK,City Thameslink
 CTK,TLKCITY,City Thameslink
 CTL,CATTAL,Cattal
 CTM,CHATHAM,Chatham
 CTN,CHARLTN,Charlton
-CTN,CODE,Charlton
 CTN,CRLN,Charlton
 CTO,CRTN,Carlton
 CTR,CHST,Chester
@@ -1049,7 +958,6 @@ CUM,CULHAM,Culham
 CUP,CUPAR,Cupar
 CUS,CUSTMHS,Custom House
 CUW,CLYNDRW,Clunderwen
-CUX,CODE,Cuxton
 CUX,CUXTON,Cuxton
 CUX,CXTN,Cuxton
 CVG,CHBUVIL,Charlbury Village
@@ -1097,7 +1005,6 @@ DBB,DOBSBRW,Dobbs Brow
 DBC,DMBRTNC,Dumbarton Central
 DBD,DNDL,Denby Dale
 DBE,DMBRTNE,Dumbarton East
-DBG,CODE,Dunbridge
 DBG,DUNBDGE,Dunbridge
 DBG,MOTFONT,Dunbridge
 DBL,DUNANE,Dunblane
@@ -1107,12 +1014,10 @@ DBS,SNDWCH,Sandwell Council House
 DBY,DRBY,Derby
 DBZ,,Derby Telesales
 DCG,DUNCRAG,Duncraig Halt
-DCH,CODE,Dorchester South
 DCH,DRCHS,Dorchester South
 DCH,DRCHSTS,Dorchester South
 DCL,DUBLINC,Dublin Connolly
 DCT,DANESCT,Danescourt
-DCW,CODE,Dorchester West
 DCW,DRCHSTW,Dorchester West
 DCW,DRCHW,Dorchester West
 DDB,,Dun Laoghaire Dublin Bay
@@ -1124,11 +1029,9 @@ DEB,PBRODMP,Peterborough Dereham Market Place
 DED,DOVERED,Dover Eastern Docks
 DEE,DUNDETB,Dundee
 DEN,DEAN,Dean (Wilts)
-DEP,CODE,Deptford
 DEP,DEPTFD,Deptford
 DEP,DEPTFRD,Deptford
 DEW,DWBY,Dewsbury
-DFD,CODE,Dartford
 DFD,DARTFD,Dartford
 DFD,DARTFRD,Dartford
 DFE,DNFRMLE,Dunfermline City
@@ -1158,19 +1061,17 @@ DIN,DINGWAL,Dingwall
 DIS,DISS,Diss
 DIT,DITTON,Ditton
 DKD,DUNKELD,Dunkeld & Birnam
-DKG,CODE,Dorking
 DKG,DORKING,Dorking
 DKG,DRKING,Dorking
 DKR,DERKER,Derker
-DKT,CODE,Dorking West
 DKT,DORKNGT,Dorking West
 DKT,DRKGW,Dorking West
 DLE,DULOE,Duloe (Causeland)
 DLE,DUNLHRM,Duloe (Causeland)
 DLG,DOLGARG,Dolgarrog
 DLH,DOLEHAM,Doleham
-DLJ,DALS,"Dalston Junction (East London Line) ✖ Believed to refer to track junction, not station"
-DLJ,DLSTONJ,"Dalston Junction (East London Line) ✖ Believed to refer to track junction, not station"
+DLJ,DALS,Dalston Junction (East London Line)
+DLJ,DLSTONJ,Dalston Junction (East London Line)
 DLK,DALSKLD,Dalston Kingsland
 DLM,DELAMER,Delamere
 DLO,DUNLGHR,Dun Laoghaire Port
@@ -1191,7 +1092,6 @@ DMR,DALMUIR,Dalmuir
 DMS,DORMANS,Dormans
 DMY,DRUMRY,Drumry
 DND,DINSDAL,Dinsdale
-DNG,CODE,Dunton Green
 DNG,DNTNGRN,Dunton Green
 DNG,DTNG,Dunton Green
 DNK,CATZDUK,Dundalk
@@ -1258,11 +1158,9 @@ DVC,DOVRCRT,Dovercourt
 DVH,DVHL,Dove Holes
 DVM,MNCRDVM,Manchester Didsbury Village Metrolink
 DVN,DAVNPRT,Davenport
-DVP,CODE,Dover Priory
 DVP,DOVERP,Dover Priory
 DVP,DVRPRY,Dover Priory
 DVR,CATZDVR,Daventry Bus Station
-DVW,CODE,Dover Western Docks
 DVW,DOVEWDK,Dover Western Docks
 DVW,DVRWDKS,Dover Western Docks
 DVY,DOVYJN,Dovey Junction
@@ -1275,12 +1173,10 @@ DYC,DYCE,Dyce
 DYF,DYFRYNA,Dyffryn Ardudwy
 DYP,DRYP,Drayton Park
 DZY,DANZEY,Danzey
-EAD,CODE,Earlsfield
 EAD,ERLFLD,Earlsfield
 EAD,ERLSFLD,Earlsfield
 EAG,EGLSCLF,Eaglescliffe
 EAL,EALINGB,Ealing Broadway
-EAR,CODE,Earley
 EAR,EARLEY,Earley
 EAR,ERLY,Earley
 EAS,ELSN,Earlston (Borders)
@@ -1294,11 +1190,9 @@ EBF,EBSFLTI,Ebbsfleet International
 EBK,EASTBRK,Eastbrook
 EBL,EBOLDON,East Boldon
 EBN,EBOURNE,Eastbourne
-EBR,CODE,Edenbridge (Kent)
 EBR,EDENBRG,Edenbridge (Kent)
 EBR,EDNB,Edenbridge (Kent)
 EBS,EDINBUS,Edinburgh Bus Station
-EBT,CODE,Edenbridge Town
 EBT,EDNBDGT,Edenbridge Town
 EBT,EDNT,Edenbridge Town
 EBV,EBWVPWY,Ebbw Vale Parkway
@@ -1308,7 +1202,6 @@ ECL,ECPK,Eccleston Park
 ECM,MNCRECC,Manchester Eccles Metrolink
 ECN,,Excursion
 ECP,ERGNCHP,Energlyn & Churchill Park
-ECR,CODE,East Croydon
 ECR,ECROYDN,East Croydon
 ECR,ECRYDON,East Croydon
 ECS,ECLR,Eccles Road
@@ -1319,12 +1212,10 @@ EDE,CATZ116,Edenbridge Stations
 EDG,EDGH,Edge Hill
 EDL,EDALE,Edale
 EDM,MNCREDM,Manchester East Didsbury Metrolink
-EDN,CODE,Eden Park
 EDN,EDENPK,Eden Park
 EDN,EDPK,Eden Park
 EDP,EDINPRK,Edinburgh Park
 EDR,EDMNGRN,Edmonton Green
-EDS,CODE,Edginswell
 EDS,EDGINSW,Edginswell
 EDS,EDGNSWL,Edginswell
 EDW,EDULWCH,East Dulwich
@@ -1332,7 +1223,6 @@ EDY,EDIDBRY,East Didsbury
 EDZ,YORKECP,York Eden Camp
 EEL,EUSKALS,East Usk Branch Alpha Steel
 EFD,CATZEFD,Enfield [Ireland]
-EFF,CODE,Effingham Junction
 EFF,EFFNGHM,Effingham Junction
 EFF,EFNGHMJ,Effingham Junction
 EFI,CATZ119,Enfield Stations
@@ -1353,7 +1243,6 @@ EKB,ESKBANK,Eskbank
 EKL,EKILBRD,East Kilbride
 EKR,CATZEKR,Eythorne East Kent Railway
 ELD,EARLSWD,Earlswood (Surrey)
-ELE,CODE,Elmers End
 ELE,ELMERSE,Elmers End
 ELE,ELMRSND,Elmers End
 ELG,ELGIN,Elgin
@@ -1381,11 +1270,9 @@ ENL,ENFLDLK,Enfield Lock
 ENN,CATZENN,Ennis
 ENS,ENISCTY,Enniscorthy
 ENT,ENTWISL,Entwistle
-EPD,CODE,Epsom Downs
 EPD,EPSDNS,Epsom Downs
 EPD,EPSMDOW,Epsom Downs
 EPH,ELPHNAC,Elephant & Castle
-EPS,CODE,Epsom
 EPS,EPSM,Epsom
 EPS,EPSMSW,Epsom
 EPS,EPSOM,Epsom
@@ -1397,11 +1284,9 @@ ERI,ERIDGE,Eridge
 ERL,ERLSTWN,Earlestown
 ERM,ERIGMOD,Eastriggs MOD
 ERS,,European Passenger Services UAT
-ESD,CODE,Elmstead Woods
 ESD,ELMSTDW,Elmstead Woods
 ESD,ELMW,Elmstead Woods
 ESH,ESHER,Esher
-ESL,CODE,Eastleigh
 ESL,ELEIGH,Eastleigh
 ESL,ELGH,Eastleigh
 ESM,ELSENHM,Elsenham
@@ -1419,7 +1304,6 @@ EVS,EVESSB,Evesham Signal Box
 EWD,ELWD,Earlswood (West Midlands)
 EWE,EWELLE,Ewell East
 EWR,EWRTHNG,East Worthing
-EWW,CODE,Ewell West
 EWW,EWELLW,Ewell West
 EWW,EWELW,Ewell West
 EXC,EXETERC,Exeter Central
@@ -1486,19 +1370,15 @@ FLX,FLXSTOW,Felixstowe
 FLZ,YORKFLM,York Flamingoland Bus
 FMA,FENTON,Fenton Manor
 FML,FRIMLEY,Frimley
-FMR,CODE,Falmer
 FMR,FALMER,Falmer
 FMR,FAMR,Falmer
 FMT,FALMTHT,Falmouth Town
-FNB,CODE,Farnborough (Main)
 FNB,FRBRMN,Farnborough (Main)
 FNB,FRNBRO,Farnborough (Main)
-FNC,CODE,Farncombe
 FNC,FARNCMB,Farncombe
 FNC,FRNCMB,Farncombe
 FNH,FARNHAM,Farnham
 FNI,NIMES,Nimes
-FNN,CODE,Farnborough North
 FNN,FRBRNTH,Farnborough North
 FNN,FRNBRON,Farnborough North
 FNR,FRNNGRD,Farningham Road
@@ -1513,8 +1393,7 @@ FOG,FRSTGT,Forest Gate
 FOH,FORESTH,Forest Hill
 FOK,FOUROKS,Four Oaks
 FOL,CATZ135,Folkestone Stations
-FOR,CAMBDCS,Cambridge Carriage Servicing Depot
-FOR,FORRES,Cambridge Carriage Servicing Depot
+FOR,FORRES,Forres
 FOT,CATZFOT,Fota
 FOX,FOXFILD,Foxfield
 FPK,FNPK,Finsbury Park
@@ -1576,7 +1455,6 @@ GCW,GLNCNWY,Glan Conwy
 GDE,GODLEYE,Godley East
 GDH,GORDONH,Gordon Hill
 GDL,GODLY,Godley
-GDN,CODE,Godstone
 GDN,GODSTNE,Godstone
 GDN,GODSTON,Godstone
 GDP,GIDEAPK,Gidea Park
@@ -1600,7 +1478,6 @@ GHM,GREATHM,Greatham
 GHN,,Glasshoughton
 GIB,IBMM,IBM
 GIG,GGLSWCK,Giggleswick
-GIL,CODE,Gillingham (Dorset)
 GIL,GLHM,Gillingham (Dorset)
 GIL,GLNGHAM,Gillingham (Dorset)
 GIP,GIPSYH,Gipsy Hill
@@ -1634,18 +1511,15 @@ GMY,GODMAYS,Goodmayes
 GNB,GBROC,Gainsborough Central
 GNF,GFLD,Greenfield
 GNG,GRTN,Grangetown (Cleveland)
-GNH,CODE,Greenhithe For Bluewater
 GNH,GNHT,Greenhithe For Bluewater
 GNH,GRENHTH,Greenhithe For Bluewater
 GNL,GNLN,Green Lane
 GNR,GREENRD,Green Road
 GNT,GUNTON,Gunton
-GNW,CODE,Greenwich
 GNW,GNWH,Greenwich
 GNW,GRENWCH,Greenwich
 GNX,CATZ022,Greenwich For The Games
 GOB,GOBOWEN,Gobowen
-GOD,CODE,Godalming
 GOD,GDLMING,Godalming
 GOD,GODLMNG,Godalming
 GOE,GLDTHRP,Goldthorpe
@@ -1672,12 +1546,10 @@ GRL,GRNFLDS,Greenfaulds
 GRM,GRSTM,Garston (Merseyside)
 GRN,GRNDLFD,Grindleford
 GRO,GROMBDG,Groombridge
-GRP,CODE,Grove Park
 GRP,GROVEPK,Grove Park
 GRP,GRVPK,Grove Park
 GRS,GSCD,Garscadden
 GRT,GRATELY,Grateley
-GRV,CODE,Gravesend
 GRV,GRVESND,Gravesend
 GRV,GRVSEND,Gravesend
 GRY,GRAYS,Grays
@@ -1699,7 +1571,6 @@ GTN,GNTN,Grangetown (South Glamorgan)
 GTO,GORTON,Gorton
 GTR,GOOSTRY,Goostrey
 GTS,GTSR,Gartshore
-GTW,CODE,Gatwick Airport
 GTW,GATWKAP,Gatwick Airport
 GTW,GTWK,Gatwick Airport
 GTY,GATLEY,Gatley
@@ -1721,7 +1592,6 @@ HAC,HAKNYNM,Hackney Downs
 HAD,HADISCO,Haddiscoe
 HAF,HTRWTM4,Heathrow Express Terminal 4
 HAG,HAGLEY,Hagley
-HAI,CODE,Halling
 HAI,HALG,Halling
 HAI,HALLING,Halling
 HAL,HALE,Hale
@@ -1740,13 +1610,11 @@ HBC,MNCRHBC,Manchester Harbour City Metrolink
 HBD,HBDNBDG,Hebden Bridge
 HBF,HEVEBUS,Hever (Stick Hill Phone Box/Brocas Farm)
 HBL,HBOLTN,Headbolt Lane
-HBN,CODE,Hollingbourne
 HBN,HBRN,Hollingbourne
 HBN,HLNGBRN,Hollingbourne
 HBP,HRNBPK,Hornbeam Park
 HBR,HENBURY,Henbury
 HBY,HBRY,Hartlebury
-HCB,CODE,Hackbridge
 HCB,HACKBDG,Hackbridge
 HCB,HKBG,Hackbridge
 HCH,HCHP,Holmes Chapel
@@ -1755,7 +1623,6 @@ HCN,HEADCRN,Headcorn
 HCR,NEWAHYK,Newark Hykeham Crossroads
 HCT,HUNCOAT,Huncoat
 HDB,HYDB,Haydon Bridge
-HDE,CODE,Hedge End
 HDE,HEDGDST,Hedge End
 HDE,HEDGEND,Hedge End
 HDF,HADFILD,Hadfield
@@ -1790,12 +1657,10 @@ HGD,HUNGRFD,Hungerford
 HGF,HAGFOLD,Hag Fold
 HGG,HAGGERS,Haggerston
 HGI,HORNBUS,Horndean Precinct/Good Intent (by bus)
-HGM,CODE,Higham
 HGM,HIGHAM,Higham
 HGM,HIGM,Higham
 HGN,HOUGHGR,Hough Green
 HGR,HTHRGRN,Hither Green
-HGS,CODE,Hastings
 HGS,HASTING,Hastings
 HGS,HASTNGS,Hastings
 HGT,HAGT,Harrogate
@@ -1830,7 +1695,6 @@ HLG,HLGN,Hall Green
 HLH,CATZ124,Helensburgh Stations
 HLI,HEALING,Healing
 HLL,HEATHLL,Heath Low Level
-HLM,CODE,Holmwood
 HLM,HLMW,Holmwood
 HLM,HOLMWD,Holmwood
 HLN,HRLG,Harlington
@@ -1840,11 +1704,9 @@ HLU,HLNSBRU,Helensburgh Upper
 HLW,HLNGTNW,Hillington West
 HLY,HOLYTWN,Holytown
 HMA,HAYY,Haymarket [Tyne & Wear Metro]
-HMC,CODE,Hampton Court
 HMC,HAMPTNC,Hampton Court
 HMC,HCRT,Hampton Court
 HMD,HMPDNPK,Hampden Park
-HME,CODE,Hamble
 HME,HAMBLE,Hamble
 HME,HMBLE,Hamble
 HMK,HAWESMP,Hawes Market Place
@@ -1853,22 +1715,18 @@ HMM,HAMERTN,Hammerton
 HMN,HOMRTON,Homerton
 HMP,HAMPTON,Hampton (London)
 HMS,HELMSDL,Helmsdale
-HMT,CODE,Ham Street
 HMT,HAMST,Ham Street
 HMT,HMST,Ham Street
-HMW,CODE,Hampton Wick
 HMW,HAMPTNW,Hampton Wick
 HMW,HAMWICK,Hampton Wick
 HMY,HARMYRS,Hairmyres
 HNA,HINTONA,Hinton Admiral
-HNB,CODE,Herne Bay
 HNB,HERNEBY,Herne Bay
 HNB,HRNEBAY,Herne Bay
 HNC,HAMLTNC,Hamilton Central
 HND,HANDBRO,Hanborough
 HNF,HDNS,Hednesford
 HNG,HENGOED,Hengoed
-HNH,CODE,Herne Hill
 HNH,HERNEH,Herne Hill
 HNH,HERNEHL,Herne Hill
 HNK,HINCKLY,Hinckley (Leics)
@@ -1883,7 +1741,6 @@ HOD,HOLINWS,Hollinwood
 HOH,HAROOTH,Harrow-on-the-Hill
 HOK,HOOK,Hook
 HOL,HOLTONH,Holton Heath
-HON,CODE,Honiton
 HON,HONITNS,Honiton
 HON,HONITON,Honiton
 HOO,HOOTON,Hooton
@@ -1909,7 +1766,6 @@ HRD,HRLNGRD,Harling Road
 HRE,HORD,Horden
 HRH,HORSHAM,Horsham
 HRL,HRLC,Harlech
-HRM,CODE,Harrietsham
 HRM,HARTSHM,Harrietsham
 HRM,HRSM,Harrietsham
 HRN,HRNSY,Hornsey
@@ -1926,12 +1782,10 @@ HSD,HAMSTED,Hamstead
 HSE,HURSLEY,Hursley Post Office
 HSG,HATHRSG,Hathersage
 HSK,HASOCKS,Hassocks
-HSL,CODE,Haslemere
 HSL,HASLEMR,Haslemere
 HSL,HASLMRE,Haslemere
 HST,GLGHST,Glasgow High Street
 HSW,HESWALL,Heswall
-HSY,CODE,Horsley
 HSY,HORSLEY,Horsley
 HSY,HRSLEY,Horsley
 HTC,HTCP,Heaton Chapel
@@ -1996,7 +1850,6 @@ HYN,HYNDLND,Hyndland
 HYO,HAYOWYE,Hay-On-Wye Hay Castle
 HYP,SHEFHYD,Sheffield Hyde Park [Sheffield Supertram]
 HYR,HYDNSRD,Haydons Road
-HYS,CODE,Hayes (Kent)
 HYS,HAYES,Hayes (Kent)
 HYS,HAYS,Hayes (Kent)
 HYT,HYDEN,Hyde North
@@ -2101,23 +1954,19 @@ KLL,KILARNY,Killarney
 KLM,KLMAURS,Kilmaurs
 KLN,KLYNN,Kings Lynn
 KLS,KLYNBUS,Kings Lynn Bus Station Great Northern
-KLY,CODE,Kenley
 KLY,KENLEY,Kenley
 KLY,KNLY,Kenley
 KMH,KMPSTNH,Kempston Hardwick
 KMK,KILMRNK,Kilmarnock
-KML,CODE,Kemsley
 KML,KEMSLEY,Kemsley
 KML,KMSLY,Kemsley
 KMP,KMPTNPK,Kempton Park
 KMS,KEMSING,Kemsing
 KNA,KNRSBGH,Knaresborough
-KND,CODE,Kingswood
 KND,KGWD,Kingswood
 KND,KINGSWD,Kingswood
 KNE,KENNETT,Kennett
 KNF,KNUTSFD,Knutsford
-KNG,CODE,Kingston
 KNG,KGSTON,Kingston
 KNG,KINGSTN,Kingston
 KNI,KNIGHTN,Knighton
@@ -2138,7 +1987,6 @@ KPT,KLPTRCK,Kilpatrick
 KQY,KAIMES,Kaimes Quarry Siding
 KRK,KRKC,Kirkconnel
 KSL,KEARSLY,Kearsley (Manchester)
-KSN,CODE,Kearsney (Kent)
 KSN,KEARSNY,Kearsney (Kent)
 KSN,KSNY,Kearsney (Kent)
 KSW,KSTP,Kirkby Stephen
@@ -2149,7 +1997,6 @@ KTR,KINTORE,Kintore
 KTW,KNTSHTW,Kentish Town West
 KVD,DAWSHLM,Kelvindale
 KVP,KVTNPK,Kiveton Park
-KWB,CODE,Kew Bridge
 KWB,KEWBDGE,Kew Bridge
 KWB,KEWBRDG,Kew Bridge
 KWD,KRKWOOD,Kirkwood
@@ -2164,10 +2011,8 @@ KYN,KEYNSHM,Keynsham
 KYY,KCLDYYD,Kirkcaldy Yard
 LAA,LIFTON,Lifton Arundell Arms Hotel
 LAB,LEYBURN,Leyburn
-LAC,CODE,Lancing
 LAC,LANCING,Lancing
 LAC,LNCG,Lancing
-LAD,CODE,Ladywell
 LAD,LADYWEL,Ladywell
 LAD,LDYW,Ladywell
 LAG,LGWITH,Langwith-Whaley Thorns
@@ -2211,7 +2056,6 @@ LDY,LADYBNK,Ladybank
 LEA,LEAGRVE,Leagrave
 LEB,LEABDGE,Lea Bridge
 LED,LDBURY,Ledbury
-LEE,CODE,Lee
 LEE,LEE,Lee
 LEE,LEEE,Lee
 LEG,LEGR,Lea Green
@@ -2236,11 +2080,9 @@ LFO,CATZLFO,Longford
 LGB,LGBK,Langbank
 LGD,LGWOOD,Lingwood
 LGE,LNGEATN,Long Eaton
-LGF,CODE,Longfield
 LGF,LGFD,Longfield
 LGF,LONGFLD,Longfield
 LGG,LGRN,Langley Green
-LGJ,CODE,Loughborough Junction
 LGJ,LBGHJN,Loughborough Junction
 LGJ,LGHBRJS,Loughborough Junction
 LGK,LONGBCK,Longbeck
@@ -2250,7 +2092,6 @@ LGO,LLGUNLO,Llangynllo
 LGS,LNSD,Langside
 LGW,LWBY,Langwathby
 LHA,LOCHAWE,Loch Awe
-LHD,CODE,Leatherhead
 LHD,LETHRHD,Leatherhead
 LHD,LTHERHD,Leatherhead
 LHE,LCEILOB,Loch Eil Outward Bound
@@ -2276,7 +2117,6 @@ LIV,LVRPLSH,Liverpool Lime Street High Level
 LIX,LIVSTLL,London Liverpool Street Crossrail
 LJL,LVRPJLA,Liverpool John Lennon Airport
 LJN,LIMERCJ,Limerick Junction
-LKE,CODE,Lake
 LKE,LAKE,Lake
 LKE,LAKEIOW,Lake
 LLA,LNAB,Llanaber Halt
@@ -2311,7 +2151,6 @@ LNB,LLBRDCH,Llanbradach
 LND,LNGNDRY,Longniddry
 LNE,LONDINT,London International
 LNF,LINDFRD,Lindford (Liphook Road)
-LNG,CODE,Longcross
 LNG,LNGCROS,Longcross
 LNG,LONGCRS,Longcross
 LNK,LANARK,Lanark
@@ -2327,7 +2166,6 @@ LOE,LONDEUR,London Eurostar (CIV)
 LOF,LONFLDS,London Fields
 LOH,LSTH,Lostock Hall
 LON,CATZ148,London Road (Guildford)
-LON,CODE,London Road (Guildford)
 LON,LNDNRDG,London Road (Guildford)
 LON,LRDGFD,London Road (Guildford)
 LOO,LOOE,Looe
@@ -2345,13 +2183,7 @@ LPT,LNGP,Longport
 LPW,LAPWRTH,Lapworth
 LPY,LVRPSPY,Liverpool South Parkway
 LRB,BRGHLRD,Brighton London Road
-LRB,CODE,Brighton London Road
 LRB,LNDNRDB,Brighton London Road
-LRB,LONDON,Brighton London Road
-LRB,NAMED,Brighton London Road
-LRB,ROAD,Brighton London Road
-LRB,WHEN,Brighton London Road
-LRD,CODE,London Road (Guildford)
 LRD,LNDNRDG,London Road (Guildford)
 LRD,LRDGFD,London Road (Guildford)
 LRG,LAIRG,Lairg
@@ -2397,7 +2229,6 @@ LVJ,JAMEST2,James Street
 LVJ,JAMEST3,James Street
 LVL,LVRPLSL,Liverpool Lime Street Low Level
 LVM,LVHM,Levenshulme
-LVN,CODE,Littlehaven
 LVN,LHVN,Littlehaven
 LVN,LTTLHVN,Littlehaven
 LVP,CATZ137,Liverpool Stations
@@ -2414,11 +2245,9 @@ LYD,LYDNEY,Lydney
 LYE,LYEE,Lye
 LYM,LYMPSTN,Lympstone Village
 LYN,LYNDHRD,Lyndhurst Road see also Ashurst New Forest
-LYP,CODE,Lymington Pier
 LYP,LMTNPIR,Lymington Pier
 LYP,LYMNGTP,Lymington Pier
 LYS,,Lyon Perrache
-LYT,CODE,Lymington Town
 LYT,LMTNTWN,Lymington Town
 LYT,LYMNGTP,Lymington Town
 LZB,LAZKRKO,Lazonby & Kirkoswald
@@ -2433,7 +2262,6 @@ MAI,MDNHEAD,Maidenhead
 MAJ,CATZMAJ,Manulla Junction
 MAL,MALDENM,Malden Manor
 MAN,MNCRPIC,Manchester Piccadilly
-MAO,CODE,Martins Heron
 MAO,MARTHRN,Martins Heron
 MAO,MHERON,Martins Heron
 MAR,MARGATE,Margate
@@ -2442,10 +2270,8 @@ MAT,MATLOCK,Matlock
 MAU,MLDTHRD,Mauldeth Road
 MAW,MALLOW,Mallow
 MAX,MAXWLPK,Maxwell Park
-MAY,GTSHDMC,Gateshead Metro Centre
-MAY,MAYBOLE,Gateshead Metro Centre
+MAY,MAYBOLE,Maybole
 MBH,CATZMBH,Muine Bheag
-MBK,CODE,Millbrook (Hants)
 MBK,MBRK,Millbrook (Hants)
 MBK,MILBRKH,Millbrook (Hants)
 MBR,MDLSBRO,Middlesbrough
@@ -2465,7 +2291,6 @@ MCV,MNCRVIC,Manchester Victoria
 MCX,CATZ033,Manchester Victoria For Old Trafford
 MCZ,CATZMCZ,Manchester Central Zone
 MDB,MSTONEB,Maidstone Barracks
-MDE,CODE,Maidstone East
 MDE,MDSTEST,Maidstone East
 MDE,MSTONEE,Maidstone East
 MDG,MIDGHAM,Midgham
@@ -2473,12 +2298,10 @@ MDL,MDWD,Middlewood
 MDM,MRDMTLK,Moor Road Metrolink
 MDN,MDNNWTN,Maiden Newton
 MDQ,MLDONQ,Meldon Quarry
-MDR,CODE,Morden Road
 MDR,MORDNRD,Morden Road
 MDR,MRDNRD,Morden Road
 MDS,MORDENS,Morden South
 MDT,MEDSTED,Medstead
-MDW,CODE,Maidstone West
 MDW,MDSTNWE,Maidstone West
 MDW,MSTONEW,Maidstone West
 MDY,CATZQBM,Maerdy (by bus)
@@ -2528,7 +2351,6 @@ MKR,MKTR,Market Rasen
 MKT,MRKSTEY,Marks Tey
 MLB,MLBRKB,Millbrook (Bedfordshire)
 MLD,MLDSWTH,Mouldsworth
-MLF,CODE,Milford (Surrey)
 MLF,MILFORD,Milford (Surrey)
 MLF,MLFORD,Milford (Surrey)
 MLG,MLAIG,Mallaig
@@ -2559,14 +2381,11 @@ MOL,MOLBS,Mold Bus Station
 MOM,CATZMOM,Mostrim (Edgworthstown)
 MON,MONIFTH,Monifieth
 MOO,MUROORD,Muir Of Ord
-MOP,CODE,Merton Park
 MOP,MERTNPK,Merton Park
 MOP,MRTP,Merton Park
-MOR,CODE,Mortimer
 MOR,MORTIMR,Mortimer
 MOR,MTIMER,Mortimer
 MOS,MSSD,Moss Side
-MOT,CODE,Motspur Park
 MOT,MOTSPRK,Motspur Park
 MOT,MOTSPRP,Motspur Park
 MOV,MOSLEY,Moseley Village
@@ -2599,7 +2418,6 @@ MSL,MOSSLEY,Mossley (Manchester)
 MSM,MNCRMSM,Manchester Monsall Metrolink
 MSN,MRSN,Marsden (Yorks)
 MSO,MSTN,Moston
-MSR,CODE,Minster
 MSR,MINSTER,Minster
 MSR,MNSTER,Minster
 MSS,MSGT,Moses Gate
@@ -2608,16 +2426,13 @@ MSW,MFLDWSE,Mansfield Woodhouse
 MTA,MASH,Mountain Ash
 MTB,MATLCKB,Matlock Bath
 MTC,ESTFLDS,Eastfields (Mitcham)
-MTD,CODE,Dunbridge
 MTD,DUNBDGE,Dunbridge
 MTD,MOTFONT,Dunbridge
 MTE,NNTNMIR,Nuneaton MIRA Technology Park
 MTG,MOTNGHM,Mottingham
 MTH,MOTHRWL,Motherwell
-MTL,CODE,Mortlake
 MTL,MRTLAKE,Mortlake
 MTL,MRTLKE,Mortlake
-MTM,CODE,Martin Mill
 MTM,MARTNML,Martin Mill
 MTM,MMIL,Martin Mill
 MTN,MORETON,Moreton (Dorset)
@@ -2648,7 +2463,6 @@ NAN,NANTWCH,Nantwich
 NAR,NRBERTH,Narberth
 NAY,NWTA,Newton Aycliffe
 NBA,NBARNET,New Barnet
-NBC,CODE,New Beckenham
 NBC,NBCKNHM,New Beckenham
 NBC,NBECKHM,New Beckenham
 NBE,NBRWGE,Newbridge [Wales]
@@ -2658,7 +2472,6 @@ NBM,MNCRNBM,Manchester Newbold Metrolink
 NBN,NBTN,New Brighton
 NBR,NARBRO,Narborough
 NBS,NTNBSD,Norton Bridge Station Drive
-NBT,CODE,Norbiton
 NBT,NORBITN,Norbiton
 NBT,NRBITON,Norbiton
 NBW,NBERWCK,North Berwick
@@ -2687,7 +2500,6 @@ NEW,NCRAGHA,Newcraighall see also Kinnaird Park
 NEY,NEWEMLN,Newcastle Emlyn Cattle Market (by bus)
 NFA,FAMBDGE,North Fambridge previously called Fambridge
 NFD,NRTF,Northfield
-NFL,CODE,Northfleet
 NFL,NRTHFLT,Northfleet
 NFL,NTHFLET,Northfleet
 NFN,NAFERTN,Nafferton
@@ -2721,8 +2533,7 @@ NOA,NWTOA,Newton-On-Ayr
 NOD,SWNANDN,Swanage Norden
 NOP,NBRLPK,Northumberland Park Tyne And Wear
 NOR,NORMNTN,Normanton
-NOT,MUCK,Muck
-NOT,NTNG,Muck
+NOT,NTNG,Nottingham
 NOY,NWCSOLM,Newcastle Olympic Games
 NPD,NPUD,New Pudsey
 NPP,NTNGPKK,Nottingham Phoenix Park
@@ -2759,14 +2570,12 @@ NVP,,Newhaven Stations
 NVR,NAVGTNR,Navigation Road
 NWA,NWALSHM,North Walsham
 NWB,NWEMBLY,North Wembley
-NWD,CODE,Norwood Junction [station]
 NWD,NORWDJ,Norwood Junction [station]
 NWD,NRWDJCT,Norwood Junction [station]
 NWE,NEWPRTE,Newport (Essex)
 NWH,NSHM,Newsham
 NWI,NTHWICH,Northwich
 NWK,CATZ141,Newark Stations
-NWM,CODE,New Milton
 NWM,NEWMLTN,New Milton
 NWM,NMILTON,New Milton
 NWN,NWTH,Newton For Hyde
@@ -2774,7 +2583,6 @@ NWP,NWPTRTG,Newport (South Wales)
 NWR,NWTM,Newtonmore
 NWT,NWTP,Newtown
 NWW,NWOLWCH,North Woolwich
-NWX,CODE,New Cross
 NWX,NEWX,New Cross
 NWX,NWCRELL,New Cross
 NWX,NWCROSS,New Cross
@@ -2788,12 +2596,8 @@ OCK,OCKENDN,Ockendon
 OCM,MNCROCM,Manchester Oldham Central Metrolink
 OHL,OLHL,Old Hill
 OKE,OKHMPTN,Okehampton
-OKI,BUT,Okehampton Interchange
-OKI,CODE,Okehampton Interchange
-OKI,NOT,Okehampton Interchange
 OKI,OKHMPI,Okehampton Interchange
 OKI,OKHMPIC,Okehampton Interchange
-OKI,USED,Okehampton Interchange
 OKL,OKLGHPK,Oakleigh Park
 OKM,OAKHAM,Oakham
 OKN,OAKNGTS,Oakengates
@@ -2810,7 +2614,6 @@ ONZ,CATZONZ,Onley Bus
 OOS,OOSTEND,Oostende
 OPK,ORELPKH,Orrell Park
 OPY,OXFPWAY,Oxford Parkway see also Water Eaton Parkway
-ORE,CODE,Ore
 ORE,ORE,Ore
 ORE,OREE,Ore
 ORN,OLDROAN,Old Roan
@@ -2827,7 +2630,6 @@ OUN,OULTNBN,Oulton Broad North
 OUS,OULTNBS,Oulton Broad South
 OUT,OUTWOOD,Outwood
 OVE,OPOL,Overpool
-OVR,CODE,Overton
 OVR,OVERTON,Overton
 OVR,OVTN,Overton
 OXF,OXFD,Oxford
@@ -2835,16 +2637,7 @@ OXN,OXENHLM,Oxenholme Lake District
 OXP,OXFPWAY,Oxford Parkway see also Water Eaton Parkway
 OXS,OXSHOTT,Oxshott
 OXT,OXTED,Oxted
-PAA,AS,Paddington Crossrail
-PAA,CODE,Paddington Crossrail
-PAA,ERROR,Paddington Crossrail
-PAA,FOR,Paddington Crossrail
-PAA,GIVEN,Paddington Crossrail
-PAA,IN,Paddington Crossrail
-PAA,LONDON,Paddington Crossrail
-PAA,PADLL,Paddington Crossrail
 PAA,PADTLL,Paddington Crossrail
-PAA,RAIL,Paddington Crossrail
 PAD,PADTON,Paddington
 PAI,PALL,Pallion [Tyne & Wear Metro]
 PAL,PALMRSG,Palmers Green
@@ -2870,19 +2663,9 @@ PDG,PADGATE,Padgate
 PDK,PEMBFTM,Pembroke Ferry Terminal
 PDL,PENDLTN,Pendleton
 PDT,PDSTWBT,Padstow Bus Terminus/Old Railway Station
-PDW,CODE,Paddock Wood
 PDW,PADCKWD,Paddock Wood
 PDW,PKWD,Paddock Wood
-PDX,AS,Paddington Crossrail
-PDX,CODE,Paddington Crossrail
-PDX,ERROR,Paddington Crossrail
-PDX,FOR,Paddington Crossrail
-PDX,GIVEN,Paddington Crossrail
-PDX,IN,Paddington Crossrail
-PDX,LONDON,Paddington Crossrail
-PDX,PADLL,Paddington Crossrail
 PDX,PADTLL,Paddington Crossrail
-PDX,RAIL,Paddington Crossrail
 PEA,PEARTRE,Peartree
 PEB,PVNSYBY,Pevensey Bay
 PEE,CATZPEE,Portree
@@ -2892,7 +2675,6 @@ PEM,PBRT,Pemberton
 PEN,PENARTH,Penarth
 PER,PNRHCBR,Penrhiwceiber
 PES,PSRN,Pensarn
-PET,CODE,Petts Wood
 PET,PETSWD,Petts Wood
 PET,PETTSWD,Petts Wood
 PEV,PVNSYAW,Pevensey & Westham
@@ -2908,7 +2690,6 @@ PGN,PAIGNTN,Paignton
 PGR,PNYGROS,Pen-Y-Gros Poveys Garage
 PHG,PENHELG,Penhelig
 PHM,PLHMTLK,Peel Hall Metrolink
-PHR,CODE,Penshurst
 PHR,PENSHST,Penshurst
 PHR,PNSHRST,Penshurst
 PHS,PERTHHS,Perth Loco Inspection Point
@@ -2919,13 +2700,11 @@ PIR,PNAPLRD,Pineapple Road originally to have been named Hazelwell
 PIT,PTLCHRY,Pitlochry
 PIZ,YORKPCK,York Pickering Eastgate
 PKG,PNKRDG,Penkridge
-PKS,CODE,Parkstone (Dorset)
 PKS,PSTONE,Parkstone (Dorset)
 PKT,PKST,Park Street
 PLC,PLUCKLY,Pluckley
 PLD,PSLDAWH,Portslade
 PLE,PLKLHDE,Pollokshields East
-PLG,CODE,Polegate
 PLG,POLEGT,Polegate
 PLG,POLGATE,Polegate
 PLK,PLOCKTN,Plockton
@@ -2933,7 +2712,6 @@ PLM,PLUMLEY,Plumley
 PLN,PLTH,Portlethen
 PLS,PLSNGTN,Pleasington
 PLT,PNTLTYN,Pontlottyn
-PLU,CODE,Plumstead
 PLU,PLMS,Plumstead
 PLU,PLMSTD,Plumstead
 PLW,PLKLHDW,Pollokshields West
@@ -2942,21 +2720,17 @@ PMA,PRTSMTA,Portsmouth Arms
 PMB,PEMBROK,Pembroke
 PMD,PEMBRKD,Pembroke Dock
 PMG,PRTHHBR,Porthmadog Harbour Ffestiniog Railway
-PMH,CODE,Portsmouth Harbour
 PMH,PHBR,Portsmouth Harbour
 PMO,MNCRPOM,Manchester Pomona Metrolink
-PMP,CODE,Plumpton
 PMP,PLMPTON,Plumpton
 PMP,PLUMPTN,Plumpton
 PMR,PCKHMRY,Peckham Rye (Catford Loop Lines)
-PMS,CODE,Portsmouth & Southsea
 PMS,POMOSTH,Portsmouth & Southsea
 PMS,PSEA,Portsmouth & Southsea
 PMT,POLMONT,Polmont
 PMW,PNMNMWR,Penmaenmawr
 PNA,PNALLY,Penally
 PNC,PENYCHN,Penychain originally named Butlins Penychain
-PNE,CODE,Penge East
 PNE,PENGEE,Penge East
 PNE,PNGEE,Penge East
 PNF,PNYF,Penyffordd
@@ -2997,7 +2771,6 @@ PRL,PRITLWL,Prittlewell
 PRM,PRIMRSH,Primrose Hill
 PRN,PARTON,Parton
 PRO,CATZPRO,Portarlington
-PRP,CODE,Preston Park
 PRP,PRSP,Preston Park
 PRP,PRSTNPK,Preston Park
 PRR,PRINRIS,Princes Risborough
@@ -3015,7 +2788,6 @@ PST,PPAN,Prestonpans
 PSW,PWTH,Polesworth
 PTA,PTALBOT,Port Talbot Parkway
 PTB,PNTRBCH,Pentre-Bach
-PTC,CODE,Portchester
 PTC,PCHESTR,Portchester
 PTC,PRTCHST,Portchester
 PTD,PNTADLS,Pontarddulais
@@ -3031,7 +2803,6 @@ PTR,PTRSFLD,Petersfield
 PTS,PRSH,Portrush
 PTT,PATERTN,Patterton
 PTW,PWCK,Prestwick Town
-PUL,CODE,Pulborough
 PUL,PULBORO,Pulborough
 PUL,PULBRO,Pulborough
 PUO,PURLEYO,Purley Oaks
@@ -3102,17 +2873,11 @@ QPK,QUNPARK,Queens Park (Glasgow)
 QPN,CATZQPN,Peak Network Day Ticket
 QPW,QPRK,Queens Park (London) [AC lines]
 QPW,QPRKAC,Queens Park (London) [AC lines]
-QRB,CODE,Queenstown Road (Battersea)
 QRB,QTRDBAT,Queenstown Road (Battersea)
 QRB,QUEENTW,Queenstown Road (Battersea)
 QRD,QUNTRD,Quainton Road
-QRP,CODE,Peckham Queens Road
 QRP,PCKHMQD,Peckham Queens Road
-QRP,PECKHAM,Peckham Queens Road
-QRP,QUEENS,Peckham Queens Road
 QRP,QUNSRDP,Peckham Queens Road
-QRP,ROAD,Peckham Queens Road
-QRP,WHEN,Peckham Queens Road
 QSD,CATZQSD,SWR Destination
 QSO,CATZQSO,SWR Origin
 QTA,THOKMAX,Three Oaks Maxfield Lane
@@ -3127,14 +2892,12 @@ QYD,QUAKRSY,Quakers Yard
 RAD,RDLEY,Radley
 RAI,RAINHMK,Rainham (Kent)
 RAL,ROSISLE,Roseisle DCL Cereals
-RAM,CODE,Ramsgate
 RAM,RAMSGTE,Ramsgate
 RAM,RMSGATE,Ramsgate
 RAN,RANNOCH,Rannoch
 RAP,RATCPS,Ratcliffe Power Station
 RAU,RAUCEBY,Rauceby
 RAV,RGLS,Ravenglass For Eskdale
-RAW,MUCK,Muck
 RAY,RAYNSPK,Raynes Park
 RBR,RBRTSBD,Robertsbridge
 RBS,REDCBSC,Redcar British Steel
@@ -3187,7 +2950,6 @@ RHF,RHDLFLS,Rheidol Falls
 RHG,RHIGOS,Rhigos Bus Stop
 RHI,RHIWBNA,Rhiwbina
 RHL,RHYL,Rhyl
-RHM,CODE,Reedham (Surrey)
 RHM,REEDHAM,Reedham (Surrey)
 RHM,REEDHMS,Reedham (Surrey)
 RHO,RHOSNGR,Rhosneigr
@@ -3200,10 +2962,7 @@ RID,RIDGMNT,Ridgmont
 RIL,RICELA,Rice Lane
 RIS,RISHTON,Rishton
 RKT,RSKNGTN,Ruskington
-RLE,CODE,Derby Rams Line Halt
 RLE,DRBYRAM,Derby Rams Line Halt
-RLE,EARLIER,Derby Rams Line Halt
-RLE,LATER,Derby Rams Line Halt
 RLE,RAMS,Derby Rams Line Halt
 RLG,RAYLEGH,Rayleigh
 RLN,RWLNDSC,Rowlands Castle
@@ -3211,7 +2970,6 @@ RLY,ROPLEY,Ropley
 RLZ,CATZ066,Rayleigh For The Games
 RMB,ROMANBG,Roman Bridge
 RMC,ROTHCEN,Rotherham Central
-RMD,CODE,Richmond (London)
 RMD,RCHMOND,Richmond (London)
 RMD,RICHMND,Richmond (London)
 RMF,ROMFORD,Romford
@@ -3228,7 +2986,6 @@ RNM,RNHAME,Rainham (Essex)
 RNR,RGHTNRD,Roughton Road
 ROB,ROBY,Roby
 ROC,RCHE,Roche
-ROE,CODE,Rotherhithe
 ROE,RTHERHI,Rotherhithe
 ROE,RTHERI,Rotherhithe
 ROG,ROGART,Rogart
@@ -3256,7 +3013,6 @@ RTH,RDHMTLK,Roundthorn Metrolink
 RTI,RUTINMS,Ruthin Market Street
 RTM,RTHRHMM,Rotherham Masborough [1]
 RTN,RENTON,Renton
-RTR,CODE,Rochester
 RTR,RCHESTR,Rochester
 RTR,RCHT,Rochester
 RTY,RSAY,Rothesay
@@ -3267,30 +3023,24 @@ RUG,RUGBY,Rugby
 RUN,RUNCORN,Runcorn
 RUS,RUSWARP,Ruswarp
 RUT,RTHGLEN,Rutherglen
-RVB,CODE,Ravensbourne
 RVB,RBRN,Ravensbourne
 RVB,RVNSBRN,Ravensbourne
 RVN,RTHP,Ravensthorpe
 RWC,RAWCLIF,Rawcliffe
 RYB,ROYBDGE,Roy Bridge
-RYD,CODE,Ryde Esplanade
 RYD,RYDE,Ryde Esplanade
 RYD,RYDEESP,Ryde Esplanade
-RYE,CODE,Rye
 RYE,RYEE,Rye
 RYE,RYESTN,Rye
 RYH,RYEHOUS,Rye House
 RYK,ROSYTHD,Rosyth Dockyard
 RYN,ROYDON,Roydon
-RYP,CODE,Ryde Pier Head
 RYP,RYDEP,Ryde Pier Head
 RYP,RYDP,Ryde Pier Head
-RYR,CODE,Ryde St Johns Road
 RYR,RYDS,Ryde St Johns Road
 RYR,RYDYSTJ,Ryde St Johns Road
 RYS,ROYSTON,Royston
 SAA,STALBNA,St Albans Abbey
-SAB,CODE,Smallbrook Junction
 SAB,SMALBRK,Smallbrook Junction
 SAB,SMALLJS,Smallbrook Junction
 SAC,STALBCY,St Albans City
@@ -3301,11 +3051,9 @@ SAG,CATZXPX,St Agnes Bus
 SAH,SALHOUS,Salhouse
 SAI,SHEFARE,Sheffield Arena [Sheffield Supertram]
 SAJ,STJOHNS,St Johns (London)
-SAL,CODE,Salisbury
 SAL,SALISBY,Salisbury
 SAL,SLSBRY,Salisbury
 SAM,SLTMRSH,Saltmarshe
-SAN,CODE,Sandown
 SAN,SANDWN,Sandown
 SAN,SNDOWN,Sandown
 SAO,SANWBUS,St Andrews Bus
@@ -3317,7 +3065,6 @@ SAU,STAUSTL,St Austell
 SAV,SOAV,Stratford-upon-Avon
 SAW,SBDGWTH,Sawbridgeworth
 SAX,SXMNDHM,Saxmundham
-SAY,CODE,Swanley
 SAY,SWANLEY,Swanley
 SAY,SWLY,Swanley
 SBE,STARBCK,Starbeck
@@ -3338,7 +3085,6 @@ SCB,SCRBSTR,Scrabster
 SCC,STALBCS,St Albans Centre Sidings
 SCE,SURCNRD,Surrey Canal Road
 SCF,STECHFD,Stechford
-SCG,CODE,Stone Crossing
 SCG,STCR,Stone Crossing
 SCG,STONEX,Stone Crossing
 SCH,SCTSTNH,Scotstounhill
@@ -3349,7 +3095,6 @@ SCR,STCLMBR,St Columb Road
 SCS,STRCROS,Starcross
 SCT,SCSCLDR,Scotscalder
 SCU,SCNTHRP,Scunthorpe
-SCY,CODE,South Croydon
 SCY,SCROYDN,South Croydon
 SCY,SCROYDO,South Croydon
 SDA,SNODLND,Snodland
@@ -3358,7 +3103,6 @@ SDC,SHRDHST,Shoreditch High Street
 SDD,STDVCH,St Davids (Dyfed) New Street/City Hall
 SDE,SHADWEL,Shadwell
 SDF,SDRSFOT,Saundersfoot
-SDG,CODE,Sandling
 SDG,SANDLNG,Sandling
 SDG,SDLG,Sandling
 SDH,SDBRYHH,Sudbury Hill Harrow
@@ -3373,7 +3117,6 @@ SDR,SUNDRTN,Saunderton
 SDS,STHFLDS,Southfields
 SDT,CATZSDT,Sidmouth Triangle
 SDT,SIDMTHT,Sidmouth Triangle
-SDW,CODE,Sandwich
 SDW,SANDWCH,Sandwich
 SDW,SWCH,Sandwich
 SDY,SNDY,Sandy
@@ -3381,39 +3124,10 @@ SEA,SEAHAM,Seaham
 SEB,SEABURN,Seaburn
 SEC,SETNCRW,Seaton Carew
 SED,SHELFD,Shelford
-SEE,GLGC,Glasgow Central High Level
-SEE,GLGCLL,Glasgow Central High Level
-SEE,GLGQHL,Glasgow Central High Level
-SEE,GLGQLL,Glasgow Central High Level
-SEE,HEWOMTR,Glasgow Central High Level
-SEE,HEWORTH,Glasgow Central High Level
-SEE,HGHI,Glasgow Central High Level
-SEE,HIGHBYA,Glasgow Central High Level
-SEE,HIGHBYE,Glasgow Central High Level
-SEE,LCHTTVH,Glasgow Central High Level
-SEE,LCHTTVL,Glasgow Central High Level
-SEE,LVRPLSH,Glasgow Central High Level
-SEE,LVRPLSL,Glasgow Central High Level
-SEE,LVRPSPH,Glasgow Central High Level
-SEE,LVRPSPY,Glasgow Central High Level
-SEE,RTFD,Glasgow Central High Level
-SEE,RTFDLL,Glasgow Central High Level
-SEE,SESARDM,Glasgow Central High Level
-SEE,STPANCI,Glasgow Central High Level
-SEE,STPX,Glasgow Central High Level
-SEE,STPXBOX,Glasgow Central High Level
-SEE,TMWTHHL,Glasgow Central High Level
-SEE,TMWTHLL,Glasgow Central High Level
-SEE,WLSD,Glasgow Central High Level
-SEE,WLSDJHL,Glasgow Central High Level
-SEE,WLSDNJL,Glasgow Central High Level
-SEE,WORCPHL,Glasgow Central High Level
-SEE,WORCPWY,Glasgow Central High Level
-SEF,CODE,Seaford
+SEE,SESARDM,Southease
 SEF,SEAFORD,Seaford
 SEF,SEAFRD,Seaford
 SEG,SELLING,Selling
-SEH,CODE,Shoreham (Kent)
 SEH,SHORHMK,Shoreham (Kent)
 SEH,SHRMKT,Shoreham (Kent)
 SEJ,STDL,Seaton Delaval
@@ -3424,7 +3138,6 @@ SEN,SHNS,Shenstone
 SER,STERTH,St Erth
 SES,SELMSAL,South Elmsall
 SET,SETTLE,Settle
-SEV,CODE,Sevenoaks
 SEV,SVENOAK,Sevenoaks
 SEV,SVNOAKS,Sevenoaks
 SEZ,SESABUS,Southease Church
@@ -3478,14 +3191,12 @@ SIB,SEHOBUS,Seahouses Bus
 SIC,SILCRFT,Silecroft
 SID,SIDCUP,Sidcup
 SIE,SHBN,Sherburn-In-Elmet
-SIH,CODE,St Helier (Surrey)
 SIH,SHLIER,St Helier (Surrey)
 SIH,STHELIR,St Helier (Surrey)
 SIL,SILEBY,Sileby
 SIN,SINGER,Singer
 SIP,SPTN,Shipton
 SIR,SINFINN,Sinfin North
-SIT,CODE,Sittingbourne
 SIT,SITNGBR,Sittingbourne
 SIT,STNGBRN,Sittingbourne
 SIV,STIVES,St Ives (Cornwall)
@@ -3529,7 +3240,6 @@ SMB,SMBG,Smithy Bridge
 SMC,SAMPCRT,Sampford Courtenay
 SMC,SMINCGB,Sampford Courtenay
 SMD,STAMFD,Stamford
-SMG,CODE,St Margarets (London)
 SMG,STMGTS,St Margarets (London)
 SMG,STMRGTS,St Margarets (London)
 SMH,STMFDHL,Stamford Hill
@@ -3555,7 +3265,6 @@ SNG,SUNNGDL,Sunningdale
 SNH,STHLNSC,St Helens Central
 SNI,SNAITH,Snaith
 SNK,SANKEY,Sankey For Penketh
-SNL,CODE,Stoneleigh
 SNL,STLEIGH,Stoneleigh
 SNL,STNLEGH,Stoneleigh
 SNM,SNETSHM,Snettisham Market Place
@@ -3563,24 +3272,20 @@ SNN,SWNT,Swinton (Manchester)
 SNO,STNEOTS,St Neots
 SNP,CATZSNP,Stanhope
 SNP,SHPE,Stanhope
-SNR,CODE,Sanderstead
 SNR,SANDSTD,Sanderstead
 SNR,SDSD,Sanderstead
 SNS,STAINES,Staines
 SNT,STNLWAT,Stanlow & Thornton
-SNW,CODE,Swanwick
 SNW,SWANWCK,Swanwick
 SNW,SWNWICK,Swanwick
 SNX,CATZ054,Staines For The Games
 SNY,SUNYMDS,Sunnymeads
-SOA,CODE,Southampton Airport Parkway
 SOA,SOTONAP,Southampton Airport Parkway
 SOA,SOTPKWY,Southampton Airport Parkway
 SOB,SBOURNE,Southbourne
 SOC,STHCENT,Southend Central
 SOE,STHNDE,Southend East
 SOF,WDHAMFR,South Woodham Ferrers formerly Woodham Ferrers
-SOG,CODE,Stonegate
 SOG,SNGT,Stonegate
 SOG,STONEGT,Stonegate
 SOH,SHMPSTD,South Hampstead
@@ -3606,7 +3311,6 @@ SPB,SHPDSB,Shepherds Bush
 SPC,,St Pancras Low Level First Capital Connect
 SPE,SPECIAL,Special For Charters
 SPF,SPFD,Springfield
-SPH,CODE,Shepherds Well
 SPH,SHEPSWL,Shepherds Well
 SPH,SWELL,Shepherds Well
 SPI,SPITAL,Spital
@@ -3619,7 +3323,6 @@ SPP,SPHL,Shippea Hill
 SPR,SPRNGBN,Springburn
 SPS,STEPPS,Stepps
 SPT,STKP,Stockport
-SPU,CODE,Staplehurst
 SPU,SPHS,Staplehurst
 SPU,STPLHST,Staplehurst
 SPW,SOTDWD,Southampton Western Docks
@@ -3631,14 +3334,12 @@ SQU,SQUIRES,Squires Gate
 SRA,STFD,Stratford (London)
 SRA,STRATFD,Stratford (London)
 SRB,SEVTROG,Severn Tunnel Junction Rogiet Pool
-SRC,CODE,Streatham Common
 SRC,STRHCOM,Streatham Common
 SRC,STRTHMC,Streatham Common
 SRD,STPLTNR,Stapleton Road
 SRE,STRNRHR,Stranraer Harbour
 SRF,SFRD,Stretford
 SRG,SEERGRN,Seer Green & Jordans
-SRH,CODE,Streatham Hill
 SRH,STRHILL,Streatham Hill
 SRH,STRTHMH,Streatham Hill
 SRI,SPRD,Spring Road
@@ -3647,7 +3348,6 @@ SRN,STRINES,Strines
 SRO,SHRKSKS,Shireoaks
 SRP,STPX,St Pancras [domestic station]
 SRR,SARN,Sarn
-SRS,CODE,Selhurst
 SRS,SEHURST,Selhurst
 SRS,SELHRST,Selhurst
 SRT,SHRTLND,Shortlands
@@ -3687,11 +3387,9 @@ STQ,SOTNTQ,Southampton Town Quay
 STR,STRNRR,Stranraer
 STS,SASH,Saltash
 STT,STEWRTN,Stewarton
-STU,CODE,Sturry
 STU,STRRY,Sturry
 STU,STURRY,Sturry
 STV,STVNSTN,Stevenston
-STW,CODE,Strawberry Hill
 STW,STRWBRY,Strawberry Hill
 STW,STRWBYH,Strawberry Hill
 STX,CATZ045,St Pancras For The Games
@@ -3703,7 +3401,6 @@ SUG,SGRLOAF,Sugar Loaf
 SUM,SUMRSTN,Summerston
 SUN,SNDRLND,Sunderland
 SUO,SUTTON,Sutton (London)
-SUP,CODE,Sundridge Park
 SUP,SNDP,Sundridge Park
 SUP,SNDRDPK,Sundridge Park
 SUR,SURBITN,Surbiton
@@ -3752,7 +3449,7 @@ SYH,SYDNHMH,Sydenham Hill
 SYL,SYONLA,Syon Lane
 SYS,SYSTON,Syston
 SYT,SMRLYTN,Somerleyton
-SZZ,,Serco Rail Cardiff ✖ Listed as Scotrail Cardiff
+SZZ,,Serco Rail Cardiff
 TAB,TAMEBDG,Tame Bridge Parkway
 TAC,TACKLEY,Tackley
 TAD,TADWTH,Tadworth
@@ -3766,13 +3463,11 @@ TAP,TAPLOW,Taplow
 TAT,TATNHMC,Tattenham Corner
 TAU,TAUNTON,Taunton
 TAY,TAYNULT,Taynuilt
-TBD,CODE,Three Bridges
 TBD,THBDGS,Three Bridges
 TBD,THREBDG,Three Bridges
 TBM,TFBMTLK,Trafford Bar Metrolink
 TBR,TLBYRSD,Tilbury Riverside
 TBT,TARBERT,Tarbert Isle Of Lewis
-TBW,CODE,Tunbridge Wells
 TBW,TNBDGWC,Tunbridge Wells
 TBW,TUNWELL,Tunbridge Wells
 TBY,TABY,Thornaby
@@ -3797,7 +3492,6 @@ TGX,CATZ011,The Games At Excel Arena
 THA,THATCHM,Thatcham
 THB,THLB,Thornliebank
 THC,TRNO,Thurnscoe
-THD,CODE,Thames Ditton
 THD,TDITTON,Thames Ditton
 THD,THMSDTN,Thames Ditton
 THE,THEALE,Theale
@@ -3806,12 +3500,8 @@ THI,THIRSK,Thirsk
 THK,CATZ150,London Thameslink Stations
 THL,TILEH,Tile Hill
 THM,CATZTHM,Thomastown
-THO,BRIDGE,Thornford
-THO,CODE,Thornford
-THO,NAMED,Thornford
 THO,THFORD,Thornford
 THO,THRNFDB,Thornford
-THO,WHEN,Thornford
 THP,THANETP,Thanet Parkway
 THR,CATZ122,Thorne Stations
 THS,THURSO,Thurso
@@ -3826,10 +3516,10 @@ TIP,TIPTON,Tipton
 TIR,TIRPHIL,Tir-Phil
 TIS,TISBRY,Tisbury
 TIS,TISBURY,Tisbury
-TJS,TONBJB1,Tonbridge Jubilee Siding 1 ✖ Part of TONBPMY as far as the computer is concerned. Separate entity for timetable planners
-TJT,TONBJB2,Tonbridge Jubilee Siding 2 ✖ Part of TONBPMY as far as the computer is concerned. Separate entity for timetable planners
-TJU,TONBJB3,Tonbridge Jubilee Siding 3 ✖ Part of TONBPMY as far as the computer is concerned. Separate entity for timetable planners
-TJV,TONBJB4,Tonbridge Jubilee Siding 4 ✖ Part of TONBPMY as far as the computer is concerned. Separate entity for timetable planners
+TJS,TONBJB1,Tonbridge Jubilee Siding 1
+TJT,TONBJB2,Tonbridge Jubilee Siding 2
+TJU,TONBJB3,Tonbridge Jubilee Siding 3
+TJV,TONBJB4,Tonbridge Jubilee Siding 4
 TLB,TALB,Talybont
 TLC,TALYCFN,Tal-y-Cafn
 TLH,TILHRST,Tilehurst
@@ -3837,7 +3527,6 @@ TLJ,TRWLJN,Trowell Junction
 TLK,THELAKS,The Lakes (Warwickshire)
 TLS,THPLESK,Thorpe-Le-Soken
 TLY,CATZ152,Tilbury Stations
-TMC,CODE,Templecombe
 TMC,TMPCMB,Templecombe
 TMC,TMPLCMB,Templecombe
 TMF,XAMFOL,Tamerton Foliot
@@ -3850,12 +3539,10 @@ TNS,THORNES,Thorne South
 TNW,,Tynewydd
 TOB,TOBRMRY,Tobermory
 TOD,TODMRDN,Todmorden
-TOK,CODE,Three Oaks
 TOK,THOK,Three Oaks
 TOK,THREOAG,Three Oaks
 TOL,TOLWTH,Tolworth
 TOM,TTNHMHL,Tottenham Hale
-TON,CODE,Tonbridge
 TON,TONBDG,Tonbridge
 TON,TONBRDG,Tonbridge
 TOO,TOOTING,Tooting
@@ -3890,12 +3577,10 @@ TRX,TROONHR,Troon Harbour
 TRY,TREORCY,Treorchy
 TTA,TADWBUS,Tadworth The Avenue (by bus)
 TTF,THETFD,Thetford
-TTH,CODE,Thornton Heath
 TTH,THRNTHT,Thornton Heath
 TTH,THTH,Thornton Heath
 TTN,TOTTON,Totton
 TTY,CATZTTY,Tetbury Long Street Bus
-TUH,CODE,Tulse Hill
 TUH,TULSEH,Tulse Hill
 TUH,TULSHIL,Tulse Hill
 TUL,TULLOCH,Tulloch
@@ -3924,7 +3609,6 @@ TYR,TYLORTN,Tylorstown (by bus)
 TYS,TYSL,Tyseley
 TYW,TYWYN,Tywyn
 TZZ,CATZ068,The Games At Brands Hatch
-UCK,CODE,Uckfield
 UCK,UCKFILD,Uckfield
 UCK,UCKFLD,Uckfield
 UDD,UDNGSTN,Uddingston
@@ -3947,7 +3631,6 @@ URM,URMSTON,Urmston
 UTR,,Utrecht
 UTT,UTOXETR,Uttoxeter
 UTY,TYNDRMU,'Tyndrum Upper' [Upper Tyndrum]
-UWL,CODE,Upper Warlingham
 UWL,UPWARLN,Upper Warlingham
 UWL,UWRLNGH,Upper Warlingham
 VAE,BRGLVAL,Broughton Lane Valley Centertainment [Sheffield Supertram]
@@ -3959,18 +3642,15 @@ VIR,VRGNWTR,Virginia Water
 VIX,CATZ046,Victoria For The Games
 VPM,MNCRVPM,Manchester Velopark Metrolink
 VTN,VNTNRBS,Ventnor Bus Terminal
-VXH,CODE,Vauxhall
 VXH,VAUXHAL,Vauxhall
 VXH,VAUXHLL,Vauxhall
 VXX,CATZ056,Vauxhall For The Games
 WAC,WRGT,Warrington Central
 WAD,WADHRST,Wadhurst
-WAE,CODE,Waterloo East
 WAE,WATRLOE,Waterloo East
 WAE,WLOE,Waterloo East
 WAF,WALLYFD,Wallyford
 WAK,CATZ143,Wakefield Stations
-WAL,CODE,Walton-On-Thames
 WAL,WALTNOT,Walton-On-Thames
 WAL,WONT,Walton-On-Thames
 WAM,WALMER,Walmer
@@ -3978,7 +3658,6 @@ WAN,WANBRO,Wanborough
 WAO,WALTONM,Walton (Merseyside)
 WAR,WARE,Ware
 WAS,WATONAS,Watton-at-Stone
-WAT,CODE,Waterloo
 WAT,WATERLO,Waterloo
 WAT,WATRLMN,Waterloo
 WAT,WATRLOO,Waterloo
@@ -3992,7 +3671,6 @@ WBD,WHTBDGE,Whitley Bridge
 WBE,WDBDGBS,Wadebridge Bus Station
 WBG,,Wadsley Bridge [station]
 WBL,WRBLNGT,Warblington
-WBO,CODE,Wimbledon Chase
 WBO,WIMBLCH,Wimbledon Chase
 WBO,WIMLCHS,Wimbledon Chase
 WBP,WBRMPTN,West Brompton
@@ -4015,7 +3693,6 @@ WCS,WEMBNEX,Wembley Bus National Express
 WCT,WATCHET,Watchet
 WCX,WEMBLSM,Wembley Stadium
 WCY,WCROYDN,West Croydon
-WDA,CODE,Waddon Marsh
 WDA,WADDONM,Waddon Marsh
 WDA,WDDONM,Waddon Marsh
 WDB,WODBDGE,Woodbridge
@@ -4121,7 +3798,6 @@ WKM,WOKNGHM,Wokingham
 WKN,WKNTNTH,Workington North
 WLA,CATZWLA,Woodlawn
 WLC,WALHAMX,Waltham Cross
-WLD,CODE,West St Leonards
 WLD,WSLE,West St Leonards
 WLD,WSTLNRD,West St Leonards
 WLE,WHTLSEA,Whittlesea
@@ -4137,7 +3813,6 @@ WLO,WLOO,Waterloo (Merseyside)
 WLP,WELSHPL,Welshpool
 WLQ,WELISOM,Wellington (Somerset)
 WLR,WHTLSER,Whittlesea Reception
-WLS,CODE,Woolston
 WLS,WOLSTON,Woolston
 WLS,WOOLSTN,Woolston
 WLT,WALNGTN,Wallington
@@ -4165,7 +3840,6 @@ WMX,CATZ027,Wembley Central For Games
 WNC,WINDSEC,Windsor & Eton Central
 WND,WENDOVR,Wendover
 WNE,WILNECT,Wilnecote
-WNF,CODE,Winchfield
 WNF,WNCFILD,Winchfield
 WNF,WNCHFLD,Winchfield
 WNG,WAUNGRN,Waun-Gron Park
@@ -4176,18 +3850,15 @@ WNM,WMILTON,Weston Milton
 WNN,WENNGTN,Wennington
 WNO,WINSLOW,Winslow
 WNP,WNSTDPK,Wanstead Park
-WNR,CODE,Windsor & Eton Riverside
 WNR,WINDSOR,Windsor & Eton Riverside
 WNR,WSORAER,Windsor & Eton Riverside
 WNS,WINERSH,Winnersh
-WNT,CODE,Wandsworth Town
 WNT,WDWTOWN,Wandsworth Town
 WNT,WNDSWTT,Wandsworth Town
 WNW,WNORWOD,West Norwood
 WNX,CATZ031,Windsor & Eton Riverside For Eton Dorney
 WNY,WNOTLEY,White Notley
 WOB,WOBURNS,Woburn Sands
-WOD,CODE,Woodburn Road [Sheffield Supertram]
 WOD,WDBRNRD,Woodburn Road [Sheffield Supertram]
 WOD,WODSIDE,Woodburn Road [Sheffield Supertram]
 WOD,WOODSID,Woodburn Road [Sheffield Supertram]
@@ -4220,7 +3891,6 @@ WRG,CATZ144,Warrington Stations
 WRH,WORTHNG,Worthing
 WRK,WORKSOP,Worksop
 WRL,WETHERL,Wetheral
-WRM,CODE,Wareham
 WRM,WAREHAM,Wareham
 WRM,WARHAM,Wareham
 WRN,WRUNTON,West Runton
@@ -4244,7 +3914,6 @@ WSM,WSMARE,Weston-super-Mare
 WSR,WMOR,Woodsmoor
 WST,WDST,Wood Street
 WSU,WSUTTON,West Sutton
-WSW,CODE,Wandsworth Common
 WSW,WANDCMN,Wandsworth Common
 WSW,WNDSWTC,Wandsworth Common
 WTA,WHAILES,Wester Hailes
@@ -4257,7 +3926,6 @@ WTH,WHITHVN,Whitehaven
 WTI,WINETGL,Winnersh Triangle
 WTL,WHLAND,Whitland
 WTM,WITHAME,Witham
-WTN,CODE,Whitton
 WTN,WHITTON,Whitton
 WTN,WHTTON,Whitton
 WTO,WTRORTN,Water Orton
@@ -4288,7 +3956,6 @@ WWX,CATZ024,Woolwich Arsenal Games
 WXC,WREXHMC,Wrexham Central
 WXF,WEXFDOH,Wexford
 WYB,WEYBDGE,Weybridge
-WYE,CODE,Wye
 WYE,WYEE,Wye
 WYE,WYESTN,Wye
 WYL,WYGN,Wylde Green
@@ -4867,10 +4534,8 @@ YSM,YSTRADM,Ystrad Mynach
 YSR,YTRHOND,Ystrad Rhondda
 YST,YSTRBST,Ystradgynlais Bus Station
 YVB,YOVILBS,Yeovil Bus Station
-YVJ,CODE,Yeovil Junction
 YVJ,YEOVILJ,Yeovil Junction
 YVJ,YOVILJN,Yeovil Junction
-YVP,CODE,Yeovil Pen Mill
 YVP,YEOVILP,Yeovil Pen Mill
 YVP,YOVILPE,Yeovil Pen Mill
 YVP,YOVILPM,Yeovil Pen Mill
@@ -5136,7 +4801,6 @@ ZRH,,Harlesden LT
 ZRI,RCKMNSW,Rickmansworth LT
 ZRL,,Rayners Lane LT
 ZRM,,Ruislip Manor LT
-ZRO,CODE,Rotherhithe
 ZRO,RTHERHI,Rotherhithe
 ZRO,RTHERI,Rotherhithe
 ZRP,,Regent's Park LT
@@ -5274,12 +4938,8 @@ ZYB,,Eurostar 28
 ZYC,,Eurostar 29
 ZYD,,Eurostar 30
 ZZA,EURST31,Eurostar 31
-ZZB,CODE,Eurostar 32
-ZZB,ERROR,Eurostar 32
 ZZB,EURST32,Eurostar 32
 ZZB,EUSTR32,Eurostar 32
-ZZB,IN,Eurostar 32
-ZZB,LISTED,Eurostar 32
 ZZC,EURST33,Eurostar 33
 ZZD,EURST34,Eurostar 34
 ZZE,EURST35,Eurostar 35

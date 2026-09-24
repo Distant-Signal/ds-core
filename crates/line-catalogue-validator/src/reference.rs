@@ -177,6 +177,30 @@ async fn fetch_with_browser_ua(client: &reqwest::Client, url: &str) -> Result<St
     Ok(resp.text().await?)
 }
 
+/// railwaycodes.org.uk annotates individual codes (and location names) with
+/// a click-to-open footnote, marked up as a self-contained three-deep span:
+///
+/// ```text
+/// <span class="popup" onclick="popup26()"><span class="popuptext" id="myPopup26"
+///   ><span class="close">&#x2716;</span>Original code</span></span>
+/// ```
+///
+/// **This markup MUST be removed before any code token is extracted from a
+/// cell**, because the note is free English prose sitting *inside* the same
+/// `<td>` as the real code. Merely stripping tags (which is all this parser
+/// used to do) leaves the prose behind, and uppercasing it turns ordinary
+/// words into things that pass the CRS/TIPLOC token filters --
+/// `"Original code"` yields a TIPLOC `CODE`, `"See CRS explanation"` yields
+/// CRS codes `SEE` *and* `CRS`, and `"Code not certain; conflicting raw
+/// data"` yields a CRS `RAW` that has never been issued to anything. That
+/// is not hypothetical: it is exactly how 340 junk rows (and one entirely
+/// fabricated CRS code) got into `reference-data/crs-tiploc.csv`; see that
+/// file's provenance doc, `reference-data/line-catalogue-validation.md`,
+/// under "Where the data comes from".
+fn strip_popups(popup_re: &regex::Regex, cell: &str) -> String {
+    popup_re.replace_all(cell, " ").into_owned()
+}
+
 /// Extraction rules mirrored exactly from
 /// `reference-data/line-catalogue-validation.md`'s "Where the data comes
 /// from" section -- keep the two in sync if either changes.
@@ -184,6 +208,11 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) {
     let row_re = regex::Regex::new(r"(?s)<tr>(.*?)</tr>").unwrap();
     let cell_re = regex::Regex::new(r"(?s)<td[^>]*>(.*?)</td>").unwrap();
     let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
+    // Non-greedy, so two footnotes in one cell (a location with an "Earlier
+    // code"/"Later code" pair, e.g. Worcestershire Parkway High Level) are
+    // stripped as two separate matches rather than one run swallowing the
+    // real code between them.
+    let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span></span>"#).unwrap();
     let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
     let tiploc_token_re = regex::Regex::new(r"^[A-Z0-9]{2,7}$").unwrap();
 
@@ -195,15 +224,15 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) {
         if cells.len() != 6 {
             continue;
         }
-        let name = clean_html_text(&tag_re, cells[0]);
+        let name = clean_html_text(&tag_re, &strip_popups(&popup_re, cells[0]));
         let crs_list: Vec<String> = tag_re
-            .replace_all(cells[1], " ")
+            .replace_all(&strip_popups(&popup_re, cells[1]), " ")
             .split_whitespace()
             .map(|t| t.to_ascii_uppercase())
             .filter(|t| crs_token_re.is_match(t))
             .collect();
         let tiploc_list: Vec<String> = tag_re
-            .replace_all(cells[3], " ")
+            .replace_all(&strip_popups(&popup_re, cells[3]), " ")
             .split_whitespace()
             .map(|t| t.to_ascii_uppercase())
             .filter(|t| tiploc_token_re.is_match(t))
@@ -279,6 +308,128 @@ mod tests {
         parse_crs_tiploc_page(html, &mut data);
         assert!(data.known_crs("SMW"));
         assert_eq!(data.tiploc_matches("SMW", "ANYTHING"), Some(true));
+    }
+
+    /// Real markup, copied byte-for-byte from the live
+    /// `https://www.railwaycodes.org.uk/crs/crs{a,g,m}.shtm` pages
+    /// (2026-09-24), for the three footnote shapes that actually corrupted
+    /// `reference-data/crs-tiploc.csv`: a footnote on the TIPLOC cell
+    /// ("Original code" -> junk TIPLOC `CODE`, 242 rows), a footnote on the
+    /// CRS cell ("See CRS explanation" -> junk CRS `SEE` and `CRS`, 54
+    /// rows), and a footnote carrying a word that is itself a valid-looking
+    /// CRS token ("conflicting raw data" -> the entirely fabricated CRS
+    /// `RAW`). See [`strip_popups`].
+    #[test]
+    fn popup_footnotes_are_never_scraped_as_codes() {
+        let html = r#"<table>
+  <tr>
+   <td>Abbey Wood</td>
+   <td>ABW</td>
+   <td>513100</td>
+   <td>ABWD
+ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPopup26"><span class="close">&#x2716;</span>Original code</span></span>
+</td>
+   <td>ABBEYWOOD</td>
+   <td>88601</td>
+  </tr>
+  <tr>
+   <td>Glasgow Central High Level</td>
+   <td>GLC<span class="popup" onclick="popup8()"><span class="popuptext" id="myPopup8"><span class="close">&#x2716;</span>See <a href="crs2.shtm">CRS explanation</a></span></span></td>
+   <td>981300</td>
+   <td>GLGC</td>
+   <td>GLASGOW C</td>
+   <td>07257</td>
+  </tr>
+  <tr>
+   <td>Muck</td>
+   <td>MUK MUC<span class="popup" onclick="popup2()"><span class="popuptext" id="myPopup2"><span class="close">&#x2716;</span>Code not certain; conflicting raw data</span></span></td>
+   <td>906100</td>
+   <td>MUCK</td>
+   <td class="noshow"></td>
+   <td>-</td>
+  </tr>
+</table>"#;
+        let mut data = ReferenceData::default();
+        parse_crs_tiploc_page(html, &mut data);
+
+        // The real codes on each row still parse, unchanged.
+        assert_eq!(data.tiploc_matches("ABW", "ABWD"), Some(true));
+        assert_eq!(data.tiploc_matches("ABW", "ABBEYWD"), Some(true));
+        assert_eq!(data.tiploc_matches("GLC", "GLGC"), Some(true));
+        assert_eq!(data.tiploc_matches("MUC", "MUCK"), Some(true));
+        assert_eq!(data.tiploc_matches("MUK", "MUCK"), Some(true));
+
+        // None of the footnote prose survives as a code.
+        assert_eq!(data.tiploc_matches("ABW", "CODE"), Some(false));
+        for fabricated in ["SEE", "CRS", "RAW", "NOT"] {
+            assert!(
+                !data.known_crs(fabricated),
+                "{fabricated} is footnote prose, not a CRS code on any of these rows"
+            );
+        }
+
+        // ...and the location name is the location, not the location plus
+        // whatever its footnote says.
+        assert_eq!(
+            data.crs_to_name.get("GLC"),
+            Some(&"Glasgow Central High Level".to_string())
+        );
+    }
+
+    /// Regression guard on the committed snapshot itself, not just on the
+    /// parser: the vendored CSV must not carry the footnote artifacts
+    /// described in [`strip_popups`]. Reads the real
+    /// `reference-data/crs-tiploc.csv` so a future hand-regeneration that
+    /// forgets to strip footnotes fails here instead of silently shipping.
+    #[test]
+    fn vendored_crs_tiploc_snapshot_carries_no_footnote_artifacts() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate lives at <repo>/crates/line-catalogue-validator");
+        let data = ReferenceData::from_vendored_csvs(
+            &repo_root.join("reference-data/crs-tiploc.csv"),
+            &repo_root.join("reference-data/toc-codes.csv"),
+        )
+        .expect("the vendored reference CSVs must load");
+
+        // `RAW` only ever existed as the word "raw" inside the note "Code
+        // not certain; conflicting raw data" on railwaycodes.org.uk's Muck
+        // row -- it is not a CRS code that has ever been issued.
+        assert!(
+            !data.known_crs("RAW"),
+            "RAW is footnote prose, never an issued CRS code"
+        );
+
+        // No real TIPLOC is shared by a large number of unrelated CRS
+        // codes; a token that is, is footnote prose (`CODE` reached 242).
+        // Genuine multi-CRS TIPLOCs top out at 4 in this snapshot (e.g.
+        // CANWHRF: CWF/CWX/ZCW/ZQC), so 6 is a comfortable ceiling that
+        // still catches the artifact class by two orders of magnitude.
+        let mut tiploc_to_crs: HashMap<&str, Vec<&str>> = HashMap::new();
+        for (crs, tiplocs) in &data.crs_to_tiploc {
+            for tiploc in tiplocs {
+                tiploc_to_crs.entry(tiploc).or_default().push(crs);
+            }
+        }
+        for (tiploc, crs_codes) in &tiploc_to_crs {
+            assert!(
+                crs_codes.len() <= 6,
+                "TIPLOC {tiploc} is claimed by {} CRS codes ({crs_codes:?}) -- almost \
+                 certainly a railwaycodes.org.uk footnote scraped as a code; see \
+                 reference-data/line-catalogue-validation.md",
+                crs_codes.len()
+            );
+        }
+
+        // The `name` column must not carry a footnote's close-button glyph
+        // or the note text that follows it.
+        for (crs, name) in &data.crs_to_name {
+            assert!(
+                !name.contains('\u{2716}'),
+                "name for {crs} carries a footnote close-button glyph: {name:?}"
+            );
+        }
     }
 
     #[test]
