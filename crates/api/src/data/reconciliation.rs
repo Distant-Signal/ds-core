@@ -42,7 +42,13 @@ pub async fn reconcile_stuck_resolution_status(pool: &PgPool) -> anyhow::Result<
 /// subscriber-referenced rows only: a `trains` row can exist with zero
 /// subscribers (broad ingestion elsewhere in this codebase), and this
 /// sweep's whole purpose is fixing what a TRACKED train's page shows, not
-/// backfilling schedule data for the whole network.
+/// backfilling schedule data for the whole network. A zero-subscriber row
+/// gets its own, narrower, read-triggered equivalent instead --
+/// `routes::train::enrich_public_train_schedule`, run once per public
+/// `GET /Train/by-uid/{uid}/{date}` view rather than proactively swept --
+/// see that function's own doc comment for the bug this closes (real live
+/// TRUST data, permanently null schedule, for any train nobody has ever
+/// tracked).
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct EnrichmentCandidate {
     id: i64,
@@ -80,7 +86,13 @@ async fn list_trains_needing_schedule_enrichment(
 /// `origin_crs = true_origin_crs` is what picks that row out from the
 /// several this train may have (one per departure-bearing calling point).
 /// See the design doc §3 Decision 2.
-async fn true_origin_departure(
+///
+/// `pub(crate)`, not private: `routes::train::enrich_public_train_schedule`
+/// reuses this exact lookup for the untracked-train counterpart of
+/// [`retry_schedule_enrichment_for_nr_primary_trains`] below -- see that
+/// function's own doc comment for why a `trains` row with zero subscribers
+/// needs a schedule-enrichment path of its own too.
+pub(crate) async fn true_origin_departure(
     pool: &PgPool,
     train_uid: &str,
     service_date: NaiveDate,
