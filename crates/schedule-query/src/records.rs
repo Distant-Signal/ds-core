@@ -8,8 +8,11 @@
 //! -- not re-derived from memory of the published CIF User Spec (RSPS5046),
 //! per this repo's "no invented API details" convention. Fields this crate
 //! has no real-data-verified use for (Transaction Type, Train Status,
-//! Platform, Line, Activity, and every `BX`-record field) are left
-//! undecoded rather than guessed at -- see this plan's Non-goals.
+//! Platform, Line, Activity) are left undecoded rather than guessed at --
+//! see this plan's Non-goals. The `BX` record is no longer entirely
+//! undecoded: its ATOC Code field is now decoded (see
+//! [`BasicSchedule::operator_atoc`]); every other `BX` field remains
+//! undecoded for the same no-real-fixture-need reason as above.
 
 use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
@@ -93,6 +96,16 @@ pub struct BasicSchedule {
     pub date_to: NaiveDate,
     /// Index 0 = Monday .. index 6 = Sunday.
     pub days_of_week: [bool; 7],
+    /// The ATOC/TOC operator code, decoded from the `BX` (Basic Schedule
+    /// Extra Details) line's `11..13` byte range (0-based, half-open) --
+    /// verified against the real `BX         SRYSR408800` line quoted in
+    /// `docs/superpowers/specs/2026-08-29-trust-schedule-delay-inference-timetable-verification.md`
+    /// ("Claim 1" section), which decodes to `"SR"` (ScotRail). `None` when
+    /// no `BX` line follows the `BS` (or the `BX` line is too short/
+    /// non-ASCII to decode, or its ATOC Code field is blank) -- this is the
+    /// only `BX` field this crate decodes; every other `BX` field remains
+    /// undecoded, per this module's own header comment.
+    pub operator_atoc: Option<String>,
 }
 
 /// Which of `LO`/`LI`/`LT` a [`CallingPoint`] was decoded from.
@@ -326,6 +339,14 @@ pub struct DestinationDeparture {
     /// the same architectural gap `day_offset` above was added to close on
     /// the DEPARTURE side.
     pub destination_arrival_day_offset: u8,
+    /// The schedule's `BX` ATOC Code (see [`BasicSchedule::operator_atoc`]),
+    /// copied verbatim from [`crate::resolve::ResolvedSchedule::operator_atoc`].
+    /// It is computed once per schedule and attached unchanged to every
+    /// entry that schedule contributes -- exactly like `true_origin_crs`
+    /// above, not recomputed per calling point. `None` when the schedule's
+    /// `BX` record is absent or its ATOC Code field was blank (see
+    /// `BasicSchedule::operator_atoc`'s own doc comment).
+    pub operator_atoc: Option<String>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
@@ -360,6 +381,7 @@ mod tests {
                 is_half_minute_departure: false,
                 day_offset: 0,
             }],
+            operator_atoc: None,
         };
         let entry: LinePopulationEntry = resolved.clone().into();
         assert_eq!(entry.uid, "C11052");

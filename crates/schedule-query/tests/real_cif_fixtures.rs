@@ -48,6 +48,12 @@ fn a_real_mixed_block_parses_end_to_end_through_the_index() {
     assert_eq!(resolved.calling_points[0].tiploc, "WATRLMN");
     assert_eq!(resolved.calling_points[1].tiploc, "CARLILE");
     assert_eq!(resolved.calling_points[2].tiploc, "EUSTON ");
+    // The real quoted BX line's ATOC Code field ("SR"), decoded by
+    // BasicSchedule::operator_atoc (Task 1) and threaded through
+    // resolve_for_date onto ResolvedSchedule::operator_atoc (Task 2),
+    // proven here end to end through ScheduleIndex::from_text ->
+    // schedule_for_uid.
+    assert_eq!(resolved.operator_atoc, Some("SR".to_string()));
 }
 
 // --- The real C11052 STP=P/STP=C Bank Holiday pair -------------------------

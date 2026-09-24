@@ -27,6 +27,7 @@ pub struct ResolvedSchedule {
     pub stp_indicator: StpIndicator,
     pub cancelled: bool,
     pub calling_points: Vec<CallingPoint>,
+    pub operator_atoc: Option<String>,
 }
 
 /// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
@@ -124,6 +125,7 @@ pub fn resolve_for_date(
         stp_indicator: winner.basic.stp_indicator,
         cancelled,
         calling_points,
+        operator_atoc: winner.basic.operator_atoc.clone(),
     })
 }
 
@@ -414,6 +416,9 @@ pub fn departures_by_destination_crs(
             .last()
             .map(|last| last.day_offset)
             .unwrap_or(0);
+        // Computed once per schedule, exactly like true_origin_crs above,
+        // and attached unchanged to every entry this schedule contributes.
+        let operator_atoc = resolved.operator_atoc.clone();
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -441,6 +446,7 @@ pub fn departures_by_destination_crs(
                     calling_point_arrival: cp.booked_arrival,
                     destination_arrival,
                     destination_arrival_day_offset,
+                    operator_atoc: operator_atoc.clone(),
                 });
         }
     }
@@ -641,6 +647,7 @@ mod tests {
             date_from: NaiveDate::parse_from_str(from, "%Y-%m-%d").unwrap(),
             date_to: NaiveDate::parse_from_str(to, "%Y-%m-%d").unwrap(),
             days_of_week: days,
+            operator_atoc: None,
         }
     }
 

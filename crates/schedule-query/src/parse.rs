@@ -29,6 +29,9 @@ const MIN_LO_LT_LEN: usize = 15;
 /// Minimum length of an `LI` line: needs bytes `0..20` (as above, plus a
 /// second time field and its half-minute flag).
 const MIN_LI_LEN: usize = 20;
+/// Minimum length of a `BX` line this parser can decode: needs bytes
+/// `0..13` (record identity through the ATOC Code).
+const MIN_BX_LEN: usize = 13;
 
 /// Is `line` safe to decode with this module's fixed-offset byte slices?
 ///
@@ -88,9 +91,10 @@ fn is_fixed_width_decodable(line: &str, min_len: usize) -> bool {
 
 /// Parses every `BS`(+`BX`)/`LO`/`LI`*/`LT` block out of `text`, matching
 /// the real CIF block structure a full `MCA` extract has: `BS` starts a
-/// block; an optional `BX` line extends it (recognized so it doesn't get
-/// mistaken for an unrelated/malformed line, but not decoded -- no real
-/// fixture in this plan's scope needed a `BX` field); `LO`/`LI`*/`LT` are
+/// block; an optional `BX` line extends it (its ATOC Code field is decoded
+/// into [`BasicSchedule::operator_atoc`] -- see [`parse_bx_operator`] --
+/// every other `BX` field is recognized only so the line doesn't get
+/// mistaken for an unrelated/malformed line); `LO`/`LI`*/`LT` are
 /// its body; the block is implicitly terminated by the next `BS` (or by
 /// end of file, or by `LT` itself for a well-formed block). A
 /// `Cancellation`-indicator `BS` line has no body at all (see
@@ -163,6 +167,13 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
                     out.push(done);
                 }
             }
+            [b'B', b'X', ..] => {
+                if let Some(schedule) = current.as_mut() {
+                    schedule.basic.operator_atoc = parse_bx_operator(line);
+                }
+                // A stray BX with no open block (current is None) is
+                // dropped, exactly as a stray LO/LI/LT already is.
+            }
             _ => {}
         }
     }
@@ -204,7 +215,35 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         date_from,
         date_to,
         days_of_week,
+        // Filled in later by the BX arm in `parse_schedule_records`, if a
+        // BX line follows this BS line; a Cancellation-indicator BS line
+        // (see `StpIndicator::Cancellation`) or one with no BX body at all
+        // keeps this `None`.
+        operator_atoc: None,
     })
+}
+
+/// Decodes the ATOC/TOC operator code from a `BX` (Basic Schedule Extra
+/// Details) line's `11..13` byte range (0-based, half-open) -- verified
+/// against the real `BX         SRYSR408800` line quoted in
+/// `docs/superpowers/specs/2026-08-29-trust-schedule-delay-inference-timetable-verification.md`
+/// ("Claim 1" section), which decodes to `"SR"`.
+///
+/// Guarded by [`is_fixed_width_decodable`] against the same two panic
+/// conditions every other fixed-offset slice in this module guards
+/// against. `None` for a too-short/non-ASCII line (mirroring this module's
+/// silent-skip posture for every other malformed line) and for a
+/// space-filled ATOC Code field, if that ever occurs in real data.
+fn parse_bx_operator(line: &str) -> Option<String> {
+    if !is_fixed_width_decodable(line, MIN_BX_LEN) {
+        return None;
+    }
+    let trimmed = line[11..13].trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 fn parse_time_field(field: &str) -> Option<NaiveTime> {
@@ -330,6 +369,10 @@ mod tests {
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].basic.uid, "W68468");
         assert_eq!(schedules[0].basic.stp_indicator, StpIndicator::Overlay);
+        // Real quoted BX line above ("BX         SRYSR408800") decodes its
+        // `11..13` ATOC Code field to "SR" (ScotRail) -- verification doc,
+        // "Claim 1" section.
+        assert_eq!(schedules[0].basic.operator_atoc, Some("SR".to_string()));
         assert_eq!(schedules[0].calling_points.len(), 1);
         let cp = &schedules[0].calling_points[0];
         assert_eq!(cp.tiploc, "BALLOCH");

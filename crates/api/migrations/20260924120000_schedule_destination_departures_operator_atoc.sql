@@ -1,0 +1,32 @@
+-- Carries the schedule's `BX` (Basic Schedule Extra Details) ATOC/TOC
+-- operator code onto every departure row it contributes -- the same
+-- per-schedule, denormalized-onto-every-row shape `true_origin_crs`/
+-- `destination_arrival` already use, since this is computed once per
+-- schedule (from its `BS`+`BX` pair) and copied unchanged to every calling
+-- point that schedule contributes, not recomputed per row. See
+-- `schedule_query::records::BasicSchedule::operator_atoc`'s own doc
+-- comment for the decode itself: the `BX` line's `11..13` byte range,
+-- verified against the real `BX         SRYSR408800` line, which decodes
+-- to `"SR"` (ScotRail).
+--
+-- Nullable for the same two reasons that field is `None`: no `BX` line
+-- follows a schedule's `BS` line at all (real published CIF data), or a
+-- `BX` line is present but its ATOC Code field is blank/undecodable --
+-- either way this degrades to NULL rather than dropping the row, exactly
+-- like `true_origin_crs`/`destination_arrival` degrade to NULL rather than
+-- failing the whole schedule over one missing/malformed field.
+ALTER TABLE schedule_destination_departures ADD COLUMN operator_atoc TEXT;
+
+-- No new index. Like `destination_arrival`/`calling_point_arrival` before
+-- it, `operator_atoc` is designed to be evaluated as another optional
+-- equality predicate against rows already narrowed by the existing
+-- schedule_destination_departures_calling_point_idx
+-- (service_date, origin_crs, scheduled, train_uid) and the
+-- (train_uid, service_date, scheduled) index -- named
+-- schedule_destination_departures_train_uid_service_date_schedule in the
+-- real database, Postgres's own 63-byte-identifier truncation of the
+-- longer name this repo's migration/index-creation code asked for -- scans.
+-- A full row is fetched by one of those two, and operator_atoc compared
+-- in-place, not scanned for on its own. Do not add a speculative index;
+-- revisit only with a measured reason, same convention as this table's
+-- prior additions.
