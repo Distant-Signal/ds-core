@@ -107,7 +107,15 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
 /// line whose own population yields any match at all (this plan's Open
 /// Question 3 resolution: trusts that a second candidate line, if any,
 /// would resolve the same UID/date identically, so there is nothing to
-/// gain from fetching every candidate and reconciling).
+/// gain from fetching every candidate and reconciling). Calls
+/// `find_schedule_match` with `expected_uid: None` -- this path has no
+/// known identity to check a candidate against (discovering the identity
+/// IS the point), so the first-candidate-wins heuristic above is the whole
+/// contract here. Contrast [`attempt_schedule_match_for_shared_train`],
+/// which DOES have a known identity and therefore passes `Some(train_uid)`
+/// instead -- see that function's own doc comment for why "first candidate
+/// line with any tolerance match" is the wrong contract once a caller
+/// already knows which uid it wants.
 ///
 /// Returns `Ok(true)` only if a match was found AND actually written
 /// (i.e. the row was still eligible -- see `apply_schedule_match`'s own
@@ -147,6 +155,10 @@ pub async fn attempt_schedule_match(
         pin_scheduled_departure,
         service_date,
         crs_line_index,
+        // No known identity yet -- discovering it IS the point of this
+        // path, so the first candidate line with any tolerance match wins,
+        // same as always. See `find_schedule_match`'s own doc comment.
+        None,
     )
     .await?
     else {
@@ -205,13 +217,46 @@ pub struct ScheduleMatch {
 /// The pure read half of a schedule match: no writes of any kind. Same
 /// candidate-line iteration, same `MATCH_TOLERANCE`, same
 /// first-line-that-matches-wins rule `attempt_schedule_match` has always
-/// had -- this IS that code, lifted out unchanged.
+/// had when `expected_uid` is `None` -- that part of this code is lifted
+/// out unchanged.
+///
+/// `expected_uid`: `None` for `attempt_schedule_match`'s legacy pin path,
+/// which has no identity to check against (discovering it IS the point) --
+/// the very first candidate line with ANY tolerance match wins, exactly as
+/// before.
+///
+/// `Some(train_uid)` for [`attempt_schedule_match_for_shared_train`], which
+/// already knows the real identity. **Real production bug this closes**
+/// (2026-09-24 investigation, train `Y80908`, Birmingham New Street ->
+/// London Euston via the Northampton loop): `pin_origin_crs` can easily
+/// have several candidate lines (`crs_line_index`'s `CRS -> Vec<line_id>`,
+/// built from every `lines/*.toml` file that lists the station -- Birmingham
+/// New Street alone appears on a dozen of them, from `cross-country` to
+/// `wmr-cross-city`). The OLD code returned on the FIRST candidate line
+/// whose population had ANY entry within the wide (20-minute,
+/// `common::MATCH_TOLERANCE`) tolerance of the pin's own time, uid
+/// unchecked -- fine for the untargeted legacy path, but wrong here: at a
+/// busy multi-line terminus it is entirely normal for some OTHER real
+/// service on an earlier-iterated candidate line (alphabetically,
+/// `cross-country.toml` sorts before `lnwr-birmingham-crewe.toml`, the line
+/// Y80908 actually runs on) to have a departure within 20 minutes of
+/// Y80908's own. The caller only ever tried that ONE candidate line, saw
+/// the uid disagreed, and gave up entirely -- `attempt_schedule_match_for_shared_train`'s
+/// own uid check has always existed as a correctness guard, but nothing
+/// ever gave it a SECOND candidate to check, so the guard itself is what
+/// silently and permanently discarded the correct match. Now: when a
+/// candidate line's match disagrees with `expected_uid`, this keeps
+/// searching the REMAINING candidate lines instead of returning that wrong
+/// match -- only `Ok(None)` (or a line whose match genuinely agrees) ends
+/// the search. The untargeted (`None`) path is completely unaffected: it
+/// still returns on the very first tolerance match, same as always.
 async fn find_schedule_match(
     pool: &PgPool,
     pin_origin_crs: &str,
     pin_scheduled_departure: DateTime<Utc>,
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
+    expected_uid: Option<&str>,
 ) -> anyhow::Result<Option<ScheduleMatch>> {
     let Some(candidate_lines) = crs_line_index.get(&pin_origin_crs.to_uppercase()) else {
         return Ok(None);
@@ -250,6 +295,25 @@ async fn find_schedule_match(
         ) else {
             continue;
         };
+
+        if let Some(expected) = expected_uid
+            && matched.uid != expected
+        {
+            // Do NOT return this -- keep searching the remaining candidate
+            // lines. See this function's own doc comment for the real
+            // production bug (train `Y80908`) this closes: returning here
+            // (the old behavior) is exactly what let a wrong-line,
+            // wrong-uid tolerance match permanently starve out the correct
+            // one on a later candidate line.
+            tracing::debug!(
+                expected_uid = expected,
+                matched_uid = matched.uid,
+                line_id = %line_id,
+                "schedule match on this candidate line resolved a different uid; trying the \
+                 next candidate line instead of giving up"
+            );
+            continue;
+        }
 
         let calling_points: Vec<ScheduleCallingPointDto> = matched
             .calling_points
@@ -312,6 +376,18 @@ async fn find_schedule_match(
 /// train's shared row, visible to every subscriber of it. Returns
 /// `Ok(false)` for that, same as for "no match at all".
 ///
+/// Passes `Some(train_uid)` as `find_schedule_match`'s `expected_uid` --
+/// see that function's own doc comment for the real production bug
+/// (train `Y80908`, 2026-09-24) this closes: it now keeps trying every
+/// remaining candidate line for `origin_crs` until one actually agrees with
+/// `train_uid`, rather than giving up the instant the FIRST candidate
+/// line's tolerance match happens to be some other, unrelated service. The
+/// check just below is therefore a defense-in-depth invariant now, not the
+/// primary correctness mechanism it used to be -- `find_schedule_match`
+/// itself should never hand this function a disagreeing uid any more; if
+/// this branch ever fires, treat it as a bug in that guarantee, not an
+/// expected "busy terminus" outcome.
+///
 /// Writes through `find_or_create_train_with_schedule_match`, whose every
 /// column is `COALESCE`d against the existing value -- so this can never
 /// clobber schedule data an earlier match already wrote, and is safe to
@@ -330,6 +406,7 @@ pub async fn attempt_schedule_match_for_shared_train(
         scheduled_departure,
         service_date,
         crs_line_index,
+        Some(train_uid),
     )
     .await?
     else {
@@ -341,8 +418,10 @@ pub async fn attempt_schedule_match_for_shared_train(
             train_uid,
             matched_uid = matched.uid,
             origin_crs,
-            "schedule match for a known-identity train resolved a DIFFERENT uid; \
-             discarding rather than writing another train's schedule onto this shared row"
+            "schedule match for a known-identity train resolved a DIFFERENT uid after checking \
+             every candidate line -- this should be unreachable now that find_schedule_match \
+             enforces expected_uid itself; discarding rather than writing another train's \
+             calling points onto this shared row"
         );
         return Ok(false);
     }
@@ -894,6 +973,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            None,
         )
         .await
         .expect("find_schedule_match")
@@ -997,6 +1077,7 @@ mod db_tests {
             scheduled_departure,
             service_date,
             &crs_line_index,
+            None,
         )
         .await
         .expect("find_schedule_match")
@@ -1353,6 +1434,150 @@ mod db_tests {
             .ok();
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// Regression test for the real production bug this closes
+    /// (`https://ds.cursed.solutions/train/Y80908/2026-09-24` still showing
+    /// no schedule at all, even after `enrich_public_train_schedule` -- see
+    /// `find_schedule_match`'s own doc comment for the full account): a
+    /// busy multi-line origin station (here, a stand-in for the real
+    /// Birmingham New Street, which appears on a dozen `lines/*.toml`
+    /// files) where the FIRST candidate line iterated for the origin CRS
+    /// happens to have some OTHER, unrelated service within
+    /// `common::MATCH_TOLERANCE` of the pin's own time, and only a LATER
+    /// candidate line actually carries the train we already know the
+    /// identity of.
+    ///
+    /// Before this fix, `find_schedule_match` returned on the FIRST
+    /// candidate line's tolerance match regardless of uid, so
+    /// `attempt_schedule_match_for_shared_train`'s own uid check discarded
+    /// it and returned `Ok(false)` -- permanently, since nothing ever tried
+    /// `real-line` at all. This reproduces exactly that shape (two
+    /// candidate lines in `crs_line_index`, in an order where the WRONG one
+    /// is tried first) and asserts the correct line's schedule is the one
+    /// actually written.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_for_shared_train_keeps_trying_candidate_lines_past_a_wrong_uid_match \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_for_shared_train_keeps_trying_candidate_lines_past_a_wrong_uid_match()
+     {
+        let pool = connect().await;
+        let train_uid = "TEST-Y80908-SHAPE";
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+
+        // Simulates `trust-backlog-consumer`'s bare `find_or_create_train` +
+        // `mark_train_resolved` -- real live TRUST identity, no
+        // `train_subscriptions` row anywhere, exactly Y80908's own real
+        // shape (a `trains` row created by broad ingestion, never tracked).
+        let trains_id = crate::data::trains::find_or_create_train(&pool, train_uid, service_date)
+            .await
+            .expect("find_or_create_train for fixture");
+        crate::data::trains::mark_train_resolved(&pool, trains_id, "TEST-Y80908-HC")
+            .await
+            .expect("mark_train_resolved for fixture");
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-BHM-STANOX', 'TBM', 'BHAMNWS', 'TEST BIRMINGHAM NEW STREET', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs for the busy origin station");
+
+        // The WRONG, earlier-iterated candidate line: a real, unrelated
+        // service departing the same origin TIPLOC 10 minutes off Y80908's
+        // own time -- well within the 20-minute `common::MATCH_TOLERANCE`,
+        // exactly what happens for real at a busy terminus like Birmingham
+        // New Street.
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-cross-country-shape', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json("TEST-UNRELATED-XC", "BHAMNWS", "12:10"))
+        .execute(&pool)
+        .await
+        .expect("seed the wrong candidate line's population");
+
+        // The CORRECT, later-iterated candidate line: Y80908's own real
+        // service.
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-lnwr-birmingham-crewe-shape', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json(train_uid, "BHAMNWS", "12:00"))
+        .execute(&pool)
+        .await
+        .expect("seed the correct candidate line's population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T12:00:00+01:00".parse().unwrap();
+        let mut crs_line_index = HashMap::new();
+        // Order matters: the wrong line MUST be iterated first to reproduce
+        // the bug -- `Vec` insertion order here mirrors the real
+        // `crs_to_line_ids` index, whose order follows `glob`'s alphabetical
+        // directory listing of `lines/*.toml` (`cross-country.toml` sorts
+        // before `lnwr-birmingham-crewe.toml`).
+        crs_line_index.insert(
+            "TBM".to_string(),
+            vec![
+                "test-cross-country-shape".to_string(),
+                "test-lnwr-birmingham-crewe-shape".to_string(),
+            ],
+        );
+
+        let matched = attempt_schedule_match_for_shared_train(
+            &pool,
+            train_uid,
+            "TBM",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt_schedule_match_for_shared_train");
+        assert!(
+            matched,
+            "must keep trying candidate lines past the wrong-uid match on the first one, not \
+             give up"
+        );
+
+        let (matched_line_id,): (Option<String>,) =
+            sqlx::query_as("SELECT matched_line_id FROM trains WHERE id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back the shared trains row");
+        assert_eq!(
+            matched_line_id,
+            Some("test-lnwr-birmingham-crewe-shape".to_string()),
+            "the shared row must carry the CORRECT line's match, never the wrong candidate \
+             line's unrelated service"
+        );
+
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id IN \
+             ('test-cross-country-shape', 'test-lnwr-birmingham-crewe-shape') AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-BHM-STANOX'")
             .execute(&pool)
             .await
             .ok();
