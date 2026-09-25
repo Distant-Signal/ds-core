@@ -99,10 +99,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@688313b0823df1393bcebb1b4add0438a6d36884 # 1.88.0
 
       - name: Cache cargo registry/target
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       # No rdkafka/sasl2 system packages installed here (unlike ci.yml's
       # `rust-test` job): `cargo run -p line-catalogue-validator` only
@@ -128,7 +128,7 @@ jobs:
           # RDM_TOCS_BASE_URL: ${{ secrets.RDM_TOCS_BASE_URL }}
 
       - name: Upload validator output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: validator-output
           path: validator-output.txt
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download validator output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: validator-output
 
@@ -167,7 +167,7 @@ jobs:
       # just not automatically flagged. Revisit if that granularity turns
       # out to matter in practice.
       - name: Open, update, or close the tracking issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const fs = require('fs');
