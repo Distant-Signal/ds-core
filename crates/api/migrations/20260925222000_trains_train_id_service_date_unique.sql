@@ -1,0 +1,70 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Structural close-out of today's TRUST-consumer/`trust_event_backlog_match`
+-- CRS+time mismatching incident (2026-09-25): two `trains` rows ended up
+-- sharing one real-world train's TRUST `train_id` for the same
+-- `service_date`, so a London Northwestern Euston->Birmingham subscription
+-- showed an unrelated Avanti Euston->Liverpool service's movements. Both
+-- write paths that could cause this have already been patched with an
+-- application-level veto (`is_provable_identity_contradiction`, this
+-- module and its equivalent in `crates/trust-consumer/src/matching.rs`) --
+-- this migration is the schema-level backstop behind those guards, so this
+-- whole bug class becomes structurally impossible, not merely guarded
+-- against by application code that a future change could regress.
+--
+-- Confirmed safe against every current write path before adding this:
+--
+-- * `trains.train_id` (TRUST's own daily identifier) is nullable by design
+--   (`20260906100000_trains.sql`) -- a schedule-matched-but-not-yet-live-
+--   resolved row has no `train_id` at all. Postgres treats every NULL as
+--   distinct from every other NULL for uniqueness purposes, so a bare
+--   `UNIQUE (train_id, service_date)` would already let any number of
+--   still-pending rows coexist for one `service_date` -- but this codebase's
+--   own established convention for exactly this shape (see
+--   `tracked_trains_resolved_identity` in the now-retired
+--   `20260828120000_train_tracking.sql`, and
+--   `train_movement_events_trains_id_dedup` /
+--   `train_current_state_trains_id` in `20260906110000_train_movement_trains_id.sql`)
+--   is an explicit partial index, `WHERE train_id IS NOT NULL`, so the
+--   NULL-skipping behavior reads as documented intent rather than an
+--   incidental side effect a future reader has to rediscover from Postgres
+--   semantics. Matched here for the same reason.
+--
+-- * Two different subscriptions sharing one physical train is already
+--   modeled as ONE `trains` row referenced by multiple
+--   `train_subscriptions.trains_id` foreign keys -- never as two `trains`
+--   rows for the same identity (`docs/superpowers/specs/2026-09-06-shared-train-identity-design.md`).
+--   `find_or_create_train`/`find_or_create_trains_batch`/
+--   `find_or_create_train_with_schedule_match` (`crates/api/src/data/trains.rs`)
+--   are the only write paths that ever create a `trains` row, and every one
+--   of them upserts via `ON CONFLICT (train_uid, service_date) DO UPDATE
+--   ... RETURNING id` -- idempotent by construction, so no code path in
+--   this codebase creates a second row for an identity that already has
+--   one. `mark_train_resolved`/`mark_trains_resolved_batch` (the only
+--   writers of `train_id` itself) always target an existing row's `id`,
+--   never insert a new one. So no legitimate write pattern here ever needs
+--   two `trains` rows to carry the same `(train_id, service_date)` pair.
+--
+-- * The one already-known real corrupted row from today's incident
+--   (`trains.id = 6095140`, `train_uid = 'Y80926'`, `service_date =
+--   '2026-09-25'`) was deliberately left uncleaned. Whether that row's
+--   *wrongly written* `train_id` actually collides with a second, correctly
+--   resolved `trains` row for the real owner of that TRUST identifier is
+--   not something this migration can determine from here (that depends on
+--   whether the real train's own `trains` row was ever independently
+--   resolved) -- and it does not need to: `CREATE UNIQUE INDEX
+--   CONCURRENTLY` never runs inside a transaction (Postgres rejects that
+--   combination outright), so a real duplicate-key violation from that row
+--   fails this single statement cleanly -- an INVALID index left behind for
+--   a human to `DROP INDEX` and retry after manual data cleanup -- rather
+--   than the ACCESS-EXCLUSIVE-lock-timeout flavor of startup crash-loop
+--   `crates/api/tests/migration_index_locking.rs` exists to prevent
+--   (`main.rs` runs migrations before binding its listener, so any
+--   transaction-wrapped index build blocks `/public/health` for its whole
+--   duration). Either way, the failure mode is a clean, retriable migration
+--   step, never a stuck lock or a corrupted transaction.
+-- -------------------------------------------------------------------------
+
+CREATE UNIQUE INDEX CONCURRENTLY trains_train_id_service_date
+    ON trains (train_id, service_date)
+    WHERE train_id IS NOT NULL;
