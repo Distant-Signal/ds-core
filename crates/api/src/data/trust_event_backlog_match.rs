@@ -89,6 +89,25 @@ struct BacklogRow {
     variation_status: Option<String>,
 }
 
+/// Is `at` within `MATCH_TOLERANCE` of a `common::rail_day` boundary
+/// (02:00 Europe/London)? Used only to decide whether a failed backlog
+/// match is worth a diagnostic log -- see `attempt_backlog_match`'s own
+/// call site.
+///
+/// Implemented as "does the rail day differ `MATCH_TOLERANCE` before `at`
+/// versus `MATCH_TOLERANCE` after it", rather than computing a raw
+/// distance to the nearest boundary instant: `common::rail_day` already
+/// exposes exactly this comparison (`current_rail_day`) and gets the
+/// DST-transition-safe Europe/London arithmetic right, whereas hand-rolling
+/// "nearest boundary" from `next_rail_day_boundary` alone would need to
+/// account for rail days that are 23h or 25h long on a clock-change day.
+/// If the two ends of that window fall on different rail days, `at` is, by
+/// definition, within `MATCH_TOLERANCE` of the boundary between them.
+fn is_near_rail_day_boundary(at: DateTime<Utc>) -> bool {
+    common::rail_day::current_rail_day(at - MATCH_TOLERANCE)
+        != common::rail_day::current_rail_day(at + MATCH_TOLERANCE)
+}
+
 /// Decision 3 step 2: does any backlog row at `pin_origin_crs`, within
 /// `MATCH_TOLERANCE` of `pin_scheduled_departure`, exist? Returns that
 /// row's `train_id` (TRUST's own daily identifier -- present on every row
@@ -173,10 +192,37 @@ struct BacklogRow {
 /// `pin_scheduled_departure` means a service departing 1 minute from the
 /// pin's own booked time is always preferred over one departing 19 minutes
 /// away, regardless of which one happens to be chronologically earlier.
+///
+/// **`service_date` filter, added for Low finding #2 (2026-09-25 review):
+/// this query used to have none, even though the very next step of this
+/// same pipeline (`fetch_backlog_history`) filters strictly on
+/// `train_id = $1 AND service_date = $2`.** That mismatch was silent and
+/// self-defeating: this function could resolve `train_id` from a backlog
+/// row whose OWN `service_date` differs from the pin's (every row this
+/// table stores carries the rail day its own TRUST message belongs to --
+/// see `trust-backlog-consumer`'s own producer), and
+/// `fetch_backlog_history(train_id, pin_service_date)` would then
+/// deterministically find ZERO rows for that `train_id` under the PIN's
+/// `service_date` -- `attempt_backlog_match` returns `Ok(false)` via the
+/// `history.is_empty()` branch, with nothing distinguishing that outcome
+/// from an honest "nothing in the backlog for this pin" one. A pin whose
+/// own `pin_scheduled_departure` sits close to the 02:00 Europe/London
+/// rail-day cutover (`common::rail_day`) is exactly where this bites: a
+/// same-CRS, same-clock-time DEPARTURE on the ADJACENT rail day can fall
+/// inside `MATCH_TOLERANCE` purely by clock coincidence, get matched here,
+/// then silently fail one step later, on every sweep, forever (nothing
+/// about a repeated sweep changes which wrong-service_date row wins).
+/// Filtering on `service_date` here closes that mismatch at the source: a
+/// candidate is now only ever chosen if the later history fetch can
+/// actually find rows for it. See `attempt_backlog_match`'s own
+/// near-boundary diagnostic logging for the other half of this fix -- a
+/// pin that still doesn't match despite being near the boundary is now at
+/// least visible in the logs, not just permanently `pending`.
 async fn find_backlog_match(
     pool: &PgPool,
     pin_origin_crs: &str,
     pin_scheduled_departure: DateTime<Utc>,
+    service_date: NaiveDate,
 ) -> anyhow::Result<Option<(String, Option<String>)>> {
     let window_start = pin_scheduled_departure - MATCH_TOLERANCE;
     let window_end = pin_scheduled_departure + MATCH_TOLERANCE;
@@ -192,7 +238,7 @@ async fn find_backlog_match(
     let query = format!(
         "SELECT train_id FROM trust_event_backlog \
          WHERE UPPER(crs) = UPPER($1) AND planned_timestamp BETWEEN $2 AND $3 \
-         AND event_type = 'DEPARTURE' \
+         AND event_type = 'DEPARTURE' AND service_date = $5 \
          AND (actual_timestamp IS NULL \
               OR actual_timestamp <= received_at + INTERVAL '{} minutes') \
          ORDER BY ABS(EXTRACT(EPOCH FROM (planned_timestamp - $4))) LIMIT 1",
@@ -203,6 +249,7 @@ async fn find_backlog_match(
         .bind(window_start)
         .bind(window_end)
         .bind(pin_scheduled_departure)
+        .bind(service_date)
         .fetch_optional(pool)
         .await?;
 
@@ -214,10 +261,25 @@ async fn find_backlog_match(
     // backlog, unscoped by CRS (an Activation carries no location at
     // all) -- the only row type in this table that ever carries a
     // train_uid.
+    //
+    // **`ORDER BY received_at DESC`, not a bare `LIMIT 1` (Low finding,
+    // 2026-09-25 review).** TRUST recycles `train_id`s, and a re-activation
+    // of the SAME `train_id` within this table's retention window (a real,
+    // if uncommon, TRUST occurrence -- e.g. a corrected/duplicate Activation
+    // resend) means more than one row can match this WHERE clause. Without
+    // an explicit order, `LIMIT 1` picks whichever row Postgres' planner
+    // happens to return first -- a physical-storage detail, not a
+    // meaningful one -- so which `train_uid` gets attached to this pin could
+    // vary non-deterministically between two otherwise-identical runs of
+    // this exact query. `received_at` (this consumer's own reliable
+    // wall-clock receipt time, never subject to the TRUST timestamp
+    // corruption `common::trust_timestamp` documents) descending picks the
+    // MOST RECENT Activation deterministically, which is also the more
+    // likely to be a correction than an earlier, possibly-superseded one.
     let activation_uid: Option<(String,)> = sqlx::query_as(
         "SELECT train_uid FROM trust_event_backlog \
          WHERE train_id = $1 AND msg_type = '0001' AND train_uid IS NOT NULL \
-         LIMIT 1",
+         ORDER BY received_at DESC LIMIT 1",
     )
     .bind(&train_id)
     .fetch_optional(pool)
@@ -295,10 +357,17 @@ pub async fn find_train_id_by_uid(
     train_uid: &str,
     service_date: NaiveDate,
 ) -> anyhow::Result<Option<String>> {
+    // **`ORDER BY received_at DESC`, not a bare `LIMIT 1` (Low finding,
+    // 2026-09-25 review) -- same reasoning as `find_backlog_match`'s own
+    // Activation lookup just above.** A re-activation of the same
+    // `(train_uid, service_date)` pair within retention (TRUST resending a
+    // corrected/duplicate Activation) means more than one row can match
+    // here; an unordered `LIMIT 1` would pick a Postgres-planner-dependent
+    // row rather than deterministically the most recent one.
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT train_id FROM trust_event_backlog \
          WHERE train_uid = $1 AND service_date = $2 AND msg_type = '0001' \
-         LIMIT 1",
+         ORDER BY received_at DESC LIMIT 1",
     )
     .bind(train_uid)
     .bind(service_date)
@@ -539,8 +608,32 @@ pub async fn attempt_backlog_match(
     service_date: NaiveDate,
 ) -> anyhow::Result<bool> {
     let Some((train_id, train_uid)) =
-        find_backlog_match(pool, pin_origin_crs, pin_scheduled_departure).await?
+        find_backlog_match(pool, pin_origin_crs, pin_scheduled_departure, service_date).await?
     else {
+        // Low finding #2 (2026-09-25 review): a diagnostic-only log, fired
+        // ONLY when this pin's own scheduled departure sits within
+        // `MATCH_TOLERANCE` of a rail-day boundary (`common::rail_day`) --
+        // exactly the situation where `find_backlog_match`'s now-added
+        // `service_date` filter can plausibly be the reason nothing
+        // matched (a same-CRS, same-clock-time candidate on the ADJACENT
+        // rail day, now correctly excluded). Not logged for the ordinary
+        // "nothing in the backlog for this pin at all" case away from any
+        // boundary -- that is the expected, high-volume, non-actionable
+        // outcome for most pending pins before TRUST movements arrive, and
+        // logging every one of those would just be noise. See
+        // `is_near_rail_day_boundary`'s own doc comment.
+        if is_near_rail_day_boundary(pin_scheduled_departure) {
+            tracing::debug!(
+                tracked_train_id,
+                pin_origin_crs,
+                %pin_scheduled_departure,
+                %service_date,
+                "backlog CRS+time match found nothing for a pin whose scheduled departure is \
+                 near the rail-day boundary; a same-CRS/same-clock-time candidate may exist on \
+                 the adjacent rail day and be excluded by this query's service_date filter -- \
+                 if this pin never resolves, check trust_event_backlog for that adjacent day"
+            );
+        }
         return Ok(false);
     };
 
@@ -855,6 +948,46 @@ pub async fn attempt_backlog_match_by_uid(
 /// guards really don't happen); these prove its truth table, including the
 /// three "not provable, leave the heuristic alone" cases that are the whole
 /// reason this is a filter and not a rewrite.
+/// Pure coverage of `is_near_rail_day_boundary` -- no database needed, so
+/// this runs in the default `cargo test --workspace` pass.
+#[cfg(test)]
+mod rail_day_boundary_tests {
+    use super::is_near_rail_day_boundary;
+    use chrono::DateTime;
+
+    #[test]
+    fn well_inside_a_rail_day_is_not_near_the_boundary() {
+        // Mid-afternoon, nowhere near 02:00 Europe/London either side.
+        let at: DateTime<chrono::Utc> = "2026-09-05T13:00:00Z".parse().unwrap();
+        assert!(!is_near_rail_day_boundary(at));
+    }
+
+    #[test]
+    fn just_before_the_boundary_is_near_it() {
+        // 01:50 Europe/London (September is BST, so 00:50 UTC) -- 10
+        // minutes before the 02:00 cutover, well inside MATCH_TOLERANCE
+        // (20 minutes).
+        let at: DateTime<chrono::Utc> = "2026-09-05T00:50:00Z".parse().unwrap();
+        assert!(is_near_rail_day_boundary(at));
+    }
+
+    #[test]
+    fn just_after_the_boundary_is_near_it() {
+        // 02:10 Europe/London (01:10 UTC in BST) -- 10 minutes after the
+        // cutover.
+        let at: DateTime<chrono::Utc> = "2026-09-05T01:10:00Z".parse().unwrap();
+        assert!(is_near_rail_day_boundary(at));
+    }
+
+    #[test]
+    fn well_outside_the_tolerance_window_is_not_near_the_boundary() {
+        // 03:00 Europe/London (02:00 UTC in BST) -- a full hour past the
+        // cutover, outside the +/-20 minute MATCH_TOLERANCE window.
+        let at: DateTime<chrono::Utc> = "2026-09-05T02:00:00Z".parse().unwrap();
+        assert!(!is_near_rail_day_boundary(at));
+    }
+}
+
 #[cfg(test)]
 mod contradiction_filter_tests {
     use super::is_provable_identity_contradiction;
@@ -2440,5 +2573,127 @@ mod db_tests {
             "TEST-UNKNOWN-PIN-UID",
         )
         .await;
+    }
+
+    /// Finding #2's own regression test (2026-09-25 review): a backlog row
+    /// that matches on CRS+time alone but carries a DIFFERENT `service_date`
+    /// than the pin's own must not be selected by `find_backlog_match` --
+    /// before this fix it was, and the subsequent `fetch_backlog_history`
+    /// call (which DOES filter on `service_date`) would then silently find
+    /// zero rows, leaving the pin `'pending'` forever with no indication
+    /// why. A second row for the SAME train_id/CRS/time but the CORRECT
+    /// `service_date` proves the fix doesn't just reject everything -- it
+    /// resolves to that row specifically.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_backlog_row_with_a_mismatched_service_date_is_never_matched -- --ignored --test-threads=1`"]
+    async fn a_backlog_row_with_a_mismatched_service_date_is_never_matched() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-SVCDATE-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-svcdate@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let pin_service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let wrong_service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
+
+        // A row that matches CRS+time exactly but was stored under the
+        // WRONG service_date (as if TRUST's own message named a different
+        // rail day than the pin's) -- must never be selected.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES ($1, NULL, $2, $3, '0003', 'DEPARTURE', $4, $4, 'ON TIME', $5)",
+        )
+        .bind("EUS")
+        .bind("TEST-BACKLOG-SVCDATE-WRONG-TRAIN-ID")
+        .bind(wrong_service_date)
+        .bind(scheduled)
+        .bind("test-backlog-svcdate-dedup-wrong")
+        .execute(&pool)
+        .await
+        .expect("seed the mismatched-service_date backlog row");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(pin_service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, pin_service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            !matched,
+            "a CRS+time match under a different service_date must not resolve this pin"
+        );
+
+        let (resolution_status,): (String,) =
+            sqlx::query_as("SELECT resolution_status FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back tracked_trains");
+        assert_eq!(resolution_status, "pending");
+
+        // Now add the SAME CRS+time row under the pin's own, CORRECT
+        // service_date -- the fix must still let a genuinely correct match
+        // through, not reject everything indiscriminately.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES ($1, NULL, $2, $3, '0003', 'DEPARTURE', $4, $4, 'ON TIME', $5)",
+        )
+        .bind("EUS")
+        .bind("TEST-BACKLOG-SVCDATE-RIGHT-TRAIN-ID")
+        .bind(pin_service_date)
+        .bind(scheduled)
+        .bind("test-backlog-svcdate-dedup-right")
+        .execute(&pool)
+        .await
+        .expect("seed the correct-service_date backlog row");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, pin_service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            matched,
+            "the same CRS+time candidate under the pin's own correct service_date must still match"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id IN \
+             ('TEST-BACKLOG-SVCDATE-WRONG-TRAIN-ID', 'TEST-BACKLOG-SVCDATE-RIGHT-TRAIN-ID')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
     }
 }
