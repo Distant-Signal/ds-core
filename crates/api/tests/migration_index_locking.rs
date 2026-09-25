@@ -100,6 +100,17 @@ const GRANDFATHERED: &[&str] = &[
     // build, which is several times slower than an equivalent btree.
     "20260917090000_incidents_affected_lines.sql",
     "20260922140000_journey_templates.sql",
+    // `unlisted_links` -- merged the same day as this guard test itself,
+    // slightly ahead of it landing on `main`, and already pushed (likely
+    // already applied in production given today's deploy cadence) before
+    // the collision was caught here. Same non-negotiable constraint as
+    // every other entry above: sqlx checksums an applied migration on
+    // connect, so rewriting this file now risks a production
+    // CrashLoopBackOff on exactly the databases this guard exists to
+    // protect, for a table (`unlisted_links`) that is small today but
+    // would need the same CONCURRENTLY treatment if it ever needed a new
+    // index again.
+    "20260925091000_unlisted_links_one_active_per_resource.sql",
 ];
 
 fn migrations_dir() -> PathBuf {
