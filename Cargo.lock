@@ -2874,6 +2874,7 @@ dependencies = [
  "clap",
  "common",
  "dotenv",
+ "http 0.2.12",
  "serde",
  "serde_json",
  "sqlx",
