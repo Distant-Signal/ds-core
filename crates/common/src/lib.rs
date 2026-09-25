@@ -307,21 +307,24 @@ pub enum DataQuality {
     #[default]
     Knowledgebase,
     LdbwsInferred,
-    /// Reserved for a future full-coverage TRUST-vs-schedule consumer
-    /// ("Option B" — see
+    /// Set by the full-coverage TRUST-vs-schedule consumer path ("Option B"
+    /// — see
     /// `docs/superpowers/specs/2026-08-29-trust-schedule-delay-inference-design.md`
     /// and
     /// `docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md`).
-    /// **Not constructed anywhere in this codebase today** — Option B has
-    /// not been built, and its own go/no-go decision gate
-    /// (`docs/superpowers/specs/2026-08-29-trust-schedule-delay-validation-findings.md`,
-    /// Task 8) has been re-run three times and has not reached "go" as of
-    /// this comment. When it does, this would be set by the same narrow
-    /// rule `LdbwsInferred` already follows: only when a full-coverage
-    /// status determines a line's severity with no active Knowledgebase
-    /// incident present, never when full-coverage data merely escalates an
-    /// incident-derived status's severity (which keeps its original
-    /// `Knowledgebase`/`Planned` provenance, mirroring
+    ///
+    /// This is LIVE, and this comment used to say the opposite ("**Not
+    /// constructed anywhere in this codebase today**"). `crates/full-coverage-consumer`
+    /// shipped, and `lines/tfw-conwy-valley.toml` set
+    /// `full_coverage_enabled = true` on 2026-09-21, so
+    /// `aggregator::aggregation::merge_full_coverage_stats` really does
+    /// construct this for a catalogued line every cycle.
+    ///
+    /// It follows the same narrow rule `LdbwsInferred` already does: set only
+    /// when a full-coverage status determines a line's severity with no
+    /// active Knowledgebase incident present, never when full-coverage data
+    /// merely escalates an incident-derived status's severity (which keeps
+    /// its original `Knowledgebase`/`Planned` provenance, mirroring
     /// `escalate_from_sample_stats`'s existing behavior for LDBWS).
     TrustInferred,
     Planned,
