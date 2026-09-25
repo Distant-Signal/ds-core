@@ -208,6 +208,61 @@ async fn find_backlog_match(
     Ok(Some((train_id, activation_uid.map(|(uid,)| uid))))
 }
 
+/// The already-known CIF identity of one subscription, or `None` when it
+/// has none yet.
+///
+/// A subscription's resolved identity does not live on
+/// `train_subscriptions` itself (Task 22 dropped that column) -- it lives
+/// exclusively on the shared `trains` row reached through
+/// `train_subscriptions.trains_id`, which is `NULL` for any pin no
+/// schedule match, NR-primary creation or earlier backlog replay has
+/// bound yet. `trains.train_uid` is itself `NOT NULL` (see
+/// `20260906100000_trains.sql`), so the only reason this returns `None` is
+/// a subscription with no `trains_id` at all: the honest "this pin has no
+/// identity of its own yet", which is exactly the case the contradiction
+/// filter below must leave alone.
+async fn known_train_uid_for_subscription(
+    pool: &PgPool,
+    tracked_train_id: i64,
+) -> anyhow::Result<Option<String>> {
+    let train_uid: Option<String> = sqlx::query_scalar(
+        "SELECT tr.train_uid FROM train_subscriptions ts \
+         JOIN trains tr ON tr.id = ts.trains_id \
+         WHERE ts.id = $1",
+    )
+    .bind(tracked_train_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(train_uid)
+}
+
+/// Is a CRS+time backlog candidate PROVABLY not the train a subscription
+/// is already known to be tracking?
+///
+/// The exact same shape, and the exact same reasoning, as the
+/// contradiction filter `trust-consumer::process::process_message` applies
+/// in front of `matching::resolve_origin_departure` (commit
+/// `4340c97f`, "a parked Activation's train_uid vetoes a wrong CRS+time
+/// claim"): only a comparison between two identities that are BOTH already
+/// known can ever prove a mismatch. When either side is unknown the
+/// underlying CRS+time heuristic is all there is, and it must run exactly
+/// as it did before -- this filter can only ever remove a candidate TRUST's
+/// own data has already contradicted, never change an outcome that was
+/// previously correct.
+///
+/// Case-insensitive on both sides, same posture as every other
+/// `train_uid` comparison in this codebase (and as the trust-consumer
+/// filter this mirrors): casing alone is not a contradiction.
+fn is_provable_identity_contradiction(
+    subscription_train_uid: Option<&str>,
+    candidate_train_uid: Option<&str>,
+) -> bool {
+    match (subscription_train_uid, candidate_train_uid) {
+        (Some(known), Some(candidate)) => !known.eq_ignore_ascii_case(candidate),
+        _ => false,
+    }
+}
+
 /// Resolves a bare `(train_uid, service_date)` to TRUST's own `train_id`,
 /// via the one row type in this table that ever carries a `train_uid` at
 /// all -- an Activation (`msg_type = '0001'`). Unlike `find_backlog_match`
@@ -438,7 +493,11 @@ async fn replay_backlog_history(
 /// the backlog's retention window has already rolled past this
 /// service_date) -- exactly Decision 3 step 8's "no regression, no new
 /// failure mode" posture: a pin left `Ok(false)` here is exactly as it
-/// would have been without this feature at all.
+/// would have been without this feature at all. Since the contradiction
+/// filter below, `Ok(false)` also covers "the CRS+time candidate is
+/// provably a different train than this subscription already knows itself
+/// to be" -- same "left exactly as it was" outcome, for a reason that is a
+/// correctness guarantee rather than an absence of data.
 ///
 /// `Ok(true)` does NOT by itself mean `resolution_status` reached
 /// `'resolved'` in every historical version of `upsert_train_event`, but
@@ -459,6 +518,81 @@ pub async fn attempt_backlog_match(
     else {
         return Ok(false);
     };
+
+    // CONTRADICTION FILTER -- the same fix, for the same class of bug, as
+    // commit `4340c97f`'s ("a parked Activation's train_uid vetoes a wrong
+    // CRS+time claim") guard in front of
+    // `trust-consumer::matching::resolve_origin_departure`. That fix closed
+    // this shape on the LIVE matching path; this closes it on the BACKLOG
+    // replay path, which had the identical gap and, if anything, a worse
+    // blast radius.
+    //
+    // `find_backlog_match` above is a pure CRS + `planned_timestamp`-window
+    // lookup with no notion of train identity: it answers "which train_id
+    // left this CRS near this time", and at a busy origin inside a
+    // +/-`MATCH_TOLERANCE` (20-minute) window that is routinely several
+    // different trains. It then opportunistically discovers that candidate's
+    // REAL `train_uid` from TRUST's own Activation (`0001`) row -- so by
+    // this point the candidate's identity is frequently already known for
+    // certain. Until this filter, that known identity was used only to look
+    // up a destination and to drive the Step A dual-write below; it was
+    // never compared against the identity the subscription ALREADY had.
+    //
+    // What that cost, concretely. A pin that `attempt_schedule_match`
+    // resolved a moment earlier (`routes::train::post_track` and
+    // `routes::journeys::post_journey` both call that first, then this,
+    // unconditionally) already points at a `trains` row whose `train_uid`
+    // came from a real CIF schedule match. If this CRS+time lookup then
+    // landed on a DIFFERENT train that happened to leave the same station
+    // inside the same window, `replay_backlog_history` below replayed that
+    // other train's entire movement history onto the user's subscription,
+    // and the Step A dual-write at the end of this function then
+    // `UPDATE train_subscriptions SET trains_id = ...` -- repointing the
+    // subscription away from its correctly-matched train onto the wrong
+    // one. There is no unwind path for either write. That is exactly the
+    // mis-attribution shape confirmed in production on 2026-09-25 (a user's
+    // Euston -> Birmingham New Street service showing an Avanti
+    // Euston -> Liverpool service's movements, and reading "En route"
+    // before it had left), and the same shape as the earlier confirmed
+    // `trains_id=713729`/`C17876` incident this module's own ARRIVAL-filter
+    // regression test documents.
+    //
+    // So: when the subscription's own identity is already known AND this
+    // candidate's identity is already known AND they differ, the candidate
+    // is provably not this train. Reject before anything is written --
+    // before `fetch_backlog_history`, before the replay, before the
+    // repoint. `Ok(false)` is the honest outcome and exactly what every
+    // other "nothing in the backlog for this pin" path already returns: the
+    // pin is left precisely as it was, and `run_backlog_match_sweep` will
+    // not re-select it anyway (its candidate query already excludes any row
+    // with a `trains_id`).
+    //
+    // Named residual, deliberately left as-is rather than tightened: when
+    // this candidate has NO Activation row in the retention window its
+    // `train_uid` is `None`, nothing is provable, and the pre-existing
+    // behavior is preserved untouched -- same "either side unknown means
+    // the heuristic runs exactly as before" posture the trust-consumer fix
+    // took, and for the same reason. Tightening that case into "an
+    // already-identified pin may only match a candidate TRUST confirms is
+    // the same train" would also break the legitimate case it is
+    // indistinguishable from: a correctly schedule-matched pin whose real
+    // train's Movement rows are retained but whose Activation has already
+    // aged out. See this fix's report for the follow-up that would close it
+    // properly (routing an already-identified subscription through
+    // `attempt_backlog_match_by_uid`, the identity-first counterpart, instead
+    // of this CRS+time discovery function at all).
+    let subscription_train_uid = known_train_uid_for_subscription(pool, tracked_train_id).await?;
+    if is_provable_identity_contradiction(subscription_train_uid.as_deref(), train_uid.as_deref()) {
+        tracing::warn!(
+            tracked_train_id,
+            subscription_train_uid = ?subscription_train_uid,
+            candidate_train_uid = ?train_uid,
+            candidate_train_id = %train_id,
+            "backlog CRS+time candidate names a different train_uid than this subscription is \
+             already known to be tracking; rejecting rather than replaying and repointing it"
+        );
+        return Ok(false);
+    }
 
     let history = fetch_backlog_history(pool, &train_id, service_date).await?;
     if history.is_empty() {
@@ -687,6 +821,66 @@ pub async fn attempt_backlog_match_by_uid(
         replayed_rows,
         origin_departure,
     }))
+}
+
+/// Pure coverage of the contradiction predicate itself -- no database, so
+/// these run in the default `cargo test --workspace` pass rather than only
+/// behind `--ignored`. The DB-gated tests below prove the predicate is
+/// actually WIRED into `attempt_backlog_match` (and that the writes it
+/// guards really don't happen); these prove its truth table, including the
+/// three "not provable, leave the heuristic alone" cases that are the whole
+/// reason this is a filter and not a rewrite.
+#[cfg(test)]
+mod contradiction_filter_tests {
+    use super::is_provable_identity_contradiction;
+
+    #[test]
+    fn two_different_known_train_uids_are_a_provable_contradiction() {
+        // The real 2026-09-25 pair: the user's London Northwestern service
+        // versus the Avanti service whose origin departure fell inside the
+        // same tolerance window.
+        assert!(is_provable_identity_contradiction(
+            Some("Y80926"),
+            Some("W34058")
+        ));
+    }
+
+    #[test]
+    fn the_same_known_train_uid_is_never_a_contradiction() {
+        assert!(!is_provable_identity_contradiction(
+            Some("Y80926"),
+            Some("Y80926")
+        ));
+    }
+
+    #[test]
+    fn casing_alone_is_never_a_contradiction() {
+        assert!(!is_provable_identity_contradiction(
+            Some("y80926"),
+            Some("Y80926")
+        ));
+        assert!(!is_provable_identity_contradiction(
+            Some("Y80926"),
+            Some("y80926")
+        ));
+    }
+
+    /// The three unknown-side cases, pinned so a future change to any of
+    /// them is a deliberate one: nothing is provable without both
+    /// identities, and the CRS+time heuristic must behave exactly as it did
+    /// before this filter existed.
+    #[test]
+    fn an_unknown_identity_on_either_side_is_never_a_contradiction() {
+        assert!(
+            !is_provable_identity_contradiction(None, Some("W34058")),
+            "a pin with no identity of its own has only the heuristic, same as always"
+        );
+        assert!(
+            !is_provable_identity_contradiction(Some("Y80926"), None),
+            "a candidate with no Activation in the retention window cannot be contradicted"
+        );
+        assert!(!is_provable_identity_contradiction(None, None));
+    }
 }
 
 #[cfg(test)]
@@ -1614,5 +1808,481 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// Seeds one subscription that is ALREADY bound to a shared `trains`
+    /// row (the schedule-matched shape: `resolution_status =
+    /// 'schedule_matched'`, `trains_id` pointing at a `trains` row whose
+    /// `train_uid` came from a real CIF match), plus one backlog train that
+    /// departs the same CRS inside the same `MATCH_TOLERANCE` window and
+    /// carries its own TRUST Activation naming its `train_uid`
+    /// unambiguously.
+    ///
+    /// Shared by both sides of the filter: pass a `backlog_train_uid` that
+    /// DIFFERS from `pin_train_uid` for the production shape this fix exists
+    /// for (two identities, both known for certain, one pin), or the same one
+    /// for the agreement case that must still replay. Returns
+    /// `(tracked_train_id, trains_id)`.
+    ///
+    /// The fixture's own incidental values -- the user's email, the backlog
+    /// rows' `dedup_key`s, the `service_date`, and the backlog train's
+    /// `planned_timestamp` -- are DERIVED here rather than passed in, both to
+    /// keep this under `clippy::too_many_arguments` and because each caller
+    /// would otherwise be restating a value it has no reason to choose
+    /// differently. The derived departure offset is the real incident's own:
+    /// 14 minutes before the pin's booked time, comfortably inside
+    /// `common::MATCH_TOLERANCE` (20 minutes), so the pure CRS+time lookup
+    /// genuinely selects this candidate.
+    async fn seed_identified_pin_and_a_backlog_train(
+        pool: &PgPool,
+        user_id: &str,
+        pin_train_uid: &str,
+        backlog_train_uid: &str,
+        backlog_train_id: &str,
+        pin_scheduled: DateTime<Utc>,
+    ) -> (i64, i64) {
+        let service_date = pin_scheduled.date_naive();
+        let backlog_planned = pin_scheduled - chrono::Duration::minutes(14);
+        let dedup_prefix = backlog_train_id;
+
+        // Defensive pre-clean, not belt-and-braces: `trust_event_backlog` has
+        // a real `UNIQUE (dedup_key)`, and these fixtures' dedup keys are
+        // fixed strings, so a PREVIOUS run that panicked before reaching its
+        // own cleanup (exactly what happens while a test is being written, or
+        // when an assertion legitimately fails) would otherwise make every
+        // later run fail on the seed instead of on the assertion -- hiding
+        // the real outcome behind a duplicate-key error. Same class of
+        // re-runnability bug this module's
+        // `a_full_activation_plus_movement_backlog_resolves_the_pin_to_resolved`
+        // documents for its own leftover `train_subscriptions` row.
+        for train_uid in [pin_train_uid, backlog_train_uid] {
+            sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+                .bind(train_uid)
+                .execute(pool)
+                .await
+                .ok();
+        }
+        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = $1")
+            .bind(backlog_train_id)
+            .execute(pool)
+            .await
+            .ok();
+
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(format!("{user_id}@example.com"))
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .expect("seed fixture user");
+
+        // The pin's OWN identity, on the shared `trains` row -- where a
+        // subscription's resolved identity actually lives (Task 22 dropped
+        // `train_subscriptions.train_uid`). `schedule_matched_at` set, no
+        // `train_id`: precisely what `attempt_schedule_match` leaves behind
+        // a moment before `attempt_backlog_match` is called at pin creation.
+        let (trains_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO trains (train_uid, service_date, origin_crs, scheduled_departure, \
+                                 schedule_matched_at) \
+             VALUES ($1, $2, 'EUS', $3, NOW()) RETURNING id",
+        )
+        .bind(pin_train_uid)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .fetch_one(pool)
+        .await
+        .expect("seed the pin's own already-matched trains row");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions \
+                (user_id, service_date, pin_origin_crs, pin_scheduled_departure, \
+                 trains_id, resolution_status) \
+             VALUES ($1, $2, 'EUS', $3, $4, 'schedule_matched') RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .bind(trains_id)
+        .fetch_one(pool)
+        .await
+        .expect("seed the already-identified subscription");
+
+        // A DIFFERENT train's backlog history at the same origin, inside the
+        // pin's window: an Activation naming its real train_uid (so
+        // `find_backlog_match` discovers that identity for certain) plus the
+        // located DEPARTURE that makes it a CRS+time candidate at all. Same
+        // faithful row shapes as this module's other fixtures -- train_uid
+        // on the Activation only, crs/timings on the Movement only.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4), \
+                    ('EUS', NULL, $2, $3, '0003', 'DEPARTURE', $5, $5, 'ON TIME', $6)",
+        )
+        .bind(backlog_train_uid)
+        .bind(backlog_train_id)
+        .bind(service_date)
+        .bind(format!("{dedup_prefix}-activation"))
+        .bind(backlog_planned)
+        .bind(format!("{dedup_prefix}-movement"))
+        .execute(pool)
+        .await
+        .expect("seed the conflicting backlog train's Activation + DEPARTURE");
+
+        (tracked_train_id, trains_id)
+    }
+
+    async fn cleanup_identity_fixture(
+        pool: &PgPool,
+        user_id: &str,
+        tracked_train_id: i64,
+        trains_id: i64,
+        backlog_train_id: &str,
+        backlog_train_uid: &str,
+    ) {
+        // `train_movement_events`/`train_current_state` are keyed on
+        // `trains_id`, not on the subscription (Step D's cutover) -- and
+        // `trains`' own FKs are `ON DELETE CASCADE`, so deleting the `trains`
+        // rows below takes both with them. Deleted explicitly first anyway,
+        // for the same reason this module's other fixtures clean up
+        // defensively: a row left behind here would show up as another
+        // test's phantom movement.
+        sqlx::query("DELETE FROM train_movement_events WHERE trains_id = $1")
+            .bind(trains_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM train_current_state WHERE trains_id = $1")
+            .bind(trains_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = $1")
+            .bind(backlog_train_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trains WHERE id = $1")
+            .bind(trains_id)
+            .execute(pool)
+            .await
+            .ok();
+        // The backlog train's own `trains` row only exists if the match was
+        // (correctly) allowed to proceed -- harmless no-op otherwise.
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(backlog_train_uid)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .ok();
+    }
+
+    /// THE REGRESSION TEST for this fix, and the backlog-path twin of
+    /// trust-consumer's own
+    /// `a_parked_activation_for_a_different_schedule_cannot_claim_a_pin_by_crs_and_time`.
+    ///
+    /// A subscription is already correctly identified (`trains_id` -> a
+    /// `trains` row with `train_uid` `Y80926`, exactly what
+    /// `attempt_schedule_match` leaves behind at pin creation). The backlog
+    /// holds a DIFFERENT train (`W34058`) whose own TRUST Activation names
+    /// it unambiguously and whose DEPARTURE from the same origin falls 14
+    /// minutes inside the pin's +/-20-minute window -- so the pure CRS+time
+    /// `find_backlog_match` lookup selects it, just as it did in production
+    /// on 2026-09-25.
+    ///
+    /// Before the contradiction filter, every one of the writes asserted
+    /// against below actually happened, and none of them has an unwind path:
+    ///
+    /// * `replay_backlog_history` replayed `W34058`'s movements through
+    ///   `upsert_train_event`, whose `flip_legacy_resolution` returns the
+    ///   subscription's EXISTING `trains_id` -- so the wrong train's
+    ///   movements and `train_current_state` landed on the CORRECT train's
+    ///   shared `trains` row, visible to every subscriber of that train, not
+    ///   just this one;
+    /// * that same `flip_legacy_resolution` advanced
+    ///   `resolution_status` to `'resolved'` with no guard at all; and
+    /// * the Step A dual-write then created a `trains` row for `W34058` and
+    ///   repointed `train_subscriptions.trains_id` at it.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin \
+                -- --ignored --test-threads=1`"]
+    async fn a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-UID-CONTRADICTION-USER";
+        // The real incident's own booked departure time (the
+        // Euston -> Birmingham New Street service); the seeding helper puts
+        // the other train's DEPARTURE 14 minutes earlier, exactly as TRUST
+        // reported the Avanti service that wrongly claimed it.
+        //
+        // The DATE, though, is deliberately a fixed one several days in the
+        // past rather than the incident's own 2026-09-25, and each of this
+        // fix's three tests deliberately uses a different HOUR.
+        // `find_backlog_match` filters on CRS + `planned_timestamp` window
+        // ONLY -- never on `service_date` -- so two fixtures sharing an
+        // origin CRS and a departure time within `MATCH_TOLERANCE` of each
+        // other compete for the same `ORDER BY planned_timestamp LIMIT 1`
+        // even across different service dates. Both hazards were real: an
+        // earlier draft of these tests shared one timestamp (so the second
+        // test matched the first's leftover row) and used "today", which put
+        // them inside the `Utc::now() - 30 minutes` window
+        // `run_backlog_match_sweep_resolves_a_pin_the_backlog_had_nothing_for_at_creation_time`
+        // anchors itself to, breaking that unrelated test depending on the
+        // hour the suite ran.
+        let pin_scheduled: DateTime<Utc> = "2026-09-20T17:56:00Z".parse().unwrap();
+        let service_date = pin_scheduled.date_naive();
+        let backlog_train_id = "TEST-BACKLOG-UID-CONTRADICTION-TRAIN-ID";
+        let backlog_train_uid = "TEST-CONTRADICTION-W34058";
+
+        let (tracked_train_id, trains_id) = seed_identified_pin_and_a_backlog_train(
+            &pool,
+            user_id,
+            "TEST-CONTRADICTION-Y80926",
+            backlog_train_uid,
+            backlog_train_id,
+            pin_scheduled,
+        )
+        .await;
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", pin_scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            !matched,
+            "a backlog train TRUST itself names as a different train_uid must never match a \
+             subscription already known to be tracking another, however well its origin \
+             departure lines up"
+        );
+
+        let (bound_trains_id, resolution_status): (Option<i64>, String) = sqlx::query_as(
+            "SELECT trains_id, resolution_status FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(tracked_train_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the subscription");
+        assert_eq!(
+            bound_trains_id,
+            Some(trains_id),
+            "the subscription must still point at its own correctly-matched trains row -- the \
+             Step A dual-write's repoint has no unwind path"
+        );
+        assert_eq!(
+            resolution_status, "schedule_matched",
+            "the pin's own resolution must be left exactly as it was"
+        );
+
+        // Keyed on `trains_id`, which is where the real damage landed: the
+        // shared movement log of the train this pin is CORRECTLY matched to.
+        let replayed: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM train_movement_events WHERE trains_id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("count replayed movement events");
+        assert_eq!(
+            replayed, 0,
+            "rejected BEFORE fetch_backlog_history/replay_backlog_history -- not one of the \
+             other train's movements may reach this train's shared movement log"
+        );
+
+        let wrong_train_row: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM trains WHERE train_uid = $1")
+                .bind(backlog_train_uid)
+                .fetch_optional(&pool)
+                .await
+                .expect("look for a trains row for the contradicting identity");
+        assert_eq!(
+            wrong_train_row, None,
+            "the Step A dual-write must not even have created the other train's trains row"
+        );
+
+        cleanup_identity_fixture(
+            &pool,
+            user_id,
+            tracked_train_id,
+            trains_id,
+            backlog_train_id,
+            backlog_train_uid,
+        )
+        .await;
+    }
+
+    /// The other side of the same filter, and the reason it is a
+    /// contradiction filter rather than a rewrite: when the backlog
+    /// candidate's Activation names the SAME `train_uid` the subscription
+    /// already knows itself to be, the replay must still happen. This is the
+    /// whole legitimate purpose of calling `attempt_backlog_match` after a
+    /// successful `attempt_schedule_match` -- a schedule match supplies
+    /// timetable data but no TRUST movements, and an already-departed train's
+    /// movements only exist in the backlog. Mirrors trust-consumer's own
+    /// `a_parked_activation_for_the_same_schedule_still_allows_the_crs_and_time_claim`.
+    ///
+    /// Both sides use the identical `train_uid` here, deliberately: the
+    /// filter's case-insensitivity is covered by the pure predicate tests
+    /// above, and feeding a differing-case `train_uid` through this DB path
+    /// would additionally exercise `find_or_create_train`'s own
+    /// case-SENSITIVE `UNIQUE (train_uid, service_date)` key -- an unrelated
+    /// pre-existing behavior this test has no business asserting on.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_backlog_candidate_naming_the_same_train_uid_still_replays_onto_an_identified_pin \
+                -- --ignored --test-threads=1`"]
+    async fn a_backlog_candidate_naming_the_same_train_uid_still_replays_onto_an_identified_pin() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-UID-AGREEMENT-USER";
+        // A different hour from its sibling tests -- see the timestamp note
+        // on `a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin`.
+        let pin_scheduled: DateTime<Utc> = "2026-09-20T09:56:00Z".parse().unwrap();
+        let service_date = pin_scheduled.date_naive();
+        let backlog_train_id = "TEST-BACKLOG-UID-AGREEMENT-TRAIN-ID";
+        // The very same identity the pin already knows itself to be.
+        let backlog_train_uid = "TEST-AGREEMENT-Y80926";
+
+        let (tracked_train_id, trains_id) = seed_identified_pin_and_a_backlog_train(
+            &pool,
+            user_id,
+            backlog_train_uid,
+            backlog_train_uid,
+            backlog_train_id,
+            pin_scheduled,
+        )
+        .await;
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", pin_scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            matched,
+            "the same train's own retained history must still replay -- this backfill is the \
+             whole reason the pin-creation call sites run this unconditionally after a \
+             successful schedule match"
+        );
+
+        let replayed: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM train_movement_events WHERE trains_id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("count replayed movement events");
+        assert_eq!(
+            replayed, 1,
+            "the DEPARTURE row must have been replayed onto this train's own shared movement \
+             log (the Activation row is a no-op replay step)"
+        );
+
+        cleanup_identity_fixture(
+            &pool,
+            user_id,
+            tracked_train_id,
+            trains_id,
+            backlog_train_id,
+            backlog_train_uid,
+        )
+        .await;
+    }
+
+    /// The named residual, pinned so narrowing it later is a deliberate
+    /// choice rather than an accident: a subscription with NO identity of
+    /// its own (`trains_id IS NULL`, `'pending'` -- the ordinary
+    /// pre-resolution shape, and every row
+    /// `list_pending_pins_for_backlog_match` selects) is completely
+    /// unaffected by this filter. There is nothing to contradict, so the
+    /// CRS+time heuristic remains the only thing it has ever had, and it
+    /// must still resolve the pin exactly as before.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_pin_with_no_identity_of_its_own_is_unaffected_by_the_contradiction_filter \
+                -- --ignored --test-threads=1`"]
+    async fn a_pin_with_no_identity_of_its_own_is_unaffected_by_the_contradiction_filter() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-UID-UNKNOWN-PIN-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-uid-unknown-pin@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        // A third distinct hour, for the reason the timestamp note on
+        // `a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin`
+        // gives.
+        let pin_scheduled: DateTime<Utc> = "2026-09-20T12:56:00Z".parse().unwrap();
+        let service_date = pin_scheduled.date_naive();
+        let backlog_planned = pin_scheduled - chrono::Duration::minutes(14);
+
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4), \
+                    ('EUS', NULL, $2, $3, '0003', 'DEPARTURE', $5, $5, 'ON TIME', $6)",
+        )
+        .bind("TEST-UNKNOWN-PIN-UID")
+        .bind("TEST-BACKLOG-UID-UNKNOWN-PIN-TRAIN-ID")
+        .bind(service_date)
+        .bind("test-backlog-uid-unknown-pin-activation")
+        .bind(backlog_planned)
+        .bind("test-backlog-uid-unknown-pin-movement")
+        .execute(&pool)
+        .await
+        .expect("seed the backlog train");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions \
+                (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, 'EUS', $3) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed a pin with no identity of its own");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", pin_scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(
+            matched,
+            "a pin with no known train_uid must still be matchable by CRS+time alone -- this \
+             filter only ever removes a candidate TRUST's own data has already contradicted"
+        );
+
+        let (trains_id,): (Option<i64>,) =
+            sqlx::query_as("SELECT trains_id FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back trains_id");
+        let trains_id = trains_id.expect("the dual-write must still have bound a trains row");
+
+        cleanup_identity_fixture(
+            &pool,
+            user_id,
+            tracked_train_id,
+            trains_id,
+            "TEST-BACKLOG-UID-UNKNOWN-PIN-TRAIN-ID",
+            "TEST-UNKNOWN-PIN-UID",
+        )
+        .await;
     }
 }
