@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 /// Everything this validator needs to know about the outside world:
@@ -130,14 +130,15 @@ impl ReferenceData {
             let body = fetch_with_browser_ua(client, &url)
                 .await
                 .with_context(|| format!("fetching {url}"))?;
-            parse_crs_tiploc_page(&body, &mut data);
+            parse_crs_tiploc_page(&body, &mut data).with_context(|| format!("parsing {url}"))?;
         }
 
         let toc_url = "https://www.railwaycodes.org.uk/operators/toccodes.shtm";
         let toc_body = fetch_with_browser_ua(client, toc_url)
             .await
             .with_context(|| format!("fetching {toc_url}"))?;
-        data.toc_codes = parse_current_toc_codes(&toc_body);
+        data.toc_codes =
+            parse_current_toc_codes(&toc_body).with_context(|| format!("parsing {toc_url}"))?;
 
         if let (Some(api_key), Some(base_url)) = (rdm_api_key, rdm_tocs_base_url) {
             match crate::rdm_toc::fetch_rdm_tocs(client, base_url, api_key).await {
@@ -197,22 +198,86 @@ async fn fetch_with_browser_ua(client: &reqwest::Client, url: &str) -> Result<St
 /// fabricated CRS code) got into `reference-data/crs-tiploc.csv`; see that
 /// file's provenance doc, `reference-data/line-catalogue-validation.md`,
 /// under "Where the data comes from".
-fn strip_popups(popup_re: &regex::Regex, cell: &str) -> String {
-    popup_re.replace_all(cell, " ").into_owned()
+///
+/// This strips only *this* specific popup shape -- an HTML comment
+/// (`<!--...-->`) sitting in the same cell is a different markup shape
+/// carrying the exact same class of risk (unstripped prose surviving into
+/// a code token), and is stripped separately by
+/// [`extract_shape_valid_tokens`], the same way `parse_current_toc_codes`
+/// already stripped comments (just not, until now, popups) before this fix.
+///
+/// The tail is `</span>\s*</span>`, not the stricter `</span></span>` this
+/// function shipped with initially: that stricter form silently strips
+/// nothing at all the moment the site ever emits so much as a newline
+/// between the two closing tags, which is indistinguishable from "no
+/// popups on this page" -- a silent regression back to exactly the bug
+/// described above, with no signal it happened. The self-check below is
+/// the other half of that guard: even with the tolerant tail, some future
+/// markup shape (a differently-nested popup, or a single-`<span>` popup)
+/// could still slip past unstripped, so this function refuses to return
+/// success in that case -- see its `bail!` below -- rather than silently
+/// handing prose-contaminated text back to a caller that has no way to
+/// know stripping failed.
+fn strip_popups(popup_re: &regex::Regex, cell: &str) -> Result<String> {
+    let stripped = popup_re.replace_all(cell, " ").into_owned();
+    if stripped.contains(r#"class="popup""#) {
+        bail!(
+            "popup markup survived stripping -- the site's markup shape has drifted from what \
+             `strip_popups`'s regex expects, so this cell may still carry footnote prose that \
+             would otherwise be silently scraped as a fabricated code; refusing to proceed \
+             rather than risk that. Cell after the failed strip attempt: {stripped:?}"
+        );
+    }
+    Ok(stripped)
+}
+
+/// Strips popup footnote markup ([`strip_popups`]) and HTML comments from
+/// `cell`, strips remaining tags, then keeps only whitespace-separated
+/// tokens that already match `shape_re` **in their original case** -- the
+/// shape check runs *before* uppercasing, not after.
+///
+/// That ordering is the fix for the second instance of this morning's bug
+/// class: a leftover word from unstripped prose (an HTML comment's "see
+/// note", a popup's "now closed", ...) is lowercase in the source markup,
+/// so checking it against an uppercase-only shape pattern (`^[A-Z]{3}$` for
+/// a CRS, `^[A-Z]{2}$` for a TOC code) rejects it outright. Only *after* a
+/// token has already proven itself shape-valid is it uppercased -- which is
+/// a no-op for every real code, since railwaycodes.org.uk always renders
+/// genuine codes in uppercase in its own markup already. Filtering after
+/// uppercasing (the old order) is what let `<!-- see note -->` mint a
+/// fabricated CRS `SEE`: uppercasing turned "see" into "SEE" *before* the
+/// shape check ran, and "SEE" passes `^[A-Z]{3}$` same as a real code would.
+fn extract_shape_valid_tokens(
+    popup_re: &regex::Regex,
+    comment_re: &regex::Regex,
+    tag_re: &regex::Regex,
+    shape_re: &regex::Regex,
+    cell: &str,
+) -> Result<Vec<String>> {
+    let no_popups = strip_popups(popup_re, cell)?;
+    let no_comments = comment_re.replace_all(&no_popups, " ");
+    let no_tags = tag_re.replace_all(&no_comments, " ");
+    Ok(no_tags
+        .split_whitespace()
+        .filter(|t| shape_re.is_match(t))
+        .map(|t| t.to_ascii_uppercase())
+        .collect())
 }
 
 /// Extraction rules mirrored exactly from
 /// `reference-data/line-catalogue-validation.md`'s "Where the data comes
 /// from" section -- keep the two in sync if either changes.
-fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) {
+fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) -> Result<()> {
     let row_re = regex::Regex::new(r"(?s)<tr>(.*?)</tr>").unwrap();
     let cell_re = regex::Regex::new(r"(?s)<td[^>]*>(.*?)</td>").unwrap();
     let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
+    let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
     // Non-greedy, so two footnotes in one cell (a location with an "Earlier
     // code"/"Later code" pair, e.g. Worcestershire Parkway High Level) are
     // stripped as two separate matches rather than one run swallowing the
-    // real code between them.
-    let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span></span>"#).unwrap();
+    // real code between them. The `\s*` tolerates whitespace between the
+    // two closing `</span>` tags -- see `strip_popups`'s doc.
+    let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
     let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
     let tiploc_token_re = regex::Regex::new(r"^[A-Z0-9]{2,7}$").unwrap();
 
@@ -224,19 +289,16 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) {
         if cells.len() != 6 {
             continue;
         }
-        let name = clean_html_text(&tag_re, &strip_popups(&popup_re, cells[0]));
-        let crs_list: Vec<String> = tag_re
-            .replace_all(&strip_popups(&popup_re, cells[1]), " ")
-            .split_whitespace()
-            .map(|t| t.to_ascii_uppercase())
-            .filter(|t| crs_token_re.is_match(t))
-            .collect();
-        let tiploc_list: Vec<String> = tag_re
-            .replace_all(&strip_popups(&popup_re, cells[3]), " ")
-            .split_whitespace()
-            .map(|t| t.to_ascii_uppercase())
-            .filter(|t| tiploc_token_re.is_match(t))
-            .collect();
+        let name = clean_html_text(&tag_re, &strip_popups(&popup_re, cells[0])?);
+        let crs_list =
+            extract_shape_valid_tokens(&popup_re, &comment_re, &tag_re, &crs_token_re, cells[1])?;
+        let tiploc_list = extract_shape_valid_tokens(
+            &popup_re,
+            &comment_re,
+            &tag_re,
+            &tiploc_token_re,
+            cells[3],
+        )?;
         if crs_list.is_empty() {
             continue;
         }
@@ -250,13 +312,27 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) {
             }
         }
     }
+    Ok(())
 }
 
-fn parse_current_toc_codes(html: &str) -> HashMap<String, String> {
+/// Extracts the currently-valid ATOC operator code table. Active whenever
+/// `RDM_API_KEY`/`RDM_TOCS_BASE_URL` aren't both configured (see
+/// `ReferenceData::fetch_live`) -- i.e. the default state of this
+/// validator's live tier, since the RDM feed's base URL has no known value
+/// yet (`rdm_toc.rs`'s module doc). Applies the exact same popup-stripping
+/// and shape-validated token extraction as `parse_crs_tiploc_page` (see
+/// [`extract_shape_valid_tokens`]): a footnote on the code cell can no
+/// longer mint a compound garbage key, and a footnote's stray "to date" in
+/// a defunct operator's date cell can no longer resurrect it as currently
+/// valid, because the "is this row current" check below runs against the
+/// stripped cell text, not the raw HTML.
+fn parse_current_toc_codes(html: &str) -> Result<HashMap<String, String>> {
     let row_re = regex::Regex::new(r"(?s)<tr>(.*?)</tr>").unwrap();
     let cell_re = regex::Regex::new(r"(?s)<td[^>]*>(.*?)</td>").unwrap();
     let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
     let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
+    let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+    let toc_token_re = regex::Regex::new(r"^[A-Z]{2}$").unwrap();
 
     let mut out = HashMap::new();
     for row_caps in row_re.captures_iter(html) {
@@ -264,15 +340,38 @@ fn parse_current_toc_codes(html: &str) -> HashMap<String, String> {
             .captures_iter(&row_caps[1])
             .map(|c| c.get(1).unwrap().as_str())
             .collect();
-        if cells.len() < 3 || !cells[2].contains("to date") {
+        if cells.len() < 3 {
             continue;
         }
-        let code = clean_html_text(&tag_re, cells[0]);
-        let without_comments = comment_re.replace_all(cells[1], "");
+
+        // "Currently valid" must be decided from the STRIPPED date cell,
+        // never raw HTML: a footnote (popup or HTML comment) on this cell
+        // could otherwise carry the literal phrase "to date" -- e.g. "see
+        // note, dates uncertain to date of writing" -- and wrongly
+        // resurrect a long-defunct operator as currently valid.
+        let no_popups = strip_popups(&popup_re, cells[2])?;
+        let no_comments = comment_re.replace_all(&no_popups, " ");
+        let valid_period = clean_html_text(&tag_re, &no_comments);
+        if !valid_period.contains("to date") {
+            continue;
+        }
+
+        // The code cell gets the same shape-validated extraction as CRS/
+        // TIPLOC cells: a footnote here must not be able to turn "GW" plus
+        // footnote prose into a compound garbage key, or a bare footnote
+        // word into a fabricated 2-letter operator code.
+        let code_tokens =
+            extract_shape_valid_tokens(&popup_re, &comment_re, &tag_re, &toc_token_re, cells[0])?;
+        let Some(code) = code_tokens.into_iter().next() else {
+            continue;
+        };
+
+        let no_popups = strip_popups(&popup_re, cells[1])?;
+        let without_comments = comment_re.replace_all(&no_popups, " ");
         let name = clean_html_text(&tag_re, &without_comments);
-        out.insert(code.to_ascii_uppercase(), name);
+        out.insert(code, name);
     }
-    out
+    Ok(out)
 }
 
 fn clean_html_text(tag_re: &regex::Regex, s: &str) -> String {
@@ -293,7 +392,7 @@ mod tests {
         let html = r#"<table><tr><td>Euston</td><td>EUS</td><td>512900</td>
             <td>EUSTON</td><td>EUSTON</td><td>72410</td></tr></table>"#;
         let mut data = ReferenceData::default();
-        parse_crs_tiploc_page(html, &mut data);
+        parse_crs_tiploc_page(html, &mut data).unwrap();
         assert!(data.known_crs("EUS"));
         assert_eq!(data.tiploc_matches("EUS", "EUSTON"), Some(true));
         assert_eq!(data.tiploc_matches("EUS", "BOGUS"), Some(false));
@@ -305,7 +404,7 @@ mod tests {
         let html = r#"<table><tr><td>Somewhere</td><td>SMW</td><td>1</td>
             <td></td><td></td><td></td></tr></table>"#;
         let mut data = ReferenceData::default();
-        parse_crs_tiploc_page(html, &mut data);
+        parse_crs_tiploc_page(html, &mut data).unwrap();
         assert!(data.known_crs("SMW"));
         assert_eq!(data.tiploc_matches("SMW", "ANYTHING"), Some(true));
     }
@@ -350,7 +449,7 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
   </tr>
 </table>"#;
         let mut data = ReferenceData::default();
-        parse_crs_tiploc_page(html, &mut data);
+        parse_crs_tiploc_page(html, &mut data).unwrap();
 
         // The real codes on each row still parse, unchanged.
         assert_eq!(data.tiploc_matches("ABW", "ABWD"), Some(true));
@@ -438,11 +537,153 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
             <tr><td>AN</td><td>Arriva Trains Northern</td><td>2001 to 2004</td></tr>
             <tr><td>NT</td><td>Northern Trains <em>Northern</em></td><td>2016 to date</td></tr>
         </table>"#;
-        let tocs = parse_current_toc_codes(html);
+        let tocs = parse_current_toc_codes(html).unwrap();
         assert!(!tocs.contains_key("AN"));
         assert_eq!(
             tocs.get("NT"),
             Some(&"Northern Trains Northern".to_string())
         );
+    }
+
+    /// Finding #2's repro: an HTML comment sitting in a code cell is a
+    /// different markup shape from the popup spans
+    /// `popup_footnotes_are_never_scraped_as_codes` covers, but the same
+    /// bug class -- prose surviving into a code token.
+    ///
+    /// Two rows, because they exercise the fix's two separate halves:
+    ///
+    /// - Row 1 is finding #2's literal `<!-- see note -->` example. It
+    ///   happens to *not* trip the pre-fix code, purely by accident of how
+    ///   `tag_re`'s `<[^>]+>` is written: with no `>` anywhere inside the
+    ///   comment, `<[^>]+>` greedily matches the *entire* `<!-- see note
+    ///   -->` span (delimiters and text both) as a single "tag" and erases
+    ///   it whole, incidentally masking the missing-comment-handling bug
+    ///   for this one shape. It's kept here verbatim (per the review
+    ///   finding) as a floor -- this exact string must keep working -- but
+    ///   it does not by itself prove the fix does anything.
+    /// - Row 2 is what actually reproduces the bug pre-fix, confirmed
+    ///   empirically against the unpatched code before this fix landed: a
+    ///   footnote comment containing so much as one inline `<a>` (the same
+    ///   "See <a href=...>CRS explanation</a>" wording the real popup
+    ///   fixtures above use, just inside a `<!--...-->` instead of a
+    ///   `<span class="popup">`). The embedded tag's own `>` makes
+    ///   `tag_re` stop matching partway through the comment, so
+    ///   "CRS"/"explanation" survive as literal leftover text -- which the
+    ///   pre-fix uppercase-then-filter order turns into a fabricated CRS
+    ///   `CRS`, indistinguishable from the real Ely branch's genuine `CRS`
+    ///   TIPLOC-turned-CRS-lookalike. `comment_re` stripping the whole
+    ///   comment as one opaque unit (rather than relying on `tag_re`'s
+    ///   incidental, shape-dependent behaviour) is what actually closes
+    ///   this.
+    #[test]
+    fn html_comments_in_a_code_cell_are_never_scraped_as_codes() {
+        let html = r#"<table>
+  <tr>
+   <td>Glasgow Central High Level</td>
+   <td>GLC <!-- see note --></td>
+   <td>981300</td>
+   <td>GLGC</td>
+   <td>GLASGOW C</td>
+   <td>07257</td>
+  </tr>
+  <tr>
+   <td>Muck</td>
+   <td>MUC <!-- see <a href="crs2.shtm">CRS explanation</a> --></td>
+   <td>906100</td>
+   <td>MUCK</td>
+   <td class="noshow"></td>
+   <td>-</td>
+  </tr>
+</table>"#;
+        let mut data = ReferenceData::default();
+        parse_crs_tiploc_page(html, &mut data).unwrap();
+
+        assert!(
+            data.known_crs("GLC"),
+            "the real code must still parse despite the trailing comment"
+        );
+        assert!(
+            data.known_crs("MUC"),
+            "the real code must still parse despite the trailing comment"
+        );
+        for fabricated in ["SEE", "NOTE", "CRS"] {
+            assert!(
+                !data.known_crs(fabricated),
+                "{fabricated} is comment prose, not a CRS code on either of these rows -- it \
+                 must be rejected by the shape check while still lowercase (or, for \"CRS\", \
+                 stripped as part of the opaque comment span), not uppercased into a false \
+                 match first"
+            );
+        }
+    }
+
+    /// Finding #3: `parse_current_toc_codes` runs whenever the RDM TOC feed
+    /// isn't configured (`ReferenceData::fetch_live`, `rdm_toc.rs`'s module
+    /// doc) -- i.e. this crate's actual default live-tier code path, not a
+    /// hypothetical. Two failure modes in one fixture: a footnote on a
+    /// *currently valid* operator's code cell must not corrupt its code
+    /// into a compound garbage key, and a footnote's stray "to date" text
+    /// on a *defunct* operator's date cell must not resurrect it as
+    /// currently valid.
+    #[test]
+    fn toc_code_parsing_strips_popups_and_checks_validity_on_stripped_text() {
+        let html = r#"<table>
+  <tr>
+   <td>GW<span class="popup" onclick="popup1()"><span class="popuptext" id="myPopup1"><span class="close">&#x2716;</span>Formerly First Great Western</span></span></td>
+   <td>Great Western Railway</td>
+   <td>2015 to date</td>
+  </tr>
+  <tr>
+   <td>AN</td>
+   <td>Arriva Trains Northern</td>
+   <td>2001 to 2004<span class="popup" onclick="popup2()"><span class="popuptext" id="myPopup2"><span class="close">&#x2716;</span>Records patchy to date</span></span></td>
+  </tr>
+</table>"#;
+        let tocs = parse_current_toc_codes(html).unwrap();
+
+        // The currently-valid operator's real code still parses, with no
+        // footnote prose appended to it.
+        assert_eq!(tocs.get("GW"), Some(&"Great Western Railway".to_string()));
+
+        // The defunct operator must NOT be resurrected by its footnote's
+        // unrelated "to date" -- the validity check must run against the
+        // stripped cell ("2001 to 2004 "), not the raw HTML that also
+        // contains the footnote's "Records patchy to date".
+        assert!(
+            !tocs.contains_key("AN"),
+            "a footnote's stray \"to date\" phrase must not resurrect a defunct operator"
+        );
+    }
+
+    /// Finding #4(a): the two closing `</span>` tags this site's popup
+    /// markup nests don't have to be perfectly adjacent -- whitespace (a
+    /// newline, in this fixture, as real HTML is often pretty-printed)
+    /// between them must still strip cleanly rather than leaving the whole
+    /// popup, unstripped, sitting in the cell.
+    #[test]
+    fn strip_popups_tolerates_whitespace_between_the_two_closing_spans() {
+        let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+        let cell = "ABW<span class=\"popup\" onclick=\"popup1()\"><span class=\"popuptext\" id=\"myPopup1\"><span class=\"close\">x</span>Original code</span>\n  </span>";
+        let stripped = strip_popups(&popup_re, cell)
+            .expect("whitespace between the two closing spans must still strip cleanly");
+        assert!(!stripped.contains("Original code"));
+        assert!(!stripped.contains("class=\"popup\""));
+    }
+
+    /// Finding #4(b): the self-check. A popup shape this regex genuinely
+    /// cannot match at all (here: the site wraps a footnote in a single
+    /// `<span class="popup">...</span>` instead of the expected two-deep
+    /// nesting) must fail loudly, not silently leave the prose in place --
+    /// which is exactly what would have kept shipping fabricated codes
+    /// like `RAW` with nothing in the logs to say why.
+    #[test]
+    fn strip_popups_errors_loudly_instead_of_silently_leaving_unstripped_prose() {
+        let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+        let cell = r#"MUC<span class="popup" onclick="popup1()">Code not certain</span>"#;
+        let err = strip_popups(&popup_re, cell).expect_err(
+            "a single-span popup shape can never match the two-close pattern, so this must \
+             surface as a loud error rather than silently returning the cell unstripped",
+        );
+        assert!(err.to_string().contains("popup"));
     }
 }
