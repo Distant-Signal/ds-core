@@ -430,13 +430,93 @@ pub struct LineStatusReport {
 }
 
 impl LineStatusReport {
-    /// Lowest numeric severity is the most disruptive.
+    /// The most severe of this report's statuses, or `GoodService` if there
+    /// are none.
+    ///
+    /// Signal Box Audit, Finding #4 (common/lib.rs): this used to be
+    /// `self.statuses.iter().map(|s| s.severity).min()`, picking the LOWEST
+    /// `Severity` discriminant. That's exactly the mistake `severity_rank`'s
+    /// own doc comment warns about: `Severity`'s derived `Ord` sorts by
+    /// declaration order, which is non-monotonic with true severity
+    /// (`Diverted = 21` and `PartClosed = 11` are numerically high but
+    /// genuinely severe; `GoodService = 10` sits mid-range). A report with
+    /// both `Diverted` and `MinorDelays` statuses would have picked
+    /// `MinorDelays` (discriminant 9) as "worst" over `Diverted`
+    /// (discriminant 21) -- backwards. `crates/api/src/data/operators.rs`'s
+    /// `build_rollup` already gets this right, ranking via
+    /// `common::severity_rank` with a `>=` (last-wins-on-tie) comparison;
+    /// this mirrors that logic via `max_by_key` (which, like that `>=`,
+    /// returns the LAST of several equally-maximum elements).
     pub fn worst_severity(&self) -> Severity {
         self.statuses
             .iter()
             .map(|s| s.severity)
-            .min()
+            .max_by_key(|&severity| severity_rank(severity))
             .unwrap_or(Severity::GoodService)
+    }
+}
+
+#[cfg(test)]
+mod worst_severity_tests {
+    use super::*;
+
+    fn status(severity: Severity) -> LineStatus {
+        LineStatus {
+            severity,
+            reason: String::new(),
+            validity: ValidityPeriod {
+                from_date: Utc::now(),
+                to_date: None,
+                is_now: true,
+            },
+            disruption: None,
+            data_quality: DataQuality::default(),
+            sample_stats: None,
+            sample_availability: SampleAvailability::no_coverage_default(),
+            full_coverage_stats: None,
+            full_coverage_availability: FullCoverageAvailability::not_enabled_default(),
+        }
+    }
+
+    fn report(statuses: Vec<LineStatus>) -> LineStatusReport {
+        LineStatusReport {
+            id: "test-line".to_string(),
+            name: "Test Line".to_string(),
+            mode_name: "national-rail".to_string(),
+            operators: vec![],
+            statuses,
+        }
+    }
+
+    /// Finding #4 regression: `Diverted` (discriminant 21, rank 4) must beat
+    /// `MinorDelays` (discriminant 9, rank 3) -- a raw `.min()` over
+    /// discriminants would have picked `MinorDelays` instead, exactly
+    /// backwards.
+    #[test]
+    fn worst_severity_uses_severity_rank_not_the_raw_discriminant() {
+        let r = report(vec![
+            status(Severity::Diverted),
+            status(Severity::MinorDelays),
+        ]);
+        assert_eq!(r.worst_severity(), Severity::Diverted);
+
+        // Same pair, reversed order -- order must not matter.
+        let r = report(vec![
+            status(Severity::MinorDelays),
+            status(Severity::Diverted),
+        ]);
+        assert_eq!(r.worst_severity(), Severity::Diverted);
+    }
+
+    #[test]
+    fn worst_severity_of_no_statuses_is_good_service() {
+        assert_eq!(report(vec![]).worst_severity(), Severity::GoodService);
+    }
+
+    #[test]
+    fn worst_severity_of_a_single_status_is_itself() {
+        let r = report(vec![status(Severity::SevereDelays)]);
+        assert_eq!(r.worst_severity(), Severity::SevereDelays);
     }
 }
 
@@ -705,11 +785,23 @@ pub struct LineDefinition {
     pub excluded_keywords: Vec<String>,
     #[serde(default)]
     pub severity_overrides: HashMap<String, f64>,
-    /// Segments this line considers exclusive (not shared with other lines).
-    /// If empty, the matcher derives exclusivity by comparing segment usage
-    /// across all loaded lines.
-    #[serde(default)]
-    pub exclusive_segments: Vec<String>,
+    // Signal Box Audit, Finding #7 (common/lib.rs): this struct used to carry
+    // an `exclusive_segments: Vec<String>` field, documented as "segments
+    // this line considers exclusive... if empty, the matcher derives
+    // exclusivity by comparing segment usage across all loaded lines" --
+    // implying a non-empty value would override that derivation. No code
+    // anywhere ever read `.exclusive_segments`: `SegmentRegistry::new`
+    // (`crate::segments`) always derives exclusivity purely from cross-line
+    // segment usage, with no override hook. `lines/SCHEMA.md` already
+    // labelled the catalogue field "Reserved" (never implemented), no
+    // `lines/*.toml` in this repo ever set it, and every Rust call site that
+    // built a `LineDefinition` literal just set it to `vec![]`. A doc
+    // comment describing behavior no code path implements is worse than no
+    // comment at all, so the field is removed rather than wired up: wiring
+    // it would mean designing and testing a real segment-exclusivity
+    // override with zero real-world callers asking for one. If a genuine
+    // need for a per-line exclusivity override shows up, reintroduce it
+    // alongside the `SegmentRegistry` change that actually reads it.
     /// Destination CRS filters used during LDBWS inference.
     #[serde(default)]
     pub destination_crs_filter: Vec<String>,
@@ -733,12 +825,57 @@ pub struct LineDefinition {
 
 impl LineDefinition {
     pub fn from_file(path: &Path) -> Result<Self> {
-        Ok(toml::from_str(&std::fs::read_to_string(path)?)?)
+        let mut line: Self = toml::from_str(&std::fs::read_to_string(path)?)?;
+        line.drop_empty_keywords(path);
+        Ok(line)
     }
 
     pub fn from_dir(dir_path: &Path) -> Result<Vec<Self>> {
         let paths = glob(&format!("{}/*.toml", dir_path.display()))?;
         paths.map(|path| Self::from_file(&path?)).collect()
+    }
+
+    /// Signal Box Audit, Finding #6 (common/matcher.rs): both
+    /// `crate::matcher::match_one`'s keyword tier and its `is_excluded`
+    /// veto check a keyword via `haystack.contains(&kw.to_lowercase())`.
+    /// `str::contains("")` is always `true` -- an empty string is a
+    /// substring of every haystack -- so a stray empty string in
+    /// `match_keywords` (or `excluded_keywords`) turns that tier into an
+    /// unconditional match (or veto) for every single incident this line is
+    /// ever checked against. A trailing comma in a catalogue TOML array
+    /// (`match_keywords = ["Reading", "Slough",]`) does NOT itself produce
+    /// this -- TOML rejects the trailing comma cleanly -- but a stray empty
+    /// element (`match_keywords = ["Reading", ""]`) parses without error and
+    /// would silently do this. Filtered here, at load time, so a typo'd
+    /// catalogue file fails loudly (via the warning below) instead of
+    /// surfacing only once it visibly over-matches (or wrongly excludes)
+    /// incidents in production.
+    fn drop_empty_keywords(&mut self, path: &Path) {
+        let before = self.match_keywords.len();
+        self.match_keywords.retain(|kw| !kw.is_empty());
+        if self.match_keywords.len() != before {
+            tracing::warn!(
+                path = %path.display(),
+                line_id = %self.id,
+                dropped = before - self.match_keywords.len(),
+                "catalogue line has empty string(s) in `match_keywords` -- dropped, since an \
+                 empty keyword is a substring of every incident's text and would match \
+                 unconditionally"
+            );
+        }
+
+        let before = self.excluded_keywords.len();
+        self.excluded_keywords.retain(|kw| !kw.is_empty());
+        if self.excluded_keywords.len() != before {
+            tracing::warn!(
+                path = %path.display(),
+                line_id = %self.id,
+                dropped = before - self.excluded_keywords.len(),
+                "catalogue line has empty string(s) in `excluded_keywords` -- dropped, since an \
+                 empty keyword is a substring of every incident's text and would veto every match \
+                 unconditionally"
+            );
+        }
     }
 
     pub fn has_station(&self, crs: &str) -> bool {
@@ -1526,7 +1663,6 @@ impl From<CustomLine> for LineDefinition {
             match_keywords: vec![],
             excluded_keywords: vec![],
             severity_overrides: HashMap::new(),
-            exclusive_segments: vec![],
             destination_crs_filter: c.destination_crs_filter,
             headcode_prefixes: c.headcode_prefixes,
             // A user-defined line is never a full-coverage rollout
@@ -1985,6 +2121,80 @@ mod custom_line_tests {
         assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
         assert_eq!(line.destination_crs_filter, vec!["AON".to_string()]);
         assert!(!line.full_coverage_enabled);
+    }
+}
+
+#[cfg(test)]
+mod line_definition_loading_tests {
+    use super::*;
+
+    fn write_fixture(name: &str, toml: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "line-definition-loading-tests-{}-{}",
+            std::process::id(),
+            name
+        ));
+        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        let file = dir.join("line.toml");
+        std::fs::write(&file, toml).expect("write fixture line file");
+        file
+    }
+
+    /// Finding #6 regression: a stray empty string in `match_keywords` (or
+    /// `excluded_keywords`) is a substring of every haystack -- `from_file`
+    /// must filter it out rather than loading a keyword that matches (or
+    /// excludes) every incident unconditionally.
+    #[test]
+    fn from_file_drops_empty_match_and_excluded_keywords() {
+        let file = write_fixture(
+            "empty-keywords",
+            "id = \"test-line\"\nname = \"Test Line\"\nmode = \"national-rail\"\n\
+             category = \"main-line\"\noperators = [\"SW\"]\n\
+             match_keywords = [\"Reading\", \"\", \"Slough\"]\n\
+             excluded_keywords = [\"\"]\n\n\
+             [[stations]]\ncrs = \"WOK\"\nrole = \"principal\"\n",
+        );
+
+        let line = LineDefinition::from_file(&file).expect("fixture should parse");
+
+        std::fs::remove_file(&file).ok();
+        std::fs::remove_dir(file.parent().unwrap()).ok();
+
+        assert_eq!(
+            line.match_keywords,
+            vec!["Reading".to_string(), "Slough".to_string()],
+            "the empty string must be dropped, not just the two real keywords kept"
+        );
+        assert!(
+            line.excluded_keywords.is_empty(),
+            "the lone empty excluded_keywords entry must be dropped entirely"
+        );
+    }
+
+    /// A catalogue file with no empty keywords must be loaded completely
+    /// unchanged -- this filtering must not silently drop or reorder real
+    /// keywords.
+    #[test]
+    fn from_file_keeps_non_empty_keywords_untouched() {
+        let file = write_fixture(
+            "non-empty-keywords",
+            "id = \"test-line-2\"\nname = \"Test Line 2\"\nmode = \"national-rail\"\n\
+             category = \"main-line\"\noperators = [\"SW\"]\n\
+             match_keywords = [\"Reading\", \"Slough\"]\n\
+             excluded_keywords = [\"Basingstoke\"]\n\n\
+             [[stations]]\ncrs = \"WOK\"\nrole = \"principal\"\n",
+        );
+
+        let line = LineDefinition::from_file(&file).expect("fixture should parse");
+
+        std::fs::remove_file(&file).ok();
+        std::fs::remove_dir(file.parent().unwrap()).ok();
+
+        assert_eq!(
+            line.match_keywords,
+            vec!["Reading".to_string(), "Slough".to_string()]
+        );
+        assert_eq!(line.excluded_keywords, vec!["Basingstoke".to_string()]);
     }
 }
 

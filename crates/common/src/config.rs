@@ -40,8 +40,38 @@ impl std::ops::Deref for LineCatalogue {
 /// would quietly invert one of those checks. Nothing in `lines/*.toml` does
 /// this today -- this makes it an enforced invariant rather than an
 /// observed one, since the gates themselves cannot detect the violation.
+/// Signal Box Audit, common-crate Low finding "A missing line catalogue
+/// directory yields an empty catalogue, not an error": `glob()` (used by
+/// `LineDefinition::from_dir`) does not error on a missing directory, and
+/// TOML-parsing zero files trivially succeeds -- so a typo'd or missing
+/// `--lines-dir`/`LINES_DIR` used to load a silently EMPTY catalogue rather
+/// than failing startup. Every real caller of this catalogue (the matcher,
+/// LDBWS sampling, full-coverage gating) treats "zero lines" as a valid,
+/// unremarkable state rather than a configuration error, so nothing further
+/// downstream would ever notice -- the service would just run
+/// indefinitely, reporting no incidents ever match anything.
+/// `crates/api/src/bin/backfill_incident_lines.rs` already had to guard
+/// this itself (`anyhow::ensure!(!lines.is_empty(), ...)`) precisely
+/// because this function didn't; every OTHER real caller
+/// (`aggregator`/`api`'s main service/`full-coverage-consumer`/
+/// `schedule-reference`/`trust-backlog-consumer`, all via `value_parser =
+/// parse_lines` on their `--lines-dir` clap arg) had no such guard at all.
+/// Checking both cases here, once, closes it for every caller instead of
+/// relying on each to remember its own post-hoc check.
 pub fn parse_lines(path: &str) -> anyhow::Result<LineCatalogue> {
-    let catalogue = LineDefinition::from_dir(&PathBuf::from(path)).map(LineCatalogue)?;
+    let dir = PathBuf::from(path);
+    anyhow::ensure!(
+        dir.is_dir(),
+        "line-catalogue directory {path:?} does not exist (or is not a directory) -- refusing \
+         to start with a silently empty line catalogue. Check --lines-dir/LINES_DIR for a typo."
+    );
+    let catalogue = LineDefinition::from_dir(&dir).map(LineCatalogue)?;
+    anyhow::ensure!(
+        !catalogue.is_empty(),
+        "line-catalogue directory {path:?} exists but contains no `*.toml` line definitions -- \
+         refusing to start with a silently empty line catalogue. Check --lines-dir/LINES_DIR for \
+         a typo."
+    );
     if let Some(offender) = catalogue.iter().find(|l| l.id.starts_with("custom-")) {
         anyhow::bail!(
             "catalogue line id {:?} uses the `custom-` prefix, which is reserved for private \
@@ -57,17 +87,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_lines_treats_a_nonexistent_directory_as_an_empty_catalogue() {
-        // Mirrors the existing per-crate copies' own implicit contract:
-        // LineDefinition::from_dir globs `{dir}/*.toml`, and `glob()` does
-        // not error on a missing directory -- it simply yields zero
-        // matches. This shared wrapper surfaces that unchanged (confirmed
-        // by running this test against the pre-existing behavior; none of
-        // the 4 per-crate copies this replaces had a test asserting the
-        // opposite).
-        let result = parse_lines("/nonexistent/path/that/should/not/exist");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 0);
+    fn parse_lines_rejects_a_nonexistent_directory() {
+        // Was: "treats a nonexistent directory as an empty catalogue" --
+        // `glob()` (inside `LineDefinition::from_dir`) does not error on a
+        // missing directory, so this used to succeed with zero lines. See
+        // this function's own doc comment (Signal Box Audit finding "A
+        // missing line catalogue directory yields an empty catalogue, not
+        // an error"): a typo'd `--lines-dir`/`LINES_DIR` must fail loudly
+        // at startup instead.
+        let err = parse_lines("/nonexistent/path/that/should/not/exist")
+            .expect_err("a nonexistent catalogue directory must not load")
+            .to_string();
+        assert!(
+            err.contains("does not exist"),
+            "the error must explain why: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_lines_rejects_an_existing_but_empty_directory() {
+        let dir =
+            std::env::temp_dir().join(format!("parse-lines-empty-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create fixture dir");
+
+        let result = parse_lines(dir.to_str().expect("utf8 temp path"));
+
+        std::fs::remove_dir(&dir).ok();
+
+        let err = result
+            .expect_err("a catalogue directory with no *.toml files must not load")
+            .to_string();
+        assert!(
+            err.contains("no `*.toml` line definitions"),
+            "the error must explain why: {err}"
+        );
     }
 
     #[test]

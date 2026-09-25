@@ -50,10 +50,9 @@ pub struct IslandOfIrelandStation {
 /// A named line/route on either Irish-jurisdiction network. Deliberately
 /// NOT `common::LineDefinition` (`crates/common/src/lib.rs:461-500`): that
 /// type's `stations: Vec<Station>` embeds CRS-keyed rows, `operators` is
-/// ATOC-coded, and its `severity_overrides`/`sample_stations`/`exclusive_segments`
-/// fields all exist to support this app's own GB severity-inference
-/// pipeline, which this type does not participate in (see this plan's
-/// Judgment Call #3).
+/// ATOC-coded, and its `severity_overrides`/`sample_stations` fields both
+/// exist to support this app's own GB severity-inference pipeline, which
+/// this type does not participate in (see this plan's Judgment Call #3).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IslandOfIrelandLineDefinition {
     pub id: String,

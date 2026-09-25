@@ -20,7 +20,6 @@ named `<id>.toml`.
 | `severity_overrides` | dict | no | Per-line threshold overrides. |
 | `destination_crs_filter` | list[string] | no | When inferring from LDBWS, only count services whose `destination_crs` is in this list. Use this to disambiguate at shared trunk stations. |
 | `headcode_prefixes` | list[string] | no | Same idea, but matches against the service's headcode. |
-| `exclusive_segments` | list[string] | no | Reserved — hint for the matcher to override segment-sharing detection. |
 
 ## Station object
 

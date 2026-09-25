@@ -24,6 +24,14 @@ use serde::Deserialize;
 /// are shared (the same value repeated per binary, like the old shared
 /// secret this design retired was before it), `username`/`password` are
 /// per-service and are the actual secret.
+///
+/// Signal Box Audit, common-crate Low findings -- the "config structs
+/// holding passwords derive Debug" finding: does NOT derive `Debug`. A
+/// derived `Debug` would print `password` (a real Authentik
+/// service-account credential) in full -- no call site logs this struct with
+/// `{:?}` today, but that's exactly the kind of latent landmine a future
+/// `tracing::debug!("{cfg:?}")` (added for some unrelated reason) would trip
+/// over. The hand-written impl below redacts it.
 #[derive(Clone)]
 pub struct OAuthCredentials {
     pub token_url: String,
@@ -31,6 +39,18 @@ pub struct OAuthCredentials {
     pub scope: String,
     pub username: String,
     pub password: String,
+}
+
+impl std::fmt::Debug for OAuthCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthCredentials")
+            .field("token_url", &self.token_url)
+            .field("client_id", &self.client_id)
+            .field("scope", &self.scope)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +93,44 @@ const REFRESH_MARGIN: Duration = Duration::from_secs(30);
 /// cycle rather than hanging it indefinitely.
 const TOKEN_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Sane upper bound on how far in the future `get_token` will ever set a
+/// cached token's `refresh_at`, used as a fallback when the IdP-supplied
+/// `expires_in` is so large that `Instant::now().checked_add(..)` would
+/// overflow (see [`compute_refresh_at`], Signal Box Audit common-crate Low
+/// finding "Instant arithmetic panics on an absurd expires_in"). Trusted
+/// IdP (Authentik), so a real `expires_in` this large should never happen
+/// in practice -- but if it ever does, treating the token as "refresh in a
+/// day" is a conservative, clearly-wrong-in-the-safe-direction fallback:
+/// far shorter than whatever the IdP actually meant, so a bogus/corrupted
+/// `expires_in` can't pin a caller to one token indefinitely, and nowhere
+/// near large enough to itself risk overflowing `Instant::checked_add`.
+const MAX_SANE_REFRESH_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Computes the `Instant` at which a freshly-fetched token (with the given
+/// `expires_in`, relative to `now`) should be treated as stale, per
+/// `REFRESH_MARGIN`'s own doc comment.
+///
+/// Signal Box Audit, common-crate Low finding "Instant arithmetic panics on
+/// an absurd expires_in": this used to be plain `Instant::now() +
+/// Duration::from_secs(expires_in).saturating_sub(REFRESH_MARGIN)`.
+/// `Duration::from_secs` never panics (a `Duration` can represent up to
+/// ~584 billion years), but `Instant`'s `Add<Duration>` impl calls
+/// `Instant::checked_add(..).expect(..)` internally and DOES panic on
+/// overflow -- so a sufficiently large `expires_in` from a
+/// malfunctioning/compromised IdP would panic every real caller's
+/// `get_token()`, and with it whatever poll/ingest loop called it. Using
+/// `checked_add` and falling back to `MAX_SANE_REFRESH_WINDOW` (itself
+/// added via a second, guaranteed-not-to-overflow `checked_add`, with an
+/// unconditional `unwrap_or_else(Instant::now)` as a last resort that can
+/// never itself panic) turns that into a merely-wrong-but-safe refresh
+/// deadline instead of a crash.
+fn compute_refresh_at(now: Instant, expires_in: u64) -> Instant {
+    let refresh_window = Duration::from_secs(expires_in).saturating_sub(REFRESH_MARGIN);
+    now.checked_add(refresh_window)
+        .or_else(|| now.checked_add(MAX_SANE_REFRESH_WINDOW))
+        .unwrap_or(now)
+}
+
 /// Caches the last-fetched access token and its refresh deadline. Guarded
 /// by a `std::sync::Mutex`, not `tokio::sync::Mutex`: the critical section
 /// (checking/updating the cached value) never awaits while holding the
@@ -81,6 +139,17 @@ const TOKEN_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 pub struct OAuthTokenCache {
     credentials: OAuthCredentials,
     cached: Mutex<Option<CachedToken>>,
+    /// Signal Box Audit, common-crate Low finding "Token check-then-fetch
+    /// isn't serialized": serializes the "is the cached token still valid"
+    /// check with the "fetch a new one if not" action in `get_token`, so
+    /// two concurrent callers that both observe a stale/absent cached token
+    /// can't both fire their own redundant POST to the token endpoint (a
+    /// stampede). A `tokio::sync::Mutex`, not a second `std::sync::Mutex`,
+    /// because the guarded section spans the `.await` in `fetch_token`.
+    /// Harmless with today's single-loop callers (each real binary has
+    /// exactly one poll/ingest loop calling `get_token`), but cheap defense
+    /// in depth against a future caller that fans this out across tasks.
+    fetch_lock: tokio::sync::Mutex<()>,
 }
 
 impl OAuthTokenCache {
@@ -88,6 +157,7 @@ impl OAuthTokenCache {
         Self {
             credentials,
             cached: Mutex::new(None),
+            fetch_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -98,13 +168,22 @@ impl OAuthTokenCache {
     /// `reqwest::Client` -- this type holds no client of its own, matching
     /// every existing `common::ingest` call site's shape (client already
     /// threaded through as a parameter).
+    ///
+    /// Checks `fresh_cached_token` a second time after acquiring
+    /// `fetch_lock` (double-checked locking): a concurrent caller may have
+    /// already refreshed the cache while this call was waiting for the
+    /// lock, in which case this call reuses that result instead of firing
+    /// its own redundant fetch too.
     pub async fn get_token(&self, client: &reqwest::Client) -> anyhow::Result<String> {
         if let Some(token) = self.fresh_cached_token() {
             return Ok(token);
         }
+        let _fetch_guard = self.fetch_lock.lock().await;
+        if let Some(token) = self.fresh_cached_token() {
+            return Ok(token);
+        }
         let (access_token, expires_in) = self.fetch_token(client).await?;
-        let refresh_at =
-            Instant::now() + Duration::from_secs(expires_in).saturating_sub(REFRESH_MARGIN);
+        let refresh_at = compute_refresh_at(Instant::now(), expires_in);
         let token_for_return = access_token.clone();
         *self
             .cached
@@ -179,7 +258,16 @@ impl OAuthTokenCache {
 /// §3.2). `#[command(flatten)]` this into a `Config` struct to gain these
 /// 5 flags with their existing `--internal-oauth-*`/`INTERNAL_OAUTH_*`
 /// names unchanged.
-#[derive(Debug, Clone, clap::Args)]
+///
+/// Signal Box Audit, common-crate Low findings -- the "config structs
+/// holding passwords derive Debug" finding: does NOT derive
+/// `Debug` -- see `OAuthCredentials`'s own doc comment above for why
+/// (`internal_oauth_password` is the same live secret). At least 3 real
+/// callers (`poller-incidents`, `schedule-ingest`, `poller-tfl`) flatten
+/// this into their own `#[derive(Debug, ...)] struct Config`, so the
+/// hand-written impl below is what keeps THEIR derived `Debug` from
+/// printing this field in the clear too.
+#[derive(Clone, clap::Args)]
 pub struct InternalOAuthArgs {
     #[arg(long, env)]
     pub internal_oauth_token_url: String,
@@ -193,6 +281,18 @@ pub struct InternalOAuthArgs {
     pub internal_oauth_username: String,
     #[arg(long, env)]
     pub internal_oauth_password: String,
+}
+
+impl std::fmt::Debug for InternalOAuthArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InternalOAuthArgs")
+            .field("internal_oauth_token_url", &self.internal_oauth_token_url)
+            .field("internal_oauth_client_id", &self.internal_oauth_client_id)
+            .field("internal_oauth_scope", &self.internal_oauth_scope)
+            .field("internal_oauth_username", &self.internal_oauth_username)
+            .field("internal_oauth_password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl InternalOAuthArgs {
@@ -394,5 +494,98 @@ mod tests {
             "fake-jwt-access-token",
             "a failed fetch must not poison the cache -- the next call retries cleanly"
         );
+    }
+
+    /// Regression for "Instant arithmetic panics on an absurd expires_in":
+    /// `u64::MAX` seconds is trivially representable as a `Duration` (a
+    /// `Duration` holds up to ~584 billion years), but adding it to
+    /// `Instant::now()` via plain `+` would overflow `Instant`'s own,
+    /// platform-dependent representable range and panic (the exact bug this
+    /// finding describes). `compute_refresh_at` must return SOME `Instant`
+    /// without panicking, no matter how large `expires_in` is.
+    #[test]
+    fn compute_refresh_at_does_not_panic_on_an_absurd_expires_in() {
+        let now = Instant::now();
+
+        let refresh_at = compute_refresh_at(now, u64::MAX);
+
+        assert!(
+            refresh_at >= now,
+            "the fallback must never compute a refresh deadline in the past"
+        );
+        assert!(
+            refresh_at <= now + MAX_SANE_REFRESH_WINDOW + Duration::from_secs(1),
+            "an overflowing expires_in must clamp to (about) MAX_SANE_REFRESH_WINDOW, not silently \
+             become some other huge value"
+        );
+    }
+
+    /// The ordinary, non-overflowing case must still match the old formula
+    /// exactly: `now + expires_in - REFRESH_MARGIN`.
+    #[test]
+    fn compute_refresh_at_normal_case_matches_the_old_formula() {
+        let now = Instant::now();
+
+        let refresh_at = compute_refresh_at(now, 300);
+
+        assert_eq!(
+            refresh_at,
+            now + Duration::from_secs(300) - REFRESH_MARGIN,
+            "a normal expires_in must be unaffected by the overflow guard"
+        );
+    }
+
+    /// A token whose own `expires_in` is shorter than `REFRESH_MARGIN` must
+    /// still saturate to `now` (immediately stale), not underflow -- the
+    /// overflow guard must not change this pre-existing behavior.
+    #[test]
+    fn compute_refresh_at_saturates_instead_of_underflowing() {
+        let now = Instant::now();
+
+        let refresh_at = compute_refresh_at(now, 5);
+
+        assert_eq!(refresh_at, now);
+    }
+
+    /// Finding #3 regression ("Token check-then-fetch isn't serialized"):
+    /// two callers that both observe a stale/absent cached token
+    /// concurrently must still only fire ONE POST to the token endpoint --
+    /// `fetch_lock` must serialize them, and the double-checked
+    /// `fresh_cached_token` re-check must let the loser reuse the winner's
+    /// result instead of fetching again.
+    ///
+    /// Both calls are started together via `tokio::join!` against a mock
+    /// endpoint with a small artificial delay, so both genuinely observe an
+    /// empty cache before either finishes fetching -- without the delay,
+    /// the first call could complete (and populate the cache) before the
+    /// second one even starts, which would pass even with the old,
+    /// unserialized code and prove nothing.
+    #[tokio::test]
+    async fn concurrent_get_token_calls_only_fetch_once() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(100))
+                    .set_body_json(serde_json::json!({
+                        "access_token": "fake-jwt-access-token",
+                        "expires_in": 300,
+                    })),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
+        let client = reqwest::Client::new();
+
+        let (first, second) = tokio::join!(cache.get_token(&client), cache.get_token(&client));
+
+        assert_eq!(first.unwrap(), "fake-jwt-access-token");
+        assert_eq!(second.unwrap(), "fake-jwt-access-token");
+        // wiremock's `.expect(1)` (asserted on Drop) fails this test if
+        // both concurrent calls fetched independently -- the real
+        // assertion here, same technique as
+        // `a_fresh_cached_token_is_reused_not_refetched` above.
     }
 }

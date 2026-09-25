@@ -186,8 +186,13 @@ fn reinterpret_as_london_local(
 /// reinterpretation, and checks the result against `received_at` via
 /// [`is_plausible_actual_timestamp`]. Returns `(instant_to_use,
 /// was_corrected)` -- `was_corrected` is `false` whenever the correction
-/// wasn't applied, whether because it was implausible or because no
-/// principled reinterpretation existed (the spring-forward gap). `None`
+/// wasn't applied (implausible, no principled reinterpretation existed --
+/// the spring-forward gap) OR whenever it WAS applied but changed nothing
+/// (the GMT/winter case, where Europe/London-local equals UTC and
+/// reinterpreting is a no-op); see the `corrected_utc != raw_utc` comment
+/// below. `was_corrected` therefore means "this value was actually altered
+/// by the correction", not merely "the correction logic ran" -- callers'
+/// `*_timestamp_correction_total` metrics rely on that distinction. `None`
 /// only if `raw` itself fails to parse as epoch millis.
 ///
 /// This is the ONLY place that decides corrected-vs-raw for a TRUST
@@ -201,7 +206,28 @@ fn decide_correction(raw: &str, received_at: DateTime<Utc>) -> Option<(DateTime<
 
     match reinterpret_as_london_local(raw_utc, received_at) {
         Some(corrected_utc) if is_plausible_actual_timestamp(corrected_utc, received_at) => {
-            Some((corrected_utc, true))
+            // Signal Box Audit, common-crate Low finding "A BST-correction
+            // metric reads ~100% 'corrected' all winter": this used to
+            // unconditionally report `true` here -- "reinterpretation
+            // succeeded and is plausible" -- even though `corrected_utc`
+            // can legitimately equal `raw_utc` bit-for-bit. That happens
+            // for every single value processed while Europe/London is on
+            // GMT (winter): local wall-clock time IS UTC then, so
+            // `reinterpret_as_london_local` is a mathematical no-op, yet
+            // this branch (successfully reinterpreted + trivially
+            // plausible, since it's identical to the untouched raw value)
+            // still runs and still reported `Some(true)`. Every caller's
+            // own `*_timestamp_correction_total{outcome="corrected"}`
+            // metric (Finding #2's kill switch, `trust-consumer`'s and
+            // `trust-backlog-consumer`'s `process.rs`) fed straight off
+            // this bool, so it read ~100% "corrected" for the entire winter
+            // -- unable to distinguish "the BST-mislabelling hypothesis
+            // fired and changed a value" from "the hypothesis fired and
+            // altered nothing", which is exactly the signal an operator
+            // would need to notice if the hypothesis ever stopped holding.
+            // Comparing the two instants directly reports a correction only
+            // when one was actually applied.
+            Some((corrected_utc, corrected_utc != raw_utc))
         }
         Some(corrected_utc) => {
             tracing::warn!(
@@ -307,14 +333,22 @@ pub struct TrustTimestampPair {
     /// ordinary single-field guarded path, since there is nothing to keep
     /// it in sync with.
     pub actual: Option<DateTime<Utc>>,
-    /// `Some(true)` if the correction was applied to this message,
-    /// `Some(false)` if it fell back to the raw interpretation (an
-    /// implausible correction, the spring-forward gap, or correction
-    /// disabled entirely via `correction_enabled: false`), `None` if no
-    /// decision could be made at all (no parseable `actual`). Feeds the
-    /// caller's own `distant_signal_*_timestamp_correction_total` metric
-    /// (Finding #2) -- only a `Some` value should be counted, since `None`
-    /// means nothing was decided.
+    /// `Some(true)` if the correction was applied to this message AND
+    /// actually changed the value, `Some(false)` if it fell back to the raw
+    /// interpretation (an implausible correction, the spring-forward gap,
+    /// or correction disabled entirely via `correction_enabled: false`) OR
+    /// if the "corrected" value is bit-for-bit identical to the raw one
+    /// (the GMT/winter case, where Europe/London-local equals UTC and
+    /// reinterpreting is a no-op -- see `decide_correction`'s own doc
+    /// comment), `None` if no decision could be made at all (no parseable
+    /// `actual`). Feeds the caller's own
+    /// `distant_signal_*_timestamp_correction_total` metric (Finding #2) --
+    /// only a `Some` value should be counted, since `None` means nothing
+    /// was decided. Deliberately NOT "the correction logic ran": a metric
+    /// built on that weaker meaning would read ~100% "corrected" for the
+    /// entire winter regardless of whether the underlying BST-mislabelling
+    /// hypothesis still held (Signal Box Audit, common-crate Low finding "A
+    /// BST-correction metric reads ~100% 'corrected' all winter").
     pub was_corrected: Option<bool>,
 }
 
@@ -498,6 +532,33 @@ mod tests {
             corrected,
             "2026-01-15T12:30:00Z".parse::<DateTime<Utc>>().unwrap(),
             "a GMT-period value must not be shifted"
+        );
+    }
+
+    /// Finding #8 regression ("A BST-correction metric reads ~100%
+    /// 'corrected' all winter"): a GMT-period value goes through the exact
+    /// same "reinterpreted + plausible" branch a BST-period value does (see
+    /// `a_bst_period_timestamp_is_corrected_one_hour_earlier_and_is_plausible`
+    /// above) -- the ONLY difference is that the reinterpreted value happens
+    /// to equal the raw one. `was_corrected` must report `Some(false)` here,
+    /// not `Some(true)`: nothing was actually corrected, so a metric built
+    /// on this bool must not count it as a correction.
+    #[test]
+    fn a_gmt_period_value_reports_was_corrected_false_even_though_the_correction_branch_ran() {
+        let raw = "1768480200000"; // 2026-01-15T12:30:00Z as millis
+        let received_at: DateTime<Utc> = "2026-01-15T12:31:00Z".parse().unwrap();
+
+        let pair = parse_trust_epoch_millis_pair(None, Some(raw), received_at, true);
+
+        assert_eq!(
+            pair.actual,
+            Some("2026-01-15T12:30:00Z".parse::<DateTime<Utc>>().unwrap()),
+            "the value itself is unaffected by this fix -- only the reported outcome changes"
+        );
+        assert_eq!(
+            pair.was_corrected,
+            Some(false),
+            "a no-op 'correction' (GMT period) must not be counted as a correction"
         );
     }
 

@@ -25,7 +25,13 @@ pub struct MetricsArgs {
 /// fields below are `#[arg(long, env)]` with no default (required) in
 /// every one of the 3 real callers today -- flattening changes nothing
 /// about defaultedness or requiredness.
-#[derive(Debug, Clone, clap::Args)]
+///
+/// Signal Box Audit, Finding #2 (common/service_args.rs): does NOT derive
+/// `Debug` -- `kafka_sasl_password` is a real secret (RDM's "Consumer
+/// secret" for this Kafka product), and a future accidental
+/// `tracing::debug!("{args:?}")` on a `Config` that flattens this in would
+/// otherwise print it verbatim. See the hand-written impl below.
+#[derive(Clone, clap::Args)]
 pub struct KafkaConnectionArgs {
     /// RDM Kafka broker address(es), comma-separated, e.g.
     /// `kafka.raildata.org.uk:9094`. GAP: unconfirmed hostname.
@@ -45,6 +51,18 @@ pub struct KafkaConnectionArgs {
     /// not a confirmed fact.
     #[arg(long, env)]
     pub kafka_sasl_mechanism: String,
+}
+
+impl std::fmt::Debug for KafkaConnectionArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KafkaConnectionArgs")
+            .field("kafka_brokers", &self.kafka_brokers)
+            .field("kafka_topic", &self.kafka_topic)
+            .field("kafka_sasl_username", &self.kafka_sasl_username)
+            .field("kafka_sasl_password", &"[REDACTED]")
+            .field("kafka_sasl_mechanism", &self.kafka_sasl_mechanism)
+            .finish()
+    }
 }
 
 #[cfg(test)]
