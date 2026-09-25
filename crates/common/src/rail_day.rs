@@ -35,9 +35,78 @@ pub fn next_rail_day_boundary(at: DateTime<Utc>) -> DateTime<Utc> {
     }
 }
 
+/// Which rail day `at` currently falls in -- the inverse of
+/// [`next_rail_day_boundary`], using the same 02:00 Europe/London cutoff
+/// and therefore the same DST-transition safety.
+///
+/// Hoisted here from `trust-backlog-consumer`'s own crate-local copy (whose
+/// doc comment already named this move as the right follow-up) because a
+/// second and third caller now need it: `trust-consumer` has to date an
+/// Activation ("which day's running is this Activation actually for",
+/// finding #2 of the 2026-09-25 review) and to age parked Activations out
+/// against the CURRENT rail day rather than a permanent CIF schedule's
+/// months-away `schedule_end_date` (finding #5).
+///
+/// A bare `Utc::now().date_naive()` is NOT an acceptable substitute:
+/// it ignores both the Europe/London offset and this codebase's own
+/// 02:00-cutoff convention, so an event at 00:30 local would be filed under
+/// the wrong (next) rail day -- which is exactly the class of date bug
+/// `trust-backlog-consumer`'s own `service_date` handling was already burned
+/// by in production.
+pub fn current_rail_day(at: DateTime<Utc>) -> chrono::NaiveDate {
+    let local = at.with_timezone(&chrono_tz::Europe::London);
+    let cutoff = NaiveTime::from_hms_opt(2, 0, 0).expect("2:00:00 is a valid time");
+    if local.time() < cutoff {
+        local.date_naive() - Duration::days(1)
+    } else {
+        local.date_naive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn current_rail_day_well_after_the_0200_cutoff_is_that_calendar_day() {
+        let at: DateTime<Utc> = "2026-09-05T13:00:00Z".parse().unwrap();
+        assert_eq!(
+            current_rail_day(at),
+            "2026-09-05".parse::<chrono::NaiveDate>().unwrap()
+        );
+    }
+
+    #[test]
+    fn current_rail_day_just_before_the_0200_cutoff_is_the_previous_calendar_day() {
+        // 00:30 UTC = 01:30 BST (September is daylight saving), clearly
+        // before the 02:00 Europe/London cutoff -- so this instant still
+        // belongs to the rail day that started the previous calendar day.
+        let at: DateTime<Utc> = "2026-09-05T00:30:00Z".parse().unwrap();
+        assert_eq!(
+            current_rail_day(at),
+            "2026-09-04".parse::<chrono::NaiveDate>().unwrap()
+        );
+    }
+
+    /// The two halves of this module must agree: the rail day `at` falls in
+    /// is the one whose boundary is the NEXT one after `at`.
+    #[test]
+    fn current_rail_day_and_next_rail_day_boundary_agree() {
+        for raw in [
+            "2026-09-05T13:00:00Z",
+            "2026-09-05T00:30:00Z",
+            "2026-03-29T00:30:00Z",
+            "2026-10-25T00:30:00Z",
+        ] {
+            let at: DateTime<Utc> = raw.parse().unwrap();
+            let boundary = next_rail_day_boundary(at);
+            assert_eq!(
+                current_rail_day(at) + Duration::days(1),
+                current_rail_day(boundary),
+                "the rail day {at} falls in must end at its next boundary {boundary}"
+            );
+        }
+    }
 
     #[test]
     fn next_rail_day_boundary_on_a_plain_midweek_day() {

@@ -27,25 +27,57 @@ struct Header {
     msg_type: String,
 }
 
-// `toc_id`/`train_service_code`/`schedule_wtt_id`/`schedule_start_date` are
-// part of `0001`'s confirmed shape (this module's header doc) but have no
-// consumer yet -- `process.rs`'s Activation handling only needs
-// `train_id`/`train_uid` (to park a pin claim) and `schedule_end_date` (to
-// expire it). Kept, not deleted, for the same "faithful port of the
-// confirmed wire shape" reason as `matcher::Evidence`.
+/// `train_id`/`train_uid` are the only two fields any consumer of this type
+/// actually *depends* on: together they are the whole point of a `0001`
+/// (bind a live TRUST identity to a CIF schedule identity), and
+/// `trust-consumer`'s `by_train_uid` fast path -- the single most reliable
+/// way a tracked subscription is ever attributed to a running train -- is
+/// unreachable without them.
+///
+/// **Every other field is `Option<String>`, deliberately** (finding #7 of
+/// the 2026-09-25 review). They used to be required `String`s, faithful to
+/// the confirmed wire shape, even though only `toc_id` has a reader at all
+/// (`full-coverage-consumer`'s `station_correlate::apply_activation`, which
+/// already treats "no toc_id learned for this uid" as a first-class case).
+/// Required fields make deserialization all-or-nothing: a single `null` or
+/// absent `schedule_wtt_id` -- a feed schema tweak, a VSTP activation, a
+/// TOC-specific quirk -- made `parse_envelope` drop the WHOLE Activation,
+/// silently costing the `by_train_uid` fast path for that train and falling
+/// the subscription through to the far weaker CRS+time departure heuristic
+/// (finding #1). Trading a field this codebase never reads for the fast
+/// path is not a trade worth making, so these are now all optional and a
+/// partial Activation still binds its identity.
+///
+/// `schedule_start_date`/`schedule_end_date` in particular are the CIF
+/// schedule's own multi-month VALIDITY WINDOW, not the date this specific
+/// train instance is running -- see `trust-backlog-consumer`'s
+/// `process.rs` module doc for the live-production bug that confirmed it.
+/// Nothing may use either as "which day is this Activation for";
+/// `trust-consumer` dates an Activation by the rail day it was observed on
+/// (`common::rail_day::current_rail_day`) instead.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Activation {
     pub train_id: String,
     pub train_uid: String,
+    /// Read by `full-coverage-consumer` (`station_correlate::apply_activation`)
+    /// -- the one non-identity field with a real consumer. `None` simply
+    /// means that consumer learns no `toc_id` for this uid, which it
+    /// already handles.
+    pub toc_id: Option<String>,
     #[allow(dead_code)]
-    pub toc_id: String,
+    pub train_service_code: Option<String>,
     #[allow(dead_code)]
-    pub train_service_code: String,
+    pub schedule_wtt_id: Option<String>,
+    /// The CIF schedule's validity-window START, NOT this instance's
+    /// running date -- see this struct's own doc comment. No reader.
     #[allow(dead_code)]
-    pub schedule_wtt_id: String,
-    #[allow(dead_code)]
-    pub schedule_start_date: String,
-    pub schedule_end_date: String,
+    pub schedule_start_date: Option<String>,
+    /// The CIF schedule's validity-window END, months away for a permanent
+    /// schedule. Read only as a secondary pruning signal for
+    /// `trust-consumer`'s parked-Activation map (see
+    /// `process::prune_expired_activations`, whose primary rule is now the
+    /// Activation's own observed rail day).
+    pub schedule_end_date: Option<String>,
 }
 
 // `gbtt_timestamp`/`reporting_stanox`/`toc_id` are part of `0003`'s
@@ -233,6 +265,40 @@ mod tests {
         }}]"#;
         let messages = parse_batch(raw).unwrap();
         assert_eq!(messages.len(), 1);
+        assert!(matches!(&messages[0], TrustMessage::Activation(a) if a.train_uid == "C21373"));
+    }
+
+    /// Finding #7's regression test: an Activation carrying ONLY the two
+    /// fields anything actually depends on still parses. Before these four
+    /// fields became `Option<String>`, this exact payload failed the whole
+    /// envelope's deserialization -- which silently cost `trust-consumer`'s
+    /// `by_train_uid` fast path for that train and dropped it through to
+    /// the much weaker CRS+time departure heuristic instead.
+    #[test]
+    fn an_activation_missing_every_field_but_the_identity_pair_still_parses() {
+        let raw = r#"[{"header":{"msg_type":"0001"},"body":{
+            "train_id":"221832406","train_uid":"C21373"
+        }}]"#;
+        let messages = parse_batch(raw).unwrap();
+        assert_eq!(messages.len(), 1);
+        let TrustMessage::Activation(activation) = &messages[0] else {
+            panic!("expected an Activation, got {:?}", messages[0]);
+        };
+        assert_eq!(activation.train_uid, "C21373");
+        assert_eq!(activation.toc_id, None);
+        assert_eq!(activation.schedule_end_date, None);
+    }
+
+    /// Same, for an explicit `null` rather than an absent key -- the shape a
+    /// feed that models these fields but has nothing to put in them sends.
+    #[test]
+    fn an_activation_with_explicit_nulls_for_the_optional_fields_still_parses() {
+        let raw = r#"[{"header":{"msg_type":"0001"},"body":{
+            "train_id":"221832406","train_uid":"C21373","toc_id":null,
+            "train_service_code":null,"schedule_wtt_id":null,
+            "schedule_start_date":null,"schedule_end_date":null
+        }}]"#;
+        let messages = parse_batch(raw).unwrap();
         assert!(matches!(&messages[0], TrustMessage::Activation(a) if a.train_uid == "C21373"));
     }
 

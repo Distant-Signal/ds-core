@@ -285,11 +285,17 @@ async fn fetch_backlog_history(
 /// top-level doc comment on this plan-vs-`main` deviation), so
 /// `resolution_status` still advances to `'resolved'` from this replay;
 /// only `train_uid` itself is left `NULL` in that case, not the status.
+///
+/// `service_date` is the day whose backlog `history` was fetched for -- it
+/// is threaded in solely as `dedup_key`'s date component (see the call
+/// below, and `trust_schema::dedup::dedup_key`'s own doc comment on why that
+/// component exists at all: TRUST recycles `train_id`s monthly).
 async fn replay_backlog_history(
     pool: &PgPool,
     tracked_train_id: i64,
     train_uid: Option<&str>,
     destination_crs: Option<&str>,
+    service_date: NaiveDate,
     history: Vec<BacklogRow>,
 ) -> anyhow::Result<()> {
     let mut previous = DerivedState::awaiting_activation();
@@ -371,12 +377,24 @@ async fn replay_backlog_history(
         // the time a backlog match runs, that train's live TRUST window
         // has already closed, which is the entire reason this feature
         // exists).
+        // `row.service_date` as the key's date component, rather than the
+        // "rail day this message was processed on" every LIVE consumer passes
+        // (see `trust_schema::dedup::dedup_key`). This function replays rows
+        // that were stored days ago, so there is no live processing day to
+        // speak of, and the stored row's own `service_date` is both available
+        // and the more meaningful value. That makes these keys differ from a
+        // live consumer's for the same real event -- exactly the divergence
+        // the paragraph above already documents and accepts for
+        // `loc_stanox`, for the same reason: `ON CONFLICT (tracked_train_id,
+        // dedup_key) DO NOTHING` only ever needs to make THIS replay
+        // idempotent against itself.
         let dedup = trust_schema::dedup::dedup_key(
             &row.train_id,
             &row.msg_type,
             event_type.as_deref(),
             None,
             planned.map(|t| t.timestamp_millis().to_string()).as_deref(),
+            service_date,
         );
 
         let (resolved_train_uid, resolved_train_id) = if !resolution_claimed {
@@ -465,6 +483,7 @@ pub async fn attempt_backlog_match(
         tracked_train_id,
         train_uid.as_deref(),
         destination_crs.as_deref(),
+        service_date,
         history,
     )
     .await?;
@@ -646,6 +665,7 @@ pub async fn attempt_backlog_match_by_uid(
         tracked_train_id,
         Some(train_uid),
         destination_crs.as_deref(),
+        service_date,
         history,
     )
     .await?;
