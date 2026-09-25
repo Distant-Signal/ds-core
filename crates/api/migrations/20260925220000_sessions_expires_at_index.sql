@@ -1,3 +1,4 @@
+-- no-transaction
 -- -------------------------------------------------------------------------
 -- Supports `data::users::prune_expired_sessions` (Task: server-side
 -- session-revocation follow-up, 2026-09-25 security review) -- a periodic
@@ -19,6 +20,17 @@
 -- is already an exact-`id`-match on the primary key first, so this index
 -- is not on that query's hot path -- it exists for the sweep's own
 -- range/threshold scan.
+--
+-- CONCURRENTLY + `-- no-transaction` (this file's own literal first line,
+-- the only place sqlx recognises it -- see
+-- crates/api/tests/migration_index_locking.rs): `sessions` already existed
+-- before this migration, so a plain `CREATE INDEX` here would hold sqlx's
+-- wrapping transaction -- and therefore this crate's own startup, since
+-- main.rs runs migrations before binding its listener -- for the whole
+-- build. A failed CONCURRENTLY build leaves an INVALID index behind
+-- (Postgres won't use it and won't clean it up); recovery is a manual
+-- `DROP INDEX` and a re-run, not an automatic rollback. That is the
+-- accepted trade for not locking the table.
 -- -------------------------------------------------------------------------
 
-CREATE INDEX sessions_expires_at ON sessions (expires_at);
+CREATE INDEX CONCURRENTLY sessions_expires_at ON sessions (expires_at);
