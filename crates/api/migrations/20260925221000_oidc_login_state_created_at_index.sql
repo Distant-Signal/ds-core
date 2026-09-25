@@ -1,0 +1,46 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Supports `data::users::insert_login_state`'s own opportunistic-cleanup
+-- sweep (2026-09-25 Low-severity auth-core review, "unthrottled login-state
+-- churn") -- EVERY hit to `GET /auth/login` runs
+-- `DELETE FROM oidc_login_state WHERE created_at < NOW() - INTERVAL '15
+-- minutes'` before inserting its own row, unlike `sessions`' equivalent
+-- sweep (`prune_expired_sessions`), which only runs on a periodic
+-- background timer (`main.rs`'s `session_cleanup_sweep_loop`), not on
+-- every single request.
+--
+-- Without this index, that per-request DELETE is a sequential scan of the
+-- whole table -- cheap at today's traffic, but it means an attacker who
+-- can simply hit this public, unauthenticated, rate-limit-free endpoint
+-- repeatedly (an anonymous browser-facing login-initiation route needs no
+-- credential to hit) forces a full-table scan write on every single
+-- request, scaling with however large the table has grown from their own
+-- prior requests -- self-inflicted, worsening amplification, not just a
+-- flat per-request cost. `oidc_login_state`'s own primary key (`id`) does
+-- not help this query at all -- it's keyed on a different column entirely,
+-- same gap `sessions_expires_at` (20260925220000) closed for `sessions`.
+--
+-- This index closes the amplification/scan-cost half of that finding.
+-- Full request-rate throttling (a second, complementary mitigation -- capping
+-- how often ANY single client may hit `/auth/login` at all, regardless of
+-- how cheap each individual hit becomes) is deliberately left to the
+-- ingress/gateway layer, not implemented in-process here: this app has no
+-- existing per-route rate-limiting convention anywhere else to extend
+-- (confirmed by grep across `crates/api`), and bolting one on for a single
+-- route would be a new pattern this fix's own scope does not otherwise
+-- justify -- an operator-level concern (an Ingress annotation, a WAF rule),
+-- consistent with how this app already treats network-policy-level
+-- exposure decisions (see e.g. the `/metrics` route's own doc comment in
+-- `main.rs`).
+--
+-- CONCURRENTLY + `-- no-transaction`: `oidc_login_state` already existed
+-- before this migration (added by 20260828090000_user_accounts.sql), so a
+-- plain `CREATE INDEX` here would hold sqlx's wrapping transaction -- and
+-- therefore this crate's own startup, since main.rs runs migrations before
+-- binding its listener -- for the whole build. See
+-- 20260925220000_sessions_expires_at_index.sql and
+-- crates/api/tests/migration_index_locking.rs for the full rationale this
+-- mirrors exactly.
+-- -------------------------------------------------------------------------
+
+CREATE INDEX CONCURRENTLY oidc_login_state_created_at ON oidc_login_state (created_at);
