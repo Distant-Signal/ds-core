@@ -132,6 +132,27 @@ impl ReferenceData {
                 .with_context(|| format!("fetching {url}"))?;
             parse_crs_tiploc_page(&body, &mut data).with_context(|| format!("parsing {url}"))?;
         }
+        // Second-layer safety net alongside `suspicious_zero_row_match`'s
+        // per-page check above: that check only fires when a page's raw
+        // HTML still has a `<tr` tag its regex just doesn't match, so a
+        // more sweeping markup change (a different row element entirely, a
+        // JS-rendered table, an upstream outage serving an unrelated error
+        // page for every one of the 26 letters) could still slip past it
+        // page-by-page while still leaving the aggregate result empty. A
+        // ZERO-CRS result across the ENTIRE alphabet crawl has no
+        // legitimate reading -- every letter of the real GB CRS list has at
+        // least one station -- so this is unconditionally fatal, not a
+        // judgment call the way a single page's row count is.
+        if data.crs_to_tiploc.is_empty() {
+            bail!(
+                "fetched and parsed all 26 crs*.shtm pages successfully but ended up with zero \
+                 known CRS codes -- this is never a genuinely empty upstream result (every letter \
+                 of the real GB CRS list has at least one station), so this almost certainly means \
+                 the site's markup has changed in a way this parser's selectors no longer \
+                 recognize at all; refusing to proceed with an empty reference set rather than \
+                 pass every lines/*.toml CRS/TIPLOC value as \"unknown\""
+            );
+        }
 
         let toc_url = "https://www.railwaycodes.org.uk/operators/toccodes.shtm";
         let toc_body = fetch_with_browser_ua(client, toc_url)
@@ -139,6 +160,20 @@ impl ReferenceData {
             .with_context(|| format!("fetching {toc_url}"))?;
         data.toc_codes =
             parse_current_toc_codes(&toc_body).with_context(|| format!("parsing {toc_url}"))?;
+        let rdm_configured = rdm_api_key.is_some() && rdm_tocs_base_url.is_some();
+        if data.toc_codes.is_empty() && !rdm_configured {
+            // Same reasoning as the CRS check above, scoped to the
+            // community-site TOC scrape specifically -- this only applies
+            // when that scrape is actually this run's operator-code source.
+            // If the RDM feed is configured (checked the same way as the
+            // real supersede below), it may legitimately replace an empty
+            // scrape with real data, so this doesn't apply.
+            bail!(
+                "fetched and parsed the TOC codes page successfully but found zero currently-valid \
+                 operator codes -- almost certainly a selector break rather than a genuinely empty \
+                 page, refusing to proceed with an empty operator-code set"
+            );
+        }
 
         if let (Some(api_key), Some(base_url)) = (rdm_api_key, rdm_tocs_base_url) {
             match crate::rdm_toc::fetch_rdm_tocs(client, base_url, api_key).await {
@@ -257,11 +292,76 @@ fn extract_shape_valid_tokens(
     let no_popups = strip_popups(popup_re, cell)?;
     let no_comments = comment_re.replace_all(&no_popups, " ");
     let no_tags = tag_re.replace_all(&no_comments, " ");
-    Ok(no_tags
+    // HTML entities (`&amp;`, `&nbsp;`, numeric refs like `&#x2716;`, ...)
+    // must be decoded BEFORE the whitespace split below, not left as raw
+    // markup: an entity that renders as whitespace once decoded (`&nbsp;`
+    // is the realistic case here -- railwaycodes.org.uk uses it to join
+    // adjacent codes/notes in a cell) is NOT whitespace to `split_whitespace`
+    // while it's still the six literal characters `&nbsp;`, so two distinct
+    // codes either side of it merge into one oversized token that fails
+    // `shape_re` and is silently dropped -- a real code read as "unknown"
+    // for a reason that has nothing to do with whether it's actually valid.
+    // Decoding first turns that back into a real space and restores the
+    // normal one-token-per-code split. Uses `quick_xml::escape::unescape`
+    // (this crate's existing `quick-xml` dependency, `escape-html` feature
+    // enabled for the full HTML5 entity table, not just XML's five) rather
+    // than hand-rolling a second decoder alongside `clean_html_text`'s
+    // existing ad hoc `&amp;`/`&nbsp;`/`&#x2716;` replacements -- that
+    // function's cell (the location name) is separate from the code cells
+    // this one handles, but there is no reason for the two to disagree on
+    // what an entity decodes to.
+    let decoded = match quick_xml::escape::unescape(&no_tags) {
+        Ok(decoded) => decoded,
+        Err(err) => {
+            // A bare, syntactically-invalid `&` (ordinary running prose,
+            // not a real entity) is common enough in scraped HTML that
+            // failing this whole cell over it would trade one bug for a
+            // worse one. Fall back to the undecoded text instead: any
+            // entity this cell actually contained then just fails its shape
+            // check exactly as it did before this fix (never silently
+            // becomes a different, malformed code), so this fallback can
+            // only ever be as strict as pre-fix behavior, never wrong in a
+            // new way.
+            eprintln!(
+                "warning: HTML-entity decoding failed for a code cell ({err}); falling back to \
+                 undecoded text for this cell"
+            );
+            std::borrow::Cow::Borrowed(no_tags.as_ref())
+        }
+    };
+    Ok(decoded
         .split_whitespace()
         .filter(|t| shape_re.is_match(t))
         .map(|t| t.to_ascii_uppercase())
         .collect())
+}
+
+/// Returns `Some(<diagnostic>)` when `html` contains at least one raw `<tr`
+/// opening tag but `matched_rows` (the caller's own `row_re.captures_iter`
+/// count for this same `html`) is zero -- i.e. the row-matching regex's
+/// literal, attribute-less `<tr>` pattern stopped matching this page's
+/// actual row markup (e.g. a restyle that added a class/id/other attribute:
+/// `<tr class="odd">`). Before this check, that exact failure mode was
+/// silent: every CRS/TIPLOC/TOC code that would have come from this page
+/// simply never gets inserted, reading downstream as "not found" --
+/// indistinguishable from every one of them having genuinely been removed
+/// from the source. A page with no `<tr` tag at all is deliberately NOT
+/// flagged here (returns `None`): that's a different, more ambiguous case
+/// (an upstream outage's error page, a genuinely row-less page) this
+/// specific check isn't meant to diagnose -- callers still catch a total,
+/// cross-page zero result as fatal regardless (see `fetch_live`'s own
+/// empty-aggregate checks).
+fn suspicious_zero_row_match(html: &str, matched_rows: usize) -> Option<String> {
+    if matched_rows > 0 || !html.contains("<tr") {
+        return None;
+    }
+    Some(
+        "matched zero <tr>...</tr> rows even though the page's raw HTML contains at least one \
+         <tr tag -- this looks like the site changed its row markup (e.g. added a class or other \
+         attribute, <tr class=\"...\">), which this parser's literal `<tr>` pattern no longer \
+         matches"
+            .to_string(),
+    )
 }
 
 /// Extraction rules mirrored exactly from
@@ -281,7 +381,9 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) -> Result<()> {
     let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
     let tiploc_token_re = regex::Regex::new(r"^[A-Z0-9]{2,7}$").unwrap();
 
+    let mut matched_rows = 0usize;
     for row_caps in row_re.captures_iter(html) {
+        matched_rows += 1;
         let cells: Vec<&str> = cell_re
             .captures_iter(&row_caps[1])
             .map(|c| c.get(1).unwrap().as_str())
@@ -312,6 +414,12 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) -> Result<()> {
             }
         }
     }
+    if let Some(diagnostic) = suspicious_zero_row_match(html, matched_rows) {
+        bail!(
+            "{diagnostic} -- every CRS/TIPLOC on this page would silently read as unknown rather \
+             than genuinely absent, so this refuses to proceed rather than risk that"
+        );
+    }
     Ok(())
 }
 
@@ -335,7 +443,9 @@ fn parse_current_toc_codes(html: &str) -> Result<HashMap<String, String>> {
     let toc_token_re = regex::Regex::new(r"^[A-Z]{2}$").unwrap();
 
     let mut out = HashMap::new();
+    let mut matched_rows = 0usize;
     for row_caps in row_re.captures_iter(html) {
+        matched_rows += 1;
         let cells: Vec<&str> = cell_re
             .captures_iter(&row_caps[1])
             .map(|c| c.get(1).unwrap().as_str())
@@ -370,6 +480,12 @@ fn parse_current_toc_codes(html: &str) -> Result<HashMap<String, String>> {
         let without_comments = comment_re.replace_all(&no_popups, " ");
         let name = clean_html_text(&tag_re, &without_comments);
         out.insert(code, name);
+    }
+    if let Some(diagnostic) = suspicious_zero_row_match(html, matched_rows) {
+        bail!(
+            "{diagnostic} -- every ATOC operator code would silently read as unknown/defunct \
+             rather than genuinely absent, so this refuses to proceed rather than risk that"
+        );
     }
     Ok(out)
 }
@@ -685,5 +801,139 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
              surface as a loud error rather than silently returning the cell unstripped",
         );
         assert!(err.to_string().contains("popup"));
+    }
+
+    // -- Finding #3: a restyled `<tr>` must fail loudly, not silently empty
+    // the reference set.
+
+    #[test]
+    fn suspicious_zero_row_match_is_none_when_rows_matched() {
+        assert_eq!(
+            suspicious_zero_row_match("<table><tr>...</tr></table>", 1),
+            None
+        );
+    }
+
+    #[test]
+    fn suspicious_zero_row_match_is_none_for_a_genuinely_row_less_page() {
+        // No `<tr` tag anywhere -- deliberately not this check's concern
+        // (see its own doc comment for why).
+        assert_eq!(
+            suspicious_zero_row_match("<html><body>no table here</body></html>", 0),
+            None
+        );
+    }
+
+    #[test]
+    fn suspicious_zero_row_match_flags_a_restyled_row_with_zero_matches() {
+        // A `<tr class="odd">` row is real markup -- `html.contains("<tr")`
+        // -- that this parser's literal `<tr>` pattern (by design, matching
+        // `matched_rows: 0` here) no longer matches.
+        let diagnostic =
+            suspicious_zero_row_match(r#"<table><tr class="odd"><td>EUS</td></tr></table>"#, 0);
+        assert!(
+            diagnostic.is_some(),
+            "a page with real <tr tags but zero regex matches must be flagged"
+        );
+    }
+
+    #[test]
+    fn parse_crs_tiploc_page_fails_loudly_on_a_restyled_row_attribute() {
+        // Same real row shape as `parses_a_real_crs_tiploc_row_shape` above,
+        // except the site now emits `<tr class="odd">` instead of a bare
+        // `<tr>` -- the exact restyle this finding describes. Before this
+        // fix this returned `Ok(())` with `data` silently left empty (every
+        // CRS on the page "not found"); it must now fail loudly instead.
+        let html = r#"<table><tr class="odd"><td>Euston</td><td>EUS</td><td>512900</td>
+            <td>EUSTON</td><td>EUSTON</td><td>72410</td></tr></table>"#;
+        let mut data = ReferenceData::default();
+        let err = parse_crs_tiploc_page(html, &mut data)
+            .expect_err("a restyled row that matches zero <tr>...</tr> patterns must be loud");
+        assert!(err.to_string().contains("row"));
+        assert!(data.crs_to_tiploc.is_empty());
+    }
+
+    #[test]
+    fn parse_current_toc_codes_fails_loudly_on_a_restyled_row_attribute() {
+        let html = r#"<table><tr class="odd"><td>GW</td><td>Great Western Railway</td><td>2015 to date</td></tr></table>"#;
+        let err = parse_current_toc_codes(html)
+            .expect_err("a restyled row that matches zero <tr>...</tr> patterns must be loud");
+        assert!(err.to_string().contains("row"));
+    }
+
+    // -- Finding #4: HTML entities in a code cell must be decoded before
+    // the shape-check/tokenizing step.
+
+    #[test]
+    fn extract_shape_valid_tokens_decodes_nbsp_between_two_codes() {
+        // `&nbsp;` (not a real space character) sitting between two codes
+        // in the raw markup used to merge them into one oversized token
+        // that fails the shape check -- both real codes silently vanish.
+        let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+        let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
+        let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
+        let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
+
+        let tokens = extract_shape_valid_tokens(
+            &popup_re,
+            &comment_re,
+            &tag_re,
+            &crs_token_re,
+            "ABW&nbsp;ABC",
+        )
+        .unwrap();
+        assert_eq!(
+            tokens,
+            vec!["ABW".to_string(), "ABC".to_string()],
+            "an undecoded &nbsp; must not merge two real codes into one unmatched token"
+        );
+    }
+
+    #[test]
+    fn extract_shape_valid_tokens_decodes_amp_without_fabricating_a_code() {
+        let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+        let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
+        let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
+        let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
+
+        // A decoded `&amp;` becomes a literal `&`, which still fails the
+        // CRS shape check on its own -- this just confirms decoding runs
+        // without panicking or fabricating anything from it, alongside the
+        // real code in the same cell.
+        let tokens = extract_shape_valid_tokens(
+            &popup_re,
+            &comment_re,
+            &tag_re,
+            &crs_token_re,
+            "EUS &amp; MORE",
+        )
+        .unwrap();
+        assert_eq!(tokens, vec!["EUS".to_string()]);
+    }
+
+    #[test]
+    fn extract_shape_valid_tokens_falls_back_gracefully_on_a_bare_ampersand() {
+        // A bare `&` with no entity syntax after it is invalid per strict
+        // HTML-entity decoding, but is common enough in scraped real-world
+        // HTML that this must degrade to the undecoded text, not fail the
+        // whole cell.
+        let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
+        let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
+        let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
+        let crs_token_re = regex::Regex::new(r"^[A-Z]{3}$").unwrap();
+
+        let tokens = extract_shape_valid_tokens(
+            &popup_re,
+            &comment_re,
+            &tag_re,
+            &crs_token_re,
+            "EUS & MORE",
+        )
+        .unwrap();
+        assert_eq!(
+            tokens,
+            vec!["EUS".to_string()],
+            "the real code in the same cell must still parse despite the bare ampersand"
+        );
     }
 }

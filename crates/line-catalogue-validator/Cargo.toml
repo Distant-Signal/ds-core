@@ -9,7 +9,7 @@ clap = { version = "4.6.6", features = ["derive", "env"] }
 common = { path = "../common" }
 csv = "1.4"
 glob = "0.3.3"
-quick-xml = { version = "0.41.0", features = ["serialize"] }
+quick-xml = { version = "0.41.0", features = ["serialize", "escape-html"] }
 regex = "1.11"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "gzip"] }
 serde = { version = "1.0.228", features = ["derive"] }
