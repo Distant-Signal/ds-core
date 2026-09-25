@@ -513,6 +513,67 @@ pub fn match_darwin_departure<'a>(
         .find(|d| !d.is_cancelled && d.destination_crs.eq_ignore_ascii_case(target))
 }
 
+/// [`match_darwin_departure`]'s TIME-SCOPED sibling: the non-cancelled
+/// departure heading to `target_destination` whose own SCHEDULED time is
+/// closest to `target_scheduled`, and only if that is within `tolerance`.
+///
+/// Exists because destination alone does not identify a service (2026-09-25
+/// review finding, High 3). `crates/api`'s `eta_blend::find_darwin_eta` used
+/// [`match_darwin_departure`] -- first non-cancelled row to that destination,
+/// no time comparison at all -- to overlay a tracked train's ETA. Once the
+/// tracked train has actually departed and dropped off its origin's board,
+/// the NEXT service to the same destination is the first (and only) row that
+/// matches, so the tracked train's ETA silently became a DIFFERENT train's
+/// estimate, presented with full confidence as "Live departure board". A
+/// tracked 18:32 to Woking showing the 19:02's estimate is not a degraded
+/// answer, it is a wrong one; declining is strictly better, which is why no
+/// row within `tolerance` yields `None` rather than a fallback.
+///
+/// `to_utc` resolves a board row's `"HH:MM"` (Darwin publishes Europe/London
+/// local wall-clock, never UTC) to the instant it names, exactly as
+/// `schedule_query::match_pin` takes its own `to_utc` closure and for the
+/// same reason: the caller owns the timezone/date resolution -- including
+/// which calendar DAY a post-midnight `"00:07"` belongs to -- and this crate
+/// stays free of that decision. A row whose `scheduled` is unparseable, or
+/// whose `to_utc` declines (a local time that does not exist on a
+/// spring-forward Sunday), is skipped rather than guessed at.
+///
+/// Matches on `scheduled`, never on `estimated`: `scheduled` is the stable
+/// identifier of WHICH service a board row is (it is what the pin itself was
+/// created from), while `estimated` is the live value that moves -- matching
+/// on a value that moves would make a heavily-delayed service stop matching
+/// its own pin precisely when the overlay matters most.
+pub fn match_darwin_departure_near_time<'a>(
+    samples: &'a [StationDeparture],
+    target_destination: Option<&str>,
+    target_scheduled: chrono::DateTime<chrono::Utc>,
+    tolerance: chrono::Duration,
+    to_utc: impl Fn(chrono::NaiveTime) -> Option<chrono::DateTime<chrono::Utc>>,
+) -> Option<&'a StationDeparture> {
+    let target = target_destination?;
+    let mut best: Option<(&'a StationDeparture, chrono::Duration)> = None;
+    for departure in samples {
+        if departure.is_cancelled || !departure.destination_crs.eq_ignore_ascii_case(target) {
+            continue;
+        }
+        let Ok(scheduled) = chrono::NaiveTime::parse_from_str(&departure.scheduled, "%H:%M") else {
+            continue;
+        };
+        let Some(scheduled_utc) = to_utc(scheduled) else {
+            continue;
+        };
+        let delta = (scheduled_utc - target_scheduled).abs();
+        if delta > tolerance {
+            continue;
+        }
+        match &best {
+            Some((_, best_delta)) if *best_delta <= delta => {}
+            _ => best = Some((departure, delta)),
+        }
+    }
+    best.map(|(departure, _)| departure)
+}
+
 /// Whether a matched Darwin departure reports `crs` as one of today's
 /// skipped calling points (Darwin's per-calling-point `isCancelled`,
 /// `StationDeparture::skipped_stations`) -- the one-line predicate shared

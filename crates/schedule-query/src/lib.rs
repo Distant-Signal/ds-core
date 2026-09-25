@@ -90,6 +90,6 @@ pub use records::{
 };
 pub use resolve::{
     ResolvedSchedule, ScheduleIndex, departures_by_crs, departures_by_destination_crs, match_pin,
-    resolve_for_date, schedules_touching, unresolved_booked_tiplocs,
+    match_pin_with_delta, resolve_for_date, schedules_touching, unresolved_booked_tiplocs,
 };
 pub use tiploc::normalize_tiploc;

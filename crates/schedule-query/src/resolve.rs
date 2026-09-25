@@ -194,6 +194,31 @@ pub fn match_pin<'a>(
     tolerance: Duration,
     to_utc: impl Fn(NaiveTime, u8) -> Option<DateTime<Utc>>,
 ) -> Option<&'a LinePopulationEntry> {
+    match_pin_with_delta(population, crs_tiplocs, scheduled, tolerance, to_utc)
+        .map(|(entry, _)| entry)
+}
+
+/// [`match_pin`]'s delta-reporting sibling -- identical scan, identical
+/// tie-break, but it also hands back HOW FAR the winning entry's matching
+/// calling point actually was from `scheduled`. [`match_pin`] is a thin
+/// wrapper over this, so there is exactly one implementation of the scan.
+///
+/// The delta exists for callers that need to distinguish "this candidate
+/// TIED for closest" from "this candidate merely matched within tolerance".
+/// `crates/api`'s `schedule_matching::find_schedule_match` uses it for
+/// exactly that: on the untargeted (identity-unknown) pin path, an exact
+/// tie on departure time between two real services at a busy station is
+/// resolved by preferring the one whose DESTINATION also matches the pin's
+/// own -- a comparison that is only sound while both candidates are equally
+/// close in time, which is what this delta lets the caller check rather
+/// than assume.
+pub fn match_pin_with_delta<'a>(
+    population: &'a [LinePopulationEntry],
+    crs_tiplocs: &[&str],
+    scheduled: DateTime<Utc>,
+    tolerance: Duration,
+    to_utc: impl Fn(NaiveTime, u8) -> Option<DateTime<Utc>>,
+) -> Option<(&'a LinePopulationEntry, Duration)> {
     let normalized_targets: Vec<&str> = crs_tiplocs.iter().map(|t| normalize_tiploc(t)).collect();
 
     let mut best: Option<(&'a LinePopulationEntry, Duration)> = None;
@@ -218,7 +243,7 @@ pub fn match_pin<'a>(
             }
         }
     }
-    best.map(|(entry, _)| entry)
+    best
 }
 
 /// Every non-cancelled, resolved schedule's departure-bearing calling

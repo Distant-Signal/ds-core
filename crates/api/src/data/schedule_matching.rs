@@ -123,12 +123,48 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
 /// uniformly: no candidate line, no `stanox_crs` rows for this CRS, no
 /// `schedule_line_population` published yet for any candidate, or no
 /// calling point within tolerance.
+///
+/// **Write ordering (2026-09-25 review finding, Medium 5): the identity
+/// write happens FIRST, and the `resolution_status` flip LAST, in a single
+/// statement that sets both `resolution_status` and `trains_id`
+/// together.** This used to be the other way round -- `apply_schedule_match`
+/// flipped `resolution_status` to `'schedule_matched'`, and only then did
+/// `find_or_create_train_with_schedule_match` plus a separate `UPDATE
+/// train_subscriptions SET trains_id` run, as three independent statements
+/// on the pool with no transaction around them. A crash (or a connection
+/// loss, or a pod eviction mid-request) between the first and the last left
+/// the row `resolution_status = 'schedule_matched'` with `trains_id NULL`
+/// FOREVER: every retry sweep is guarded on `resolution_status =
+/// 'pending'` (`list_pending_pins_for_schedule_match`), so nothing would
+/// ever look at that row again, and every read path resolves its identity
+/// through `trains_id` -- a permanently blank train the user cannot fix
+/// except by deleting and re-pinning.
+///
+/// Reversing the order removes the window rather than narrowing it, and
+/// needs no transaction: `find_or_create_train_with_schedule_match` only
+/// ever enriches the SHARED `trains` row (every column `COALESCE`d, safe to
+/// call repeatedly -- see its own doc comment), so running it before we
+/// know whether this subscription is still eligible is harmless and
+/// idempotent, while `apply_schedule_match` now writes `resolution_status`
+/// and `trains_id` in ONE guarded `UPDATE`, which Postgres applies
+/// atomically. The only state a crash can now leave behind is "the shared
+/// row got its schedule data, the subscription is still `pending`" -- which
+/// the next sweep tick simply retries to completion.
 #[allow(clippy::too_many_arguments)]
 pub async fn attempt_schedule_match(
     pool: &PgPool,
     tracked_train_id: i64,
     pin_origin_crs: &str,
     pin_scheduled_departure: DateTime<Utc>,
+    // The destination CRS the user's own departure-board pick named
+    // (`train_subscriptions.pin_destination_crs`, written by
+    // `train_tracking::create_pin` and carried through the sweep by
+    // `PendingSchedulePin`). Used ONLY to break an exact departure-time tie
+    // between two candidate schedules -- see `find_schedule_match`'s own
+    // doc comment for the tie this closes and for why it is a tie-break
+    // rather than a filter. `None` for an origin-only pin (the user never
+    // named a destination), which leaves tie-breaking exactly as it was.
+    pin_destination_crs: Option<&str>,
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
     // Darwin's own explicit skipped-calling-point snapshot, captured at
@@ -153,11 +189,13 @@ pub async fn attempt_schedule_match(
         pool,
         pin_origin_crs,
         pin_scheduled_departure,
+        pin_destination_crs,
         service_date,
         crs_line_index,
         // No known identity yet -- discovering it IS the point of this
-        // path, so the first candidate line with any tolerance match wins,
-        // same as always. See `find_schedule_match`'s own doc comment.
+        // path, so the closest tolerance match on the first candidate line
+        // wins, with the pin's own destination breaking an exact tie. See
+        // `find_schedule_match`'s own doc comment.
         None,
     )
     .await?
@@ -165,34 +203,37 @@ pub async fn attempt_schedule_match(
         return Ok(false);
     };
 
-    let matched_ok = train_tracking::apply_schedule_match(pool, tracked_train_id).await?;
+    // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
+    // §2 Step A): mirror this schedule match onto the shared `trains` row
+    // too, and point this subscription at it.
+    //
+    // Deliberately BEFORE `apply_schedule_match`'s status flip, not after --
+    // see this function's own doc comment for the crash window that
+    // ordering closes. Safe to run even if the subscription turns out to be
+    // ineligible below (already resolved by live TRUST, already matched by
+    // an earlier sweep tick): every column this writes is `COALESCE`d
+    // against the existing value, so it can only ever add schedule data to
+    // a shared row that is missing it, never clobber another writer's.
+    let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
+        pool,
+        &matched.uid,
+        service_date,
+        pin_origin_crs,
+        pin_scheduled_departure,
+        matched.destination_crs.as_deref(),
+        &matched.line_id,
+        &matched.calling_points_json,
+        pin_skipped_stations,
+        pin_platform,
+        pin_planned_platform,
+    )
+    .await?;
 
-    if matched_ok {
-        // Step A dual-write (docs/superpowers/specs/2026-09-06-shared-train-identity-design.md
-        // §2 Step A): mirror this schedule match onto the shared `trains`
-        // row too, and point this subscription at it.
-        let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
-            pool,
-            &matched.uid,
-            service_date,
-            pin_origin_crs,
-            pin_scheduled_departure,
-            matched.destination_crs.as_deref(),
-            &matched.line_id,
-            &matched.calling_points_json,
-            pin_skipped_stations,
-            pin_platform,
-            pin_planned_platform,
-        )
-        .await?;
-        sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
-            .bind(tracked_train_id)
-            .bind(trains_id)
-            .execute(pool)
-            .await?;
-    }
-
-    Ok(matched_ok)
+    // One statement, both columns: the row leaves `pending` and acquires
+    // its `trains_id` atomically, so no crash can strand it
+    // `schedule_matched` with a NULL `trains_id` (invisible to every retry
+    // sweep, permanently schedule-less to every reader).
+    train_tracking::apply_schedule_match(pool, tracked_train_id, trains_id).await
 }
 
 /// What a successful `schedule_query::match_pin` lookup produced, already
@@ -215,15 +256,80 @@ pub struct ScheduleMatch {
 }
 
 /// The pure read half of a schedule match: no writes of any kind. Same
-/// candidate-line iteration, same `MATCH_TOLERANCE`, same
-/// first-line-that-matches-wins rule `attempt_schedule_match` has always
-/// had when `expected_uid` is `None` -- that part of this code is lifted
-/// out unchanged.
+/// candidate-line iteration and same `MATCH_TOLERANCE`
+/// `attempt_schedule_match` has always had.
 ///
 /// `expected_uid`: `None` for `attempt_schedule_match`'s legacy pin path,
 /// which has no identity to check against (discovering it IS the point) --
-/// the very first candidate line with ANY tolerance match wins, exactly as
-/// before.
+/// the first candidate line with a tolerance match wins, with
+/// `pin_destination_crs` breaking an exact tie (round 4 below).
+///
+/// ---
+///
+/// **Round 4 (2026-09-25), the untargeted path's own half of the same
+/// exact-minute-tie bug, plus a known-identity origin-catalogue gap.** Two
+/// separate findings of the whole-codebase review pass, both in this
+/// function:
+///
+/// *(a) The untargeted (`expected_uid: None`) path had exactly the tie bug
+/// round 3 fixed for the targeted one, and had no way to use the one signal
+/// it does hold.* This is the path every manual "track this train" pick
+/// from a departure board takes (`routes::train::post_track` ->
+/// `attempt_schedule_match`). Round 3's fix cannot apply here: there is no
+/// known identity to narrow the population by -- discovering the identity is
+/// the entire point. So at a busy station the pin's own minute is shared by
+/// other real services (measured live at Birmingham New Street on
+/// 2026-09-24: 106 of 267 schedules share their departure minute with
+/// another service), `schedule_query::match_pin` keeps whichever tied entry
+/// it saw first, and the pin silently resolved to the WRONG train's uid --
+/// which is worse than not matching at all, because everything downstream
+/// (calling points, journey view, notifications, delay repay) then describes
+/// another train with full confidence.
+///
+/// But the pin is not actually identity-less: the user picked a specific
+/// departure-board ROW, and `create_pin` already stores that row's
+/// `destination_crs` (`train_subscriptions.pin_destination_crs`). Two
+/// services departing the same station in the same minute almost never share
+/// a destination -- that is precisely what distinguishes them on the board
+/// the user was looking at. This function now threads that value through and
+/// uses it to break the tie: among the candidates that are EQUALLY CLOSE in
+/// time to the pin, one whose schedule TERMINATES at the pin's destination
+/// beats one that does not.
+///
+/// Deliberately a tie-break, not a filter, and deliberately only on an
+/// exactly-equal delta (`<=` against the unconstrained best delta): the
+/// pin's `destination_crs` comes from Darwin's live board while the
+/// population's terminus comes from CIF, and the two can legitimately
+/// disagree (a service terminated short, a portion-working, a CRS-less
+/// pseudo-terminus). Treating a disagreement as disqualifying would break
+/// matches that work today; treating it as a tie-break can only ever choose
+/// differently in the one case that was a coin-flip anyway. A pin with no
+/// `pin_destination_crs` at all (an origin-only pin) has no such signal and
+/// is left exactly as it was -- named here rather than silently unhandled.
+/// A candidate that is STRICTLY CLOSER in time still wins even if its
+/// destination disagrees; closeness remains the primary key.
+///
+/// *(b) A known identity was still gated on the ORIGIN CRS being in the
+/// line catalogue.* When `expected_uid` is `Some`, ANY line population
+/// carrying that uid is enough -- the uid filter below makes the choice of
+/// line irrelevant to correctness. But this function used to return
+/// `Ok(None)` the instant `crs_line_index` had no entry for the origin CRS,
+/// even though `schedule_query::schedules_touching` puts a schedule's WHOLE
+/// stopping pattern (origin calling point included) into the population of
+/// every line listing ANY station it calls at. A real, non-hypothetical
+/// shape for NR-primary trains: an uncatalogued branch terminus whose
+/// service joins a catalogued main line a few stops later. Now, and only
+/// when `expected_uid` is `Some`, it falls back to
+/// `queries::list_line_ids_with_uid_in_population` -- "which published line
+/// populations contain THIS uid today" -- and searches those instead of
+/// giving up. The untargeted path still gives up, because it has no uid to
+/// search by and matching an uncatalogued origin against every line in the
+/// country by time alone would be a coin flip, not a match.
+///
+/// Still returns `Ok(None)` when the origin CRS resolves to no TIPLOC at all
+/// (`list_stanox_crs_for_crs` empty): `match_pin` matches a pin against
+/// calling points BY TIPLOC, so there is nothing to compare, identity known
+/// or not.
 ///
 /// `Some(train_uid)` for [`attempt_schedule_match_for_shared_train`], which
 /// already knows the real identity. Two distinct bugs have been found and
@@ -313,21 +419,57 @@ async fn find_schedule_match(
     pool: &PgPool,
     pin_origin_crs: &str,
     pin_scheduled_departure: DateTime<Utc>,
+    pin_destination_crs: Option<&str>,
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
     expected_uid: Option<&str>,
 ) -> anyhow::Result<Option<ScheduleMatch>> {
-    let Some(candidate_lines) = crs_line_index.get(&pin_origin_crs.to_uppercase()) else {
-        return Ok(None);
-    };
-
     let origin_tiplocs = queries::list_stanox_crs_for_crs(pool, pin_origin_crs).await?;
     if origin_tiplocs.is_empty() {
         return Ok(None);
     }
     let tiplocs: Vec<&str> = origin_tiplocs.iter().map(|r| r.tiploc.as_str()).collect();
 
-    for line_id in candidate_lines {
+    // Round 4(b) (see this function's own doc comment): an origin CRS on no
+    // `lines/*.toml` at all is fatal only for the untargeted path. With a
+    // known uid, ask the published populations directly which lines carry
+    // it -- the uid filter below makes which line we found it on irrelevant.
+    let candidate_lines: Vec<String> = match crs_line_index.get(&pin_origin_crs.to_uppercase()) {
+        Some(lines) => lines.clone(),
+        None => match expected_uid {
+            Some(expected) => {
+                let lines =
+                    queries::list_line_ids_with_uid_in_population(pool, service_date, expected)
+                        .await?;
+                tracing::debug!(
+                    expected_uid = expected,
+                    origin_crs = pin_origin_crs,
+                    candidate_lines = lines.len(),
+                    "origin CRS is on no catalogued line; falling back to searching every \
+                     published line population that carries this uid"
+                );
+                lines
+            }
+            None => return Ok(None),
+        },
+    };
+
+    // Round 4(a)'s tie-break signal, resolved ONCE rather than per candidate
+    // entry: every TIPLOC the pin's own destination CRS covers, normalized
+    // the same way `match_pin` normalizes what it compares. Empty whenever
+    // there is nothing to break a tie with -- an origin-only pin, an
+    // unrecognised destination CRS, or the targeted path (which is already
+    // narrowed to one uid, so it has no tie to break).
+    let destination_tiplocs: Vec<String> = match (expected_uid, pin_destination_crs) {
+        (None, Some(destination_crs)) => queries::list_stanox_crs_for_crs(pool, destination_crs)
+            .await?
+            .iter()
+            .map(|row| schedule_query::normalize_tiploc(&row.tiploc).to_string())
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    for line_id in &candidate_lines {
         let Some(json) = queries::get_schedule_line_population(pool, line_id, service_date).await?
         else {
             continue;
@@ -361,25 +503,67 @@ async fn find_schedule_match(
             None => entries,
         };
 
-        let Some(matched) = schedule_query::match_pin(
+        // day_offset (see `schedule_query::CallingPoint::day_offset`) shifts
+        // the base date forward for a calling point that falls on a calendar
+        // day AFTER the schedule's own `service_date` -- required for a real
+        // overnight service (2026-09-09 investigation: c2c UID F49687
+        // crosses midnight between Stratford and Barking). Without this,
+        // every calling point after a midnight crossing matched against the
+        // WRONG day, permanently stuck "Waiting to hear from Network Rail"
+        // for any pin on one of them.
+        let to_utc = |t: chrono::NaiveTime, day_offset: u8| {
+            london_to_utc((service_date + Duration::days(day_offset as i64)).and_time(t))
+        };
+
+        let Some((matched, best_delta)) = schedule_query::match_pin_with_delta(
             &entries,
             &tiplocs,
             pin_scheduled_departure,
             common::MATCH_TOLERANCE,
-            // day_offset (see `schedule_query::CallingPoint::day_offset`)
-            // shifts the base date forward for a calling point that falls
-            // on a calendar day AFTER the schedule's own `service_date` --
-            // required for a real overnight service (2026-09-09
-            // investigation: c2c UID F49687 crosses midnight between
-            // Stratford and Barking). Without this, every calling point
-            // after a midnight crossing matched against the WRONG day,
-            // permanently stuck "Waiting to hear from Network Rail" for any
-            // pin on one of them.
-            |t, day_offset| {
-                london_to_utc((service_date + Duration::days(day_offset as i64)).and_time(t))
-            },
+            to_utc,
         ) else {
             continue;
+        };
+
+        // **Round 4(a)'s destination tie-break** (see this function's own doc
+        // comment). Re-run the SAME scan over only those entries whose
+        // schedule terminates where the pin says it is going, and prefer that
+        // winner when -- and only when -- it is exactly as close in time as
+        // the unconstrained one. `match_pin_with_delta` keeps the first entry
+        // it sees on a tie, so without this the pin resolves to whichever of
+        // two same-minute services happens to sit earlier in the published
+        // population array: a coin flip that silently attributed the user's
+        // pin to another train.
+        let destination_entries: Vec<LinePopulationEntry> = if destination_tiplocs.is_empty() {
+            Vec::new()
+        } else {
+            entries
+                .iter()
+                .filter(|entry| terminates_at_any(entry, &destination_tiplocs))
+                .cloned()
+                .collect()
+        };
+        let matched = match schedule_query::match_pin_with_delta(
+            &destination_entries,
+            &tiplocs,
+            pin_scheduled_departure,
+            common::MATCH_TOLERANCE,
+            to_utc,
+        ) {
+            Some((destination_matched, destination_delta))
+                if destination_delta <= best_delta && destination_matched.uid != matched.uid =>
+            {
+                tracing::debug!(
+                    line_id = %line_id,
+                    tied_uid = matched.uid,
+                    preferred_uid = destination_matched.uid,
+                    pin_destination_crs = pin_destination_crs,
+                    "two schedules matched this pin equally closely; preferring the one whose \
+                     destination matches the pin's own"
+                );
+                destination_matched
+            }
+            _ => matched,
         };
 
         if let Some(expected) = expected_uid
@@ -438,6 +622,28 @@ async fn find_schedule_match(
     Ok(None)
 }
 
+/// Whether this population entry's own LAST calling point (its terminus --
+/// the same calling point `find_schedule_match` derives `destination_crs`
+/// from, so the two can never disagree about which stop is the destination)
+/// is one of `destination_tiplocs`.
+///
+/// Compared on `schedule_query::normalize_tiploc`'d values, like every other
+/// TIPLOC comparison in this codebase: a population entry's TIPLOC is the
+/// raw, space-padded 7-character CIF field (`"EUSTON "`), while
+/// `destination_tiplocs` is built from `stanox_crs`/`tiploc_crs`'s bare
+/// storage form -- comparing them unnormalized silently never matches (the
+/// exact class of bug `queries::crs_for_tiploc`'s own doc comment documents
+/// for the 2026-09-16 "Unknown location" incident).
+fn terminates_at_any(entry: &LinePopulationEntry, destination_tiplocs: &[String]) -> bool {
+    let Some(terminus) = entry.calling_points.last() else {
+        return false;
+    };
+    let normalized = schedule_query::normalize_tiploc(&terminus.tiploc);
+    destination_tiplocs
+        .iter()
+        .any(|candidate| candidate == normalized)
+}
+
 /// Fills in the SHARED `trains` row's schedule columns for a train whose
 /// identity is already known -- the NR-primary path
 /// (`POST /Train/by-uid/{uid}/{date}/track`), which starts from a real
@@ -494,6 +700,11 @@ pub async fn attempt_schedule_match_for_shared_train(
         pool,
         origin_crs,
         scheduled_departure,
+        // This path has no departure-board pin at all (see this function's
+        // own doc comment), so there is no pinned destination to break a tie
+        // with -- and it needs none: the population is narrowed to
+        // `train_uid` before matching, so no rival can tie with it.
+        None,
         service_date,
         crs_line_index,
         Some(train_uid),
@@ -573,6 +784,12 @@ pub async fn run_schedule_match_sweep(
             row.id,
             pin_origin_crs,
             pin_scheduled_departure,
+            // The sweep's retry must carry the SAME tie-break signal the
+            // synchronous attempt at pin-creation time had, or a pin that
+            // only ever resolves via the sweep would silently lose the
+            // destination disambiguation and could resolve to the wrong
+            // same-minute service -- see `find_schedule_match`'s round 4(a).
+            row.pin_destination_crs.as_deref(),
             row.service_date,
             crs_line_index,
             &row.pin_skipped_stations,
@@ -788,6 +1005,7 @@ mod db_tests {
             tracked_train_id,
             "EUS",
             scheduled_departure,
+            None, // no pinned destination in this fixture
             service_date,
             &crs_line_index,
             &[],
@@ -945,6 +1163,7 @@ mod db_tests {
             tracked_train_id,
             "ZBK",
             scheduled_departure,
+            None, // no pinned destination in this fixture
             service_date,
             &crs_line_index,
             &[],
@@ -1077,6 +1296,7 @@ mod db_tests {
             &pool,
             "ZEC",
             scheduled_departure,
+            None,
             service_date,
             &crs_line_index,
             None,
@@ -1181,6 +1401,7 @@ mod db_tests {
             &pool,
             "ZBS",
             scheduled_departure,
+            None,
             service_date,
             &crs_line_index,
             None,
@@ -1323,6 +1544,7 @@ mod db_tests {
             tracked_train_id,
             "ZNT",
             scheduled_departure,
+            None, // no pinned destination in this fixture
             service_date,
             &crs_line_index,
             &[],
@@ -1404,6 +1626,7 @@ mod db_tests {
             tracked_train_id,
             "ZZZ",
             "2026-09-05T19:15:00Z".parse().unwrap(),
+            None, // no pinned destination in this fixture
             service_date,
             &HashMap::new(), // no candidate lines at all
             &[],
@@ -1493,6 +1716,7 @@ mod db_tests {
             tracked_train_id,
             "EUS",
             scheduled_departure,
+            None, // no pinned destination in this fixture
             service_date,
             &crs_line_index,
             &[],
@@ -1880,6 +2104,7 @@ mod db_tests {
             tracked_train_id,
             "TTU",
             scheduled_departure,
+            None, // no pinned destination in this fixture
             service_date,
             &crs_line_index,
             &[],
@@ -1927,6 +2152,562 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// [`population_json_multi`]'s two-calling-point sibling: each entry gets
+    /// an Origin AND a Terminate calling point, so a fixture can express
+    /// WHERE each schedule is going -- which is the whole signal round 4(a)'s
+    /// tie-break turns on, and something the origin-only helpers above cannot
+    /// express at all.
+    fn population_json_with_destinations(
+        entries: &[(&str, &str, &str, &str, &str)],
+    ) -> serde_json::Value {
+        serde_json::Value::Array(
+            entries
+                .iter()
+                .map(
+                    |(uid, origin_tiploc, departure, terminus_tiploc, arrival)| {
+                        serde_json::json!({
+                            "uid": uid,
+                            "calling_points": [
+                                {
+                                    "tiploc": origin_tiploc,
+                                    "kind": "Origin",
+                                    "booked_arrival": null,
+                                    "booked_departure": departure,
+                                    "is_half_minute_arrival": false,
+                                    "is_half_minute_departure": false,
+                                    "day_offset": 0
+                                },
+                                {
+                                    "tiploc": terminus_tiploc,
+                                    "kind": "Terminate",
+                                    "booked_arrival": arrival,
+                                    "booked_departure": null,
+                                    "is_half_minute_arrival": false,
+                                    "is_half_minute_departure": false,
+                                    "day_offset": 0
+                                }
+                            ]
+                        })
+                    },
+                )
+                .collect(),
+        )
+    }
+
+    /// **The 2026-09-25 High 1 regression test**: the UNTARGETED pin path's
+    /// own half of the exact-minute-tie bug round 3 fixed for the targeted
+    /// one, reproduced in the shape it really happens in.
+    ///
+    /// Modeled on the same measured production data as the round-3 test above
+    /// (Birmingham New Street, 2026-09-24): two real services departing the
+    /// SAME station in the SAME minute, sitting next to each other in ONE
+    /// line's population -- 16:06 to London Euston and 16:06 to Lichfield.
+    /// A user tracks the Euston one from the departure board, so the pin
+    /// carries `pin_destination_crs` for Euston; `schedule_query::match_pin`
+    /// sees two entries whose delta is identically zero and keeps the FIRST,
+    /// which here is the Lichfield service.
+    ///
+    /// This test asserts BOTH halves, so it cannot pass for the wrong reason:
+    /// * an otherwise-identical pin with NO destination (an origin-only pin)
+    ///   still resolves to the rival -- proving the fixture really is a tie
+    ///   and that first-wins is what decides it, i.e. exactly what this test
+    ///   would have done for the real pin before the fix;
+    /// * the pin that DOES carry its destination now resolves to the correct
+    ///   service.
+    ///
+    /// Before the fix the second assertion failed with the rival's uid: the
+    /// user's tracked train silently became another train, with another
+    /// train's calling points, destination, ETA and delay-repay evidence.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_breaks_an_exact_minute_tie_with_the_pins_own_destination \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_breaks_an_exact_minute_tie_with_the_pins_own_destination() {
+        let pool = connect().await;
+        let user_id = "TEST-SCHEDULE-MATCH-DEST-TIE";
+        let wanted_uid = "TEST-TIE-TO-EUSTON";
+        let rival_uid = "TEST-TIE-TO-LICHFIELD";
+        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("dest-tie@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        // Origin (the busy station both services leave) plus both termini, as
+        // real CIF-derived crosswalk rows -- `find_schedule_match` resolves
+        // the pin's destination CRS to TIPLOCs through exactly this table.
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) VALUES \
+             ('TEST-DTIE-ORIGIN', 'TDO', 'TDTIEORG', 'TEST BIRMINGHAM NEW STREET', 1), \
+             ('TEST-DTIE-EUSTON', 'TDE', 'TDTIEEUS', 'TEST LONDON EUSTON', 1), \
+             ('TEST-DTIE-LICHFLD', 'TDL', 'TDTIELIC', 'TEST LICHFIELD', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs, tiploc = EXCLUDED.tiploc",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        // ONE line, both services, the RIVAL first -- `match_pin`'s first-wins
+        // tie-break therefore decides the outcome unless something else does.
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-dest-tie-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json_with_destinations(&[
+            (rival_uid, "TDTIEORG", "16:06", "TDTIELIC", "17:12"),
+            (wanted_uid, "TDTIEORG", "16:06", "TDTIEEUS", "18:18"),
+        ]))
+        .execute(&pool)
+        .await
+        .expect("seed the busy line's population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("TDO".to_string(), vec!["test-dest-tie-line".to_string()]);
+
+        async fn seed_pin(
+            pool: &PgPool,
+            user_id: &str,
+            service_date: chrono::NaiveDate,
+            scheduled_departure: chrono::DateTime<chrono::Utc>,
+            destination_crs: Option<&str>,
+        ) -> i64 {
+            let (id,): (i64,) = sqlx::query_as(
+                "INSERT INTO train_subscriptions \
+                    (user_id, service_date, pin_origin_crs, pin_scheduled_departure, \
+                     pin_destination_crs) \
+                 VALUES ($1, $2, 'TDO', $3, $4) RETURNING id",
+            )
+            .bind(user_id)
+            .bind(service_date)
+            .bind(scheduled_departure)
+            .bind(destination_crs)
+            .fetch_one(pool)
+            .await
+            .expect("seed fixture subscription");
+            id
+        }
+
+        async fn matched_uid_for(pool: &PgPool, tracked_train_id: i64) -> String {
+            let (trains_id,): (Option<i64>,) =
+                sqlx::query_as("SELECT trains_id FROM train_subscriptions WHERE id = $1")
+                    .bind(tracked_train_id)
+                    .fetch_one(pool)
+                    .await
+                    .expect("read back trains_id");
+            let (train_uid,): (String,) =
+                sqlx::query_as("SELECT train_uid FROM trains WHERE id = $1")
+                    .bind(trains_id.expect("a successful match sets trains_id"))
+                    .fetch_one(pool)
+                    .await
+                    .expect("read back the shared trains row");
+            train_uid
+        }
+
+        // Control: an origin-only pin has no destination signal, so the tie is
+        // still decided by population order. This is the pre-fix behaviour for
+        // EVERY pin, and the case this fix deliberately does not change.
+        let origin_only_pin =
+            seed_pin(&pool, user_id, service_date, scheduled_departure, None).await;
+        assert!(
+            attempt_schedule_match(
+                &pool,
+                origin_only_pin,
+                "TDO",
+                scheduled_departure,
+                None,
+                service_date,
+                &crs_line_index,
+                &[],
+                None,
+                None,
+            )
+            .await
+            .expect("attempt_schedule_match (origin-only pin)")
+        );
+        assert_eq!(
+            matched_uid_for(&pool, origin_only_pin).await,
+            rival_uid,
+            "sanity check: the two fixture schedules really do tie, and population order \
+             really is what decides an origin-only pin -- if this ever stops holding, the \
+             assertion below stops proving anything"
+        );
+
+        // The real case: the user picked the Euston service off the board, so
+        // the pin knows where it is going.
+        let destination_pin = seed_pin(
+            &pool,
+            user_id,
+            service_date,
+            scheduled_departure,
+            Some("TDE"),
+        )
+        .await;
+        assert!(
+            attempt_schedule_match(
+                &pool,
+                destination_pin,
+                "TDO",
+                scheduled_departure,
+                Some("TDE"),
+                service_date,
+                &crs_line_index,
+                &[],
+                None,
+                None,
+            )
+            .await
+            .expect("attempt_schedule_match (destination-bearing pin)")
+        );
+        assert_eq!(
+            matched_uid_for(&pool, destination_pin).await,
+            wanted_uid,
+            "a pin that names its destination must resolve to the same-minute service actually \
+             going there, not to whichever of the two sits earlier in the published population"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM trains WHERE train_uid IN ($1, $2)")
+            .bind(wanted_uid)
+            .bind(rival_uid)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-dest-tie-line' \
+             AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query(
+            "DELETE FROM stanox_crs WHERE stanox IN \
+             ('TEST-DTIE-ORIGIN', 'TEST-DTIE-EUSTON', 'TEST-DTIE-LICHFLD')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// **The 2026-09-25 Medium 6 regression test**: a known-identity train
+    /// whose ORIGIN station is on no `lines/*.toml` at all -- a real shape for
+    /// an NR-primary train starting at an uncatalogued branch terminus.
+    ///
+    /// The schedule IS reachable: `schedules_touching` puts its whole stopping
+    /// pattern, origin calling point included, into the population of every
+    /// line listing any station it calls at further down the route (here, the
+    /// catalogued main line it joins). But `find_schedule_match` used to
+    /// return `Ok(None)` the instant `crs_line_index` had no entry for the
+    /// origin CRS -- so this train could never acquire origin, destination or
+    /// calling points from any path, even though its uid was already known and
+    /// one JSONB containment query away.
+    ///
+    /// The fixture's `crs_line_index` deliberately does NOT contain the origin
+    /// CRS (it lists an unrelated station on the same line), which is exactly
+    /// what made the old code give up. It asserts the untargeted path still
+    /// gives up on the same data -- that path has no uid to search by, and
+    /// matching an uncatalogued origin against every line in the country by
+    /// time alone would be a coin flip, not a match.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                attempt_schedule_match_for_shared_train_searches_every_line_when_the_origin_is_uncatalogued \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_for_shared_train_searches_every_line_when_the_origin_is_uncatalogued()
+     {
+        let pool = connect().await;
+        let train_uid = "TEST-UNCATALOGUED-ORIGIN";
+        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+
+        // Cleanup FIRST as well as last: `find_or_create_train` is idempotent
+        // per `(train_uid, service_date)`, so a row left behind by an earlier
+        // FAILED run (which never reaches its own cleanup) would already carry
+        // the schedule columns this test asserts get filled in -- passing for
+        // the wrong reason.
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(&pool)
+            .await
+            .ok();
+
+        let trains_id = crate::data::trains::find_or_create_train(&pool, train_uid, service_date)
+            .await
+            .expect("find_or_create_train for fixture");
+        crate::data::trains::mark_train_resolved(&pool, trains_id, "TEST-UNCAT-HC")
+            .await
+            .expect("mark_train_resolved for fixture");
+
+        // The origin exists in the CIF-derived crosswalk (it is a real
+        // station) -- it simply appears on no line TOML, which is the gap.
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) VALUES \
+             ('TEST-UNCAT-ORIGIN', 'TUO', 'TUNCATOR', 'TEST BRANCH TERMINUS', 1), \
+             ('TEST-UNCAT-DEST', 'TUD', 'TUNCATDE', 'TEST MAIN LINE TERMINUS', 1) \
+             ON CONFLICT (stanox) DO UPDATE SET crs = EXCLUDED.crs, tiploc = EXCLUDED.tiploc",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ('test-uncatalogued-main-line', $1, $2) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(service_date)
+        .bind(population_json_with_destinations(&[(
+            train_uid, "TUNCATOR", "09:14", "TUNCATDE", "10:42",
+        )]))
+        .execute(&pool)
+        .await
+        .expect("seed the catalogued line's population");
+
+        let scheduled_departure: chrono::DateTime<chrono::Utc> =
+            "2026-09-25T09:14:00+01:00".parse().unwrap();
+        // The load-bearing omission: 'TUO' is absent. Only an unrelated
+        // station of the same line is catalogued, exactly as for a real
+        // uncatalogued branch terminus.
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert(
+            "TUD".to_string(),
+            vec!["test-uncatalogued-main-line".to_string()],
+        );
+
+        assert!(
+            find_schedule_match(
+                &pool,
+                "TUO",
+                scheduled_departure,
+                None,
+                service_date,
+                &crs_line_index,
+                None,
+            )
+            .await
+            .expect("find_schedule_match (untargeted)")
+            .is_none(),
+            "the untargeted path has no uid to search by and must still decline for an \
+             uncatalogued origin -- the fallback is deliberately identity-only"
+        );
+
+        let matched = attempt_schedule_match_for_shared_train(
+            &pool,
+            train_uid,
+            "TUO",
+            scheduled_departure,
+            service_date,
+            &crs_line_index,
+        )
+        .await
+        .expect("attempt_schedule_match_for_shared_train");
+        assert!(
+            matched,
+            "a known uid must be found via any line population that carries it, even when the \
+             origin CRS is on no catalogued line at all"
+        );
+
+        let (origin_crs, destination_crs, matched_line_id): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT origin_crs, destination_crs, matched_line_id FROM trains WHERE id = $1",
+        )
+        .bind(trains_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the shared trains row");
+        assert_eq!(origin_crs, Some("TUO".to_string()));
+        assert_eq!(destination_crs, Some("TUD".to_string()));
+        assert_eq!(
+            matched_line_id,
+            Some("test-uncatalogued-main-line".to_string())
+        );
+
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM schedule_line_population WHERE line_id = 'test-uncatalogued-main-line' \
+             AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query(
+            "DELETE FROM stanox_crs WHERE stanox IN ('TEST-UNCAT-ORIGIN', 'TEST-UNCAT-DEST')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+    }
+
+    /// **The 2026-09-25 Medium 5 regression test**: a successful match must
+    /// never leave `resolution_status = 'schedule_matched'` with a NULL
+    /// `trains_id`.
+    ///
+    /// That state used to be reachable by a crash between
+    /// `apply_schedule_match`'s status flip and the separate `UPDATE ... SET
+    /// trains_id` that followed it, and it is PERMANENT when reached: the
+    /// retry sweep only selects `'pending'` rows, and every read resolves
+    /// identity through `trains_id`. A test cannot crash the process
+    /// mid-request, but it can assert the invariant that made the window
+    /// possible is gone -- the two columns are now written by ONE statement,
+    /// so observing one without the other is impossible by construction.
+    ///
+    /// Asserted from both directions: an eligible row gets BOTH columns, and
+    /// an INELIGIBLE row (already linked, mirroring a pin that live TRUST
+    /// resolved first) gets neither -- `apply_schedule_match` returning
+    /// `false` must not have moved `resolution_status` either.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p api \
+                apply_schedule_match_writes_status_and_trains_id_together \
+                -- --ignored --test-threads=1`"]
+    async fn apply_schedule_match_writes_status_and_trains_id_together() {
+        let pool = connect().await;
+        let user_id = "TEST-APPLY-ATOMIC";
+        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("apply-atomic@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let matched_trains_id =
+            crate::data::trains::find_or_create_train(&pool, "TEST-APPLY-ATOMIC-UID", service_date)
+                .await
+                .expect("find_or_create_train for the matched identity");
+        let other_trains_id =
+            crate::data::trains::find_or_create_train(&pool, "TEST-APPLY-OTHER-UID", service_date)
+                .await
+                .expect("find_or_create_train for the already-linked identity");
+
+        let (pending_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions \
+                (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, 'TDO', $3) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind(
+            "2026-09-25T09:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap(),
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("seed a pending subscription");
+
+        assert!(
+            train_tracking::apply_schedule_match(&pool, pending_id, matched_trains_id)
+                .await
+                .expect("apply_schedule_match on an eligible row")
+        );
+        let (status, trains_id): (String, Option<i64>) = sqlx::query_as(
+            "SELECT resolution_status, trains_id FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(pending_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the eligible row");
+        assert_eq!(status, "schedule_matched");
+        assert_eq!(
+            trains_id,
+            Some(matched_trains_id),
+            "the status flip and the identity link are one statement now: a row can never be \
+             'schedule_matched' with a NULL trains_id, which was permanent and unrepairable"
+        );
+
+        // An already-linked row: `WHERE trains_id IS NULL AND
+        // resolution_status = 'pending'` must make this a complete no-op, not
+        // a partial write.
+        let (linked_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions \
+                (user_id, service_date, pin_origin_crs, pin_scheduled_departure, trains_id, \
+                 resolution_status) \
+             VALUES ($1, $2, 'TDO', $3, $4, 'resolved') RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind(
+            "2026-09-25T09:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap(),
+        )
+        .bind(other_trains_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed an already-linked subscription");
+
+        assert!(
+            !train_tracking::apply_schedule_match(&pool, linked_id, matched_trains_id)
+                .await
+                .expect("apply_schedule_match on an ineligible row")
+        );
+        let (status, trains_id): (String, Option<i64>) = sqlx::query_as(
+            "SELECT resolution_status, trains_id FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(linked_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the ineligible row");
+        assert_eq!(
+            status, "resolved",
+            "an ineligible row must not be re-flipped"
+        );
+        assert_eq!(
+            trains_id,
+            Some(other_trains_id),
+            "an ineligible row's existing identity link must never be repointed"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trains WHERE train_uid IN ('TEST-APPLY-ATOMIC-UID', \
+             'TEST-APPLY-OTHER-UID')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
             .execute(&pool)
