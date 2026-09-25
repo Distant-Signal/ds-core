@@ -1,0 +1,32 @@
+-- -------------------------------------------------------------------------
+-- Adds `current_departure_date` to `tracked_train_tickets`: the ticket's own
+-- claimed departure INSTANT, when the source format carries one (currently
+-- only ever a `.pkpass`'s `semantics.currentDepartureDate`, per
+-- `crates/api/src/data/ticket_extraction.rs::PartialTicket::current_departure_date`'s
+-- own doc comment). Nullable, and left NULL for every ticket saved before
+-- this migration, every PDF-sourced ticket, and every `.pkpass` whose
+-- `semantics` dictionary doesn't populate this key -- same "leave it blank,
+-- don't guess" contract the rest of this table's columns already follow.
+--
+-- This is what makes the ticket-to-journey-leg-proposal feature possible:
+-- `GET /Train/tickets/{ticketId}/journey-leg-proposal`
+-- (`data::journey_leg_proposal::propose_window_leg`) derives a PROPOSED
+-- window-mode journey leg's service date and search-window bounds from this
+-- column -- a best-effort HINT the caller reviews and explicitly confirms
+-- through the existing `POST /Journeys` window-mode leg flow, never a value
+-- this column's mere presence auto-creates anything from.
+--
+-- LEGAL/PRIVACY AUDIT (carried forward from `20260829090000_journey_ticket_tracking.sql`
+-- -- see that migration's own header comment, whose "diff any future
+-- migration against this list" instruction this migration satisfies): this
+-- table's allowed-fields list is hereby extended to include
+-- `current_departure_date` alongside operator, ticket_type, origin_crs,
+-- destination_crs, source, and timestamps/ownership. It must still NEVER
+-- gain a column for payment/price data, any barcode payload (raw or
+-- decoded), any ITSO data, passenger name, or the uploaded .pkpass/PDF file
+-- itself -- a departure date/time is none of those; Apple's own PassKit
+-- `semantics` dictionary documents it as ordinary, non-sensitive trip
+-- metadata (see the ticket-tracking design doc's own research section).
+-- -------------------------------------------------------------------------
+
+ALTER TABLE tracked_train_tickets ADD COLUMN current_departure_date TIMESTAMPTZ;

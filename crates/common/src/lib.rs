@@ -1067,6 +1067,16 @@ pub struct TicketEntryRequest {
     pub origin_crs: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub destination_crs: Option<String>,
+    /// See `ticket_extraction::PartialTicket::current_departure_date`'s own
+    /// doc comment -- this is that same value, carried through unedited by
+    /// `TicketEntryForm.tsx`'s save step (there is no separate "confirm
+    /// upload" endpoint; see this struct's own doc comment). A best-effort
+    /// HINT for a later journey-leg-proposal search window
+    /// (`data::journey_leg_proposal`), never a hard pin -- persisted
+    /// verbatim, never validated against anything, same posture as
+    /// `operator`/`ticket_type` above.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_departure_date: Option<DateTime<Utc>>,
     #[serde(default = "default_ticket_source")]
     pub source: String,
 }
