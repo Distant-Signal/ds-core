@@ -385,6 +385,63 @@ pub fn parse_trust_epoch_millis_pair(
     }
 }
 
+/// How far apart a single TRUST message's own `planned_timestamp`/
+/// `actual_timestamp` may plausibly sit before their difference is treated
+/// as a corrupted timestamp pair rather than a real delay -- see this
+/// module's own top-level doc comment for the TRUST timestamp corruption
+/// this guards against (and note that corruption is NOT limited to the
+/// specific ~59-60 minute Europe/London-mislabelling shape documented
+/// there; any unbounded, un-plausibility-checked timestamp arithmetic is
+/// exposed to it). A real train delay of even several hours is already
+/// extraordinary; a full day is comfortably beyond anything a real
+/// delay/early-running event could produce, so a gap beyond this is
+/// treated as a bad timestamp pair, not trusted into
+/// `train_current_state.delay_minutes` -- a value every subscriber to a
+/// shared train sees, and which feeds Delay Repay compensation estimates.
+pub const MAX_PLAUSIBLE_DELAY_MINUTES: i64 = 24 * 60;
+
+/// Computes a plausibility-guarded `delay_minutes` from a TRUST message's
+/// own `actual`/`planned` timestamps. Returns `None` -- not a clamped,
+/// still-wrong value -- when `|actual - planned|` exceeds
+/// [`MAX_PLAUSIBLE_DELAY_MINUTES`], logging at `warn!` so a corrupted pair
+/// doesn't fail silently.
+///
+/// **Why `None`, not clamping to the bound:** a corrupted timestamp pair
+/// doesn't degrade gracefully to "very delayed" -- `(actual - planned)`
+/// having gone wrong by minutes-to-millions is exactly as wrong at
+/// `MAX_PLAUSIBLE_DELAY_MINUTES` as it is at any other implausible value,
+/// so clamping would just substitute one made-up number (1440) for
+/// another. `None` lets both real call sites
+/// (`crates/api/src/data/trust_event_backlog.rs` and
+/// `crates/api/src/data/trust_event_backlog_match.rs`) fall back to the
+/// coarser, `variation_status`-only `delay_minutes` estimate
+/// `trust_schema::journey::apply_movement` already computed before either
+/// call site overwrites it with this timestamp-derived (and here,
+/// rejected) one -- an honest "we don't have a precise number" rather than
+/// a precise-looking but fabricated one.
+///
+/// This is the fix for the truncating-cast bug the finding this guards
+/// against actually found: `(actual - planned).num_minutes() as i32` with
+/// no bound check at all, which one corrupt `actual_timestamp` (the same
+/// class of corruption this module already guards `is_plausible_actual_timestamp`
+/// against, just unfiltered at this particular call site) could turn into
+/// a delay of literally millions of minutes.
+pub fn plausible_delay_minutes(actual: DateTime<Utc>, planned: DateTime<Utc>) -> Option<i32> {
+    let delta_minutes = (actual - planned).num_minutes();
+    if delta_minutes.unsigned_abs() > MAX_PLAUSIBLE_DELAY_MINUTES as u64 {
+        tracing::warn!(
+            actual = %actual,
+            planned = %planned,
+            delta_minutes,
+            "TRUST actual/planned timestamp gap is implausible (beyond \
+             MAX_PLAUSIBLE_DELAY_MINUTES); dropping this delay_minutes computation rather than \
+             writing a corrupted value into train_current_state"
+        );
+        return None;
+    }
+    Some(delta_minutes as i32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -763,5 +820,59 @@ mod tests {
             Some("2026-07-15T12:00:00Z".parse::<DateTime<Utc>>().unwrap())
         );
         assert_eq!(pair.was_corrected, Some(true));
+    }
+
+    // --- `plausible_delay_minutes` ---
+
+    #[test]
+    fn an_ordinary_delay_is_computed_normally() {
+        let planned: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
+        let actual: DateTime<Utc> = "2026-09-25T18:22:00Z".parse().unwrap();
+        assert_eq!(plausible_delay_minutes(actual, planned), Some(7));
+    }
+
+    #[test]
+    fn an_early_departure_is_a_negative_delay() {
+        let planned: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
+        let actual: DateTime<Utc> = "2026-09-25T18:10:00Z".parse().unwrap();
+        assert_eq!(plausible_delay_minutes(actual, planned), Some(-5));
+    }
+
+    #[test]
+    fn a_value_exactly_at_the_bound_is_still_plausible() {
+        let planned: DateTime<Utc> = "2026-09-25T00:00:00Z".parse().unwrap();
+        let actual = planned + chrono::Duration::minutes(MAX_PLAUSIBLE_DELAY_MINUTES);
+        assert_eq!(
+            plausible_delay_minutes(actual, planned),
+            Some(MAX_PLAUSIBLE_DELAY_MINUTES as i32)
+        );
+    }
+
+    /// The real bug this fix closes: one corrupt `actual_timestamp`
+    /// (millions of minutes away from `planned`, not merely the ~60-minute
+    /// shape this module's own correction targets) must not produce a
+    /// fabricated `delay_minutes` -- it must be dropped (`None`), not
+    /// truncating-cast into some other, still-wrong `i32`.
+    #[test]
+    fn a_wildly_corrupt_actual_timestamp_is_rejected_not_truncated() {
+        let planned: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
+        // A plausible-looking millis value that happens to decode to a
+        // timestamp decades away from `planned` -- exactly the shape of a
+        // corrupted TRUST field this guards against, not a contrived
+        // overflow input.
+        let actual: DateTime<Utc> = "2090-01-01T00:00:00Z".parse().unwrap();
+        assert_eq!(
+            plausible_delay_minutes(actual, planned),
+            None,
+            "an implausible gap must be dropped, not written as a huge (or wrapped/truncated) \
+             delay_minutes"
+        );
+    }
+
+    #[test]
+    fn a_wildly_corrupt_actual_timestamp_in_the_past_is_also_rejected() {
+        let planned: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
+        let actual: DateTime<Utc> = "1970-01-01T00:00:00Z".parse().unwrap();
+        assert_eq!(plausible_delay_minutes(actual, planned), None);
     }
 }

@@ -185,6 +185,7 @@ dependencies = [
  "clap",
  "common",
  "dotenv",
+ "flate2",
  "glob",
  "log",
  "oauth2",

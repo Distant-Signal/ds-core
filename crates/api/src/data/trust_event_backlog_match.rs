@@ -157,6 +157,22 @@ struct BacklogRow {
 /// sweep, exactly as documented. `actual_timestamp IS NULL` rows (not
 /// every kept row carries one) are never excluded by this filter -- there
 /// is nothing to guard in that case, so they remain eligible unchanged.
+///
+/// **Closest-to-scheduled, not earliest-in-window (2026-09-25 review,
+/// same root-cause class as `Y80908` -- see `schedule_matching.rs`'s own
+/// "Round 3" doc comment for that incident's full account).** Before this
+/// fix the query below ended `ORDER BY planned_timestamp LIMIT 1`, i.e.
+/// whichever candidate DEPARTURE in the `MATCH_TOLERANCE` window happened
+/// to depart EARLIEST -- not the one actually closest to this pin's own
+/// `pin_scheduled_departure`. At a busy multi-departure station that is a
+/// different train's schedule, picked arbitrarily by clock time rather
+/// than by relevance to the pin: exactly the same "closest wins, not
+/// first-by-some-unrelated-order wins" bug `schedule_matching.rs`'s own
+/// Round 3 fix closed for the live-matching path, just manifesting here on
+/// the backlog-replay path instead. Ordering by absolute distance from
+/// `pin_scheduled_departure` means a service departing 1 minute from the
+/// pin's own booked time is always preferred over one departing 19 minutes
+/// away, regardless of which one happens to be chronologically earlier.
 async fn find_backlog_match(
     pool: &PgPool,
     pin_origin_crs: &str,
@@ -179,13 +195,14 @@ async fn find_backlog_match(
          AND event_type = 'DEPARTURE' \
          AND (actual_timestamp IS NULL \
               OR actual_timestamp <= received_at + INTERVAL '{} minutes') \
-         ORDER BY planned_timestamp LIMIT 1",
+         ORDER BY ABS(EXTRACT(EPOCH FROM (planned_timestamp - $4))) LIMIT 1",
         common::trust_timestamp::MAX_TIMESTAMP_SKEW_AHEAD_OF_RECEIPT.num_minutes()
     );
     let row: Option<(String,)> = sqlx::query_as(&query)
         .bind(pin_origin_crs)
         .bind(window_start)
         .bind(window_end)
+        .bind(pin_scheduled_departure)
         .fetch_optional(pool)
         .await?;
 
@@ -390,7 +407,15 @@ async fn replay_backlog_history(
                     row.actual_timestamp,
                     row.variation_status.as_deref(),
                 ) {
-                    derived.delay_minutes = Some((a - p).num_minutes() as i32);
+                    // Finding #4 (2026-09-25 review): same guard as the
+                    // live consumer path (`trust_event_backlog.rs`) --
+                    // see `common::trust_timestamp::plausible_delay_minutes`'s
+                    // own doc comment for why `None` (keep `apply_movement`'s
+                    // coarser estimate) rather than clamping to a
+                    // fabricated-but-bounded number.
+                    if let Some(delay) = common::trust_timestamp::plausible_delay_minutes(a, p) {
+                        derived.delay_minutes = Some(delay);
+                    }
                 }
                 (
                     derived,
@@ -1310,6 +1335,137 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// Finding #2's own regression test (2026-09-25 review), modeled on
+    /// `schedule_matching.rs`'s own `Y80908` busy-station fixtures: a busy
+    /// station with TWO plausible DEPARTURE candidates inside the same
+    /// `MATCH_TOLERANCE` window, where the EARLIER-departing one is a
+    /// completely different, unrelated train and the LATER-departing one is
+    /// actually the closest to the pin's own `pin_scheduled_departure`.
+    ///
+    /// Before this fix, `find_backlog_match`'s `ORDER BY planned_timestamp
+    /// LIMIT 1` always won on chronological order, not proximity -- so the
+    /// earlier, unrelated train's entire movement history would have been
+    /// replayed onto this pin. This asserts the CLOSER candidate is the one
+    /// actually chosen, even though it sorts second by plain
+    /// `planned_timestamp` order.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                a_busy_stations_closest_departure_wins_over_an_earlier_unrelated_one \
+                -- --ignored --test-threads=1`"]
+    async fn a_busy_stations_closest_departure_wins_over_an_earlier_unrelated_one() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-CLOSEST-USER";
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind("backlog-closest@example.com")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+
+        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+        // The pin's own scheduled departure.
+        let scheduled: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
+
+        // EARLIER candidate: sorts FIRST by plain `planned_timestamp`
+        // ascending (17 minutes before the pin's own scheduled departure,
+        // still inside the +/-20 minute MATCH_TOLERANCE window), but it's a
+        // completely different, unrelated train -- exactly the "busy
+        // station, wrong train picked because it happened to depart first"
+        // shape the finding describes.
+        let earlier_planned: DateTime<Utc> = "2026-09-25T17:58:00Z".parse().unwrap();
+        // CLOSER candidate: only 1 minute after the pin's own scheduled
+        // departure -- the train this pin actually belongs to -- but sorts
+        // SECOND by plain ascending `planned_timestamp`.
+        let closer_planned: DateTime<Utc> = "2026-09-25T18:16:00Z".parse().unwrap();
+
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES \
+                ($1, NULL, $2, $3, '0003', 'DEPARTURE', $4, $4, 'ON TIME', $5), \
+                ($1, NULL, $6, $3, '0003', 'DEPARTURE', $7, $7, 'ON TIME', $8), \
+                (NULL, $9, $6, $3, '0001', NULL, NULL, NULL, NULL, $10)",
+        )
+        .bind("EUS")
+        .bind("TEST-BACKLOG-CLOSEST-EARLIER-TRAIN-ID")
+        .bind(service_date)
+        .bind(earlier_planned)
+        .bind("test-backlog-closest-dedup-earlier")
+        .bind("TEST-BACKLOG-CLOSEST-CLOSER-TRAIN-ID")
+        .bind(closer_planned)
+        .bind("test-backlog-closest-dedup-closer")
+        // An Activation row for the CLOSER train_id only, so this test can
+        // confirm identity via the joined `trains` row, same pattern as
+        // the fallthrough test above.
+        .bind("TEST-DW-CLOSEST-UID")
+        .bind("test-backlog-closest-dedup-activation")
+        .execute(&pool)
+        .await
+        .expect("seed both backlog rows plus an Activation for the closer one");
+
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind("EUS")
+        .bind(scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed tracked_trains row");
+
+        let matched =
+            attempt_backlog_match(&pool, tracked_train_id, "EUS", scheduled, service_date)
+                .await
+                .expect("attempt_backlog_match");
+        assert!(matched);
+
+        let (train_id,): (String,) = sqlx::query_as(
+            "SELECT tr.train_id FROM train_subscriptions tt \
+             JOIN trains tr ON tr.id = tt.trains_id \
+             WHERE tt.id = $1",
+        )
+        .bind(tracked_train_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back the resolved train_id");
+        assert_eq!(
+            train_id, "TEST-BACKLOG-CLOSEST-CLOSER-TRAIN-ID",
+            "must resolve to the candidate closest to the pin's own scheduled departure, never \
+             whichever candidate merely departs earliest in the window"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(tracked_train_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id IN \
+             ('TEST-BACKLOG-CLOSEST-EARLIER-TRAIN-ID', 'TEST-BACKLOG-CLOSEST-CLOSER-TRAIN-ID')",
+        )
+        .execute(&pool)
+        .await
+        .ok();
+        sqlx::query(
+            "DELETE FROM trains WHERE train_uid = 'TEST-DW-CLOSEST-UID' AND service_date = $1",
+        )
+        .bind(service_date)
+        .execute(&pool)
+        .await
+        .ok();
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
             .execute(&pool)
