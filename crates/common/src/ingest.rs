@@ -23,6 +23,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::oauth_client::OAuthTokenCache;
 
+/// Called by every helper below right after a request made with a cached
+/// bearer token comes back 401 or 403 (Finding #4): the API rejected the
+/// token itself (revocation, signing-key rotation, clock skew), so the
+/// cache entry is invalidated to force a fresh fetch on the very next call,
+/// rather than presenting the same rejected token again until its normal
+/// `refresh_at` deadline (up to `expires_in - 30s` away). Any other status
+/// (a 5xx, a 404, a plain network error) leaves the cache untouched --
+/// those don't indicate the token itself was the problem.
+fn invalidate_on_auth_rejection(tokens: &OAuthTokenCache, status: reqwest::StatusCode) {
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        tokens.invalidate();
+    }
+}
+
 /// Header RDM uses for API-key auth, per RSPS5050 P-03-00 Rev A. How
 /// confidently this is corroborated varies per poller/product — see each
 /// poller's `main.rs` module docs for the specific gap, if any. Unrelated
@@ -42,12 +56,9 @@ pub async fn get_json<T: DeserializeOwned>(
     tokens: &OAuthTokenCache,
 ) -> anyhow::Result<T> {
     let token = tokens.get_token(client).await?;
-    let response = client
-        .get(url)
-        .bearer_auth(&token)
-        .send()
-        .await?
-        .error_for_status()?;
+    let response = client.get(url).bearer_auth(&token).send().await?;
+    invalidate_on_auth_rejection(tokens, response.status());
+    let response = response.error_for_status()?;
     Ok(response.json().await?)
 }
 
@@ -74,6 +85,7 @@ pub async fn post_json<T: Serialize>(
         Ok(())
     } else {
         let status = response.status();
+        invalidate_on_auth_rejection(tokens, status);
         let text = response.text().await.unwrap_or_default();
         anyhow::bail!("POST failed: {status} {text}");
     }
@@ -114,6 +126,7 @@ pub async fn post_batch<T: Serialize>(
         Ok(())
     } else {
         let status = response.status();
+        invalidate_on_auth_rejection(tokens, status);
         let text = response.text().await.unwrap_or_default();
         anyhow::bail!("ingestion POST failed: {status} {text}");
     }
@@ -267,6 +280,65 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(thing.value, 42);
+    }
+
+    /// Finding #4 regression, exercised at the real call path
+    /// (`get_json`, as every `/private/*` GET caller uses it): a 401
+    /// response using a cached token must invalidate that cache entry, so
+    /// the very next call refetches instead of presenting the same
+    /// rejected token again until its normal `refresh_at` deadline (still
+    /// ~300s away here). Observed via wiremock's `.expect(2)` on the token
+    /// endpoint -- it fails the test on `Drop` unless the token endpoint is
+    /// actually hit a second time.
+    #[tokio::test]
+    async fn get_json_invalidates_the_cached_token_on_a_401_response() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "fake-jwt",
+                "expires_in": 300,
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/thing"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let tokens =
+            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+                token_url: format!("{}/token/", server.uri()),
+                client_id: "c".to_string(),
+                scope: "groups".to_string(),
+                username: "u".to_string(),
+                password: "p".to_string(),
+            });
+        let client = reqwest::Client::new();
+
+        #[derive(serde::Deserialize)]
+        struct Thing {
+            #[allow(dead_code)]
+            value: u32,
+        }
+
+        let first: anyhow::Result<Thing> =
+            get_json(&client, &format!("{}/thing", server.uri()), &tokens).await;
+        assert!(first.is_err(), "a 401 must surface as an Err");
+
+        let second: anyhow::Result<Thing> =
+            get_json(&client, &format!("{}/thing", server.uri()), &tokens).await;
+        assert!(
+            second.is_err(),
+            "the endpoint still 401s regardless (this test doesn't change that) -- the real \
+             assertion is wiremock's `.expect(2)` on the token endpoint above, which fails \
+             unless invalidate() forced this second call to refetch"
+        );
     }
 
     #[tokio::test]

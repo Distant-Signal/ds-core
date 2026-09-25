@@ -57,6 +57,22 @@ struct CachedToken {
 /// the very next call refetches, never underflows or panics.
 const REFRESH_MARGIN: Duration = Duration::from_secs(30);
 
+/// Per-request timeout applied to the token-fetch POST itself, inside
+/// [`OAuthTokenCache::fetch_token`] (Finding #3). Several real callers
+/// (`trust-consumer`, `trust-backlog-consumer`, `full-coverage-consumer`)
+/// construct their `reqwest::Client` with `reqwest::Client::new()` and no
+/// client-level timeout at all, so a stalled connection to Authentik would
+/// otherwise block `get_token().await` -- and with it that consumer's
+/// entire Kafka/Redis processing loop -- indefinitely, with no error and no
+/// metric. Set here, at the request-builder level, so it applies
+/// regardless of what timeout (if any) a caller's own `reqwest::Client` was
+/// built with -- fixed once for every caller instead of relying on each of
+/// the 9+ call sites to remember its own client-level timeout. 15s is well
+/// above a healthy Authentik round trip but short enough that a stalled
+/// connection surfaces as a normal, loggable `Err` within one poll/ingest
+/// cycle rather than hanging it indefinitely.
+const TOKEN_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
+
 /// Caches the last-fetched access token and its refresh deadline. Guarded
 /// by a `std::sync::Mutex`, not `tokio::sync::Mutex`: the critical section
 /// (checking/updating the cached value) never awaits while holding the
@@ -100,6 +116,28 @@ impl OAuthTokenCache {
         Ok(token_for_return)
     }
 
+    /// Clears the cached token (if any), forcing the next [`get_token`]
+    /// call to fetch a fresh one instead of returning the same value again
+    /// until its ordinary `refresh_at` deadline.
+    ///
+    /// [`get_token`]: OAuthTokenCache::get_token
+    ///
+    /// Finding #4: nothing previously invalidated a cached token that the
+    /// API had actually rejected (revocation, signing-key rotation, clock
+    /// skew) -- every call kept presenting the same rejected token until
+    /// its normal expiry, so every poll cycle or ingest POST failed for up
+    /// to `expires_in - REFRESH_MARGIN`. Callers that make the actual HTTP
+    /// call with a token from this cache (see `crate::ingest`'s
+    /// `get_json`/`post_json`/`post_batch`) call this whenever they observe
+    /// a 401 or 403 response using that token, so the very next call
+    /// refetches instead of repeating the same rejected credential.
+    pub fn invalidate(&self) {
+        *self
+            .cached
+            .lock()
+            .expect("oauth token cache mutex poisoned") = None;
+    }
+
     fn fresh_cached_token(&self) -> Option<String> {
         let guard = self
             .cached
@@ -119,6 +157,7 @@ impl OAuthTokenCache {
                 ("password", self.credentials.password.as_str()),
                 ("scope", self.credentials.scope.as_str()),
             ])
+            .timeout(TOKEN_FETCH_TIMEOUT)
             .send()
             .await?;
 
@@ -218,6 +257,44 @@ mod tests {
             .await;
     }
 
+    /// Finding #3 regression: a stalled token endpoint must not block
+    /// `get_token` forever -- `fetch_token`'s own `TOKEN_FETCH_TIMEOUT`
+    /// must surface as an `Err` once elapsed, regardless of whether the
+    /// caller's own `reqwest::Client` (here, a bare `reqwest::Client::new()`
+    /// with no client-level timeout at all, matching `trust-consumer`'s
+    /// real shape) has any timeout configured of its own.
+    ///
+    /// Uses a paused tokio clock (`start_paused = true`) so this asserts
+    /// the real timeout duration deterministically and instantly, rather
+    /// than either waiting out `TOKEN_FETCH_TIMEOUT` in real time or
+    /// weakening the test to a shorter, made-up delay.
+    #[tokio::test(start_paused = true)]
+    async fn fetch_token_times_out_instead_of_hanging_forever() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(TOKEN_FETCH_TIMEOUT + Duration::from_secs(5))
+                    .set_body_json(serde_json::json!({
+                        "access_token": "fake-jwt-access-token",
+                        "expires_in": 300,
+                    })),
+            )
+            .mount(&server)
+            .await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
+        let client = reqwest::Client::new(); // no client-level timeout, matching real callers
+
+        let result = cache.get_token(&client).await;
+
+        assert!(
+            result.is_err(),
+            "a token endpoint stalled past TOKEN_FETCH_TIMEOUT must return Err, not hang \
+             forever (and block the caller's whole processing loop with it)"
+        );
+    }
+
     #[tokio::test]
     async fn a_fresh_cached_token_is_reused_not_refetched() {
         let server = MockServer::start().await;
@@ -241,6 +318,50 @@ mod tests {
         // `refresh_at` saturates to "now" -- the cached entry is
         // immediately stale, and the second call must refetch.
         mock_token_endpoint(&server, 5, 2).await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
+        let client = reqwest::Client::new();
+
+        cache.get_token(&client).await.unwrap();
+        cache.get_token(&client).await.unwrap();
+    }
+
+    /// Finding #4 regression: `invalidate()` must force the very next
+    /// `get_token` call to refetch, rather than returning the same
+    /// (rejected) cached token again until its normal `refresh_at`
+    /// deadline. Uses `expires_in: 300` (well outside `REFRESH_MARGIN`) so
+    /// the *only* thing that could explain a second fetch is the explicit
+    /// `invalidate()` call, not an ordinary near-expiry refresh.
+    #[tokio::test]
+    async fn invalidate_forces_a_fresh_fetch_on_the_next_call() {
+        let server = MockServer::start().await;
+        mock_token_endpoint(&server, 300, 2).await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
+        let client = reqwest::Client::new();
+
+        let first = cache.get_token(&client).await.unwrap();
+        assert_eq!(first, "fake-jwt-access-token");
+
+        // Simulate the caller having observed a 401/403 using `first`.
+        cache.invalidate();
+
+        let second = cache.get_token(&client).await.unwrap();
+        assert_eq!(
+            second, "fake-jwt-access-token",
+            "still succeeds -- the mock always returns the same token -- but wiremock's \
+             `.expect(2)` (asserted on Drop, in mock_token_endpoint) fails this test unless \
+             invalidate() actually forced a second POST to /token/"
+        );
+    }
+
+    /// Without `invalidate()`, a still-fresh cached token is reused (this
+    /// mirrors `a_fresh_cached_token_is_reused_not_refetched` above) --
+    /// confirms the fresh-fetch behavior above is specifically caused by
+    /// `invalidate()`, not some other change to the cache's normal reuse
+    /// logic.
+    #[tokio::test]
+    async fn without_invalidate_a_fresh_cached_token_is_still_reused() {
+        let server = MockServer::start().await;
+        mock_token_endpoint(&server, 300, 1).await;
         let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
         let client = reqwest::Client::new();
 

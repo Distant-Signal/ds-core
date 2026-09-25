@@ -247,6 +247,18 @@ fn decide_correction(raw: &str, received_at: DateTime<Utc>) -> Option<(DateTime<
 /// transition as `actual` did -- it never independently touches
 /// `reinterpret_as_london_local`'s ambiguous-or-nonexistent branches at
 /// all.
+///
+/// Uses `checked_add_signed` rather than plain `+`: `parse_raw_millis`
+/// accepts any millis value down to `DateTime::MIN_UTC` (or up to
+/// `DateTime::MAX_UTC`), straight off the live TRUST Kafka feed, and
+/// `chrono`'s `Add<TimeDelta>` for `DateTime<Utc>` panics on overflow. An
+/// extreme-but-parseable `raw` value close to either bound, combined with a
+/// non-zero `correction_delta`, could push the sum outside the
+/// representable range and crash the whole processing task (Finding #1) --
+/// `checked_add_signed` turns that into a clean `None` instead, which
+/// `apply_correction_decision`'s own `Option` return type and every caller
+/// already treat as "this field didn't parse", exactly like any other
+/// unparseable value.
 fn apply_correction_decision(
     raw: &str,
     was_corrected: bool,
@@ -256,7 +268,7 @@ fn apply_correction_decision(
     if !was_corrected {
         return Some(raw_utc);
     }
-    Some(raw_utc + correction_delta)
+    raw_utc.checked_add_signed(correction_delta)
 }
 
 /// Parses a single TRUST/RDM millisecond-epoch timestamp string, correcting
@@ -283,7 +295,10 @@ pub fn parse_trust_epoch_millis(raw: &str, received_at: DateTime<Utc>) -> Option
 pub struct TrustTimestampPair {
     /// The companion field (`planned_timestamp`), parsed under the SAME
     /// corrected-or-raw decision as `actual`. `None` if the caller had no
-    /// raw string to parse, or if it failed to parse.
+    /// raw string to parse, if it failed to parse, or if applying the
+    /// correction delta would overflow `DateTime<Utc>`'s representable
+    /// range (Finding #1) -- treated the same as any other unparseable
+    /// value rather than panicking.
     pub planned: Option<DateTime<Utc>>,
     /// The anchor field (`actual_timestamp`, or `canx_timestamp` playing
     /// the same role). `None` if the caller had no raw string to parse, or
@@ -802,6 +817,95 @@ mod tests {
             delay_minutes, 40,
             "the true delay is +40 minutes late; a split (planned on GMT, actual on BST) would \
              corrupt this into -20 minutes (looking early) instead"
+        );
+    }
+
+    // --- Finding #1: overflow no longer panics ---
+
+    /// Direct regression for the panic: `apply_correction_decision` used to
+    /// compute `raw_utc + correction_delta` via chrono's panicking
+    /// `Add<TimeDelta>`. A raw value near `DateTime::<Utc>::MAX_UTC`,
+    /// pushed further out by a positive `correction_delta`, would overflow
+    /// `DateTime<Utc>`'s representable range and crash the whole
+    /// processing task. `checked_add_signed` must turn this into a clean
+    /// `None` instead.
+    #[test]
+    fn an_overflowing_correction_delta_returns_none_instead_of_panicking() {
+        let near_max = DateTime::<Utc>::MAX_UTC - chrono::Duration::minutes(30);
+        let raw = near_max.timestamp_millis().to_string();
+
+        let result = apply_correction_decision(&raw, true, chrono::Duration::hours(1));
+
+        assert_eq!(
+            result, None,
+            "a correction that would overflow DateTime<Utc>'s max must return None, not panic"
+        );
+    }
+
+    /// The underflow counterpart, near `DateTime::<Utc>::MIN_UTC` with a
+    /// negative `correction_delta` (the ordinary BST-correction direction).
+    #[test]
+    fn an_underflowing_correction_delta_returns_none_instead_of_panicking() {
+        let near_min = DateTime::<Utc>::MIN_UTC + chrono::Duration::minutes(30);
+        let raw = near_min.timestamp_millis().to_string();
+
+        let result = apply_correction_decision(&raw, true, chrono::Duration::hours(-1));
+
+        assert_eq!(
+            result, None,
+            "a correction that would underflow DateTime<Utc>'s min must return None, not panic"
+        );
+    }
+
+    /// The `apply_correction_decision` overflow guard is only reached when
+    /// `was_corrected` is `true` -- confirm the raw (uncorrected) branch
+    /// still returns the raw value unchanged even at the extreme, since no
+    /// arithmetic happens on that path at all.
+    #[test]
+    fn an_extreme_raw_value_is_returned_unchanged_when_not_corrected() {
+        let near_max = DateTime::<Utc>::MAX_UTC - chrono::Duration::minutes(30);
+        let millis = near_max.timestamp_millis();
+        // `parse_raw_millis` (and this test's `raw` string) only carries
+        // millisecond precision, so the expected value must be re-derived
+        // from the same truncated millis rather than compared against
+        // `near_max` itself, which still has its original sub-millisecond
+        // component.
+        let expected = DateTime::from_timestamp_millis(millis).unwrap();
+
+        let result =
+            apply_correction_decision(&millis.to_string(), false, chrono::Duration::hours(1));
+
+        assert_eq!(result, Some(expected));
+    }
+
+    /// End-to-end regression through the real call path
+    /// (`parse_trust_epoch_millis_pair`, as every TRUST consumer calls
+    /// it): an ordinary, plausibly-correcting `actual_timestamp` paired
+    /// with an extreme, poison `planned_timestamp` that would overflow
+    /// once the same correction delta is applied to it. Must not panic --
+    /// `actual` is corrected normally, `planned` comes back `None` exactly
+    /// as it would for any other unparseable value, and processing
+    /// continues.
+    #[test]
+    fn a_poison_planned_timestamp_near_the_representable_bound_does_not_panic_the_whole_message() {
+        let actual_raw = "1784120400000"; // 2026-07-15T13:00:00Z as millis; corrects to 12:00:00Z (-1h delta)
+        let received_at: DateTime<Utc> = "2026-07-15T12:01:00Z".parse().unwrap();
+        let near_min = DateTime::<Utc>::MIN_UTC + chrono::Duration::minutes(30);
+        let planned_raw = near_min.timestamp_millis().to_string();
+
+        let pair =
+            parse_trust_epoch_millis_pair(Some(&planned_raw), Some(actual_raw), received_at, true);
+
+        assert_eq!(pair.was_corrected, Some(true));
+        assert_eq!(
+            pair.actual,
+            Some("2026-07-15T12:00:00Z".parse::<DateTime<Utc>>().unwrap()),
+            "actual corrects normally, unaffected by planned's overflow"
+        );
+        assert_eq!(
+            pair.planned, None,
+            "planned overflows DateTime<Utc>'s min applying the same -1h delta, and must come \
+             back None rather than panicking the whole message"
         );
     }
 

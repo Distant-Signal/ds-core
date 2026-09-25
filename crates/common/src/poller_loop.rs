@@ -21,6 +21,29 @@ use std::time::Duration;
 use crate::ingest;
 use crate::oauth_client::OAuthTokenCache;
 
+/// Builds the poll-cycle `tokio::time::Interval`, first ticking at `start`
+/// and thereafter every `poll_interval` -- with `MissedTickBehavior::Delay`
+/// rather than the default `Burst`.
+///
+/// `Burst` fires every missed tick back-to-back with zero gap once a cycle
+/// overruns `poll_interval` (a slow upstream API, a timeout pile-up) --
+/// directly multiplying calls against whatever rate-limited endpoint
+/// `time_until_next_poll` exists to protect (Finding #2). `Delay` instead
+/// waits a fresh `poll_interval` from whenever the overrun tick actually
+/// completes, so a slow cycle never causes a burst of immediate follow-up
+/// calls. Split out from `run_poll_loop` itself so this configuration is
+/// directly assertable in a unit test, since the missed-tick BEHAVIOR
+/// (skipping ticks under a real overrun) isn't practically observable
+/// without a slow, flaky, real-time test.
+fn poll_interval_with_delay_on_overrun(
+    start: tokio::time::Instant,
+    poll_interval: Duration,
+) -> tokio::time::Interval {
+    let mut interval = tokio::time::interval_at(start, poll_interval);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    interval
+}
+
 // Every poller's own single-call-site scaffolding function, threading
 // every per-cycle config knob straight through -- same posture as
 // `aggregator`/`full-coverage-consumer`/`schedule-ingest`'s own
@@ -53,7 +76,8 @@ where
             "data still fresh from a prior run; delaying first poll"
         );
     }
-    let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + delay, poll_interval);
+    let mut interval =
+        poll_interval_with_delay_on_overrun(tokio::time::Instant::now() + delay, poll_interval);
 
     loop {
         interval.tick().await;
@@ -105,6 +129,27 @@ mod tests {
             username: "test".to_string(),
             password: "test".to_string(),
         })
+    }
+
+    /// Finding #2 regression: the interval `run_poll_loop` ticks on must be
+    /// configured with `MissedTickBehavior::Delay`, not the default
+    /// `Burst`, so an overrun cycle doesn't fire a burst of back-to-back
+    /// catch-up ticks against a rate-limited upstream. The behavior itself
+    /// (skipping ticks under a real overrun) isn't practically assertable
+    /// without a slow, timing-flaky test, so this asserts the configuration
+    /// directly via `Interval::missed_tick_behavior()`.
+    #[tokio::test]
+    async fn poll_interval_defaults_to_delay_not_burst_on_a_missed_tick() {
+        let interval = poll_interval_with_delay_on_overrun(
+            tokio::time::Instant::now(),
+            Duration::from_secs(60),
+        );
+        assert_eq!(
+            interval.missed_tick_behavior(),
+            tokio::time::MissedTickBehavior::Delay,
+            "an overrun poll cycle must not burst-fire every missed tick back-to-back against a \
+             rate-limited upstream"
+        );
     }
 
     /// Not a full loop run (this function never returns) -- confirms the
