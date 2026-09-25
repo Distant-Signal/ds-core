@@ -4,7 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 # Deliberately lib-only: no `main.rs`/`[[bin]]`, no dependency on `tokio`,
-# `reqwest`, `sqlx`, or `rdkafka`. See src/lib.rs's module doc.
+# `reqwest`, `sqlx`, or `rdkafka`. See src/lib.rs's module doc. `tracing` is
+# not in that exclusion list on purpose -- it is a pure facade (macros
+# no-op with no subscriber installed, no async runtime or I/O of its own),
+# added 2026-09-25 so `parse.rs::parse_schedule_records` can warn on the one
+# malformed-line case that can fabricate an apparent direct connection
+# between two stops that were never actually adjacent -- see that module's
+# own doc comment.
 [dependencies]
 chrono = { version = "0.4.44", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
+tracing = "0.1.44"

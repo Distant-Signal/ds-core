@@ -66,9 +66,19 @@ fn a_real_mixed_block_parses_end_to_end_through_the_index() {
 // real-byte-verified BS field offsets. `records.rs`/`resolve.rs`'s own
 // tests already cover this UID's resolution logic directly; this test adds
 // the "not present at all" -> `None` case Task 5 calls out separately.
+// Every BS line below is padded out to the real, full 80-byte CIF width
+// (`parse::parse_basic_schedule`'s 2026-09-25 fix requires the STP indicator
+// at its real fixed column, 80/1-based -- see that function's own doc
+// comment): the identity/UID/dates/days-bitmask prefix (bytes `0..28`) is
+// the exact real-byte-verified content this test's own header describes,
+// followed by space-padding through the undecoded free-text region, then
+// the real STP character at the real final column. Pre-2026-09-25 these
+// fixture constants were only as long as their own content needed to be,
+// relying on "STP is the line's last significant character" rather than a
+// fixed column -- that convention is what this whole fix replaces.
 const C11052_BASE_AND_OVERRIDE: &str = "\
-BSNC110522605182612111111100           P
-BSNC110522608312608311000000           C";
+BSNC110522605182612111111100                                                   P
+BSNC110522608312608311000000                                                   C";
 
 #[test]
 fn schedule_for_uid_for_a_uid_date_not_covered_by_any_record_returns_none() {
@@ -93,8 +103,10 @@ fn schedule_for_uid_for_a_uid_date_not_covered_by_any_record_returns_none() {
 // form. The block is deliberately left open after BUSHEY (no LT), matching
 // the real quote's own trailing "-> ..." -- this crate has no real quoted
 // terminus for this UID to reconstruct.
+// The BS line is padded to the full 80-byte width -- see
+// `C11052_BASE_AND_OVERRIDE`'s own comment above for why.
 const F26094_BANK_HOLIDAY_BODY: &str = "\
-BSNF260942608312608311000000           N
+BSNF260942608312608311000000                                                   N
 LOEUSTON  1130         TB
 LIHTCHEND 1135 1136H        T
 LIBUSHEY  1148 1149         T";
@@ -168,17 +180,19 @@ fn f26094_real_bank_holiday_body_decodes_calling_points_and_the_half_minute_mark
 // not a byte-exact quote. days-of-week is not given by the paraphrase at
 // all; set here to run daily so the date-range coverage the doc does
 // state is exercised without guessing a specific weekday pattern.
+// Every BS line is padded to the full 80-byte width -- see
+// `C11052_BASE_AND_OVERRIDE`'s own comment above for why.
 const WCML_MULTI_STATION_SCHEDULES: &str = "\
-BSNC013702605232612121111111           P
+BSNC013702605232612121111111                                                   P
 LOEUSTON  0716         TB
 LIMKNSCEN 0750H0750H        T
 LICREWE   1006H1006H        T
 LTCARLILE 1200H        TF
-BSNC177552605232612121111111           P
+BSNC177552605232612121111111                                                   P
 LOEUSTON  1940         TB
 LIMKNSCEN 2022 2022         T
 LTCREWE   2157         TF
-BSNC177982605232612121111111           P
+BSNC177982605232612121111111                                                   P
 LOEUSTON  0756         TB
 LTMKNSCEN 0837         TF";
 
@@ -204,8 +218,10 @@ fn schedules_touching_the_five_real_wcml_sample_tiplocs_finds_the_three_real_uid
 /// points, to pin down parsing without real-data noise. Runs every day of
 /// the week so a query against it exercises a real match, not just a
 /// parse.
+// The BS line is padded to the full 80-byte width -- see
+// `C11052_BASE_AND_OVERRIDE`'s own comment above for why.
 const SYNTHETIC_MINIMAL_BLOCK: &str = "\
-BSNZ000012601012612311111111           P
+BSNZ000012601012612311111111                                                   P
 BX         SRYSR000000
 LOABC     1000         TB
 LTXYZ     1010         TF";
@@ -225,8 +241,10 @@ fn a_synthetic_minimal_two_point_block_parses_and_resolves_cleanly() {
 /// Fully synthetic: identical to [`SYNTHETIC_MINIMAL_BLOCK`] but with an
 /// all-zero days-of-week bitmask, to confirm a schedule with no running
 /// day at all never resolves for any date.
+// The BS line is padded to the full 80-byte width -- see
+// `C11052_BASE_AND_OVERRIDE`'s own comment above for why.
 const SYNTHETIC_BLOCK_NO_RUNNING_DAYS: &str = "\
-BSNZ000022601012612310000000           P
+BSNZ000022601012612310000000                                                   P
 LOABC     1000         TB
 LTXYZ     1010         TF";
 
@@ -244,8 +262,10 @@ fn a_synthetic_block_with_an_all_zero_days_bitmask_never_resolves() {
 /// otherwise-real block, to confirm the "skip, don't abort" behavior at
 /// the integration level (unit-level coverage already lives in
 /// `src/parse.rs`'s own tests).
+// The BS line is padded to the full 80-byte width -- see
+// `C11052_BASE_AND_OVERRIDE`'s own comment above for why.
 const BLOCK_WITH_A_MALFORMED_LINE: &str = "\
-BSNC110522605182612111111100           P
+BSNC110522605182612111111100                                                   P
 LOEUSTON  0716         TB
 XX
 LTCARLILE 1200H        TF";

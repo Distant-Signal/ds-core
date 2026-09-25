@@ -11,10 +11,30 @@
 //! extraction" posture. That sibling module is also fully log-free (no
 //! `tracing` call, no skip-count return -- just a silently-shorter `Vec`)
 //! despite its crate depending on `tracing` for its own `main.rs`; this
-//! crate has no `main.rs` and matches that same log-free posture rather
-//! than inventing a fresh one, per this plan's Task 2 "decide during
+//! crate matched that same log-free posture for a long time rather than
+//! inventing a fresh one, per this plan's Task 2 "decide during
 //! implementation, matching whichever posture `schedule-reference` already
 //! established" guidance.
+//!
+//! **One narrow, deliberate exception to that posture, as of 2026-09-25.**
+//! An undecodable `LO`/`LI`/`LT` line dropped from an otherwise-successfully-parsing,
+//! still-open block is not just "one fewer calling point" -- the block
+//! stays open around the gap, so the calling points immediately before and
+//! after the dropped one end up adjacent in [`RawSchedule::calling_points`]
+//! with nothing recording that a real intermediate stop used to sit between
+//! them. Every downstream consumer of this crate treats adjacency in that
+//! `Vec` as "these two stops are directly connected" (this is the exact
+//! shape the dynamic trip-planning connections graph -- `crates/schedule-query::connections`
+//! -- builds edges from), so this one failure mode can silently fabricate a
+//! journey leg that was never actually timetabled, which is a materially
+//! worse and harder-to-notice failure than "this train's schedule is a
+//! little shorter than it should be." Every OTHER malformed-line skip in
+//! this module stays silent (a bad `BS`, a stray orphaned body line with no
+//! open block, a too-short `BX`): none of those can splice two real,
+//! non-adjacent stops together, so the original "skip malformed, never
+//! abort, never log" posture is left alone for them. See
+//! [`parse_schedule_records`]'s own doc comment for why the block is still
+//! kept open (rather than discarded) even now that the gap is visible.
 
 use chrono::{NaiveDate, NaiveTime};
 
@@ -32,6 +52,13 @@ const MIN_LI_LEN: usize = 20;
 /// Minimum length of a `BX` line this parser can decode: needs bytes
 /// `0..13` (record identity through the ATOC Code).
 const MIN_BX_LEN: usize = 13;
+/// 0-based byte offset of the STP (Short Term Planning) indicator within a
+/// full-width `BS` line -- CIF User Spec column 80 (1-based), the record's
+/// own LAST column. Fixed on purpose, not derived from the line's own
+/// length: see [`parse_basic_schedule`]'s own doc comment (2026-09-25 fix)
+/// for why reading "the last significant character" instead let a
+/// truncated line decode into a plausible-but-wrong STP value.
+const STP_INDICATOR_COL: usize = 79;
 
 /// Is `line` safe to decode with this module's fixed-offset byte slices?
 ///
@@ -106,9 +133,34 @@ fn is_fixed_width_decodable(line: &str, min_len: usize) -> bool {
 /// plan's Non-goals. A `CR` (Change en Route) line, which can appear
 /// mid-block, is likewise ignored without disturbing the open block, since
 /// this plan decodes no field from it.
+///
+/// **An undecodable `LO`/`LI`/`LT` line inside an open block is skipped, not
+/// the whole block.** This was a deliberate choice, not the only option
+/// considered -- see this module's own header doc for why the skip now
+/// also emits a `tracing::warn!` (2026-09-25). Discarding the entire block
+/// on one bad body line was rejected for two reasons: (1) it would make a
+/// single corrupted byte -- the same class of real-world glitch this
+/// module's char-boundary/ASCII guards already exist to survive -- delete a
+/// whole train's timetable from every downstream product (station boards,
+/// destination search, the connections graph) instead of costing it one
+/// calling point, which is a strictly worse outcome for trip-planning
+/// correctness than a visible gap; and (2) it would widen "malformed" well
+/// past what this fix's own scope covers, re-litigating the fuzz-verified
+/// "reject only the line that is actually bad" behaviour this module's own
+/// `an_undecodable_bs_line_still_terminates_the_previous_block`/
+/// `an_undecodable_lt_line_still_terminates_its_own_block` tests exist to
+/// pin. Keeping the line-level skip but making it LOUD -- a `tracing::warn!`
+/// naming the train UID and the line's position in the block -- gives an
+/// operator a real signal to investigate a systematically corrupt feed
+/// without trading a rare visible gap for a common invisible one.
 pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
     let mut out = Vec::new();
     let mut current: Option<RawSchedule> = None;
+    // 1-based position of the body line about to be processed within the
+    // CURRENTLY OPEN block (reset whenever a real `BS` line opens a new
+    // one) -- purely diagnostic context for the drop warning below, so a
+    // log line can say WHERE in the block the gap is, not just which train.
+    let mut body_line_position: u32 = 0;
 
     for line in text.lines() {
         // Dispatch on the two record-identity BYTES, not on `&line[0..2]`.
@@ -128,6 +180,7 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
                 if let Some(prev) = current.take() {
                     out.push(prev);
                 }
+                body_line_position = 0;
                 if let Some(basic) = parse_basic_schedule(line) {
                     let cancelled = basic.stp_indicator == StpIndicator::Cancellation;
                     let schedule = RawSchedule {
@@ -144,25 +197,31 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
                 // until the next real BS line starts a new block.
             }
             [b'L', b'O', ..] => {
-                if let Some(cp) = parse_calling_point(line, CallingPointKind::Origin)
-                    && let Some(schedule) = current.as_mut()
-                {
-                    schedule.calling_points.push(cp);
-                }
+                body_line_position += 1;
+                record_calling_point(
+                    parse_calling_point(line, CallingPointKind::Origin),
+                    current.as_mut(),
+                    "LO",
+                    body_line_position,
+                );
             }
             [b'L', b'I', ..] => {
-                if let Some(cp) = parse_calling_point(line, CallingPointKind::Intermediate)
-                    && let Some(schedule) = current.as_mut()
-                {
-                    schedule.calling_points.push(cp);
-                }
+                body_line_position += 1;
+                record_calling_point(
+                    parse_calling_point(line, CallingPointKind::Intermediate),
+                    current.as_mut(),
+                    "LI",
+                    body_line_position,
+                );
             }
             [b'L', b'T', ..] => {
-                if let Some(cp) = parse_calling_point(line, CallingPointKind::Terminate)
-                    && let Some(schedule) = current.as_mut()
-                {
-                    schedule.calling_points.push(cp);
-                }
+                body_line_position += 1;
+                record_calling_point(
+                    parse_calling_point(line, CallingPointKind::Terminate),
+                    current.as_mut(),
+                    "LT",
+                    body_line_position,
+                );
                 if let Some(done) = current.take() {
                     out.push(done);
                 }
@@ -183,6 +242,39 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
     }
 
     out
+}
+
+/// Pushes a successfully-decoded calling point onto the currently open
+/// block, or -- when decode failed AND a block is genuinely open -- emits a
+/// `tracing::warn!` naming the train UID and the line's position in the
+/// block before dropping it. See this module's own header doc for why this
+/// is the one skip in this otherwise log-free parser that is not silent.
+///
+/// A decode failure with NO open block (`current` is `None`) stays silent:
+/// an orphaned body line has no adjacent real stops for the gap to
+/// fabricate a connection between, so it is exactly the same harmless shape
+/// as every other malformed-line skip this module already treats quietly.
+fn record_calling_point(
+    cp: Option<CallingPoint>,
+    current: Option<&mut RawSchedule>,
+    record_type: &str,
+    position: u32,
+) {
+    match (cp, current) {
+        (Some(cp), Some(schedule)) => schedule.calling_points.push(cp),
+        (None, Some(schedule)) => {
+            tracing::warn!(
+                train_uid = %schedule.basic.uid,
+                record_type,
+                position,
+                calling_points_so_far = schedule.calling_points.len(),
+                "dropped an undecodable body line inside an open schedule block; the block \
+                 stays open, so the calling points immediately before and after this gap can \
+                 look like a direct connection that was never actually timetabled"
+            );
+        }
+        (_, None) => {}
+    }
 }
 
 fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
@@ -206,7 +298,32 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         days_of_week[i] = c == '1';
     }
 
-    let stp_char = line.trim_end().chars().next_back()?;
+    // **2026-09-25 fix.** This used to be `line.trim_end().chars().next_back()`
+    // -- "the last significant character of the line" -- which reads the STP
+    // indicator from wherever the line happens to END rather than from its
+    // documented fixed CIF column (80, 1-based; `STP_INDICATOR_COL` = 79
+    // 0-based). Both of this module's own real fixture lines are exactly 80
+    // bytes and their last character IS the real STP indicator, so the two
+    // approaches agree on well-formed input -- the divergence only shows up
+    // on a TRUNCATED line, which is exactly the case that matters: a `BS`
+    // line cut short partway through its free-text tail can, by pure
+    // coincidence, end on a byte that happens to be `C`/`N`/`O`/`P`, and the
+    // old logic would decode that as a complete, plausible, WRONG record
+    // (this exact hazard was previously identified and deliberately left
+    // unfixed here -- see this module's own `tests::a_bs_line_truncated_inside_every_fixed_field_is_skipped`
+    // for the worked example, e.g. `&BS_C00573_PERMANENT[..30]` decoding as
+    // a bogus Permanent schedule). Requiring the real fixed column instead
+    // means a line too short to reach it fails cleanly (`None`), matching
+    // this parser's own "skip malformed, never guess" posture for every
+    // other fixed-offset field.
+    if line.len() <= STP_INDICATOR_COL {
+        return None;
+    }
+    // Safe: `is_fixed_width_decodable` (checked above) already confirmed
+    // `line` is ASCII, so every byte index -- including this one -- is a
+    // char boundary, and an ASCII byte can always be widened to `char`
+    // directly.
+    let stp_char = line.as_bytes()[STP_INDICATOR_COL] as char;
     let stp_indicator = StpIndicator::try_from(stp_char).ok()?;
 
     Some(BasicSchedule {
@@ -684,22 +801,25 @@ mod tests {
         // boundary and not a blanket reject.
         assert_eq!(parse_schedule_records(BS_C00573_PERMANENT).len(), 1);
 
-        // Deliberately NOT asserted: that `MIN_BS_LEN + 1` bytes decode.
-        // Past the minimum, whether a truncation decodes depends on the
-        // one field `parse_basic_schedule` does not read at a fixed offset
-        // -- the STP indicator, which is "the last significant character
-        // of the line" (see `StpIndicator`'s own doc comment for the real
-        // evidence behind that rule). Truncating a `BS` line therefore
-        // does not just drop the tail; it MOVES that field, and a
-        // truncation whose new last character happens to be `C`/`N`/`O`/
-        // `P` decodes into a complete, plausible, WRONG record -- e.g.
-        // `&BS_C00573_PERMANENT[..30]` decodes as a real Permanent
-        // schedule with no calling points, picking its `P` out of the
-        // Train Status column. That is a pre-existing decode-correctness
-        // hazard, unrelated to the panic class this block is about, and
-        // not something to bless by pinning it either way here; it is
-        // written up for a separate pass rather than silently widened or
-        // narrowed in a panic-safety change.
+        // **This is the "separate pass" the comment below used to point
+        // at, now done (2026-09-25).** Before the STP-indicator fixed-column
+        // fix, a truncation past `MIN_BS_LEN` (28) but short of the full
+        // 80-byte line decoded the STP indicator from wherever the line
+        // happened to END, since `parse_basic_schedule` read it as "the
+        // line's last significant character" rather than a fixed offset --
+        // so `&BS_C00573_PERMANENT[..30]` used to decode as a complete,
+        // plausible, WRONG Permanent schedule, picking its `P` out of the
+        // Train Status column instead of a real STP field. Now that the STP
+        // indicator is read from its real fixed column (80, 1-based), any
+        // line shorter than that column -- including every one of these
+        // truncations -- fails to decode at all.
+        for len in MIN_BS_LEN..BS_C00573_PERMANENT.len() {
+            assert!(
+                parse_schedule_records(&BS_C00573_PERMANENT[..len]).is_empty(),
+                "a BS line truncated to {len} bytes is short of the real STP column (80) and \
+                 must be skipped, not decoded with a wrong STP guessed from wherever it ends"
+            );
+        }
     }
 
     #[test]
@@ -764,10 +884,9 @@ mod tests {
         assert!(parse_schedule_records(&bs_line_with(len - 1..len, "Z")).is_empty());
 
         // Truncated to exactly the fixed fields this parser decodes and
-        // then space-padded: the last significant character is now the
-        // days-run bitmask's final '1', which is not a valid STP
-        // indicator, so the fallback "last significant char" read fails
-        // cleanly instead of reaching past the end of the line.
+        // then space-padded out to the real 80-byte width: the fixed STP
+        // column now lands on a space (part of the padding, not real data),
+        // which is not a valid STP indicator either.
         let padded = format!("{}{}", &BS_C00573_PERMANENT[..MIN_BS_LEN], " ".repeat(52));
         assert!(parse_schedule_records(&padded).is_empty());
 
@@ -1075,6 +1194,197 @@ mod activity_tests {
         assert_eq!(
             parse_public_time_field("0822"),
             NaiveTime::from_hms_opt(8, 22, 0)
+        );
+    }
+}
+
+/// Regression tests for the 2026-09-25 dropped-body-line warning (this
+/// module's own header doc: "One narrow, deliberate exception" to its
+/// otherwise log-free posture). A hand-rolled minimal [`tracing::Subscriber`]
+/// -- this crate deliberately has no `tracing-subscriber`/`tracing-test` dev
+/// dependency, matching its own "lib-only, no extra dependencies" convention
+/// (see `Cargo.toml`) -- captures every event's fields so these tests can
+/// assert on the exact train UID/record-type/position a real operator would
+/// see, not just "something logged."
+#[cfg(test)]
+mod drop_warning_tests {
+    use std::sync::{Arc, Mutex};
+
+    use tracing::field::{Field, Visit};
+
+    use super::*;
+
+    #[derive(Default, Clone, Debug)]
+    struct CapturedEvent {
+        message: String,
+        train_uid: Option<String>,
+        record_type: Option<String>,
+        position: Option<u64>,
+    }
+
+    impl Visit for CapturedEvent {
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            if field.name() == "position" {
+                self.position = Some(value);
+            }
+        }
+
+        fn record_str(&mut self, field: &Field, value: &str) {
+            match field.name() {
+                "train_uid" => self.train_uid = Some(value.to_string()),
+                "record_type" => self.record_type = Some(value.to_string()),
+                "message" => self.message = value.to_string(),
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            // `tracing::warn!("literal string")`'s message field, and a
+            // `%display` field like `train_uid`, both come through here on
+            // some tracing versions rather than `record_str` -- covering
+            // both keeps this test robust to that detail.
+            let rendered = format!("{value:?}");
+            let rendered = rendered.strip_prefix('"').unwrap_or(&rendered);
+            let rendered = rendered.strip_suffix('"').unwrap_or(rendered);
+            match field.name() {
+                "train_uid" if self.train_uid.is_none() => {
+                    self.train_uid = Some(rendered.to_string());
+                }
+                "record_type" if self.record_type.is_none() => {
+                    self.record_type = Some(rendered.to_string());
+                }
+                "message" if self.message.is_empty() => {
+                    self.message = rendered.to_string();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// A minimal [`tracing::Subscriber`] that stores every event's fields in
+    /// order, in a `Mutex<Vec<_>>` shared with the test. `enabled` always
+    /// returns `true`: these tests want every event this parser emits, not a
+    /// level-filtered subset.
+    struct RecordingSubscriber {
+        events: Arc<Mutex<Vec<CapturedEvent>>>,
+    }
+
+    impl tracing::Subscriber for RecordingSubscriber {
+        fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+
+        fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut captured = CapturedEvent::default();
+            event.record(&mut captured);
+            self.events.lock().unwrap().push(captured);
+        }
+
+        fn enter(&self, _span: &tracing::span::Id) {}
+
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    const BS_C00573_PERMANENT: &str =
+        "BSNC005732605172612060000001 PXX1S003101121194800 DMU    125      S A T        P";
+    const LO_EUSTON: &str = "LOEUSTON  0822 08227  C      TB";
+    const LT_EUSTON: &str = "LTEUSTON  0804 08079     TF";
+
+    fn wrap_full_block(body: &[&str]) -> String {
+        let mut lines = vec![BS_C00573_PERMANENT.to_string()];
+        lines.extend(body.iter().map(|s| s.to_string()));
+        lines.join("\n")
+    }
+
+    #[test]
+    fn an_undecodable_body_line_inside_an_open_block_warns_with_train_uid_and_position() {
+        // "LISHORT" is well short of MIN_LI_LEN (20) -- undecodable, and
+        // dropped from a block that is otherwise open and successfully
+        // parsing (LO_EUSTON before it, LT_EUSTON after it).
+        let text = wrap_full_block(&[LO_EUSTON, "LISHORT", LT_EUSTON]);
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = RecordingSubscriber {
+            events: events.clone(),
+        };
+        let schedules =
+            tracing::subscriber::with_default(subscriber, || parse_schedule_records(&text));
+
+        // The gap really is there, silently, in the returned data -- LO and
+        // LT are now adjacent with no trace of the dropped LI between them.
+        // This assertion documents exactly the fabricated-adjacency shape
+        // the warning exists to make visible.
+        assert_eq!(schedules.len(), 1);
+        assert_eq!(schedules[0].calling_points.len(), 2);
+
+        let captured = events.lock().unwrap();
+        assert_eq!(
+            captured.len(),
+            1,
+            "exactly one warning for the one dropped line, no warning for the two good ones"
+        );
+        assert!(
+            captured[0]
+                .message
+                .contains("dropped an undecodable body line"),
+            "unexpected message: {:?}",
+            captured[0].message
+        );
+        assert_eq!(captured[0].train_uid.as_deref(), Some("C00573"));
+        assert_eq!(captured[0].record_type.as_deref(), Some("LI"));
+        assert_eq!(
+            captured[0].position,
+            Some(2),
+            "LO_EUSTON is body position 1, the dropped LI is position 2"
+        );
+    }
+
+    #[test]
+    fn a_dropped_line_with_no_open_block_stays_silent() {
+        // No BS at all -- these two body lines are orphaned from the start,
+        // exactly the pre-existing, already-tested "no open block" skip
+        // (`parse_schedule_records`'s own `body_lines_with_no_open_block_are_dropped_without_panicking`).
+        // There is no surviving block for a dropped line here to fabricate
+        // an adjacency inside, so this must not warn.
+        let text = format!("{LO_EUSTON}\n{LT_EUSTON}");
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = RecordingSubscriber {
+            events: events.clone(),
+        };
+        let schedules =
+            tracing::subscriber::with_default(subscriber, || parse_schedule_records(&text));
+
+        assert!(schedules.is_empty());
+        assert!(
+            events.lock().unwrap().is_empty(),
+            "an orphaned body line has no open block to fabricate a connection in"
+        );
+    }
+
+    #[test]
+    fn a_fully_well_formed_block_emits_no_warnings_at_all() {
+        let text = wrap_full_block(&[LO_EUSTON, LT_EUSTON]);
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = RecordingSubscriber {
+            events: events.clone(),
+        };
+        let schedules =
+            tracing::subscriber::with_default(subscriber, || parse_schedule_records(&text));
+
+        assert_eq!(schedules[0].calling_points.len(), 2);
+        assert!(
+            events.lock().unwrap().is_empty(),
+            "nothing was dropped, so nothing should warn"
         );
     }
 }

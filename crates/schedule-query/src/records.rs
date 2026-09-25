@@ -30,8 +30,16 @@ use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 
 /// A CIF `BS` (Basic Schedule) record's STP (Short Term Planning) overlay
-/// indicator -- the final significant (non-space, after right-trimming)
-/// character of the 80-byte `BS` line.
+/// indicator -- CIF User Spec column 80 (1-based), the fixed last byte of
+/// the 80-byte `BS` line (`parse::STP_INDICATOR_COL`, 0-based 79).
+///
+/// **Read from that fixed column, not "the line's last significant
+/// character," as of 2026-09-25.** The two are equivalent on every
+/// well-formed real line quoted below (each is exactly 80 bytes, and
+/// nothing follows the STP indicator for right-trimming to strip), but they
+/// diverge on a line truncated partway through its own free-text tail --
+/// see [`crate::parse::parse_basic_schedule`]'s own doc comment for the
+/// decode-correctness hazard that divergence caused and this fix closes.
 ///
 /// Confirmed real and populated with all four values in the same real
 /// `RJTTF942MCA.txt` extract (verification doc, "Claim 1"): `81162 C /
@@ -97,9 +105,10 @@ impl TryFrom<char> for StpIndicator {
 ///   2026-08-31 is independently confirmed a Monday in the same section
 ///   ("2026-08-31 is a Monday, and turned out to be the UK August Bank
 ///   Holiday") -- so bit index 0 set alone means "Monday only".
-/// - the record's final significant character (after right-trimming
-///   trailing spaces) is the STP indicator, not a fixed offset within this
-///   struct's own decoded range -- see [`StpIndicator`]'s own doc comment.
+/// - `79` (the record's last byte, CIF column 80 1-based) the STP
+///   indicator -- see [`StpIndicator`]'s own doc comment for why this is a
+///   fixed offset rather than "the line's last significant character" as of
+///   2026-09-25.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BasicSchedule {
     pub uid: String,
