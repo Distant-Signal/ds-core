@@ -99,16 +99,69 @@ pub fn apply_movement(
             _ => false,
         };
 
+    let naive_status = if confirmed_terminus_arrival {
+        "completed"
+    } else {
+        "en_route"
+    };
+
     DerivedState {
-        status: if confirmed_terminus_arrival {
-            "completed".to_string()
+        // **Terminal-state guard (Low finding #1 of the 2026-09-25 review).**
+        // Without this, a depot move or any other Movement landing AFTER the
+        // confirmed terminus ARRIVAL that set `previous.status ==
+        // "completed"` would unconditionally recompute `naive_status` as
+        // `"en_route"` above (it is neither an ARRIVAL nor at the
+        // destination) and silently regress an already-finished journey back
+        // to running -- exactly the shape of bug this function's whole
+        // design (a pure fold over one event at a time, per the module doc)
+        // makes easy to introduce, because `apply_movement` has no memory of
+        // "we already decided this is over" beyond `previous` itself.
+        //
+        // `status_rank` below is this crate's mirror of
+        // `common::severity_rank`'s established "rank, don't compare
+        // declaration/discriminant order" pattern: never let a transition
+        // move a journey to a LOWER rank than it already reached. Once
+        // `previous.status` is `"completed"` (or `"cancelled"` -- the other
+        // terminal status this fold can be handed, e.g. if a stray Movement
+        // arrives after `apply_cancellation` already ran) no Movement may
+        // ever pull it back down to `"en_route"`; a `naive_status` at the
+        // SAME rank (a second confirmed terminus ARRIVAL) still applies,
+        // which is harmless idempotence, not a regression.
+        status: if status_rank(naive_status) < status_rank(&previous.status) {
+            previous.status.clone()
         } else {
-            "en_route".to_string()
+            naive_status.to_string()
         },
         last_reported_location: location,
         last_event_type: Some(movement.event_type.clone()),
         delay_minutes,
         next_calling_point: previous.next_calling_point.clone(), // see module docs -- never populated ahead of time
+    }
+}
+
+/// Rank of a journey `status` string for status-TRANSITION purposes only --
+/// **higher means further along / more final**, mirroring
+/// `common::severity_rank`'s "rank, don't compare declaration order"
+/// pattern (see that function's own doc comment for the sibling reasoning).
+/// `status` here is a plain `&str`, not an enum (see this module's own
+/// `DerivedState::status` field comment for why), so this can't be an
+/// exhaustive match on a closed type the way `severity_rank` is -- an
+/// unrecognized value conservatively ranks as `0` (lowest), so it can never
+/// itself block a legitimate transition.
+///
+/// Used by [`apply_movement`] to guard against a later event regressing an
+/// already-`"completed"` (or `"cancelled"`) journey back to `"en_route"`.
+/// [`apply_cancellation`] deliberately does NOT consult this: a cancellation
+/// is real, independent evidence a journey has ended and must always apply,
+/// even over a `"completed"` journey (e.g. a corrected/withdrawn terminus
+/// arrival) -- unlike a bare Movement, it is never mistaken evidence of
+/// still running.
+fn status_rank(status: &str) -> u8 {
+    match status {
+        "awaiting_activation" => 0,
+        "en_route" => 1,
+        "completed" | "cancelled" => 2,
+        _ => 0,
     }
 }
 
@@ -330,6 +383,97 @@ mod tests {
             Some("WAT"),
         );
         assert_eq!(back_at_waterloo.status, "completed");
+    }
+
+    /// **Low finding #1 of the 2026-09-25 review, this fix's own regression
+    /// test.** A depot move (or any other Movement) arriving AFTER the
+    /// confirmed terminus ARRIVAL already marked the journey `"completed"`
+    /// must not regress it back to `"en_route"` -- before the `status_rank`
+    /// guard, this exact sequence did exactly that, because `apply_movement`
+    /// recomputes status from scratch on every call and a DEPARTURE/PASS at
+    /// the destination is (correctly) never itself confirmed-arrival
+    /// evidence, so the naive result was `"en_route"`.
+    #[test]
+    fn a_later_movement_does_not_regress_a_completed_journey_to_en_route() {
+        let previous = DerivedState::awaiting_activation();
+
+        let arrived = apply_movement(
+            &previous,
+            &movement("ARRIVAL", Some("ON TIME")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(arrived.status, "completed");
+
+        // A depot move away from the terminus platform, reported against the
+        // same STANOX/CRS -- exactly the shape TRUST emits for stabling
+        // moves after a service has finished.
+        let depot_move = apply_movement(
+            &arrived,
+            &movement("DEPARTURE", Some("ON TIME")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(
+            depot_move.status, "completed",
+            "a movement after a confirmed terminus arrival must not regress the journey"
+        );
+
+        // A PASS somewhere else entirely (not even at the destination) must
+        // be blocked the same way -- the guard is on `previous.status`, not
+        // on the new event's own location.
+        let stray_pass = apply_movement(
+            &arrived,
+            &movement("PASS", Some("ON TIME")),
+            Some("CLJ"),
+            Some("WOK"),
+        );
+        assert_eq!(
+            stray_pass.status, "completed",
+            "a movement anywhere else, after completion, must still not regress the journey"
+        );
+    }
+
+    /// A second confirmed terminus ARRIVAL after the first (TRUST resending
+    /// or correcting the same event) is a same-rank transition, not a
+    /// regression -- it must still apply cleanly rather than being blocked
+    /// by the guard above.
+    #[test]
+    fn a_repeated_confirmed_arrival_after_completion_stays_completed() {
+        let previous = DerivedState::awaiting_activation();
+        let arrived = apply_movement(
+            &previous,
+            &movement("ARRIVAL", Some("ON TIME")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(arrived.status, "completed");
+
+        let arrived_again = apply_movement(
+            &arrived,
+            &movement("ARRIVAL", Some("LATE")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(arrived_again.status, "completed");
+    }
+
+    /// A Movement arriving after `apply_cancellation` already ran must not
+    /// resurrect a cancelled journey as `"en_route"` either -- `"cancelled"`
+    /// is the other terminal status `status_rank` protects.
+    #[test]
+    fn a_movement_after_cancellation_does_not_resurrect_the_journey() {
+        let previous = DerivedState::awaiting_activation();
+        let cancelled = apply_cancellation(&previous);
+        assert_eq!(cancelled.status, "cancelled");
+
+        let stray_movement = apply_movement(
+            &cancelled,
+            &movement("DEPARTURE", Some("ON TIME")),
+            Some("WAT"),
+            None,
+        );
+        assert_eq!(stray_movement.status, "cancelled");
     }
 
     #[test]
