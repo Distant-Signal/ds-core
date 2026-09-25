@@ -1,0 +1,24 @@
+-- -------------------------------------------------------------------------
+-- Supports `data::users::prune_expired_sessions` (Task: server-side
+-- session-revocation follow-up, 2026-09-25 security review) -- a periodic
+-- sweep (`main.rs`'s `session_cleanup_sweep_loop`) that deletes
+-- `sessions` rows past their `expires_at`, so the table doesn't grow
+-- without bound on a long-lived deployment.
+--
+-- Without this index, `DELETE FROM sessions WHERE expires_at <= NOW()`
+-- is a sequential scan of the whole table on every sweep -- cheap today
+-- (a small table), but the entire point of even having a sweep is to
+-- keep it that way as the table grows; an unindexed periodic DELETE
+-- against a growing table is exactly the kind of thing that quietly
+-- turns into a lock-held-too-long problem months later. `sessions_user_id`
+-- (added by 20260828090000_user_accounts.sql) doesn't help this query at
+-- all -- it's keyed on a different column entirely.
+--
+-- Every existing lookup that filters on `expires_at`
+-- (`get_session_with_user`'s `WHERE s.id = $1 AND s.expires_at > NOW()`)
+-- is already an exact-`id`-match on the primary key first, so this index
+-- is not on that query's hot path -- it exists for the sweep's own
+-- range/threshold scan.
+-- -------------------------------------------------------------------------
+
+CREATE INDEX sessions_expires_at ON sessions (expires_at);
