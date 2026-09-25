@@ -8,8 +8,20 @@
 //! -- not re-derived from memory of the published CIF User Spec (RSPS5046),
 //! per this repo's "no invented API details" convention. Fields this crate
 //! has no real-data-verified use for (Transaction Type, Train Status,
-//! Platform, Line, Activity) are left undecoded rather than guessed at --
-//! see this plan's Non-goals. The `BX` record is no longer entirely
+//! Platform, Line) are left undecoded rather than guessed at --
+//! see this plan's Non-goals.
+//!
+//! **The Activity field is no longer on that list (2026-09-25).** Leaving it
+//! undecoded was not a neutral scope decision: without it, every calling point
+//! carrying a booked departure was published as a boardable departure, so
+//! set-down-only, operational and not-advertised-to-the-public stops were
+//! offered to users as places to board. Its byte range was verified per record
+//! type against this crate's own real fixtures the same way every other offset
+//! here was -- see [`CallingPoint::activity`] and
+//! [`CallingPoint::is_public_pickup`]. The public arrival/departure times were
+//! decoded alongside it, at offsets verified the same way.
+//!
+//! The `BX` record is no longer entirely
 //! undecoded: its ATOC Code field is now decoded (see
 //! [`BasicSchedule::operator_atoc`]); every other `BX` field remains
 //! undecoded for the same no-real-fixture-need reason as above.
@@ -177,6 +189,123 @@ pub struct CallingPoint {
     /// previous -- buggy -- behavior, never a hard failure).
     #[serde(default)]
     pub day_offset: u8,
+    /// The CIF Activity field, right-trimmed, exactly as decoded -- a packed
+    /// run of up to six TWO-CHARACTER activity codes (`"TB"`, `"T"`, `"TF"`,
+    /// `"D"`, `"U"`, `"R"`, `"N"`, `"OP"`, `"-T"`, ...). `LO` `29..41`, `LT`
+    /// `25..37`, `LI` `42..54`; all three verified against this crate's own
+    /// real byte-verbatim fixtures (`LOEUSTON  0822 08227  C      TB` ->
+    /// `"TB"`, `LTEUSTON  0804 08079     TF` -> `"TF"`,
+    /// `LICARLILE 1202 1213      120212131        T` -> `"T"`).
+    ///
+    /// **Left undecoded until 2026-09-25, and that was a real
+    /// correctness bug, not just a missing feature.** Without it, every
+    /// calling point carrying a booked departure was published as a boardable
+    /// departure -- so a set-down-only stop (`D`, passengers may only get
+    /// OFF), a pickup-only stop, an operational stop (`OP`), and a stop not
+    /// advertised to the public at all (`N`) were all offered to users as
+    /// places to board, on station boards and in the trip planner. See
+    /// [`Self::is_public_pickup`].
+    ///
+    /// Stored as the raw field rather than a parsed enum set: this is a
+    /// packed, open-ended code list (RSPS5046 defines more codes than this
+    /// app has real-data evidence for), and the one question this codebase
+    /// actually asks of it -- "can a passenger board here?" -- is answered by
+    /// [`Self::is_public_pickup`] without needing to model every code.
+    /// `#[serde(default)]` (empty string) so a `schedule_line_population` /
+    /// `trains.calling_points` JSONB blob published before this field existed
+    /// still deserializes, and deliberately reads as "unknown, assume
+    /// boardable" -- see [`Self::is_public_pickup`] for why that direction is
+    /// the safe one.
+    #[serde(default)]
+    pub activity: String,
+    /// The CIF Public Arrival time (`LT`/`LO` `15..19`, `LI` `25..29`) --
+    /// what a passenger timetable shows, as opposed to the working
+    /// (`booked_arrival`) time. `None` when the field is blank or the CIF
+    /// "no public time" sentinel `0000`, which is what a non-public stop
+    /// carries.
+    #[serde(default)]
+    pub public_arrival: Option<NaiveTime>,
+    /// The CIF Public Departure time (`LO` `15..19`, `LI` `29..33`). Same
+    /// blank/`0000` handling as [`Self::public_arrival`].
+    #[serde(default)]
+    pub public_departure: Option<NaiveTime>,
+}
+
+/// Two-character CIF Activity codes that mean a passenger may BOARD at this
+/// calling point.
+///
+/// * `T` -- stops to take up and set down passengers.
+/// * `TB` -- train begins (the origin of a passenger service).
+/// * `U` -- stops to take up passengers only.
+/// * `R` -- request stop (the train calls on request; a passenger can board).
+///
+/// Deliberately NOT included, and each one a real reason this list exists:
+/// `D` (stops to SET DOWN passengers only -- you may get off, never on),
+/// `TF` (train finishes, a terminus), `OP` (operational stop), `N` (stop not
+/// advertised to the public), and every engineering/shunting code (`-T`,
+/// `-U`, `-D`, `W`, ...).
+const PICKUP_ACTIVITY_CODES: [&str; 4] = ["T", "TB", "U", "R"];
+
+/// The CIF Activity code for "stop not advertised to the public". Checked
+/// separately from [`PICKUP_ACTIVITY_CODES`] because it can legitimately
+/// appear ALONGSIDE a passenger code, and when it does it wins: an
+/// unadvertised stop is not a place this app may tell a user to board.
+const NOT_ADVERTISED_ACTIVITY_CODE: &str = "N";
+
+impl CallingPoint {
+    /// The two-character Activity codes packed into [`Self::activity`], each
+    /// trimmed, blanks dropped. `"TB          "` yields `["TB"]`;
+    /// `"T           "` yields `["T"]` (single-character codes are
+    /// left-justified in their own two-character slot).
+    pub fn activity_codes(&self) -> impl Iterator<Item = &str> {
+        self.activity
+            .as_bytes()
+            .chunks(2)
+            .filter_map(|chunk| std::str::from_utf8(chunk).ok())
+            .map(str::trim)
+            .filter(|code| !code.is_empty())
+    }
+
+    /// Can a passenger genuinely BOARD a train at this calling point -- i.e.
+    /// may this app publish it as a departure a user can catch?
+    ///
+    /// **This is the predicate that was missing.** Every consumer of
+    /// calling-point data treated "has a `booked_departure`" as "is a
+    /// boardable departure", which is not the same thing: a set-down-only
+    /// (`D`) stop, an operational (`OP`) stop and a stop not advertised to the
+    /// public (`N`) all carry a booked departure time and none of them is a
+    /// place a passenger may board. `crate::resolve::departures_by_crs` and
+    /// `departures_by_destination_crs` -- which produce the station-board and
+    /// whole-network-search "you can board here" rows -- now filter on this.
+    ///
+    /// **An empty `activity` reads as boardable, on purpose.** That is the
+    /// value for a line too short to carry the field, for a
+    /// `schedule_line_population` blob published before this field existed,
+    /// and for any future decode gap. Failing open keeps a real departure on
+    /// the board when the evidence is simply absent; failing closed would
+    /// silently empty station boards the first time an offset or a
+    /// deployment ordering surprised us, which is precisely the
+    /// "product silently stops updating" class this codebase keeps getting
+    /// bitten by. Deliberately NOT gated on
+    /// [`Self::public_departure`] being `Some` for the same reason: the
+    /// Activity field is one well-specified field at one verified offset,
+    /// whereas requiring a public time would turn any offset surprise in a
+    /// layout variant into a wholesale board outage.
+    pub fn is_public_pickup(&self) -> bool {
+        if self.activity.trim().is_empty() {
+            return true;
+        }
+        let mut boardable = false;
+        for code in self.activity_codes() {
+            if code == NOT_ADVERTISED_ACTIVITY_CODE {
+                return false;
+            }
+            if PICKUP_ACTIVITY_CODES.contains(&code) {
+                boardable = true;
+            }
+        }
+        boardable
+    }
 }
 
 /// One UID's resolved calling points, as published over the wire between
@@ -380,6 +509,9 @@ mod tests {
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 0,
+                activity: String::new(),
+                public_arrival: None,
+                public_departure: None,
             }],
             operator_atoc: None,
         };

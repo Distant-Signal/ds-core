@@ -247,6 +247,33 @@ pub fn match_pin<'a>(
 /// calling points) bucketing -- the same complexity class
 /// [`schedules_touching`] already pays per line, done once for the whole
 /// network instead of once per line.
+/// Is a calling point at `day_offset`/`time` genuinely before `now`, where
+/// `now` is a bare clock time on the schedule's own `service_date` (i.e.
+/// `day_offset` 0)?
+///
+/// **This exists because comparing the bare clock times was wrong in both
+/// directions.** [`departures_by_crs`] and [`departures_by_destination_crs`]
+/// both filtered with `departure < now`, ignoring
+/// [`crate::records::CallingPoint::day_offset`] entirely -- the very field
+/// this crate computes precisely because CIF times are bare `HH:MM` with no
+/// day marker. So for a real overnight service (the live-confirmed c2c UID
+/// `F49687`: `23:48` Liverpool Street, `00:07` Barking the NEXT day) at, say,
+/// `now = 23:00`:
+///
+/// * the genuine FUTURE `00:07` departure (`day_offset: 1`, really 67 minutes
+///   away) was dropped from the station board as though it had already gone,
+///   and
+/// * had `now` been `00:30` instead, that same `00:07` entry would have been
+///   dropped while a `day_offset: 0` entry at `00:40` -- which really is
+///   yesterday's, long past -- would have been kept.
+///
+/// Comparing `(day_offset, time)` against `(0, now)` as a tuple is the whole
+/// fix: a calling point on a later calendar day is never in the past, and one
+/// on the service date itself compares by clock time as before.
+fn is_before(day_offset: u8, time: NaiveTime, now: NaiveTime) -> bool {
+    (day_offset, time) < (0, now)
+}
+
 pub fn departures_by_crs(
     index: &ScheduleIndex,
     date: NaiveDate,
@@ -266,7 +293,17 @@ pub fn departures_by_crs(
             let Some(departure) = cp.booked_departure else {
                 continue;
             };
-            if departure < now {
+            if is_before(cp.day_offset, departure, now) {
+                continue;
+            }
+            // A booked departure is not the same thing as a place a passenger
+            // may board. Until 2026-09-25 this bucket -- which backs
+            // `GET /public/stations/{crs}/schedule-departures` -- published
+            // set-down-only (`D`), operational (`OP`) and
+            // not-advertised-to-the-public (`N`) stops as boardable
+            // departures, because the CIF Activity field was never decoded at
+            // all. See `CallingPoint::is_public_pickup`.
+            if !cp.is_public_pickup() {
                 continue;
             }
             let Some(crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
@@ -428,7 +465,14 @@ pub fn departures_by_destination_crs(
             let Some(departure) = cp.booked_departure else {
                 continue;
             };
-            if departure < now {
+            if is_before(cp.day_offset, departure, now) {
+                continue;
+            }
+            // Same "a booked departure is not a boardable departure" filter as
+            // `departures_by_crs` above -- this product backs
+            // `GET /public/trains/search`, where every row is offered to a
+            // user as a train they can catch FROM `origin_crs`.
+            if !cp.is_public_pickup() {
                 continue;
             }
             let Some(origin_crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
@@ -701,6 +745,9 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
+            activity: String::new(),
+            public_arrival: None,
+            public_departure: None,
         }
     }
 
@@ -717,6 +764,9 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
+            activity: String::new(),
+            public_arrival: None,
+            public_departure: None,
         }
     }
 
@@ -733,6 +783,9 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
+            activity: String::new(),
+            public_arrival: None,
+            public_departure: None,
         }
     }
 
@@ -750,6 +803,25 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
+            activity: String::new(),
+            public_arrival: None,
+            public_departure: None,
+        }
+    }
+
+    /// A calling point with a real booked departure AND a CIF Activity field --
+    /// the pairing that distinguishes "this train departs from here" from
+    /// "a passenger may board here", which until 2026-09-25 this crate could
+    /// not tell apart at all. See `CallingPoint::is_public_pickup`.
+    fn calling_point_with_departure_and_activity(
+        tiploc: &str,
+        kind: CallingPointKind,
+        departure: &str,
+        activity: &str,
+    ) -> CallingPoint {
+        CallingPoint {
+            activity: activity.to_string(),
+            ..calling_point_with_departure(tiploc, kind, departure)
         }
     }
 
@@ -903,6 +975,219 @@ mod tests {
 
         let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
         assert!(by_crs.is_empty());
+    }
+
+    /// **Regression test for the 2026-09-25 Activity-code fix.** A set-down-only
+    /// (`D`) calling point has a real booked departure, so before the Activity
+    /// field was decoded at all it was published as a boardable departure --
+    /// `GET /public/stations/{crs}/schedule-departures` offered it as a train a
+    /// user could catch from a station where, in reality, nobody may board.
+    #[test]
+    fn departures_by_crs_excludes_a_set_down_only_calling_point() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure_and_activity(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "08:22",
+                    "TB",
+                ),
+                // Real booked departure, but passengers may only get OFF here.
+                calling_point_with_departure_and_activity(
+                    "CARLILE",
+                    CallingPointKind::Intermediate,
+                    "12:13",
+                    "D",
+                ),
+                calling_point_with_arrival("CREWE  ", CallingPointKind::Terminate, "13:00"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let now = NaiveTime::MIN;
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CARLILE", "CAR"), ("CREWE", "CRE")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        assert!(
+            by_crs.contains_key("EUS"),
+            "the origin (`TB`, train begins) is a genuine boardable departure"
+        );
+        assert!(
+            !by_crs.contains_key("CAR"),
+            "a set-down-only stop must not be published as a departure a user can board"
+        );
+    }
+
+    /// The same filter on the whole-network search product, which backs
+    /// `GET /public/trains/search` -- every row there is offered to a user as a
+    /// train they can catch FROM `origin_crs`.
+    #[test]
+    fn departures_by_destination_crs_excludes_a_set_down_only_calling_point() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure_and_activity(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "08:22",
+                    "TB",
+                ),
+                calling_point_with_departure_and_activity(
+                    "CARLILE",
+                    CallingPointKind::Intermediate,
+                    "12:13",
+                    "D",
+                ),
+                calling_point_with_arrival("CREWE  ", CallingPointKind::Terminate, "13:00"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CARLILE", "CAR"), ("CREWE", "CRE")]);
+
+        let by_destination =
+            departures_by_destination_crs(&index, date, NaiveTime::MIN, &tiploc_to_crs);
+
+        let origins: Vec<&str> = by_destination["CRE"]
+            .iter()
+            .map(|d| d.origin_crs.as_str())
+            .collect();
+        assert_eq!(
+            origins,
+            vec!["EUS"],
+            "only the genuinely boardable calling point may be offered as an origin"
+        );
+    }
+
+    /// The fail-open property at the consumer level: a calling point with NO
+    /// Activity field (every pre-existing fixture in this file, and every
+    /// `schedule_line_population` blob published before the field existed) must
+    /// still publish. Without this the fix would silently empty station boards
+    /// on any decode gap.
+    #[test]
+    fn departures_by_crs_still_publishes_a_calling_point_with_no_activity_field_at_all() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C11052",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![calling_point_with_departure(
+                "EUSTON ",
+                CallingPointKind::Origin,
+                "08:22",
+            )],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
+
+        let by_crs = departures_by_crs(&index, date, NaiveTime::MIN, &tiploc_to_crs);
+        assert!(by_crs.contains_key("EUS"));
+    }
+
+    /// **Regression test for the 2026-09-25 overnight `now`-filter fix.** The
+    /// `now`-forward filter compared bare clock times and ignored
+    /// `day_offset`, so at `now = 23:00` on the service date this real
+    /// live-confirmed overnight working's Barking departure -- `00:07`,
+    /// `day_offset: 1`, genuinely 67 minutes in the FUTURE -- was dropped from
+    /// the station board as though it had already gone. Liverpool Street's
+    /// `23:48` (same day, 48 minutes away) survived, which is what made the
+    /// bug look like correct behavior at a glance.
+    #[test]
+    fn departures_by_crs_keeps_a_genuine_post_midnight_departure_that_is_still_in_the_future() {
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let now = NaiveTime::from_hms_opt(23, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[
+            ("LIVST", "LST"),
+            ("STFD", "SRA"),
+            ("BARKING", "BKG"),
+            ("SHENFLD", "SNF"),
+        ]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        assert_eq!(
+            by_crs["LST"][0].scheduled,
+            NaiveTime::from_hms_opt(23, 48, 0).unwrap(),
+            "the same-day 23:48 departure is 48 minutes away and must be kept"
+        );
+        let barking = by_crs.get("BKG").unwrap_or_else(|| {
+            panic!(
+                "Barking's 00:07 departure is day_offset 1 -- 67 minutes in the FUTURE at 23:00 \
+                 -- and must not be dropped as though its bare clock time made it past"
+            )
+        });
+        assert_eq!(
+            barking[0].scheduled,
+            NaiveTime::from_hms_opt(0, 7, 0).unwrap()
+        );
+        assert_eq!(barking[0].day_offset, 1);
+    }
+
+    /// The other direction of the same bug, and the reason the fix is a tuple
+    /// comparison rather than "always keep `day_offset >= 1`": at
+    /// `now = 00:30` a `day_offset: 0` departure at `00:40` is genuinely
+    /// today's and still in the future, while the SAME clock time at
+    /// `day_offset: 1` belongs to tomorrow and is also in the future. What
+    /// must be excluded is only what is really past -- a `day_offset: 0`
+    /// departure before `now`.
+    #[test]
+    fn departures_by_crs_excludes_only_what_is_really_past_once_day_offset_is_considered() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "F49687",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                ALL_DAYS,
+            ),
+            calling_points: vec![
+                // day_offset 0, 00:10 -- really past at 00:30.
+                calling_point_with_departure("LIVST  ", CallingPointKind::Origin, "00:10"),
+                // day_offset 0, 00:40 -- still to come at 00:30.
+                calling_point_with_both(
+                    "STFD   ",
+                    CallingPointKind::Intermediate,
+                    "00:35",
+                    "00:40",
+                ),
+                calling_point_with_arrival("SHENFLD", CallingPointKind::Terminate, "01:01"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let now = NaiveTime::from_hms_opt(0, 30, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("LIVST", "LST"), ("STFD", "SRA"), ("SHENFLD", "SNF")]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        assert!(
+            !by_crs.contains_key("LST"),
+            "a same-day 00:10 departure really is past at 00:30 and must still be excluded"
+        );
+        assert_eq!(
+            by_crs["SRA"][0].scheduled,
+            NaiveTime::from_hms_opt(0, 40, 0).unwrap(),
+            "a same-day 00:40 departure is still to come at 00:30"
+        );
     }
 
     #[test]
@@ -1853,6 +2138,9 @@ mod tests {
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 1,
+                activity: String::new(),
+                public_arrival: None,
+                public_departure: None,
             }],
         )];
         // service_date is 2026-09-05, but Barking's real booked_departure

@@ -255,6 +255,60 @@ fn parse_time_field(field: &str) -> Option<NaiveTime> {
     NaiveTime::from_hms_opt(hour, minute, 0)
 }
 
+/// The CIF PUBLIC arrival/departure fields, which differ from
+/// [`parse_time_field`]'s working-timetable ones in one way that matters:
+/// `0000` is not midnight, it is the "this stop has no public time" sentinel,
+/// which is what a non-public (set-down-only, operational, unadvertised)
+/// calling point carries. A blank field is likewise `None`.
+fn parse_public_time_field(field: &str) -> Option<NaiveTime> {
+    if field == "0000" {
+        return None;
+    }
+    parse_time_field(field)
+}
+
+/// A fixed-offset field that may run past the end of the line, clamped rather
+/// than panicking or rejecting the whole record.
+///
+/// Every caller is past [`is_fixed_width_decodable`], so `line` is ASCII and
+/// any byte index is a char boundary -- the only hazard left is length, and
+/// unlike the working-time fields these later fields genuinely are missing
+/// from real short lines: `LTEUSTON  0804 08079     TF` is 27 bytes and its
+/// Activity field is specified as `25..37`. Raising `MIN_LO_LT_LEN` to 37 to
+/// slice it "safely" would reject that real line outright, so the field is
+/// clamped instead and simply comes back shorter (or empty).
+fn ascii_field(line: &str, start: usize, end: usize) -> &str {
+    if start >= line.len() {
+        return "";
+    }
+    &line[start..end.min(line.len())]
+}
+
+/// The CIF Activity field's byte range for each record type -- `LO` `29..41`,
+/// `LT` `25..37`, `LI` `42..54` -- all three independently verified against
+/// this module's own real byte-verbatim fixtures by decomposing them field by
+/// field from this crate's already-verified TIPLOC/time offsets:
+///
+/// ```text
+/// LOEUSTON  0822 08227  C      TB
+///           ^10..15     ^19..22 platform      ^29..41 activity = "TB"
+///                ^15..19 public departure
+/// LTEUSTON  0804 08079     TF
+///           ^10..15   ^19..22 platform  ^25..37 activity = "TF"
+///                ^15..19 public arrival
+/// LICARLILE 1202 1213      120212131        T
+///           ^10..15        ^25..29 public arr    ^42..54 activity = "T"
+///                ^15..20     ^29..33 public dep
+///                     ^20..25 pass
+/// ```
+fn activity_range(kind: CallingPointKind) -> (usize, usize) {
+    match kind {
+        CallingPointKind::Origin => (29, 41),
+        CallingPointKind::Terminate => (25, 37),
+        CallingPointKind::Intermediate => (42, 54),
+    }
+}
+
 fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoint> {
     let min_len = match kind {
         CallingPointKind::Origin | CallingPointKind::Terminate => MIN_LO_LT_LEN,
@@ -291,6 +345,23 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
             }
         };
 
+    // Public times: the passenger-timetable times, distinct from the working
+    // times above. `LO` carries only a public DEPARTURE and `LT` only a public
+    // ARRIVAL, both at `15..19` -- the same offset an `LI`'s WORKING departure
+    // occupies, which is why this is matched per-kind and not hoisted.
+    let (public_arrival, public_departure) = match kind {
+        CallingPointKind::Origin => (None, parse_public_time_field(ascii_field(line, 15, 19))),
+        CallingPointKind::Terminate => (parse_public_time_field(ascii_field(line, 15, 19)), None),
+        CallingPointKind::Intermediate => (
+            parse_public_time_field(ascii_field(line, 25, 29)),
+            parse_public_time_field(ascii_field(line, 29, 33)),
+        ),
+    };
+    let (activity_start, activity_end) = activity_range(kind);
+    let activity = ascii_field(line, activity_start, activity_end)
+        .trim_end()
+        .to_string();
+
     Some(CallingPoint {
         tiploc,
         kind,
@@ -298,6 +369,9 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
         booked_departure,
         is_half_minute_arrival,
         is_half_minute_departure,
+        activity,
+        public_arrival,
+        public_departure,
         // Always 0 here: a single BS(+BX)/LO/LI*/LT block is decoded in
         // isolation and has no reason to own cross-calling-point
         // day-rollover bookkeeping. The real value is computed once, over
@@ -832,5 +906,175 @@ mod tests {
         assert_eq!(schedules[0].calling_points.len(), 1);
         assert_eq!(schedules[1].basic.uid, "C00574");
         assert_eq!(schedules[1].calling_points.len(), 1);
+    }
+}
+
+/// Regression tests for the 2026-09-25 Activity/public-time decode.
+///
+/// The failure being fixed: `parse_calling_point` read only the WORKING
+/// arrival/departure times, so a calling point that stops to SET DOWN
+/// passengers only, or for operational reasons, or that is not advertised to
+/// the public at all, was indistinguishable from a genuine boardable
+/// departure -- and was published as one, on station boards and in the trip
+/// planner.
+///
+/// Every fixture here is either a real byte-verbatim line already quoted in
+/// this module's own tests, or that same line with ONLY its Activity field
+/// overwritten in place (byte length unchanged, so the offsets under test are
+/// the real ones) -- clearly marked where that is the case, per this crate's
+/// "quote real bytes when available, mark anything else synthetic" convention.
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+
+    const LO_EUSTON: &str = "LOEUSTON  0822 08227  C      TB";
+    const LT_EUSTON: &str = "LTEUSTON  0804 08079     TF";
+    const LI_CARLILE: &str = "LICARLILE 1202 1213      120212131        T";
+
+    /// `line` with ONLY its Activity field replaced by `activity`, space-padded
+    /// out to the field's real end offset -- every byte before the field is the
+    /// real, byte-verbatim fixture, so the offsets under test are the real,
+    /// verified ones and the only thing synthetic is the field's own content.
+    /// (Real CIF records are 80 bytes; these fixtures are quoted
+    /// right-trimmed, which is why padding out to the field end is needed at
+    /// all.)
+    fn with_activity(line: &str, kind: CallingPointKind, activity: &str) -> String {
+        let (start, end) = activity_range(kind);
+        assert!(
+            activity.len() <= end - start,
+            "an Activity field holds at most {} bytes",
+            end - start
+        );
+        let mut out = String::new();
+        out.push_str(&line[..start]);
+        out.push_str(activity);
+        while out.len() < end {
+            out.push(' ');
+        }
+        assert_eq!(
+            &out[..start],
+            &line[..start],
+            "every byte before the Activity field must stay byte-verbatim real"
+        );
+        out
+    }
+
+    fn cp(line: &str, kind: CallingPointKind) -> CallingPoint {
+        parse_calling_point(line, kind).expect("real fixture line must decode")
+    }
+
+    #[test]
+    fn the_real_fixture_lines_decode_the_activity_field_at_its_verified_offset() {
+        assert_eq!(cp(LO_EUSTON, CallingPointKind::Origin).activity, "TB");
+        assert_eq!(cp(LT_EUSTON, CallingPointKind::Terminate).activity, "TF");
+        assert_eq!(cp(LI_CARLILE, CallingPointKind::Intermediate).activity, "T");
+    }
+
+    #[test]
+    fn the_real_fixture_lines_decode_their_public_times() {
+        let lo = cp(LO_EUSTON, CallingPointKind::Origin);
+        assert_eq!(lo.public_departure, NaiveTime::from_hms_opt(8, 22, 0));
+        assert_eq!(lo.public_arrival, None, "an LO has no public arrival");
+
+        let lt = cp(LT_EUSTON, CallingPointKind::Terminate);
+        assert_eq!(lt.public_arrival, NaiveTime::from_hms_opt(8, 7, 0));
+        assert_eq!(lt.public_departure, None, "an LT has no public departure");
+
+        let li = cp(LI_CARLILE, CallingPointKind::Intermediate);
+        assert_eq!(li.public_arrival, NaiveTime::from_hms_opt(12, 2, 0));
+        assert_eq!(li.public_departure, NaiveTime::from_hms_opt(12, 13, 0));
+    }
+
+    #[test]
+    fn activity_codes_splits_the_packed_field_into_two_character_codes() {
+        let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, "T RM");
+        let parsed = cp(&line, CallingPointKind::Intermediate);
+        assert_eq!(
+            parsed.activity_codes().collect::<Vec<_>>(),
+            vec!["T", "RM"],
+            "single-character codes are left-justified in their own 2-char slot"
+        );
+    }
+
+    /// **The core of the fix.** A real `LI` line whose only Activity code is
+    /// `D` -- stops to SET DOWN passengers only. It has a booked departure, so
+    /// before this change it was published as a boardable departure.
+    #[test]
+    fn a_set_down_only_stop_is_not_a_public_pickup() {
+        let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, "D");
+        let parsed = cp(&line, CallingPointKind::Intermediate);
+        assert_eq!(parsed.activity, "D");
+        assert!(
+            parsed.booked_departure.is_some(),
+            "sanity check: it really does carry a booked departure, which is what made it \
+             indistinguishable from a boardable one"
+        );
+        assert!(!parsed.is_public_pickup());
+    }
+
+    #[test]
+    fn an_operational_stop_is_not_a_public_pickup() {
+        let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, "OP");
+        assert!(!cp(&line, CallingPointKind::Intermediate).is_public_pickup());
+    }
+
+    /// `N` wins even when a passenger code sits alongside it: a stop not
+    /// advertised to the public is not somewhere this app may tell a user to
+    /// board, whatever else the field says.
+    #[test]
+    fn a_not_advertised_stop_is_not_a_public_pickup_even_next_to_a_passenger_code() {
+        let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, "T N");
+        let parsed = cp(&line, CallingPointKind::Intermediate);
+        assert_eq!(parsed.activity_codes().collect::<Vec<_>>(), vec!["T", "N"]);
+        assert!(!parsed.is_public_pickup());
+    }
+
+    #[test]
+    fn ordinary_pickup_codes_are_public_pickups() {
+        for code in ["T", "TB", "U", "R"] {
+            let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, code);
+            assert!(
+                cp(&line, CallingPointKind::Intermediate).is_public_pickup(),
+                "activity {code} must be treated as boardable"
+            );
+        }
+    }
+
+    /// A real origin: `TB` (train begins) must always be boardable -- if this
+    /// regressed, every schedule's own first stop would vanish from every
+    /// station board.
+    #[test]
+    fn a_real_origin_train_begins_stop_is_a_public_pickup() {
+        assert!(cp(LO_EUSTON, CallingPointKind::Origin).is_public_pickup());
+    }
+
+    /// **The fail-open property, and why it is deliberate.** A line too short
+    /// to carry the Activity field at all (the real `LT` fixture is 27 bytes;
+    /// its field is specified at `25..37`) must still decode, and an absent
+    /// Activity must read as boardable rather than silently emptying a board.
+    #[test]
+    fn a_line_too_short_to_carry_the_activity_field_still_decodes_and_fails_open() {
+        let truncated = &LI_CARLILE[..25];
+        let parsed = parse_calling_point(truncated, CallingPointKind::Intermediate)
+            .expect("a line past MIN_LI_LEN must still decode");
+        assert_eq!(parsed.activity, "");
+        assert_eq!(parsed.public_arrival, None);
+        assert!(
+            parsed.is_public_pickup(),
+            "an absent Activity field must fail OPEN -- failing closed would silently empty \
+             station boards on any future decode gap"
+        );
+    }
+
+    /// The CIF "no public time" sentinel. `0000` is not midnight; it is what a
+    /// non-public stop carries, and it must not decode as `00:00`.
+    #[test]
+    fn a_zero_public_time_is_absent_not_midnight() {
+        assert_eq!(parse_public_time_field("0000"), None);
+        assert_eq!(parse_public_time_field("    "), None);
+        assert_eq!(
+            parse_public_time_field("0822"),
+            NaiveTime::from_hms_opt(8, 22, 0)
+        );
     }
 }

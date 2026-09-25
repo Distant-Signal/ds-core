@@ -132,6 +132,36 @@ pub struct LastFetchedResponse {
     pub fetched_at: Option<DateTime<Utc>>,
 }
 
+/// Wire contract for `POST /private/schedule-reference-publishes` — the
+/// completion marker `crates/schedule-reference` writes for itself, ONCE
+/// per delivery, only after every one of that cycle's products has
+/// published successfully.
+///
+/// Shared here rather than redefined per-side for the same reason
+/// [`LastFetchedResponse`] is, and deliberately carrying the delivery's
+/// DIRECTORY NAME verbatim (`YYYYMMDDTHHMMSSZ`, see
+/// `schedule-reference::discovery::CompleteDelivery::dir_name`) rather than
+/// a `DateTime` that would have to be re-formatted back into that shape on
+/// read: the string this marker stores is the exact string
+/// `schedule-reference::poll_once` compares against, so round-tripping it
+/// through a timestamp would insert a lossy conversion between "what was
+/// published" and "what a restart compares" for no benefit.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleReferencePublishRequest {
+    pub delivery: String,
+}
+
+/// Wire contract for `GET /private/schedule-reference-publishes` — the read
+/// side of [`ScheduleReferencePublishRequest`], returning the most recently
+/// COMPLETED delivery's directory name, or `None` if this producer has
+/// never completed a full publish cycle (a fresh deployment).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastCompletedPublishResponse {
+    pub delivery: Option<String>,
+}
+
 /// How long to wait before this process's first poll, so a restart doesn't
 /// immediately re-fetch data that's still fresh from before it. GETs `url`
 /// — the same URL the poller POSTs its batches to; the two share one route,
