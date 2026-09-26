@@ -1,0 +1,37 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Index `line_status_history` for the notifier's own per-line-id lookups by
+-- `id`, not just by `computed_at`.
+--
+-- Real, confirmed-live bug this closes: `notifier::queries::poll_line_candidates`
+-- looked up "the immediately preceding row for this line_id" via a
+-- correlated subquery ordered by `id DESC LIMIT 1` (and its
+-- window-function replacement below needs the same access path for its own
+-- one-row-per-line "anchor" lookup) -- but the only index on this table is
+-- `line_status_history_line_time (line_id, computed_at DESC)`, which cannot
+-- serve an `ORDER BY id DESC` at all. Every one of those lookups therefore
+-- fell back to a sequential scan of the whole table, once per candidate row
+-- in the correlated-subquery version -- confirmed in a live cluster as a
+-- >1s slow-query WARNING on literally every single 60s poll cycle
+-- (2.1-2.4s over ~6500 rows each time).
+--
+-- `id DESC` (matching the existing `computed_at DESC` index's own
+-- direction) so a query ordering by `(line_id, id DESC)` -- exactly what
+-- both the old correlated subquery and the new anchor lookup need -- can
+-- use this index directly with no extra sort step.
+--
+-- CONCURRENTLY + `-- no-transaction` (this file's own literal first line,
+-- the only place sqlx recognises it -- see
+-- crates/api/tests/migration_index_locking.rs): `line_status_history`
+-- already existed before this migration, so a plain `CREATE INDEX` here
+-- would hold sqlx's wrapping transaction -- and therefore this crate's own
+-- startup, since main.rs runs migrations before binding its listener --
+-- for the whole build (which, per the slow-query evidence above, could be
+-- seconds against a table already holding thousands of rows). A failed
+-- CONCURRENTLY build leaves an INVALID index behind (Postgres won't use it
+-- and won't clean it up); recovery is a manual `DROP INDEX` and a re-run,
+-- not an automatic rollback. That is the accepted trade for not locking
+-- the table.
+-- -------------------------------------------------------------------------
+
+CREATE INDEX CONCURRENTLY line_status_history_line_id_id ON line_status_history (line_id, id DESC);
