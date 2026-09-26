@@ -476,11 +476,22 @@ async fn find_schedule_match(
     };
 
     for line_id in &candidate_lines {
-        let Some(json) = queries::get_schedule_line_population(pool, line_id, service_date).await?
+        // With a known uid, Postgres narrows the population to that uid's
+        // entries before anything reaches `api` -- the same filter as the
+        // `match expected_uid` just below (which is kept, and is now a
+        // no-op there), moved into SQL so a candidate line's whole day (up
+        // to 31 MB of JSON text) is never transferred or decoded here. See
+        // `queries::get_schedule_line_population_entries`.
+        let Some(entries) = queries::get_schedule_line_population_entries(
+            pool,
+            line_id,
+            service_date,
+            expected_uid,
+        )
+        .await?
         else {
             continue;
         };
-        let entries: Vec<LinePopulationEntry> = serde_json::from_value(json)?;
 
         // **The whole fix for the real Y80908 production bug** (2026-09-24
         // round-3 investigation -- see this function's own doc comment).
