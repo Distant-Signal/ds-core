@@ -1,0 +1,36 @@
+-- -------------------------------------------------------------------------
+-- M14/L6 (2026-09-26 Repeater Signal review): server-side session
+-- revocation. Before this, a session's authz data (`users.groups`, read
+-- once at `AuthenticatedUser::from_request_parts` time via
+-- `data::users::get_session_with_user`) was frozen for the entire
+-- `session_ttl_days` (14 days by default) lifetime of the session row --
+-- removing a user from an access group, or disabling their account,
+-- in the IdP did nothing to any session already issued, and there was no
+-- "log out everywhere" capability at all: a compromised session, or one
+-- issued to a device the user no longer trusts, could only ever be ended
+-- by waiting out its own TTL.
+--
+-- `sessions_invalidated_at` is a per-user "sessions created before this
+-- instant are no longer valid" marker: `NULL` (the default for every
+-- existing row) means "no revocation has ever happened, trust every
+-- session row normally" -- `data::users::get_session_with_user`'s own
+-- `WHERE` clause treats it exactly that way. Setting it to `NOW()`
+-- invalidates every session whose `created_at` predates it; a session
+-- reissued in the SAME transaction (see
+-- `data::users::invalidate_all_sessions_and_reissue`) has a `created_at`
+-- from that same `NOW()` snapshot, which is why the comparison in
+-- `get_session_with_user` is `>=`, not `>`: Postgres's `NOW()` is constant
+-- for the whole of one transaction, so a session row reissued alongside
+-- the marker in the same transaction would otherwise tie with it and be
+-- rejected as its own very first read.
+--
+-- Nullable, no default expression needed beyond `NULL` itself -- adding a
+-- nullable column with no `DEFAULT` (or a constant `DEFAULT`) is a
+-- metadata-only change on Postgres 11+, not a table rewrite, so this is
+-- safe to run inside the wrapping transaction `sqlx::migrate!()` already
+-- uses for every migration that isn't itself building a blocking index
+-- (see `crates/api/tests/migration_index_locking.rs`'s own doc comment --
+-- this file adds no index at all, so that guard doesn't apply here).
+-- -------------------------------------------------------------------------
+
+ALTER TABLE users ADD COLUMN sessions_invalidated_at TIMESTAMPTZ;
