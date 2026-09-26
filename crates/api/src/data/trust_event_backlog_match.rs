@@ -30,10 +30,36 @@
 //! `grep -n "MATCH_TOLERANCE" crates/common/src/lib.rs` finds a real, public
 //! `pub const MATCH_TOLERANCE: chrono::Duration = chrono::Duration::minutes(20);`,
 //! and `crates/api/src/data/schedule_matching.rs` already imports and uses
-//! it). This module uses `common::MATCH_TOLERANCE` directly instead of
-//! duplicating it locally -- exactly the collapse the plan's own text asked
-//! "whoever lands second" to perform, and duplicating it here today would
-//! just be two names for the same already-shared constant.
+//! it).
+//!
+//! **M9 finding, 2026-09-26 review: this module now DOES define its own
+//! local tolerance constant after all, but a different, TIGHTER one for a
+//! different purpose.** `common::MATCH_TOLERANCE` (20 minutes) is sized for
+//! comparing a SCHEDULED time against an ACTUAL one, where lateness is
+//! genuinely expected -- but `find_backlog_match`'s own CRS+time lookup
+//! compares TWO scheduled times (a Movement's `planned_timestamp`, i.e. WTT,
+//! against a pin's own `pin_scheduled_departure`), exactly the comparison
+//! `trust-consumer::matching::resolve_origin_departure`'s own
+//! `SCHEDULED_DEPARTURE_TOLERANCE` already exists for, and that live matcher
+//! was deliberately tightened from `common::MATCH_TOLERANCE` down to 5
+//! minutes (see that constant's own doc comment: "there is no lateness
+//! between two timetabled values," and a wide window at a busy terminus
+//! "routinely contains a dozen other services"). This backlog-replay
+//! sibling did the identical scheduled-vs-scheduled comparison but was never
+//! brought in line -- seen twice in this file's own regression fixtures
+//! before this fix: the real `Y80926`/`W34058` mis-attribution this
+//! module's own contradiction filter now also guards, and the `trains_id=713729`
+//! ARRIVAL mis-attribution, both real production incidents that a 20-minute
+//! scheduled-vs-scheduled window at a busy terminus made possible in the
+//! first place. See [`SCHEDULED_DEPARTURE_TOLERANCE`]'s own doc comment.
+//! `is_near_rail_day_boundary`'s own diagnostic-logging threshold moves to
+//! the same tighter constant alongside it (it exists solely to explain a
+//! `find_backlog_match` miss near a rail-day boundary, so it must describe
+//! the SAME window that function actually searches) -- between the two,
+//! `common::MATCH_TOLERANCE` has no remaining use in this module and its
+//! `use` is dropped. The plausibility guard's own skew threshold is a
+//! separate constant entirely (`common::trust_timestamp`'s
+//! `MAX_TIMESTAMP_SKEW_AHEAD_OF_RECEIPT`), untouched by this fix.
 //!
 //! **A second deviation, also confirmed directly**: this module's docs
 //! (and the plan's own "Dependency on the schedule-first plan" section)
@@ -59,13 +85,38 @@
 //! one step short of it. Named here so a future reader comparing this
 //! module against the plan's own prose isn't confused by the mismatch.
 
-use chrono::{DateTime, NaiveDate, Utc};
-use common::MATCH_TOLERANCE;
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use sqlx::PgPool;
 use trust_schema::journey::{self, DerivedState};
 use trust_schema::schema::Movement;
 
 use crate::data::train_tracking;
+
+/// How far a backlog Movement's own SCHEDULED (`planned_timestamp`, i.e.
+/// WTT) departure time may sit from a pin's `pin_scheduled_departure` and
+/// still be believed to describe the same booked service -- and, via
+/// [`is_near_rail_day_boundary`], how close a pin's own scheduled departure
+/// must sit to a rail-day boundary before a `find_backlog_match` miss is
+/// worth a diagnostic log.
+///
+/// **M9 finding, 2026-09-26 review.** This used to be `common::MATCH_TOLERANCE`
+/// (20 minutes) -- see this module's own top-level doc comment for the full
+/// reasoning this constant now mirrors from
+/// `trust-consumer::matching::SCHEDULED_DEPARTURE_TOLERANCE` exactly:
+/// `find_backlog_match` compares two SCHEDULED times, not a scheduled time
+/// against an actual one, so there is no lateness to absorb and the only
+/// real slack needed is the small, couple-of-minutes disagreement between a
+/// Darwin-sourced pin's public timetable (GBTT) and TRUST's own working
+/// timetable (WTT). A 20-minute window at a busy terminus routinely
+/// contains several OTHER trains' scheduled departures -- exactly the shape
+/// of two real, confirmed production mis-attributions this file's own
+/// regression tests document (`a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin`'s
+/// `Y80926`/`W34058` incident, and `an_unrelated_arrival_event_never_falsely_matches_a_pins_scheduled_departure`'s
+/// `trains_id=713729` one) -- and the live matcher was tightened to 5
+/// minutes for exactly this reason. This backlog-replay sibling, doing the
+/// identical scheduled-vs-scheduled comparison, was never brought in line
+/// until now.
+const SCHEDULED_DEPARTURE_TOLERANCE: Duration = Duration::minutes(5);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct BacklogRow {
@@ -89,27 +140,41 @@ struct BacklogRow {
     variation_status: Option<String>,
 }
 
-/// Is `at` within `MATCH_TOLERANCE` of a `common::rail_day` boundary
-/// (02:00 Europe/London)? Used only to decide whether a failed backlog
-/// match is worth a diagnostic log -- see `attempt_backlog_match`'s own
-/// call site.
+/// Is `at` within [`SCHEDULED_DEPARTURE_TOLERANCE`] of a `common::rail_day`
+/// boundary (02:00 Europe/London)? Used only to decide whether a failed
+/// backlog match is worth a diagnostic log -- see `attempt_backlog_match`'s
+/// own call site.
 ///
-/// Implemented as "does the rail day differ `MATCH_TOLERANCE` before `at`
-/// versus `MATCH_TOLERANCE` after it", rather than computing a raw
-/// distance to the nearest boundary instant: `common::rail_day` already
-/// exposes exactly this comparison (`current_rail_day`) and gets the
+/// **M9 finding, 2026-09-26 review: this threshold moved from the wide
+/// `common::MATCH_TOLERANCE` (20 minutes) to the same tightened
+/// [`SCHEDULED_DEPARTURE_TOLERANCE`] `find_backlog_match`'s own query window
+/// now uses.** This diagnostic exists solely to explain a `find_backlog_match`
+/// miss that might really be "a same-CRS/same-clock-time candidate on the
+/// adjacent rail day, excluded by the `service_date` filter" -- which can
+/// only be true of a candidate that would otherwise have fallen inside
+/// `find_backlog_match`'s own window in the first place. Leaving this at 20
+/// minutes after tightening that window to 5 would have kept firing for
+/// pins 6-20 minutes from a boundary that the query could never have
+/// matched anyway, boundary or not -- a stale threshold describing a window
+/// that no longer exists.
+///
+/// Implemented as "does the rail day differ `SCHEDULED_DEPARTURE_TOLERANCE`
+/// before `at` versus `SCHEDULED_DEPARTURE_TOLERANCE` after it", rather than
+/// computing a raw distance to the nearest boundary instant: `common::rail_day`
+/// already exposes exactly this comparison (`current_rail_day`) and gets the
 /// DST-transition-safe Europe/London arithmetic right, whereas hand-rolling
 /// "nearest boundary" from `next_rail_day_boundary` alone would need to
 /// account for rail days that are 23h or 25h long on a clock-change day.
 /// If the two ends of that window fall on different rail days, `at` is, by
-/// definition, within `MATCH_TOLERANCE` of the boundary between them.
+/// definition, within `SCHEDULED_DEPARTURE_TOLERANCE` of the boundary
+/// between them.
 fn is_near_rail_day_boundary(at: DateTime<Utc>) -> bool {
-    common::rail_day::current_rail_day(at - MATCH_TOLERANCE)
-        != common::rail_day::current_rail_day(at + MATCH_TOLERANCE)
+    common::rail_day::current_rail_day(at - SCHEDULED_DEPARTURE_TOLERANCE)
+        != common::rail_day::current_rail_day(at + SCHEDULED_DEPARTURE_TOLERANCE)
 }
 
 /// Decision 3 step 2: does any backlog row at `pin_origin_crs`, within
-/// `MATCH_TOLERANCE` of `pin_scheduled_departure`, exist? Returns that
+/// [`SCHEDULED_DEPARTURE_TOLERANCE`] of `pin_scheduled_departure`, exist? Returns that
 /// row's `train_id` (TRUST's own daily identifier -- present on every row
 /// this table ever stores, per Task 9) plus, opportunistically, a
 /// `train_uid` (CIF's own identifier) if an Activation row for that same
@@ -132,7 +197,7 @@ fn is_near_rail_day_boundary(at: DateTime<Utc>) -> bool {
 /// which keeps a Movement "only if its `event_type` is `ARRIVAL` or
 /// `DEPARTURE`"). Without this filter, a pin's scheduled departure could
 /// match an UNRELATED train's ARRIVAL event at the same CRS inside the
-/// same `MATCH_TOLERANCE` window -- a routine occurrence at any
+/// same `SCHEDULED_DEPARTURE_TOLERANCE` window -- a routine occurrence at any
 /// turnback/interchange station -- and that wrong train's entire movement
 /// history would then get replayed onto the pin's `trains_id` via
 /// `fetch_backlog_history`/`replay_backlog_history` below. Confirmed as a
@@ -181,8 +246,8 @@ fn is_near_rail_day_boundary(at: DateTime<Utc>) -> bool {
 /// same root-cause class as `Y80908` -- see `schedule_matching.rs`'s own
 /// "Round 3" doc comment for that incident's full account).** Before this
 /// fix the query below ended `ORDER BY planned_timestamp LIMIT 1`, i.e.
-/// whichever candidate DEPARTURE in the `MATCH_TOLERANCE` window happened
-/// to depart EARLIEST -- not the one actually closest to this pin's own
+/// whichever candidate DEPARTURE in the `SCHEDULED_DEPARTURE_TOLERANCE`
+/// window happened to depart EARLIEST -- not the one actually closest to this pin's own
 /// `pin_scheduled_departure`. At a busy multi-departure station that is a
 /// different train's schedule, picked arbitrarily by clock time rather
 /// than by relevance to the pin: exactly the same "closest wins, not
@@ -209,7 +274,7 @@ fn is_near_rail_day_boundary(at: DateTime<Utc>) -> bool {
 /// own `pin_scheduled_departure` sits close to the 02:00 Europe/London
 /// rail-day cutover (`common::rail_day`) is exactly where this bites: a
 /// same-CRS, same-clock-time DEPARTURE on the ADJACENT rail day can fall
-/// inside `MATCH_TOLERANCE` purely by clock coincidence, get matched here,
+/// inside `SCHEDULED_DEPARTURE_TOLERANCE` purely by clock coincidence, get matched here,
 /// then silently fail one step later, on every sweep, forever (nothing
 /// about a repeated sweep changes which wrong-service_date row wins).
 /// Filtering on `service_date` here closes that mismatch at the source: a
@@ -224,8 +289,8 @@ async fn find_backlog_match(
     pin_scheduled_departure: DateTime<Utc>,
     service_date: NaiveDate,
 ) -> anyhow::Result<Option<(String, Option<String>)>> {
-    let window_start = pin_scheduled_departure - MATCH_TOLERANCE;
-    let window_end = pin_scheduled_departure + MATCH_TOLERANCE;
+    let window_start = pin_scheduled_departure - SCHEDULED_DEPARTURE_TOLERANCE;
+    let window_end = pin_scheduled_departure + SCHEDULED_DEPARTURE_TOLERANCE;
 
     // The skew threshold is interpolated as a plain integer (not bound as a
     // parameter) because `chrono::Duration` has no `sqlx::Encode` for
@@ -626,8 +691,8 @@ pub async fn attempt_backlog_match(
     else {
         // Low finding #2 (2026-09-25 review): a diagnostic-only log, fired
         // ONLY when this pin's own scheduled departure sits within
-        // `MATCH_TOLERANCE` of a rail-day boundary (`common::rail_day`) --
-        // exactly the situation where `find_backlog_match`'s now-added
+        // `SCHEDULED_DEPARTURE_TOLERANCE` of a rail-day boundary
+        // (`common::rail_day`) -- exactly the situation where `find_backlog_match`'s now-added
         // `service_date` filter can plausibly be the reason nothing
         // matched (a same-CRS, same-clock-time candidate on the ADJACENT
         // rail day, now correctly excluded). Not logged for the ordinary
@@ -662,8 +727,11 @@ pub async fn attempt_backlog_match(
     // `find_backlog_match` above is a pure CRS + `planned_timestamp`-window
     // lookup with no notion of train identity: it answers "which train_id
     // left this CRS near this time", and at a busy origin inside a
-    // +/-`MATCH_TOLERANCE` (20-minute) window that is routinely several
-    // different trains. It then opportunistically discovers that candidate's
+    // +/-`SCHEDULED_DEPARTURE_TOLERANCE` window that can still contain more
+    // than one train (the M9 fix, 2026-09-26 review, tightened this from a
+    // 20-minute window to 5 -- see this module's own top-level doc comment
+    // -- which shrinks but does not eliminate the risk this filter guards
+    // against). It then opportunistically discovers that candidate's
     // REAL `train_uid` from TRUST's own Activation (`0001`) row -- so by
     // this point the candidate's identity is frequently already known for
     // certain. Until this filter, that known identity was used only to look
@@ -713,6 +781,22 @@ pub async fn attempt_backlog_match(
     // properly (routing an already-identified subscription through
     // `attempt_backlog_match_by_uid`, the identity-first counterpart, instead
     // of this CRS+time discovery function at all).
+    //
+    // **M9 finding, 2026-09-26 review, investigated and confirmed NOT a
+    // gap**: a plain `pending` pin (no `trains_id` at all yet) is the OTHER
+    // "either side unknown" case, distinct from the residual just above (a
+    // known-identity pin against a candidate with no Activation).
+    // `known_train_uid_for_subscription`'s own `JOIN train_subscriptions ...
+    // trains` finds no row at all when `trains_id IS NULL`, so it already
+    // returns `None` for exactly this pin -- and `is_provable_identity_contradiction`'s
+    // own `(None, _) => false` arm already treats that `None` as "nothing to
+    // contradict," letting the CRS+time heuristic run unchanged. This is
+    // the exact same treatment `trust-consumer::process`'s own live
+    // contradiction filter gives a pin with no `train_uid` of its own
+    // (`PendingPin::train_uid: None` falls into that filter's own `_ =>
+    // true` arm) -- symmetric by construction, not a gap this filter leaves
+    // open. See `a_pin_with_no_identity_of_its_own_is_unaffected_by_the_contradiction_filter`
+    // below for the regression coverage.
     let subscription_train_uid = known_train_uid_for_subscription(pool, tracked_train_id).await?;
     if is_provable_identity_contradiction(subscription_train_uid.as_deref(), train_uid.as_deref()) {
         tracing::warn!(
@@ -781,9 +865,12 @@ pub async fn attempt_backlog_match(
 /// the tracked train has departed sees an empty (or merely
 /// not-yet-relevant) `trust_event_backlog` at that single attempt, and
 /// `trust-consumer::matching::resolve_origin_departure`'s own live match
-/// only succeeds within `common::MATCH_TOLERANCE` of the pin's scheduled
-/// departure -- so a train that departs more than 20 minutes early or late
-/// (routine under disruption) has no path left to resolve at all, despite
+/// only succeeds within its own `SCHEDULED_DEPARTURE_TOLERANCE` (5 minutes,
+/// comparing booked time against booked time -- or the wider
+/// `common::MATCH_TOLERANCE`, 20 minutes, on the rarer fallback path where a
+/// Movement carries no `planned_timestamp` at all) of the pin's scheduled
+/// departure -- so a train that departs more than that has no path left to
+/// resolve at all, despite
 /// the exact backlog row a retry would match filling in over the next few
 /// hours as TRUST movements actually arrive. Mirrors
 /// `schedule_matching::run_schedule_match_sweep`'s own shape closely: same
@@ -978,25 +1065,27 @@ mod rail_day_boundary_tests {
 
     #[test]
     fn just_before_the_boundary_is_near_it() {
-        // 01:50 Europe/London (September is BST, so 00:50 UTC) -- 10
-        // minutes before the 02:00 cutover, well inside MATCH_TOLERANCE
-        // (20 minutes).
-        let at: DateTime<chrono::Utc> = "2026-09-05T00:50:00Z".parse().unwrap();
+        // 01:57 Europe/London (September is BST, so 00:57 UTC) -- 3
+        // minutes before the 02:00 cutover, well inside the M9-tightened
+        // SCHEDULED_DEPARTURE_TOLERANCE (5 minutes; was MATCH_TOLERANCE's 20
+        // before the 2026-09-26 review).
+        let at: DateTime<chrono::Utc> = "2026-09-05T00:57:00Z".parse().unwrap();
         assert!(is_near_rail_day_boundary(at));
     }
 
     #[test]
     fn just_after_the_boundary_is_near_it() {
-        // 02:10 Europe/London (01:10 UTC in BST) -- 10 minutes after the
+        // 02:03 Europe/London (01:03 UTC in BST) -- 3 minutes after the
         // cutover.
-        let at: DateTime<chrono::Utc> = "2026-09-05T01:10:00Z".parse().unwrap();
+        let at: DateTime<chrono::Utc> = "2026-09-05T01:03:00Z".parse().unwrap();
         assert!(is_near_rail_day_boundary(at));
     }
 
     #[test]
     fn well_outside_the_tolerance_window_is_not_near_the_boundary() {
         // 03:00 Europe/London (02:00 UTC in BST) -- a full hour past the
-        // cutover, outside the +/-20 minute MATCH_TOLERANCE window.
+        // cutover, outside the +/-5 minute SCHEDULED_DEPARTURE_TOLERANCE
+        // window.
         let at: DateTime<chrono::Utc> = "2026-09-05T02:00:00Z".parse().unwrap();
         assert!(!is_near_rail_day_boundary(at));
     }
@@ -1270,8 +1359,8 @@ mod db_tests {
 
         let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
-        // `planned_timestamp` is inside the pin's MATCH_TOLERANCE window --
-        // `find_backlog_match`'s own SQL WHERE clause finds this row -- but
+        // `planned_timestamp` is inside the pin's SCHEDULED_DEPARTURE_TOLERANCE
+        // window -- `find_backlog_match`'s own SQL WHERE clause finds this row -- but
         // `actual_timestamp` is 60 minutes AHEAD of `received_at`, exactly
         // the shape of the still-unconfirmed corruption this guard exists
         // to catch. `received_at` is set explicitly (rather than left to
@@ -1382,11 +1471,12 @@ mod db_tests {
         // received_at -- must be excluded from the query entirely, not just
         // rejected after being selected.
         let received_at_implausible: DateTime<Utc> = "2026-09-05T17:16:00Z".parse().unwrap();
-        // Candidate 2: sorts SECOND (5 minutes after scheduled, still
-        // within MATCH_TOLERANCE), but is genuinely plausible -- this is the
-        // row that must actually resolve the pin.
-        let plausible_planned: DateTime<Utc> = "2026-09-05T18:20:00Z".parse().unwrap();
-        let received_at_plausible: DateTime<Utc> = "2026-09-05T18:21:00Z".parse().unwrap();
+        // Candidate 2: sorts SECOND (4 minutes after scheduled, comfortably
+        // within the M9-tightened SCHEDULED_DEPARTURE_TOLERANCE of 5), but is
+        // genuinely plausible -- this is the row that must actually resolve
+        // the pin.
+        let plausible_planned: DateTime<Utc> = "2026-09-05T18:19:00Z".parse().unwrap();
+        let received_at_plausible: DateTime<Utc> = "2026-09-05T18:20:00Z".parse().unwrap();
 
         sqlx::query(
             "INSERT INTO trust_event_backlog \
@@ -1492,9 +1582,10 @@ mod db_tests {
     /// Finding #2's own regression test (2026-09-25 review), modeled on
     /// `schedule_matching.rs`'s own `Y80908` busy-station fixtures: a busy
     /// station with TWO plausible DEPARTURE candidates inside the same
-    /// `MATCH_TOLERANCE` window, where the EARLIER-departing one is a
-    /// completely different, unrelated train and the LATER-departing one is
-    /// actually the closest to the pin's own `pin_scheduled_departure`.
+    /// `SCHEDULED_DEPARTURE_TOLERANCE` window, where the EARLIER-departing
+    /// one is a completely different, unrelated train and the
+    /// LATER-departing one is actually the closest to the pin's own
+    /// `pin_scheduled_departure`.
     ///
     /// Before this fix, `find_backlog_match`'s `ORDER BY planned_timestamp
     /// LIMIT 1` always won on chronological order, not proximity -- so the
@@ -1524,12 +1615,13 @@ mod db_tests {
         let scheduled: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
 
         // EARLIER candidate: sorts FIRST by plain `planned_timestamp`
-        // ascending (17 minutes before the pin's own scheduled departure,
-        // still inside the +/-20 minute MATCH_TOLERANCE window), but it's a
-        // completely different, unrelated train -- exactly the "busy
-        // station, wrong train picked because it happened to depart first"
-        // shape the finding describes.
-        let earlier_planned: DateTime<Utc> = "2026-09-25T17:58:00Z".parse().unwrap();
+        // ascending (4 minutes before the pin's own scheduled departure,
+        // still inside the M9-tightened +/-5 minute
+        // SCHEDULED_DEPARTURE_TOLERANCE window), but it's a completely
+        // different, unrelated train -- exactly the "busy station, wrong
+        // train picked because it happened to depart first" shape the
+        // finding describes.
+        let earlier_planned: DateTime<Utc> = "2026-09-25T18:11:00Z".parse().unwrap();
         // CLOSER candidate: only 1 minute after the pin's own scheduled
         // departure -- the train this pin actually belongs to -- but sorts
         // SECOND by plain ascending `planned_timestamp`.
@@ -1751,8 +1843,8 @@ mod db_tests {
     /// `attempt_backlog_match` is tried once) BEFORE the matching backlog
     /// row ever lands -- exactly what happens when a pin is created before
     /// its train has departed, or when the live departure falls outside
-    /// `resolve_origin_departure`'s `MATCH_TOLERANCE` window and TRUST's
-    /// own backlog only fills in afterwards. That first attempt must fail
+    /// `resolve_origin_departure`'s `SCHEDULED_DEPARTURE_TOLERANCE` window
+    /// and TRUST's own backlog only fills in afterwards. That first attempt must fail
     /// honestly (`Ok(false)`), leaving the pin `'pending'` with no retry
     /// mechanism prior to this fix. Once the backlog row exists, a later
     /// call to `run_backlog_match_sweep` -- exactly what `main.rs`'s
@@ -1887,7 +1979,7 @@ mod db_tests {
     /// (`trust-consumer::process.rs`'s `if movement.event_type != "DEPARTURE"
     /// { return Vec::new(); }` guard). A pin's scheduled departure could
     /// therefore match an UNRELATED train's ARRIVAL event at the same CRS,
-    /// inside the same `MATCH_TOLERANCE` window -- a routine occurrence at
+    /// inside the same `SCHEDULED_DEPARTURE_TOLERANCE` window -- a routine occurrence at
     /// any turnback/interchange station. Once matched, the wrong train's
     /// entire movement history gets replayed onto the pin's already-correct
     /// `trains_id` (confirmed real-world instance: `trains_id=713729`,
@@ -1925,7 +2017,7 @@ mod db_tests {
 
         // An unrelated train's ARRIVAL at the pin's own origin CRS, exactly
         // on the pin's scheduled departure time -- well inside
-        // MATCH_TOLERANCE, and (before this fix) the only row
+        // SCHEDULED_DEPARTURE_TOLERANCE, and (before this fix) the only row
         // `find_backlog_match`'s CRS+time WHERE clause needed to match.
         sqlx::query(
             "INSERT INTO trust_event_backlog \
@@ -1999,8 +2091,9 @@ mod db_tests {
     /// the ARRIVAL row first, exactly as `an_implausible_actual_timestamp...`'s
     /// sibling test proved for the plausibility guard). The unrelated
     /// train's ARRIVAL lands exactly on the pin's scheduled time (sorts
-    /// first); the real train's own DEPARTURE lands 5 minutes later (sorts
-    /// second, still inside MATCH_TOLERANCE). Only the DEPARTURE may resolve
+    /// first); the real train's own DEPARTURE lands 4 minutes later (sorts
+    /// second, still inside the M9-tightened +/-5 minute
+    /// SCHEDULED_DEPARTURE_TOLERANCE). Only the DEPARTURE may resolve
     /// the pin.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
@@ -2024,10 +2117,10 @@ mod db_tests {
 
         // Unrelated train: ARRIVAL, sorts FIRST by planned_timestamp
         // (exactly on the pin's scheduled time).
-        // Real train: DEPARTURE, sorts SECOND (5 minutes later, still
-        // within MATCH_TOLERANCE), plus its own Activation so identity can
-        // be verified via the dual-written `trains` row.
-        let departure_planned: DateTime<Utc> = "2026-09-05T18:20:00Z".parse().unwrap();
+        // Real train: DEPARTURE, sorts SECOND (4 minutes later, still
+        // within SCHEDULED_DEPARTURE_TOLERANCE), plus its own Activation so
+        // identity can be verified via the dual-written `trains` row.
+        let departure_planned: DateTime<Utc> = "2026-09-05T18:19:00Z".parse().unwrap();
 
         sqlx::query(
             "INSERT INTO trust_event_backlog \
@@ -2117,8 +2210,8 @@ mod db_tests {
     /// row (the schedule-matched shape: `resolution_status =
     /// 'schedule_matched'`, `trains_id` pointing at a `trains` row whose
     /// `train_uid` came from a real CIF match), plus one backlog train that
-    /// departs the same CRS inside the same `MATCH_TOLERANCE` window and
-    /// carries its own TRUST Activation naming its `train_uid`
+    /// departs the same CRS inside the same `SCHEDULED_DEPARTURE_TOLERANCE`
+    /// window and carries its own TRUST Activation naming its `train_uid`
     /// unambiguously.
     ///
     /// Shared by both sides of the filter: pass a `backlog_train_uid` that
@@ -2132,10 +2225,16 @@ mod db_tests {
     /// `planned_timestamp` -- are DERIVED here rather than passed in, both to
     /// keep this under `clippy::too_many_arguments` and because each caller
     /// would otherwise be restating a value it has no reason to choose
-    /// differently. The derived departure offset is the real incident's own:
-    /// 14 minutes before the pin's booked time, comfortably inside
-    /// `common::MATCH_TOLERANCE` (20 minutes), so the pure CRS+time lookup
-    /// genuinely selects this candidate.
+    /// differently. **The derived departure offset was the real incident's
+    /// own 14 minutes before the pin's booked time until the M9 fix
+    /// (2026-09-26 review) tightened `find_backlog_match`'s own window from
+    /// `common::MATCH_TOLERANCE` (20 minutes) to `SCHEDULED_DEPARTURE_TOLERANCE`
+    /// (5)** -- 14 minutes would now fall OUTSIDE that window and never
+    /// reach the contradiction filter this fixture exists to exercise at
+    /// all (`find_backlog_match` would simply return `None`, and this
+    /// fixture's own tests would then be proving nothing about the filter).
+    /// 4 minutes keeps the fixture comfortably inside the new, tighter
+    /// window while still testing the identical contradiction-filter logic.
     async fn seed_identified_pin_and_a_backlog_train(
         pool: &PgPool,
         user_id: &str,
@@ -2145,7 +2244,7 @@ mod db_tests {
         pin_scheduled: DateTime<Utc>,
     ) -> (i64, i64) {
         let service_date = pin_scheduled.date_naive();
-        let backlog_planned = pin_scheduled - chrono::Duration::minutes(14);
+        let backlog_planned = pin_scheduled - chrono::Duration::minutes(4);
         let dedup_prefix = backlog_train_id;
 
         // Defensive pre-clean, not belt-and-braces: `trust_event_backlog` has
@@ -2327,15 +2426,18 @@ mod db_tests {
         let user_id = "TEST-BACKLOG-UID-CONTRADICTION-USER";
         // The real incident's own booked departure time (the
         // Euston -> Birmingham New Street service); the seeding helper puts
-        // the other train's DEPARTURE 14 minutes earlier, exactly as TRUST
-        // reported the Avanti service that wrongly claimed it.
+        // the other train's DEPARTURE 4 minutes earlier (the real incident's
+        // own TRUST-reported Avanti offset was 14 minutes, but that no
+        // longer fits inside the M9-tightened `SCHEDULED_DEPARTURE_TOLERANCE`
+        // window -- see `seed_identified_pin_and_a_backlog_train`'s own doc
+        // comment).
         //
         // The DATE, though, is deliberately a fixed one several days in the
         // past rather than the incident's own 2026-09-25, and each of this
         // fix's three tests deliberately uses a different HOUR.
         // `find_backlog_match` filters on CRS + `planned_timestamp` window
         // ONLY -- never on `service_date` -- so two fixtures sharing an
-        // origin CRS and a departure time within `MATCH_TOLERANCE` of each
+        // origin CRS and a departure time within `SCHEDULED_DEPARTURE_TOLERANCE` of each
         // other compete for the same `ORDER BY planned_timestamp LIMIT 1`
         // even across different service dates. Both hazards were real: an
         // earlier draft of these tests shared one timestamp (so the second
@@ -2526,10 +2628,12 @@ mod db_tests {
 
         // A third distinct hour, for the reason the timestamp note on
         // `a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin`
-        // gives.
+        // gives. 4 minutes, not the real incident's own 14, for the same
+        // M9-tightened-tolerance reason
+        // `seed_identified_pin_and_a_backlog_train`'s own doc comment gives.
         let pin_scheduled: DateTime<Utc> = "2026-09-20T12:56:00Z".parse().unwrap();
         let service_date = pin_scheduled.date_naive();
-        let backlog_planned = pin_scheduled - chrono::Duration::minutes(14);
+        let backlog_planned = pin_scheduled - chrono::Duration::minutes(4);
 
         sqlx::query(
             "INSERT INTO trust_event_backlog \
