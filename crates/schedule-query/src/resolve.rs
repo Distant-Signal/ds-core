@@ -1615,7 +1615,7 @@ mod tests {
                     CallingPointKind::Intermediate,
                     "10:00",
                 );
-                cp.activity = "T ".to_string();
+                cp.activity = "T ".to_string().into();
                 cp
             },
             calling_point("MNCRPIC", CallingPointKind::Terminate),
