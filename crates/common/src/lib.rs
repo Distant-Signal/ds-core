@@ -526,6 +526,10 @@ mod worst_severity_tests {
 /// One service from an LDBWS departure board.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationDeparture {
+    /// RDM/LDBWS's opaque, board-relative `serviceID` -- a transient token,
+    /// not a durable key: it is neither Darwin's `rid` nor the CIF
+    /// `train_uid`, and nothing in this app maps it to either. See
+    /// `poller-ldbws::schema::RdmServiceItem::service_id`.
     pub service_id: String,
     pub operator: String,
     pub destination_crs: String,
