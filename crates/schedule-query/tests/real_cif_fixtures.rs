@@ -58,6 +58,9 @@ fn a_real_mixed_block_parses_end_to_end_through_the_index() {
     // `...POO2E88    1...`) threaded through resolve_for_date onto
     // ResolvedSchedule::headcode.
     assert_eq!(resolved.headcode, Some("2E88".to_string()));
+    // The real quoted BX line's Retail Service ID field (bytes 14..22,
+    // `SRYSR408800` -> `SR408800`) threaded onto ResolvedSchedule::rsid.
+    assert_eq!(resolved.rsid, Some("SR408800".to_string()));
 }
 
 // --- The real C11052 STP=P/STP=C Bank Holiday pair -------------------------

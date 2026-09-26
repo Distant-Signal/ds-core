@@ -1,0 +1,23 @@
+-- The schedule's CIF `BX` Retail Service ID -- the 8-character ID
+-- customer-facing systems show for a train (LDBWS/Darwin's `rsid`, e.g.
+-- `SR408800`: ATOC prefix, 4-digit service number, 2-digit portion suffix)
+-- -- decoded from the `BX` record's `14..22` byte range (see
+-- `schedule_query::records::BasicSchedule::rsid`). Carried onto every
+-- departure row a schedule contributes, exactly like `operator_atoc` and
+-- `headcode` (20260926184000_schedule_destination_departures_headcode.sql):
+-- per-schedule, taken from the STP-resolved winner, copied unchanged.
+--
+-- Backs `GET /public/trains/resolve`, which maps a live departure-board row
+-- (station, time, rsid) to a train UID. NOT unique per train: a few RSIDs
+-- are shared by several UIDs on one day (measured on the real RJTTF971
+-- extract, 2026-09-26), so the read always narrows by station and time too.
+--
+-- Nullable, no default (a metadata-only ALTER, no table rewrite): the CIF
+-- field can be blank, and every row published before this column existed
+-- -- or by a `schedule-reference` build that predates it; the ingest
+-- payload's `rsid` key is `#[serde(default)]` -- stays NULL until the next
+-- publish cycle rewrites it. NULL means "not known". No new index: the
+-- resolve read is scoped by (service_date, origin_crs, scheduled window) or
+-- (service_date, destination_crs), both already served by existing indexes,
+-- and filters rsid in the heap.
+ALTER TABLE schedule_destination_departures ADD COLUMN rsid TEXT;

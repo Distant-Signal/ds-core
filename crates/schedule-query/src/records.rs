@@ -23,7 +23,8 @@
 //!
 //! The `BX` record is no longer entirely
 //! undecoded: its ATOC Code field is now decoded (see
-//! [`BasicSchedule::operator_atoc`]); every other `BX` field remains
+//! [`BasicSchedule::operator_atoc`]), and so is its Retail Service ID
+//! (see [`BasicSchedule::rsid`]); every other `BX` field remains
 //! undecoded for the same no-real-fixture-need reason as above.
 
 use chrono::{NaiveDate, NaiveTime};
@@ -151,6 +152,22 @@ pub struct BasicSchedule {
     /// that merely embeds a headcode.
     #[serde(default)]
     pub headcode: Option<String>,
+    /// The `BX` record's Retail Service ID -- the 8-character ID
+    /// customer-facing systems show for this train (LDBWS/Darwin's `rsid`,
+    /// e.g. `"SR408800"`: ATOC prefix, 4-digit service number, 2-digit
+    /// portion suffix), decoded from the `BX` line's `14..22` byte range
+    /// (0-based, half-open; CIF columns 15-22). Verified against the real
+    /// `BX         SRYSR408800` line (see `operator_atoc` above).
+    ///
+    /// `None` when no `BX` line follows the `BS`, the line is too short to
+    /// carry the whole field, or the field is blank / not ASCII
+    /// alphanumeric. NOT unique per train: measured on the real
+    /// `RJTTF971MCA` extract (2026-09-26), a handful of RSIDs are shared by
+    /// several UIDs running on the same day (Heathrow Express uses one RSID
+    /// per service group), but no two UIDs share an RSID at the same
+    /// calling point and working time.
+    #[serde(default)]
+    pub rsid: Option<String>,
 }
 
 /// Which of `LO`/`LI`/`LT` a [`CallingPoint`] was decoded from.
@@ -524,6 +541,13 @@ pub struct DestinationDeparture {
     /// exactly like `operator_atoc` above.
     #[serde(default)]
     pub headcode: Option<String>,
+    /// The schedule's `BX` Retail Service ID (see [`BasicSchedule::rsid`]),
+    /// copied verbatim from [`crate::resolve::ResolvedSchedule::rsid`] --
+    /// the STP-resolved winner's own value, so an overlay that changes the
+    /// RSID wins -- and attached unchanged to every entry the schedule
+    /// contributes, exactly like `operator_atoc`/`headcode` above.
+    #[serde(default)]
+    pub rsid: Option<String>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
@@ -564,6 +588,7 @@ mod tests {
             }],
             operator_atoc: None,
             headcode: None,
+            rsid: None,
         };
         let entry: LinePopulationEntry = resolved.clone().into();
         assert_eq!(entry.uid, "C11052");

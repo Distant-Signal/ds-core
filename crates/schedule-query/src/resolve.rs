@@ -31,6 +31,9 @@ pub struct ResolvedSchedule {
     /// See [`crate::records::BasicSchedule::headcode`]; taken from the
     /// winning (STP-resolved) record.
     pub headcode: Option<String>,
+    /// See [`crate::records::BasicSchedule::rsid`]; taken from the winning
+    /// (STP-resolved) record, never from a lower-priority one.
+    pub rsid: Option<String>,
 }
 
 /// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
@@ -130,6 +133,7 @@ pub fn resolve_for_date(
         calling_points,
         operator_atoc: winner.basic.operator_atoc.clone(),
         headcode: winner.basic.headcode.clone(),
+        rsid: winner.basic.rsid.clone(),
     })
 }
 
@@ -543,6 +547,7 @@ pub fn departures_by_destination_crs(
         // and attached unchanged to every entry this schedule contributes.
         let operator_atoc = resolved.operator_atoc.clone();
         let headcode = resolved.headcode.clone();
+        let rsid = resolved.rsid.clone();
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -579,6 +584,7 @@ pub fn departures_by_destination_crs(
                     destination_arrival_day_offset,
                     operator_atoc: operator_atoc.clone(),
                     headcode: headcode.clone(),
+                    rsid: rsid.clone(),
                 });
         }
     }
@@ -820,6 +826,7 @@ mod tests {
             days_of_week: days,
             operator_atoc: None,
             headcode: None,
+            rsid: None,
         }
     }
 
@@ -1514,6 +1521,73 @@ mod tests {
             crewe[0].scheduled,
             NaiveTime::from_hms_opt(8, 22, 0).unwrap()
         );
+    }
+
+    #[test]
+    fn the_overlay_winners_rsid_is_threaded_onto_every_destination_departure() {
+        // SYNTHETIC: a Permanent base carrying one RSID and an Overlay for
+        // a single Tuesday carrying a different one (e.g. a re-planned
+        // portion). The overlay date must publish the overlay's RSID, the
+        // other dates the base's -- never a mix, never the loser's.
+        let mut base = basic(
+            "C11052",
+            StpIndicator::Permanent,
+            "2026-05-18",
+            "2026-12-11",
+            WEEKDAYS,
+        );
+        base.rsid = Some("VT123400".to_string());
+        let mut overlay = basic(
+            "C11052",
+            StpIndicator::Overlay,
+            "2026-09-01",
+            "2026-09-01",
+            WEEKDAYS,
+        );
+        overlay.rsid = Some("VT123401".to_string());
+        let body = vec![
+            calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "08:22"),
+            {
+                let mut cp = calling_point_with_departure(
+                    "CREWE  ",
+                    CallingPointKind::Intermediate,
+                    "10:00",
+                );
+                cp.activity = "T ".to_string();
+                cp
+            },
+            calling_point("MNCRPIC", CallingPointKind::Terminate),
+        ];
+        let index = ScheduleIndex::build(vec![
+            RawSchedule {
+                basic: base,
+                calling_points: body.clone(),
+            },
+            RawSchedule {
+                basic: overlay,
+                calling_points: body,
+            },
+        ]);
+        let now = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS"), ("CREWE", "CRE"), ("MNCRPIC", "MAN")]);
+
+        let overlay_day = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        assert_eq!(
+            index
+                .schedule_for_uid("C11052", overlay_day)
+                .unwrap()
+                .rsid
+                .as_deref(),
+            Some("VT123401")
+        );
+        let rows = &departures_by_destination_crs(&index, overlay_day, now, &tiploc_to_crs)["MAN"];
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|d| d.rsid.as_deref() == Some("VT123401")));
+
+        let base_day = NaiveDate::from_ymd_opt(2026, 9, 2).unwrap();
+        let rows = &departures_by_destination_crs(&index, base_day, now, &tiploc_to_crs)["MAN"];
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|d| d.rsid.as_deref() == Some("VT123400")));
     }
 
     #[test]

@@ -52,6 +52,9 @@ const MIN_LI_LEN: usize = 20;
 /// Minimum length of a `BX` line this parser can decode: needs bytes
 /// `0..13` (record identity through the ATOC Code).
 const MIN_BX_LEN: usize = 13;
+/// 0-based, half-open byte range of the `BX` record's Retail Service ID
+/// field (CIF columns 15-22, 1-based) -- see [`BasicSchedule::rsid`].
+const RETAIL_SERVICE_ID_RANGE: std::ops::Range<usize> = 14..22;
 /// 0-based byte offset of the STP (Short Term Planning) indicator within a
 /// full-width `BS` line -- CIF User Spec column 80 (1-based), the record's
 /// own LAST column. Fixed on purpose, not derived from the line's own
@@ -123,7 +126,8 @@ fn is_fixed_width_decodable(line: &str, min_len: usize) -> bool {
 /// the real CIF block structure a full `MCA` extract has: `BS` starts a
 /// block; an optional `BX` line extends it (its ATOC Code field is decoded
 /// into [`BasicSchedule::operator_atoc`] -- see [`parse_bx_operator`] --
-/// every other `BX` field is recognized only so the line doesn't get
+/// and its Retail Service ID into [`BasicSchedule::rsid`] -- see
+/// [`parse_bx_rsid`]; every other `BX` field is recognized only so the line doesn't get
 /// mistaken for an unrelated/malformed line); `LO`/`LI`*/`LT` are
 /// its body; the block is implicitly terminated by the next `BS` (or by
 /// end of file, or by `LT` itself for a well-formed block). A
@@ -232,6 +236,7 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
             [b'B', b'X', ..] => {
                 if let Some(schedule) = current.as_mut() {
                     schedule.basic.operator_atoc = parse_bx_operator(line);
+                    schedule.basic.rsid = parse_bx_rsid(line);
                 }
                 // A stray BX with no open block (current is None) is
                 // dropped, exactly as a stray LO/LI/LT already is.
@@ -345,6 +350,8 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         // keeps this `None`.
         operator_atoc: None,
         headcode,
+        // Filled in by the BX arm, exactly like `operator_atoc` above.
+        rsid: None,
     })
 }
 
@@ -382,6 +389,33 @@ fn parse_bx_operator(line: &str) -> Option<String> {
     }
     let trimmed = line[11..13].trim();
     if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Decodes the Retail Service ID from a `BX` line's `14..22` byte range
+/// (0-based, half-open; CIF columns 15-22) -- the 8-character ID a
+/// customer-facing system (LDBWS/Darwin's `rsid`) shows for this train:
+/// 2-letter ATOC prefix + 4-digit service number + 2-digit portion
+/// suffix. Verified against the real `BX         SRYSR408800` line (see
+/// [`parse_bx_operator`]), which decodes to `"SR408800"`: byte 13 is the
+/// 1-char Applicable Timetable Code (`Y`), bytes 14..22 the RSID.
+///
+/// Needs the whole field, not just its start: a line shorter than 22
+/// bytes (e.g. the synthetic `BX         XXY000000` test line, 20 bytes)
+/// decodes to `None` rather than a truncated ID that could falsely match a
+/// different real train. Also `None` for a blank field (a real CIF case --
+/// many freight/ECS and some passenger `BX` records carry none) and for a
+/// field that is not ASCII alphanumeric after trimming -- the same
+/// "skip malformed, never guess" posture as [`parse_train_identity`].
+fn parse_bx_rsid(line: &str) -> Option<String> {
+    if !is_fixed_width_decodable(line, RETAIL_SERVICE_ID_RANGE.end) {
+        return None;
+    }
+    let trimmed = line[RETAIL_SERVICE_ID_RANGE].trim();
+    if trimmed.is_empty() || !trimmed.bytes().all(|b| b.is_ascii_alphanumeric()) {
         None
     } else {
         Some(trimmed.to_string())
@@ -642,12 +676,56 @@ mod tests {
         // `11..13` ATOC Code field to "SR" (ScotRail) -- verification doc,
         // "Claim 1" section.
         assert_eq!(schedules[0].basic.operator_atoc, Some("SR".to_string()));
+        // ...and its `14..22` Retail Service ID field to "SR408800".
+        assert_eq!(schedules[0].basic.rsid.as_deref(), Some("SR408800"));
         assert_eq!(schedules[0].calling_points.len(), 1);
         let cp = &schedules[0].calling_points[0];
         assert_eq!(cp.tiploc, "BALLOCH");
         assert_eq!(cp.kind, CallingPointKind::Origin);
         assert_eq!(cp.booked_departure, NaiveTime::from_hms_opt(23, 8, 0));
         assert!(!cp.is_half_minute_departure);
+    }
+
+    #[test]
+    fn decodes_the_retail_service_id_from_the_real_bx_line() {
+        const BX_REAL: &str = "BX         SRYSR408800";
+        assert_eq!(&BX_REAL[14..22], "SR408800");
+        assert_eq!(parse_bx_rsid(BX_REAL).as_deref(), Some("SR408800"));
+        // Real extract lines are space-padded to 80 bytes; the padding
+        // (and a trailing CR, which `str::lines` strips) must not leak in.
+        let padded = format!("{BX_REAL:<80}");
+        assert_eq!(parse_bx_rsid(&padded).as_deref(), Some("SR408800"));
+    }
+
+    #[test]
+    fn a_bx_line_too_short_for_the_whole_rsid_field_decodes_rsid_as_none() {
+        // The synthetic 20-byte test line used elsewhere in this repo: long
+        // enough for the ATOC Code, two bytes short of the RSID field.
+        let text =
+            format!("{BS_W68468_OVERLAY}\nBX         XXY000000\nLOBALLOCH 2308 2308          TB");
+        let schedules = parse_schedule_records(&text);
+        assert_eq!(schedules[0].basic.operator_atoc.as_deref(), Some("XX"));
+        assert_eq!(schedules[0].basic.rsid, None);
+    }
+
+    #[test]
+    fn a_blank_or_non_alphanumeric_rsid_field_decodes_as_none() {
+        // SYNTHETIC: the real BX line with its RSID bytes blanked (a real
+        // CIF case) or replaced by punctuation.
+        assert_eq!(parse_bx_rsid("BX         SRY        "), None);
+        assert_eq!(parse_bx_rsid(&format!("{:<80}", "BX         SRY")), None);
+        assert_eq!(parse_bx_rsid("BX         SRYSR40*800"), None);
+        let text =
+            format!("{BS_W68468_OVERLAY}\nBX         SRY        \nLOBALLOCH 2308 2308          TB");
+        let schedules = parse_schedule_records(&text);
+        assert_eq!(schedules[0].basic.operator_atoc.as_deref(), Some("SR"));
+        assert_eq!(schedules[0].basic.rsid, None);
+    }
+
+    #[test]
+    fn a_bs_with_no_bx_line_has_no_rsid() {
+        let text = format!("{BS_W68468_OVERLAY}\nLOBALLOCH 2308 2308          TB");
+        assert_eq!(parse_schedule_records(&text)[0].basic.rsid, None);
     }
 
     // Real LO/LT/LI body lines, byte-verbatim, quoted in the verification
