@@ -59,6 +59,9 @@ const MIN_BX_LEN: usize = 13;
 /// for why reading "the last significant character" instead let a
 /// truncated line decode into a plausible-but-wrong STP value.
 const STP_INDICATOR_COL: usize = 79;
+/// 0-based, half-open byte range of the `BS` record's Train Identity field
+/// (CIF columns 33-36, 1-based) -- see [`BasicSchedule::headcode`].
+const TRAIN_IDENTITY_RANGE: std::ops::Range<usize> = 32..36;
 
 /// Is `line` safe to decode with this module's fixed-offset byte slices?
 ///
@@ -325,6 +328,10 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
     // directly.
     let stp_char = line.as_bytes()[STP_INDICATOR_COL] as char;
     let stp_indicator = StpIndicator::try_from(stp_char).ok()?;
+    // Safe: the STP check above already proved `line.len() > 79`, and
+    // `is_fixed_width_decodable` proved it ASCII, so `32..36` is in bounds
+    // and on char boundaries.
+    let headcode = parse_train_identity(&line[TRAIN_IDENTITY_RANGE]);
 
     Some(BasicSchedule {
         uid,
@@ -337,7 +344,25 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         // (see `StpIndicator::Cancellation`) or one with no BX body at all
         // keeps this `None`.
         operator_atoc: None,
+        headcode,
     })
+}
+
+/// Decodes the `BS` record's Train Identity field (the 4-character
+/// signalling headcode, e.g. `"1S00"`) -- see [`BasicSchedule::headcode`]
+/// for the byte range and the real fixtures it was verified against.
+///
+/// `None` when the field is blank (a real `C`-indicator `BS` line, e.g.
+/// `BS_G00704_CANCELLATION` below, leaves it space-filled) or carries
+/// anything other than ASCII alphanumerics after trimming -- this module's
+/// "skip malformed, never guess" posture, applied per field.
+fn parse_train_identity(field: &str) -> Option<String> {
+    let trimmed = field.trim();
+    if trimmed.is_empty() || !trimmed.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 /// Decodes the ATOC/TOC operator code from a `BX` (Basic Schedule Extra
@@ -544,6 +569,49 @@ mod tests {
             basic.days_of_week,
             [false, false, false, false, false, false, true]
         );
+    }
+
+    #[test]
+    fn decodes_the_train_identity_headcode_from_real_bs_lines() {
+        // Bytes 32..36 of each real line: `...PXX1S003101...` -> "1S00",
+        // `...PXX1P033104...` -> "1P03", `...POO2E88    1...` -> "2E88".
+        // Byte 36..40 (`3101`/`3104`/blank) is CIF's separate, differently
+        // named "Headcode" field and must NOT leak in.
+        for (line, expected) in [
+            (BS_C00573_PERMANENT, "1S00"),
+            (BS_C00574_PERMANENT, "1P03"),
+            (BS_W68468_OVERLAY, "2E88"),
+        ] {
+            let schedules = parse_schedule_records(line);
+            assert_eq!(
+                schedules[0].basic.headcode.as_deref(),
+                Some(expected),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_real_bs_line_with_a_blank_train_identity_decodes_headcode_as_none() {
+        // The real Cancellation line's Train Identity field is space-filled.
+        let schedules = parse_schedule_records(BS_G00704_CANCELLATION);
+        assert_eq!(&BS_G00704_CANCELLATION[32..36], "    ");
+        assert_eq!(schedules[0].basic.headcode, None);
+    }
+
+    #[test]
+    fn a_non_alphanumeric_train_identity_decodes_headcode_as_none() {
+        // SYNTHETIC: the real C00573 line with its Train Identity bytes
+        // replaced by punctuation.
+        let line = format!(
+            "{}1S*-{}",
+            &BS_C00573_PERMANENT[..32],
+            &BS_C00573_PERMANENT[36..]
+        );
+        assert_eq!(line.len(), 80);
+        let schedules = parse_schedule_records(&line);
+        assert_eq!(schedules[0].basic.uid, "C00573");
+        assert_eq!(schedules[0].basic.headcode, None);
     }
 
     #[test]

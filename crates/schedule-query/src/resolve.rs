@@ -28,6 +28,9 @@ pub struct ResolvedSchedule {
     pub cancelled: bool,
     pub calling_points: Vec<CallingPoint>,
     pub operator_atoc: Option<String>,
+    /// See [`crate::records::BasicSchedule::headcode`]; taken from the
+    /// winning (STP-resolved) record.
+    pub headcode: Option<String>,
 }
 
 /// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
@@ -126,6 +129,7 @@ pub fn resolve_for_date(
         cancelled,
         calling_points,
         operator_atoc: winner.basic.operator_atoc.clone(),
+        headcode: winner.basic.headcode.clone(),
     })
 }
 
@@ -538,6 +542,7 @@ pub fn departures_by_destination_crs(
         // Computed once per schedule, exactly like true_origin_crs above,
         // and attached unchanged to every entry this schedule contributes.
         let operator_atoc = resolved.operator_atoc.clone();
+        let headcode = resolved.headcode.clone();
         for cp in &resolved.calling_points {
             let Some(departure) = cp.booked_departure else {
                 continue;
@@ -573,6 +578,7 @@ pub fn departures_by_destination_crs(
                     destination_arrival,
                     destination_arrival_day_offset,
                     operator_atoc: operator_atoc.clone(),
+                    headcode: headcode.clone(),
                 });
         }
     }
@@ -813,6 +819,7 @@ mod tests {
             date_to: NaiveDate::parse_from_str(to, "%Y-%m-%d").unwrap(),
             days_of_week: days,
             operator_atoc: None,
+            headcode: None,
         }
     }
 

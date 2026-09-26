@@ -1,0 +1,19 @@
+-- The schedule's CIF `BS` Train Identity -- the 4-character signalling
+-- headcode / train reporting number (e.g. `1S00`) -- decoded from the `BS`
+-- record's `32..36` byte range (see
+-- `schedule_query::records::BasicSchedule::headcode`). Carried onto every
+-- departure row a schedule contributes, exactly like `operator_atoc`
+-- (20260924120000_schedule_destination_departures_operator_atoc.sql): it
+-- is per-schedule, computed once and copied unchanged.
+--
+-- NOT the TRUST 10-character `trains.train_id`, which is a movement-feed
+-- activation identifier that merely embeds a headcode.
+--
+-- Nullable, no default (a metadata-only ALTER, no table rewrite): the CIF
+-- field can be blank, and every row published before this column existed
+-- -- or by a `schedule-reference` build that predates it; the ingest
+-- payload's `headcode` key is `#[serde(default)]` -- stays NULL until the
+-- next publish cycle replaces that service_date wholesale. NULL means "not
+-- known". No new index: read only by (train_uid, service_date) lookups the
+-- existing train_uid/service_date index already serves.
+ALTER TABLE schedule_destination_departures ADD COLUMN headcode TEXT;

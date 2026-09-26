@@ -105,6 +105,12 @@ impl TryFrom<char> for StpIndicator {
 ///   2026-08-31 is independently confirmed a Monday in the same section
 ///   ("2026-08-31 is a Monday, and turned out to be the UK August Bank
 ///   Holiday") -- so bit index 0 set alone means "Monday only".
+/// - `28..32` Bank Holiday Running, Train Status, Train Category (not
+///   decoded)
+/// - `32..36` Train Identity (the 4-character signalling headcode, e.g.
+///   `"1S00"`) -- see [`BasicSchedule::headcode`]
+/// - `36..40` CIF's separately-named "Headcode" field (not decoded; NOT
+///   the signalling headcode despite its name)
 /// - `79` (the record's last byte, CIF column 80 1-based) the STP
 ///   indicator -- see [`StpIndicator`]'s own doc comment for why this is a
 ///   fixed offset rather than "the line's last significant character" as of
@@ -127,6 +133,24 @@ pub struct BasicSchedule {
     /// only `BX` field this crate decodes; every other `BX` field remains
     /// undecoded, per this module's own header comment.
     pub operator_atoc: Option<String>,
+    /// The `BS` record's Train Identity field -- the 4-character signalling
+    /// headcode / train reporting number (e.g. `"1S00"`), decoded from the
+    /// `32..36` byte range (0-based, half-open; CIF columns 33-36). Verified
+    /// against the real, byte-verbatim `BS` lines quoted above:
+    /// `...PXX1S003101...` (C00573) -> `"1S00"`, `...PXX1P033104...`
+    /// (C00574) -> `"1P03"`, `...POO2E88    1...` (W68468) -> `"2E88"`;
+    /// the field sits right after the 2-char Train Category (`XX`/`OO`)
+    /// and right before CIF's separately-named 4-char "Headcode" field
+    /// (`3101`/`3104`/blank, NOT decoded) and the 1-char Course Indicator
+    /// (`1` on all three lines, including the real `G00704` Cancellation
+    /// line, which pins the column alignment independently).
+    ///
+    /// `None` when the field is blank (real `C`-indicator lines leave it
+    /// space-filled) or not ASCII alphanumeric. NOT the TRUST 10-character
+    /// `train_id` (`trains.train_id`), which is a movement-feed identifier
+    /// that merely embeds a headcode.
+    #[serde(default)]
+    pub headcode: Option<String>,
 }
 
 /// Which of `LO`/`LI`/`LT` a [`CallingPoint`] was decoded from.
@@ -494,6 +518,12 @@ pub struct DestinationDeparture {
     /// `BX` record is absent or its ATOC Code field was blank (see
     /// `BasicSchedule::operator_atoc`'s own doc comment).
     pub operator_atoc: Option<String>,
+    /// The schedule's `BS` Train Identity (see [`BasicSchedule::headcode`]),
+    /// copied verbatim from [`crate::resolve::ResolvedSchedule::headcode`]
+    /// and attached unchanged to every entry the schedule contributes,
+    /// exactly like `operator_atoc` above.
+    #[serde(default)]
+    pub headcode: Option<String>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
@@ -533,6 +563,7 @@ mod tests {
                 platform: None,
             }],
             operator_atoc: None,
+            headcode: None,
         };
         let entry: LinePopulationEntry = resolved.clone().into();
         assert_eq!(entry.uid, "C11052");
