@@ -15,6 +15,7 @@ pub mod log_once;
 pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;
+pub mod outbound_endpoint_guard;
 pub mod poller_loop;
 pub mod rail_day;
 pub mod segments;

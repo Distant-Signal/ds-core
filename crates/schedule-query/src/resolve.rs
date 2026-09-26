@@ -308,50 +308,102 @@ pub fn departures_by_crs(
     let mut by_crs: HashMap<String, Vec<crate::records::ScheduleDeparture>> = HashMap::new();
 
     for uid in index.uids() {
-        let Some(resolved) = index.schedule_for_uid(uid, date) else {
-            continue;
-        };
-        if resolved.cancelled {
-            continue;
+        if let Some(resolved) = index.schedule_for_uid(uid, date) {
+            collect_crs_departures(&resolved, 0, now, tiploc_to_crs, &mut by_crs);
         }
-        for cp in &resolved.calling_points {
-            let Some(departure) = cp.booked_departure else {
-                continue;
-            };
-            if is_before(cp.day_offset, departure, now) {
-                continue;
+    }
+
+    // A sleeper or late Thameslink/c2c-class overnight service is booked
+    // under YESTERDAY's date (`resolve_for_date`/`schedule_for_uid` pick the
+    // schedule instance whose own days-of-week bitmask/date range cover the
+    // date it's booked FOR, not the date its later calling points land on),
+    // so the loop above -- which only ever calls `schedule_for_uid(uid,
+    // date)` -- never resolves that instance at all when building `date`'s
+    // own board, and its post-midnight `day_offset >= 1` calling points
+    // (already, correctly, kept forward-looking by `is_before` when
+    // YESTERDAY's own board was published) are silently absent from today's
+    // board too. A delivery processed at 01:30 is exactly this case: the
+    // real sleeper/Thameslink/c2c calling points still to come are booked
+    // under yesterday's UID instance, not today's.
+    //
+    // Fixed the same way `is_before`'s own doc comment fixed the sibling
+    // bug: resolve yesterday's instance too, keep only the calling points
+    // that land on `date` (`day_offset >= 1` there -- `day_offset == 0`
+    // really is yesterday's own departure, already covered when yesterday's
+    // board was published), and REBASE each kept calling point's day_offset
+    // by -1 before storing it, so a `ScheduleDeparture::day_offset` stored
+    // under `date`'s board always means what its own doc comment says:
+    // days past THIS board's `date`, never the originating instance's.
+    if let Some(yesterday) = date.pred_opt() {
+        for uid in index.uids() {
+            if let Some(resolved) = index.schedule_for_uid(uid, yesterday) {
+                collect_crs_departures(&resolved, 1, now, tiploc_to_crs, &mut by_crs);
             }
-            // A booked departure is not the same thing as a place a passenger
-            // may board. Until 2026-09-25 this bucket -- which backs
-            // `GET /public/stations/{crs}/schedule-departures` -- published
-            // set-down-only (`D`), operational (`OP`) and
-            // not-advertised-to-the-public (`N`) stops as boardable
-            // departures, because the CIF Activity field was never decoded at
-            // all. See `CallingPoint::is_public_pickup`.
-            if !cp.is_public_pickup() {
-                continue;
-            }
-            let Some(crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
-                continue;
-            };
-            let destination_crs = resolved
-                .calling_points
-                .last()
-                .and_then(|last| tiploc_to_crs.get(normalize_tiploc(&last.tiploc)))
-                .cloned();
-            by_crs
-                .entry(crs.clone())
-                .or_default()
-                .push(crate::records::ScheduleDeparture {
-                    uid: resolved.uid.clone(),
-                    scheduled: departure,
-                    day_offset: cp.day_offset,
-                    destination_crs,
-                });
         }
     }
 
     by_crs
+}
+
+/// The shared per-schedule body [`departures_by_crs`]'s two passes (`date`'s
+/// own instance, and the previous calendar day's overnight-carryover
+/// instance) both run: every departure-bearing calling point of `resolved`
+/// with `day_offset >= min_day_offset` is bucketed by CRS, same
+/// public-pickup/tiploc-resolution rules either pass, with `day_offset -
+/// min_day_offset` stored rather than the raw `day_offset` -- a no-op
+/// rebasing for the `date`-own pass (`min_day_offset: 0`), and exactly what
+/// turns "1 day past the schedule instance booked for yesterday" into "0
+/// days past `date`" for the carryover pass (`min_day_offset: 1`).
+/// Cancelled schedules contribute nothing, from either pass.
+fn collect_crs_departures(
+    resolved: &ResolvedSchedule,
+    min_day_offset: u8,
+    now: NaiveTime,
+    tiploc_to_crs: &HashMap<String, String>,
+    by_crs: &mut HashMap<String, Vec<crate::records::ScheduleDeparture>>,
+) {
+    if resolved.cancelled {
+        return;
+    }
+    for cp in &resolved.calling_points {
+        if cp.day_offset < min_day_offset {
+            continue;
+        }
+        let day_offset = cp.day_offset - min_day_offset;
+        let Some(departure) = cp.booked_departure else {
+            continue;
+        };
+        if is_before(day_offset, departure, now) {
+            continue;
+        }
+        // A booked departure is not the same thing as a place a passenger
+        // may board. Until 2026-09-25 this bucket -- which backs
+        // `GET /public/stations/{crs}/schedule-departures` -- published
+        // set-down-only (`D`), operational (`OP`) and
+        // not-advertised-to-the-public (`N`) stops as boardable
+        // departures, because the CIF Activity field was never decoded at
+        // all. See `CallingPoint::is_public_pickup`.
+        if !cp.is_public_pickup() {
+            continue;
+        }
+        let Some(crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
+            continue;
+        };
+        let destination_crs = resolved
+            .calling_points
+            .last()
+            .and_then(|last| tiploc_to_crs.get(normalize_tiploc(&last.tiploc)))
+            .cloned();
+        by_crs
+            .entry(crs.clone())
+            .or_default()
+            .push(crate::records::ScheduleDeparture {
+                uid: resolved.uid.clone(),
+                scheduled: departure,
+                day_offset,
+                destination_crs,
+            });
+    }
 }
 
 /// The destination-keyed sibling of [`departures_by_crs`]: every
@@ -1168,6 +1220,59 @@ mod tests {
             NaiveTime::from_hms_opt(0, 7, 0).unwrap()
         );
         assert_eq!(barking[0].day_offset, 1);
+    }
+
+    /// **Regression test for the L2 overnight-carryover fix.** `F49687`
+    /// (ALL_DAYS) is booked under `2026-09-04`'s instance too, and that
+    /// instance's Barking (`00:07`, `day_offset: 1` relative to
+    /// `2026-09-04`) genuinely lands on `2026-09-05` -- a delivery processed
+    /// at `00:05` on `2026-09-05` (a real post-midnight cycle time, e.g. a
+    /// 01:30 delivery) must still surface it on `2026-09-05`'s own board,
+    /// rebased to `day_offset: 0` (it IS today's departure, not tomorrow's),
+    /// not only on `2026-09-04`'s now-superseded board.
+    #[test]
+    fn departures_by_crs_includes_yesterdays_still_future_post_midnight_calling_point() {
+        let index = ScheduleIndex::build(f49687_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let now = NaiveTime::from_hms_opt(0, 5, 0).unwrap();
+        let tiploc_to_crs = tiploc_map(&[
+            ("LIVST", "LST"),
+            ("STFD", "SRA"),
+            ("BARKING", "BKG"),
+            ("SHENFLD", "SNF"),
+        ]);
+
+        let by_crs = departures_by_crs(&index, date, now, &tiploc_to_crs);
+
+        let barking = by_crs.get("BKG").unwrap_or_else(|| {
+            panic!(
+                "yesterday's (2026-09-04) F49687 instance's 00:07 Barking calling point is still \
+                 12 minutes in the future at 00:05 on 2026-09-05 and must not be dropped just \
+                 because it was booked under yesterday's schedule instance"
+            )
+        });
+        let carried_over = barking
+            .iter()
+            .find(|d| d.day_offset == 0)
+            .unwrap_or_else(|| {
+                panic!(
+                    "the carried-over calling point must be rebased to day_offset 0 -- it lands \
+                     on 2026-09-05 itself, not the day after"
+                )
+            });
+        assert_eq!(
+            carried_over.scheduled,
+            NaiveTime::from_hms_opt(0, 7, 0).unwrap()
+        );
+        // 2026-09-05's OWN F49687 instance also legitimately contributes a
+        // day_offset: 1 Barking entry (tonight's 23:48 departure's own
+        // 00:07-the-day-after continuation) -- both are real, distinct
+        // physical departures and neither should suppress the other.
+        assert!(
+            barking.iter().any(|d| d.day_offset == 1),
+            "2026-09-05's own instance must still independently contribute its own tomorrow-\
+             bound continuation"
+        );
     }
 
     /// The other direction of the same bug, and the reason the fix is a tuple
