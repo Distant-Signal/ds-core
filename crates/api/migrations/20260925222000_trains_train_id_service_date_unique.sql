@@ -45,19 +45,68 @@
 --   never insert a new one. So no legitimate write pattern here ever needs
 --   two `trains` rows to carry the same `(train_id, service_date)` pair.
 --
+-- * UPDATE (this migration's own revision, superseding the framing this
+--   comment originally had): rather than leaving existing corrupted data
+--   for a human to discover only when this file's `CREATE UNIQUE INDEX
+--   CONCURRENTLY` fails at deploy time, the immediately-preceding
+--   migration, `20260925221500_close_out_trains_train_id_service_date_collisions.sql`,
+--   now closes out every `(train_id, service_date)` collision first --
+--   deleting both/all sides of every colliding group outright, after
+--   detaching (never deleting) any `train_subscriptions` row that pointed
+--   at one of them. See that file's own header comment for the full
+--   reasoning (why it deletes rather than repairs in place, exactly how a
+--   detached subscription's `resolution_status` is recomputed, and the
+--   full FK fan-out audit).
+--
+--   That cleanup is a SEPARATE migration file, deliberately -- not folded
+--   into this one, even though this one's own header used to say "this
+--   migration alone doesn't touch existing corrupted data" as if a single
+--   file could do both. It cannot: sqlx sends an entire migration file to
+--   Postgres as ONE simple-query protocol message (verified empirically
+--   against Postgres 18 while writing this), and Postgres refuses to run
+--   `CREATE INDEX CONCURRENTLY` at all when it is not the ONLY statement in
+--   such a message -- not merely when it is inside an explicit `BEGIN`
+--   block. `-- no-transaction` (which this file still opts into, below)
+--   only removes sqlx's OWN wrapping transaction; it cannot make Postgres
+--   treat a multi-statement message as anything other than one batch for
+--   this purpose, no matter how the statements inside it are ordered or
+--   bracketed with `BEGIN`/`COMMIT`. (`20260906110000_train_movement_trains_id.sql`'s
+--   own doc comment already names this same shape of problem -- "this one
+--   also mixes DDL with a data backfill, so it genuinely wants its own
+--   transaction; splitting it would have needed more than a CONCURRENTLY
+--   rewrite" -- for exactly this reason.) Two migration files, applied in
+--   the ascending version order sqlx already guarantees, is the only way
+--   to get an ordinary transactional data cleanup to run immediately
+--   before an index build that must remain the sole statement in its own
+--   file. This file's own content is otherwise UNCHANGED from before that
+--   split -- still exactly one statement.
+--
 -- * The one already-known real corrupted row from today's incident
 --   (`trains.id = 6095140`, `train_uid = 'Y80926'`, `service_date =
---   '2026-09-25'`) was deliberately left uncleaned. Whether that row's
---   *wrongly written* `train_id` actually collides with a second, correctly
---   resolved `trains` row for the real owner of that TRUST identifier is
---   not something this migration can determine from here (that depends on
---   whether the real train's own `trains` row was ever independently
---   resolved) -- and it does not need to: `CREATE UNIQUE INDEX
---   CONCURRENTLY` never runs inside a transaction (Postgres rejects that
---   combination outright), so a real duplicate-key violation from that row
---   fails this single statement cleanly -- an INVALID index left behind for
---   a human to `DROP INDEX` and retry after manual data cleanup -- rather
---   than the ACCESS-EXCLUSIVE-lock-timeout flavor of startup crash-loop
+--   '2026-09-25'`) is now handled by the preceding migration like any
+--   other collision -- it no longer needs to be left for this file's
+--   `CREATE UNIQUE INDEX CONCURRENTLY` to discover the hard way. The
+--   standalone `scripts/remediate-2026-09-25-cross-matched-trains-row.sql`
+--   script (which fixes that one row in place, preserving its schedule
+--   match rather than deleting it) is therefore superseded for that
+--   incident -- it is kept in the repo as a historical record of the
+--   incident and as a worked example of the narrower "TRUST Activation
+--   contradicts identity" signature, not because it still needs to be run.
+--   If somehow run before these migrations deploy, it is harmless and
+--   simply leaves nothing for the preceding migration's own cleanup to
+--   find for that one row.
+--
+-- * Whether a real duplicate-key violation could still reach this file's
+--   `CREATE UNIQUE INDEX CONCURRENTLY` after the preceding migration's
+--   cleanup is, as far as this migration can determine, no -- that
+--   migration deletes every row involved in any `(train_id, service_date)`
+--   collision, which is exactly the condition this unique index would
+--   otherwise reject. `CREATE UNIQUE INDEX CONCURRENTLY` never runs inside
+--   a transaction (Postgres rejects that combination outright), so IF
+--   something unforeseen still collides (e.g. a live write racing this
+--   migration), the failure mode is unchanged from before: an INVALID
+--   index left behind for a human to `DROP INDEX` and retry, rather than
+--   the ACCESS-EXCLUSIVE-lock-timeout flavor of startup crash-loop
 --   `crates/api/tests/migration_index_locking.rs` exists to prevent
 --   (`main.rs` runs migrations before binding its listener, so any
 --   transaction-wrapped index build blocks `/public/health` for its whole
