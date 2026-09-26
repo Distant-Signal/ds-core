@@ -1,0 +1,15 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Drops `trust_event_backlog_crs_time (crs, planned_timestamp) WHERE crs IS
+-- NOT NULL`, superseded by the previous migration's
+-- `trust_event_backlog_upper_crs_time`. No query can use the old index: its
+-- only intended caller (`find_backlog_match`) filters on `UPPER(crs)`, and
+-- no other query against this table filters on `crs` at all (the rest key on
+-- `train_id`, `train_uid`, `dedup_key` or `received_at`). Production showed
+-- it at 39 MB with 0 scans, pure write and vacuum overhead on a table that
+-- turns over completely every day.
+--
+-- CONCURRENTLY (and so `-- no-transaction`, alone in its file) so the drop
+-- never waits behind, or blocks, the live backlog ingest.
+-- -------------------------------------------------------------------------
+DROP INDEX CONCURRENTLY IF EXISTS trust_event_backlog_crs_time;

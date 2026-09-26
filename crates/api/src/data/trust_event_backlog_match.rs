@@ -300,6 +300,11 @@ async fn find_backlog_match(
     // as safe as a hand-written literal while never drifting from the
     // threshold `common::trust_timestamp::is_plausible_actual_timestamp`
     // itself uses.
+    //
+    // `UPPER(crs)` is served by the expression index
+    // `trust_event_backlog_upper_crs_time (UPPER(crs), planned_timestamp)`
+    // (20260926182000); keep the predicate's shape in step with it, or this
+    // falls back to a sequential scan of the whole backlog.
     let query = format!(
         "SELECT train_id FROM trust_event_backlog \
          WHERE UPPER(crs) = UPPER($1) AND planned_timestamp BETWEEN $2 AND $3 \
