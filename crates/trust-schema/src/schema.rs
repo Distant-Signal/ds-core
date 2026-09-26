@@ -1,9 +1,12 @@
 //! TRUST movement-feed message parsing. Field shapes are drawn only from
 //! what docs/superpowers/specs/2026-08-28-train-tracking-design.md's
 //! research pass independently confirmed (five of eight msg_types, by
-//! name and field). `0005`/`0008` are unconfirmed and parse into
-//! `TrustMessage::Unknown` rather than being guessed at -- per this
-//! codebase's "no invented API details" convention.
+//! name and field), plus `0005` (Reinstatement -- see the H4 finding of
+//! the 2026-09-26 review, and the `Reinstatement` struct's own doc comment
+//! below for why this one additional type is now modeled too). `0008` alone
+//! remains unconfirmed and parses into `TrustMessage::Unknown` rather than
+//! being guessed at -- per this codebase's "no invented API details"
+//! convention.
 //!
 //! One thing that research pass got wrong: it claimed TRUST delivers a
 //! JSON array of `{header, body}` envelopes per batch. A real RDM Train
@@ -122,6 +125,32 @@ pub struct ChangeOfIdentity {
     pub train_id: String,
 }
 
+/// TRUST message type `0005`, Train Reinstatement: sent when a previously
+/// cancelled service resumes running (the H4 finding of the 2026-09-26
+/// review). This codebase's original research pass (see this module's own
+/// header doc) flagged `0005` as unconfirmed, since a "community summary"
+/// it found named it "Unidentified Train" rather than "Reinstatement" and
+/// that wasn't checked against a primary source. Network Rail's own
+/// published Train Movements message list (the same TRAIN_MVT_ALL_TOC
+/// product this whole crate targets) names `0005` as Train Reinstatement,
+/// independent of that unverified community summary -- so unlike `0008`
+/// (still genuinely unresolved either way), this one type is now confirmed
+/// by name.
+///
+/// Only `train_id` is modeled, same minimal posture as `ChangeOfOrigin`/
+/// `ChangeOfIdentity` above: it is the one field any consumer of this type
+/// can depend on (the join key back to the cancelled journey this
+/// reinstates), and this pass has no independently-confirmed source for
+/// this message's other fields (a real reinstatement timestamp, an
+/// `original_loc_stanox`, etc. are plausible but would be guessing at
+/// exact field names/shapes, which this codebase's "no invented API
+/// details" convention rules out same as it did for `0005` as a whole
+/// before this fix).
+#[derive(Debug, Clone, Deserialize)]
+pub struct Reinstatement {
+    pub train_id: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum TrustMessage {
     Activation(Activation),
@@ -129,9 +158,10 @@ pub enum TrustMessage {
     Cancellation(Cancellation),
     ChangeOfOrigin(ChangeOfOrigin),
     ChangeOfIdentity(ChangeOfIdentity),
-    /// Any `msg_type` this pass doesn't confirm the shape of (`0005`,
-    /// `0008`, or anything else RDM's schema turns out to send). Carries
-    /// the raw `msg_type` string for logging; the raw body is intentionally
+    Reinstatement(Reinstatement),
+    /// Any `msg_type` this pass doesn't confirm the shape of (`0008`, or
+    /// anything else RDM's schema turns out to send). Carries the raw
+    /// `msg_type` string for logging; the raw body is intentionally
     /// dropped here since there's no confirmed shape to hold it in.
     Unknown(String),
 }
@@ -191,7 +221,13 @@ pub fn parse_batch(raw: &str) -> anyhow::Result<Vec<TrustMessage>> {
 /// deserialization itself fails before per-envelope classification ever
 /// runs -- same as `parse_batch` today.
 pub fn confirmed_envelope_bodies(raw: &str) -> anyhow::Result<Vec<(String, String)>> {
-    const CONFIRMED: [&str; 5] = ["0001", "0002", "0003", "0006", "0007"];
+    // `0005` (Reinstatement) joined this list in the H4 fix (2026-09-26
+    // review): it used to parse as `Unknown` and get dropped right here,
+    // before `trust-consumer`/`trust-backlog-consumer` ever saw it, which
+    // silently discarded the one message TRUST sends to un-cancel a service
+    // that resumes running. See `schema::Reinstatement`'s own doc comment
+    // for why this type (unlike `0008`) is now confirmed.
+    const CONFIRMED: [&str; 6] = ["0001", "0002", "0003", "0005", "0006", "0007"];
 
     let value: serde_json::Value = serde_json::from_str(raw)?;
     let envelopes: Vec<serde_json::Value> = if value.is_array() {
@@ -244,6 +280,9 @@ fn parse_envelope(envelope: Envelope) -> Option<TrustMessage> {
         "0007" => serde_json::from_value(envelope.body)
             .ok()
             .map(TrustMessage::ChangeOfIdentity),
+        "0005" => serde_json::from_value(envelope.body)
+            .ok()
+            .map(TrustMessage::Reinstatement),
         other => return Some(TrustMessage::Unknown(other.to_string())),
     };
     if parsed.is_none() {
@@ -350,10 +389,28 @@ mod tests {
 
     #[test]
     fn unconfirmed_msg_types_become_unknown_not_a_parse_error() {
-        let raw = r#"[{"header":{"msg_type":"0005"},"body":{"anything":"goes"}}]"#;
+        // `0008` ("Change of Location"), not `0005`: the H4 fix confirmed
+        // `0005` (Reinstatement), see `parses_a_reinstatement_message` below
+        // and `Reinstatement`'s own doc comment for why.
+        let raw = r#"[{"header":{"msg_type":"0008"},"body":{"anything":"goes"}}]"#;
         let messages = parse_batch(raw).unwrap();
         assert_eq!(messages.len(), 1);
-        assert!(matches!(&messages[0], TrustMessage::Unknown(t) if t == "0005"));
+        assert!(matches!(&messages[0], TrustMessage::Unknown(t) if t == "0008"));
+    }
+
+    /// The H4 finding of the 2026-09-26 review, this fix's own regression
+    /// test: `0005` (Reinstatement) now parses into its own confirmed
+    /// variant, not `Unknown` -- see `Reinstatement`'s doc comment for why
+    /// this is a real, previously-dropped signal that a cancelled service
+    /// resumed running.
+    #[test]
+    fn parses_a_reinstatement_message() {
+        let raw = r#"[{"header":{"msg_type":"0005"},"body":{"train_id":"221832406"}}]"#;
+        let messages = parse_batch(raw).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            matches!(&messages[0], TrustMessage::Reinstatement(r) if r.train_id == "221832406")
+        );
     }
 
     #[test]
@@ -396,7 +453,7 @@ mod tests {
                 "train_service_code":"22345000","schedule_wtt_id":"WTT1",
                 "schedule_start_date":"2026-08-28","schedule_end_date":"2026-08-28"
             }},
-            {"header":{"msg_type":"0005"},"body":{"anything":"goes"}},
+            {"header":{"msg_type":"0008"},"body":{"anything":"goes"}},
             {"header":{"msg_type":"0003"},"body":{
                 "train_id":"221832406","event_type":"DEPARTURE",
                 "planned_timestamp":"1756400000000","actual_timestamp":"1756400060000",
@@ -411,6 +468,20 @@ mod tests {
             let value: serde_json::Value = serde_json::from_str(payload).unwrap();
             assert_eq!(value["header"]["msg_type"].as_str().unwrap(), msg_type);
         }
+    }
+
+    /// The H4 fix's own regression test for the movement-relay gate: `0005`
+    /// (Reinstatement) is now in `CONFIRMED` and must survive
+    /// `confirmed_envelope_bodies` -- the exact function `movement-relay`
+    /// calls to decide what gets published onward to
+    /// `trust-consumer`/`trust-backlog-consumer`. Before this fix, `0005`
+    /// was silently dropped right here, before either consumer ever saw it.
+    #[test]
+    fn confirmed_envelope_bodies_now_keeps_reinstatement() {
+        let raw = r#"[{"header":{"msg_type":"0005"},"body":{"train_id":"221832406"}}]"#;
+        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        assert_eq!(survivors.len(), 1);
+        assert_eq!(survivors[0].0, "0005");
     }
 
     /// The one the design doc's Decision 1 rationale exists to prove:

@@ -501,6 +501,20 @@ async fn replay_backlog_history(
                 row.actual_timestamp, // canx_timestamp lands in actual_timestamp, mirrors process.rs
                 None,
             ),
+            // "0005" (Reinstatement, confirmed by the H4 fix of the
+            // 2026-09-26 review): un-sticks a "cancelled" journey back to
+            // "en_route" during replay too, same as the live paths --
+            // without this arm, a resolved subscription that only backlog-
+            // matches AFTER a cancel -> reinstate sequence would replay the
+            // Cancellation but silently skip the Reinstatement (falling into
+            // `_ => continue` below) and land back on a stale "cancelled".
+            "0005" => (
+                journey::apply_reinstatement(&previous),
+                None,
+                None,
+                None,
+                None,
+            ),
             // "0001" (Activation) carries no derivable state change of its
             // own in trust_schema::journey -- it only supplies train_uid,
             // already known by the time this function is called. Skipped

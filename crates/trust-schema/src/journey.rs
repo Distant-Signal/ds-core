@@ -106,27 +106,37 @@ pub fn apply_movement(
     };
 
     DerivedState {
-        // **Terminal-state guard (Low finding #1 of the 2026-09-25 review).**
-        // Without this, a depot move or any other Movement landing AFTER the
-        // confirmed terminus ARRIVAL that set `previous.status ==
-        // "completed"` would unconditionally recompute `naive_status` as
-        // `"en_route"` above (it is neither an ARRIVAL nor at the
-        // destination) and silently regress an already-finished journey back
-        // to running -- exactly the shape of bug this function's whole
-        // design (a pure fold over one event at a time, per the module doc)
-        // makes easy to introduce, because `apply_movement` has no memory of
-        // "we already decided this is over" beyond `previous` itself.
+        // **Terminal-state guard (Low finding #1 of the 2026-09-25 review;
+        // narrowed by the H4 fix of the 2026-09-26 review -- see
+        // `status_rank`'s own doc comment for why `"cancelled"` no longer
+        // ranks alongside `"completed"` here).**
+        //
+        // Without this guard at all, a depot move or any other Movement
+        // landing AFTER the confirmed terminus ARRIVAL that set
+        // `previous.status == "completed"` would unconditionally recompute
+        // `naive_status` as `"en_route"` above (it is neither an ARRIVAL nor
+        // at the destination) and silently regress an already-finished
+        // journey back to running -- exactly the shape of bug this
+        // function's whole design (a pure fold over one event at a time,
+        // per the module doc) makes easy to introduce, because
+        // `apply_movement` has no memory of "we already decided this is
+        // over" beyond `previous` itself.
         //
         // `status_rank` below is this crate's mirror of
         // `common::severity_rank`'s established "rank, don't compare
         // declaration/discriminant order" pattern: never let a transition
         // move a journey to a LOWER rank than it already reached. Once
-        // `previous.status` is `"completed"` (or `"cancelled"` -- the other
-        // terminal status this fold can be handed, e.g. if a stray Movement
-        // arrives after `apply_cancellation` already ran) no Movement may
-        // ever pull it back down to `"en_route"`; a `naive_status` at the
-        // SAME rank (a second confirmed terminus ARRIVAL) still applies,
-        // which is harmless idempotence, not a regression.
+        // `previous.status` is `"completed"` -- genuinely terminal, a real
+        // train cannot un-finish a finished journey -- no Movement may ever
+        // pull it back down; a `naive_status` at the SAME rank (a second
+        // confirmed terminus ARRIVAL) still applies, which is harmless
+        // idempotence, not a regression. `"cancelled"`, by contrast, is
+        // NOT given this same protection against a fresh Movement (see
+        // `status_rank`): a cancelled service that TRUST then reports real
+        // movement for again (whether or not a Reinstatement message was
+        // also seen -- see `apply_reinstatement`) is real, positive evidence
+        // it is running, and must be reflected, not permanently stuck
+        // reading "Cancelled".
         status: if status_rank(naive_status) < status_rank(&previous.status) {
             previous.status.clone()
         } else {
@@ -150,17 +160,31 @@ pub fn apply_movement(
 /// itself block a legitimate transition.
 ///
 /// Used by [`apply_movement`] to guard against a later event regressing an
-/// already-`"completed"` (or `"cancelled"`) journey back to `"en_route"`.
-/// [`apply_cancellation`] deliberately does NOT consult this: a cancellation
-/// is real, independent evidence a journey has ended and must always apply,
-/// even over a `"completed"` journey (e.g. a corrected/withdrawn terminus
-/// arrival) -- unlike a bare Movement, it is never mistaken evidence of
-/// still running.
+/// already-`"completed"` journey back to `"en_route"`.
+///
+/// **`"cancelled"` is deliberately NOT given `"completed"`'s rank (H4
+/// finding, 2026-09-26 review).** It briefly was, as part of the
+/// 2026-09-25 review's Low finding #1 fix (guarding a `"completed"` journey
+/// against a stray post-arrival Movement) -- but `"completed"` and
+/// `"cancelled"` are not equally final in reality: a genuine TRUST
+/// Reinstatement (`0005`) is Network Rail's own confirmation that a
+/// cancelled service is running again, a real and not-uncommon operational
+/// event, whereas nothing ever "un-arrives" a train from its destination.
+/// Ranking `"cancelled"` at `1`, the SAME rank as `"en_route"`, means a
+/// fresh Movement arriving after a Cancellation is free to recompute
+/// `naive_status` and have it actually apply -- exactly the behavior this
+/// whole fold had before the 2026-09-25 fix, restored for `"cancelled"`
+/// specifically, while `"completed"`'s own guard (rank `2`, the one that
+/// fix was actually about) is untouched. See
+/// `a_later_movement_does_not_regress_a_completed_journey_to_en_route` for
+/// that guard's own regression test, unchanged by this fix, and
+/// `a_movement_after_cancellation_reflects_real_running_again` for this
+/// one's.
 fn status_rank(status: &str) -> u8 {
     match status {
         "awaiting_activation" => 0,
-        "en_route" => 1,
-        "completed" | "cancelled" => 2,
+        "en_route" | "cancelled" => 1,
+        "completed" => 2,
         _ => 0,
     }
 }
@@ -168,6 +192,41 @@ fn status_rank(status: &str) -> u8 {
 pub fn apply_cancellation(previous: &DerivedState) -> DerivedState {
     DerivedState {
         status: "cancelled".to_string(),
+        ..previous.clone()
+    }
+}
+
+/// Applied for a genuine TRUST Reinstatement (`0005`) -- real, positive
+/// evidence a previously-cancelled service is running again (the H4 finding
+/// of the 2026-09-26 review; see `schema::Reinstatement`'s own doc comment
+/// for the message type itself, and `status_rank`'s for why `"cancelled"`
+/// no longer blocks a fresh Movement from proving the same thing
+/// independently).
+///
+/// Un-sticks the status immediately, without waiting for the next Movement
+/// to arrive and independently confirm it -- there can be a real gap
+/// between a Reinstatement and this train's next reported Movement, during
+/// which this journey would otherwise keep reading "Cancelled" despite
+/// TRUST already having said otherwise.
+///
+/// Deliberately conservative about exactly which previous statuses this
+/// touches: only `"cancelled"` is un-stuck, back to `"en_route"` (the
+/// natural "we don't yet know its new position, but it is running" state,
+/// same as `DerivedState::awaiting_activation`'s own choice of default
+/// isn't `"en_route"` while nothing is known yet). Every other previous
+/// status passes through unchanged -- in particular `"completed"` is left
+/// alone, same posture as [`apply_movement`]'s own guard: a real
+/// Reinstatement for a train that has already been confirmed to arrive at
+/// its destination is not a scenario this fold un-does. `"awaiting_activation"`
+/// and `"en_route"` are already not "stuck" on anything a Reinstatement
+/// would need to fix, so they pass through as-is too.
+pub fn apply_reinstatement(previous: &DerivedState) -> DerivedState {
+    DerivedState {
+        status: if previous.status == "cancelled" {
+            "en_route".to_string()
+        } else {
+            previous.status.clone()
+        },
         ..previous.clone()
     }
 }
@@ -458,22 +517,114 @@ mod tests {
         assert_eq!(arrived_again.status, "completed");
     }
 
-    /// A Movement arriving after `apply_cancellation` already ran must not
-    /// resurrect a cancelled journey as `"en_route"` either -- `"cancelled"`
-    /// is the other terminal status `status_rank` protects.
+    /// **H4 finding, 2026-09-26 review -- the reviewer's exact repro.**
+    /// A genuine Movement (DEPARTURE/ARRIVAL) arriving for a train AFTER a
+    /// Cancellation must be reflected as real running again, not stuck
+    /// reading `"cancelled"` forever. This is the opposite expectation of
+    /// this same scenario's test from the 2026-09-25 review (which this
+    /// test replaces): that fix made `"cancelled"` rank alongside
+    /// `"completed"` as terminal, which -- as an unintended side effect --
+    /// made a cancel-then-reinstate-then-actually-run sequence show
+    /// "Cancelled" all day even once real movement data resumed, since no
+    /// Movement could ever override it again. `status_rank` no longer
+    /// protects `"cancelled"` this way (see its own doc comment); only
+    /// `"completed"` keeps that protection, proven unchanged by
+    /// `a_later_movement_does_not_regress_a_completed_journey_to_en_route`
+    /// above.
     #[test]
-    fn a_movement_after_cancellation_does_not_resurrect_the_journey() {
+    fn a_movement_after_cancellation_reflects_real_running_again() {
         let previous = DerivedState::awaiting_activation();
         let cancelled = apply_cancellation(&previous);
         assert_eq!(cancelled.status, "cancelled");
 
-        let stray_movement = apply_movement(
+        // No `0005` Reinstatement in this exact sequence -- proving the fix
+        // doesn't depend on that message having been seen at all. A bare
+        // Movement resuming is, on its own, real evidence the train is
+        // running.
+        let departure = apply_movement(
             &cancelled,
             &movement("DEPARTURE", Some("ON TIME")),
             Some("WAT"),
             None,
         );
-        assert_eq!(stray_movement.status, "cancelled");
+        assert_eq!(
+            departure.status, "en_route",
+            "a real Movement after a Cancellation must un-stick the status, not stay cancelled forever"
+        );
+
+        let arrival = apply_movement(
+            &cancelled,
+            &movement("ARRIVAL", Some("ON TIME")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(
+            arrival.status, "completed",
+            "a confirmed terminus ARRIVAL after a Cancellation must also apply, not stay cancelled"
+        );
+    }
+
+    /// The full real-world H4 sequence: Cancellation, then a genuine TRUST
+    /// Reinstatement (`0005`), then real Movement data resuming -- each
+    /// step must be reflected, and the final state must be a normally
+    /// running (or completing) journey, not `"cancelled"`.
+    #[test]
+    fn cancel_then_reinstate_then_move_ends_up_running_again() {
+        let previous = DerivedState::awaiting_activation();
+
+        let cancelled = apply_cancellation(&previous);
+        assert_eq!(cancelled.status, "cancelled");
+
+        // The Reinstatement itself un-sticks the status immediately, even
+        // before any fresh Movement arrives -- there can be a real gap
+        // between the two.
+        let reinstated = apply_reinstatement(&cancelled);
+        assert_eq!(reinstated.status, "en_route");
+
+        let running = apply_movement(
+            &reinstated,
+            &movement("DEPARTURE", Some("ON TIME")),
+            Some("WAT"),
+            None,
+        );
+        assert_eq!(running.status, "en_route");
+        assert_eq!(running.last_reported_location, Some("WAT".to_string()));
+    }
+
+    /// A Reinstatement is a no-op for any status it has nothing to undo --
+    /// in particular, it must NOT resurrect an already-`"completed"`
+    /// journey (mirroring `apply_movement`'s own guard for that case).
+    #[test]
+    fn reinstatement_does_not_touch_a_completed_journey() {
+        let previous = DerivedState::awaiting_activation();
+        let arrived = apply_movement(
+            &previous,
+            &movement("ARRIVAL", Some("ON TIME")),
+            Some("WOK"),
+            Some("WOK"),
+        );
+        assert_eq!(arrived.status, "completed");
+
+        let reinstated = apply_reinstatement(&arrived);
+        assert_eq!(reinstated.status, "completed");
+    }
+
+    /// And a no-op for a journey that was never cancelled in the first
+    /// place -- an out-of-order or duplicate Reinstatement must not
+    /// disturb an ordinary running journey.
+    #[test]
+    fn reinstatement_is_a_no_op_for_an_already_running_journey() {
+        let previous = DerivedState::awaiting_activation();
+        let running = apply_movement(
+            &previous,
+            &movement("DEPARTURE", Some("ON TIME")),
+            Some("WAT"),
+            None,
+        );
+        assert_eq!(running.status, "en_route");
+
+        let reinstated = apply_reinstatement(&running);
+        assert_eq!(reinstated.status, "en_route");
     }
 
     #[test]
