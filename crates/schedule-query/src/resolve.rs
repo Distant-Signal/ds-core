@@ -608,10 +608,13 @@ pub fn departures_by_destination_crs(
 /// correct degrade: the code correctly declines to claim a station this
 /// schedule's terminus cannot be honestly named as. `GET
 /// /public/trains/search`'s own `destinationCrs` response field passes this
-/// value straight through unenriched (`render::calling_point_departure_json`
-/// does not look up a display name for `destinationCrs` today, for any
-/// value), so this degrades to a visibly-not-a-station-code string on the
-/// wire rather than silently pretending to be a real one.
+/// value straight through as-is -- `render::calling_point_departure_json`
+/// does now look up a display name for `destinationCrs` (added after this
+/// paragraph was first written; see that function's own doc comment), but
+/// a `~`-prefixed key is never a real CRS and so never has a `stations`
+/// row to resolve a name from -- so it degrades to a visibly-not-a-
+/// station-code string with a `null` name on the wire rather than silently
+/// pretending to be a real one.
 fn unresolved_destination_key(terminus_tiploc: &str) -> String {
     format!("~{terminus_tiploc}")
 }
