@@ -79,12 +79,40 @@ fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
 /// own calling points already in seq order; this function does no
 /// resolution or reordering of its own.
 ///
-/// A pair contributes a connection only when the earlier point has a
-/// `booked_departure` and the later has a `booked_arrival` -- both real,
-/// non-`Err` gaps (an `Origin` point has no arrival; a `Terminate` point
-/// has no departure; see [`crate::records::CallingPointKind`]) that simply
-/// produce no connection across that specific gap, never a fabricated one.
-/// A schedule with fewer than two calling points contributes nothing.
+/// A connection joins the earlier point with a `booked_departure` to the
+/// NEAREST later point with a `booked_arrival` -- not necessarily its
+/// immediate slice neighbour. Real CIF schedules interleave genuine calling
+/// points with non-stopping junction/pass-point TIPLOCs (e.g. `CMDNJN`,
+/// `WATFDJ` used as a pass rather than a call, `RUGBY`, `STOKOTJ`) that
+/// carry no booked time at all -- CIF gives those a separate "Scheduled
+/// Pass" time this crate does not decode (see
+/// `crate::parse::parse_calling_point`'s own doc comment), so they
+/// correctly arrive here as `CallingPointForConnections` with both fields
+/// `None`. `schedule_calling_points_full_rows`
+/// (`crates/schedule-reference/src/main.rs`) does not filter these rows out
+/// -- a blank CIF Activity code deliberately "fails open" as boardable
+/// (see `crate::records::CallingPoint::is_public_pickup`'s own doc
+/// comment), and a real pass point has both a blank Activity code and no
+/// booked time, so it is published here indistinguishable from a genuine
+/// calling point except for carrying no time. Requiring strict pairwise
+/// adjacency (as this function used to) treats every one of these untimed
+/// rows as a hard break in the graph, severing it at almost every junction
+/// on almost every real multi-station schedule -- confirmed live
+/// 2026-09-27 against UID `W33128` (EUSTON -> Manchester Piccadilly),
+/// which produced zero trip-planner itineraries despite the direct service
+/// genuinely existing. Walking forward past any untimed row(s) instead
+/// connects the two REAL timed calling points directly, carrying the
+/// correct transit time across the skipped gap (the skipped rows have no
+/// timing data to contribute either way, so nothing is fabricated or
+/// interpolated -- the edge is exactly the timed "from" point's own
+/// `booked_departure` to the timed "to" point's own `booked_arrival`,
+/// precisely as it would be for a genuinely adjacent pair).
+///
+/// An `Origin` point has no arrival; a `Terminate` point has no departure
+/// (see [`crate::records::CallingPointKind`]) -- those simply cannot start
+/// (`Terminate`) or cannot be the `to` of (`Origin`) a connection, never a
+/// fabricated one. A schedule with fewer than two calling points, or one
+/// whose remaining timed points are fewer than two, contributes nothing.
 ///
 /// Sorted by `(departure_min, uid, from_tiploc)`, not `departure_min`
 /// alone: `schedules` is commonly driven by a `HashMap` at the call site
@@ -102,12 +130,17 @@ pub fn build_connections<'a>(
 ) -> Vec<Connection> {
     let mut connections = Vec::new();
     for (uid, calling_points) in schedules {
-        for pair in calling_points.windows(2) {
-            let (from, to) = (&pair[0], &pair[1]);
-            let (Some(departure), Some(arrival)) = (from.booked_departure, to.booked_arrival)
+        for (i, from) in calling_points.iter().enumerate() {
+            let Some(departure) = from.booked_departure else {
+                continue;
+            };
+            let Some(to) = calling_points[i + 1..]
+                .iter()
+                .find(|cp| cp.booked_arrival.is_some())
             else {
                 continue;
             };
+            let arrival = to.booked_arrival.expect("just checked is_some");
             connections.push(Connection {
                 uid: uid.to_string(),
                 from_tiploc: from.tiploc.clone(),
@@ -208,5 +241,62 @@ mod tests {
             build_connections([("LATE", late.as_slice()), ("EARLY", early.as_slice())]);
         assert_eq!(connections[0].uid, "EARLY");
         assert_eq!(connections[1].uid, "LATE");
+    }
+
+    #[test]
+    fn untimed_junction_rows_between_two_timed_stops_still_produce_a_connection() {
+        // Real-world shape confirmed live 2026-09-27 against UID `W33128`
+        // (EUSTON -> Manchester Piccadilly): `schedule_calling_points_full`
+        // carries genuine, non-stopping junction/pass-point TIPLOCs
+        // (CMDNJN, WATFDJ used here as a pass rather than a call, RUGBY,
+        // STOKOTJ) interleaved between real calling points, each with
+        // neither a booked arrival nor departure. Before this fix,
+        // `build_connections`'s strict `windows(2)` adjacency produced ZERO
+        // edges across a gap like this, severing the whole graph at this
+        // junction even though EUSTON and MAN are both real, genuinely
+        // timed calling points of the same schedule.
+        let points = vec![
+            cp("EUSTON", None, Some("08:00:00"), 0),
+            cp("CMDNJN", None, None, 0),
+            cp("WATFDJ", None, None, 0),
+            cp("RUGBY", None, None, 0),
+            cp("STOKOTJ", None, None, 0),
+            cp("MAN", Some("10:50:00"), None, 0),
+        ];
+        let connections = build_connections([("W33128", points.as_slice())]);
+        assert_eq!(
+            connections.len(),
+            1,
+            "the four untimed junction rows must be skipped over, not treated as breaks"
+        );
+        assert_eq!(connections[0].from_tiploc, "EUSTON");
+        assert_eq!(connections[0].to_tiploc, "MAN");
+        assert_eq!(connections[0].departure_min, 8 * 60);
+        assert_eq!(connections[0].arrival_min, 10 * 60 + 50);
+    }
+
+    #[test]
+    fn untimed_junction_rows_do_not_merge_two_separate_real_segments() {
+        // A schedule with real timed stops on BOTH sides of an untimed
+        // junction run must still produce two separate connections (one per
+        // real segment), not one long connection that skips the middle
+        // timed stop entirely.
+        let points = vec![
+            cp("EUSTON", None, Some("08:00:00"), 0),
+            cp("CMDNJN", None, None, 0),
+            cp("WATFDJ", Some("08:20:00"), Some("08:21:00"), 0),
+            cp("RUGBY", None, None, 0),
+            cp("MAN", Some("10:50:00"), None, 0),
+        ];
+        let connections = build_connections([("W33128", points.as_slice())]);
+        assert_eq!(connections.len(), 2);
+        assert_eq!(connections[0].from_tiploc, "EUSTON");
+        assert_eq!(connections[0].to_tiploc, "WATFDJ");
+        assert_eq!(connections[0].departure_min, 8 * 60);
+        assert_eq!(connections[0].arrival_min, 8 * 60 + 20);
+        assert_eq!(connections[1].from_tiploc, "WATFDJ");
+        assert_eq!(connections[1].to_tiploc, "MAN");
+        assert_eq!(connections[1].departure_min, 8 * 60 + 21);
+        assert_eq!(connections[1].arrival_min, 10 * 60 + 50);
     }
 }
