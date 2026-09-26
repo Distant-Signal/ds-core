@@ -72,6 +72,7 @@
 //! gate) for a human to re-check this crate's byte offsets against the
 //! real, full, untracked `timetable_full.zip` extract by hand.
 
+pub mod compact;
 pub mod connections;
 pub mod interchange;
 pub mod parse;
@@ -79,17 +80,19 @@ pub mod records;
 pub mod resolve;
 pub mod tiploc;
 
+pub use compact::SmallStr;
 pub use connections::{CallingPointForConnections, Connection, build_connections};
 pub use interchange::{
     ChangeTime, FixedLink, InterchangeData, fixed_links_from, minimum_change_time, sibling_tiplocs,
 };
-pub use parse::parse_schedule_records;
+pub use parse::{ScheduleRecordParser, parse_schedule_records};
 pub use records::{
-    BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture, LinePopulationEntry,
-    RawSchedule, ScheduleDeparture, StpIndicator,
+    Activity, BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture,
+    LinePopulationEntry, Platform, RawSchedule, ScheduleDeparture, StpIndicator, Tiploc,
 };
 pub use resolve::{
-    ResolvedSchedule, ScheduleIndex, departures_by_crs, departures_by_destination_crs, match_pin,
-    match_pin_with_delta, resolve_for_date, schedules_touching, unresolved_booked_tiplocs,
+    ResolvedSchedule, ScheduleIndex, ScheduleIndexBuilder, departures_by_crs,
+    departures_by_destination_crs, match_pin, match_pin_with_delta, resolve_for_date,
+    schedules_touching, unresolved_booked_tiplocs,
 };
 pub use tiploc::normalize_tiploc;

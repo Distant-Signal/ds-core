@@ -38,7 +38,7 @@ pub struct CallingPointForConnections {
 impl From<&crate::records::CallingPoint> for CallingPointForConnections {
     fn from(cp: &crate::records::CallingPoint) -> Self {
         Self {
-            tiploc: cp.tiploc.clone(),
+            tiploc: cp.tiploc.to_string(),
             booked_arrival: cp.booked_arrival,
             booked_departure: cp.booked_departure,
             day_offset: cp.day_offset,

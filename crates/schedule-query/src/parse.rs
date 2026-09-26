@@ -38,7 +38,10 @@
 
 use chrono::{NaiveDate, NaiveTime};
 
-use crate::records::{BasicSchedule, CallingPoint, CallingPointKind, RawSchedule, StpIndicator};
+use crate::records::{
+    Activity, BasicSchedule, CallingPoint, CallingPointKind, Platform, RawSchedule, StpIndicator,
+    Tiploc,
+};
 
 /// Minimum length of a `BS` line this parser can decode: needs bytes
 /// `0..28` (record identity through the days-of-week bitmask).
@@ -162,14 +165,43 @@ fn is_fixed_width_decodable(line: &str, min_len: usize) -> bool {
 /// without trading a rare visible gap for a common invisible one.
 pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
     let mut out = Vec::new();
-    let mut current: Option<RawSchedule> = None;
+    let mut parser = ScheduleRecordParser::default();
+    for line in text.lines() {
+        parser.push_line(line, |schedule| out.push(schedule));
+    }
+    parser.finish(|schedule| out.push(schedule));
+    out
+}
+
+/// [`parse_schedule_records`]'s state machine, fed one line at a time, so a
+/// caller can parse a whole `MCA` extract straight off disk without ever
+/// holding its ~700MB of text in memory (see
+/// [`crate::resolve::ScheduleIndexBuilder`], and `schedule-reference`'s
+/// 2026-09-26 OOM fix). [`parse_schedule_records`] is exactly this, driven
+/// by `text.lines()`, so both entry points share every behaviour documented
+/// on it.
+///
+/// Each completed block is handed to `emit` as soon as it closes, with its
+/// `calling_points` shrunk to fit: a block's `Vec` grows by doubling while
+/// it is being parsed, and that slack would otherwise stay resident for the
+/// index's whole lifetime.
+#[derive(Debug, Default)]
+pub struct ScheduleRecordParser {
+    current: Option<RawSchedule>,
     // 1-based position of the body line about to be processed within the
     // CURRENTLY OPEN block (reset whenever a real `BS` line opens a new
     // one) -- purely diagnostic context for the drop warning below, so a
     // log line can say WHERE in the block the gap is, not just which train.
-    let mut body_line_position: u32 = 0;
+    body_line_position: u32,
+}
 
-    for line in text.lines() {
+impl ScheduleRecordParser {
+    /// Feeds one line (without its line terminator).
+    pub fn push_line(&mut self, line: &str, mut emit: impl FnMut(RawSchedule)) {
+        let mut emit = |mut schedule: RawSchedule| {
+            schedule.calling_points.shrink_to_fit();
+            emit(schedule);
+        };
         // Dispatch on the two record-identity BYTES, not on `&line[0..2]`.
         // A `&str` slice would panic when byte index 2 falls inside a
         // multi-byte character (the very first of this parser's eight
@@ -184,10 +216,10 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
         // calling points to the PREVIOUS schedule.
         match line.as_bytes() {
             [b'B', b'S', ..] => {
-                if let Some(prev) = current.take() {
-                    out.push(prev);
+                if let Some(prev) = self.current.take() {
+                    emit(prev);
                 }
-                body_line_position = 0;
+                self.body_line_position = 0;
                 if let Some(basic) = parse_basic_schedule(line) {
                     let cancelled = basic.stp_indicator == StpIndicator::Cancellation;
                     let schedule = RawSchedule {
@@ -195,46 +227,46 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
                         calling_points: Vec::new(),
                     };
                     if cancelled {
-                        out.push(schedule);
+                        emit(schedule);
                     } else {
-                        current = Some(schedule);
+                        self.current = Some(schedule);
                     }
                 }
                 // A malformed BS line is skipped; `current` stays `None`
                 // until the next real BS line starts a new block.
             }
             [b'L', b'O', ..] => {
-                body_line_position += 1;
+                self.body_line_position += 1;
                 record_calling_point(
                     parse_calling_point(line, CallingPointKind::Origin),
-                    current.as_mut(),
+                    self.current.as_mut(),
                     "LO",
-                    body_line_position,
+                    self.body_line_position,
                 );
             }
             [b'L', b'I', ..] => {
-                body_line_position += 1;
+                self.body_line_position += 1;
                 record_calling_point(
                     parse_calling_point(line, CallingPointKind::Intermediate),
-                    current.as_mut(),
+                    self.current.as_mut(),
                     "LI",
-                    body_line_position,
+                    self.body_line_position,
                 );
             }
             [b'L', b'T', ..] => {
-                body_line_position += 1;
+                self.body_line_position += 1;
                 record_calling_point(
                     parse_calling_point(line, CallingPointKind::Terminate),
-                    current.as_mut(),
+                    self.current.as_mut(),
                     "LT",
-                    body_line_position,
+                    self.body_line_position,
                 );
-                if let Some(done) = current.take() {
-                    out.push(done);
+                if let Some(done) = self.current.take() {
+                    emit(done);
                 }
             }
             [b'B', b'X', ..] => {
-                if let Some(schedule) = current.as_mut() {
+                if let Some(schedule) = self.current.as_mut() {
                     schedule.basic.operator_atoc = parse_bx_operator(line);
                     schedule.basic.rsid = parse_bx_rsid(line);
                 }
@@ -245,11 +277,14 @@ pub fn parse_schedule_records(text: &str) -> Vec<RawSchedule> {
         }
     }
 
-    if let Some(leftover) = current.take() {
-        out.push(leftover);
+    /// End of input: emits a block still open at end of file (one with no
+    /// terminating `LT`), exactly as [`parse_schedule_records`] always has.
+    pub fn finish(mut self, mut emit: impl FnMut(RawSchedule)) {
+        if let Some(mut leftover) = self.current.take() {
+            leftover.calling_points.shrink_to_fit();
+            emit(leftover);
+        }
     }
-
-    out
 }
 
 /// Pushes a successfully-decoded calling point onto the currently open
@@ -501,7 +536,7 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
         return None;
     }
 
-    let tiploc = line[2..9].to_string();
+    let tiploc = Tiploc::new(&line[2..9]);
     let first_time = parse_time_field(&line[10..14]);
     let first_half_minute = line.as_bytes()[14] == b'H';
 
@@ -541,11 +576,11 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
     };
     let platform = Some(ascii_field(line, platform_start, platform_end).trim())
         .filter(|p| !p.is_empty())
-        .map(str::to_string);
+        .map(Platform::new);
     let (activity_start, activity_end) = activity_range(kind);
-    let activity = ascii_field(line, activity_start, activity_end)
+    let activity: Activity = ascii_field(line, activity_start, activity_end)
         .trim_end()
-        .to_string();
+        .into();
 
     Some(CallingPoint {
         tiploc,

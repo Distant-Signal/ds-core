@@ -30,6 +30,17 @@
 use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 
+use crate::compact::SmallStr;
+
+/// A CIF TIPLOC as stored on a [`CallingPoint`]: the fixed 7-byte field,
+/// inline. See [`crate::compact::SmallStr`].
+pub type Tiploc = SmallStr<7>;
+/// A [`CallingPoint::activity`] field: CIF's 12-byte packed activity codes,
+/// inline.
+pub type Activity = SmallStr<12>;
+/// A [`CallingPoint::platform`] value: CIF's 3-byte platform field, inline.
+pub type Platform = SmallStr<3>;
+
 /// A CIF `BS` (Basic Schedule) record's STP (Short Term Planning) overlay
 /// indicator -- CIF User Spec column 80 (1-based), the fixed last byte of
 /// the 80-byte `BS` line (`parse::STP_INDICATOR_COL`, 0-based 79).
@@ -211,7 +222,8 @@ pub enum CallingPointKind {
 /// real-byte-verified offsets, per this plan's Non-goals.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallingPoint {
-    pub tiploc: String,
+    /// Inline, no heap allocation: see [`crate::compact::SmallStr`].
+    pub tiploc: Tiploc,
     pub kind: CallingPointKind,
     pub booked_arrival: Option<NaiveTime>,
     pub booked_departure: Option<NaiveTime>,
@@ -266,8 +278,11 @@ pub struct CallingPoint {
     /// still deserializes, and deliberately reads as "unknown, assume
     /// boardable" -- see [`Self::is_public_pickup`] for why that direction is
     /// the safe one.
+    ///
+    /// Stored inline ([`Activity`]) rather than as a `String` -- see
+    /// [`crate::compact`] for the production OOM that motivated it.
     #[serde(default)]
-    pub activity: String,
+    pub activity: Activity,
     /// The CIF Public Arrival time (`LT`/`LO` `15..19`, `LI` `25..29`) --
     /// what a passenger timetable shows, as opposed to the working
     /// (`booked_arrival`) time. `None` when the field is blank or the CIF
@@ -286,8 +301,11 @@ pub struct CallingPoint {
     /// one: a later Darwin platform alteration is never reflected here.
     /// `#[serde(default)]` so a stored/serialized `CallingPoint` written
     /// before this field existed still deserializes, as `None` ("not known").
+    ///
+    /// Stored inline ([`Platform`]) rather than as a `String` -- see
+    /// [`crate::compact`].
     #[serde(default)]
-    pub platform: Option<String>,
+    pub platform: Option<Platform>,
 }
 
 /// Two-character CIF Activity codes that mean a passenger may BOARD at this
@@ -574,14 +592,14 @@ mod tests {
             stp_indicator: StpIndicator::Permanent,
             cancelled: false,
             calling_points: vec![CallingPoint {
-                tiploc: "EUSTON ".to_string(),
+                tiploc: "EUSTON ".into(),
                 kind: CallingPointKind::Origin,
                 booked_arrival: None,
                 booked_departure: chrono::NaiveTime::from_hms_opt(8, 22, 0),
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 0,
-                activity: String::new(),
+                activity: Default::default(),
                 public_arrival: None,
                 public_departure: None,
                 platform: None,

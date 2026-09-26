@@ -779,20 +779,23 @@ pub struct ScheduleIndex {
 impl ScheduleIndex {
     /// Groups already-parsed `raw` schedules by `uid`.
     pub fn build(raw: Vec<RawSchedule>) -> Self {
-        let mut by_uid: HashMap<String, Vec<RawSchedule>> = HashMap::new();
+        let mut builder = ScheduleIndexBuilder::default();
         for schedule in raw {
-            by_uid
-                .entry(schedule.basic.uid.clone())
-                .or_default()
-                .push(schedule);
+            builder.insert(schedule);
         }
-        Self { by_uid }
+        builder.finish()
     }
 
-    /// Composes [`crate::parse::parse_schedule_records`] with [`Self::build`]
-    /// as the one convenience entry point most callers will actually use.
+    /// Parses `text` straight into an index. Equivalent to
+    /// `Self::build(parse_schedule_records(text))`, but each block goes
+    /// into the index as soon as it is parsed, so the whole extract never
+    /// exists twice (as a flat `Vec<RawSchedule>` and as the index).
     pub fn from_text(text: &str) -> Self {
-        Self::build(crate::parse::parse_schedule_records(text))
+        let mut builder = ScheduleIndexBuilder::default();
+        for line in text.lines() {
+            builder.push_line(line);
+        }
+        builder.finish()
     }
 
     /// The direct `train_uid` -> booked-schedule bridge
@@ -809,6 +812,65 @@ impl ScheduleIndex {
     /// query it by UID.
     pub fn uids(&self) -> impl Iterator<Item = &str> {
         self.by_uid.keys().map(String::as_str)
+    }
+}
+
+/// Builds a [`ScheduleIndex`] incrementally, one CIF line (or one parsed
+/// block) at a time.
+///
+/// **Why this exists (2026-09-26).** `schedule-reference` used to read every
+/// `BS`/`BX`/`LO`/`LI`/`CR`/`LT` line of the ~735MB `MCA` extract into one
+/// `String` and hand it to [`ScheduleIndex::from_text`], keeping ~700MB of
+/// text (plus `String` growth slack) resident alongside the index it was
+/// building -- one of the contributors to the `reference` container being
+/// OOMKilled at its 3Gi limit. Feeding lines here straight off a
+/// `BufRead` means the text is never held at all.
+#[derive(Debug, Default)]
+pub struct ScheduleIndexBuilder {
+    parser: crate::parse::ScheduleRecordParser,
+    by_uid: HashMap<String, Vec<RawSchedule>>,
+}
+
+impl ScheduleIndexBuilder {
+    /// Feeds one line of CIF text (without its line terminator). See
+    /// [`crate::parse::parse_schedule_records`] for how lines are decoded.
+    pub fn push_line(&mut self, line: &str) {
+        let by_uid = &mut self.by_uid;
+        self.parser
+            .push_line(line, |schedule| Self::insert_into(by_uid, schedule));
+    }
+
+    /// Adds one already-parsed schedule.
+    pub fn insert(&mut self, schedule: RawSchedule) {
+        Self::insert_into(&mut self.by_uid, schedule);
+    }
+
+    fn insert_into(by_uid: &mut HashMap<String, Vec<RawSchedule>>, schedule: RawSchedule) {
+        match by_uid.get_mut(schedule.basic.uid.as_str()) {
+            Some(schedules) => schedules.push(schedule),
+            None => {
+                // Most UIDs carry exactly one schedule: `vec![x]` allocates
+                // room for exactly one, where `or_default().push` would
+                // allocate four.
+                let uid = schedule.basic.uid.clone();
+                by_uid.insert(uid, vec![schedule]);
+            }
+        }
+    }
+
+    /// Flushes any block still open at end of input and returns the index,
+    /// with every per-UID `Vec` shrunk to fit.
+    pub fn finish(mut self) -> ScheduleIndex {
+        let by_uid = &mut self.by_uid;
+        self.parser
+            .finish(|schedule| Self::insert_into(by_uid, schedule));
+        for schedules in self.by_uid.values_mut() {
+            schedules.shrink_to_fit();
+        }
+        self.by_uid.shrink_to_fit();
+        ScheduleIndex {
+            by_uid: self.by_uid,
+        }
     }
 }
 
@@ -832,14 +894,14 @@ mod tests {
 
     fn calling_point(tiploc: &str, kind: CallingPointKind) -> CallingPoint {
         CallingPoint {
-            tiploc: tiploc.to_string(),
+            tiploc: tiploc.into(),
             kind,
             booked_arrival: None,
             booked_departure: None,
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: String::new(),
+            activity: Default::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -852,14 +914,14 @@ mod tests {
         departure: &str,
     ) -> CallingPoint {
         CallingPoint {
-            tiploc: tiploc.to_string(),
+            tiploc: tiploc.into(),
             kind,
             booked_arrival: None,
             booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: String::new(),
+            activity: Default::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -872,14 +934,14 @@ mod tests {
         arrival: &str,
     ) -> CallingPoint {
         CallingPoint {
-            tiploc: tiploc.to_string(),
+            tiploc: tiploc.into(),
             kind,
             booked_arrival: Some(NaiveTime::parse_from_str(arrival, "%H:%M").unwrap()),
             booked_departure: None,
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: String::new(),
+            activity: Default::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -893,14 +955,14 @@ mod tests {
         departure: &str,
     ) -> CallingPoint {
         CallingPoint {
-            tiploc: tiploc.to_string(),
+            tiploc: tiploc.into(),
             kind,
             booked_arrival: Some(NaiveTime::parse_from_str(arrival, "%H:%M").unwrap()),
             booked_departure: Some(NaiveTime::parse_from_str(departure, "%H:%M").unwrap()),
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: String::new(),
+            activity: Default::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -918,7 +980,7 @@ mod tests {
         activity: &str,
     ) -> CallingPoint {
         CallingPoint {
-            activity: activity.to_string(),
+            activity: activity.into(),
             ..calling_point_with_departure(tiploc, kind, departure)
         }
     }
@@ -2349,14 +2411,14 @@ mod tests {
         let population = vec![population_entry(
             "F49687",
             vec![CallingPoint {
-                tiploc: "BARKING".to_string(),
+                tiploc: "BARKING".into(),
                 kind: CallingPointKind::Intermediate,
                 booked_arrival: NaiveTime::from_hms_opt(0, 6, 0),
                 booked_departure: NaiveTime::from_hms_opt(0, 7, 0),
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 1,
-                activity: String::new(),
+                activity: Default::default(),
                 public_arrival: None,
                 public_departure: None,
                 platform: None,

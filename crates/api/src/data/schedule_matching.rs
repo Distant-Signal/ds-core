@@ -93,14 +93,14 @@ struct ScheduleCallingPointDto {
 impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
     fn from(cp: &schedule_query::CallingPoint) -> Self {
         Self {
-            tiploc: cp.tiploc.clone(),
+            tiploc: cp.tiploc.to_string(),
             kind: cp.kind,
             booked_arrival: cp.booked_arrival,
             booked_departure: cp.booked_departure,
             is_half_minute_arrival: cp.is_half_minute_arrival,
             is_half_minute_departure: cp.is_half_minute_departure,
             day_offset: cp.day_offset,
-            platform: cp.platform.clone(),
+            platform: cp.platform.as_deref().map(str::to_owned),
         }
     }
 }
