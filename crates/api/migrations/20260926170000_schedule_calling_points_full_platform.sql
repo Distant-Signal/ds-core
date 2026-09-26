@@ -1,0 +1,12 @@
+-- The CIF booked (timetabled) platform for each calling point --
+-- `schedule_query::records::CallingPoint::platform`, decoded from the
+-- LO/LT `19..22` / LI `33..36` Platform field of the same CIF extract this
+-- table is already published from. No new ingestion source: this is one
+-- more field of rows `schedule-reference` already publishes.
+--
+-- Nullable: most calling points carry no booked platform at all, and every
+-- row published before this column existed (or by a `schedule-reference`
+-- build that predates it -- its ingest payload's `platform` key is
+-- `#[serde(default)]`) is NULL until the next publish cycle replaces that
+-- service_date wholesale. NULL means "not known", never "no platform".
+ALTER TABLE schedule_calling_points_full ADD COLUMN platform TEXT;

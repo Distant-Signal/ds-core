@@ -474,6 +474,15 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
             parse_public_time_field(ascii_field(line, 29, 33)),
         ),
     };
+    // CIF Platform field: `LO`/`LT` `19..22`, `LI` `33..36` -- see
+    // `activity_range`'s own byte-layout diagram, which already marks both.
+    let (platform_start, platform_end) = match kind {
+        CallingPointKind::Origin | CallingPointKind::Terminate => (19, 22),
+        CallingPointKind::Intermediate => (33, 36),
+    };
+    let platform = Some(ascii_field(line, platform_start, platform_end).trim())
+        .filter(|p| !p.is_empty())
+        .map(str::to_string);
     let (activity_start, activity_end) = activity_range(kind);
     let activity = ascii_field(line, activity_start, activity_end)
         .trim_end()
@@ -489,6 +498,7 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
         activity,
         public_arrival,
         public_departure,
+        platform,
         // Always 0 here: a single BS(+BX)/LO/LI*/LT block is decoded in
         // isolation and has no reason to own cross-calling-point
         // day-rollover bookkeeping. The real value is computed once, over
@@ -1080,6 +1090,45 @@ mod activity_tests {
 
     fn cp(line: &str, kind: CallingPointKind) -> CallingPoint {
         parse_calling_point(line, kind).expect("real fixture line must decode")
+    }
+
+    #[test]
+    fn the_real_fixture_lines_decode_the_booked_platform_field_at_its_verified_offset() {
+        assert_eq!(
+            cp(LO_EUSTON, CallingPointKind::Origin).platform.as_deref(),
+            Some("7")
+        );
+        assert_eq!(
+            cp(LT_EUSTON, CallingPointKind::Terminate)
+                .platform
+                .as_deref(),
+            Some("9")
+        );
+        assert_eq!(
+            cp(LI_CARLILE, CallingPointKind::Intermediate)
+                .platform
+                .as_deref(),
+            Some("1")
+        );
+        // Two-character platform immediately followed by the Line field.
+        assert_eq!(
+            cp("LOWATRLMN 0754 075315 MFL    TB", CallingPointKind::Origin)
+                .platform
+                .as_deref(),
+            Some("15")
+        );
+    }
+
+    #[test]
+    fn a_blank_or_truncated_platform_field_decodes_to_none_not_an_empty_string() {
+        // Real LI shape with the platform bytes blanked out.
+        let blank = "LICARLILE 1202 1213      12021213         T";
+        assert_eq!(cp(blank, CallingPointKind::Intermediate).platform, None);
+        // A line that ends before the platform field at all.
+        assert_eq!(
+            cp("LTEUSTON  0804 0807", CallingPointKind::Terminate).platform,
+            None
+        );
     }
 
     #[test]

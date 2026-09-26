@@ -83,6 +83,11 @@ struct ScheduleCallingPointDto {
     /// an overnight schedule instead of unconditionally stamping every stop
     /// with the schedule's own `service_date`.
     day_offset: u8,
+    /// Carried through verbatim from `schedule_query::CallingPoint::platform`
+    /// -- the CIF booked platform, surfaced as `JourneyStop.booked_platform`.
+    /// `None` both for a blank CIF field and (on read) for a
+    /// `trains.calling_points` row stored before this field existed.
+    platform: Option<String>,
 }
 
 impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
@@ -95,6 +100,7 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
             is_half_minute_arrival: cp.is_half_minute_arrival,
             is_half_minute_departure: cp.is_half_minute_departure,
             day_offset: cp.day_offset,
+            platform: cp.platform.clone(),
         }
     }
 }
@@ -815,6 +821,37 @@ pub async fn run_schedule_match_sweep(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `trains.calling_points` (this DTO's stored shape, read back by
+    /// `journey::RawCallingPoint` and relayed verbatim as `callingPoints`)
+    /// carries the CIF booked platform as `platform` -- a string when the
+    /// CIF field had one, explicit `null` when it was blank.
+    #[test]
+    fn calling_point_dto_serializes_the_cif_booked_platform_or_null() {
+        let text = "BSNC005732605172612060000001 PXX1S003101121194800 DMU    125      S A T        P\n\
+                    LOEUSTON  0822 08227  C      TB\n\
+                    LICARLILE 1202 1213      12021213         T\n\
+                    LTEUSTON  0804 08079     TF";
+        let index = schedule_query::ScheduleIndex::from_text(text);
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 5, 17).unwrap();
+        let resolved = index
+            .schedule_for_uid("C00573", date)
+            .expect("fixture schedule resolves");
+
+        let json: Vec<serde_json::Value> = resolved
+            .calling_points
+            .iter()
+            .map(|cp| serde_json::to_value(ScheduleCallingPointDto::from(cp)).unwrap())
+            .collect();
+
+        assert_eq!(json[0]["platform"], "7");
+        assert!(
+            json[1]
+                .get("platform")
+                .is_some_and(serde_json::Value::is_null)
+        );
+        assert_eq!(json[2]["platform"], "9");
+    }
 
     fn line(id: &str, stations: Vec<(&str, Option<&str>)>) -> LineDefinition {
         LineDefinition {

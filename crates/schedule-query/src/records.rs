@@ -238,6 +238,15 @@ pub struct CallingPoint {
     /// blank/`0000` handling as [`Self::public_arrival`].
     #[serde(default)]
     pub public_departure: Option<NaiveTime>,
+    /// The CIF booked (timetabled) Platform field -- `LO`/`LT` `19..22`,
+    /// `LI` `33..36` -- trimmed; `None` when blank (most calling points at
+    /// single-platform or non-platformed locations carry no value). This is
+    /// the TIMETABLE's platform as published in the CIF extract, not a live
+    /// one: a later Darwin platform alteration is never reflected here.
+    /// `#[serde(default)]` so a stored/serialized `CallingPoint` written
+    /// before this field existed still deserializes, as `None` ("not known").
+    #[serde(default)]
+    pub platform: Option<String>,
 }
 
 /// Two-character CIF Activity codes that mean a passenger may BOARD at this
@@ -521,6 +530,7 @@ mod tests {
                 activity: String::new(),
                 public_arrival: None,
                 public_departure: None,
+                platform: None,
             }],
             operator_atoc: None,
         };

@@ -828,6 +828,7 @@ mod tests {
             activity: String::new(),
             public_arrival: None,
             public_departure: None,
+            platform: None,
         }
     }
 
@@ -847,6 +848,7 @@ mod tests {
             activity: String::new(),
             public_arrival: None,
             public_departure: None,
+            platform: None,
         }
     }
 
@@ -866,6 +868,7 @@ mod tests {
             activity: String::new(),
             public_arrival: None,
             public_departure: None,
+            platform: None,
         }
     }
 
@@ -886,6 +889,7 @@ mod tests {
             activity: String::new(),
             public_arrival: None,
             public_departure: None,
+            platform: None,
         }
     }
 
@@ -2274,6 +2278,7 @@ mod tests {
                 activity: String::new(),
                 public_arrival: None,
                 public_departure: None,
+                platform: None,
             }],
         )];
         // service_date is 2026-09-05, but Barking's real booked_departure
