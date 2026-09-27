@@ -138,6 +138,57 @@ fn is_link_local_v6(v6: Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xffc0) == 0xfe80
 }
 
+/// A `reqwest` DNS resolver that refuses to hand the connector any
+/// address [`is_disallowed_ip`] rejects -- the connect-time half of this
+/// module's SSRF guard.
+///
+/// **Why [`validate_outbound_url`] alone still wasn't enough (2026-09-27,
+/// L9 follow-up).** Validating and then sending resolves the name TWICE:
+/// once in [`validate_outbound_url`], and again inside the HTTP client when
+/// it connects. A rebinding name with a 0-second TTL can answer with a
+/// public address the first time and a private one the second, which is
+/// the classic DNS-rebinding shape, so a validate-then-send sequence never
+/// actually constrains where the connection goes. Doing the check inside the
+/// resolver the connector itself uses means the addresses that get checked
+/// are exactly the addresses that get dialled. IP-literal URLs never reach a
+/// resolver at all, which is why callers still run [`validate_outbound_url`]
+/// first (it checks literals directly).
+///
+/// Any disallowed address in the answer rejects the whole name, same as
+/// [`validate_outbound_url`] -- filtering out just the bad ones would let
+/// a mixed answer through.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PublicOnlyResolver;
+
+impl reqwest::dns::Resolve for PublicOnlyResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_owned();
+        Box::pin(async move {
+            let addrs: Vec<std::net::SocketAddr> =
+                tokio::net::lookup_host((host.as_str(), 0)).await?.collect();
+            if addrs.is_empty() {
+                return Err(format!("{host} does not resolve").into());
+            }
+            if addrs.iter().any(|addr| is_disallowed_ip(addr.ip())) {
+                return Err(format!(
+                    "{host} resolves to a disallowed (private/internal/loopback) address"
+                )
+                .into());
+            }
+            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
+/// A `reqwest::ClientBuilder` for outbound requests to caller-supplied
+/// URLs: [`PublicOnlyResolver`] for every name it connects to, and no
+/// redirect following (a redirect is a second, unvalidated URL).
+pub fn public_only_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .dns_resolver(PublicOnlyResolver)
+        .redirect(reqwest::redirect::Policy::none())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,5 +254,42 @@ mod tests {
             .await
             .expect_err("a private IPv4 literal must be rejected");
         assert!(err.contains("disallowed"));
+    }
+
+    /// L9 follow-up: the connector's own resolver refuses a name that
+    /// resolves to loopback, so a send can never reach one no matter what
+    /// an earlier validation saw.
+    #[tokio::test]
+    async fn the_public_only_resolver_refuses_a_name_resolving_to_loopback() {
+        use reqwest::dns::Resolve;
+        let name: reqwest::dns::Name = "localhost".parse().expect("valid name");
+        let err = match PublicOnlyResolver.resolve(name).await {
+            Ok(_) => panic!("localhost must not resolve through the public-only resolver"),
+            Err(err) => err,
+        };
+        assert!(err.to_string().contains("disallowed"), "{err}");
+    }
+
+    /// End to end through a real client: the request fails at resolution,
+    /// before any connection is attempted.
+    #[tokio::test]
+    async fn a_public_only_client_never_connects_to_a_name_resolving_to_loopback() {
+        let client = public_only_client_builder().build().expect("client");
+        let err = client
+            .post("http://localhost:9/push")
+            .send()
+            .await
+            .expect_err("must not connect");
+        let chain = {
+            let mut out = String::new();
+            let mut source: Option<&dyn std::error::Error> = Some(&err);
+            while let Some(e) = source {
+                out.push_str(&e.to_string());
+                out.push('\n');
+                source = e.source();
+            }
+            out
+        };
+        assert!(chain.contains("disallowed"), "{chain}");
     }
 }
