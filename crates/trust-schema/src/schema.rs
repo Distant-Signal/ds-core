@@ -81,6 +81,19 @@ pub struct Activation {
     /// `process::prune_expired_activations`, whose primary rule is now the
     /// Activation's own observed rail day).
     pub schedule_end_date: Option<String>,
+    /// The date (`YYYY-MM-DD`) this train instance departs its origin: the
+    /// CIF running date, which is the `service_date` convention the rest
+    /// of the system keys a train on. Unlike `schedule_start_date`, this
+    /// IS per-instance. Checked against the live production feed on
+    /// 2026-09-27: over 13,424 Activations it matched the London calendar
+    /// date of `creation_timestamp` except for 39 overnight trains. There
+    /// it was the origin date: the next day for a train activated before
+    /// midnight to depart after it, and the previous day for a train
+    /// activated after midnight that had departed before it. Read by
+    /// `trust-backlog-consumer` to date its Activation rows (Repeater Signal
+    /// M7). A plain date, not an epoch timestamp, so it is immune to the
+    /// `common::trust_timestamp` corruption.
+    pub tp_origin_timestamp: Option<String>,
 }
 
 // `gbtt_timestamp`/`reporting_stanox`/`toc_id` are part of `0003`'s
