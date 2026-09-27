@@ -243,29 +243,117 @@ pub enum TrustMessage {
 /// field-level errors (e.g. "missing field `header`") for a shape that's
 /// neither of the two expected ones.
 pub fn parse_batch(raw: &str) -> anyhow::Result<Vec<TrustMessage>> {
+    Ok(parse_batch_detailed(raw)?.messages)
+}
+
+/// One envelope [`parse_batch_detailed`] could not turn into a
+/// [`TrustMessage`] (finding PL-8 of the 2026-09-27 pipelines review).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvelopeFailure {
+    /// The envelope's `header.msg_type`, or [`MISSING_MSG_TYPE`] when it
+    /// has none. Always one of the confirmed types or that marker, so it is
+    /// safe as a metric label: an unconfirmed type is `Unknown`, never a
+    /// failure.
+    pub msg_type: String,
+    pub error: String,
+}
+
+/// [`EnvelopeFailure::msg_type`] for an envelope inside an array payload
+/// that has no `header.msg_type` at all.
+pub const MISSING_MSG_TYPE: &str = "missing";
+
+/// Every message a payload yielded, plus every envelope that was dropped.
+#[derive(Debug, Default)]
+pub struct ParsedBatch {
+    pub messages: Vec<TrustMessage>,
+    pub failures: Vec<EnvelopeFailure>,
+}
+
+/// [`parse_batch`], but reporting each dropped envelope instead of only
+/// logging it (finding PL-8). A confirmed `msg_type` whose body fails its
+/// typed shape used to vanish with at most a log line; a feed-wide schema
+/// change looked like "trains stopped moving". Callers count
+/// `failures` into their own `*_errors_total{operation="parse_envelope",
+/// msg_type}`; this function logs each failing `msg_type` at WARN once per
+/// process (so a feed-wide change does not flood the log at feed rate).
+///
+/// `Err` only when the payload as a whole is unusable: invalid JSON, or a
+/// bare single envelope with no `header`. Inside an array, an envelope with
+/// no `header.msg_type` is one failure, not a reason to drop the other
+/// envelopes (finding PL-4).
+pub fn parse_batch_detailed(raw: &str) -> anyhow::Result<ParsedBatch> {
     let value: serde_json::Value = serde_json::from_str(raw)?;
-    let envelopes: Vec<Envelope> = if value.is_array() {
-        serde_json::from_value(value)?
+    let mut parsed = ParsedBatch::default();
+    if let serde_json::Value::Array(values) = value {
+        for value in values {
+            match serde_json::from_value::<Envelope>(value) {
+                Ok(envelope) => parsed.push(envelope),
+                Err(err) => parsed.failures.push(EnvelopeFailure {
+                    msg_type: MISSING_MSG_TYPE.to_string(),
+                    error: err.to_string(),
+                }),
+            }
+        }
     } else {
-        vec![serde_json::from_value(value)?]
-    };
-    Ok(envelopes.into_iter().filter_map(parse_envelope).collect())
+        parsed.push(serde_json::from_value::<Envelope>(value)?);
+    }
+    for failure in &parsed.failures {
+        warn_once(failure);
+    }
+    Ok(parsed)
+}
+
+impl ParsedBatch {
+    fn push(&mut self, envelope: Envelope) {
+        match parse_envelope(envelope) {
+            Ok(message) => self.messages.push(message),
+            Err(failure) => self.failures.push(failure),
+        }
+    }
+}
+
+/// WARN the first failure of each `msg_type` this process sees; later ones
+/// only reach the caller's counter.
+fn warn_once(failure: &EnvelopeFailure) {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static SEEN: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let first = SEEN
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .map(|mut seen| seen.insert(failure.msg_type.clone()))
+        .unwrap_or(true);
+    if first {
+        tracing::warn!(
+            msg_type = %failure.msg_type,
+            error = %failure.error,
+            "a TRUST envelope failed to parse against its known shape; dropping it \
+             (further failures of this msg_type are counted, not logged)"
+        );
+    }
+}
+
+/// What [`confirmed_envelope_bodies`] made of one Kafka record.
+#[derive(Debug, Default)]
+pub struct ClassifiedRecord {
+    /// `(msg_type, payload)` for each confirmed envelope, payload
+    /// re-serialized verbatim.
+    pub envelopes: Vec<(String, String)>,
+    /// Envelopes with no `header.msg_type`: skipped, for the caller to count.
+    pub malformed: usize,
 }
 
 /// The `movement-relay` filtering primitive
 /// (docs/superpowers/specs/2026-09-04-movement-relay-design.md Decision 1):
 /// classifies each envelope in `raw` by `header.msg_type` alone against
-/// the same five confirmed types `parse_envelope` already encodes, and
+/// the same confirmed types `parse_envelope` already encodes, and
 /// re-serializes each SURVIVING envelope's own `serde_json::Value`
 /// verbatim, byte-faithful, even in the rare multi-envelope-array case.
 /// Returns `(msg_type, payload)` pairs -- `msg_type` is re-derived cheaply
 /// here (rather than making every caller re-parse the returned payload
 /// just to extract it again) since `movement-relay`'s own `EventSink`
 /// needs it as a separate, redundant introspection field alongside the
-/// raw payload (design doc Decision 2's field-layout choice) -- see
-/// docs/superpowers/plans/2026-09-04-movement-relay-plan.md Task 7's own
-/// note for why this deviates from this function's originally-sketched
-/// `Vec<String>` signature.
+/// raw payload (design doc Decision 2's field-layout choice).
 ///
 /// Deliberately does NOT attempt to deserialize `body` into any typed
 /// struct -- an envelope with a confirmed `msg_type` but a body that would
@@ -274,12 +362,14 @@ pub fn parse_batch(raw: &str) -> anyhow::Result<Vec<TrustMessage>> {
 /// it already lives, inside each downstream consumer's own `parse_batch`
 /// call -- this function only ever looks at `header.msg_type`.
 ///
-/// Shares `parse_batch`'s error behavior for a structurally malformed
-/// payload (e.g. an envelope missing `header` entirely): that's a hard
-/// `Err`, not a per-envelope skip, because `Vec<Envelope>`/`Envelope`
-/// deserialization itself fails before per-envelope classification ever
-/// runs -- same as `parse_batch` today.
-pub fn confirmed_envelope_bodies(raw: &str) -> anyhow::Result<Vec<(String, String)>> {
+/// An envelope with no `header.msg_type` is skipped and counted in
+/// [`ClassifiedRecord::malformed`], per envelope (finding PL-4 of the
+/// 2026-09-27 pipelines review). It used to be a hard `Err` for the whole
+/// record, which silently cost every other envelope in a TRUST batch (up
+/// to ~200 movements) for one odd one. `Err` is now only for a record that
+/// is not JSON at all, or whose top level is neither an envelope object nor
+/// an array.
+pub fn confirmed_envelope_bodies(raw: &str) -> anyhow::Result<ClassifiedRecord> {
     // `0005` (Reinstatement) joined this list in the H4 fix (2026-09-26
     // review): it used to parse as `Unknown` and get dropped right here,
     // before `trust-consumer`/`trust-backlog-consumer` ever saw it, which
@@ -289,65 +379,71 @@ pub fn confirmed_envelope_bodies(raw: &str) -> anyhow::Result<Vec<(String, Strin
     const CONFIRMED: [&str; 6] = ["0001", "0002", "0003", "0005", "0006", "0007"];
 
     let value: serde_json::Value = serde_json::from_str(raw)?;
-    let envelopes: Vec<serde_json::Value> = if value.is_array() {
-        serde_json::from_value(value)?
-    } else {
-        vec![value]
+    let envelopes = match value {
+        serde_json::Value::Array(values) => values,
+        value @ serde_json::Value::Object(_) => vec![value],
+        other => anyhow::bail!(
+            "a TRUST record must be an envelope object or an array of them, got {}",
+            json_kind(&other)
+        ),
     };
 
-    // Deliberately NOT a `filter_map` over a `?`-chained `Option` walk: that
-    // shape (the plan's original sketch) conflates two different outcomes
-    // that must stay distinct -- "structurally malformed envelope" (missing
-    // `header`/`msg_type` entirely, a hard `Err` for the whole payload, same
-    // as `parse_batch`'s own behavior on this exact input) versus
-    // "well-formed envelope, unconfirmed msg_type" (a soft, per-envelope
-    // skip). A bare `?` inside `filter_map`'s closure turns BOTH into a
-    // silent `None`, which would make a genuinely malformed payload return
-    // `Ok(vec![])` instead of `Err` -- confirmed by hand against
-    // `confirmed_envelope_bodies_errors_on_a_payload_missing_header_entirely`'s
-    // fixture while implementing this.
-    let mut survivors = Vec::with_capacity(envelopes.len());
+    let mut classified = ClassifiedRecord {
+        envelopes: Vec::with_capacity(envelopes.len()),
+        malformed: 0,
+    };
     for envelope in envelopes {
-        let msg_type = envelope
+        let Some(msg_type) = envelope
             .get("header")
             .and_then(|header| header.get("msg_type"))
             .and_then(|msg_type| msg_type.as_str())
-            .ok_or_else(|| anyhow::anyhow!("envelope missing header.msg_type"))?
-            .to_string();
+            .map(str::to_string)
+        else {
+            classified.malformed += 1;
+            continue;
+        };
         if CONFIRMED.contains(&msg_type.as_str()) {
             let payload = serde_json::to_string(&envelope)?;
-            survivors.push((msg_type, payload));
+            classified.envelopes.push((msg_type, payload));
         }
     }
-    Ok(survivors)
+    Ok(classified)
 }
 
-fn parse_envelope(envelope: Envelope) -> Option<TrustMessage> {
-    let parsed = match envelope.header.msg_type.as_str() {
-        "0001" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::Activation),
-        "0002" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::Cancellation),
-        "0003" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::Movement),
-        "0006" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::ChangeOfOrigin),
-        "0007" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::ChangeOfIdentity),
-        "0005" => serde_json::from_value(envelope.body)
-            .ok()
-            .map(TrustMessage::Reinstatement),
-        other => return Some(TrustMessage::Unknown(other.to_string())),
-    };
-    if parsed.is_none() {
-        tracing::warn!(msg_type = %envelope.header.msg_type, "confirmed msg_type failed to parse against its known shape; dropping");
+fn json_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "a boolean",
+        serde_json::Value::Number(_) => "a number",
+        serde_json::Value::String(_) => "a string",
+        serde_json::Value::Array(_) => "an array",
+        serde_json::Value::Object(_) => "an object",
     }
-    parsed
+}
+
+fn parse_envelope(envelope: Envelope) -> Result<TrustMessage, EnvelopeFailure> {
+    fn typed<T: serde::de::DeserializeOwned>(
+        msg_type: &str,
+        body: serde_json::Value,
+        wrap: fn(T) -> TrustMessage,
+    ) -> Result<TrustMessage, EnvelopeFailure> {
+        serde_json::from_value(body)
+            .map(wrap)
+            .map_err(|err| EnvelopeFailure {
+                msg_type: msg_type.to_string(),
+                error: err.to_string(),
+            })
+    }
+    let msg_type = envelope.header.msg_type.as_str();
+    match msg_type {
+        "0001" => typed(msg_type, envelope.body, TrustMessage::Activation),
+        "0002" => typed(msg_type, envelope.body, TrustMessage::Cancellation),
+        "0003" => typed(msg_type, envelope.body, TrustMessage::Movement),
+        "0005" => typed(msg_type, envelope.body, TrustMessage::Reinstatement),
+        "0006" => typed(msg_type, envelope.body, TrustMessage::ChangeOfOrigin),
+        "0007" => typed(msg_type, envelope.body, TrustMessage::ChangeOfIdentity),
+        other => Ok(TrustMessage::Unknown(other.to_string())),
+    }
 }
 
 #[cfg(test)]
@@ -614,7 +710,7 @@ mod tests {
                 "loc_stanox":"87701","variation_status":"LATE"
             }}
         ]"#;
-        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        let survivors = confirmed_envelope_bodies(raw).unwrap().envelopes;
         assert_eq!(survivors.len(), 2);
         assert_eq!(survivors[0].0, "0001");
         assert_eq!(survivors[1].0, "0003");
@@ -633,7 +729,7 @@ mod tests {
     #[test]
     fn confirmed_envelope_bodies_now_keeps_reinstatement() {
         let raw = r#"[{"header":{"msg_type":"0005"},"body":{"train_id":"221832406"}}]"#;
-        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        let survivors = confirmed_envelope_bodies(raw).unwrap().envelopes;
         assert_eq!(survivors.len(), 1);
         assert_eq!(survivors[0].0, "0005");
     }
@@ -647,7 +743,7 @@ mod tests {
     fn confirmed_envelope_bodies_does_not_filter_on_body_shape() {
         let raw = r#"{"header":{"msg_type":"0001"},"body":{"not_the_right_shape":true}}"#;
 
-        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        let survivors = confirmed_envelope_bodies(raw).unwrap().envelopes;
         assert_eq!(survivors.len(), 1, "malformed body still survives");
         assert_eq!(survivors[0].0, "0001");
 
@@ -666,15 +762,101 @@ mod tests {
             "planned_timestamp":"1756400000000","actual_timestamp":"1756400060000",
             "loc_stanox":"87701","variation_status":"LATE"
         }}"#;
-        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        let survivors = confirmed_envelope_bodies(raw).unwrap().envelopes;
         assert_eq!(survivors.len(), 1);
         assert_eq!(survivors[0].0, "0003");
     }
 
+    /// PL-4: a bare envelope with no `header` is one malformed envelope,
+    /// skipped and counted -- no longer an `Err` for the record.
     #[test]
-    fn confirmed_envelope_bodies_errors_on_a_payload_missing_header_entirely() {
+    fn confirmed_envelope_bodies_counts_a_bare_envelope_missing_header() {
         let raw = r#"{"not_an_envelope": true}"#;
-        assert!(confirmed_envelope_bodies(raw).is_err());
+        let classified = confirmed_envelope_bodies(raw).unwrap();
+        assert!(classified.envelopes.is_empty());
+        assert_eq!(classified.malformed, 1);
+    }
+
+    /// PL-4's regression test: one envelope without `header.msg_type` in a
+    /// TRUST batch used to drop every other envelope in the record.
+    #[test]
+    fn one_envelope_missing_msg_type_does_not_drop_the_rest_of_the_record() {
+        let raw = r#"[
+            {"header":{"msg_type":"0003"},"body":{"train_id":"A","event_type":"DEPARTURE"}},
+            {"header":{},"body":{"train_id":"B"}},
+            {"body":{"train_id":"C"}},
+            {"header":{"msg_type":7},"body":{"train_id":"D"}},
+            {"header":{"msg_type":"0002"},"body":{"train_id":"E"}}
+        ]"#;
+        let classified = confirmed_envelope_bodies(raw).unwrap();
+        let types: Vec<&str> = classified
+            .envelopes
+            .iter()
+            .map(|(msg_type, _)| msg_type.as_str())
+            .collect();
+        assert_eq!(types, ["0003", "0002"]);
+        assert_eq!(classified.malformed, 3);
+    }
+
+    #[test]
+    fn confirmed_envelope_bodies_errors_only_on_an_unusable_top_level() {
+        assert!(confirmed_envelope_bodies("not json").is_err());
+        assert!(confirmed_envelope_bodies("42").is_err());
+        assert!(confirmed_envelope_bodies(r#""a string""#).is_err());
+        let empty = confirmed_envelope_bodies("[]").unwrap();
+        assert!(empty.envelopes.is_empty());
+        assert_eq!(empty.malformed, 0);
+    }
+
+    /// PL-8: a confirmed type whose body fails its shape is reported with
+    /// its msg_type and error, not silently dropped.
+    #[test]
+    fn parse_batch_detailed_reports_each_dropped_envelope() {
+        let raw = r#"[
+            {"header":{"msg_type":"0001"},"body":{"not_the_right_shape":true}},
+            {"header":{"msg_type":"0003"},"body":{"train_id":"A","event_type":"ARRIVAL"}},
+            {"header":{"msg_type":"0003"},"body":{"train_id":null,"event_type":"ARRIVAL"}},
+            {"header":{"msg_type":"0008"},"body":{"anything":"goes"}}
+        ]"#;
+        let parsed = parse_batch_detailed(raw).unwrap();
+        assert_eq!(
+            parsed.messages.len(),
+            2,
+            "the good 0003 and the Unknown 0008"
+        );
+        let types: Vec<&str> = parsed
+            .failures
+            .iter()
+            .map(|f| f.msg_type.as_str())
+            .collect();
+        assert_eq!(types, ["0001", "0003"]);
+        assert!(
+            parsed.failures[0].error.contains("train_id"),
+            "{:?}",
+            parsed.failures[0]
+        );
+    }
+
+    /// Inside an array, an envelope with no header is one failure labelled
+    /// `missing`; the others still parse (PL-4 for the consumers' side).
+    #[test]
+    fn parse_batch_detailed_skips_an_array_envelope_without_a_header() {
+        let raw = r#"[
+            {"body":{"train_id":"A"}},
+            {"header":{"msg_type":"0002"},"body":{"train_id":"B"}}
+        ]"#;
+        let parsed = parse_batch_detailed(raw).unwrap();
+        assert_eq!(parsed.messages.len(), 1);
+        assert_eq!(parsed.failures.len(), 1);
+        assert_eq!(parsed.failures[0].msg_type, MISSING_MSG_TYPE);
+    }
+
+    #[test]
+    fn a_clean_batch_reports_no_failures() {
+        let raw = r#"{"header":{"msg_type":"0002"},"body":{"train_id":"B"}}"#;
+        let parsed = parse_batch_detailed(raw).unwrap();
+        assert_eq!(parsed.messages.len(), 1);
+        assert!(parsed.failures.is_empty());
     }
 
     #[test]
@@ -685,7 +867,7 @@ mod tests {
             "loc_stanox":"87701","variation_status":"LATE",
             "an_unmodeled_field":"some real RDM data no struct declares"
         }}"#;
-        let survivors = confirmed_envelope_bodies(raw).unwrap();
+        let survivors = confirmed_envelope_bodies(raw).unwrap().envelopes;
         assert_eq!(survivors.len(), 1);
         let value: serde_json::Value = serde_json::from_str(&survivors[0].1).unwrap();
         assert_eq!(

@@ -33,7 +33,11 @@ use crate::progress::Progress;
 /// `refresh_at` deadline (up to `expires_in - 30s` away). Any other status
 /// (a 5xx, a 404, a plain network error) leaves the cache untouched --
 /// those don't indicate the token itself was the problem.
-fn invalidate_on_auth_rejection(tokens: &OAuthTokenCache, status: reqwest::StatusCode) {
+///
+/// Public for the few callers that need a request shape none of the helpers
+/// below cover (full-coverage-consumer's conditional GET), so every request
+/// made with a cached token honours the same rule (PL-15b).
+pub fn invalidate_on_auth_rejection(tokens: &OAuthTokenCache, status: reqwest::StatusCode) {
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         tokens.invalidate();
     }

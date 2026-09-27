@@ -1,6 +1,8 @@
 use chrono::NaiveDate;
 use sha2::{Digest, Sha256};
 
+use crate::schema::TrustMessage;
+
 /// Stable across Kafka/Redis redelivery of the exact same TRUST message
 /// (at-least-once delivery means this WILL happen). Built from the fields
 /// that together identify one real-world event -- not the whole message
@@ -31,15 +33,25 @@ use sha2::{Digest, Sha256};
 /// real-world events a month apart can no longer hash equal however little
 /// else distinguishes them.
 ///
-/// `event_date` must be **the Europe/London rail day the message was
-/// processed on** (`common::rail_day::current_rail_day`), in every caller.
-/// That specific rule matters because `trust-consumer` and
-/// `trust-backlog-consumer` both consume the same live `movement-events`
-/// stream and both write `train_movement_events` for the same real event;
-/// their keys agreeing is what makes `ON CONFLICT (trains_id, dedup_key)`
-/// collapse the two writes into one stored row. Using a per-crate notion of
-/// the date (one crate's parked-Activation `service_date`, say, against the
-/// other's clock) would silently double those rows for any overnight train.
+/// `event_date` must come from [`event_date`] in every live consumer:
+/// the date is derived from **the message's own bytes**, falling back to
+/// the processing rail day only when the message carries no usable date.
+/// `trust-consumer` and `trust-backlog-consumer` both consume the same
+/// live `movement-events` stream and both write `train_movement_events`
+/// for the same real event; their keys agreeing is what makes
+/// `ON CONFLICT (trains_id, dedup_key)` collapse the two writes into one
+/// stored row.
+///
+/// It used to be the rail day the message was *processed* on (finding PL-3
+/// of the 2026-09-27 pipelines review). A redelivery that straddled 02:00
+/// London (a batch that failed at 01:59 and was reclaimed after 02:00, a
+/// restart across the cutover), or the two consumers processing one
+/// message either side of 02:00, produced two different keys and a
+/// duplicate row. A date read from the message is the same on every
+/// delivery and in every consumer. Both consumers must ship this rule in
+/// the same deploy: until both run it, the old and new keys for the same
+/// event differ, so expect a one-off duplicate risk at the deploy boundary.
+///
 /// The one deliberate exception is `api`'s own
 /// `trust_event_backlog_match`, which REPLAYS stored backlog rows rather
 /// than live messages and passes each row's `service_date` -- that function's
@@ -68,6 +80,50 @@ pub fn dedup_key(
     }
     let digest = hasher.finalize();
     digest.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// The `event_date` for [`dedup_key`]: a date read from the message itself,
+/// so every delivery of it, in every consumer, hashes the same (PL-3).
+///
+/// Per type, the first present and parseable of:
+/// - `0001`: `tp_origin_timestamp` (a `YYYY-MM-DD` date);
+/// - `0002`: `canx_timestamp`, then `dep_timestamp`;
+/// - `0003`: `planned_timestamp`, then `actual_timestamp`;
+/// - `0005`/`0006`: `dep_timestamp`.
+///
+/// An epoch-millis timestamp is converted by its RAW value's UTC calendar
+/// date, deliberately without `common::trust_timestamp`'s local-as-UTC
+/// correction: that correction depends on the wall clock at processing
+/// time, and the whole point here is a value that does not. (TRUST encodes
+/// London local time as if it were UTC, so the raw UTC date is in practice
+/// the London calendar date.) `0007`, `Unknown`, and a message whose field
+/// is missing or unparseable fall back to `processed_rail_day`, which is
+/// what every message used before.
+pub fn event_date(message: &TrustMessage, processed_rail_day: NaiveDate) -> NaiveDate {
+    let from_millis = |raw: Option<&str>| raw.and_then(epoch_millis_date);
+    let date = match message {
+        TrustMessage::Activation(a) => a
+            .tp_origin_timestamp
+            .as_deref()
+            .and_then(|raw| NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").ok()),
+        TrustMessage::Cancellation(c) => from_millis(c.canx_timestamp.as_deref())
+            .or_else(|| from_millis(c.dep_timestamp.as_deref())),
+        TrustMessage::Movement(m) => from_millis(m.planned_timestamp.as_deref())
+            .or_else(|| from_millis(m.actual_timestamp.as_deref())),
+        TrustMessage::Reinstatement(r) => from_millis(r.dep_timestamp.as_deref()),
+        TrustMessage::ChangeOfOrigin(o) => from_millis(o.dep_timestamp.as_deref()),
+        TrustMessage::ChangeOfIdentity(_) | TrustMessage::Unknown(_) => None,
+    };
+    date.unwrap_or(processed_rail_day)
+}
+
+fn epoch_millis_date(raw: &str) -> Option<NaiveDate> {
+    let millis: i64 = raw.trim().parse().ok()?;
+    // A zero or negative value is a placeholder, not a date.
+    if millis <= 0 {
+        return None;
+    }
+    chrono::DateTime::from_timestamp_millis(millis).map(|at| at.date_naive())
 }
 
 #[cfg(test)]
@@ -196,5 +252,77 @@ mod tests {
         let first = dedup_key("221832406", "0002", None, None, None, date("2026-08-28"));
         let redelivered = dedup_key("221832406", "0002", None, None, None, date("2026-08-28"));
         assert_eq!(first, redelivered);
+    }
+
+    fn parse_one(raw: &str) -> TrustMessage {
+        crate::schema::parse_batch(raw).unwrap().remove(0)
+    }
+
+    /// PL-3's regression test: the same message processed either side of
+    /// 02:00 London (a redelivery, or the two consumers a moment apart)
+    /// gets the same date, so the same key.
+    #[test]
+    fn a_movement_redelivered_across_the_rail_day_cutover_keeps_its_date() {
+        // 2026-09-27 01:59:30 as TRUST's raw epoch millis.
+        let raw = r#"{"header":{"msg_type":"0003"},"body":{"train_id":"1","event_type":"ARRIVAL",
+            "planned_timestamp":"1790474370000"}}"#;
+        let message = parse_one(raw);
+        let before = event_date(&message, date("2026-09-26"));
+        let after = event_date(&message, date("2026-09-27"));
+        assert_eq!(before, after);
+        assert_eq!(before, date("2026-09-27"));
+    }
+
+    #[test]
+    fn event_date_per_message_type() {
+        let fallback = date("2000-01-01");
+        let cases = [
+            (
+                r#"{"header":{"msg_type":"0001"},"body":{"train_id":"1","train_uid":"C1","tp_origin_timestamp":"2026-09-28"}}"#,
+                "2026-09-28",
+            ),
+            (
+                r#"{"header":{"msg_type":"0002"},"body":{"train_id":"1","canx_timestamp":"1790474370000","dep_timestamp":"1790600000000"}}"#,
+                "2026-09-27",
+            ),
+            (
+                r#"{"header":{"msg_type":"0002"},"body":{"train_id":"1","dep_timestamp":"1790600000000"}}"#,
+                "2026-09-28",
+            ),
+            (
+                r#"{"header":{"msg_type":"0003"},"body":{"train_id":"1","event_type":"ARRIVAL","actual_timestamp":"1790600000000"}}"#,
+                "2026-09-28",
+            ),
+            (
+                r#"{"header":{"msg_type":"0005"},"body":{"train_id":"1","dep_timestamp":"1790474370000"}}"#,
+                "2026-09-27",
+            ),
+            (
+                r#"{"header":{"msg_type":"0006"},"body":{"train_id":"1","dep_timestamp":"1790474370000"}}"#,
+                "2026-09-27",
+            ),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(
+                event_date(&parse_one(raw), fallback),
+                date(expected),
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn event_date_falls_back_to_the_processing_rail_day_without_a_usable_date() {
+        let fallback = date("2026-09-27");
+        for raw in [
+            r#"{"header":{"msg_type":"0007"},"body":{"train_id":"1"}}"#,
+            r#"{"header":{"msg_type":"0005"},"body":{"train_id":"1"}}"#,
+            r#"{"header":{"msg_type":"0003"},"body":{"train_id":"1","event_type":"ARRIVAL","planned_timestamp":"garbage"}}"#,
+            r#"{"header":{"msg_type":"0002"},"body":{"train_id":"1","canx_timestamp":"0"}}"#,
+            r#"{"header":{"msg_type":"0001"},"body":{"train_id":"1","train_uid":"C1","tp_origin_timestamp":"28/09/2026"}}"#,
+            r#"{"header":{"msg_type":"0008"},"body":{}}"#,
+        ] {
+            assert_eq!(event_date(&parse_one(raw), fallback), fallback, "{raw}");
+        }
     }
 }

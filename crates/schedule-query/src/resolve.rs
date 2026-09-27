@@ -59,16 +59,21 @@ pub struct ResolvedSchedule {
 /// since a real schedule's calling points are always chronological once
 /// day-of-week is fixed.
 ///
-/// **Known, accepted limitation** (same posture as this crate's other
-/// documented rare-edge-case gaps, e.g. `match_pin`'s tie-break): a single
-/// calling point that itself dwells across midnight (arrival 23:59,
-/// departure 00:05 at the SAME stop) still gets only one `day_offset` for
-/// both fields, so its `booked_departure` would be mis-dated by this
-/// scheme alone. Not fixed here -- no real CIF calling point this deep
-/// dive found actually does this (a stop dwelling into the next calendar
-/// day), and modeling two independent day offsets per calling point would
-/// double `CallingPoint`'s footprint for a case with no known real
-/// instance.
+/// **A stop that dwells across midnight** (arrival 23:55, departure 00:02
+/// at the SAME stop; realistic for sleepers and long overnight dwells) is
+/// itself a crossing: its departure is earlier than its own arrival, so the
+/// running offset increments AFTER that stop, and every later calling
+/// point is on the next day (finding PL-12 of the 2026-09-27 pipelines
+/// review). Before that fix the crossing was missed entirely: the next
+/// stop's time was compared against the 00:02 departure, never regressed,
+/// and every remaining calling point (and the destination arrival) was
+/// filed a day early.
+///
+/// **Remaining, accepted limitation**: `CallingPoint` has one `day_offset`
+/// for both of its times, so the dwelling stop keeps its ARRIVAL's offset
+/// and its own `booked_departure` alone is a day early. Modelling a second
+/// per-stop offset would change every published product's row shape for
+/// this one field.
 fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
     let mut offset: u8 = 0;
     let mut last_time: Option<NaiveTime> = None;
@@ -78,9 +83,16 @@ fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
         if let (Some(last), Some(first)) = (last_time, first_time)
             && first < last
         {
-            offset += 1;
+            offset = offset.saturating_add(1);
         }
         cp.day_offset = offset;
+
+        // PL-12: a dwell across midnight within this one stop.
+        if let (Some(arrival), Some(departure)) = (cp.booked_arrival, cp.booked_departure)
+            && departure < arrival
+        {
+            offset = offset.saturating_add(1);
+        }
 
         if let Some(latest) = cp.booked_departure.or(cp.booked_arrival) {
             last_time = Some(latest);
@@ -2538,6 +2550,52 @@ mod tests {
         assert_eq!(
             resolved.calling_points[3].day_offset, 1,
             "Shenfield 01:01 stays on the crossed-into day, not a second crossing"
+        );
+    }
+
+    /// PL-12's regression test: a stop that dwells across midnight
+    /// (arrive 23:55, depart 00:02) must move every LATER calling point to
+    /// the next day. Before the fix none of them moved.
+    #[test]
+    fn a_midnight_dwell_moves_every_later_calling_point_to_the_next_day() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "S00001",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                ALL_DAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("EUSTON ", CallingPointKind::Origin, "21:15"),
+                calling_point_with_both(
+                    "CRSTRS ",
+                    CallingPointKind::Intermediate,
+                    "23:55",
+                    "00:02",
+                ),
+                calling_point_with_both(
+                    "MTHRWL ",
+                    CallingPointKind::Intermediate,
+                    "00:15",
+                    "00:16",
+                ),
+                calling_point_with_arrival("GLGC   ", CallingPointKind::Terminate, "00:40"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let resolved = index.schedule_for_uid("S00001", date).unwrap();
+        let offsets: Vec<u8> = resolved
+            .calling_points
+            .iter()
+            .map(|cp| cp.day_offset)
+            .collect();
+        assert_eq!(
+            offsets,
+            vec![0, 0, 1, 1],
+            "the dwelling stop keeps its arrival's day; everything after it is the next day, \
+             counted once (Motherwell is not compared against the 23:55 arrival)"
         );
     }
 
