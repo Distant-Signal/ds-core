@@ -1262,6 +1262,38 @@ pub struct RejectedTrustBacklogRow {
     pub message: String,
 }
 
+/// One TRUST reason code, the wire shape `trust-backlog-consumer` POSTs in
+/// batches to `api`'s `/private/train-reasons` route (stored in
+/// `train_reasons`, see `api::data::train_reasons`). Sent for a `0002`
+/// Cancellation's `canx_reason_code` and a `0006` Change of Origin's
+/// `reason_code`, and only when the message carries one.
+///
+/// Deliberately its own type and route, not a field on
+/// [`TrustBacklogEventMessage`]: `0006` has no place in the backlog table
+/// or its replay, and a reason is enrichment, so it must never hold up the
+/// backlog batch it arrived in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrainReasonMessage {
+    /// TRUST's 10-character train id.
+    pub train_id: String,
+    /// Known once the consumer has seen this train's Activation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub train_uid: Option<String>,
+    /// Derived exactly as the same message's backlog row's `service_date`.
+    pub service_date: NaiveDate,
+    /// `"0002"` or `"0006"`.
+    pub msg_type: String,
+    pub reason_code: String,
+    /// `0002` only: `"AT ORIGIN"`, `"EN ROUTE"`, `"ON CALL"` or `"OUT OF PLAN"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canx_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loc_stanox: Option<String>,
+    /// `canx_timestamp` (`0002`) or `dep_timestamp` (`0006`), corrected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_at: Option<DateTime<Utc>>,
+}
+
 /// What `trust-consumer` needs to know about each active tracked train:
 /// pending pins to attempt resolving, and already-resolved ones to
 /// recognize incoming TRUST messages against, after a restart or on its

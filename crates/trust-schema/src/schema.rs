@@ -139,14 +139,14 @@ pub fn movement_delay_minutes(movement: &Movement) -> Option<i32> {
     }
 }
 
-// `canx_reason_code` is part of `0002`'s confirmed shape but has no consumer
-// yet -- see the Activation comment above for why it's kept rather than
-// deleted.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Cancellation {
     pub train_id: String,
     pub canx_timestamp: Option<String>,
-    #[allow(dead_code)]
+    /// The delay attribution code for the cancellation (e.g. `"TG"`). Read
+    /// by `trust-backlog-consumer`, which forwards it to `api`'s
+    /// `train_reasons` table. Present on every `0002` in a 2026-09-27
+    /// sample of the live feed; `None` is still handled.
     pub canx_reason_code: Option<String>,
     /// `"AT ORIGIN"`, `"EN ROUTE"`, `"ON CALL"` or `"OUT OF PLAN"`.
     pub canx_type: Option<String>,
@@ -172,6 +172,11 @@ pub struct ChangeOfOrigin {
     pub dep_timestamp: Option<String>,
     #[serde(default)]
     pub loc_stanox: Option<String>,
+    /// The delay attribution code for the change of origin (e.g. `"YI"`).
+    /// Absent on some messages: 76 of 82 carried it in a 2026-09-27 sample
+    /// of the live feed.
+    #[serde(default)]
+    pub reason_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -581,7 +586,7 @@ mod tests {
                 "dep_timestamp":"1790507000000","loc_stanox":"87702"}},
             {"header":{"msg_type":"0005"},"body":{"train_id":"722N71MW27","dep_timestamp":"1790507000000"}},
             {"header":{"msg_type":"0006"},"body":{"train_id":"722N71MW27",
-                "dep_timestamp":"1790508000000","loc_stanox":"87703"}}
+                "dep_timestamp":"1790508000000","loc_stanox":"87703","reason_code":"YI"}}
         ]"#;
         let messages = parse_batch(raw).unwrap();
         let TrustMessage::Movement(m) = &messages[0] else {
@@ -595,6 +600,7 @@ mod tests {
         assert_eq!(c.canx_type.as_deref(), Some("EN ROUTE"));
         assert_eq!(c.dep_timestamp.as_deref(), Some("1790507000000"));
         assert_eq!(c.loc_stanox.as_deref(), Some("87702"));
+        assert_eq!(c.canx_reason_code.as_deref(), Some("YI"));
         let TrustMessage::Reinstatement(r) = &messages[2] else {
             panic!("{:?}", messages[2])
         };
@@ -604,6 +610,7 @@ mod tests {
         };
         assert_eq!(o.dep_timestamp.as_deref(), Some("1790508000000"));
         assert_eq!(o.loc_stanox.as_deref(), Some("87703"));
+        assert_eq!(o.reason_code.as_deref(), Some("YI"));
     }
 
     /// Bodies from before these fields were read still parse, as `None`.

@@ -1,0 +1,386 @@
+# Delay attribution reason codes: TRUST `canx_reason_code` (0002) and
+# `reason_code` (0006) -> description.
+#
+# Source: Network Rail, "Historic Delay Attribution Glossary", sheet
+# "Incident Reason" (file dated 2021-08-11), downloaded 2026-09-27 from
+# https://www.networkrail.co.uk/wp-content/uploads/2021/08/Historic-Delay-Attribution-Glossary.xlsx
+# (sha256 083eb7df58120c3f9ba9e28de9f0944f598a17d05c2efd5055a07ce8de6dcb6e).
+# Contains information of Network Rail Infrastructure Limited. Reused on
+# the basis that Network Rail publishes its transparency data under the Open
+# Government Licence v3.0; the file itself carries no licence text, so this
+# was an operator decision (2026-09-27), recorded in
+# docs/trust-reason-codes.md.
+#
+# The descriptions are as of August 2021. Codes added or redefined in the
+# Delay Attribution Principles and Rules since then are missing or may be
+# described with their 2021 meaning. A code not listed here is served with a
+# null description (see crates/api/src/data/train_reasons.rs).
+#
+# Columns (tab-separated; whitespace in the source collapsed to single
+# spaces, nothing else changed): code, short name, description, category.
+code	name	description	category
+AA	WTG ACCEPT	Waiting acceptance into off Network Rail network Terminal or Yard	Freight Terminal/Yard delays
+AB	DOCUMENTS	Waiting Customer Release of Documentation	Freight Terminal/Yard delays
+AC	TRAIN PREP	Waiting Train preparation or completion of TOPS list/RT3973	Freight Terminal/Yard delays
+AD	WTG STAFF	Off Network Rail network Terminal or Yard staff shortage including reactionary congestion caused by shortage	Freight Terminal/Yard delays
+AE	CONGESTION	Congestion in off Network Rail network Terminal or Yard	Freight Terminal/Yard delays
+AF	EQUIPMENT	Terminal/Yard Equipment failure - Cranes etc.	Freight Terminal/Yard delays
+AG	LOAD INCDT	Wagon load incident including adjusting loads or open door	Freight Terminal/Yard delays
+AH	YARD EQUIP	Customer or off Network Rail network yard equipment breakdown/reduced capacity	Freight Terminal/Yard delays
+AI	SHIP/ROAD	Waiting traffic off ship/road	Freight Terminal/Yard delays
+AJ	TRAF DOC	Waiting Customer's traffic including release information and documentation	Freight Terminal/Yard delays
+AK	YARDSAFETY	Safety Ins and mishaps(derailments, fire, chemical spill) in off n/w freight yard or terminal (inc private sdgs affecting FOC	Freight Terminal/Yard delays
+AX	OFFNET INF	Failure of off network infrastructure (FOC or private)	Freight Terminal/Yard delays
+AY	FTO MISHAP	Mishap in Terminal/Yard or on Terminal/Yard infrastructure	Freight Terminal/Yard delays
+AZ	YARD OTHER	Other Freight Operating Company cause, to be specified, in off network terminals or yards	Freight Terminal/Yard delays
+DA	HOLD NT FL	NT FL Holding Code	Non-technical Fleet delays
+DB	HOLD T-OPS	Train Operations Holding Code	Train operations
+DC	HOLD T-CRW	Train Crew Causes Holding Code	Traincrew causes
+DD	HOLD T-FL	Technical Fleet Holding Code	Technical Fleet delays
+DE	HOLD STN	Station Causes holding Code	Station delays
+DF	HOLD EXT	External Causes Holding Code	External Causes (Train Operator)
+DG	HOLD YARD	Freight Terminal And Or Yard Holding Code	Freight Terminal/Yard delays
+DH	HOLD AUTM	Adhesion And Or Autumn Holding Code	Low Adhesion inc. Autumn (Train Operator)
+FA	DANG GOODS	Dangerous Goods incident	Train operations
+FB	REMARSHALL	Train stopped on route due to incorrect marshalling	Train operations
+FC	FOC DRIVER	Freight Train Driver error, SPAD, Wrong routing or Missed AWS/DSD	Traincrew causes
+FD	LOCO USED	Booked loco used on additional/other service	Train operations
+FE	NO T-CREW	Train Crew not available including after rest	Traincrew causes
+FF	FOC DIAG	FOC Diagramming or Rostering issue	Traincrew causes
+FG	PRO DRIVER	Driver adhering to company professional driving standards or policy	Traincrew causes
+FH	FOC PLAN	FOC Planning issue (not diagramming or rostering)	Train operations
+FI	ETCS DVR	Delay due to incorrect ETCS system or equipment operation by Driver	Traincrew causes
+FJ	FOC CONTRL	FOC Control decision or directive	Train operations
+FK	DIVERT REQ	Train diverted/re-routed at FOC request	Train operations
+FL	HOLD REQST	Train cancelled at FOC request or planned not to run	Train operations
+FM	LAMP ISSUE	Tail lamp/head lamp out or incorrectly shown	Train operations
+FN	LATE CHUNL	Late presentation from Europe	Train operations
+FO	LIR UNEX	Time Lost en-route believed to be operator cause and information required from Operator (Ops Responsibility)	Train operations
+FP	OC ROUTE	Incorrect route taken or route wrongly challenged by driver incl SPADs	Traincrew causes
+FS	ETCS O-RDE	Delay due to ETCS/ERTMS on-board overriding driver command	Train operations
+FT	LF NEUTRAL	Leaf fall Neutral	Low Adhesion inc. Autumn (Train Operator)
+FU	JOINT INQ	Formal Inquiry Incident - possible Operator responsibility	Train operations
+FW	LATE START	Late start/yard overtime not explained by Operator	Freight Terminal/Yard delays
+FX	TRAIN SPEC	Freight train running at lower class or speed than planned classification or overweight	Train operations
+FY	FOC MISHAP	Mishap caused by Freight Operating Company or on FOC-owned infrastructure	Train operations
+FZ	FOC OTHER	Other FOC causes incl. cause to be specified, including mishaps	Train operations
+I0	RETB FLR	Telecom equipment legacy radio failures (RETB)	Telecoms failures
+I1	OHL/3 RAIL	Overhead line/third rail defect	OLE/Third Rail faults
+I2	AC/DC TRIP	AC/DC trip (including no fault or cause found)	OLE/Third Rail faults
+I3	ON OHL	Obstruction on OHL, cause of which is not known	OLE/Third Rail faults
+I4	SUPPLY FLR	OHLE/third rail power supply failure or reduction	OLE/Third Rail faults
+I5	OVERRUN	Possession over-run from planned work	Possession over-run and related faults
+I6	LINE BLOCK	Delays as a result of line blocks / track patrols (including late handback)	Track Patrols & related possessions
+I7	ENGNRS TRN	Engineer's train late into, from or failed in possession	Possession over-run and related faults
+I8	ANIMAL	Animal Strike or Incursion within the control of Network Rail	Other infrastructure
+I9	INFRA FIRE	Fires starting on Network Rail Infrastructure	Fires starting on Network Rail Infrastructure
+IA	SIGNAL FLR	Signal failure (including no fault found)	Signal Failures
+IB	POINTS FLR	Points failure (including no fault found)	Points failures
+IC	TC FAILURE	Track circuit failure (including no fault found)	Track Circuit Failures
+ID	LEVEL XING	Level crossing faults and failure incl. barrow/foot crossings and crossing treadles	Level crossing failures
+IE	SIG FUNC PWR	Signalling Functional Power Supply Failure	Signalling System & Functional Power Failures
+IF	PANEL FLR	Train Describer/Panel/ARS/SSI/TDM Remote Control failure	Signalling System & Functional Power Failures
+IG	BLOCK FLR	Block failure	Signalling System & Functional Power Failures
+IH	PWR SUP DIS	Power Supply And Distribution System Failure	Non Traction Power Supply Failures
+II	SIG CABLE	Signalling lineside cable fault	Cable faults (lineside signalling)
+IJ	AWS/ATP	AWS/ATP/TPWS/Train stop/On track equipment failure	Other Signal Equipment Failures
+IK	TELECOMS	Telecom equipment failure (including no fault found)	Telecoms failures
+IL	TOKEN FLR	Token equipment failure (including no fault found)	Other Signal Equipment Failures
+IM	BALISE FLR	Infrastructure Balise Failure (TASS / ETCS / ERTMS)	ETCS including Balise Failures
+IN	HABD FAULT	HABD/Panchex/WILD/Wheelchex fault, failure or mis-detection	Other Signal Equipment Failures
+IO	NFF	No Fault Found/HABD/Panchex/WILD/Wheelchex	Other Signal Equipment Failures
+IP	POINT HEAT	Points failure caused by snow or frost where heaters are fitted but found to be not turned on, not operative or defective	Points failures
+IQ	TRACK SIGN	Trackside sign blown down, fallen over, missing, defective, mis-placed	Problems with trackside signs including TSR boards
+IR	RAIL FLAW	Broken/cracked/twisted/buckled/flawed rail	Track Faults including Broken Rails
+IS	TRACK FLT	Track defects (other than rail defects) inc. fish plates, wet beds etc.	Track Faults including Broken Rails
+IT	TRACK NFF	Rough ride or bumps reported - cause not known or no fault found	Track Faults including Broken Rails
+IU	ONTRACK EQ	Engineers on-track plant affecting possession	Possession over-run and related faults
+IV	EARTHSLIP	Cutting or embankment earthslip, rock fall or subsidence (not the result of severe weather on the day of failure)	Civil Engineering structures, earthworks & buildings
+IW	INF WEATHR	Non severe weather - snow/ice/frost affecting infrastructure equipment	Other weather (impact on infrastructure or network operations)
+IX	UNPLND TSR	Temporary speed restriction outside rules of route	TSRs Due to Condition of Track
+IY	INF MISHAP	Mishap - Infrastructure Maintainer causes	Mishap - infrastructure causes
+IZ	INF OTHER	Other Infrastructure causes	Other infrastructure
+J0	GSM-R-FLR	Telecom equipment radio failure (GSM-R)	Telecoms failures
+J1	TPWS FLR	TPWS On Track Equipment Failure	Other Signal Equipment Failures
+J2	TRTS FLR	Network Rail train dispatch equipment failure (including no fault found but excluding telecoms equipment)	Other Signal Equipment Failures
+J3	AXLE C FLR	Axle Counter Failure	Axle Counter Failures
+J4	MOP NFF	Infrastructure Safety Issue Reported by Member of the Public - No Fault Found	Other infrastructure
+J5	MIS REPORT	Infrastructure Asset fault reported but proven to be mistaken	Other infrastructure
+J6	LIGHTNING	Lightning strike against unprotected assets	Other weather (impact on infrastructure or network operations)
+J7	ETCS FLR	ETCS/ERTMS Equipment Failure (excl. communications link and balises)	ETCS including Balise Failures
+J8	ONTRK DMG	OTM DAMAGE	Other possession related delay
+J9	RCM ALERT	Preventative Maintenance to the infrastructure in response to a Remote Condition Monitoring Alert	Other infrastructure
+JA	TSRNOT EAS	TSR speed restrictions for track work outside of the Timetable Planning Rules	TSRs Due to Condition of Track
+JB	TSR REACTN	Reactionary Delay to 'P' coded TSRs	Reactionary delay to P-coded TSRs
+JC	COMM LINKS	Telecom cable failure (transmission sys & cable failures)	Telecoms failures
+JD	STRUCTURES	Structures - Bridges/tunnels/buildings/retaining walls/sea defences (not bridge strikes)	Civil Engineering structures, earthworks & buildings
+JE	BETWN TRNS	Waiting clearence to pass booked trains	Possession over-run and related faults
+JF	OFFTRK ASS	Off track asset defects or issues on the NR network (not due to vandalism or weather or part of station infrastructure)	Other infrastructure
+JG	ESR/TSR	ESR/TSR Work not comp/canx pssn (restriction did not exist prior to pssn)	Other possession related delay
+JH	HEAT SPEED	Critical Rail Temperature speeds, (other than buckled rails)	Other weather (impact on infrastructure or network operations)
+JI	SWING BDGE	Swing/lifting bridge failure	Civil Engineering structures, earthworks & buildings
+JJ	LIFT/ESC	Lift/escalator defect/failure	Other infrastructure
+JK	FLOODING	Flooding not due to exceptional weather	Other weather (impact on infrastructure or network operations)
+JL	SAFETY INF	Safety related incident caused by maintenance or infrastructure staff oversight or error (not Operations staff)	Mishap - infrastructure causes
+JM	ASPECT CHG	Change of Signal Aspects - No Fault Found	Other Signal Equipment Failures
+JN	POSSN CANC	Possession cancellation	Other possession related delay
+JO	RCF	Rolling Contact Fatigue	Gauge Corner Cracking
+JP	VEGETATION	Failure to maintain vegetation within network boundaries in accordance with prevailing Network Rail standards	Vegetation Management Failure
+JQ	TREE OHANG	Trains striking overhanging branches/vegetation (not weather related)	Vegetation Management Failure
+JR	RBC ETCS	Delay due to RBC issues affecting ETCS / ATO operation (not Balise related)	ETCS including Balise Failures
+JS	TRACK COND	Condition of Track TSR outside the Timetable Planning Rules	TSRs Due to Condition of Track
+JT	NO PNT HTR	Points failure caused by snow or frost where heaters are not fitted	Points failures
+JX	MISC OBJCT	Miscellaneous items on track including litter (not including leaves, result of vandalism, weather or fallen/thrown from trains)	Other infrastructure
+JY	MISHAP	Mishap - Renewal/Infrastructure Contractor cause	Mishap - infrastructure causes
+JZ	OTHER	Other Renewal/Infrastructure Contractor cause	Other infrastructure
+M0	CAB SAFETY	Confirmed train cab based safety system fault (including GSMR)	Technical Fleet delays
+M1	PANTO/SHOE	Confirmed Pantograph ADD, shoe beam or assoc. system faults inlc. positive PANCHEX activations	Technical Fleet delays
+M2	ETCS	Delay due to ATO / ETCS equipment	Technical Fleet delays
+M3	DIESL OTH	Diesel loco failure/defect/attention : other	Technical Fleet delays
+M4	EMU BRAKE	EMU failure/defect/attention : brakes	Technical Fleet delays
+M5	EMU DOOR	EMU failure/defect/attention : doors (incl SDO equipment failure)	Technical Fleet delays
+M6	EMU OTHER	EMU failure/defect/attention : other	Technical Fleet delays
+M7	DOORS	Door and Door system faults	Technical Fleet delays
+M8	ABOVE SBAR	Technical failures above the Solebar	Technical Fleet delays
+M9	FLEET NFF	Reported fleet equipment defect - no fault found	Technical Fleet delays
+MA	ELEC BRAK	Electric Loco (inc. IC225) failure/defect/attention :brakes	Technical Fleet delays
+MB	ELEC LOCO	Electic Loco failure, defect, attention	Technical Fleet delays
+MC	DIESL LOCO	Diesel Loco failure, defect, attention	Technical Fleet delays
+MD	BELOW SBAR	Technical failures below the solebar	Technical Fleet delays
+ME	STEAM LOCO	Steam locomotive failure/defect/attention	Technical Fleet delays
+MF	CHUNL LOCO	International/Channel Tunnel locomotive failure/defect/attention	Technical Fleet delays
+MG	COACH BRKE	Coach (incl. Intl/IC225) failure/defect/attention : brakes	Technical Fleet delays
+MH	COACH DOOR	Coach (incl. Intl/IC225) failure/defect/attention : doors	Technical Fleet delays
+MI	COACH OTHR	Coach (incl. Intl/IC225) failure/defect/attention : other	Technical Fleet delays
+MJ	PARCEL VEH	Parcels vehicle failure/defect/attention	Technical Fleet delays
+MK	DVT PCV	DVT/PCV failure/defect/attention	Technical Fleet delays
+ML	WAGN/COACH	Wagons, coaches and parcel vehicle faults	Technical Fleet delays
+MM	EMU TRAC	EMU failure/defect/attention : traction	Technical Fleet delays
+MN	BRAKE/WHLS	Brake and brake systems faults; including wheel flats where no other cause had been identified	Technical Fleet delays
+MO	STOCK LATE	Loco/unit/vehicles late off depot (cause not known)	Technical Fleet delays
+MP	ADHESION	Rail / wheel interface, adhesion problems (including ice on the running rail)	Low Adhesion inc. Autumn (Train Operator)
+MQ	ELEC OTHER	Electric Loco (incl. IC225) failure/defect/attention : other	Technical Fleet delays
+MR	SANDER	Sanders and scrubber faults	Technical Fleet delays
+MS	ALOC STOCK	Planned underpowered or shortformed service and or vehicle, incl. exam set swaps	Non-technical Fleet delays
+MT	SYST FAULT	Confirmed train borne safety system faults (not cab based)	Technical Fleet delays
+MU	DEPOT OPS	Depot operating problem	Non-technical Fleet delays
+MV	ON-TRACK	Engineers on-track equipment failure outside possession	Technical Fleet delays
+MW	WEATHR FLT	Weather - effect on T&RS equipment	Technical Fleet delays
+MX	DIESL BRKE	Diesel Loco failure/defect/attention : brakes	Technical Fleet delays
+MY	COUPLER	Coupler and Coupler system faults	Technical Fleet delays
+MZ	T+RS OTHER	Other Fleet Engineer causes/initial attribution	Technical Fleet delays
+NA	TASS/TILT	On train TASS/TILT failure	Technical Fleet delays
+NB	TASS - NFF	TASS - no fault found	Technical Fleet delays
+NC	DEP FIRE	Fire in fleet depot not caused by vandals (including caused by vandals in respect of frieght depots)	Non-technical Fleet delays
+ND	ETCS	On train ETCS/ERTMS failure	Technical Fleet delays
+O2	ACI FAIL	ACI Failures	Network Rail Operations - other
+OA	ENDVR REG	Regulation Decision Made With Best Endeavours	Network Rail Operations - signalling
+OB	REGULATION	Delayed by signaller not applying applicable regulating policy	Network Rail Operations - signalling
+OC	SIGNALLER	Signaller including mis-routing (not ERTM /ETCS related)	Network Rail Operations - signalling
+OD	NR CONTROL	Delays due to National/Regional/Route Operations directives or Route Control decision or directive	Network Rail Operations - control
+OE	RHC PROG	Failure to lay Sandite or operate Railhead Conditioning train as programmed	Wheel slip due to leaf fall
+OF	ETCS CTRL	Delay due to incorrect ETCS system or equipment operation by Signaller / Controller	Network Rail Operations - signalling
+OG	ICING	Ice on conductor rail/OHLE	Other weather (impact on infrastructure or network operations)
+OH	ARS / TMS	ARS / TMS / SARS software problem (excluding scheduling issues and technical failures)	Network Rail Operations - other
+OI	JOINT INQ	Formal Inquiry Incident - other Operators	Network Rail Operations - other
+OJ	STN FIRE	Fire in station building/platform affecting operators not booked to call at that stations	Network Rail Operations - other
+OK	OPTG STAFF	Delay caused by Operating staff oversight, issues or absence (excluding signallers and Control)	Network Rail Operations - other
+OL	BOX CLOSED	Signal Box not open during booked hours	Network Rail Operations - signalling
+OM	RHC FAIL	Technical failure associated with a Railhead conditioning train	Network Rail Operations - railhead conditioning trains
+ON	MIS-INVEST	Delays not properly investigated by Network Rail	Uninvestigated Delay
+OO	RHC	Late start of a RHC	Network Rail Operations - railhead conditioning trains
+OQ	SIMPLIFIER	Incorrect simplifier	Network Rail Operations - signalling
+OR	BOX INSTR	LOM directive or Signaller correctly applying local instructions (ex late running trains or infrastructure Accepted Limitation)	Network Rail Operations - signalling
+OS	RHC LATE	Late start or delays to Railhead Conditioning or Ghost Train due to its own activity and not in reaction to another incident	Network Rail Operations - railhead conditioning trains
+OT	SIGHT TSR	Ops Safety TSR implemented for sighting issues relating to foot crossings, level crossings or signals (Not vegetation caused)	Network Rail Operations - other
+OU	Not INVEST	Delays not Investigated by Network Rail	Uninvestigated Delay
+OV	RTK FIRE	Fire or evacuation due to fire alarm of Network Rail buildings other than stations not due to vandalism	Network Rail Operations - other
+OW	FOC CONECT	Conn held where the prime incident causing delay to the incoming train is a FOC owned incident & serv is more freq than hourly	Network Rail Operations - other
+OY	RT MISHAP	Mishap - Network Rail operating causes	Network Rail Operations - other
+OZ	OPTG OTHER	Other Network Rail operating causes	Network Rail Operations - other
+PA	PLANND ENG	Published TSR associated with Planned Engineering Works where time loss is within Engineering Allowance	All P codes
+PB	PLANND CON	Published TSR due to condition of asset (not associated with Engineering Work) where time loss is within Engineering Allowance	All P codes
+PC	PLANND COB	Condition of Bridge TSR within rules of the route	All P codes
+PD	SYSTM CANC	System generated cancellation (NOT to be attributed to manually)	All P codes
+PF	DIVRSN/SLW	Planned eng work where published diversion/SLW not provided for in schedule but where time loss is within Engineering Allowance	All P codes
+PG	PLAND CAPE	Planned cancellation where that cancellation is identified and agreed prior to 22.00 the day before the schedule runs	All P codes
+PH	PLANND COE	Condition of Earthworks TSR within Rules of the Route	All P codes
+PI	SCH 4 TSR	TSR for Schedule 4 Possession	All P codes
+PJ	DUPLICATE	Canx of a duplicate or erroneous schedule or an identified duplicate, false or erroneous delay (NOT berth off set related)	All P codes
+PK	BANK HOL	Bank Holiday Cancellations	All P codes
+PL	AGREED EXC	Exclusion commercially agreed and documented between Network Rail and Train Operator	All P codes
+PM	SEC ALERT	Security alert affecting stations where trains are allowed to pass but not stop	All P codes
+PN	VSTP DELAY	VSTP Serv delay < 5 mins cause by regulation and or time lost in running (VSTP Sched del ONLY where delay causes no react delay)	All P codes
+PS	DUPE SCHLD	Cancellation of a duplicate or errorneous schedule	All P codes
+PT	TRUST ANOM	Authorised TRUST reporting anomalies or inaccuracies relating to berth off sets	All P codes
+Q0	F COMM SPLTS	Freight Commercial Splits	Network Rail commercial takeback/other
+Q1	TKB PUMPS	Takeback Pumps	Network Rail commercial takeback/other
+Q2	NZ PMPS F	NZ Pumps F	Low adhesion inc. Autumn (Network Rail)
+Q3	NZ PMPS T	NZ Pumps T	Low adhesion inc. Autumn (Network Rail)
+QA	WTT SCHED	WTT schedule and or LTP Process including erroneous simplifiers	Timetable Planning
+QB	DIVRSN/SLW	Planned engineering work - diversion/SLW not timetabled (outside the Timetable Planning Rules)	Timetable Planning
+QC	EXPCTD TSR	Expected TSR not planned for	Timetable Planning
+QD	STRUCTURES	AUTOGENERATED - NOT IN USE	Civil Engineering structures, earthworks & buildings
+QH	RAILCONTAM	Adhesion problems due to leaf contamination	Wheel slip due to leaf fall
+QI	CAUTCONTAM	Cautioning due to railhead leaf contamination	Wheel slip due to leaf fall
+QJ	LEAVES T/C	Special working for leaf-fall track circuit operation	Track circuit failures - leaf fall
+QK	FOG/SNOW	Special Working for fog and falling snow conditions	Other weather (impact on infrastructure or network operations)
+QL	PLND TSR	Reactionary Delay to 'P' coded TSRs	Reactionary delay to P-coded TSRs
+QM	STP SCHED	Train schedule/STP Process including erroneous simplifiers	Timetable Planning
+QN	VSTP SCHED	VSTP Schedule/ VSTP Process (TSI created schedule)	Network Rail Operations - control
+QP	PLND REACT	Reactionary Delay to 'P' coded Possession	Other possession related delay
+QQ	OPS S ERR	Simplifier Error Ops Planning	Timetable Planning
+QT	COMMERCIAL	Delay accepted by Network Rail as part of commercial agreement where no substansive delay reason is identified	Network Rail commercial takeback/other
+QZ	COMM OTHER	Other Network Rail non - Operating causes	Network Rail commercial takeback/other
+R1	DISPATCH	Incorrect train dispatch by station staff	Station delays
+R2	LATE TRTS	Late TRTS given by station staff	Station delays
+R3	STAFF MSNG	Station Staff unavailable - missing or uncovered	Station delays
+R4	STAFF DUTY	Station staff split responsibility - unable to cover all duties	Station delays
+R5	STAFF ERR	Station staff error - e.g wrong announcements misdirection	Station delays
+R6	UNSTAFFED	Overtime at stations normally unstaffed	Station delays
+R7	PLND EVENT	Station delays as a result of overcrowding due to planned events (e.g. sports fixtures, concerts)	Station delays
+R8	STN UNEX	Delay at Station believed to be operator cause and information required from operator (Ops Responsibility)	Station delays
+RA	PLATFORM	Waiting platform/station congestion/platform change	External Causes (Train Operator)
+RB	PASSENGERS	Passengers joining/alighting	Station delays
+RC	BKD ASSIST	re-booked assistance for a person with reduced mobility joining/alighting,	Station delays
+RD	ATT/DETACH	Attaching/detaching/shunter/watering	Train operations
+RE	LIFT/ESC	Lift/escalator defect/failure	Station delays
+RF	MAIL/PRCLS	Loading/unloading letter mail/parcels	Freight Terminal/Yard delays
+RG	DOOR OPEN	Door Open incident - Station Operator cause	Station delays
+RH	FIRE ALARM	Station evacuated due to fire alarm	Station delays
+RI	UNAUTH CON	Waiting connections - not authorised by TOC Control	Station delays
+RJ	UNAUTH SSO	Special stop orders - not authorised by TOC Control	Station delays
+RK	AUTH CON	Waiting passenger connections authorised by TOC but outwith TOC/Network Rail connection policy	Train operations
+RL	AUTH SSO	Special Stop Orders - authorised by TOC Control (including any delay at point of issue)	Train operations
+RM	XTNL CONN	Waiting connections from other transport modes	Station delays
+RN	PASS CONN	Passengers forcing connections between trains outside connectional allowances	Station delays
+RO	PASS ILL	Passengers taken ill on platform	Station delays
+RP	PASS DROP	Passenger dropped object whilst boarding/alighting from train and train delayed at TOC request	Station delays
+RQ	UBKD ASST	Un-booked assistance for a person with reduced mobility joining/alighting,	Station delays
+RR	BIKE RSVD	Loading or unloading reserved bicycles	Station delays
+RS	BIKE URSVD	Loading or unloading un-reserved bicycles	Station delays
+RT	EXCES LUGG	Loading excessive luggage	Station delays
+RU	LOST LUGG	Locating lost luggage	Station delays
+RV	PASS INFO	Customer Information system failure	Station delays
+RW	STN FLOOD	Station flooding (incl. issues with drains) not the result of weather, where the water has not emanated from NR infrastructure	Station delays
+RX	UNPL EVENT	Station delay due overcrowding due unplanned events or incident (line or station closure) where causal event is not determined	Station delays
+RY	STN MISHAP	Mishap - Station Operating causes	Station delays
+RZ	STN OTHER	Other Station Operating causes	Station delays
+T1	DOO STN	Delay at unstaffed station to DOO train	Station delays
+T2	NONDOO STN	Delay at unstaffed station to non-DOO train	Station delays
+T3	XTNL CONN	Waiting connections from other transport modes	Traincrew causes
+T4	SUPPLIES	Loading Supplies (including catering)	Station delays
+T8	STN UNEX	Delays at Station believed to be operator cause and Information required from operator (Ops responsibility)	Train operations
+TA	DIAG ISSUE	Train-crew/loco/stock/unit diagram issues	Train operations
+TB	TOC REQEST	Train cancelled or delayed at Train Operators request	Train operations
+TC	CREW USED	Booked Traincrew used for additional/other service	Traincrew causes
+TD	STOCK USED	Booked loco/stock/unit used for additional/other service	Train operations
+TE	PASS INJRY	Injury to passenger on train	External Causes (Train Operator)
+TF	SEAT RESVN	Seat reservation problems	Train operations
+TG	TOC DRIVER	Driver	Traincrew causes
+TH	T-MGR/COND	(Senior) Conductor/Train Manager	Traincrew causes
+TI	ROSTERING	Traincrew rostering problem	Traincrew causes
+TJ	LAMP ISSUE	Tail lamp or headlamp missing, not lit or wrongly displayed	Traincrew causes
+TK	CATERING	Train catering staff (including Contractors)	Traincrew causes
+TL	DOOR OPEN	Door open/not properly secured incident	Train operations
+TM	AUTH CONN	Connection authorised by TOC but outwith Connection Policy	Train operations
+TN	LATE CHUNL	Late presentation from the continent	Train operations
+TO	LIR UNEX	Time lost en-route believed to be Operator cause and information required form operatore (Ops Responsibility)	Train operations
+TP	SSO	Special Stop Orders	Train operations
+TR	TOC DIRECT	Train Operating Company Directive	Train operations
+TS	ETCS DVR	Delay due to incorrect ETCS system or equipment operation by Driver	Train operations
+TT	LF NEUTRAL	Leaf fall Neutral	Low Adhesion inc. Autumn (Train Operator)
+TU	JOINT INQ	Formal Inquiry Incident - possible Operator responsibility	Train operations
+TW	PRO DRIVER	Driver adhering to company professional driving standards or policy	Traincrew causes
+TX	OTH NETWK	Delays incurred on non-Network Rail running lines or networks including London Underground (except fleet related delays)	Train operations
+TY	TOC MISHAP	Mishap-Train Operating Company cause	Train operations
+TZ	TOC OTHER	Other Passenger Train Operating Company causes	Train operations
+V8	BIRDSTRIKE	Train striking or being struck by a bird	External Causes (Train Operator)
+VA	DISORDER	Disorder/drunks or trespass	External Causes (Train Operator)
+VB	VANDALISM	Vandalism or theft	External Causes (Train Operator)
+VC	FATALITIES	Fatalities and or injuries sustained on platform result of struck by train or falling from a train	External Causes (Train Operator)
+VD	ILL PASS	Passenger taken ill on train	External Causes (Train Operator)
+VE	TICKET IRR	Ticket irregularities or refusals to pay	External Causes (Train Operator)
+VF	VANDL FIRE	Fire caused by vandalism	External Causes (Train Operator)
+VG	POLICE-TRN	Police searching train	External Causes (Train Operator)
+VH	PASS COMM	Passenger Communication cord, door egress or emergency train alarm operated	External Causes (Train Operator)
+VI	SEC ALERT	Security alert affecting stations and depots	External Causes (Train Operator)
+VR	PRO DRIVER	Driver adhering to company professional driving standards or policies during severe weather that are not fleet related	External Causes (Train Operator)
+VW	SEV WEATHR	Severe weather affecting passenger Fleet equipment including follwogin company standards/policies or Rule book instructions	External Causes (Train Operator)
+VX	LUL CAUSES	External events occurring on the LUL or other non NR running lines	External Causes (Train Operator)
+VZ	EXT OTHER	Other passenger or external causes the responsibility of TOC	External Causes (Train Operator)
+W8	ALL ANIMAL	Animals online including large birds	External other
+WA	TRESPASS	Trespass	External fatalities and trespass
+WB	VANDALS	Vandalism/Theft	External infrastructure damage - Vandalism/Theft
+WD	XING INCDT	Level Crossing Incidents	External level crossing/road incidents (not bridges)
+WK	ELEC BOARD	Electricity Board power failures	External other
+WN	ROAD INCDT	Road related - excl bridge strikes/level crossing incident	External level crossing/road incidents (not bridges)
+WP	BDG STRIKE	Road vehicles striking/stuck under bridges	Bridge strikes
+WR	CABLE CUT	Cable vandalism/theft	External infrastructure damage - Vandalism/Theft
+WT	SNOW	Severe snow affecting infrastructure the responsibility of IMC	Severe weather (beyond design capability of infrastructure)
+WW	WEATHER	Severe weather other than snow affecting infrastructure the responsibility of IMC	Severe weather (beyond design capability of infrastructure)
+WX	MISC OBS	Msc items on line (incl trees) due to effects of weather responsibility IMC	Severe weather (beyond design capability of infrastructure)
+WZ	EXT OTHER	Other external causes the responsibility of IMC	External other
+X1	SPL WRKING	Visibility in semaphore signalled areas, or special working for fog and falling snow implemented by NR ¿ in all signalling areas	Other weather (impact on infrastructure or network operations)
+X2	SEV FLOOD	Severe flooding beyond that which could be mitigated on Network Rail infrastructure	Severe weather (beyond design capability of infrastructure)
+X3	LIGHTNING	Lightning Strike - damage to protected systems	Severe weather (beyond design capability of infrastructure)
+X4	KRS / BLKT	Blanket speed restrictions or Key Route Strategy implemented with Group Standards or national operational safety instructions	Other weather (impact on infrastructure or network operations)
+X8	EXT ANIMAL	Animal Strike or incursion not within the control of Network Rail	External other
+X9	PNTS SNOW	Points failure caused by severe snow or ice where heaters are fitted and working as designed	Severe weather (beyond design capability of infrastructure)
+XA	TRESPASS	Trespass (including non-intentional)	External fatalities and trespass
+XB	VANDALS	Vandalism or theft (including the placing of objects on the line)	External infrastructure damage - Vandalism/Theft
+XC	FATALITIES	Fatalities or injuries caused by being hit by train (including non-intentional)	External fatalities and trespass
+XD	XING INCDT	Level Crossing Incidents including misuse and emergency services being prioritised over rail services	External level crossing/road incidents (not bridges)
+XE	TICKET IRR	Ticket irregularities/refusal to pay	External Causes (Train Operator)
+XF	POLICE-RLY	Police searching the line	External police on line/security alerts
+XG	POLICE-TRN	Police searching train	External Causes (Train Operator)
+XH	SEV HEAT	Severe heat affecting infrastructure the responsibility of Network Rail (excluding heat related speed restrictions)	Severe weather (beyond design capability of infrastructure)
+XI	SEC ALERT	Security alert affecting the Network Rail network (incl. line blocks for emergency services attending off network incidents)	External police on line/security alerts
+XJ	ANIMALS	Animals on line	External other
+XK	NATL GRID	National Grid Power Failure - local area also affected (inc outage, surges, blips where working standby generator/UPS installed)	External other
+XL	EXTL FIRES	Fire external to but directly affecting the network (incl. line blocks for emergency services attending off network incidents)	External fires
+XM	EX UTILITY	External utility incident including gas, water mains, overhead power lines	External other
+XN	ROAD/XING	Road or crossing related incidents inc. cars on line, crossing misuse and priority to emergency services (NOT bridge strikes)	External level crossing/road incidents (not bridges)
+XO	EXT OBJECT	External trees, building or structures encroaching or falling onto network infrastructure (not weather or vandalism)	External other
+XP	BDG STRIKE	BRIDGE HIT	Bridge strikes
+XQ	BRIDGE OPN	Swing bridge open for river or canal traffic	External other
+XR	CABLE VAND	Cable vandalism or theft	External infrastructure damage - Vandalism/Theft
+XS	XNG MISUSE	Level Crossing misuse	External level crossing/road incidents (not bridges)
+XT	SEV SNOW	Severe snow or ice affecting infrastructure which is the responsibility of NR (including implementation of Key Route Strategy)	Severe weather (beyond design capability of infrastructure)
+XU	SUN OBSCUR	Sunlight on signal or dispatch equipment Where all responsible mitigation has been taken	External other
+XV	VANDL FIRE	Fire or evacuation due to fire alarm of Network Rail buildings due to vandalism (not including stations)	External other
+XW	HIGH WIND	Severe weather not snow affecting infrastructure the responsibility of Network Rail	Severe weather (beyond design capability of infrastructure)
+XX	MISC OBS	Msc items on line (incl trees) due to effects of weather responsibility of RT	Severe weather (beyond design capability of infrastructure)
+XY	EXT MISHAP	Mishap due to external cause	External other
+XZ	EXT OTHER	AUTOGENERATED - NOT IN USE	External other
+YA	REG-ONTIME	Lost path - regulated for train running less late	1st Order Reactionary
+YB	REG-LATE	Lost path - regulated for another later running train	1st Order Reactionary
+YC	FOL-ONTIME	Lost path - following train running less late	1st Order Reactionary
+YD	FOL-LATE	Lost path - following another later running train	1st Order Reactionary
+YE	WTG S/LINE	Waiting path onto/from single line	1st Order Reactionary
+YF	OFF SLINE	Waiting for late running train off single line	1st Order Reactionary
+YG	REG INSTRC	Regulated in accordance with Regulation Policy	1st Order Reactionary
+YH	INWD LOCO	Late arrival of inward loco	2nd Order Reactionary
+YI	INWD STOCK	Late arrival of booked inward stock (inward and outward trains are operated under the same Track Access Contract)	2nd Order Reactionary
+YJ	INWD CREW	Late arrival of booked inward train-crew where inward and outward are worked by that train-crew under same Track Access Contract	2nd Order Reactionary
+YK	CNNCTN TFC	Waiting connecting Freight or Res traffic to attach	1st Order Reactionary
+YL	AUTHSD CON	Waiting passenger connections within Connection Policy, contingency plan or otherwise agreed by NR/TOC	1st Order Reactionary
+YM	AUTHSD SSO	Special stop orders within the contingency plan or agreed by NR/TOC	1st Order Reactionary
+YN	FIND CREW	Service Recovery-booked train crew, not available	2nd Order Reactionary
+YO	PLATFORM	Waiting platform/station congestion/platform change	2nd Order Reactionary
+YP	DIVERSION	Delays due to diversions from booked route or line	1st Order Reactionary
+YQ	SHRT FRMD	Passenger overcrowding caused by a train being of short-formation	2nd Order Reactionary
+YR	SR CNCL	Tactical cancellation for service recovery not caused by late running	2nd Order Reactionary
+YT	NON NR INF	Reactionary delay to a train that is not leaving the network, by a train that is leaving the network	1st Order Reactionary
+YU	UNIT SWAPS	Service Recovery-booked rolling stock, not available	2nd Order Reactionary
+YV	HELD BACK	Tactical hold of train at origin or at a strategic location en-route due to a line blocking incident on the train¿s booked route	1st Order Reactionary
+YX	OVER CRWD	Passenger overcrowding caused by delay or cancellation of another train or its own late running	2nd Order Reactionary
+ZA	MISHAP INQ	Mishap subject to Joint Inquiry	Network Rail Operations - other
+ZB	LEAF SLIP	Wheel-slip or overshoot due to leaves	Wheel slip due to leaf fall
+ZC	LEAVES T/C	Track circuit failures due to leaves	Track circuit failures - leaf fall
+ZS	NOCAUSE AS	No Cause ascertainable for a Sub-Threshold Delay causing Threshold Reactionary (where agreed by both parties)	All Z codes - Unexplained
+ZU	NOCAUSE ID	No Cause Identified After investigation by both Parties	All Z codes - Unexplained
+ZW	Sys CANC	Unattributed Cancellations System Roll-ups Only	All Z codes - Unexplained
+ZX	SYS L-STRT	Univestigated late Start System Roll-Ups only	All Z codes - Unexplained
+ZY	SYS OTIME	Univestigated station overtime System Roll-up Only	All Z codes - Unexplained
+ZZ	SYS LIR	Unexplained loss in running system Roll-up Only	All Z codes - Unexplained
