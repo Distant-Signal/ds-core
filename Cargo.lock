@@ -86,6 +86,7 @@ dependencies = [
  "dotenv",
  "futures-util",
  "health-http",
+ "md-5 0.10.6",
  "metrics",
  "object_store",
  "serde",
