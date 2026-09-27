@@ -128,6 +128,13 @@ const GRANDFATHERED_TABLE_LOCK_HAZARDS: &[(&str, TableLockHazard)] = &[
         "20260905150000_schedule_matched_resolution.sql",
         TableLockHazard::ValidatingConstraint,
     ),
+    // `train_current_state` gained a BIGSERIAL id (a table rewrite). Found
+    // when RewritingAddColumn was added on 2026-09-27 (DB2-33); already
+    // applied, and already GRANDFATHERED above for its indexes.
+    (
+        "20260906110000_train_movement_trains_id.sql",
+        TableLockHazard::RewritingAddColumn,
+    ),
 ];
 
 fn migrations_dir() -> PathBuf {
@@ -398,6 +405,23 @@ enum TableLockHazard {
     /// `ALTER COLUMN ... [SET DATA] TYPE` usually rewrites the table and
     /// every index on it.
     AlterType,
+    /// `ADD COLUMN` whose value must be computed per row rewrites the whole
+    /// table: a volatile `DEFAULT` (`random()`, `gen_random_uuid()`,
+    /// `clock_timestamp()`, `nextval(..)`, ...), a `serial` type, an identity
+    /// column or a `GENERATED ... STORED` column. A constant or STABLE default
+    /// (`0`, `now()`) is stored once in the catalog and is instant. Add the
+    /// column with no default, backfill in batches, then set the default.
+    RewritingAddColumn,
+    /// `REINDEX` without `CONCURRENTLY` blocks writes to the table (and reads
+    /// through the index) for the whole rebuild. Use `REINDEX ...
+    /// CONCURRENTLY` in its own `-- no-transaction` file.
+    Reindex,
+    /// `CLUSTER` rewrites the table under ACCESS EXCLUSIVE. Never in a
+    /// migration.
+    Cluster,
+    /// `VACUUM FULL` rewrites the table under ACCESS EXCLUSIVE. Never in a
+    /// migration; plain `VACUUM` is fine.
+    VacuumFull,
 }
 
 fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
@@ -415,6 +439,16 @@ fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
         r"(?i)^ALTER\s+(?:COLUMN\s+)?{IDENT}\s+(?:SET\s+DATA\s+)?TYPE\b"
     ))
     .unwrap();
+    // `ADD [COLUMN] [IF NOT EXISTS] name <rest>`, but not `ADD CONSTRAINT`
+    // or a table constraint (`ADD PRIMARY KEY`, `ADD CHECK`, ...).
+    let add_column = Regex::new(&format!(
+        r"(?i)^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?:CONSTRAINT|PRIMARY|UNIQUE|FOREIGN|CHECK|EXCLUDE)\b|^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?{IDENT}\s+(.*)$"
+    ))
+    .unwrap();
+    let rewrites_on_add = Regex::new(
+        r"(?i)^(?:small|big)?serial[248]?\b|\bGENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY\b|\bGENERATED\s+ALWAYS\s+AS\s*\(.*\bSTORED\b|\bDEFAULT\b.*\b(?:random|gen_random_uuid|uuidv[47]|uuid_generate_v(?:1|1mc|4)|clock_timestamp|timeofday|nextval)\s*\(",
+    )
+    .unwrap();
 
     let mut out = Vec::new();
     for (table, action) in alter_table_actions(sql) {
@@ -427,11 +461,49 @@ fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
             Some(TableLockHazard::ValidatingConstraint)
         } else if alter_type.is_match(&action) {
             Some(TableLockHazard::AlterType)
+        } else if add_column
+            .captures(&action)
+            .and_then(|caps| caps.get(1))
+            .is_some_and(|rest| rewrites_on_add.is_match(rest.as_str()))
+        {
+            Some(TableLockHazard::RewritingAddColumn)
         } else {
             None
         };
         if let Some(hazard) = hazard {
             out.push((hazard, format!("ALTER TABLE {table} {action}")));
+        }
+    }
+
+    // Whole-statement hazards (DB2-33).
+    let ws = Regex::new(r"\s+").unwrap();
+    let reindex = Regex::new(r"(?i)^REINDEX\b").unwrap();
+    let concurrently = Regex::new(r"(?i)\bCONCURRENTLY\b").unwrap();
+    let cluster = Regex::new(&format!(
+        r"(?i)^CLUSTER\b(?:\s+VERBOSE\b)?(?:\s*\([^)]*\))?\s*({IDENT})?"
+    ))
+    .unwrap();
+    let vacuum_full =
+        Regex::new(r"(?i)^VACUUM\s+(?:FULL\b|\([^)]*\bFULL\b(?:\s+(?:TRUE|ON|1)\b)?\s*[,)])")
+            .unwrap();
+    for statement in lex(sql).statements {
+        let statement = ws.replace_all(statement.trim(), " ").to_string();
+        let hazard = if reindex.is_match(&statement) && !concurrently.is_match(&statement) {
+            Some(TableLockHazard::Reindex)
+        } else if let Some(caps) = cluster.captures(&statement) {
+            // A table created by the same file is empty and invisible to
+            // everyone else, like every other check here.
+            match caps.get(1) {
+                Some(table) if created.contains(&canonical_ident(table.as_str())) => None,
+                _ => Some(TableLockHazard::Cluster),
+            }
+        } else if vacuum_full.is_match(&statement) {
+            Some(TableLockHazard::VacuumFull)
+        } else {
+            None
+        };
+        if let Some(hazard) = hazard {
+            out.push((hazard, statement));
         }
     }
     out
@@ -578,7 +650,10 @@ fn no_new_migration_scans_or_rewrites_an_existing_table_under_its_lock() {
          it in a later migration, then SET NOT NULL (no scan once a valid check exists). \
          FOREIGN KEY / CHECK -> add it `NOT VALID`, then `VALIDATE CONSTRAINT` in a later \
          migration (takes only SHARE UPDATE EXCLUSIVE). ALTER COLUMN TYPE -> add a new column, \
-         backfill in batches, swap.",
+         backfill in batches, swap. ADD COLUMN with a volatile default / serial / identity / \
+         stored generated column -> add it plain, backfill in batches, then set the default. \
+         REINDEX -> REINDEX ... CONCURRENTLY in its own `-- no-transaction` file. CLUSTER / \
+         VACUUM FULL -> never in a migration.",
         offenders.join("\n  ")
     );
 }
@@ -587,7 +662,7 @@ fn no_new_migration_scans_or_rewrites_an_existing_table_under_its_lock() {
 fn the_table_lock_hazard_grandfather_list_has_no_stale_entries() {
     assert_eq!(
         GRANDFATHERED_TABLE_LOCK_HAZARDS.len(),
-        2,
+        3,
         "GRANDFATHERED_TABLE_LOCK_HAZARDS must only ever shrink; lower this cap when removing an \
          entry"
     );
@@ -760,6 +835,72 @@ fn guard_catches_scans_and_rewrites_under_access_exclusive() {
         ),
     ] {
         assert_eq!(hazard_kinds(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn guard_catches_rewrites_reindex_cluster_and_vacuum_full() {
+    use TableLockHazard::*;
+    for (sql, expected) in [
+        (
+            "ALTER TABLE t ADD COLUMN id uuid NOT NULL DEFAULT gen_random_uuid();",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN IF NOT EXISTS r float8 DEFAULT random();",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD seen timestamptz DEFAULT clock_timestamp();",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN n bigint DEFAULT nextval('s');",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN id bigserial;",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN id serial8;",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN id bigint GENERATED ALWAYS AS IDENTITY;",
+            vec![RewritingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN d int GENERATED ALWAYS AS (a * 2) STORED;",
+            vec![RewritingAddColumn],
+        ),
+        ("REINDEX TABLE t;", vec![Reindex]),
+        ("REINDEX (VERBOSE) INDEX t_a;", vec![Reindex]),
+        ("CLUSTER t USING t_a;", vec![Cluster]),
+        ("CLUSTER;", vec![Cluster]),
+        ("VACUUM FULL t;", vec![VacuumFull]),
+        ("VACUUM (FULL, ANALYZE) t;", vec![VacuumFull]),
+        ("VACUUM (VERBOSE, FULL) t;", vec![VacuumFull]),
+    ] {
+        assert_eq!(hazard_kinds(sql), expected, "{sql}");
+    }
+}
+
+#[test]
+fn guard_allows_instant_defaults_and_concurrent_reindex() {
+    for sql in [
+        "ALTER TABLE t ADD COLUMN c timestamptz NOT NULL DEFAULT now();",
+        "ALTER TABLE t ADD COLUMN c text DEFAULT 'serial';",
+        "ALTER TABLE t ADD COLUMN serial_no text;",
+        "ALTER TABLE t ADD COLUMN c int;",
+        "ALTER TABLE t ADD CONSTRAINT t_c CHECK (random() > 0) NOT VALID;",
+        "REINDEX INDEX CONCURRENTLY t_a;",
+        "VACUUM t;",
+        "VACUUM (ANALYZE) t;",
+        "CREATE TABLE t (id bigserial); CLUSTER t USING t_pkey;",
+        "CREATE TABLE t (a int); ALTER TABLE t ADD COLUMN id uuid DEFAULT gen_random_uuid();",
+    ] {
+        assert!(hazard_kinds(sql).is_empty(), "{sql}");
     }
 }
 
