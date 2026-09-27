@@ -132,6 +132,36 @@ pub async fn post_batch<T: Serialize>(
     }
 }
 
+/// Like [`post_batch`], but also deserializes a 2xx response body as `R`,
+/// for the routes whose reply carries more than "it worked" (e.g.
+/// `/private/trust-event-backlog`'s per-row `rejected` list). Same bearer
+/// token handling and the same `"ingestion POST failed: ..."` error text.
+pub async fn post_batch_for_response<T: Serialize, R: DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    items: &[T],
+    noun: &str,
+) -> anyhow::Result<R> {
+    let token = tokens.get_token(client).await?;
+    let response = client
+        .post(url)
+        .bearer_auth(&token)
+        .json(items)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        tracing::info!(count = items.len(), "posted {noun} to ingestion API");
+        Ok(response.json().await?)
+    } else {
+        let status = response.status();
+        invalidate_on_auth_rejection(tokens, status);
+        let text = response.text().await.unwrap_or_default();
+        anyhow::bail!("ingestion POST failed: {status} {text}");
+    }
+}
+
 /// Wire contract for the GET side of each `/private/*` ingest route (see
 /// `crates/api/src/routes/ingest.rs`) — shared, not redefined per-side, so
 /// a future rename can't silently drift out of sync between the `api`

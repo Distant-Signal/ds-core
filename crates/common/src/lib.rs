@@ -1197,6 +1197,44 @@ pub struct TrustBacklogEventMessage {
     pub dedup_key: String,
 }
 
+/// Response body of `POST /private/trust-event-backlog`, shared by `api`
+/// (which serializes it) and `trust-backlog-consumer` (which reads it).
+///
+/// `upserted` is the field the route has always returned. `rejected` was
+/// added later and lists the rows `api` refused because of a *data* error
+/// (a constraint violation or invalid input: Postgres SQLSTATE classes 23
+/// and 22). Those rows can never succeed on a retry, so the route still
+/// answers 200 and inserts every other row in the batch. A consumer built
+/// before `rejected` existed ignores the field and ACKs the batch; `api`
+/// logs and counts each rejected row itself, so nothing is lost silently
+/// even then. `#[serde(default)]` keeps a new consumer compatible with an
+/// older `api` that sends only `upserted`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrustBacklogIngestResponse {
+    pub upserted: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<RejectedTrustBacklogRow>,
+}
+
+/// One row `api` refused from a `/private/trust-event-backlog` batch. See
+/// [`TrustBacklogIngestResponse`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectedTrustBacklogRow {
+    /// Position of the row in the posted batch.
+    pub index: usize,
+    pub dedup_key: String,
+    /// Five-character Postgres SQLSTATE, e.g. `23514`.
+    pub sqlstate: String,
+    /// Condition name for `sqlstate`, e.g. `check_violation`. Drawn from
+    /// a fixed set, so it is safe to use as a metric label.
+    pub reason: String,
+    /// The violated constraint, when Postgres reports one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constraint: Option<String>,
+    /// Postgres's own error message.
+    pub message: String,
+}
+
 /// What `trust-consumer` needs to know about each active tracked train:
 /// pending pins to attempt resolving, and already-resolved ones to
 /// recognize incoming TRUST messages against, after a restart or on its
