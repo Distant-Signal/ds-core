@@ -1533,6 +1533,14 @@ pub struct FullCoverageLineStatsRow {
     pub service_date: chrono::NaiveDate,
     pub availability: String, // "pending" | "available"
     pub stats: SampleStats,
+    /// The producer does not hold every event of `service_date` for this
+    /// line (it started mid-day and could not replay the day's start), so
+    /// unseen services are left out rather than counted as cancelled and the
+    /// row never reads "available". `#[serde(default)]` for version skew in
+    /// both directions: an older `full-coverage-consumer` omits it (read as
+    /// `false`, its historical meaning), and an older `api` ignores it.
+    #[serde(default)]
+    pub partial: bool,
 }
 
 #[cfg(test)]
