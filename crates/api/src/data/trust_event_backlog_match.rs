@@ -863,11 +863,21 @@ pub async fn attempt_backlog_match(
         let trains_id =
             crate::data::trains::find_or_create_train(pool, train_uid, identity_date).await?;
         crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
-        sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
-            .bind(tracked_train_id)
-            .bind(trains_id)
-            .execute(pool)
-            .await?;
+        if !crate::data::trains::bind_subscription_unless_other_train(
+            pool,
+            tracked_train_id,
+            trains_id,
+        )
+        .await?
+        {
+            tracing::warn!(
+                tracked_train_id,
+                trains_id,
+                "subscription was bound to a different train (or deleted) during this backlog \
+                 match; not repointing it or replaying this history (DB2-5)"
+            );
+            return Ok(false);
+        }
     }
 
     replay_backlog_history(

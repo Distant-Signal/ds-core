@@ -5,22 +5,31 @@
 use common::TrainForwardSignalMessage;
 use sqlx::PgPool;
 
+/// Appends every signal in ONE statement (DB2-29): all rows or none. The
+/// old per-row autocommit loop could commit part of a batch and then 500,
+/// so the consumer's retry re-inserted the committed prefix. Rows get their
+/// `id`s in input order (`WITH ORDINALITY ... ORDER BY`), which is the order
+/// the notifier polls them in.
 pub async fn insert_forward_signals(
     pool: &PgPool,
     signals: &[TrainForwardSignalMessage],
 ) -> anyhow::Result<u64> {
-    let mut inserted = 0u64;
-    for signal in signals {
-        sqlx::query(
-            "INSERT INTO notifier_forward_queue (trains_id, event_summary) VALUES ($1, $2)",
-        )
-        .bind(signal.trains_id)
-        .bind(&signal.event_summary)
-        .execute(pool)
-        .await?;
-        inserted += 1;
+    if signals.is_empty() {
+        return Ok(0);
     }
-    Ok(inserted)
+    let trains_ids: Vec<i64> = signals.iter().map(|s| s.trains_id).collect();
+    let summaries: Vec<&str> = signals.iter().map(|s| s.event_summary.as_str()).collect();
+    let result = sqlx::query(
+        "INSERT INTO notifier_forward_queue (trains_id, event_summary) \
+         SELECT trains_id, event_summary \
+           FROM UNNEST($1::bigint[], $2::text[]) WITH ORDINALITY AS s(trains_id, event_summary, ord) \
+          ORDER BY ord",
+    )
+    .bind(&trains_ids)
+    .bind(&summaries)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }
 
 #[cfg(test)]
@@ -133,6 +142,56 @@ mod db_tests {
             count, 2,
             "no dedup_key on this table -- two calls append two rows"
         );
+
+        sqlx::query("DELETE FROM trains WHERE id = $1")
+            .bind(trains_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// DB2-29: one bad signal (an unknown `trains_id`, refused by the
+    /// foreign key) rolls back the whole batch, and a good batch keeps its
+    /// input order in `id`.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                insert_forward_signals_is_all_or_nothing -- --ignored --test-threads=1`"]
+    async fn insert_forward_signals_is_all_or_nothing_and_keeps_input_order() {
+        let pool = connect().await;
+        sqlx::query("DELETE FROM trains WHERE train_uid = 'TEST-FORWARD-QUEUE-UID-3'")
+            .execute(&pool)
+            .await
+            .ok();
+        let trains_id = fixture_train(&pool, "TEST-FORWARD-QUEUE-UID-3").await;
+        let signal = |trains_id: i64, summary: &str| TrainForwardSignalMessage {
+            trains_id,
+            event_summary: summary.to_string(),
+        };
+
+        let bad = vec![signal(trains_id, "first"), signal(-1, "no such train")];
+        assert!(insert_forward_signals(&pool, &bad).await.is_err());
+        let count: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM notifier_forward_queue WHERE trains_id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .expect("count");
+        assert_eq!(count, 0, "a failed batch must commit nothing");
+
+        let good = vec![
+            signal(trains_id, "a"),
+            signal(trains_id, "b"),
+            signal(trains_id, "c"),
+        ];
+        assert_eq!(insert_forward_signals(&pool, &good).await.unwrap(), 3);
+        let order: Vec<String> = sqlx::query_scalar(
+            "SELECT event_summary FROM notifier_forward_queue WHERE trains_id = $1 ORDER BY id",
+        )
+        .bind(trains_id)
+        .fetch_all(&pool)
+        .await
+        .expect("order");
+        assert_eq!(order, vec!["a", "b", "c"]);
 
         sqlx::query("DELETE FROM trains WHERE id = $1")
             .bind(trains_id)
