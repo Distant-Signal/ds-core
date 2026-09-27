@@ -68,6 +68,9 @@ const STP_INDICATOR_COL: usize = 79;
 /// 0-based, half-open byte range of the `BS` record's Train Identity field
 /// (CIF columns 33-36, 1-based) -- see [`BasicSchedule::headcode`].
 const TRAIN_IDENTITY_RANGE: std::ops::Range<usize> = 32..36;
+/// 0-based byte offset of the `BS` record's Train Status (CIF column 30,
+/// 1-based) -- see [`BasicSchedule::train_status`].
+const TRAIN_STATUS_COL: usize = 29;
 
 /// Is `line` safe to decode with this module's fixed-offset byte slices?
 ///
@@ -372,6 +375,9 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
     // `is_fixed_width_decodable` proved it ASCII, so `32..36` is in bounds
     // and on char boundaries.
     let headcode = parse_train_identity(&line[TRAIN_IDENTITY_RANGE]);
+    // Same bounds argument as the headcode above.
+    let train_status =
+        Some(line.as_bytes()[TRAIN_STATUS_COL] as char).filter(|c| c.is_ascii_alphanumeric());
 
     Some(BasicSchedule {
         uid,
@@ -387,6 +393,7 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         headcode,
         // Filled in by the BX arm, exactly like `operator_atoc` above.
         rsid: None,
+        train_status,
     })
 }
 
@@ -658,6 +665,32 @@ mod tests {
                 "{line}"
             );
         }
+    }
+
+    /// Train Status, byte 29: `P` on the real passenger lines, blank on
+    /// the real Cancellation line, and `5` on a bus (SYNTHETIC: the real
+    /// C00573 line with its status/category bytes replaced by a
+    /// rail-replacement bus's `5BR`, the shape measured on the 2026-09-26
+    /// extract).
+    #[test]
+    fn decodes_the_train_status_including_a_bus() {
+        let passenger = parse_schedule_records(BS_C00573_PERMANENT);
+        assert_eq!(passenger[0].basic.train_status, Some('P'));
+        let overlay = parse_schedule_records(BS_W68468_OVERLAY);
+        assert_eq!(overlay[0].basic.train_status, Some('P'));
+        let cancelled = parse_schedule_records(BS_G00704_CANCELLATION);
+        assert_eq!(cancelled[0].basic.train_status, None);
+
+        let bus = format!(
+            "{}5BR{}",
+            &BS_C00573_PERMANENT[..29],
+            &BS_C00573_PERMANENT[32..]
+        );
+        assert_eq!(bus.len(), 80);
+        let bus = parse_schedule_records(&bus);
+        assert_eq!(bus[0].basic.uid, "C00573");
+        assert_eq!(bus[0].basic.train_status, Some('5'));
+        assert!(crate::records::is_bus_or_ship(bus[0].basic.train_status));
     }
 
     #[test]

@@ -34,6 +34,10 @@ pub struct ResolvedSchedule {
     /// See [`crate::records::BasicSchedule::rsid`]; taken from the winning
     /// (STP-resolved) record, never from a lower-priority one.
     pub rsid: Option<String>,
+    /// See [`crate::records::BasicSchedule::train_status`]; taken from the
+    /// winning (STP-resolved) record, so an STP bus overlay (`5`) of a
+    /// permanent train wins.
+    pub train_status: Option<char>,
 }
 
 /// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
@@ -134,6 +138,7 @@ pub fn resolve_for_date(
         operator_atoc: winner.basic.operator_atoc.clone(),
         headcode: winner.basic.headcode.clone(),
         rsid: winner.basic.rsid.clone(),
+        train_status: winner.basic.train_status,
     })
 }
 
@@ -889,6 +894,7 @@ mod tests {
             operator_atoc: None,
             headcode: None,
             rsid: None,
+            train_status: None,
         }
     }
 
@@ -2205,6 +2211,8 @@ mod tests {
         LinePopulationEntry {
             uid: uid.to_string(),
             calling_points,
+            operator_atoc: None,
+            train_status: None,
         }
     }
 

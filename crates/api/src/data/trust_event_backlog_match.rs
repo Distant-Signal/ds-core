@@ -537,6 +537,7 @@ async fn replay_backlog_history(
                     loc_stanox: None,
                     toc_id: None,
                     variation_status: row.variation_status.clone(),
+                    timetable_variation: None,
                 };
                 let mut derived = journey::apply_movement(
                     &previous,

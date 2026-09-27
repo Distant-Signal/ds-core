@@ -113,24 +113,65 @@ pub struct Movement {
     #[allow(dead_code)]
     pub toc_id: Option<String>,
     pub variation_status: Option<String>,
+    /// TRUST's own lateness in whole minutes, as a string (`"12"`), against
+    /// the working timetable at this location. Read only when
+    /// `variation_status` is `LATE` -- see [`movement_delay_minutes`]. Free
+    /// of the local-as-UTC timestamp skew `common::trust_timestamp` guards
+    /// against, because it is a difference TRUST computed itself.
+    #[serde(default)]
+    pub timetable_variation: Option<String>,
 }
 
-// `canx_reason_code`/`canx_type` are part of `0002`'s confirmed shape but
-// have no consumer yet -- see the Activation comment above for why they're
-// kept rather than deleted.
+/// A Movement's delay in minutes: TRUST's `timetable_variation` for
+/// `LATE`, `0` for `ON TIME` and `EARLY` (an early train is not delayed),
+/// and `None` for anything else (`OFF ROUTE`, a missing status, or a
+/// `LATE` whose `timetable_variation` is missing or unparseable) -- a
+/// report that says nothing about lateness.
+pub fn movement_delay_minutes(movement: &Movement) -> Option<i32> {
+    match movement.variation_status.as_deref() {
+        Some("ON TIME") | Some("EARLY") => Some(0),
+        Some("LATE") => movement
+            .timetable_variation
+            .as_deref()
+            .and_then(|v| v.trim().parse::<i32>().ok())
+            .map(|minutes| minutes.max(0)),
+        _ => None,
+    }
+}
+
+// `canx_reason_code` is part of `0002`'s confirmed shape but has no consumer
+// yet -- see the Activation comment above for why it's kept rather than
+// deleted.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Cancellation {
     pub train_id: String,
     pub canx_timestamp: Option<String>,
     #[allow(dead_code)]
     pub canx_reason_code: Option<String>,
-    #[allow(dead_code)]
-    pub canx_type: Option<String>, // "EN ROUTE" | "AT ORIGIN"
+    /// `"AT ORIGIN"`, `"EN ROUTE"`, `"ON CALL"` or `"OUT OF PLAN"`.
+    pub canx_type: Option<String>,
+    /// The planned departure (epoch milliseconds, as a string, with the
+    /// same local-as-UTC skew as every TRUST timestamp -- parse it with
+    /// `common::trust_timestamp`) at the location the train is cancelled
+    /// FROM: the train does not run beyond it. Read by the full-coverage
+    /// consumer to tell a cancellation before a line from one after it.
+    #[serde(default)]
+    pub dep_timestamp: Option<String>,
+    /// The STANOX the train is cancelled from.
+    #[serde(default)]
+    pub loc_stanox: Option<String>,
 }
 
+/// TRUST `0006`, Change of Origin: the train now starts from `loc_stanox`,
+/// departing at `dep_timestamp` (same encoding as
+/// [`Cancellation::dep_timestamp`]).
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChangeOfOrigin {
     pub train_id: String,
+    #[serde(default)]
+    pub dep_timestamp: Option<String>,
+    #[serde(default)]
+    pub loc_stanox: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -162,6 +203,11 @@ pub struct ChangeOfIdentity {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Reinstatement {
     pub train_id: String,
+    /// The planned departure at the reinstatement location (same encoding
+    /// as [`Cancellation::dep_timestamp`]). Optional: nothing depends on
+    /// it yet, and a body without it still parses.
+    #[serde(default)]
+    pub dep_timestamp: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -423,6 +469,101 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert!(
             matches!(&messages[0], TrustMessage::Reinstatement(r) if r.train_id == "221832406")
+        );
+    }
+
+    /// The fields the full-coverage consumer's windowed stats read, in
+    /// the shape the live feed sends them (every value a string).
+    #[test]
+    fn parses_the_windowed_stats_fields_of_0002_0003_0005_and_0006() {
+        let raw = r#"[
+            {"header":{"msg_type":"0003"},"body":{"train_id":"722N71MW27","event_type":"ARRIVAL",
+                "planned_timestamp":"1790505600000","actual_timestamp":"1790506320000",
+                "loc_stanox":"87701","variation_status":"LATE","timetable_variation":"12"}},
+            {"header":{"msg_type":"0002"},"body":{"train_id":"722N71MW27","canx_type":"EN ROUTE",
+                "canx_reason_code":"YI","canx_timestamp":"1790506000000",
+                "dep_timestamp":"1790507000000","loc_stanox":"87702"}},
+            {"header":{"msg_type":"0005"},"body":{"train_id":"722N71MW27","dep_timestamp":"1790507000000"}},
+            {"header":{"msg_type":"0006"},"body":{"train_id":"722N71MW27",
+                "dep_timestamp":"1790508000000","loc_stanox":"87703"}}
+        ]"#;
+        let messages = parse_batch(raw).unwrap();
+        let TrustMessage::Movement(m) = &messages[0] else {
+            panic!("{:?}", messages[0])
+        };
+        assert_eq!(m.timetable_variation.as_deref(), Some("12"));
+        assert_eq!(movement_delay_minutes(m), Some(12));
+        let TrustMessage::Cancellation(c) = &messages[1] else {
+            panic!("{:?}", messages[1])
+        };
+        assert_eq!(c.canx_type.as_deref(), Some("EN ROUTE"));
+        assert_eq!(c.dep_timestamp.as_deref(), Some("1790507000000"));
+        assert_eq!(c.loc_stanox.as_deref(), Some("87702"));
+        let TrustMessage::Reinstatement(r) = &messages[2] else {
+            panic!("{:?}", messages[2])
+        };
+        assert_eq!(r.dep_timestamp.as_deref(), Some("1790507000000"));
+        let TrustMessage::ChangeOfOrigin(o) = &messages[3] else {
+            panic!("{:?}", messages[3])
+        };
+        assert_eq!(o.dep_timestamp.as_deref(), Some("1790508000000"));
+        assert_eq!(o.loc_stanox.as_deref(), Some("87703"));
+    }
+
+    /// Bodies from before these fields were read still parse, as `None`.
+    #[test]
+    fn bodies_without_the_windowed_stats_fields_still_parse() {
+        let raw = r#"[
+            {"header":{"msg_type":"0003"},"body":{"train_id":"1","event_type":"ARRIVAL","variation_status":"LATE"}},
+            {"header":{"msg_type":"0002"},"body":{"train_id":"1"}},
+            {"header":{"msg_type":"0006"},"body":{"train_id":"1"}}
+        ]"#;
+        let messages = parse_batch(raw).unwrap();
+        assert_eq!(messages.len(), 3);
+        let TrustMessage::Movement(m) = &messages[0] else {
+            panic!()
+        };
+        assert_eq!(m.timetable_variation, None);
+        assert_eq!(
+            movement_delay_minutes(m),
+            None,
+            "LATE without a variation says nothing about how late"
+        );
+    }
+
+    #[test]
+    fn movement_delay_minutes_by_variation_status() {
+        let movement = |status: Option<&str>, variation: Option<&str>| Movement {
+            train_id: "1".to_string(),
+            event_type: "ARRIVAL".to_string(),
+            gbtt_timestamp: None,
+            planned_timestamp: None,
+            actual_timestamp: None,
+            reporting_stanox: None,
+            loc_stanox: None,
+            toc_id: None,
+            variation_status: status.map(str::to_string),
+            timetable_variation: variation.map(str::to_string),
+        };
+        assert_eq!(
+            movement_delay_minutes(&movement(Some("LATE"), Some("12"))),
+            Some(12)
+        );
+        assert_eq!(
+            movement_delay_minutes(&movement(Some("ON TIME"), Some("0"))),
+            Some(0)
+        );
+        assert_eq!(
+            movement_delay_minutes(&movement(Some("EARLY"), Some("3"))),
+            Some(0)
+        );
+        assert_eq!(
+            movement_delay_minutes(&movement(Some("OFF ROUTE"), Some("4"))),
+            None
+        );
+        assert_eq!(
+            movement_delay_minutes(&movement(Some("LATE"), Some("x"))),
+            None
         );
     }
 

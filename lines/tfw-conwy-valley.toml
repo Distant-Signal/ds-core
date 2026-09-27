@@ -102,6 +102,16 @@ match_keywords = ["Conwy Valley Line", "Llandudno branch line"]
 # backed by `crates/api/src/data/full_coverage_comparison.rs`) for how this
 # pilot's real-vs-sampled agreement is meant to be checked before any
 # second line is ever added here.
+#
+# 2026-09-27: superseded as the pilot mechanism by windowed full-coverage
+# stats (docs/superpowers/specs/2026-09-27-full-coverage-windowed-stats-design.md).
+# The legacy whole-day read this flag gated never matched a row, so it never
+# escalated this line. Under the new design this flag is necessary but not
+# sufficient: aggregator's FULL_COVERAGE_WINDOW_MODE=enforce only changes a
+# line also named in FULL_COVERAGE_WINDOW_ENFORCE_LINES. This line has ~68
+# relevant trains a day and is almost always below the 6-train minimum per
+# 60-minute window, so it is not a useful enforce pilot; the flag is kept
+# as is (design open question 2).
 full_coverage_enabled = true
 
 # Sourcing note (per the catalogue's "cross-checked against a second source"

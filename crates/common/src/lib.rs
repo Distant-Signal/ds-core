@@ -10,6 +10,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub mod backoff;
 pub mod config;
+pub mod full_coverage_window;
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod log_once;
@@ -28,6 +29,10 @@ pub mod service_args;
 pub mod startup;
 pub mod text_hash;
 pub mod trust_timestamp;
+
+pub use full_coverage_window::{
+    FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,
+};
 
 /// Status severity scale. Mirrors TfL's `statusSeverity` codes 0–14 where the
 /// meanings carry over, with NR-specific extensions above 14. Lower is worse,
@@ -1549,6 +1554,17 @@ pub struct FullCoverageLineStatsRow {
     /// `false`, its historical meaning), and an older `api` ignores it.
     #[serde(default)]
     pub partial: bool,
+    /// The windowed-stats breakdown (`stats_version` 2): explicit vs
+    /// presumed cancellations, pending and unobserved trains. `None` from a
+    /// consumer with `FULL_COVERAGE_WINDOWED_STATS` off (and never
+    /// serialized then, so that body is exactly what it always was); an
+    /// older `api` ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub breakdown: Option<FullCoverageWindowCounts>,
+    /// `None` (read as 1, the whole-population method) or
+    /// `full_coverage_window::FULL_COVERAGE_STATS_VERSION`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stats_version: Option<u16>,
 }
 
 #[cfg(test)]
@@ -1784,6 +1800,20 @@ pub struct Defaults {
     /// samples alone.
     #[serde_inline_default(3)]
     pub min_sample_size: i64,
+    /// Full coverage's own "delayed" threshold: minutes late at the train's
+    /// first calling point on the line (see
+    /// `full_coverage_window::FULL_COVERAGE_DELAY_THRESHOLD_MINUTES`).
+    #[serde_inline_default(full_coverage_window::FULL_COVERAGE_DELAY_THRESHOLD_MINUTES)]
+    pub full_coverage_delay_threshold_minutes: i64,
+    /// Below this many evaluable trains in a full-coverage window, the
+    /// window never influences severity (LDBWS's `min_sample_size` is a
+    /// different knob).
+    #[serde_inline_default(6)]
+    pub full_coverage_min_sample_size: i64,
+    /// A full-coverage tier also needs at least this many affected trains
+    /// (so "2 of 6 late" never reads Minor Delays).
+    #[serde_inline_default(3)]
+    pub full_coverage_min_affected: i64,
 }
 
 impl Default for Defaults {
@@ -1810,6 +1840,11 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
             "part_suspended_pct" => merged.part_suspended_pct = *value,
             "knowledgebase_severity_floor" => merged.knowledgebase_severity_floor = *value as i8,
             "min_sample_size" => merged.min_sample_size = *value as i64,
+            "full_coverage_delay_threshold_minutes" => {
+                merged.full_coverage_delay_threshold_minutes = *value as i64
+            }
+            "full_coverage_min_sample_size" => merged.full_coverage_min_sample_size = *value as i64,
+            "full_coverage_min_affected" => merged.full_coverage_min_affected = *value as i64,
             _ => {}
         }
     }

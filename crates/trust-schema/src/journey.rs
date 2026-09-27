@@ -263,6 +263,7 @@ mod tests {
             loc_stanox: Some("87701".to_string()),
             toc_id: None,
             variation_status: variation_status.map(str::to_string),
+            timetable_variation: None,
         }
     }
 

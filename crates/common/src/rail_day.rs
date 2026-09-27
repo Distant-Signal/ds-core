@@ -63,6 +63,55 @@ pub fn current_rail_day(at: DateTime<Utc>) -> chrono::NaiveDate {
     }
 }
 
+/// A Europe/London wall-clock time on `date` (a CIF booked time, say) as a
+/// UTC instant. On the autumn change the repeated hour resolves to its
+/// first (BST) occurrence; on the spring change a time inside the skipped
+/// hour is read as the instant one hour later (the clock would already
+/// show BST), so no booked time is ever lost.
+pub fn london_to_utc(date: chrono::NaiveDate, time: NaiveTime) -> DateTime<Utc> {
+    let naive = date.and_time(time);
+    match chrono_tz::Europe::London.from_local_datetime(&naive) {
+        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
+        chrono::LocalResult::Ambiguous(earliest, _) => earliest.with_timezone(&Utc),
+        chrono::LocalResult::None => chrono_tz::Europe::London
+            .from_local_datetime(&(naive + Duration::hours(1)))
+            .earliest()
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|| naive.and_utc()),
+    }
+}
+
+#[cfg(test)]
+mod london_to_utc_tests {
+    use super::*;
+
+    fn at(date: &str, time: &str) -> DateTime<Utc> {
+        london_to_utc(date.parse().unwrap(), time.parse().unwrap())
+    }
+
+    #[test]
+    fn bst_gmt_and_both_transitions() {
+        assert_eq!(
+            at("2026-07-15", "08:22:00").to_rfc3339(),
+            "2026-07-15T07:22:00+00:00"
+        );
+        assert_eq!(
+            at("2026-01-15", "08:22:00").to_rfc3339(),
+            "2026-01-15T08:22:00+00:00"
+        );
+        // 2026-10-25: 01:30 happens twice; the first is BST.
+        assert_eq!(
+            at("2026-10-25", "01:30:00").to_rfc3339(),
+            "2026-10-25T00:30:00+00:00"
+        );
+        // 2026-03-29: 01:30 does not exist; read as 02:30 BST.
+        assert_eq!(
+            at("2026-03-29", "01:30:00").to_rfc3339(),
+            "2026-03-29T01:30:00+00:00"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

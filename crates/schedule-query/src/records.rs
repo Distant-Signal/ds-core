@@ -117,8 +117,9 @@ impl TryFrom<char> for StpIndicator {
 ///   2026-08-31 is independently confirmed a Monday in the same section
 ///   ("2026-08-31 is a Monday, and turned out to be the UK August Bank
 ///   Holiday") -- so bit index 0 set alone means "Monday only".
-/// - `28..32` Bank Holiday Running, Train Status, Train Category (not
-///   decoded)
+/// - `28` Bank Holiday Running (not decoded)
+/// - `29` Train Status (CIF column 30) -- see [`BasicSchedule::train_status`]
+/// - `30..32` Train Category (not decoded)
 /// - `32..36` Train Identity (the 4-character signalling headcode, e.g.
 ///   `"1S00"`) -- see [`BasicSchedule::headcode`]
 /// - `36..40` CIF's separately-named "Headcode" field (not decoded; NOT
@@ -179,6 +180,23 @@ pub struct BasicSchedule {
     /// calling point and working time.
     #[serde(default)]
     pub rsid: Option<String>,
+    /// The `BS` record's Train Status (byte 29, 0-based; CIF column 30):
+    /// `P`/`1` passenger (permanent/STP), `B`/`5` bus, `S`/`4` ship,
+    /// `F`/`2` freight, `T`/`3` trip. `None` when the byte is blank (a real
+    /// `C`-indicator line leaves it space-filled) or not ASCII
+    /// alphanumeric. TRUST never reports a bus or a ship, which is why the
+    /// full-coverage consumer needs it (see
+    /// `docs/superpowers/specs/2026-09-27-full-coverage-windowed-stats-design.md`
+    /// section 4.1). `#[serde(default)]` so a record serialized before this
+    /// field existed still deserializes.
+    #[serde(default)]
+    pub train_status: Option<char>,
+}
+
+/// Whether a CIF Train Status is a road vehicle or a ship (`B`/`5` bus,
+/// `S`/`4` ship) -- never a train TRUST can report on.
+pub fn is_bus_or_ship(train_status: Option<char>) -> bool {
+    matches!(train_status, Some('B' | '5' | 'S' | '4'))
 }
 
 /// Which of `LO`/`LI`/`LT` a [`CallingPoint`] was decoded from.
@@ -398,6 +416,19 @@ impl CallingPoint {
 pub struct LinePopulationEntry {
     pub uid: String,
     pub calling_points: Vec<CallingPoint>,
+    /// The winning schedule's ATOC operator code (see
+    /// [`BasicSchedule::operator_atoc`]). Optional on the wire, and omitted
+    /// when `None`, so an old reader ignores it and an old writer's body
+    /// (without it) still deserializes -- the full-coverage consumer then
+    /// falls back to `relevance = 'stops_only'` (windowed-stats design
+    /// section 4.1, version skew).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator_atoc: Option<String>,
+    /// The winning schedule's CIF Train Status (see
+    /// [`BasicSchedule::train_status`]), serialized as a one-character
+    /// string. Same compatibility posture as `operator_atoc`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub train_status: Option<char>,
 }
 
 impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
@@ -405,6 +436,8 @@ impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
         Self {
             uid: resolved.uid,
             calling_points: resolved.calling_points,
+            operator_atoc: resolved.operator_atoc,
+            train_status: resolved.train_status,
         }
     }
 }
@@ -604,12 +637,55 @@ mod tests {
                 public_departure: None,
                 platform: None,
             }],
-            operator_atoc: None,
+            operator_atoc: Some("LM".to_string()),
             headcode: None,
             rsid: None,
+            train_status: Some('P'),
         };
         let entry: LinePopulationEntry = resolved.clone().into();
         assert_eq!(entry.uid, "C11052");
         assert_eq!(entry.calling_points, resolved.calling_points);
+        assert_eq!(entry.operator_atoc.as_deref(), Some("LM"));
+        assert_eq!(entry.train_status, Some('P'));
+    }
+
+    /// The population wire in both skew directions: a new entry carries
+    /// the two optional fields; an old body without them still
+    /// deserializes (as `None`), and a `None` is not serialized at all, so
+    /// the body an old writer would have produced is unchanged.
+    #[test]
+    fn line_population_entry_round_trips_with_and_without_schedule_facts() {
+        let new = LinePopulationEntry {
+            uid: "C11052".to_string(),
+            calling_points: vec![],
+            operator_atoc: Some("LM".to_string()),
+            train_status: Some('5'),
+        };
+        let json = serde_json::to_string(&new).unwrap();
+        assert!(json.contains(r#""operator_atoc":"LM""#), "{json}");
+        assert!(json.contains(r#""train_status":"5""#), "{json}");
+        assert_eq!(
+            serde_json::from_str::<LinePopulationEntry>(&json).unwrap(),
+            new
+        );
+
+        let old_body = r#"{"uid": "C11052", "calling_points": []}"#;
+        let old: LinePopulationEntry = serde_json::from_str(old_body).unwrap();
+        assert_eq!(old.operator_atoc, None);
+        assert_eq!(old.train_status, None);
+        assert_eq!(
+            serde_json::to_string(&old).unwrap(),
+            r#"{"uid":"C11052","calling_points":[]}"#
+        );
+    }
+
+    #[test]
+    fn bus_and_ship_statuses_are_recognised() {
+        for status in ['B', '5', 'S', '4'] {
+            assert!(is_bus_or_ship(Some(status)), "{status}");
+        }
+        for status in [Some('P'), Some('1'), Some('F'), None] {
+            assert!(!is_bus_or_ship(status), "{status:?}");
+        }
     }
 }
