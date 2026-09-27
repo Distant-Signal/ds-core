@@ -59,7 +59,7 @@ mod db_tests {
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
-                insert_forward_signals_inserts_one_row_per_signal -- --ignored`"]
+                insert_forward_signals_inserts_one_row_per_signal -- --ignored --test-threads=1`"]
     async fn insert_forward_signals_inserts_one_row_per_signal() {
         let pool = connect().await;
         let trains_id = fixture_train(&pool, "TEST-FORWARD-QUEUE-UID-1").await;
@@ -97,7 +97,7 @@ mod db_tests {
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
-                insert_forward_signals_with_an_empty_slice_inserts_nothing -- --ignored`"]
+                insert_forward_signals_with_an_empty_slice_inserts_nothing -- --ignored --test-threads=1`"]
     async fn insert_forward_signals_with_an_empty_slice_inserts_nothing() {
         let pool = connect().await;
 

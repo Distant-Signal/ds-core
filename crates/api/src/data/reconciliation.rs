@@ -493,7 +493,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 reconcile_stuck_resolution_status_flips_a_pending_row_with_movement_events_to_resolved \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_flips_a_pending_row_with_movement_events_to_resolved()
      {
         let pool = connect().await;
@@ -523,7 +523,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 reconcile_stuck_resolution_status_leaves_a_pending_row_with_no_movement_events_untouched \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_leaves_a_pending_row_with_no_movement_events_untouched()
      {
         // The L78659 live-example variant: a genuinely missed Activation,
@@ -555,7 +555,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 reconcile_stuck_resolution_status_never_touches_a_row_that_isnt_pending \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_never_touches_a_row_that_isnt_pending() {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL1-C";
@@ -591,7 +591,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 retry_schedule_enrichment_matches_a_subscribed_trains_row_past_the_grace_period \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_matches_a_subscribed_trains_row_past_the_grace_period() {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL2-A";
@@ -641,7 +641,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 retry_schedule_enrichment_skips_a_row_still_inside_the_grace_period \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_row_still_inside_the_grace_period() {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL2-B";
@@ -691,7 +691,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 retry_schedule_enrichment_skips_a_trains_row_with_no_subscriber \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_trains_row_with_no_subscriber() {
         let pool = connect().await;
         let train_uid = "TEST-RECON-STALL2-UID-C";
@@ -742,7 +742,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 retry_schedule_enrichment_skips_a_trains_row_with_no_schedule_destination_departures_data \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_trains_row_with_no_schedule_destination_departures_data()
      {
         let pool = connect().await;
@@ -782,7 +782,7 @@ mod db_tests {
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 retry_schedule_enrichment_advances_the_subscribers_own_resolution_status \
-                -- --ignored`"]
+                -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_advances_the_subscribers_own_resolution_status() {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL2-E";

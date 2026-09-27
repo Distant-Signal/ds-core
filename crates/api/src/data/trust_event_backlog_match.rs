@@ -1190,7 +1190,7 @@ mod db_tests {
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
-                attempt_backlog_match -- --ignored --test-threads=1`"]
+                a_full_activation_plus_movement_backlog_resolves_the_pin_to_resolved -- --ignored --test-threads=1`"]
     async fn a_full_activation_plus_movement_backlog_resolves_the_pin_to_resolved() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-MATCH-USER";
@@ -1308,7 +1308,7 @@ mod db_tests {
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
-                attempt_backlog_match_with_no_matching_rows -- --ignored --test-threads=1`"]
+                no_matching_backlog_rows_leaves_the_pin_untouched -- --ignored --test-threads=1`"]
     async fn no_matching_backlog_rows_leaves_the_pin_untouched() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-MATCH-EMPTY-USER";
