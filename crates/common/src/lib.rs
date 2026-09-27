@@ -23,6 +23,7 @@ pub mod pg;
 pub mod poller_loop;
 pub mod progress;
 pub mod rail_day;
+pub mod redis_auth;
 pub mod schedule_delivery;
 pub mod secret;
 pub mod segments;
