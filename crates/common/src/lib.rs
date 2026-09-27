@@ -20,10 +20,12 @@ pub mod outbound_endpoint_guard;
 #[cfg(feature = "postgres")]
 pub mod pg;
 pub mod poller_loop;
+pub mod progress;
 pub mod rail_day;
 pub mod schedule_delivery;
 pub mod segments;
 pub mod service_args;
+pub mod startup;
 pub mod text_hash;
 pub mod trust_timestamp;
 

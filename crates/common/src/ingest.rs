@@ -21,7 +21,9 @@ use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::backoff::Backoff;
 use crate::oauth_client::OAuthTokenCache;
+use crate::progress::Progress;
 
 /// Called by every helper below right after a request made with a cached
 /// bearer token comes back 401 or 403 (Finding #4): the API rejected the
@@ -317,6 +319,71 @@ pub struct LastCompletedPublishResponse {
     pub delivery: Option<String>,
 }
 
+/// How long a poller waits for `api` to answer before giving up on it
+/// (SVC-09). After a node reboot the pollers start before `api` (which
+/// waits for Postgres, then runs migrations), so the first freshness GET
+/// fails; treating that as "poll now" spent the poller's upstream fetch
+/// (once per 24h for the RDM stations/TOCs feeds) on a POST that could not
+/// succeed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApiWait {
+    pub backoff: Backoff,
+    /// Give up (and fall back to the old "poll now") once this much time has
+    /// gone by -- so a GET-side-only breakage can never stop polling.
+    pub max_wait: Duration,
+}
+
+/// 2s doubling to 30s, for at most 10 minutes: `api`'s own startup budget
+/// (startupProbe 300s) plus a slow Postgres crash recovery.
+pub const API_STARTUP_WAIT: ApiWait = ApiWait {
+    backoff: Backoff::new(Duration::from_secs(2), Duration::from_secs(30)),
+    max_wait: Duration::from_secs(600),
+};
+
+/// GETs the last-fetch time from `url` (see [`time_until_next_poll`]),
+/// retrying any failure with `wait.backoff` for up to `wait.max_wait`.
+/// `progress`, when given, is beaten on every failed attempt -- waiting for
+/// `api` is not a stall.
+pub async fn wait_for_last_fetched(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> anyhow::Result<Option<DateTime<Utc>>> {
+    let started = tokio::time::Instant::now();
+    let mut failures: u32 = 0;
+    loop {
+        let err = match fetch_last_fetched(client, url, tokens).await {
+            Ok(fetched_at) => {
+                if failures > 0 {
+                    tracing::info!(
+                        waited_secs = started.elapsed().as_secs(),
+                        "api is reachable again"
+                    );
+                }
+                return Ok(fetched_at);
+            }
+            Err(err) => err,
+        };
+        let delay = wait.backoff.delay(failures);
+        if started.elapsed() + delay > wait.max_wait {
+            return Err(err);
+        }
+        tracing::warn!(
+            error = ?err,
+            attempt = failures + 1,
+            retry_in_secs = delay.as_secs(),
+            "api not reachable yet; waiting for it before fetching upstream"
+        );
+        if let Some(progress) = progress {
+            progress.beat();
+        }
+        tokio::time::sleep(delay).await;
+        failures = failures.saturating_add(1);
+    }
+}
+
 /// How long to wait before this process's first poll, so a restart doesn't
 /// immediately re-fetch data that's still fresh from before it. GETs `url`
 /// — the same URL the poller POSTs its batches to; the two share one route,
@@ -324,24 +391,102 @@ pub struct LastCompletedPublishResponse {
 /// learn the last successful fetch time, then defers to the pure
 /// [`duration_until_next_poll`] to do the actual math.
 ///
-/// A failed freshness check (network error, `api` not yet reachable, bad
-/// response) logs a warning and returns `Duration::ZERO` — "poll now" is
-/// this process's behavior before this function existed at all, so on
-/// error it's the safe fallback, not a new failure mode.
+/// A failed freshness check is retried for up to [`API_STARTUP_WAIT`]
+/// (SVC-09: `api` is typically still starting); only if `api` is still
+/// unreachable after that does this log a warning and return
+/// `Duration::ZERO` -- "poll now" is this process's behavior before this
+/// function existed at all, so it stays the fallback.
 pub async fn time_until_next_poll(
     client: &reqwest::Client,
     url: &str,
     tokens: &OAuthTokenCache,
     poll_interval: Duration,
 ) -> Duration {
-    let fetched_at = match fetch_last_fetched(client, url, tokens).await {
+    time_until_next_poll_waiting(client, url, tokens, poll_interval, &API_STARTUP_WAIT, None).await
+}
+
+/// [`time_until_next_poll`] with an explicit [`ApiWait`] and an optional
+/// liveness [`Progress`] to beat while waiting.
+pub async fn time_until_next_poll_waiting(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    poll_interval: Duration,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> Duration {
+    let fetched_at = match wait_for_last_fetched(client, url, tokens, wait, progress).await {
         Ok(fetched_at) => fetched_at,
         Err(err) => {
-            tracing::warn!(error = ?err, "could not determine last-fetch time; polling immediately");
+            tracing::warn!(
+                error = ?err,
+                max_wait_secs = wait.max_wait.as_secs(),
+                "could not determine last-fetch time; polling immediately"
+            );
             return Duration::ZERO;
         }
     };
     duration_until_next_poll(fetched_at, Utc::now(), poll_interval)
+}
+
+/// Backoff between retries of a failed poller ingest POST, see
+/// [`post_batch_retrying`].
+pub const POST_RETRY_BACKOFF: Backoff =
+    Backoff::new(Duration::from_secs(2), Duration::from_secs(60));
+
+/// [`post_batch`], retrying a [`FailureClass::Transient`] failure (api
+/// unreachable, a timeout, a 5xx, an auth hiccup) with
+/// [`POST_RETRY_BACKOFF`] for up to `budget`, WITHOUT re-fetching the data
+/// from upstream (SVC-09). A [`FailureClass::Rejected`] failure is returned
+/// at once: the same body will be refused the same way.
+///
+/// Pollers size `budget` with `poller_loop::post_retry_budget`, so a
+/// frequent poller never spends longer retrying than its next fresh fetch
+/// would take to arrive, while a daily one keeps its expensive upstream
+/// fetch alive through an api restart.
+pub async fn post_batch_retrying<T: Serialize>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    items: &[T],
+    noun: &str,
+    budget: Duration,
+) -> anyhow::Result<()> {
+    post_batch_retrying_with(client, url, tokens, items, noun, budget, POST_RETRY_BACKOFF).await
+}
+
+async fn post_batch_retrying_with<T: Serialize>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    items: &[T],
+    noun: &str,
+    budget: Duration,
+    backoff: Backoff,
+) -> anyhow::Result<()> {
+    let started = tokio::time::Instant::now();
+    let mut failures: u32 = 0;
+    loop {
+        let err = match post_batch(client, url, tokens, items, noun).await {
+            Ok(()) => return Ok(()),
+            Err(err) => err,
+        };
+        if classify_failure(&err) == FailureClass::Rejected {
+            return Err(err);
+        }
+        let delay = backoff.delay(failures);
+        if started.elapsed() + delay > budget {
+            return Err(err);
+        }
+        tracing::warn!(
+            error = ?err,
+            attempt = failures + 1,
+            retry_in_secs = delay.as_secs(),
+            "ingestion POST of {noun} failed; retrying without re-fetching upstream"
+        );
+        tokio::time::sleep(delay).await;
+        failures = failures.saturating_add(1);
+    }
 }
 
 async fn fetch_last_fetched(
@@ -606,6 +751,188 @@ mod tests {
             classify_failure(&anyhow::Error::from(err)),
             FailureClass::Transient
         );
+    }
+
+    async fn svc09_server_and_tokens() -> (wiremock::MockServer, OAuthTokenCache) {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "fake-jwt",
+                "expires_in": 300,
+            })))
+            .mount(&server)
+            .await;
+        let tokens =
+            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+                token_url: format!("{}/token/", server.uri()),
+                client_id: "c".to_string(),
+                scope: "groups".to_string(),
+                username: "u".to_string(),
+                password: "p".to_string(),
+            });
+        (server, tokens)
+    }
+
+    const FAST_WAIT: ApiWait = ApiWait {
+        backoff: Backoff::new(Duration::from_millis(10), Duration::from_millis(20)),
+        max_wait: Duration::from_secs(5),
+    };
+
+    /// SVC-09: a freshness GET that fails because `api` is still starting
+    /// is retried until `api` answers, instead of being treated as "poll
+    /// now" (which spent the daily upstream fetch on a doomed POST).
+    #[tokio::test]
+    async fn the_freshness_check_waits_for_api_to_come_up() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        let fetched_at = Utc::now() - chrono::Duration::hours(1);
+        Mock::given(method("GET"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(3)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/private/tocs"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "fetchedAt": fetched_at })),
+            )
+            .with_priority(2)
+            .mount(&server)
+            .await;
+
+        let delay = time_until_next_poll_waiting(
+            &reqwest::Client::new(),
+            &format!("{}/private/tocs", server.uri()),
+            &tokens,
+            Duration::from_secs(86_400),
+            &FAST_WAIT,
+            None,
+        )
+        .await;
+        // Fetched an hour ago on a 24h interval: ~23h to go, NOT "poll now".
+        assert!(delay > Duration::from_secs(22 * 3600), "{delay:?}");
+    }
+
+    /// The fallback is unchanged: once `max_wait` runs out, poll now.
+    #[tokio::test]
+    async fn the_freshness_check_still_falls_back_to_poll_now_after_max_wait() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        let wait = ApiWait {
+            max_wait: Duration::from_millis(100),
+            ..FAST_WAIT
+        };
+        let delay = time_until_next_poll_waiting(
+            &reqwest::Client::new(),
+            &format!("{}/private/tocs", server.uri()),
+            &tokens,
+            Duration::from_secs(86_400),
+            &wait,
+            None,
+        )
+        .await;
+        assert_eq!(delay, Duration::ZERO);
+    }
+
+    /// SVC-09: a POST that fails because `api` is down is retried with the
+    /// SAME body -- the upstream data is not fetched again.
+    #[tokio::test]
+    async fn a_transient_post_failure_is_retried_without_refetching() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("POST"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(502))
+            .up_to_n_times(2)
+            .with_priority(1)
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(200))
+            .with_priority(2)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        post_batch_retrying_with(
+            &reqwest::Client::new(),
+            &format!("{}/private/tocs", server.uri()),
+            &tokens,
+            &["TOC"],
+            "TOCs",
+            Duration::from_secs(5),
+            FAST_WAIT.backoff,
+        )
+        .await
+        .expect("the third attempt succeeds");
+    }
+
+    #[tokio::test]
+    async fn a_rejected_post_is_not_retried() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(422))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let err = post_batch_retrying_with(
+            &reqwest::Client::new(),
+            &format!("{}/private/tocs", server.uri()),
+            &tokens,
+            &["TOC"],
+            "TOCs",
+            Duration::from_secs(5),
+            FAST_WAIT.backoff,
+        )
+        .await
+        .expect_err("422 is a data rejection");
+        assert_eq!(classify_failure(&err), FailureClass::Rejected);
+    }
+
+    #[tokio::test]
+    async fn post_retries_stop_at_the_budget() {
+        let client = reqwest::Client::new();
+        // Nothing listens here: every attempt is a connection error.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let (_server, tokens) = svc09_server_and_tokens().await;
+        let started = std::time::Instant::now();
+        let err = post_batch_retrying_with(
+            &client,
+            &format!("http://{addr}/private/tocs"),
+            &tokens,
+            &["TOC"],
+            "TOCs",
+            Duration::from_millis(200),
+            FAST_WAIT.backoff,
+        )
+        .await
+        .expect_err("api never comes up");
+        assert_eq!(classify_failure(&err), FailureClass::Transient);
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[test]

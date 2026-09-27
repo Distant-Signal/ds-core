@@ -31,6 +31,33 @@ pub struct MetricsArgs {
 /// secret" for this Kafka product), and a future accidental
 /// `tracing::debug!("{args:?}")` on a `Config` that flattens this in would
 /// otherwise print it verbatim. See the hand-written impl below.
+/// The `/livez` + `/healthz` listener every background worker (aggregator,
+/// enricher, notifier, the pollers, schedule-ingest, schedule-reference)
+/// serves via `health_http::spawn_with_progress` (SVC-08/INF-9). Liveness
+/// probes hit `/livez` (503 only once the loop has stalled); workers with a
+/// readiness probe hit `/healthz` (also 503 until the initial database/Redis
+/// connection is up, INF-5).
+#[derive(Debug, Clone, clap::Args)]
+pub struct HealthArgs {
+    /// Bind address for the health listener. The chart sets it per
+    /// container (scheduleFeed's two Rust containers share a pod, so they
+    /// need different ports).
+    #[arg(long, env, default_value = "0.0.0.0:8090")]
+    pub health_bind_url: String,
+    /// `/livez` answers 503 "stalled" once one loop iteration has run for
+    /// this many seconds without completing. Idle time between iterations
+    /// never counts (`common::progress::Progress::idle`), so this only needs
+    /// to exceed the longest legitimate single iteration.
+    #[arg(long, env, default_value_t = 1800)]
+    pub progress_stall_secs: u64,
+}
+
+impl HealthArgs {
+    pub fn stall_after(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.progress_stall_secs)
+    }
+}
+
 #[derive(Clone, clap::Args)]
 pub struct KafkaConnectionArgs {
     /// RDM Kafka broker address(es), comma-separated, e.g.
@@ -77,6 +104,8 @@ mod tests {
         metrics: MetricsArgs,
         #[command(flatten)]
         kafka: KafkaConnectionArgs,
+        #[command(flatten)]
+        health: HealthArgs,
     }
 
     #[test]
@@ -99,6 +128,8 @@ mod tests {
             config.metrics.metrics_enabled,
             "metrics_enabled's default must stay true when --metrics-enabled is omitted"
         );
+        assert_eq!(config.health.health_bind_url, "0.0.0.0:8090");
+        assert_eq!(config.health.progress_stall_secs, 1800);
     }
 
     #[test]

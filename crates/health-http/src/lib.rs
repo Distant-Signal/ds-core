@@ -14,8 +14,8 @@
 //! behavior-unifying one.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::routing::get;
@@ -26,56 +26,9 @@ use axum::routing::get;
 /// (`Arc<AtomicBool>`) under its own crate-local name.
 pub type ConnectionState = Arc<AtomicBool>;
 
-/// Liveness-by-progress for a consume loop: the loop calls [`Progress::beat`]
-/// once per completed iteration, and `/healthz` reports unhealthy once no
-/// beat has arrived for `stall_after`.
-///
-/// `ConnectionState` alone cannot catch a wedged loop: it is only written by
-/// the feed's own `next_batch`, so a loop stuck forever inside an `await`
-/// after that (a half-open HTTP connection with no timeout, the PL-1
-/// incident) leaves it at its last value -- `true` -- and the liveness probe
-/// never restarts the pod.
-#[derive(Debug, Clone)]
-pub struct Progress {
-    origin: Instant,
-    /// Milliseconds after `origin` of the last beat.
-    last_beat_ms: Arc<AtomicU64>,
-    stall_after: Duration,
-}
-
-impl Progress {
-    /// Starts "just beaten", so a fresh process gets a full `stall_after`
-    /// of grace before its first iteration has to complete.
-    pub fn new(stall_after: Duration) -> Self {
-        Self {
-            origin: Instant::now(),
-            last_beat_ms: Arc::new(AtomicU64::new(0)),
-            stall_after,
-        }
-    }
-
-    fn elapsed_ms(&self) -> u64 {
-        u64::try_from(self.origin.elapsed().as_millis()).unwrap_or(u64::MAX)
-    }
-
-    /// Records that the loop completed an iteration.
-    pub fn beat(&self) {
-        self.last_beat_ms
-            .store(self.elapsed_ms(), Ordering::Relaxed);
-    }
-
-    /// How long since the last beat.
-    pub fn since_last_beat(&self) -> Duration {
-        Duration::from_millis(
-            self.elapsed_ms()
-                .saturating_sub(self.last_beat_ms.load(Ordering::Relaxed)),
-        )
-    }
-
-    pub fn is_stalled(&self) -> bool {
-        self.since_last_beat() > self.stall_after
-    }
-}
+/// Liveness-by-progress; see [`common::progress`]. Re-exported so every
+/// caller keeps using `health_http::Progress`.
+pub use common::progress::Progress;
 
 /// [`spawn`], plus a [`Progress`] watchdog: `/healthz` answers 503 with
 /// `"stalled"` whenever no iteration has completed within `stall_after`,
@@ -96,6 +49,28 @@ pub fn spawn_with_progress(
         unhealthy_text,
     );
     (state, progress)
+}
+
+/// The health listener for a background worker (SVC-08/INF-9), from its
+/// `HealthArgs`: `/livez` for the liveness probe (progress only) and
+/// `/healthz` for readiness (also 503 `"connecting"` until the caller flips
+/// the returned state, once its initial database/Redis connection is up).
+pub fn spawn_worker(args: &common::service_args::HealthArgs) -> (ConnectionState, Progress) {
+    spawn_with_progress(
+        args.health_bind_url.clone(),
+        "ok",
+        "connecting",
+        args.stall_after(),
+    )
+}
+
+/// [`spawn_worker`] for a worker with no persistent connection to wait for
+/// (the pollers): ready at once, so `/healthz` and `/livez` both reflect
+/// loop progress only.
+pub fn spawn_liveness(args: &common::service_args::HealthArgs) -> Progress {
+    let (state, progress) = spawn_worker(args);
+    state.store(true, Ordering::Relaxed);
+    progress
 }
 
 /// Creates a fresh `ConnectionState` and starts the `/healthz` server.
@@ -132,17 +107,20 @@ fn serve(
     unhealthy_text: &'static str,
 ) {
     tokio::spawn(async move {
-        let app = axum::Router::new().route(
-            "/healthz",
-            get(move || {
-                healthz(
-                    Arc::clone(&state),
-                    progress.clone(),
-                    healthy_text,
-                    unhealthy_text,
-                )
-            }),
-        );
+        let livez_progress = progress.clone();
+        let app = axum::Router::new()
+            .route(
+                "/healthz",
+                get(move || {
+                    healthz(
+                        Arc::clone(&state),
+                        progress.clone(),
+                        healthy_text,
+                        unhealthy_text,
+                    )
+                }),
+            )
+            .route("/livez", get(move || livez(livez_progress.clone())));
         let listener = match tokio::net::TcpListener::bind(&bind_url).await {
             Ok(listener) => listener,
             Err(err) => {
@@ -165,7 +143,7 @@ async fn healthz(
     if let Some(progress) = progress.filter(Progress::is_stalled) {
         tracing::warn!(
             since_last_beat_secs = progress.since_last_beat().as_secs(),
-            stall_after_secs = progress.stall_after.as_secs(),
+            stall_after_secs = progress.stall_after().as_secs(),
             "no consume-loop iteration has completed within the stall window; reporting unhealthy"
         );
         return (StatusCode::SERVICE_UNAVAILABLE, "stalled");
@@ -174,6 +152,20 @@ async fn healthz(
         (StatusCode::OK, healthy_text)
     } else {
         (StatusCode::SERVICE_UNAVAILABLE, unhealthy_text)
+    }
+}
+
+/// Liveness only: 503 `"stalled"` once the loop has stopped making
+/// progress, 200 `"alive"` otherwise -- whatever the connection state says.
+///
+/// `/healthz` is readiness-shaped (503 until the caller is connected), which
+/// is wrong for a liveness probe on a service that is still retrying its
+/// initial connection (INF-5): restarting it would only add CrashLoopBackOff
+/// delay. A caller with no progress watchdog is always alive.
+async fn livez(progress: Option<Progress>) -> (StatusCode, &'static str) {
+    match progress.filter(Progress::is_stalled) {
+        Some(_) => (StatusCode::SERVICE_UNAVAILABLE, "stalled"),
+        None => (StatusCode::OK, "alive"),
     }
 }
 
@@ -262,5 +254,27 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "a fresh beat recovers");
+    }
+
+    /// INF-5: while a service is still retrying its initial connection,
+    /// readiness (`/healthz`) is false but liveness (`/livez`) must stay true,
+    /// or the liveness probe would restart it into CrashLoopBackOff.
+    #[tokio::test]
+    async fn livez_ignores_the_connection_state_but_not_a_stall() {
+        let progress = Progress::new(Duration::from_millis(100));
+        let state: ConnectionState = Arc::new(AtomicBool::new(false));
+        let (status, _) = healthz(Arc::clone(&state), Some(progress.clone()), "c", "d").await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "not ready yet");
+        assert_eq!(
+            livez(Some(progress.clone())).await,
+            (StatusCode::OK, "alive")
+        );
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        assert_eq!(
+            livez(Some(progress.clone())).await,
+            (StatusCode::SERVICE_UNAVAILABLE, "stalled")
+        );
+        assert_eq!(livez(None).await, (StatusCode::OK, "alive"));
     }
 }
