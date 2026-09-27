@@ -69,6 +69,7 @@ use clap::Parser;
 
 use checks::Severity;
 use reference::ReferenceData;
+use regenerate::ReportDetail;
 
 #[derive(Parser)]
 struct Args {
@@ -93,6 +94,29 @@ struct Args {
     #[arg(long, value_name = "CORPUS_JSON")]
     regenerate_crs_tiploc_from_corpus: Option<PathBuf>,
 
+    /// With `--regenerate-crs-tiploc-from-corpus`: write the full inference
+    /// report (per-rule counts, ambiguous groups, and every differing pair
+    /// when `--compare-with` is given) to this file. A summary still goes
+    /// to stderr. Without it the report (minus per-pair lists) goes to
+    /// stderr.
+    #[arg(
+        long,
+        value_name = "PATH",
+        requires = "regenerate_crs_tiploc_from_corpus"
+    )]
+    report: Option<PathBuf>,
+
+    /// With `--regenerate-crs-tiploc-from-corpus`: compare the new output
+    /// against this existing `crs-tiploc.csv` (read before anything is
+    /// written, so it may be the file being replaced) and add agreement
+    /// stats to the report.
+    #[arg(
+        long,
+        value_name = "CRS_TIPLOC_CSV",
+        requires = "regenerate_crs_tiploc_from_corpus"
+    )]
+    compare_with: Option<PathBuf>,
+
     /// Instead of validating, regenerate `<reference-dir>/toc-codes.csv`
     /// from this saved Knowledgebase Train Operating Company List XML
     /// response (the feed `poller-tocs` ingests).
@@ -110,10 +134,41 @@ async fn main() -> anyhow::Result<()> {
         if let Some(corpus) = &args.regenerate_crs_tiploc_from_corpus {
             let json = std::fs::read(corpus)
                 .map_err(|e| anyhow::anyhow!("reading {}: {e}", corpus.display()))?;
-            let rows = regenerate::crs_tiploc_from_corpus(&json)?;
+            let result = regenerate::crs_tiploc_from_corpus(&json)?;
+            // Read the comparison file before writing: it is often the
+            // very file about to be replaced.
+            let comparison = match &args.compare_with {
+                Some(path) => {
+                    let file = std::fs::File::open(path)
+                        .map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
+                    let (old_pairs, old_crs) = regenerate::read_crs_tiploc_pairs(file)?;
+                    Some((
+                        path.as_path(),
+                        regenerate::compare(&result, &old_pairs, &old_crs),
+                    ))
+                }
+                None => None,
+            };
+            let comparison = comparison.as_ref().map(|(p, c)| (*p, c));
+            match &args.report {
+                Some(path) => {
+                    let full = regenerate::render_report(&result, comparison, ReportDetail::Full);
+                    std::fs::write(path, full)
+                        .map_err(|e| anyhow::anyhow!("writing {}: {e}", path.display()))?;
+                    eprint!(
+                        "{}",
+                        regenerate::render_report(&result, comparison, ReportDetail::Summary)
+                    );
+                    eprintln!("full report written to {}", path.display());
+                }
+                None => eprint!(
+                    "{}",
+                    regenerate::render_report(&result, comparison, ReportDetail::Standard)
+                ),
+            }
             let out = args.reference_dir.join("crs-tiploc.csv");
-            regenerate::write_crs_tiploc_csv(&out, &rows)?;
-            println!("wrote {} row(s) to {}", rows.len(), out.display());
+            regenerate::write_crs_tiploc_csv(&out, &result.rows)?;
+            println!("wrote {} row(s) to {}", result.rows.len(), out.display());
         }
         if let Some(xml_path) = &args.regenerate_toc_codes_from_rdm_xml {
             let xml = std::fs::read_to_string(xml_path)

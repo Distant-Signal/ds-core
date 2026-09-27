@@ -237,12 +237,62 @@ here is already available to compare against.
   is the same data -- see the `toc-codes.csv` section above.
 - `--regenerate-crs-tiploc-from-corpus <CORPUSExtract.json>`: Network
   Rail's CORPUS extract, decompressed (download from Network Rail's open
-  data feeds / Rail Data Marketplace; needs a registered account). Keeps
-  every row whose `3ALPHA` is a 3-letter CRS, pairs it with that row's
-  `TIPLOC` (2-7 letters/digits), writes one row per `(crs, tiploc)` with an
-  empty `tiploc` only for a CRS no row pairs with a TIPLOC, takes `name`
-  from the `NLCDESC` of the alphabetically-first TIPLOC, sorts by
-  `crs,tiploc` and writes LF line endings. **Not run yet**: this repo does
+  data feeds / Rail Data Marketplace; needs a registered account). CORPUS
+  fills `3ALPHA` (the CRS) only on a station's *primary* TIPLOC, so a
+  station's other TIPLOCs (platforms, through lines, carriage sidings with
+  their own timing point) carry no CRS of their own. Every valid `TIPLOC`
+  (2-7 uppercase letters/digits) therefore gets its CRS from the first of
+  these rules that applies:
+
+  1. **Direct**: one of its own rows has a `3ALPHA` that is a 3-letter
+     CRS. Every such CRS is kept and no inference is attempted for that
+     TIPLOC.
+  2. **NLC group**: an NLC is six digits, the first four identifying the
+     location and the last two a sub-location. If the rows sharing the
+     TIPLOC's 4-digit prefix carry exactly one distinct CRS, it gets that
+     one. (A numeric NLC is left-padded back to six digits first; an
+     all-zero NLC is ignored.)
+  3. **STANOX group**: otherwise -- the NLC group had no CRS, *or more
+     than one* -- if the rows sharing its STANOX carry exactly one
+     distinct CRS, it gets that one. Blank and all-zero STANOX values are
+     ignored, since they would lump unrelated locations together.
+  4. Otherwise (no candidate, or two or more) it is left out.
+
+  Group candidates come only from rows with their own `3ALPHA` (including
+  rows with no usable TIPLOC), never from another inference, so the result
+  does not depend on row order. The output format is unchanged: one row per
+  `(crs, tiploc)` (the validator already accepts several TIPLOCs per CRS),
+  an empty `tiploc` only for a CRS that ends up with no TIPLOC, `name` from
+  the `NLCDESC` of the alphabetically-first *directly* paired TIPLOC (so an
+  inferred platform row never renames a station), sorted by `crs,tiploc`,
+  LF line endings. Which rule produced each pair is not in the CSV; it is
+  in the report.
+
+  The report goes to stderr (per-rule pair counts, TIPLOCs left out,
+  ambiguous NLC/STANOX groups with their candidate CRS codes and the
+  TIPLOCs that consulted them, and the TIPLOCs the STANOX rule assigned
+  *after* their NLC group was ambiguous -- the least certain inferences).
+  `--report <path>` writes the full report to a file instead and leaves a
+  count-only summary on stderr. `--compare-with <crs-tiploc.csv>` adds
+  agreement with an existing file: pairs matched, pairs only in the old
+  file (still missing), pairs only in the new output, conflicts (a TIPLOC
+  in both files with a different CRS set), CRS codes only on one side, and
+  matched / only-new / conflict counts per rule; the `--report` file also
+  lists every differing pair. The comparison file is read before anything
+  is written, but to judge the rules without touching the committed file,
+  point `--reference-dir` somewhere else:
+
+  ```text
+  cargo run -p line-catalogue-validator -- \
+    --regenerate-crs-tiploc-from-corpus ~/CORPUSExtract.json \
+    --reference-dir ~/crs-trial \
+    --compare-with reference-data/crs-tiploc.csv \
+    --report ~/crs-trial/report.txt
+  ```
+
+  High NLC/STANOX "matched" counts and few conflicts mean the inference is
+  agreeing with the railwaycodes snapshot; read the conflicts and the
+  ambiguous groups before trusting it. **Not run yet**: this repo does
   not ingest CORPUS and no extract was available when the TOC file was
   regenerated, so `crs-tiploc.csv` below is still the railwaycodes.org.uk
   snapshot. After running it, run `cargo run -p line-catalogue-validator`
