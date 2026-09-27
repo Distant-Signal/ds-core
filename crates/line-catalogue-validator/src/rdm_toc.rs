@@ -53,11 +53,22 @@ pub async fn fetch_rdm_tocs(
         .error_for_status()?
         .text()
         .await?;
-    let list: TrainOperatingCompanyList = quick_xml::de::from_str(&body)?;
+    parse_rdm_tocs(&body)
+}
+
+/// Parses a TOC List XML body into ATOC code (uppercased) -> name. Shared by
+/// the live tier and `regenerate::toc_codes_from_rdm_xml`.
+pub fn parse_rdm_tocs(xml: &str) -> Result<HashMap<String, String>> {
+    let list: TrainOperatingCompanyList = quick_xml::de::from_str(xml)?;
     Ok(list
         .train_operating_company
         .into_iter()
-        .map(|toc| (toc.atoc_code.to_ascii_uppercase(), toc.name))
+        .map(|toc| {
+            (
+                toc.atoc_code.trim().to_ascii_uppercase(),
+                toc.name.trim().to_owned(),
+            )
+        })
         .collect())
 }
 

@@ -13,4 +13,5 @@ quick-xml = { version = "0.41.0", features = ["serialize", "escape-html"] }
 regex = "1.11"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "gzip"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }

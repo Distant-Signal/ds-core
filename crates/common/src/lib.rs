@@ -30,6 +30,7 @@ pub mod service_args;
 pub mod startup;
 pub mod text_hash;
 pub mod trust_timestamp;
+pub mod user_agent;
 
 pub use full_coverage_window::{
     FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,

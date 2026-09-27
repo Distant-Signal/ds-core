@@ -42,6 +42,15 @@ against an independently-curated site closes that gap, at the cost of that
 site itself not being a primary-issuing authority (see "Known limitations"
 below).
 
+**Update 2026-09-27 (DQ13):** the plan is now to take both files from
+primary Network Rail / National Rail sources instead: `toc-codes.csv` has
+been regenerated from the Knowledgebase TOC List, and `crs-tiploc.csv` is
+to be regenerated from Network Rail's CORPUS extract (not the CIF-derived
+tables above, whose licence hasn't been reviewed yet) once an extract is
+available. CORPUS is still independent of this repo's CIF pipeline, so the
+"not a single shared upstream" property above still holds. See
+"Regenerating this snapshot".
+
 ## Where the data comes from
 
 ### `crs-tiploc.csv`
@@ -130,26 +139,37 @@ parser and this committed snapshot against a recurrence.
 
 ### `toc-codes.csv`
 
-Scraped from `https://www.railwaycodes.org.uk/operators/toccodes.shtm`, a
-single HTML table of every ATOC/timetable operator code ever issued, each
-row giving a code, an operator name, and a date range. Only rows whose date
-range column contains the literal string `"to date"` (i.e. still current,
-per that page's own convention for an open-ended range) are kept -- this
-excludes retired codes like `AN` (Arriva Trains Northern, superseded by
-`NT`) or the erroneous historical `ATW` entry, which is exactly the
-"currently-valid" list this validator needs (see `lines/SCHEMA.md`'s
-curation rule: "Old codes shouldn't silently match new operators").
+**Source: the National Rail Knowledgebase Train Operating Company List**
+(the RDM feed, RSPS5050 P-03-00 Rev A §3, that `crates/poller-tocs` polls
+daily into production's `tocs` table). Regenerated 2026-09-27 (DQ13) from
+production's `tocs` table, fetched from the feed at 2026-09-27 05:13 UTC,
+with:
 
-This page's rows carry no footnote spans at all (unlike the CRS pages --
-checked on 2026-09-24, zero `<span class="popup">` on the whole page), so
-the footnote bug documented above for `crs-tiploc.csv` never applied here.
-A fresh re-scrape on 2026-09-24 reproduced the committed file exactly: same
-33 codes, same 33 names, nothing added or removed.
+```sh
+psql ... -c "\copy (SELECT atoc_code, name FROM tocs ORDER BY atoc_code) \
+  TO STDOUT WITH (FORMAT csv, HEADER)" > reference-data/toc-codes.csv
+```
 
-Result: 33 currently-valid ATOC codes, generated 2026-09-21, re-verified
-unchanged 2026-09-24. All 27 codes actually used across `lines/*.toml`
-today are present (21 when this file was written, before the catalogue
-grew).
+which is byte-for-byte what `cargo run -p line-catalogue-validator --
+--regenerate-toc-codes-from-rdm-xml <saved feed response.xml>` writes from
+the feed's own XML (header `atoc_code,name`, one row per operator, sorted
+by code, LF line endings) -- use whichever input is to hand.
+
+Every operator in the feed is kept, with its Knowledgebase display name.
+That is the list this app itself knows operators by, so "valid" here now
+means "an operator code production recognises", not railwaycodes.org.uk's
+"date range ends `to date`". Result: 40 codes. Compared with the previous
+railwaycodes-derived file (33 codes), it adds `HS`, `HV`, `LN`, `LT`, `NR`,
+`SX`, `WM`, `XP`, `XS`, `ZN` (Knowledgebase lists non-TOC operators such as
+Network Rail, airports and Hovertravel, and splits `LN`/`WM` out of `LM`)
+and drops `LF` (Grand Union), `NY` (North Yorkshire Moors Railway) and `WR`
+(West Coast Railways), which the Knowledgebase list doesn't carry. None of
+the 24 codes used across `lines/*.toml` on 2026-09-27 is affected; the
+validator passes with zero errors.
+
+Before 2026-09-27 this file was scraped from
+`https://www.railwaycodes.org.uk/operators/toccodes.shtm` (rows whose date
+range read `to date`).
 
 ## Known limitations (documented, not silently papered over)
 
@@ -205,19 +225,48 @@ here is already available to compare against.
 
 ## Regenerating this snapshot
 
+### From Network Rail / Knowledgebase data (preferred, DQ13)
+
+`crates/line-catalogue-validator` has two regeneration modes (see its
+`src/regenerate.rs`); each writes into `--reference-dir` (default
+`reference-data`) and exits without validating:
+
+- `--regenerate-toc-codes-from-rdm-xml <file>`: a saved response from the
+  Knowledgebase Train Operating Company List feed (the one `poller-tocs`
+  uses; needs an RDM subscription and API key). Production's `tocs` table
+  is the same data -- see the `toc-codes.csv` section above.
+- `--regenerate-crs-tiploc-from-corpus <CORPUSExtract.json>`: Network
+  Rail's CORPUS extract, decompressed (download from Network Rail's open
+  data feeds / Rail Data Marketplace; needs a registered account). Keeps
+  every row whose `3ALPHA` is a 3-letter CRS, pairs it with that row's
+  `TIPLOC` (2-7 letters/digits), writes one row per `(crs, tiploc)` with an
+  empty `tiploc` only for a CRS no row pairs with a TIPLOC, takes `name`
+  from the `NLCDESC` of the alphabetically-first TIPLOC, sorts by
+  `crs,tiploc` and writes LF line endings. **Not run yet**: this repo does
+  not ingest CORPUS and no extract was available when the TOC file was
+  regenerated, so `crs-tiploc.csv` below is still the railwaycodes.org.uk
+  snapshot. After running it, run `cargo run -p line-catalogue-validator`
+  and `cargo test -p line-catalogue-validator` (CORPUS names are upper
+  case and its CRS coverage is not the same as railwaycodes', so check the
+  error count before committing), then update this file's
+  `crs-tiploc.csv` section and the railwaycodes credit in
+  `frontend/components/OpenDataAttribution.tsx` if nothing else still
+  comes from that site.
+
+### `crs-tiploc.csv` from railwaycodes.org.uk (legacy)
+
 There is no automated regeneration script yet (see
 `.github/workflows/validate-line-catalogue.yml`'s live-check job, which is
 the intended eventual replacement for "someone re-runs a scraper by hand").
 To refresh by hand: re-fetch each
-`https://www.railwaycodes.org.uk/crs/crs<a-z>.shtm` page and
-`https://www.railwaycodes.org.uk/operators/toccodes.shtm`, and re-apply the
-extraction rules above (send a real `User-Agent` header -- the site 403s
-the default `curl`/no-UA request). Keep both CSVs sorted by their first
-column for a reviewable diff, matching `stanox-crs.csv`'s own convention,
-and keep `crs-tiploc.csv`/`toc-codes.csv` CRLF-terminated, which is what
-they already are (`stanox-crs.csv`, generated by a different task from a
-different source, is LF -- don't "normalise" either one, it only makes a
-whole-file diff).
+`https://www.railwaycodes.org.uk/crs/crs<a-z>.shtm` page and re-apply the
+extraction rules above (send an honest, identifying `User-Agent` header,
+the same one `reference.rs`'s `USER_AGENT` sends -- the site 403s the
+default no-UA request; never impersonate a browser). Keep the CSV sorted
+by its first column for a reviewable diff, matching `stanox-crs.csv`'s own
+convention, and keep `crs-tiploc.csv` CRLF-terminated, which is what it
+already is (don't "normalise" it by hand, it only makes a whole-file
+diff).
 
 **Delete the footnote spans from every cell before extracting any token**
 -- the single rule the 2026-09-21 generation got wrong, and the one thing

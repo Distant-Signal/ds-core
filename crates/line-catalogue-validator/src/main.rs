@@ -41,7 +41,7 @@
 //!   ~110 line files.
 //! - **Thorough, live tier (`--live`; what the weekly cron in
 //!   `.github/workflows/validate-line-catalogue.yml` runs, currently
-//!   disabled)**: re-fetches the same upstream site live, plus the real
+//!   disabled)**: scrapes railwaycodes.org.uk live, plus the real
 //!   RDM Train Operating Company List feed for operator codes when
 //!   `RDM_API_KEY`/`RDM_TOCS_BASE_URL` are set (falls back to the
 //!   community-site scrape and prints a warning if they aren't -- see
@@ -61,6 +61,7 @@
 mod checks;
 mod rdm_toc;
 mod reference;
+mod regenerate;
 
 use std::path::PathBuf;
 
@@ -84,11 +85,46 @@ struct Args {
     /// -- see this binary's module doc.
     #[arg(long)]
     live: bool,
+
+    /// Instead of validating, regenerate `<reference-dir>/crs-tiploc.csv`
+    /// from this Network Rail CORPUS extract (`CORPUSExtract.json`,
+    /// decompressed). See `regenerate.rs` and
+    /// `reference-data/line-catalogue-validation.md`.
+    #[arg(long, value_name = "CORPUS_JSON")]
+    regenerate_crs_tiploc_from_corpus: Option<PathBuf>,
+
+    /// Instead of validating, regenerate `<reference-dir>/toc-codes.csv`
+    /// from this saved Knowledgebase Train Operating Company List XML
+    /// response (the feed `poller-tocs` ingests).
+    #[arg(long, value_name = "TOC_LIST_XML")]
+    regenerate_toc_codes_from_rdm_xml: Option<PathBuf>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    if args.regenerate_crs_tiploc_from_corpus.is_some()
+        || args.regenerate_toc_codes_from_rdm_xml.is_some()
+    {
+        if let Some(corpus) = &args.regenerate_crs_tiploc_from_corpus {
+            let json = std::fs::read(corpus)
+                .map_err(|e| anyhow::anyhow!("reading {}: {e}", corpus.display()))?;
+            let rows = regenerate::crs_tiploc_from_corpus(&json)?;
+            let out = args.reference_dir.join("crs-tiploc.csv");
+            regenerate::write_crs_tiploc_csv(&out, &rows)?;
+            println!("wrote {} row(s) to {}", rows.len(), out.display());
+        }
+        if let Some(xml_path) = &args.regenerate_toc_codes_from_rdm_xml {
+            let xml = std::fs::read_to_string(xml_path)
+                .map_err(|e| anyhow::anyhow!("reading {}: {e}", xml_path.display()))?;
+            let rows = regenerate::toc_codes_from_rdm_xml(&xml)?;
+            let out = args.reference_dir.join("toc-codes.csv");
+            regenerate::write_toc_codes_csv(&out, &rows)?;
+            println!("wrote {} row(s) to {}", rows.len(), out.display());
+        }
+        return Ok(());
+    }
 
     let reference = if args.live {
         eprintln!(

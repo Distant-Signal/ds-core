@@ -2,9 +2,11 @@
 //! against, for both tiers described in `main.rs`'s module doc:
 //! [`ReferenceData::from_vendored_csvs`] (fast, no-secrets tier, reads the
 //! checked-in `reference-data/crs-tiploc.csv` / `reference-data/toc-codes.csv`)
-//! and [`ReferenceData::fetch_live`] (thorough tier, hits the same
-//! upstream site live over the network, plus the real RDM TOC feed when
-//! credentials are available).
+//! and [`ReferenceData::fetch_live`] (thorough tier, scrapes
+//! railwaycodes.org.uk live over the network, plus the real RDM TOC feed
+//! when credentials are available). `crs-tiploc.csv` is still a
+//! railwaycodes.org.uk snapshot; `toc-codes.csv` is now a Knowledgebase TOC
+//! List snapshot (DQ13) -- see `regenerate.rs`.
 //!
 //! Both tiers build the exact same [`ReferenceData`] shape, so
 //! `checks::validate_lines`/`checks::coverage_report` have no idea which
@@ -105,8 +107,8 @@ impl ReferenceData {
         Ok(data)
     }
 
-    /// Thorough, live tier: re-fetches the exact same
-    /// railwaycodes.org.uk pages the vendored CSVs were generated from
+    /// Thorough, live tier: re-fetches the
+    /// railwaycodes.org.uk pages the vendored CSVs were originally generated from
     /// (see `reference-data/line-catalogue-validation.md`), applying the
     /// identical extraction rules documented there, plus -- when
     /// `rdm_api_key`/`rdm_tocs_base_url` are both given -- the real RDM
@@ -127,7 +129,7 @@ impl ReferenceData {
         for letter in b'a'..=b'z' {
             let letter = letter as char;
             let url = format!("https://www.railwaycodes.org.uk/crs/crs{letter}.shtm");
-            let body = fetch_with_browser_ua(client, &url)
+            let body = fetch_with_identifying_ua(client, &url)
                 .await
                 .with_context(|| format!("fetching {url}"))?;
             parse_crs_tiploc_page(&body, &mut data).with_context(|| format!("parsing {url}"))?;
@@ -155,7 +157,7 @@ impl ReferenceData {
         }
 
         let toc_url = "https://www.railwaycodes.org.uk/operators/toccodes.shtm";
-        let toc_body = fetch_with_browser_ua(client, toc_url)
+        let toc_body = fetch_with_identifying_ua(client, toc_url)
             .await
             .with_context(|| format!("fetching {toc_url}"))?;
         data.toc_codes =
@@ -197,16 +199,19 @@ impl ReferenceData {
     }
 }
 
-async fn fetch_with_browser_ua(client: &reqwest::Client, url: &str) -> Result<String> {
+/// The `User-Agent` the live tier sends to railwaycodes.org.uk (LEG-24):
+/// honest and identifying -- this crate's name and version plus the
+/// project URL -- instead of the browser-impersonating
+/// `"Mozilla/5.0 ..."` string this validator used to send.
+pub(crate) const USER_AGENT: &str = common::user_agent!();
+
+async fn fetch_with_identifying_ua(client: &reqwest::Client, url: &str) -> Result<String> {
     // railwaycodes.org.uk 403s a request with no `User-Agent` at all
-    // (confirmed while building this validator) -- a plain browser-shaped
-    // UA is enough, no other headers are needed.
+    // (confirmed while building this validator), so one is always sent --
+    // but it says who we are rather than pretending to be a browser.
     let resp = client
         .get(url)
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-        )
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await?
         .error_for_status()?;
@@ -502,6 +507,15 @@ fn clean_html_text(tag_re: &regex::Regex, s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LEG-24: the live tier identifies itself honestly and never
+    /// impersonates a browser.
+    #[test]
+    fn live_tier_user_agent_is_honest_and_identifying() {
+        assert!(USER_AGENT.starts_with("distant-signal-line-catalogue-validator/"));
+        assert!(USER_AGENT.contains(common::user_agent::PROJECT_URL));
+        assert!(!USER_AGENT.contains("Mozilla"));
+    }
 
     #[test]
     fn parses_a_real_crs_tiploc_row_shape() {

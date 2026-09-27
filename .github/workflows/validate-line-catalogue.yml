@@ -16,15 +16,16 @@ name: Validate line catalogue (live, weekly)
 # `fetch_live`) for CRS/TIPLOC data -- that half needs **no secret at all**,
 # it's a plain public site. Confirmed working during this validator's
 # development (it does 403 a request with no `User-Agent` header at all,
-# which `fetch_live` already sends around).
+# so `fetch_live` sends an honest, identifying one -- see `reference.rs`'s
+# `USER_AGENT`).
 #
 # The operator-code half is where a real credential decision lives. Without
-# one, `--live` silently falls back to the *same* railwaycodes.org.uk
-# operator-codes page the fast tier's vendored `toc-codes.csv` already came
-# from (see `fetch_live`'s fallback branch) -- which makes the "thorough"
-# tier no more authoritative than the fast one for operator codes
-# specifically. To make it genuinely more authoritative, `--live` can hit
-# the real RDM Train Operating Company List feed instead -- the same feed
+# one, `--live` silently falls back to the railwaycodes.org.uk
+# operator-codes page (see `fetch_live`'s fallback branch) -- a community
+# source that is *less* authoritative than the fast tier's vendored
+# `toc-codes.csv`, which is itself a snapshot of the Knowledgebase TOC List
+# (see reference-data/line-catalogue-validation.md). To make it genuinely
+# authoritative, `--live` can hit the real RDM Train Operating Company List feed instead -- the same feed
 # `crates/poller-tocs` already polls in production (RSPS5050 P-03-00 Rev A
 # §3) -- given two env vars:
 #
