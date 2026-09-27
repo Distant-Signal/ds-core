@@ -2698,6 +2698,84 @@ mod db_tests {
         .await;
     }
 
+    /// M9 (Repeater Signal, 2026-09-26) boundary pin: `find_backlog_match`
+    /// compares booked time against booked time, so its window is
+    /// `SCHEDULED_DEPARTURE_TOLERANCE` (5 minutes), not `common::MATCH_TOLERANCE`
+    /// (20). A DEPARTURE booked 10 minutes from the pin's departure (inside
+    /// the old window) must not be matched; one booked 4 minutes away must.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                find_backlog_match_ignores_a_departure_outside_the_five_minute_window \
+                -- --ignored --test-threads=1`"]
+    async fn find_backlog_match_ignores_a_departure_outside_the_five_minute_window() {
+        let pool = connect().await;
+        let far_train_id = "TEST-M9-FAR-TRAIN-ID";
+        let near_train_id = "TEST-M9-NEAR-TRAIN-ID";
+        let cleanup = || async {
+            sqlx::query("DELETE FROM trust_event_backlog WHERE train_id IN ($1, $2)")
+                .bind(far_train_id)
+                .bind(near_train_id)
+                .execute(&pool)
+                .await
+                .ok();
+        };
+        cleanup().await;
+
+        let pin_scheduled: DateTime<Utc> = "2026-09-19T07:31:00Z".parse().unwrap();
+        let service_date = pin_scheduled.date_naive();
+        let insert_departure =
+            |train_id: &'static str, planned: DateTime<Utc>, dedup: &'static str| {
+                let pool = pool.clone();
+                async move {
+                    sqlx::query(
+                        "INSERT INTO trust_event_backlog \
+                        (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                         planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+                     VALUES ('ZZM', NULL, $1, $2, '0003', 'DEPARTURE', $3, $3, 'ON TIME', $4)",
+                    )
+                    .bind(train_id)
+                    .bind(service_date)
+                    .bind(planned)
+                    .bind(dedup)
+                    .execute(&pool)
+                    .await
+                    .expect("seed backlog departure");
+                }
+            };
+
+        insert_departure(
+            far_train_id,
+            pin_scheduled - chrono::Duration::minutes(10),
+            "test-m9-far-departure",
+        )
+        .await;
+        let far_only = find_backlog_match(&pool, "ZZM", pin_scheduled, service_date)
+            .await
+            .expect("find_backlog_match");
+        assert_eq!(
+            far_only, None,
+            "a departure booked 10 minutes away is outside the 5-minute window (it was inside \
+             the old 20-minute one)"
+        );
+
+        insert_departure(
+            near_train_id,
+            pin_scheduled - chrono::Duration::minutes(4),
+            "test-m9-near-departure",
+        )
+        .await;
+        let with_near = find_backlog_match(&pool, "ZZM", pin_scheduled, service_date)
+            .await
+            .expect("find_backlog_match");
+        assert_eq!(
+            with_near.map(|(train_id, _)| train_id).as_deref(),
+            Some(near_train_id),
+            "a departure booked 4 minutes away is inside the window"
+        );
+
+        cleanup().await;
+    }
+
     /// Finding #2's own regression test (2026-09-25 review): a backlog row
     /// that matches on CRS+time alone but carries a DIFFERENT `service_date`
     /// than the pin's own must not be selected by `find_backlog_match` --
