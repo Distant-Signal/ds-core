@@ -1,0 +1,16 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Drops `line_status_daily_stats_line_day`, a plain btree on
+-- `line_status_daily_stats (line_id, day)` that exactly duplicates the table's primary key
+-- `line_status_daily_stats_pkey (line_id, day)` (same columns, same order, same default
+-- opclasses and sort order). Both were created by
+-- 20260831090001_line_status_daily_stats.sql; nothing has altered either since.
+-- Every lookup the index could serve is served identically by the pkey, so it
+-- only costs write amplification and space (DB review 2026-09-27, F8; prod
+-- showed idx_scan = 0).
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. IF EXISTS so a database
+-- where it was dropped by hand still migrates.
+-- -------------------------------------------------------------------------
+DROP INDEX CONCURRENTLY IF EXISTS line_status_daily_stats_line_day;

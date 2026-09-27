@@ -1,0 +1,13 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Serves `queries::crs_for_tiploc`/`crs_for_tiplocs_batch`'s
+-- `stanox_crs WHERE tiploc = ...` branch; see the previous migration
+-- (`stanox_crs_crs`) for the background. `tiploc_crs`'s branch is served by
+-- its own `tiploc` primary key.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index that IF NOT EXISTS would then skip; recovery
+-- is `DROP INDEX CONCURRENTLY stanox_crs_tiploc;` and a restart.
+-- -------------------------------------------------------------------------
+CREATE INDEX CONCURRENTLY IF NOT EXISTS stanox_crs_tiploc ON stanox_crs (tiploc);

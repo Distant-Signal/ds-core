@@ -1,0 +1,17 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- `stanox_crs` had no index but its `stanox` primary key, so both of its
+-- lookups by other columns -- `queries::list_stanox_crs_for_crs`
+-- (`WHERE crs = $1`) and `crs_for_tiploc`/`crs_for_tiplocs_batch`
+-- (`WHERE tiploc = ...`, next migration) -- were sequential scans, repeated
+-- per leg by the journey-detail builder (DB review 2026-09-27 F1, part 2
+-- DB2-14). The queries now bind a normalised (trimmed, upper-cased) code
+-- and compare it to the plain column, which production already stores in
+-- that form, so a plain btree serves them.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index that IF NOT EXISTS would then skip; recovery
+-- is `DROP INDEX CONCURRENTLY stanox_crs_crs;` and a restart.
+-- -------------------------------------------------------------------------
+CREATE INDEX CONCURRENTLY IF NOT EXISTS stanox_crs_crs ON stanox_crs (crs);

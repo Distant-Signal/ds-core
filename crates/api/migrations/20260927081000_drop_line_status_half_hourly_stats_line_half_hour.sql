@@ -1,0 +1,18 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Drops `line_status_half_hourly_stats_line_half_hour`, a plain btree on
+-- `line_status_half_hourly_stats (line_id, half_hour_start)` that exactly duplicates the table's primary key
+-- `line_status_half_hourly_stats_pkey (line_id, half_hour_start)` (same columns, same order, same default
+-- opclasses and sort order). Both were created by
+-- 20260902090000_line_status_hourly_stats.sql (as line_status_hourly_stats_line_hour
+-- on (line_id, hour_start)); 20260902170000 renamed the table, the column,
+-- the pkey and this index together, and nothing has altered either since.
+-- Every lookup the index could serve is served identically by the pkey, so it
+-- only costs write amplification and space (DB review 2026-09-27, F8; prod
+-- showed idx_scan = 0).
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. IF EXISTS so a database
+-- where it was dropped by hand still migrates.
+-- -------------------------------------------------------------------------
+DROP INDEX CONCURRENTLY IF EXISTS line_status_half_hourly_stats_line_half_hour;
