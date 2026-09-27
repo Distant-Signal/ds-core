@@ -1,0 +1,49 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Index the diff publish's key staging table for
+-- `schedule_destination_departures` (created without one by
+-- 20260926183000_schedule_publish_keys.sql).
+--
+-- WHY. On 2026-09-27 a production publish's final chunk ran its
+-- `delete_missing` anti-join
+--   DELETE FROM schedule_destination_departures d
+--   WHERE d.service_date = ANY($2) AND NOT EXISTS (
+--     SELECT 1 FROM schedule_destination_departures_publish_keys k
+--     WHERE k.publish_id = $1 AND k.<every key column> = d.<same>)
+-- for 6+ minutes at one full core: 150k staged keys against ~1.66M target
+-- rows. The staging table's statistics still described the PREVIOUS
+-- publish (autoanalyze only ran minutes after the delete started), so
+-- `publish_id = $1` -- a value absent from the stale MCV list -- was
+-- estimated at ~0 rows and the planner picked a nested-loop anti-join
+-- whose inner side is a sequential scan of the whole staging table, once
+-- per outer row. With fresh statistics it is a merge/hash anti-join. The
+-- code now ANALYZEs the staging table right before that delete
+-- (`finish_publish_part` in crates/api/src/data/queries.rs); this index is
+-- the other half: if the planner ever again chooses a nested loop, its
+-- inner side is an index probe (O(log n)) instead of a seq scan (O(n)).
+--
+-- COLUMN ORDER. `publish_id` leads, then the exact equality columns of the
+-- anti-join probe, so the probe is a single index descent. That order also
+-- serves the other per-publish statements:
+-- * `summarize` (`WHERE publish_id = $1`, count + distinct dates) and
+--   `drop_publish` (`DELETE ... WHERE publish_id = $1`) are a leading-column
+--   range scan.
+-- * `discard_superseded` is `(service_date = ANY($2) AND publish_id <> $1)
+--   OR staged_at < now() - 1 day`. The `staged_at` arm has no index on any
+--   order of these columns, so that statement stays a sequential scan of a
+--   table that holds at most about one in-flight publish; it runs once per
+--   publish (first chunk only) and is cheap. Leading with `service_date`
+--   instead would not rescue it (the OR still needs `staged_at`) and would
+--   cost `summarize`/`drop_publish` their leading-column match.
+--
+-- Non-unique on purpose: the final chunk's count check relies on one
+-- staged row per incoming row, duplicates included (see the table's
+-- migration). The table is UNLOGGED, so is the index -- no WAL for its
+-- churn.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs.
+-- -------------------------------------------------------------------------
+CREATE INDEX CONCURRENTLY IF NOT EXISTS schedule_destination_departures_publish_keys_probe
+    ON schedule_destination_departures_publish_keys
+       (publish_id, service_date, destination_crs, scheduled, train_uid, origin_crs);
