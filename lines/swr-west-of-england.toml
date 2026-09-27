@@ -43,7 +43,7 @@ destination_crs_filter = ["SAL", "EXD"]
 # / swr-alton.toml's sample_stations rationale — a clean read of this line's
 # own service, not the SWML/Alton/Portsmouth expresses that also run over the
 # shared Waterloo-Basingstoke stretch).
-sample_stations = ["ANV", "SAL", "EXD"]
+sample_stations = ["ADV", "SAL", "EXD"]
 
 match_keywords = ["West of England line", "West of England Main Line"]
 # "West of England line" is the line's own Wikipedia article title (see

@@ -162,6 +162,31 @@ pub fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Fi
             }
         }
 
+        // poller-ldbws asks LDBWS for exactly these CRS codes, so one that
+        // isn't among this line's own stations is either a typo (LDBWS
+        // answers "Invalid crs code supplied" every poll -- "ANV" for
+        // Andover's "ADV" did this in prod) or samples another line's
+        // service.
+        let sample_line = line
+            .raw
+            .lines()
+            .position(|l| l.trim_start().starts_with("sample_stations ="))
+            .map(|i| i + 1);
+        for sample in &line.definition.sample_stations {
+            if !line.definition.stations.iter().any(|s| &s.crs == sample) {
+                findings.push(Finding {
+                    path: line.path.clone(),
+                    line_no: sample_line,
+                    severity: Severity::Error,
+                    message: format!(
+                        "sample station \"{sample}\" is not one of this line's own stations -- \
+                         poller-ldbws polls this CRS for the line's status, so it must be listed \
+                         under [[stations]]"
+                    ),
+                });
+            }
+        }
+
         for operator in &line.definition.operators {
             if !reference.known_operator(operator) {
                 findings.push(Finding {
@@ -269,6 +294,27 @@ operators = ["XC"]
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].severity, Severity::Error);
         assert!(findings[0].message.contains("ZZZ"));
+        assert_eq!(findings[0].line_no, expected_line);
+    }
+
+    #[test]
+    fn sample_station_not_on_the_line_is_a_hard_error() {
+        let dir = tempfile_dir();
+        // `sample_stations` is a top-level key, so it goes before [[stations]].
+        let body = format!(
+            "{HEADER}sample_stations = [\"EUS\", \"ANV\"]\n\n[[stations]]\ncrs = \"EUS\"\n"
+        );
+        let expected_line = body
+            .lines()
+            .position(|l| l.starts_with("sample_stations ="))
+            .map(|i| i + 1);
+        write_line_file(&dir, "a", &body);
+        let lines = load_all(&dir).unwrap();
+        let reference = reference_with(&[("EUS", &["EUSTON"])], &["XC"]);
+        let findings = validate_lines(&lines, &reference);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Error);
+        assert!(findings[0].message.contains("\"ANV\""));
         assert_eq!(findings[0].line_no, expected_line);
     }
 
