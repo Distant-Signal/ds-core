@@ -192,6 +192,8 @@ dependencies = [
  "dotenv",
  "flate2",
  "glob",
+ "hyper",
+ "hyper-util",
  "libc",
  "log",
  "metrics",

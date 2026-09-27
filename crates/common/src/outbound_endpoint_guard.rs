@@ -86,37 +86,80 @@ pub async fn validate_outbound_url(url: &str) -> Result<(), String> {
 }
 
 /// Every IPv4 and IPv6 non-public range worth rejecting an SSRF-candidate
-/// URL over. An IPv6 address that is really an IPv4-mapped address
-/// (`::ffff:a.b.c.d`) is unwrapped and re-checked against the IPv4 rules
-/// below rather than sailing through the IPv6 branch unexamined -- the
-/// same "attacker picks the representation that evades the filter" concern
-/// [`validate_outbound_url`]'s own doc comment raises about DNS rebinding,
-/// applied to address FORM instead of resolution timing.
+/// URL over. An IPv6 address that carries an IPv4 address (the mapped
+/// `::ffff:a.b.c.d` form, the deprecated compatible `::a.b.c.d` form, NAT64
+/// `64:ff9b::/96`, 6to4 `2002::/16` and Teredo `2001::/32`) has that IPv4
+/// address extracted and re-checked against the IPv4 rules below rather than
+/// sailing through the IPv6 branch unexamined -- the same "attacker picks the
+/// representation that evades the filter" concern [`validate_outbound_url`]'s
+/// own doc comment raises about DNS rebinding, applied to address FORM
+/// instead of resolution timing (COMMON-1 / SVC-03: `2002:0a00:0007::`
+/// is 10.0.0.7 reached through a 6to4 relay).
 pub fn is_disallowed_ip(addr: IpAddr) -> bool {
     match addr {
         IpAddr::V4(v4) => is_disallowed_ipv4(v4),
-        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
-            Some(mapped) => is_disallowed_ipv4(mapped),
-            None => {
-                v6.is_loopback()
-                    || v6.is_unspecified()
-                    || v6.is_multicast()
-                    || is_unique_local_v6(v6)
-                    || is_link_local_v6(v6)
-            }
-        },
+        IpAddr::V6(v6) => is_disallowed_ipv6(v6),
+    }
+}
+
+fn is_disallowed_ipv6(v6: Ipv6Addr) -> bool {
+    if let Some(mapped) = v6.to_ipv4_mapped() {
+        return is_disallowed_ipv4(mapped);
+    }
+    if v6.is_loopback()
+        || v6.is_unspecified()
+        || v6.is_multicast()
+        || is_unique_local_v6(v6)
+        || is_link_local_v6(v6)
+        || is_site_local_v6(v6)
+        || is_documentation_v6(v6)
+        || is_discard_only_v6(v6)
+        || is_local_use_nat64_v6(v6)
+    {
+        return true;
+    }
+    embedded_ipv4s(v6)
+        .into_iter()
+        .flatten()
+        .any(is_disallowed_ipv4)
+}
+
+/// The IPv4 addresses an IPv6 address hands traffic on to, for the
+/// transition forms that embed one. Up to two (Teredo names a server and a
+/// client).
+fn embedded_ipv4s(v6: Ipv6Addr) -> [Option<Ipv4Addr>; 2] {
+    let s = v6.segments();
+    let v4 = |hi: u16, lo: u16| Ipv4Addr::from((u32::from(hi) << 16) | u32::from(lo));
+    match s {
+        // ::a.b.c.d (RFC4291 "IPv4-compatible", deprecated). `::` and `::1`
+        // are caught above as unspecified/loopback before reaching here.
+        [0, 0, 0, 0, 0, 0, hi, lo] => [Some(v4(hi, lo)), None],
+        // 64:ff9b::/96 -- NAT64 well-known prefix (RFC6052): the last 32 bits.
+        [0x0064, 0xff9b, 0, 0, 0, 0, hi, lo] => [Some(v4(hi, lo)), None],
+        // 2002::/16 -- 6to4 (RFC3056): bits 16..48.
+        [0x2002, hi, lo, ..] => [Some(v4(hi, lo)), None],
+        // 2001::/32 -- Teredo (RFC4380): the server in bits 32..64, the
+        // client in the last 32 bits, bitwise inverted.
+        [0x2001, 0, server_hi, server_lo, _, _, client_hi, client_lo] => [
+            Some(v4(server_hi, server_lo)),
+            Some(v4(!client_hi, !client_lo)),
+        ],
+        _ => [None, None],
     }
 }
 
 fn is_disallowed_ipv4(v4: Ipv4Addr) -> bool {
+    let [a, b, c, _] = v4.octets();
     v4.is_private() // RFC1918: 10/8, 172.16/12, 192.168/16
         || v4.is_loopback() // 127/8
         || v4.is_link_local() // 169.254/16
         || v4.is_multicast()
-        || v4.is_broadcast()
-        || v4.is_unspecified() // 0.0.0.0
         || v4.is_documentation() // 192.0.2/24, 198.51.100/24, 203.0.113/24
         || is_carrier_grade_nat_v4(v4) // 100.64/10 (RFC6598)
+        || a == 0 // 0.0.0.0/8 "this network" (RFC1122), not just 0.0.0.0
+        || (a == 192 && b == 0 && c == 0) // 192.0.0.0/24 IETF protocol assignments (RFC6890)
+        || (a == 198 && (b & 0xfe) == 18) // 198.18.0.0/15 benchmarking (RFC2544)
+        || a >= 240 // 240.0.0.0/4 reserved, including 255.255.255.255 broadcast
 }
 
 /// `std::net::Ipv4Addr` has no stable `is_shared` yet -- this is that
@@ -131,6 +174,30 @@ fn is_carrier_grade_nat_v4(v4: Ipv4Addr) -> bool {
 /// equivalent of RFC1918.
 fn is_unique_local_v6(v6: Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xfe00) == 0xfc00
+}
+
+/// fec0::/10 -- IPv6 site-local (RFC3879 deprecated it; never public).
+fn is_site_local_v6(v6: Ipv6Addr) -> bool {
+    (v6.segments()[0] & 0xffc0) == 0xfec0
+}
+
+/// 2001:db8::/32 -- IPv6 documentation (RFC3849).
+fn is_documentation_v6(v6: Ipv6Addr) -> bool {
+    let s = v6.segments();
+    s[0] == 0x2001 && s[1] == 0x0db8
+}
+
+/// 100::/64 -- IPv6 discard-only (RFC6666).
+fn is_discard_only_v6(v6: Ipv6Addr) -> bool {
+    let s = v6.segments();
+    s[0] == 0x0100 && s[1] == 0 && s[2] == 0 && s[3] == 0
+}
+
+/// 64:ff9b:1::/48 -- NAT64 local-use prefix (RFC8215). Operator-defined
+/// translation inside one network, so never a legitimate public target.
+fn is_local_use_nat64_v6(v6: Ipv6Addr) -> bool {
+    let s = v6.segments();
+    s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 0x0001
 }
 
 /// fe80::/10 -- IPv6 link-local (RFC4291).
@@ -181,12 +248,25 @@ impl reqwest::dns::Resolve for PublicOnlyResolver {
 }
 
 /// A `reqwest::ClientBuilder` for outbound requests to caller-supplied
-/// URLs: [`PublicOnlyResolver`] for every name it connects to, and no
-/// redirect following (a redirect is a second, unvalidated URL).
+/// URLs. What it guarantees at connect time:
+///
+/// - every host NAME it dials was resolved through [`PublicOnlyResolver`],
+///   so the addresses checked are exactly the addresses connected to;
+/// - no redirect following (a redirect is a second, unvalidated URL);
+/// - no proxy, including one picked up from `HTTPS_PROXY`/`ALL_PROXY` in the
+///   environment (COMMON-1 / SVC-03). Through a proxy the resolver only ever
+///   sees the proxy's own host, and the proxy dials the caller's target
+///   unchecked, so the resolver guard would silently stop applying.
+///
+/// IP-literal URLs bypass any resolver, so callers must still run
+/// [`validate_outbound_url`] (or [`is_disallowed_ip`] on the literal) before
+/// sending. A literal can't be rebound, so that check has no
+/// time-of-check/time-of-use gap.
 pub fn public_only_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .dns_resolver(PublicOnlyResolver)
         .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
 }
 
 #[cfg(test)]
@@ -238,6 +318,99 @@ mod tests {
         assert!(is_disallowed_ip(IpAddr::V6(Ipv6Addr::new(
             0xfe80, 0, 0, 0, 0, 0, 0, 1
         ))));
+    }
+
+    fn v4(a: u8, b: u8, c: u8, d: u8) -> IpAddr {
+        IpAddr::V4(Ipv4Addr::new(a, b, c, d))
+    }
+
+    fn v6(s: &str) -> IpAddr {
+        IpAddr::V6(s.parse().expect("valid IPv6 literal"))
+    }
+
+    /// COMMON-1 / SVC-03: the reserved IPv4 ranges the first version missed.
+    #[test]
+    fn reserved_ipv4_ranges_are_disallowed() {
+        for ip in [
+            v4(0, 0, 0, 0),
+            v4(0, 1, 2, 3), // 0.0.0.0/8, not just 0.0.0.0
+            v4(0, 255, 255, 255),
+            v4(192, 0, 0, 1), // 192.0.0.0/24
+            v4(192, 0, 0, 255),
+            v4(198, 18, 0, 1), // 198.18.0.0/15
+            v4(198, 19, 255, 254),
+            v4(240, 0, 0, 1), // 240.0.0.0/4
+            v4(250, 1, 2, 3),
+            v4(255, 255, 255, 255),
+        ] {
+            assert!(is_disallowed_ip(ip), "{ip} should be disallowed");
+        }
+    }
+
+    /// The neighbours of each new range stay allowed, so the masks are the
+    /// right width.
+    #[test]
+    fn public_neighbours_of_the_reserved_ipv4_ranges_are_allowed() {
+        for ip in [
+            v4(1, 0, 0, 1),
+            v4(192, 0, 1, 1),    // just past 192.0.0.0/24
+            v4(198, 17, 255, 1), // just before 198.18.0.0/15
+            v4(198, 20, 0, 1),   // just past it
+            v4(223, 255, 255, 1),
+        ] {
+            assert!(!is_disallowed_ip(ip), "{ip} should be allowed");
+        }
+    }
+
+    /// NAT64, 6to4, Teredo and IPv4-compatible addresses are judged by the
+    /// IPv4 address they carry.
+    #[test]
+    fn ipv6_transition_forms_are_checked_against_their_embedded_ipv4() {
+        for ip in [
+            v6("64:ff9b::a00:7"),               // NAT64 -> 10.0.0.7
+            v6("64:ff9b::7f00:1"),              // NAT64 -> 127.0.0.1
+            v6("64:ff9b::a9fe:a9fe"),           // NAT64 -> 169.254.169.254
+            v6("2002:a00:7::"),                 // 6to4 -> 10.0.0.7
+            v6("2002:7f00:1:1::1"),             // 6to4 -> 127.0.0.1
+            v6("2002:c0a8:101::1"),             // 6to4 -> 192.168.1.1
+            v6("2001:0:a00:7::1"),              // Teredo server 10.0.0.7
+            v6("2001:0:808:808:0:0:f5ff:fff8"), // Teredo client !f5ff:fff8 = 10.0.0.7
+            v6("::a00:7"),                      // IPv4-compatible 10.0.0.7
+        ] {
+            assert!(is_disallowed_ip(ip), "{ip} should be disallowed");
+        }
+        for ip in [
+            v6("64:ff9b::808:808"), // NAT64 -> 8.8.8.8
+            v6("2002:808:808::1"),  // 6to4 -> 8.8.8.8
+            // Teredo, server 8.8.8.8 and client !f7f7:f7f7 = 8.8.8.8
+            v6("2001:0:808:808:0:0:f7f7:f7f7"),
+        ] {
+            assert!(!is_disallowed_ip(ip), "{ip} should be allowed");
+        }
+    }
+
+    #[test]
+    fn other_non_public_ipv6_ranges_are_disallowed() {
+        for ip in [
+            v6("2001:db8::1"),  // documentation
+            v6("100::1"),       // discard-only
+            v6("64:ff9b:1::a"), // NAT64 local-use
+            v6("fec0::1"),      // site-local
+            v6("ff02::1"),      // multicast
+            v6("::"),
+        ] {
+            assert!(is_disallowed_ip(ip), "{ip} should be disallowed");
+        }
+        assert!(!is_disallowed_ip(v6("2606:4700:4700::1111")));
+        assert!(!is_disallowed_ip(v6("2001:4860:4860::8888")));
+    }
+
+    #[tokio::test]
+    async fn a_6to4_literal_embedding_a_private_ipv4_is_rejected() {
+        let err = validate_outbound_url("https://[2002:a00:7::1]/push")
+            .await
+            .expect_err("6to4 wrapping 10.0.0.7 must be rejected");
+        assert!(err.contains("disallowed"));
     }
 
     #[tokio::test]
