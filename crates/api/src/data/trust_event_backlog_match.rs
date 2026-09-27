@@ -994,7 +994,8 @@ pub struct BacklogReplayOutcome {
 /// re-read. `Ok(None)` means the backlog holds no Activation for this
 /// identity (never emitted, or already pruned past its retention window) --
 /// an honest, expected outcome, exactly as `Ok(false)` is for
-/// [`attempt_backlog_match`].
+/// [`attempt_backlog_match`] -- or that the subscription is bound to a
+/// different train, which this never repoints (DB2-5; logged at warn).
 pub async fn attempt_backlog_match_by_uid(
     pool: &PgPool,
     tracked_train_id: i64,
@@ -1064,6 +1065,38 @@ pub async fn attempt_backlog_match_by_uid(
     let destination_crs =
         crate::data::trains::destination_crs_for_train(pool, train_uid, service_date).await?;
 
+    // Step A dual-write, same as `attempt_backlog_match` above -- but
+    // unconditional here, because this path's `train_uid` is an input, not
+    // something that may or may not have been discovered.
+    //
+    // Guarded and done BEFORE the replay, exactly as in
+    // `attempt_backlog_match` (DB2-5, applied to this path at integration,
+    // 2026-09-27): a bare `UPDATE ... SET trains_id` here would repoint a
+    // subscription that is bound to a DIFFERENT train (a concurrent schedule
+    // match, or any other writer, between the caller creating it and this
+    // call), after the replay had already written this train's history onto
+    // that other train's shared row. `bind_subscription_unless_other_train`
+    // only binds an unbound subscription, one already on this row, or one on
+    // a same-uid row; otherwise nothing is replayed and this returns
+    // `Ok(None)` (the caller then leaves the train to live trust-consumer
+    // resolution, as for an empty backlog). Binding first also makes the
+    // replay's `flip_legacy_resolution` write onto this row.
+    let trains_id =
+        crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
+    crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
+    if !crate::data::trains::bind_subscription_unless_other_train(pool, tracked_train_id, trains_id)
+        .await?
+    {
+        tracing::warn!(
+            tracked_train_id,
+            trains_id,
+            train_uid,
+            "subscription is bound to a different train (or was deleted); not repointing it or \
+             replaying this train's history onto it (DB2-5, uid path)"
+        );
+        return Ok(None);
+    }
+
     let replayed_rows = history.len();
     replay_backlog_history(
         pool,
@@ -1073,18 +1106,6 @@ pub async fn attempt_backlog_match_by_uid(
         history,
     )
     .await?;
-
-    // Step A dual-write, same as `attempt_backlog_match` above -- but
-    // unconditional here, because this path's `train_uid` is an input, not
-    // something that may or may not have been discovered.
-    let trains_id =
-        crate::data::trains::find_or_create_train(pool, train_uid, service_date).await?;
-    crate::data::trains::mark_train_resolved(pool, trains_id, &train_id).await?;
-    sqlx::query("UPDATE train_subscriptions SET trains_id = $2 WHERE id = $1")
-        .bind(tracked_train_id)
-        .bind(trains_id)
-        .execute(pool)
-        .await?;
 
     Ok(Some(BacklogReplayOutcome {
         train_id,
@@ -3405,5 +3426,79 @@ mod db_tests {
         );
 
         cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+    }
+
+    /// DB2-5, applied to the uid path at integration (2026-09-27): a
+    /// subscription already bound to a DIFFERENT train is never repointed
+    /// by `attempt_backlog_match_by_uid`, and that train's history is not
+    /// replayed onto it. Before the guard, the replay wrote this uid's
+    /// movements onto the other train's shared row and a bare UPDATE then
+    /// repointed the subscription.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                attempt_backlog_match_by_uid -- --ignored --test-threads=1`"]
+    async fn attempt_backlog_match_by_uid_never_repoints_a_subscription_bound_to_another_train() {
+        let pool = connect().await;
+        let user_id = "TEST-DB25-BY-UID-USER";
+        let train_id = "TEST-DB25-U-TID";
+        let train_uid = "TEST-DB25-U";
+        let other_uid = "TEST-DB25-OTHER";
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+        cleanup_absolute_time_fixture(&pool, &[], &[], other_uid).await;
+
+        let day: NaiveDate = "2026-09-25".parse().unwrap();
+        let departure: DateTime<Utc> = "2026-09-25T08:30:00Z".parse().unwrap();
+        seed_backlog_run(&pool, train_id, train_uid, day, "ZDU", departure).await;
+
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(format!("{user_id}@example.com"))
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+        let other_trains_id = crate::data::trains::find_or_create_train(&pool, other_uid, day)
+            .await
+            .expect("find_or_create_train (other)");
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, trains_id, service_date) \
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(other_trains_id)
+        .bind(day)
+        .fetch_one(&pool)
+        .await
+        .expect("seed a subscription bound to another train");
+
+        let outcome = attempt_backlog_match_by_uid(&pool, tracked_train_id, train_uid, day)
+            .await
+            .expect("attempt_backlog_match_by_uid");
+        assert!(
+            outcome.is_none(),
+            "a subscription bound to another train is not replayed onto"
+        );
+        let bound: Option<i64> =
+            sqlx::query_scalar("SELECT trains_id FROM train_subscriptions WHERE id = $1")
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back trains_id");
+        assert_eq!(bound, Some(other_trains_id), "never repointed");
+        assert_eq!(
+            movement_count_for(&pool, other_uid, day).await,
+            Some(0),
+            "the other train's shared row gets none of this train's history"
+        );
+        assert_eq!(
+            movement_count_for(&pool, train_uid, day).await.unwrap_or(0),
+            0,
+            "nothing is replayed at all"
+        );
+
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+        cleanup_absolute_time_fixture(&pool, &[], &[], other_uid).await;
     }
 }
