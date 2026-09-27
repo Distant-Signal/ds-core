@@ -724,6 +724,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sha2 0.10.9",
+ "sqlx",
  "tokio",
  "toml",
  "tracing",

@@ -17,6 +17,8 @@ pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;
 pub mod outbound_endpoint_guard;
+#[cfg(feature = "postgres")]
+pub mod pg;
 pub mod poller_loop;
 pub mod rail_day;
 pub mod schedule_delivery;
