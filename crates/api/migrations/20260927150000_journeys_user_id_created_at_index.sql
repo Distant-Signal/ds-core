@@ -1,0 +1,15 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Serves `journeys::list_journeys_for_user` (`GET /Journeys/mine`), which
+-- now picks the user's newest journeys first (`WHERE user_id = $1 ORDER BY
+-- created_at DESC, id DESC LIMIT n`) before ranking their legs. Only
+-- `journeys_user_id` existed, so the old query ranked every leg the user
+-- owned, template-materialised journeys included, before its LIMIT (DB
+-- review 2026-09-27 part 2, DB2-18).
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index that IF NOT EXISTS would then skip; recovery
+-- is `DROP INDEX CONCURRENTLY journeys_user_id_created_at;` and a restart.
+-- -------------------------------------------------------------------------
+CREATE INDEX CONCURRENTLY IF NOT EXISTS journeys_user_id_created_at ON journeys (user_id, created_at DESC);

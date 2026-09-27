@@ -218,6 +218,26 @@ pub async fn set_local_idle_in_transaction_timeout(
     .map(drop)
 }
 
+/// Transaction-scoped advisory lock on one `(user_id, trains_id)` pair,
+/// taken before the SELECT-or-INSERT in `create_subscription_for_train`
+/// (DB2-21). There is no unique index on `train_subscriptions(user_id,
+/// trains_id)` (see that function's doc comment for why), so two
+/// concurrent calls could both see no row and both insert. The api and the
+/// notifier each have a copy of that function; both call this, so the key
+/// is the same in every process. Held until the enclosing transaction ends.
+pub async fn lock_user_train_subscription(
+    conn: &mut PgConnection,
+    user_id: &str,
+    trains_id: i64,
+) -> sqlx::Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('train_subscription:' || $1 || ':' || $2::text, 0))")
+        .bind(user_id)
+        .bind(trains_id)
+        .execute(conn)
+        .await
+        .map(drop)
+}
+
 /// Whether `err` (anywhere in its chain) is Postgres cancelling a statement,
 /// SQLSTATE 57014 `query_canceled` -- `statement_timeout` expiring.
 pub fn is_query_canceled(err: &anyhow::Error) -> bool {
