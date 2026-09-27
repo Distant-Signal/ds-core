@@ -37,6 +37,90 @@ fn invalidate_on_auth_rejection(tokens: &OAuthTokenCache, status: reqwest::Statu
     }
 }
 
+/// Connect timeout for [`consumer_http_client`]: `api` is in-cluster, so a
+/// TCP connect that has not completed in this long is a dead peer, not a
+/// slow one.
+pub const CONSUMER_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Whole-request timeout for [`consumer_http_client`] -- the same
+/// `REQUEST_TIMEOUT` pattern every poller already uses (30s there), doubled
+/// because a movement-stream consumer's largest legitimate POST is bigger:
+/// a PEL replay hands over up to 1,000 stream entries at once, and
+/// `trust-backlog-consumer` posts every surviving row of that in a single
+/// request that `api` upserts row by row. Without any timeout (the previous
+/// `reqwest::Client::new()`), one half-open connection to `api` wedged a
+/// consumer forever: no XACK, no XAUTOCLAIM sweep, and a `/healthz` that
+/// still said 200.
+pub const CONSUMER_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The HTTP client the three `movement-events` consumers (`trust-consumer`,
+/// `trust-backlog-consumer`, `full-coverage-consumer`) talk to `api` and the
+/// OAuth token endpoint with. See [`CONSUMER_REQUEST_TIMEOUT`].
+pub fn consumer_http_client() -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .connect_timeout(CONSUMER_CONNECT_TIMEOUT)
+        .timeout(CONSUMER_REQUEST_TIMEOUT)
+        .build()
+}
+
+/// A non-2xx response from one of this module's POST helpers. Kept as a
+/// typed error (rather than a bare `anyhow!` string) so a caller can tell a
+/// data rejection from an outage -- see [`classify_failure`]. `Display` is
+/// the exact text the helpers used to `bail!` with, so log lines are
+/// unchanged.
+#[derive(Debug)]
+pub struct HttpStatusError {
+    pub prefix: &'static str,
+    pub status: reqwest::StatusCode,
+    pub body: String,
+}
+
+impl std::fmt::Display for HttpStatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} {}", self.prefix, self.status, self.body)
+    }
+}
+
+impl std::error::Error for HttpStatusError {}
+
+/// Why a downstream write failed, as far as retrying it is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureClass {
+    /// Retrying the same data can succeed: `api` unreachable, a timeout, a
+    /// 5xx, an auth failure, a 404 mid-deploy, a 408/429. The data must stay
+    /// pending and be retried for as long as it takes.
+    Transient,
+    /// `api` explicitly refused the data itself (400, 413 or 422): the same
+    /// request will fail the same way on every retry.
+    Rejected,
+}
+
+/// Classifies an error from this module's helpers. Only a response status
+/// that means "this request body is bad" counts as [`FailureClass::Rejected`];
+/// everything else -- including any error this function does not recognise
+/// -- is [`FailureClass::Transient`], because wrongly treating an outage as
+/// a rejection dead-letters healthy data, while the reverse only delays it.
+pub fn classify_failure(err: &anyhow::Error) -> FailureClass {
+    let status = err.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<HttpStatusError>()
+            .map(|e| e.status)
+            .or_else(|| {
+                cause
+                    .downcast_ref::<reqwest::Error>()
+                    .and_then(reqwest::Error::status)
+            })
+    });
+    match status {
+        Some(
+            reqwest::StatusCode::BAD_REQUEST
+            | reqwest::StatusCode::PAYLOAD_TOO_LARGE
+            | reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+        ) => FailureClass::Rejected,
+        _ => FailureClass::Transient,
+    }
+}
+
 /// Header RDM uses for API-key auth, per RSPS5050 P-03-00 Rev A. How
 /// confidently this is corroborated varies per poller/product — see each
 /// poller's `main.rs` module docs for the specific gap, if any. Unrelated
@@ -86,8 +170,13 @@ pub async fn post_json<T: Serialize>(
     } else {
         let status = response.status();
         invalidate_on_auth_rejection(tokens, status);
-        let text = response.text().await.unwrap_or_default();
-        anyhow::bail!("POST failed: {status} {text}");
+        let body = response.text().await.unwrap_or_default();
+        Err(HttpStatusError {
+            prefix: "POST failed",
+            status,
+            body,
+        }
+        .into())
     }
 }
 
@@ -127,8 +216,13 @@ pub async fn post_batch<T: Serialize>(
     } else {
         let status = response.status();
         invalidate_on_auth_rejection(tokens, status);
-        let text = response.text().await.unwrap_or_default();
-        anyhow::bail!("ingestion POST failed: {status} {text}");
+        let body = response.text().await.unwrap_or_default();
+        Err(HttpStatusError {
+            prefix: "ingestion POST failed",
+            status,
+            body,
+        }
+        .into())
     }
 }
 
@@ -157,8 +251,13 @@ pub async fn post_batch_for_response<T: Serialize, R: DeserializeOwned>(
     } else {
         let status = response.status();
         invalidate_on_auth_rejection(tokens, status);
-        let text = response.text().await.unwrap_or_default();
-        anyhow::bail!("ingestion POST failed: {status} {text}");
+        let body = response.text().await.unwrap_or_default();
+        Err(HttpStatusError {
+            prefix: "ingestion POST failed",
+            status,
+            body,
+        }
+        .into())
     }
 }
 
@@ -413,6 +512,92 @@ mod tests {
         )
         .await
         .unwrap();
+    }
+
+    fn status_error(status: u16) -> anyhow::Error {
+        HttpStatusError {
+            prefix: "ingestion POST failed",
+            status: reqwest::StatusCode::from_u16(status).unwrap(),
+            body: "body".to_string(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn only_a_data_rejection_status_is_classified_rejected() {
+        for status in [400, 413, 422] {
+            assert_eq!(
+                classify_failure(&status_error(status)),
+                FailureClass::Rejected,
+                "{status}"
+            );
+        }
+        for status in [401, 403, 404, 408, 409, 429, 500, 502, 503, 504] {
+            assert_eq!(
+                classify_failure(&status_error(status)),
+                FailureClass::Transient,
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unrecognised_or_wrapped_error_is_classified_correctly() {
+        assert_eq!(
+            classify_failure(&anyhow::anyhow!("connection refused")),
+            FailureClass::Transient
+        );
+        assert_eq!(
+            classify_failure(&status_error(422).context("posting train events")),
+            FailureClass::Rejected,
+            "a context layer must not hide the status"
+        );
+    }
+
+    #[test]
+    fn the_status_error_keeps_the_old_log_text() {
+        assert_eq!(
+            status_error(500).to_string(),
+            "ingestion POST failed: 500 Internal Server Error body"
+        );
+    }
+
+    /// PL-1: a server that accepts the connection but never answers must
+    /// not hang the caller -- the request times out, as a transient error.
+    #[tokio::test]
+    async fn a_hung_api_times_out_as_a_transient_failure() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        // Accept and hold connections open, never writing a byte.
+        let _server = tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = listener.accept().await {
+                held.push(socket);
+            }
+        });
+        let client = reqwest::Client::builder()
+            .connect_timeout(CONSUMER_CONNECT_TIMEOUT)
+            .timeout(Duration::from_millis(300))
+            .build()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let err = client
+            .post(format!("http://{addr}/private/train-events"))
+            .body("[]")
+            .send()
+            .await
+            .expect_err("a hung api must time out, not hang");
+        assert!(err.is_timeout(), "{err:?}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert_eq!(
+            classify_failure(&anyhow::Error::from(err)),
+            FailureClass::Transient
+        );
+    }
+
+    #[test]
+    fn the_consumer_client_builds() {
+        consumer_http_client().unwrap();
     }
 
     #[test]
