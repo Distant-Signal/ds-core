@@ -1136,6 +1136,19 @@ pub struct TrainMovementEventMessage {
     pub resolved_train_uid: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_train_id: Option<String>,
+    /// The resolved train's own identity date: the CIF running date its
+    /// origin departure falls on, from the claimed Activation's
+    /// `tp_origin_timestamp` (Repeater Signal M7 leftover, 2026-09-27).
+    /// Only ever `Some` alongside `resolved_train_uid`, on the resolving
+    /// message. `api`'s `flip_legacy_resolution` keys a newly created
+    /// `trains` row on it instead of the subscription's own `service_date`,
+    /// which for a pin at an intermediate stop after midnight on a train
+    /// that left its origin before midnight is the NEXT day -- a different
+    /// real train. Optional on the wire: a message from an older
+    /// trust-consumer (or one with no parked Activation) omits it, and `api`
+    /// then falls back to the subscription's `service_date` as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_date: Option<NaiveDate>,
 
     pub dedup_key: String,
     pub msg_type: String,

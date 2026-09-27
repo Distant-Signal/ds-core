@@ -455,8 +455,9 @@ pub async fn find_train_id_by_uid(
 /// Usually one date. [`attempt_backlog_match`] passes two when the matched
 /// DEPARTURE row and the train's Activation were filed under different
 /// dates (a Movement processed with no parked Activation is dated by its
-/// own calendar date -- see `find_backlog_match`), so the history is not
-/// cut in half at midnight. A `train_id` never repeats within a day, so
+/// own calendar date -- see `find_backlog_match`), and
+/// [`attempt_backlog_match_by_uid`] passes its identity date and the day
+/// after it (unless that day holds another run's Activation), so the history is not cut in half at midnight. A `train_id` never repeats within a day, so
 /// two adjacent dates cannot mix two trains.
 ///
 /// Keyed on `train_id`, NOT `train_uid`. This is deliberate, not a typo:
@@ -650,6 +651,7 @@ async fn replay_backlog_history(
             tracked_train_id,
             resolved_train_uid,
             resolved_train_id,
+            identity_date: None,
             dedup_key: dedup,
             msg_type: row.msg_type.clone(),
             event_type,
@@ -846,7 +848,8 @@ pub async fn attempt_backlog_match(
     // first event goes through `upsert_train_event` ->
     // `flip_legacy_resolution`, which, for a subscription with no
     // `trains_id` yet, creates `trains(train_uid, <subscription's
-    // service_date>)` and writes every replayed movement there. For the pin
+    // service_date>)` (the replay sends no `identity_date`) and writes every
+    // replayed movement there. For the pin
     // above that is the NEXT day's run of the same service, so its
     // movements would land on another train's shared row, visible to that
     // train's subscribers, before this write repointed the subscription.
@@ -992,7 +995,32 @@ pub async fn attempt_backlog_match_by_uid(
         return Ok(None);
     };
 
-    let history = fetch_backlog_history(pool, &train_id, &[service_date]).await?;
+    // `service_date` here is the train's identity date (its Activation's
+    // `service_date`, the origin date since 97ccd3ea). Its Movements are
+    // usually filed under the same date, but one processed with no parked
+    // Activation (a trust-backlog-consumer restart between the two) is
+    // dated by its own calendar date, which after midnight is the NEXT day.
+    // So read both, exactly as `attempt_backlog_match` reads
+    // `{identity_date, service_date}` from the other direction (M7 leftover,
+    // 2026-09-27). TRUST's `train_id` carries the origin day of month, so
+    // real D+1 rows with this `train_id` are this train's. Belt and braces:
+    // if D+1 holds an Activation of its own for this `train_id`, those rows
+    // are another run's and D+1 is left out.
+    let next_day = service_date + Duration::days(1);
+    let next_day_is_another_run: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM trust_event_backlog \
+         WHERE train_id = $1 AND service_date = $2 AND msg_type = '0001')",
+    )
+    .bind(&train_id)
+    .bind(next_day)
+    .fetch_one(pool)
+    .await?;
+    let history_dates = if next_day_is_another_run {
+        vec![service_date]
+    } else {
+        vec![service_date, next_day]
+    };
+    let history = fetch_backlog_history(pool, &train_id, &history_dates).await?;
     if history.is_empty() {
         return Ok(None);
     }
@@ -3277,6 +3305,93 @@ mod db_tests {
         assert!(
             miss.is_none(),
             "no Activation for that date means no replay, not the adjacent day's"
+        );
+
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+    }
+
+    /// M7 leftover (2026-09-27): the uid path reads `{date, date+1}`. After
+    /// a backlog-consumer restart between a train's Activation and its
+    /// post-midnight Movements, those Movements are filed under D+1 while
+    /// the Activation (and the identity) is D. Asking for `(uid, D)` must
+    /// replay both halves onto `trains(uid, D)`.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                attempt_backlog_match_by_uid -- --ignored --test-threads=1`"]
+    async fn attempt_backlog_match_by_uid_includes_the_next_day_half_of_a_split_history() {
+        let pool = connect().await;
+        let user_id = "TEST-M7L-BY-UID-SPLIT-USER";
+        let train_id = "TEST-M7L-US-TID";
+        let train_uid = "TEST-M7L-US";
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+
+        let origin_date: NaiveDate = "2026-09-23".parse().unwrap();
+        let next_date: NaiveDate = "2026-09-24".parse().unwrap();
+        // 23:30 BST on D, then 00:30 BST on D+1.
+        let origin_departure: DateTime<Utc> = "2026-09-23T22:30:00Z".parse().unwrap();
+        let stop_departure: DateTime<Utc> = "2026-09-23T23:30:00Z".parse().unwrap();
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key, received_at) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, 'test-m7l-us-act', $5), \
+                    ('ZMV', NULL, $2, $3, '0003', 'DEPARTURE', $5, $5, 'ON TIME', 'test-m7l-us-origin', $5), \
+                    ('ZMW', NULL, $2, $4, '0003', 'DEPARTURE', $6, $6, 'ON TIME', 'test-m7l-us-stop', $6)",
+        )
+        .bind(train_uid)
+        .bind(train_id)
+        .bind(origin_date)
+        .bind(next_date)
+        .bind(origin_departure)
+        .bind(stop_departure)
+        .execute(&pool)
+        .await
+        .expect("seed a split-date backlog train");
+
+        sqlx::query(
+            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(format!("{user_id}@example.com"))
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("seed fixture user");
+        let trains_id = crate::data::trains::find_or_create_train(&pool, train_uid, origin_date)
+            .await
+            .expect("find_or_create_train");
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, trains_id, service_date) \
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(trains_id)
+        .bind(origin_date)
+        .fetch_one(&pool)
+        .await
+        .expect("seed an NR-primary subscription");
+
+        let outcome = attempt_backlog_match_by_uid(&pool, tracked_train_id, train_uid, origin_date)
+            .await
+            .expect("attempt_backlog_match_by_uid")
+            .expect("the Activation is in the backlog");
+        assert_eq!(
+            outcome.replayed_rows, 3,
+            "the Activation and origin DEPARTURE under D, and the D+1-dated stop DEPARTURE"
+        );
+        assert_eq!(
+            outcome.origin_departure,
+            Some(("ZMV".to_string(), origin_departure))
+        );
+        assert_eq!(
+            movement_count_for(&pool, train_uid, origin_date).await,
+            Some(2),
+            "both halves land on (uid, D)"
+        );
+        assert_eq!(
+            movement_count_for(&pool, train_uid, next_date).await,
+            None,
+            "no (uid, D+1) row is created"
         );
 
         cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;

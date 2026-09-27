@@ -4,7 +4,7 @@
 //! # Budget: the startup probe
 //!
 //! `main.rs` migrates BEFORE it binds, so `api.probes.startup` in the chart
-//! (150 x 2s = 300s) is a hard ceiling on the whole migration run: past it
+//! (450 x 2s = 900s) is a hard ceiling on the whole migration run: past it
 //! the kubelet SIGKILLs the pod mid-DDL. The dedicated connection therefore
 //! carries:
 //!
@@ -17,10 +17,13 @@
 //!   retry converges. A transactional migration's own
 //!   `SET LOCAL lock_timeout` still wins inside that migration.
 //! * `statement_timeout` (default 240s, `MIGRATION_STATEMENT_TIMEOUT_SECS`):
-//!   bounds each statement below the 300s probe budget so a runaway statement
-//!   fails with SQLSTATE 57014 in the log rather than a silent SIGKILL. It is
-//!   per statement, not per run: several long statements can still add up
-//!   past 300s. A migration that genuinely needs longer must raise both this
+//!   bounds each statement well below the 900s probe budget so a runaway
+//!   statement fails with SQLSTATE 57014 in the log rather than a silent
+//!   SIGKILL. 240s was first picked to fit under the old 300s budget; it
+//!   stayed when the budget rose to 900s (2026-09-27) because one statement
+//!   running 4+ minutes is itself worth failing loudly, and three of them
+//!   still fit inside one probe budget. It is per statement, not per run:
+//!   several long statements can still add up past 900s. A migration that genuinely needs longer must raise both this
 //!   and the startup probe (or be run by hand with `sqlx migrate run`).
 //!   NOT the request pool's 60s default -- that is why this is its own
 //!   connection.
@@ -226,9 +229,11 @@ mod tests {
 
     #[test]
     fn defaults_fit_inside_the_startup_probe_budget() {
-        // api.probes.startup: 150 x 2s = 300s.
+        // api.probes.startup: 450 x 2s = 900s.
         let settings = MigrationSettings::default();
-        assert!(settings.statement_timeout < Duration::from_secs(300));
+        assert!(settings.statement_timeout < Duration::from_secs(900));
+        // Kept at 240s (below the old 300s budget) by decision.
+        assert_eq!(settings.statement_timeout, Duration::from_secs(240));
         assert!(settings.lock_timeout < settings.statement_timeout);
     }
 
