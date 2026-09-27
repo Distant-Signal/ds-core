@@ -220,10 +220,13 @@ pub async fn attempt_schedule_match(
     // an earlier sweep tick): every column this writes is `COALESCE`d
     // against the existing value, so it can only ever add schedule data to
     // a shared row that is missing it, never clobber another writer's.
+    // Keyed on the matched schedule's own date, not the pin's: for a pin
+    // after midnight on a train that left its origin the evening before,
+    // `(uid, pin's date)` would be the NEXT day's run of the same service.
     let trains_id = crate::data::trains::find_or_create_train_with_schedule_match(
         pool,
         &matched.uid,
-        service_date,
+        matched.service_date,
         pin_origin_crs,
         pin_scheduled_departure,
         matched.destination_crs.as_deref(),
@@ -256,6 +259,12 @@ pub struct ScheduleMatch {
     /// disagrees -- a stronger check than the +/-20-minute CRS+time
     /// heuristic can make on its own.
     pub uid: String,
+    /// The date of the population the schedule was found in -- the
+    /// schedule's own CIF (origin) date, and so the date its `trains` row is
+    /// keyed on. Usually the pin's `service_date`; the day before it when an
+    /// untargeted pin after midnight matched an overnight schedule that left
+    /// its origin the previous evening (see `find_schedule_match`).
+    pub service_date: NaiveDate,
     pub line_id: String,
     pub destination_crs: Option<String>,
     pub calling_points_json: serde_json::Value,
@@ -475,6 +484,28 @@ async fn find_schedule_match(
         _ => Vec::new(),
     };
 
+    // **The previous day's overnight schedules, untargeted path only
+    // (Repeater Signal M7 residual, 2026-09-27).** A pin is dated by its OWN
+    // departure's London calendar date (`TrackTrainForm.tsx`), a schedule by
+    // its ORIGIN date. A pin at an intermediate stop at 00:30 on D+1, on a
+    // train that left its origin at 23:30 on D, is therefore dated D+1, but
+    // its schedule lives in D's population (that calling point carries
+    // `day_offset: 1`). Searching D+1's population alone can never find it:
+    // D+1's run of the same service is at 00:30 on D+2, a day away. So also
+    // search D's overnight entries, each converted with D as its base date,
+    // and let absolute time decide: the closer candidate wins, and a tie
+    // goes to the pin's own date (the behavior before this change). The
+    // matched schedule's own date is returned in `ScheduleMatch::service_date`
+    // and is what the caller keys the train's identity on.
+    //
+    // Not needed with a known uid: that caller
+    // (`attempt_schedule_match_for_shared_train`) passes the train's own CIF
+    // date, not a pin's.
+    let previous_service_date = match expected_uid {
+        None => service_date.pred_opt(),
+        Some(_) => None,
+    };
+
     for line_id in &candidate_lines {
         // With a known uid, Postgres narrows the population to that uid's
         // entries before anything reaches `api` -- the same filter as the
@@ -482,16 +513,24 @@ async fn find_schedule_match(
         // no-op there), moved into SQL so a candidate line's whole day (up
         // to 31 MB of JSON text) is never transferred or decoded here. See
         // `queries::get_schedule_line_population_entries`.
-        let Some(entries) = queries::get_schedule_line_population_entries(
+        let entries = queries::get_schedule_line_population_entries(
             pool,
             line_id,
             service_date,
             expected_uid,
         )
-        .await?
-        else {
-            continue;
+        .await?;
+        let previous_day_entries = match previous_service_date {
+            Some(previous) => {
+                queries::get_overnight_schedule_line_population_entries(pool, line_id, previous)
+                    .await?
+                    .map(|entries| (previous, entries))
+            }
+            None => None,
         };
+        if entries.is_none() && previous_day_entries.is_none() {
+            continue;
+        }
 
         // **The whole fix for the real Y80908 production bug** (2026-09-24
         // round-3 investigation -- see this function's own doc comment).
@@ -514,74 +553,63 @@ async fn find_schedule_match(
         // Filtering first removes the rivalry entirely.
         let entries: Vec<LinePopulationEntry> = match expected_uid {
             Some(expected) => entries
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|entry| entry.uid == expected)
                 .collect(),
-            None => entries,
+            None => entries.unwrap_or_default(),
         };
 
-        // day_offset (see `schedule_query::CallingPoint::day_offset`) shifts
-        // the base date forward for a calling point that falls on a calendar
-        // day AFTER the schedule's own `service_date` -- required for a real
-        // overnight service (2026-09-09 investigation: c2c UID F49687
-        // crosses midnight between Stratford and Barking). Without this,
-        // every calling point after a midnight crossing matched against the
-        // WRONG day, permanently stuck "Waiting to hear from Network Rail"
-        // for any pin on one of them.
-        let to_utc = |t: chrono::NaiveTime, day_offset: u8| {
-            london_to_utc((service_date + Duration::days(day_offset as i64)).and_time(t))
-        };
-
-        let Some((matched, best_delta)) = schedule_query::match_pin_with_delta(
+        let same_day = closest_population_entry(
             &entries,
+            service_date,
             &tiplocs,
+            &destination_tiplocs,
             pin_scheduled_departure,
-            common::MATCH_TOLERANCE,
-            to_utc,
-        ) else {
-            continue;
-        };
-
-        // **Round 4(a)'s destination tie-break** (see this function's own doc
-        // comment). Re-run the SAME scan over only those entries whose
-        // schedule terminates where the pin says it is going, and prefer that
-        // winner when -- and only when -- it is exactly as close in time as
-        // the unconstrained one. `match_pin_with_delta` keeps the first entry
-        // it sees on a tie, so without this the pin resolves to whichever of
-        // two same-minute services happens to sit earlier in the published
-        // population array: a coin flip that silently attributed the user's
-        // pin to another train.
-        let destination_entries: Vec<LinePopulationEntry> = if destination_tiplocs.is_empty() {
-            Vec::new()
-        } else {
-            entries
-                .iter()
-                .filter(|entry| terminates_at_any(entry, &destination_tiplocs))
-                .cloned()
-                .collect()
-        };
-        let matched = match schedule_query::match_pin_with_delta(
-            &destination_entries,
-            &tiplocs,
-            pin_scheduled_departure,
-            common::MATCH_TOLERANCE,
-            to_utc,
-        ) {
-            Some((destination_matched, destination_delta))
-                if destination_delta <= best_delta && destination_matched.uid != matched.uid =>
-            {
-                tracing::debug!(
-                    line_id = %line_id,
-                    tied_uid = matched.uid,
-                    preferred_uid = destination_matched.uid,
-                    pin_destination_crs = pin_destination_crs,
-                    "two schedules matched this pin equally closely; preferring the one whose \
-                     destination matches the pin's own"
-                );
-                destination_matched
+            pin_destination_crs,
+            line_id,
+        );
+        let previous_day = previous_day_entries.and_then(|(previous, entries)| {
+            closest_population_entry(
+                &entries,
+                previous,
+                &tiplocs,
+                &destination_tiplocs,
+                pin_scheduled_departure,
+                pin_destination_crs,
+                line_id,
+            )
+            .map(|(entry, delta)| (entry, delta, previous))
+        });
+        let (matched, matched_service_date) = match (same_day, previous_day) {
+            (None, None) => continue,
+            (Some((entry, _)), None) => (entry, service_date),
+            (None, Some((entry, _, previous))) => (entry, previous),
+            (Some((same, same_delta)), Some((earlier, earlier_delta, previous))) => {
+                // Strictly closer wins. On an exact tie, the destination
+                // tie-break (round 4(a)) decides if exactly one of the two
+                // terminates at the pin's destination; otherwise the pin's
+                // own date, as before this change.
+                let earlier_wins = earlier_delta < same_delta
+                    || (earlier_delta == same_delta
+                        && terminates_at_any(&earlier, &destination_tiplocs)
+                        && !terminates_at_any(&same, &destination_tiplocs));
+                if earlier_wins {
+                    (earlier, previous)
+                } else {
+                    (same, service_date)
+                }
             }
-            _ => matched,
         };
+        if matched_service_date != service_date {
+            tracing::debug!(
+                line_id = %line_id,
+                matched_uid = matched.uid,
+                %service_date,
+                %matched_service_date,
+                "pin after midnight matched the previous day's overnight schedule"
+            );
+        }
 
         if let Some(expected) = expected_uid
             && matched.uid != expected
@@ -630,6 +658,7 @@ async fn find_schedule_match(
 
         return Ok(Some(ScheduleMatch {
             uid: matched.uid.clone(),
+            service_date: matched_service_date,
             line_id: line_id.clone(),
             destination_crs,
             calling_points_json,
@@ -637,6 +666,84 @@ async fn find_schedule_match(
     }
 
     Ok(None)
+}
+
+/// The closest entry of ONE day's population to the pin, and how close it
+/// is: `schedule_query::match_pin_with_delta` within `common::MATCH_TOLERANCE`,
+/// then round 4(a)'s destination tie-break (see `find_schedule_match`'s doc
+/// comment). `base_date` is the date the population was published for;
+/// each calling point's `day_offset` is added to it, so an overnight
+/// schedule's post-midnight calls land on the right instant.
+fn closest_population_entry(
+    entries: &[LinePopulationEntry],
+    base_date: NaiveDate,
+    tiplocs: &[&str],
+    destination_tiplocs: &[String],
+    pin_scheduled_departure: DateTime<Utc>,
+    pin_destination_crs: Option<&str>,
+    line_id: &str,
+) -> Option<(LinePopulationEntry, Duration)> {
+    // day_offset (see `schedule_query::CallingPoint::day_offset`) shifts
+    // the base date forward for a calling point that falls on a calendar
+    // day AFTER the schedule's own `service_date` -- required for a real
+    // overnight service (2026-09-09 investigation: c2c UID F49687
+    // crosses midnight between Stratford and Barking). Without this,
+    // every calling point after a midnight crossing matched against the
+    // WRONG day, permanently stuck "Waiting to hear from Network Rail"
+    // for any pin on one of them.
+    let to_utc = |t: chrono::NaiveTime, day_offset: u8| {
+        london_to_utc((base_date + Duration::days(day_offset as i64)).and_time(t))
+    };
+
+    let (matched, best_delta) = schedule_query::match_pin_with_delta(
+        entries,
+        tiplocs,
+        pin_scheduled_departure,
+        common::MATCH_TOLERANCE,
+        to_utc,
+    )?;
+
+    // **Round 4(a)'s destination tie-break** (see `find_schedule_match`'s
+    // own doc comment). Re-run the SAME scan over only those entries whose
+    // schedule terminates where the pin says it is going, and prefer that
+    // winner when -- and only when -- it is exactly as close in time as the
+    // unconstrained one. `match_pin_with_delta` keeps the first entry it
+    // sees on a tie, so without this the pin resolves to whichever of two
+    // same-minute services happens to sit earlier in the published
+    // population array: a coin flip that silently attributed the user's pin
+    // to another train.
+    let destination_entries: Vec<LinePopulationEntry> = if destination_tiplocs.is_empty() {
+        Vec::new()
+    } else {
+        entries
+            .iter()
+            .filter(|entry| terminates_at_any(entry, destination_tiplocs))
+            .cloned()
+            .collect()
+    };
+    let matched = match schedule_query::match_pin_with_delta(
+        &destination_entries,
+        tiplocs,
+        pin_scheduled_departure,
+        common::MATCH_TOLERANCE,
+        to_utc,
+    ) {
+        Some((destination_matched, destination_delta))
+            if destination_delta <= best_delta && destination_matched.uid != matched.uid =>
+        {
+            tracing::debug!(
+                line_id = %line_id,
+                tied_uid = matched.uid,
+                preferred_uid = destination_matched.uid,
+                pin_destination_crs = pin_destination_crs,
+                "two schedules matched this pin equally closely; preferring the one whose \
+                 destination matches the pin's own"
+            );
+            destination_matched
+        }
+        _ => matched,
+    };
+    Some((matched.clone(), best_delta))
 }
 
 /// Whether this population entry's own LAST calling point (its terminus --
@@ -1256,6 +1363,214 @@ mod db_tests {
             .execute(&pool)
             .await
             .expect("cleanup user");
+    }
+
+    /// Repeater Signal M7 residual (2026-09-27), schedule-match half. A pin
+    /// is dated by its OWN departure's calendar date; a schedule by its
+    /// ORIGIN date. So a pin at an intermediate stop at 00:30 on D+1, on an
+    /// overnight train that left its origin the evening before, is dated
+    /// D+1 while its schedule sits in D's population with `day_offset: 1`.
+    /// Before the fix only D+1's population was searched, and the only
+    /// candidate there was a DIFFERENT train 15 minutes away -- inside
+    /// `MATCH_TOLERANCE`, so the pin silently resolved to the wrong train.
+    ///
+    /// Checks, all at the same station:
+    /// * the D+1 pin matches the overnight schedule, keyed on `(uid, D)`;
+    /// * a pin on the other train still matches it on its own date;
+    /// * a D+2 pin matches the NEXT run of the overnight service, keyed on
+    ///   `(uid, D+1)` -- never day D's run.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                attempt_schedule_match_matches_the_previous_days_overnight_schedule \
+                -- --ignored --test-threads=1`"]
+    async fn attempt_schedule_match_matches_the_previous_days_overnight_schedule() {
+        let pool = connect().await;
+        let users = [
+            "TEST-SCHEDULE-M7R-USER-1",
+            "TEST-SCHEDULE-M7R-USER-2",
+            "TEST-SCHEDULE-M7R-USER-3",
+        ];
+        let line_id = "test-m7r-overnight-line";
+        let overnight_uid = "TEST-M7S-NIGHT";
+        let other_uid = "TEST-M7S-OTHER";
+        let day_one: chrono::NaiveDate = "2026-09-10".parse().unwrap();
+        let day_two: chrono::NaiveDate = "2026-09-11".parse().unwrap();
+        let day_three: chrono::NaiveDate = "2026-09-12".parse().unwrap();
+
+        let cleanup = || async {
+            for user_id in users {
+                sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
+                    .bind(user_id)
+                    .execute(&pool)
+                    .await
+                    .ok();
+                sqlx::query("DELETE FROM users WHERE id = $1")
+                    .bind(user_id)
+                    .execute(&pool)
+                    .await
+                    .ok();
+            }
+            sqlx::query("DELETE FROM trains WHERE train_uid IN ($1, $2)")
+                .bind(overnight_uid)
+                .bind(other_uid)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM schedule_line_population WHERE line_id = $1")
+                .bind(line_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-M7R-ZSB-STANOX'")
+                .execute(&pool)
+                .await
+                .ok();
+        };
+        cleanup().await;
+
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-M7R-ZSB-STANOX', 'ZSB', 'TSTZSB', 'TEST M7R STOP', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+
+        let calling_point = |tiploc: &str, kind: &str, departure: &str, day_offset: u8| {
+            serde_json::json!({
+                "tiploc": tiploc,
+                "kind": kind,
+                "booked_arrival": null,
+                "booked_departure": departure,
+                "is_half_minute_arrival": false,
+                "is_half_minute_departure": false,
+                "day_offset": day_offset
+            })
+        };
+        // The overnight service: origin 23:30, the shared stop 00:30 the
+        // next calendar day. Runs every day, so it is in both days'
+        // populations.
+        let overnight = serde_json::json!({
+            "uid": overnight_uid,
+            "calling_points": [
+                calling_point("TSTORIG", "Origin", "23:30:00", 0),
+                calling_point("TSTZSB ", "Intermediate", "00:30:00", 1),
+            ]
+        });
+        // A different train that starts after midnight and leaves the same
+        // stop at 00:45 -- 15 minutes after the overnight one.
+        let other = serde_json::json!({
+            "uid": other_uid,
+            "calling_points": [
+                calling_point("TSTZSB ", "Origin", "00:45:00", 0),
+            ]
+        });
+        for (date, population) in [
+            (day_one, serde_json::json!([overnight.clone()])),
+            (day_two, serde_json::json!([other, overnight])),
+        ] {
+            sqlx::query(
+                "INSERT INTO schedule_line_population (line_id, service_date, population) \
+                 VALUES ($1, $2, $3)",
+            )
+            .bind(line_id)
+            .bind(date)
+            .bind(&population)
+            .execute(&pool)
+            .await
+            .expect("seed schedule_line_population");
+        }
+
+        let mut crs_line_index = HashMap::new();
+        crs_line_index.insert("ZSB".to_string(), vec![line_id.to_string()]);
+
+        let pin_and_match = |user_id: &'static str, pin_date: chrono::NaiveDate, at: &str| {
+            let pool = pool.clone();
+            let crs_line_index = crs_line_index.clone();
+            let scheduled: chrono::DateTime<chrono::Utc> = at.parse().unwrap();
+            async move {
+                sqlx::query(
+                    "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) \
+                     ON CONFLICT (id) DO NOTHING",
+                )
+                .bind(user_id)
+                .bind(format!("{user_id}@example.com"))
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .expect("seed fixture user");
+                let (tracked_train_id,): (i64,) = sqlx::query_as(
+                    "INSERT INTO train_subscriptions \
+                        (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
+                     VALUES ($1, $2, 'ZSB', $3) RETURNING id",
+                )
+                .bind(user_id)
+                .bind(pin_date)
+                .bind(scheduled)
+                .fetch_one(&pool)
+                .await
+                .expect("seed pin");
+                let matched = attempt_schedule_match(
+                    &pool,
+                    tracked_train_id,
+                    "ZSB",
+                    scheduled,
+                    None,
+                    pin_date,
+                    &crs_line_index,
+                    &[],
+                    None,
+                    None,
+                )
+                .await
+                .expect("attempt_schedule_match");
+                assert!(matched, "{user_id}'s pin must schedule-match");
+                let identity: (String, chrono::NaiveDate, String) = sqlx::query_as(
+                    "SELECT tr.train_uid, tr.service_date, ts.resolution_status \
+                     FROM train_subscriptions ts JOIN trains tr ON tr.id = ts.trains_id \
+                     WHERE ts.id = $1",
+                )
+                .bind(tracked_train_id)
+                .fetch_one(&pool)
+                .await
+                .expect("read back identity");
+                identity
+            }
+        };
+
+        // 00:30 BST on day two, dated day two.
+        assert_eq!(
+            pin_and_match(users[0], day_two, "2026-09-10T23:30:00Z").await,
+            (
+                overnight_uid.to_string(),
+                day_one,
+                "schedule_matched".to_string()
+            ),
+            "the pin matches the overnight train that left its origin on day one, not the \
+             other train 15 minutes away on its own date"
+        );
+        // 00:45 BST on day two: the other train, on its own date.
+        assert_eq!(
+            pin_and_match(users[1], day_two, "2026-09-10T23:45:00Z").await,
+            (
+                other_uid.to_string(),
+                day_two,
+                "schedule_matched".to_string()
+            ),
+            "a pin whose own date holds the closest schedule still matches it"
+        );
+        // 00:30 BST on day three: the NEXT run of the overnight service.
+        assert_eq!(
+            pin_and_match(users[2], day_three, "2026-09-11T23:30:00Z").await,
+            (
+                overnight_uid.to_string(),
+                day_two,
+                "schedule_matched".to_string()
+            ),
+            "a day-three pin binds to the run that left on day two, never day one's"
+        );
+
+        cleanup().await;
     }
 
     /// Regression test for the destination-CRS half of the shared
