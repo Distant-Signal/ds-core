@@ -104,6 +104,62 @@ const TOKEN_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 /// far shorter than whatever the IdP actually meant, so a bogus/corrupted
 /// `expires_in` can't pin a caller to one token indefinitely, and nowhere
 /// near large enough to itself risk overflowing `Instant::checked_add`.
+/// How many times [`OAuthTokenCache::get_token`] attempts the token-fetch POST
+/// before giving up, when the failures are TRANSIENT (see
+/// [`TokenFetchError::is_transient`]): a connect failure -- DNS resolution
+/// included -- or a 5xx/429 from the IdP.
+///
+/// **Why (2026-09-26 node reboot).** Every container on the node started
+/// before cluster DNS could resolve the IdP (`dns error ... Temporary failure
+/// in name resolution`), and the IdP itself then answered 502 for most of a
+/// minute. With a single attempt, every `/private/*` call in that window
+/// failed outright on its token fetch, and each caller's own error handling
+/// took over -- which for `schedule-reference` meant falling back to
+/// first-run behavior and republishing a delivery it had already finished.
+/// A short bounded retry here absorbs the common few-second blip for every
+/// caller at once; a longer outage still surfaces as an `Err` quickly (about
+/// a second of waiting in total) so callers with their own, longer retry
+/// loop stay in control of it.
+///
+/// Deliberately NOT retried: a timeout (already [`TOKEN_FETCH_TIMEOUT`] long
+/// -- three of those would stall a caller's loop for 45s), and any 4xx other
+/// than 429 (bad credentials do not fix themselves).
+const TOKEN_FETCH_ATTEMPTS: u32 = 3;
+
+/// Backoff between [`TOKEN_FETCH_ATTEMPTS`].
+const TOKEN_FETCH_BACKOFF: crate::backoff::Backoff =
+    crate::backoff::Backoff::new(Duration::from_millis(250), Duration::from_secs(2));
+
+/// One failed token-fetch attempt, classified for [`TOKEN_FETCH_ATTEMPTS`].
+#[derive(Debug)]
+struct TokenFetchError {
+    error: anyhow::Error,
+    transient: bool,
+}
+
+impl TokenFetchError {
+    fn from_reqwest(err: reqwest::Error) -> Self {
+        // `is_connect` covers DNS resolution failures as well as refused/reset
+        // connections -- exactly the "network not up yet" shape.
+        let transient = err.is_connect();
+        Self {
+            error: err.into(),
+            transient,
+        }
+    }
+
+    fn from_status(status: reqwest::StatusCode, text: String) -> Self {
+        Self {
+            error: anyhow::anyhow!("oauth2 token fetch failed: {status} {text}"),
+            transient: status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS,
+        }
+    }
+
+    fn is_transient(&self) -> bool {
+        self.transient
+    }
+}
+
 const MAX_SANE_REFRESH_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Computes the `Instant` at which a freshly-fetched token (with the given
@@ -150,6 +206,10 @@ pub struct OAuthTokenCache {
     /// exactly one poll/ingest loop calling `get_token`), but cheap defense
     /// in depth against a future caller that fans this out across tasks.
     fetch_lock: tokio::sync::Mutex<()>,
+    /// Attempts/backoff for transient token-fetch failures -- always
+    /// [`TOKEN_FETCH_ATTEMPTS`]/[`TOKEN_FETCH_BACKOFF`] outside tests.
+    fetch_attempts: u32,
+    fetch_backoff: crate::backoff::Backoff,
 }
 
 impl OAuthTokenCache {
@@ -158,7 +218,19 @@ impl OAuthTokenCache {
             credentials,
             cached: Mutex::new(None),
             fetch_lock: tokio::sync::Mutex::new(()),
+            fetch_attempts: TOKEN_FETCH_ATTEMPTS,
+            fetch_backoff: TOKEN_FETCH_BACKOFF,
         }
+    }
+
+    /// Overrides how transient token-fetch failures are retried -- for tests
+    /// (here and in callers' crates) that exercise a failing IdP and should
+    /// neither wait out the production backoff nor, with `attempts: 1`,
+    /// retry at all.
+    pub fn with_fetch_retry(mut self, attempts: u32, backoff: crate::backoff::Backoff) -> Self {
+        self.fetch_attempts = attempts.max(1);
+        self.fetch_backoff = backoff;
+        self
     }
 
     /// Returns a currently-valid bearer token: the cached one if it still
@@ -182,7 +254,7 @@ impl OAuthTokenCache {
         if let Some(token) = self.fresh_cached_token() {
             return Ok(token);
         }
-        let (access_token, expires_in) = self.fetch_token(client).await?;
+        let (access_token, expires_in) = self.fetch_token_with_retry(client).await?;
         let refresh_at = compute_refresh_at(Instant::now(), expires_in);
         let token_for_return = access_token.clone();
         *self
@@ -226,7 +298,37 @@ impl OAuthTokenCache {
         (Instant::now() < cached.refresh_at).then(|| cached.access_token.clone())
     }
 
-    async fn fetch_token(&self, client: &reqwest::Client) -> anyhow::Result<(String, u64)> {
+    /// [`Self::fetch_token`], retried on transient failures -- see
+    /// [`TOKEN_FETCH_ATTEMPTS`].
+    async fn fetch_token_with_retry(
+        &self,
+        client: &reqwest::Client,
+    ) -> anyhow::Result<(String, u64)> {
+        let mut attempt = 0;
+        loop {
+            match self.fetch_token(client).await {
+                Ok(token) => return Ok(token),
+                Err(err) if err.is_transient() && attempt + 1 < self.fetch_attempts => {
+                    let delay = self.fetch_backoff.delay(attempt);
+                    tracing::warn!(
+                        error = ?err.error,
+                        attempt = attempt + 1,
+                        max_attempts = self.fetch_attempts,
+                        retry_in = ?delay,
+                        "transient oauth2 token fetch failure; retrying"
+                    );
+                    tokio::time::sleep(delay).await;
+                    attempt += 1;
+                }
+                Err(err) => return Err(err.error),
+            }
+        }
+    }
+
+    async fn fetch_token(
+        &self,
+        client: &reqwest::Client,
+    ) -> Result<(String, u64), TokenFetchError> {
         let response = client
             .post(&self.credentials.token_url)
             .form(&[
@@ -238,14 +340,18 @@ impl OAuthTokenCache {
             ])
             .timeout(TOKEN_FETCH_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(TokenFetchError::from_reqwest)?;
 
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            anyhow::bail!("oauth2 token fetch failed: {status} {text}");
+            return Err(TokenFetchError::from_status(status, text));
         }
-        let body: TokenResponse = response.json().await?;
+        let body: TokenResponse = response.json().await.map_err(|err| TokenFetchError {
+            error: err.into(),
+            transient: false,
+        })?;
         Ok((body.access_token, body.expires_in))
     }
 }
@@ -395,6 +501,96 @@ mod tests {
         );
     }
 
+    const FAST_RETRY: crate::backoff::Backoff =
+        crate::backoff::Backoff::new(Duration::from_millis(1), Duration::from_millis(5));
+
+    /// 2026-09-26 node reboot: the IdP answered 502 for most of a minute
+    /// after the node came back. A transient 5xx must be retried inside one
+    /// `get_token` call rather than failing it outright.
+    #[tokio::test]
+    async fn a_transient_5xx_from_the_idp_is_retried_within_one_call() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(502))
+            .up_to_n_times(2)
+            .expect(2)
+            .mount(&server)
+            .await;
+        mock_token_endpoint(&server, 300, 1).await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())))
+            .with_fetch_retry(3, FAST_RETRY);
+
+        let token = cache.get_token(&reqwest::Client::new()).await;
+
+        assert_eq!(token.unwrap(), "fake-jwt-access-token");
+    }
+
+    /// The retry is bounded: an IdP that keeps failing still surfaces as an
+    /// `Err` after `attempts` tries, so the caller's own error handling runs.
+    #[tokio::test]
+    async fn a_persistent_5xx_gives_up_after_the_configured_attempts() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(503))
+            .expect(3)
+            .mount(&server)
+            .await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())))
+            .with_fetch_retry(3, FAST_RETRY);
+
+        assert!(cache.get_token(&reqwest::Client::new()).await.is_err());
+    }
+
+    /// Bad credentials do not fix themselves, so a 4xx (other than 429) is
+    /// returned at once, not retried.
+    #[tokio::test]
+    async fn a_4xx_from_the_idp_is_not_retried() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token/"))
+            .respond_with(ResponseTemplate::new(400))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())))
+            .with_fetch_retry(3, FAST_RETRY);
+
+        assert!(cache.get_token(&reqwest::Client::new()).await.is_err());
+    }
+
+    /// A connect failure -- the class a DNS resolution failure falls in -- is
+    /// transient. Observed via the configured backoff: with three attempts and
+    /// a 50ms floor on each of the two waits, a retried call cannot finish in
+    /// under ~50ms, while a single attempt against a refused port returns
+    /// almost at once.
+    #[tokio::test]
+    async fn a_connect_failure_is_retried() {
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        }; // dropped: nothing listens here now, so connecting is refused
+        let cache = OAuthTokenCache::new(credentials(format!("http://127.0.0.1:{port}/token/")))
+            .with_fetch_retry(
+                3,
+                crate::backoff::Backoff::new(
+                    Duration::from_millis(100),
+                    Duration::from_millis(100),
+                ),
+            );
+
+        let started = Instant::now();
+        let result = cache.get_token(&reqwest::Client::new()).await;
+
+        assert!(result.is_err());
+        assert!(
+            started.elapsed() >= Duration::from_millis(100),
+            "two jittered waits of at least 50ms each must have happened, took {:?}",
+            started.elapsed()
+        );
+    }
+
     #[tokio::test]
     async fn a_fresh_cached_token_is_reused_not_refetched() {
         let server = MockServer::start().await;
@@ -479,7 +675,10 @@ mod tests {
             .mount(&server)
             .await;
         mock_token_endpoint(&server, 300, 1).await;
-        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())));
+        // No in-call retry here, so the 500 reaches the caller and this test
+        // stays about the cache, not about `fetch_token_with_retry`.
+        let cache = OAuthTokenCache::new(credentials(format!("{}/token/", server.uri())))
+            .with_fetch_retry(1, FAST_RETRY);
         let client = reqwest::Client::new();
 
         let first = cache.get_token(&client).await;
