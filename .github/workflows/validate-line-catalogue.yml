@@ -12,22 +12,22 @@ name: Validate line catalogue (live, weekly)
 # NEEDED TO TURN IT BACK ON
 # ============================================================================
 #
-# `--live` re-fetches railwaycodes.org.uk directly (see `reference.rs`'s
-# `fetch_live`) for CRS/TIPLOC data -- that half needs **no secret at all**,
-# it's a plain public site. Confirmed working during this validator's
-# development (it does 403 a request with no `User-Agent` header at all,
-# so `fetch_live` sends an honest, identifying one -- see `reference.rs`'s
-# `USER_AGENT`).
+# `--live` re-fetches railwaycodes.org.uk's 26 CRS pages directly (see
+# `reference.rs`'s `fetch_live`) for CRS/TIPLOC data -- that half needs
+# **no secret at all**, it's a plain public site. Confirmed working during
+# this validator's development (it does 403 a request with no `User-Agent`
+# header at all, so `fetch_live` sends an honest, identifying one -- see
+# `reference.rs`'s `USER_AGENT`). It is the only railwaycodes.org.uk fetch
+# left; see reference-data/line-catalogue-validation.md's "The live tier"
+# section for why nothing credential-free replaces it yet.
 #
-# The operator-code half is where a real credential decision lives. Without
-# one, `--live` silently falls back to the railwaycodes.org.uk
-# operator-codes page (see `fetch_live`'s fallback branch) -- a community
-# source that is *less* authoritative than the fast tier's vendored
-# `toc-codes.csv`, which is itself a snapshot of the Knowledgebase TOC List
-# (see reference-data/line-catalogue-validation.md). To make it genuinely
-# authoritative, `--live` can hit the real RDM Train Operating Company List feed instead -- the same feed
-# `crates/poller-tocs` already polls in production (RSPS5050 P-03-00 Rev A
-# §3) -- given two env vars:
+# The operator-code half needs no secret to run either: without one,
+# `--live` uses the vendored `toc-codes.csv` (a Knowledgebase TOC List
+# snapshot, DQ13) and prints a notice saying so. It no longer scrapes the
+# railwaycodes.org.uk operator-codes page. To check against the *live*
+# list instead of that snapshot, `--live` can hit the real RDM Train
+# Operating Company List feed -- the same feed `crates/poller-tocs` already
+# polls in production (RSPS5050 P-03-00 Rev A §3) -- given two env vars:
 #
 #   - `RDM_API_KEY`      -- sent as the `x-apikey` header (see
 #                            `common::ingest::RDM_AUTH_HEADER_NAME`).
@@ -67,15 +67,15 @@ name: Validate line catalogue (live, weekly)
 # issues via `actions/github-script` with the default token is standard,
 # documented GitHub Actions behaviour requiring no PAT/app credential. The
 # only pending-credential blocker described above is specific to making the
-# *operator-code* half of `--live` hit the real RDM feed instead of falling
-# back to the community-site scrape.
+# *operator-code* half of `--live` hit the real RDM feed instead of the
+# vendored Knowledgebase snapshot.
 on:
   workflow_dispatch: {}
   # TODO: enable once RDM_API_KEY and RDM_TOCS_BASE_URL exist as repository
   # secrets -- see the big comment block above for exactly why, and
   # reference-data/line-catalogue-validation.md for what running without
-  # them still does (falls back to a live scrape, no secret needed, just
-  # less authoritative for operator codes).
+  # them still does (operator codes from the vendored Knowledgebase
+  # snapshot, no secret needed, just not re-fetched).
   # schedule:
   #   - cron: '17 4 * * 1' # 04:17 UTC every Monday -- arbitrary early-UTC
   #                         # off-peak slot, no significance to the exact
@@ -122,9 +122,9 @@ jobs:
         env:
           RUST_LOG: info
           # TODO: uncomment once both secrets exist (see the workflow's
-          # top-of-file comment) -- until then `--live` falls back to the
-          # railwaycodes.org.uk operator-codes scrape and prints a notice
-          # saying so, it does not fail.
+          # top-of-file comment) -- until then `--live` uses the vendored
+          # Knowledgebase toc-codes.csv for operator codes and prints a
+          # notice saying so, it does not fail.
           # RDM_API_KEY: ${{ secrets.RDM_API_KEY }}
           # RDM_TOCS_BASE_URL: ${{ secrets.RDM_TOCS_BASE_URL }}
 

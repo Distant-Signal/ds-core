@@ -171,6 +171,35 @@ Before 2026-09-27 this file was scraped from
 `https://www.railwaycodes.org.uk/operators/toccodes.shtm` (rows whose date
 range read `to date`).
 
+## The live tier (`--live`)
+
+The weekly `--live` run (`.github/workflows/validate-line-catalogue.yml`,
+schedule still disabled) checks the same three things as the fast tier
+against fresher data:
+
+| Check | Live source | Credential needed |
+|---|---|---|
+| operator codes | Knowledgebase TOC List feed (`RDM_API_KEY` + `RDM_TOCS_BASE_URL`), else the vendored `toc-codes.csv` | only for the live feed |
+| CRS exists | railwaycodes.org.uk `crs<a-z>.shtm` (26 GETs, honest `User-Agent`) | none |
+| CRS/TIPLOC pairing | same pages | none |
+
+Since 2026-09-27 the live tier no longer scrapes railwaycodes.org.uk's
+operator-codes page. Without RDM credentials it uses the vendored
+Knowledgebase snapshot instead, which is the list production itself
+recognises and so more authoritative than the community page was.
+
+The CRS pages are the one remaining railwaycodes.org.uk fetch, because
+nothing the project already has rights to covers a CRS/TIPLOC check
+without a new credential:
+
+- the Knowledgebase Stations feed (`poller-stations`) needs `RDM_API_KEY`
+  and an account-specific base URL;
+- Network Rail's CORPUS extract needs a registered open-data account;
+- this app's own `GET /public/stanox-crs` (CIF-derived, has `crs` and
+  `tiploc`) would work as a source, but production's API has no public
+  ingress today (it is reachable only on the tailnet), and its data comes
+  from the CIF feed, whose licence review (LEG-22) is still open.
+
 ## Known limitations (documented, not silently papered over)
 
 - **Not an official/primary-issuing source.** railwaycodes.org.uk is a
@@ -179,9 +208,9 @@ range read `to date`).
   package), not ATOC/RSSB/ORR itself. The genuinely authoritative sources
   -- Network Rail's CORPUS/SMART reference data, and RDM's own TOC List
   feed (the same one `crates/poller-tocs` already consumes) -- both need a
-  registered account/API key. See `.github/workflows/validate-line-catalogue.yml`
-  for the live, credentialed tier that checks against the real thing, kept
-  disabled until those credentials exist as repo secrets.
+  registered account/API key. This now applies to CRS/TIPLOC data only:
+  operator codes come from a Knowledgebase snapshot in both tiers (see
+  "The live tier" above).
 - **A CRS/TIPLOC pair being "real" doesn't mean it's the *right* station
   for a given line.** This snapshot can confirm `WWA` really is a live,
   bookable CRS (it is -- Woolwich Arsenal) but cannot tell you a

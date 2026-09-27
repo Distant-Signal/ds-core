@@ -41,11 +41,12 @@
 //!   ~110 line files.
 //! - **Thorough, live tier (`--live`; what the weekly cron in
 //!   `.github/workflows/validate-line-catalogue.yml` runs, currently
-//!   disabled)**: scrapes railwaycodes.org.uk live, plus the real
-//!   RDM Train Operating Company List feed for operator codes when
-//!   `RDM_API_KEY`/`RDM_TOCS_BASE_URL` are set (falls back to the
-//!   community-site scrape and prints a warning if they aren't -- see
-//!   `reference.rs::ReferenceData::fetch_live`).
+//!   disabled)**: scrapes railwaycodes.org.uk's CRS pages live for
+//!   CRS/TIPLOC (the one check nothing credential-free the project already
+//!   has rights to covers), and takes operator codes from the real RDM
+//!   Train Operating Company List feed when `RDM_API_KEY`/
+//!   `RDM_TOCS_BASE_URL` are set, else from the vendored Knowledgebase
+//!   `toc-codes.csv` -- see `reference.rs::ReferenceData::fetch_live`.
 //!
 //! Both tiers run the exact same `checks::validate_lines` against the
 //! exact same `ReferenceData` shape -- there is only one set of
@@ -78,7 +79,8 @@ struct Args {
     lines_dir: PathBuf,
 
     /// Directory holding the vendored `crs-tiploc.csv`/`toc-codes.csv`
-    /// reference data (fast tier only -- ignored with `--live`).
+    /// reference data. With `--live` only `toc-codes.csv` is read, as the
+    /// operator-code source when the RDM TOC feed isn't configured.
     #[arg(long, default_value = "reference-data")]
     reference_dir: PathBuf,
 
@@ -183,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
 
     let reference = if args.live {
         eprintln!(
-            "running the live tier -- fetching railwaycodes.org.uk (and the RDM TOC feed, if configured)..."
+            "running the live tier -- fetching railwaycodes.org.uk CRS pages (and the RDM TOC feed, if configured)..."
         );
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -192,13 +194,14 @@ async fn main() -> anyhow::Result<()> {
         let rdm_tocs_base_url = std::env::var("RDM_TOCS_BASE_URL").ok();
         if rdm_api_key.is_none() || rdm_tocs_base_url.is_none() {
             eprintln!(
-                "note: RDM_API_KEY/RDM_TOCS_BASE_URL not both set -- operator codes will use \
-                 the railwaycodes.org.uk scrape instead of the authoritative RDM feed \
-                 (see .github/workflows/validate-line-catalogue.yml for what's needed)"
+                "note: RDM_API_KEY/RDM_TOCS_BASE_URL not both set -- operator codes will come \
+                 from the vendored Knowledgebase snapshot (toc-codes.csv) instead of the live \
+                 RDM feed (see .github/workflows/validate-line-catalogue.yml for what's needed)"
             );
         }
         ReferenceData::fetch_live(
             &client,
+            &args.reference_dir.join("toc-codes.csv"),
             rdm_api_key.as_deref(),
             rdm_tocs_base_url.as_deref(),
         )

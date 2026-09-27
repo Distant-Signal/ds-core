@@ -2,9 +2,10 @@
 //! against, for both tiers described in `main.rs`'s module doc:
 //! [`ReferenceData::from_vendored_csvs`] (fast, no-secrets tier, reads the
 //! checked-in `reference-data/crs-tiploc.csv` / `reference-data/toc-codes.csv`)
-//! and [`ReferenceData::fetch_live`] (thorough tier, scrapes
-//! railwaycodes.org.uk live over the network, plus the real RDM TOC feed
-//! when credentials are available). `crs-tiploc.csv` is still a
+//! and [`ReferenceData::fetch_live`] (thorough tier: scrapes
+//! railwaycodes.org.uk's CRS pages live, and takes operator codes from the
+//! real RDM TOC feed when credentials are available, else from the vendored
+//! Knowledgebase `toc-codes.csv`). `crs-tiploc.csv` is still a
 //! railwaycodes.org.uk snapshot; `toc-codes.csv` is now a Knowledgebase TOC
 //! List snapshot (DQ13) -- see `regenerate.rs`.
 //!
@@ -91,36 +92,38 @@ impl ReferenceData {
             }
         }
 
-        #[derive(Deserialize)]
-        struct TocRow {
-            atoc_code: String,
-            name: String,
-        }
-        let mut rdr = csv::Reader::from_path(toc_codes_csv)
-            .with_context(|| format!("reading {}", toc_codes_csv.display()))?;
-        for row in rdr.deserialize::<TocRow>() {
-            let row = row.with_context(|| format!("parsing {}", toc_codes_csv.display()))?;
-            data.toc_codes
-                .insert(row.atoc_code.trim().to_ascii_uppercase(), row.name);
-        }
+        data.toc_codes = load_toc_codes_csv(toc_codes_csv)?;
 
         Ok(data)
     }
 
-    /// Thorough, live tier: re-fetches the
-    /// railwaycodes.org.uk pages the vendored CSVs were originally generated from
-    /// (see `reference-data/line-catalogue-validation.md`), applying the
-    /// identical extraction rules documented there, plus -- when
-    /// `rdm_api_key`/`rdm_tocs_base_url` are both given -- the real RDM
-    /// Train Operating Company List feed (RSPS5050 P-03-00 Rev A §3, the
-    /// same feed `crates/poller-tocs` polls in production) as a more
-    /// authoritative operator-code source than the community site.
+    /// Thorough, live tier. Two halves, from different sources:
     ///
-    /// This hits the network ~27 times (26 CRS pages + 1 TOC page, plus
-    /// one more for the RDM feed if configured) and is deliberately not
-    /// used by the fast/CI-blocking tier -- see `main.rs`.
+    /// - **CRS/TIPLOC**: re-fetches the 26 railwaycodes.org.uk
+    ///   `crs<a-z>.shtm` pages `crs-tiploc.csv` was originally generated
+    ///   from (see `reference-data/line-catalogue-validation.md`), applying
+    ///   the identical extraction rules documented there. This is the only
+    ///   part of the validator that still scrapes that site: nothing this
+    ///   project already has rights to covers a CRS/TIPLOC check without a
+    ///   credential (the Knowledgebase Stations feed and CORPUS both need a
+    ///   registered account, and this app's own `/public/stanox-crs` is not
+    ///   reachable from CI -- see that doc's "The live tier" section).
+    /// - **Operator codes**: the real RDM Train Operating Company List feed
+    ///   (RSPS5050 P-03-00 Rev A §3, the same feed `crates/poller-tocs`
+    ///   polls in production) when `rdm_api_key`/`rdm_tocs_base_url` are
+    ///   both given; otherwise, or if that fetch fails or comes back empty,
+    ///   the vendored `toc_codes_csv` snapshot of that same feed (DQ13). The
+    ///   railwaycodes.org.uk operator-codes page is no longer fetched: the
+    ///   Knowledgebase snapshot is the list production itself recognises,
+    ///   so a live scrape of a community copy was strictly less
+    ///   authoritative than the file already in the repo.
+    ///
+    /// This hits the network 26 times (one per CRS page), plus once more
+    /// for the RDM feed if configured, and is deliberately not used by the
+    /// fast/CI-blocking tier -- see `main.rs`.
     pub async fn fetch_live(
         client: &reqwest::Client,
+        toc_codes_csv: &Path,
         rdm_api_key: Option<&str>,
         rdm_tocs_base_url: Option<&str>,
     ) -> Result<Self> {
@@ -156,50 +159,80 @@ impl ReferenceData {
             );
         }
 
-        let toc_url = "https://www.railwaycodes.org.uk/operators/toccodes.shtm";
-        let toc_body = fetch_with_identifying_ua(client, toc_url)
-            .await
-            .with_context(|| format!("fetching {toc_url}"))?;
         data.toc_codes =
-            parse_current_toc_codes(&toc_body).with_context(|| format!("parsing {toc_url}"))?;
-        let rdm_configured = rdm_api_key.is_some() && rdm_tocs_base_url.is_some();
-        if data.toc_codes.is_empty() && !rdm_configured {
-            // Same reasoning as the CRS check above, scoped to the
-            // community-site TOC scrape specifically -- this only applies
-            // when that scrape is actually this run's operator-code source.
-            // If the RDM feed is configured (checked the same way as the
-            // real supersede below), it may legitimately replace an empty
-            // scrape with real data, so this doesn't apply.
-            bail!(
-                "fetched and parsed the TOC codes page successfully but found zero currently-valid \
-                 operator codes -- almost certainly a selector break rather than a genuinely empty \
-                 page, refusing to proceed with an empty operator-code set"
-            );
-        }
-
-        if let (Some(api_key), Some(base_url)) = (rdm_api_key, rdm_tocs_base_url) {
-            match crate::rdm_toc::fetch_rdm_tocs(client, base_url, api_key).await {
-                Ok(rdm_tocs) => {
-                    // The real RDM feed supersedes the community-site
-                    // scrape above wherever it has data -- it's this
-                    // app's own already-integrated authoritative source
-                    // (see `crates/poller-tocs`).
-                    data.toc_codes = rdm_tocs;
-                }
-                Err(err) => {
-                    eprintln!(
-                        "warning: RDM TOC feed fetch failed ({err:#}); falling back to the \
-                         railwaycodes.org.uk scrape for operator codes"
-                    );
-                }
-            }
-        }
+            live_toc_codes(client, toc_codes_csv, rdm_api_key, rdm_tocs_base_url).await?;
 
         Ok(data)
     }
 }
 
-/// The `User-Agent` the live tier sends to railwaycodes.org.uk (LEG-24):
+/// Reads a `toc-codes.csv` (`atoc_code,name`, a Knowledgebase TOC List
+/// snapshot) into ATOC code (uppercased) -> name. Used by both tiers.
+fn load_toc_codes_csv(toc_codes_csv: &Path) -> Result<HashMap<String, String>> {
+    #[derive(Deserialize)]
+    struct TocRow {
+        atoc_code: String,
+        name: String,
+    }
+    let mut out = HashMap::new();
+    let mut rdr = csv::Reader::from_path(toc_codes_csv)
+        .with_context(|| format!("reading {}", toc_codes_csv.display()))?;
+    for row in rdr.deserialize::<TocRow>() {
+        let row = row.with_context(|| format!("parsing {}", toc_codes_csv.display()))?;
+        out.insert(row.atoc_code.trim().to_ascii_uppercase(), row.name);
+    }
+    Ok(out)
+}
+
+/// The live tier's operator-code source: the RDM TOC feed when configured
+/// and it returns at least one operator, otherwise the vendored
+/// Knowledgebase snapshot at `toc_codes_csv` (with a notice on stderr
+/// saying which, so a run's output always records where its operator list
+/// came from). An empty result from either is fatal: every `operators`
+/// value would otherwise fail as "unknown" for a reason that has nothing to
+/// do with the line catalogue.
+async fn live_toc_codes(
+    client: &reqwest::Client,
+    toc_codes_csv: &Path,
+    rdm_api_key: Option<&str>,
+    rdm_tocs_base_url: Option<&str>,
+) -> Result<HashMap<String, String>> {
+    if let (Some(api_key), Some(base_url)) = (rdm_api_key, rdm_tocs_base_url) {
+        match crate::rdm_toc::fetch_rdm_tocs(client, base_url, api_key).await {
+            Ok(rdm_tocs) if !rdm_tocs.is_empty() => {
+                eprintln!(
+                    "operator codes: {} from the live RDM TOC feed",
+                    rdm_tocs.len()
+                );
+                return Ok(rdm_tocs);
+            }
+            Ok(_) => eprintln!(
+                "warning: the RDM TOC feed returned zero operators; falling back to {}",
+                toc_codes_csv.display()
+            ),
+            Err(err) => eprintln!(
+                "warning: RDM TOC feed fetch failed ({err:#}); falling back to {}",
+                toc_codes_csv.display()
+            ),
+        }
+    }
+    let vendored = load_toc_codes_csv(toc_codes_csv)?;
+    if vendored.is_empty() {
+        bail!(
+            "{} has no operator codes -- refusing to proceed with an empty operator-code set",
+            toc_codes_csv.display()
+        );
+    }
+    eprintln!(
+        "operator codes: {} from the vendored Knowledgebase snapshot {}",
+        vendored.len(),
+        toc_codes_csv.display()
+    );
+    Ok(vendored)
+}
+
+/// The `User-Agent` the live tier sends to railwaycodes.org.uk's CRS pages
+/// (LEG-24):
 /// honest and identifying -- this crate's name and version plus the
 /// project URL -- instead of the browser-impersonating
 /// `"Mozilla/5.0 ..."` string this validator used to send.
@@ -243,8 +276,8 @@ async fn fetch_with_identifying_ua(client: &reqwest::Client, url: &str) -> Resul
 /// (`<!--...-->`) sitting in the same cell is a different markup shape
 /// carrying the exact same class of risk (unstripped prose surviving into
 /// a code token), and is stripped separately by
-/// [`extract_shape_valid_tokens`], the same way `parse_current_toc_codes`
-/// already stripped comments (just not, until now, popups) before this fix.
+/// [`extract_shape_valid_tokens`], the same way the (since removed)
+/// operator-codes page parser already stripped comments before this fix.
 ///
 /// The tail is `</span>\s*</span>`, not the stricter `</span></span>` this
 /// function shipped with initially: that stricter form silently strips
@@ -428,73 +461,6 @@ fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) -> Result<()> {
     Ok(())
 }
 
-/// Extracts the currently-valid ATOC operator code table. Active whenever
-/// `RDM_API_KEY`/`RDM_TOCS_BASE_URL` aren't both configured (see
-/// `ReferenceData::fetch_live`) -- i.e. the default state of this
-/// validator's live tier, since the RDM feed's base URL has no known value
-/// yet (`rdm_toc.rs`'s module doc). Applies the exact same popup-stripping
-/// and shape-validated token extraction as `parse_crs_tiploc_page` (see
-/// [`extract_shape_valid_tokens`]): a footnote on the code cell can no
-/// longer mint a compound garbage key, and a footnote's stray "to date" in
-/// a defunct operator's date cell can no longer resurrect it as currently
-/// valid, because the "is this row current" check below runs against the
-/// stripped cell text, not the raw HTML.
-fn parse_current_toc_codes(html: &str) -> Result<HashMap<String, String>> {
-    let row_re = regex::Regex::new(r"(?s)<tr>(.*?)</tr>").unwrap();
-    let cell_re = regex::Regex::new(r"(?s)<td[^>]*>(.*?)</td>").unwrap();
-    let tag_re = regex::Regex::new(r"<[^>]+>").unwrap();
-    let comment_re = regex::Regex::new(r"(?s)<!--.*?-->").unwrap();
-    let popup_re = regex::Regex::new(r#"(?s)<span class="popup".*?</span>\s*</span>"#).unwrap();
-    let toc_token_re = regex::Regex::new(r"^[A-Z]{2}$").unwrap();
-
-    let mut out = HashMap::new();
-    let mut matched_rows = 0usize;
-    for row_caps in row_re.captures_iter(html) {
-        matched_rows += 1;
-        let cells: Vec<&str> = cell_re
-            .captures_iter(&row_caps[1])
-            .map(|c| c.get(1).unwrap().as_str())
-            .collect();
-        if cells.len() < 3 {
-            continue;
-        }
-
-        // "Currently valid" must be decided from the STRIPPED date cell,
-        // never raw HTML: a footnote (popup or HTML comment) on this cell
-        // could otherwise carry the literal phrase "to date" -- e.g. "see
-        // note, dates uncertain to date of writing" -- and wrongly
-        // resurrect a long-defunct operator as currently valid.
-        let no_popups = strip_popups(&popup_re, cells[2])?;
-        let no_comments = comment_re.replace_all(&no_popups, " ");
-        let valid_period = clean_html_text(&tag_re, &no_comments);
-        if !valid_period.contains("to date") {
-            continue;
-        }
-
-        // The code cell gets the same shape-validated extraction as CRS/
-        // TIPLOC cells: a footnote here must not be able to turn "GW" plus
-        // footnote prose into a compound garbage key, or a bare footnote
-        // word into a fabricated 2-letter operator code.
-        let code_tokens =
-            extract_shape_valid_tokens(&popup_re, &comment_re, &tag_re, &toc_token_re, cells[0])?;
-        let Some(code) = code_tokens.into_iter().next() else {
-            continue;
-        };
-
-        let no_popups = strip_popups(&popup_re, cells[1])?;
-        let without_comments = comment_re.replace_all(&no_popups, " ");
-        let name = clean_html_text(&tag_re, &without_comments);
-        out.insert(code, name);
-    }
-    if let Some(diagnostic) = suspicious_zero_row_match(html, matched_rows) {
-        bail!(
-            "{diagnostic} -- every ATOC operator code would silently read as unknown/defunct \
-             rather than genuinely absent, so this refuses to proceed rather than risk that"
-        );
-    }
-    Ok(out)
-}
-
 fn clean_html_text(tag_re: &regex::Regex, s: &str) -> String {
     let stripped = tag_re.replace_all(s, "");
     let decoded = stripped
@@ -661,20 +627,6 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
         }
     }
 
-    #[test]
-    fn only_to_date_toc_rows_are_kept() {
-        let html = r#"<table>
-            <tr><td>AN</td><td>Arriva Trains Northern</td><td>2001 to 2004</td></tr>
-            <tr><td>NT</td><td>Northern Trains <em>Northern</em></td><td>2016 to date</td></tr>
-        </table>"#;
-        let tocs = parse_current_toc_codes(html).unwrap();
-        assert!(!tocs.contains_key("AN"));
-        assert_eq!(
-            tocs.get("NT"),
-            Some(&"Northern Trains Northern".to_string())
-        );
-    }
-
     /// Finding #2's repro: an HTML comment sitting in a code cell is a
     /// different markup shape from the popup spans
     /// `popup_footnotes_are_never_scraped_as_codes` covers, but the same
@@ -745,44 +697,6 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
                  match first"
             );
         }
-    }
-
-    /// Finding #3: `parse_current_toc_codes` runs whenever the RDM TOC feed
-    /// isn't configured (`ReferenceData::fetch_live`, `rdm_toc.rs`'s module
-    /// doc) -- i.e. this crate's actual default live-tier code path, not a
-    /// hypothetical. Two failure modes in one fixture: a footnote on a
-    /// *currently valid* operator's code cell must not corrupt its code
-    /// into a compound garbage key, and a footnote's stray "to date" text
-    /// on a *defunct* operator's date cell must not resurrect it as
-    /// currently valid.
-    #[test]
-    fn toc_code_parsing_strips_popups_and_checks_validity_on_stripped_text() {
-        let html = r#"<table>
-  <tr>
-   <td>GW<span class="popup" onclick="popup1()"><span class="popuptext" id="myPopup1"><span class="close">&#x2716;</span>Formerly First Great Western</span></span></td>
-   <td>Great Western Railway</td>
-   <td>2015 to date</td>
-  </tr>
-  <tr>
-   <td>AN</td>
-   <td>Arriva Trains Northern</td>
-   <td>2001 to 2004<span class="popup" onclick="popup2()"><span class="popuptext" id="myPopup2"><span class="close">&#x2716;</span>Records patchy to date</span></span></td>
-  </tr>
-</table>"#;
-        let tocs = parse_current_toc_codes(html).unwrap();
-
-        // The currently-valid operator's real code still parses, with no
-        // footnote prose appended to it.
-        assert_eq!(tocs.get("GW"), Some(&"Great Western Railway".to_string()));
-
-        // The defunct operator must NOT be resurrected by its footnote's
-        // unrelated "to date" -- the validity check must run against the
-        // stripped cell ("2001 to 2004 "), not the raw HTML that also
-        // contains the footnote's "Records patchy to date".
-        assert!(
-            !tocs.contains_key("AN"),
-            "a footnote's stray \"to date\" phrase must not resurrect a defunct operator"
-        );
     }
 
     /// Finding #4(a): the two closing `</span>` tags this site's popup
@@ -867,14 +781,6 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
         assert!(data.crs_to_tiploc.is_empty());
     }
 
-    #[test]
-    fn parse_current_toc_codes_fails_loudly_on_a_restyled_row_attribute() {
-        let html = r#"<table><tr class="odd"><td>GW</td><td>Great Western Railway</td><td>2015 to date</td></tr></table>"#;
-        let err = parse_current_toc_codes(html)
-            .expect_err("a restyled row that matches zero <tr>...</tr> patterns must be loud");
-        assert!(err.to_string().contains("row"));
-    }
-
     // -- Finding #4: HTML entities in a code cell must be decoded before
     // the shape-check/tokenizing step.
 
@@ -949,5 +855,47 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
             vec!["EUS".to_string()],
             "the real code in the same cell must still parse despite the bare ampersand"
         );
+    }
+
+    fn vendored_toc_codes_csv() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate lives at <repo>/crates/line-catalogue-validator")
+            .join("reference-data/toc-codes.csv")
+    }
+
+    /// Without RDM credentials the live tier's operator codes are exactly
+    /// the vendored Knowledgebase snapshot -- no network, and in particular
+    /// no railwaycodes.org.uk operator-codes scrape.
+    #[tokio::test]
+    async fn live_operator_codes_without_rdm_credentials_are_the_vendored_snapshot() {
+        let csv = vendored_toc_codes_csv();
+        let client = reqwest::Client::new();
+        let live = live_toc_codes(&client, &csv, None, None).await.unwrap();
+        assert_eq!(live, load_toc_codes_csv(&csv).unwrap());
+        assert!(live.contains_key("GW"));
+
+        // Only one of the two set is the same as neither.
+        let live = live_toc_codes(&client, &csv, Some("key"), None)
+            .await
+            .unwrap();
+        assert_eq!(live, load_toc_codes_csv(&csv).unwrap());
+    }
+
+    /// A configured-but-failing RDM feed falls back to the vendored
+    /// snapshot rather than failing the run or returning nothing.
+    #[tokio::test]
+    async fn live_operator_codes_fall_back_to_the_vendored_snapshot_when_rdm_fails() {
+        let csv = vendored_toc_codes_csv();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        // Port 9 on loopback: nothing listens, so the connection is refused.
+        let live = live_toc_codes(&client, &csv, Some("key"), Some("http://127.0.0.1:9/tocs"))
+            .await
+            .unwrap();
+        assert_eq!(live, load_toc_codes_csv(&csv).unwrap());
     }
 }
