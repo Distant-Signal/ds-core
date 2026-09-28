@@ -14,6 +14,10 @@ metrics-exporter-prometheus = { version = "0.18", default-features = false, feat
 # Only with the `postgres` feature: `common::pg`, the pool settings shared by
 # the crates that hold a Postgres pool. Same version the workspace already uses.
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"], optional = true }
+# Only with the `redis` feature: `common::redis_conn`, the bounded
+# ConnectionManager settings shared by every worker that holds a Redis
+# connection. Same version and features those crates already use.
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "form", "native-tls", "gzip"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-inline-default = "1.0.1"
@@ -29,6 +33,9 @@ url = "2.5"
 # `common::pg` (Postgres pool settings). Enabled by api, aggregator, notifier
 # and enricher; the pollers and consumers do not build sqlx.
 postgres = ["dep:sqlx"]
+# `common::redis_conn` (bounded Redis connection settings). Enabled by
+# movement-relay, movement-feed and enricher.
+redis = ["dep:redis"]
 
 [dev-dependencies]
 # Only to prove `redis_auth` URLs parse back to the same credentials in the

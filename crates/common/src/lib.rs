@@ -24,6 +24,8 @@ pub mod poller_loop;
 pub mod progress;
 pub mod rail_day;
 pub mod redis_auth;
+#[cfg(feature = "redis")]
+pub mod redis_conn;
 pub mod schedule_delivery;
 pub mod secret;
 pub mod segments;
