@@ -187,6 +187,34 @@ pub fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Fi
             }
         }
 
+        // The aggregator's `belongs_to_line` compares each LDBWS departure's
+        // *destination* against this list, so it names where services
+        // terminate -- often beyond the line's own catalogued stations
+        // (Elizabeth line trains to Shenfield, TPE Hull trains to
+        // Manchester, WCML Scotland trains to Euston). So it is NOT required
+        // to be a subset of [[stations]]; it only has to be a real CRS, since
+        // a typo'd code silently matches no departure and drops the line's
+        // LDBWS sample to nothing.
+        let filter_line = line
+            .raw
+            .lines()
+            .position(|l| l.trim_start().starts_with("destination_crs_filter ="))
+            .map(|i| i + 1);
+        for destination in &line.definition.destination_crs_filter {
+            if !reference.known_crs(destination) {
+                findings.push(Finding {
+                    path: line.path.clone(),
+                    line_no: filter_line,
+                    severity: Severity::Error,
+                    message: format!(
+                        "unknown CRS code \"{destination}\" in destination_crs_filter -- not \
+                         found in reference-data/crs-tiploc.csv; a typo here matches no LDBWS \
+                         departure, so the line's sampled status silently loses every service"
+                    ),
+                });
+            }
+        }
+
         for operator in &line.definition.operators {
             if !reference.known_operator(operator) {
                 findings.push(Finding {
@@ -316,6 +344,42 @@ operators = ["XC"]
         assert_eq!(findings[0].severity, Severity::Error);
         assert!(findings[0].message.contains("\"ANV\""));
         assert_eq!(findings[0].line_no, expected_line);
+    }
+
+    #[test]
+    fn unknown_destination_filter_crs_is_a_hard_error() {
+        let dir = tempfile_dir();
+        let body = format!(
+            "{HEADER}destination_crs_filter = [\"EUS\", \"ZZZ\"]\n\n[[stations]]\ncrs = \"EUS\"\n"
+        );
+        let expected_line = body
+            .lines()
+            .position(|l| l.starts_with("destination_crs_filter ="))
+            .map(|i| i + 1);
+        write_line_file(&dir, "a", &body);
+        let lines = load_all(&dir).unwrap();
+        let reference = reference_with(&[("EUS", &["EUSTON"])], &["XC"]);
+        let findings = validate_lines(&lines, &reference);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Error);
+        assert!(findings[0].message.contains("\"ZZZ\""));
+        assert_eq!(findings[0].line_no, expected_line);
+    }
+
+    /// A destination beyond the line's own stations is normal (through
+    /// services terminating elsewhere) -- only an unknown code is flagged.
+    #[test]
+    fn destination_filter_crs_off_the_line_but_known_passes_clean() {
+        let dir = tempfile_dir();
+        write_line_file(
+            &dir,
+            "a",
+            &format!("{HEADER}destination_crs_filter = [\"MAN\"]\n\n[[stations]]\ncrs = \"EUS\"\n"),
+        );
+        let lines = load_all(&dir).unwrap();
+        let reference = reference_with(&[("EUS", &["EUSTON"]), ("MAN", &["MNCRPIC"])], &["XC"]);
+        let findings = validate_lines(&lines, &reference);
+        assert!(findings.is_empty(), "{findings:?}");
     }
 
     #[test]

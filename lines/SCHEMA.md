@@ -14,11 +14,11 @@ named `<id>.toml`.
 | `category` | string | yes | One of `main-line`, `commuter`, `regional`, `operator`. Drives default sampling strategy. |
 | `operators` | list[string] | yes | ATOC codes of TOCs whose services define this line. |
 | `stations` | list[Station] | yes | Ordered list of CRS codes from one end to the other. |
-| `sample_stations` | list[string] | no | CRS codes to poll for LDBWS sampling. |
+| `sample_stations` | list[string] | no | CRS codes to poll for LDBWS sampling. Each must be one of this line's own `[[stations]]` (enforced by `line-catalogue-validator`). |
 | `match_keywords` | list[string] | no | Free-text keywords for matching Knowledgebase incidents. |
 | `excluded_keywords` | list[string] | no | Vetoes a Knowledgebase incident match. |
 | `severity_overrides` | dict | no | Per-line threshold overrides. |
-| `destination_crs_filter` | list[string] | no | When inferring from LDBWS, only count services whose `destination_crs` is in this list. Use this to disambiguate at shared trunk stations. |
+| `destination_crs_filter` | list[string] | no | When inferring from LDBWS, only count services whose `destination_crs` is in this list. Use this to disambiguate at shared trunk stations. Entries are service destinations, so they may lie beyond this line's own stations, but each must be a real CRS (enforced by `line-catalogue-validator`). |
 | `headcode_prefixes` | list[string] | no | Same idea, but matches against the service's headcode. |
 
 ## Station object
