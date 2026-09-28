@@ -1,0 +1,67 @@
+# Tooling config for the repo's scripts (scripts/*.py, every *.sh, and the
+# workflow run: blocks). There is no Python package here, hence no [project]
+# table. CI: the `scripts-lint` job in .github/workflows/ci.yml; locally,
+# `scripts/lint-scripts.sh` runs the same checks.
+#
+# Strict by default. Opt out per line (`# noqa: XXXX  # reason`,
+# `# type: ignore[code]  # reason`) rather than here, unless a rule genuinely
+# conflicts repo-wide.
+
+[dependency-groups]
+# Every tool the scripts-lint job runs, pinned exactly. Renovate's pep621
+# manager bumps these. shellcheck-py / shfmt-py / actionlint-py ship the
+# upstream static binaries: shellcheck 0.11.0, shfmt 3.14.1 (shfmt-py's own
+# version number is independent of shfmt's), actionlint 1.7.12.
+lint = [
+    "actionlint-py==1.7.12.25",
+    "mypy==2.3.1",
+    "ruff==0.16.9",
+    "shellcheck-py==0.11.0.1",
+    "shfmt-py==4.2.0",
+]
+
+[tool.ruff]
+# Oldest Python the scripts support (tomllib needs 3.11; Ubuntu 24.04 ships
+# 3.12). CI runs 3.14.
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Mutually exclusive docstring-layout pairs: pydocstyle requires one of
+    # each pair to be off. Keep D211 (no blank line before a class
+    # docstring) and D212 (summary on the first line).
+    "D203",
+    "D213",
+    # Conflict with `ruff format` (ruff's documented formatter conflicts).
+    "COM812",
+    "ISC001",
+    # The repo has no LICENSE and no per-file copyright headers anywhere
+    # (Rust, TypeScript or shell); a header only in Python files would be
+    # the odd one out.
+    "CPY001",
+]
+
+[tool.ruff.format]
+# Defaults (double quotes, spaces, magic trailing comma).
+
+[tool.mypy]
+# mypy over pyright: it installs from PyPI with the rest of the pinned lint
+# group (no Node runtime in this job), and `strict = true` is a stable,
+# documented flag set. The extra flags below go beyond --strict.
+strict = true
+python_version = "3.12"
+files = ["scripts"]
+warn_unreachable = true
+enable_error_code = [
+    "deprecated",
+    "explicit-override",
+    "ignore-without-code",
+    "possibly-undefined",
+    "redundant-expr",
+    "redundant-self",
+    "truthy-bool",
+    "truthy-iterable",
+    "unimported-reveal",
+    "unused-awaitable",
+]

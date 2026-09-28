@@ -116,7 +116,7 @@ jobs:
           set +e
           cargo run -p line-catalogue-validator -- --live > validator-output.txt 2>&1
           code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${code}" >> "${GITHUB_OUTPUT}"
           cat validator-output.txt
           exit 0
         env:

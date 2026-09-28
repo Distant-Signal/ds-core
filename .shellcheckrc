@@ -1,0 +1,8 @@
+# ShellCheck config for every tracked *.sh (CI: the `scripts-lint` job in
+# .github/workflows/ci.yml; actionlint also uses it for workflow `run:` blocks).
+# Strict by default: every optional check on, report down to style level.
+# Opt out per line with `# shellcheck disable=SCxxxx # reason`, never here,
+# unless a rule genuinely conflicts repo-wide.
+enable=all
+external-sources=true
+severity=style

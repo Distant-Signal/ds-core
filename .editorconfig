@@ -1,0 +1,11 @@
+# EditorConfig: https://editorconfig.org
+# shfmt reads the [*.sh] section (when run without formatting flags), so this
+# is the single source of truth for shell formatting: equivalent to
+# `shfmt -i 4 -ci -bn`.
+root = true
+
+[*.sh]
+indent_style = space
+indent_size = 4
+switch_case_indent = true
+binary_next_line = true
