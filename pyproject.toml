@@ -11,13 +11,17 @@
 # Every tool the scripts-lint job runs, pinned exactly. Renovate's pep621
 # manager bumps these. shellcheck-py / shfmt-py / actionlint-py ship the
 # upstream static binaries: shellcheck 0.11.0, shfmt 3.14.1 (shfmt-py's own
-# version number is independent of shfmt's), actionlint 1.7.12.
+# version number is independent of shfmt's), actionlint 1.7.12. PyYAML is
+# scripts/chart-values-doc.py's one dependency (the scripts-lint job also
+# runs its `check`); types-PyYAML lets mypy check it.
 lint = [
     "actionlint-py==1.7.12.25",
     "mypy==2.3.1",
+    "pyyaml==6.0.3",
     "ruff==0.16.9",
     "shellcheck-py==0.11.0.1",
     "shfmt-py==4.2.0",
+    "types-pyyaml==6.0.12.20260906",
 ]
 
 [tool.ruff]
