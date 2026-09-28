@@ -591,6 +591,139 @@ pub struct StationDeparture {
     /// serialization time rather than storing it separately.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planned_platform: Option<String>,
+    /// LDBWS's `rsid`: the Retail Service ID (e.g. `"GW123400"`) -- the
+    /// same identifier the CIF `BX` record carries
+    /// (`schedule_destination_departures.rsid`), so it is the join key
+    /// between a board row and a CIF train (`api::data::train_resolve`,
+    /// `api::data::stop_board`). Not unique per day on its own: pair it with
+    /// the station and time. `None` when the board omitted it, and on every
+    /// row stored before the poller decoded it (`#[serde(default)]`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rsid: Option<String>,
+    /// This service's calling points AFTER the sampled station, from
+    /// LDBWS's `subsequentCallingPoints`, flattened in board order (a
+    /// split/join service reports one list per portion; a stop repeated
+    /// across lists is kept once). Empty when the board reported none, and
+    /// on every row stored before the poller kept them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calling_points: Vec<BoardCallingPoint>,
+}
+
+/// One subsequent calling point of a [`StationDeparture`], compacted from
+/// LDBWS's `callingPoint` item. Stored inside `station_samples.departures`
+/// (one JSONB row per station, overwritten every poll), so the keys are
+/// short and absent values are omitted rather than stored as `null`; the
+/// API re-expands them on the wire (`api::render::station_departure_json`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoardCallingPoint {
+    pub crs: String,
+    /// `locationName`.
+    #[serde(default, rename = "n", skip_serializing_if = "Option::is_none")]
+    pub location_name: Option<String>,
+    /// `st`: the scheduled (public) time, `"HH:MM"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub st: Option<String>,
+    /// `et`: the estimate, a time or a status word (`"On time"`,
+    /// `"Delayed"`, `"Cancelled"`). Present until the train has left.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub et: Option<String>,
+    /// `at`: the actual time, once the train has called.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
+    /// Darwin's per-calling-point `isCancelled`.
+    #[serde(default, rename = "x", skip_serializing_if = "std::ops::Not::not")]
+    pub is_cancelled: bool,
+}
+
+impl StationDeparture {
+    /// Whether this service calls at `crs` after the sampled station
+    /// (case-insensitive). A cancelled calling point still counts: the
+    /// service is booked to call there, and the caller sees
+    /// `isCancelled` on it.
+    pub fn calls_at(&self, crs: &str) -> bool {
+        self.calling_points
+            .iter()
+            .any(|cp| cp.crs.eq_ignore_ascii_case(crs))
+    }
+}
+
+/// The TIPLOC embedded in an LDBWS `serviceID`, when it has the observed
+/// shape `^\d{7}<TIPLOC padded with '_' to 7><1 char>$` (e.g.
+/// `9134470CLPHMJC_` -> `CLPHMJC`, `9136955LNDNBDE2` -> `LNDNBDE`). Darwin
+/// documents the ID as opaque, so this is a hint only: `None` for anything
+/// else, and callers must treat `None` as "no hint", never as a veto. The
+/// TIPLOC is the sampled station's own TIPLOC for this call (measured on
+/// prod 2026-09-27: 99.5% present in the matched CIF train's calls).
+pub fn service_id_tiploc(service_id: &str) -> Option<&str> {
+    let bytes = service_id.as_bytes();
+    if bytes.len() != 15 || !bytes[..7].iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let tiploc = service_id.get(7..14)?.trim_end_matches('_');
+    (!tiploc.is_empty() && tiploc.bytes().all(|b| b.is_ascii_alphanumeric())).then_some(tiploc)
+}
+
+#[cfg(test)]
+mod station_departure_board_fields_tests {
+    use super::*;
+
+    #[test]
+    fn a_row_stored_before_rsid_and_calling_points_existed_still_deserializes() {
+        let old = serde_json::json!({
+            "service_id": "9134470CLPHMJC_",
+            "operator": "SW",
+            "destination_crs": "WAT",
+            "scheduled": "10:00",
+            "estimated": "On time",
+            "is_cancelled": false,
+            "delay_minutes": 0,
+            "skipped_stations": [],
+        });
+        let d: StationDeparture = serde_json::from_value(old).unwrap();
+        assert_eq!(d.rsid, None);
+        assert!(d.calling_points.is_empty());
+        assert!(!d.calls_at("WAT"));
+    }
+
+    #[test]
+    fn empty_new_fields_are_not_written_to_storage() {
+        let d: StationDeparture = serde_json::from_value(serde_json::json!({
+            "service_id": "x", "operator": "SW", "destination_crs": "WAT",
+            "scheduled": "10:00", "estimated": "On time", "is_cancelled": false,
+            "delay_minutes": 0,
+        }))
+        .unwrap();
+        let stored = serde_json::to_value(&d).unwrap();
+        assert!(stored.get("rsid").is_none());
+        assert!(stored.get("calling_points").is_none());
+    }
+
+    #[test]
+    fn calls_at_is_case_insensitive_and_counts_a_cancelled_call() {
+        let d: StationDeparture = serde_json::from_value(serde_json::json!({
+            "service_id": "x", "operator": "SW", "destination_crs": "WOK",
+            "scheduled": "10:00", "estimated": "On time", "is_cancelled": false,
+            "delay_minutes": 0, "rsid": "SW123400",
+            "calling_points": [{"crs": "CLJ", "st": "10:07"}, {"crs": "WOK", "x": true}],
+        }))
+        .unwrap();
+        assert_eq!(d.rsid.as_deref(), Some("SW123400"));
+        assert!(d.calls_at("clj"));
+        assert!(d.calls_at("WOK"));
+        assert!(d.calling_points[1].is_cancelled);
+        assert!(!d.calls_at("WAT"));
+    }
+
+    #[test]
+    fn service_id_tiploc_decodes_the_observed_shape_only() {
+        assert_eq!(service_id_tiploc("9134470CLPHMJC_"), Some("CLPHMJC"));
+        assert_eq!(service_id_tiploc("9136955LNDNBDE2"), Some("LNDNBDE"));
+        assert_eq!(service_id_tiploc("9136955WDON___A"), Some("WDON"));
+        assert_eq!(service_id_tiploc("yjnJDu6rXAM6MhtwfOUZZg=="), None);
+        assert_eq!(service_id_tiploc("913695_WDON___A"), None);
+        assert_eq!(service_id_tiploc("9136955_______A"), None);
+        assert_eq!(service_id_tiploc(""), None);
+    }
 }
 
 /// Finds the live Darwin/LDBWS departure-board sample matching a specific
@@ -718,6 +851,8 @@ mod darwin_departure_matching_tests {
             // the fixture honest rather than inventing a value.
             platform: None,
             planned_platform: None,
+            rsid: None,
+            calling_points: Vec::new(),
         }
     }
 
@@ -2131,6 +2266,8 @@ mod compute_sample_stats_tests {
             skipped_stations: skipped_stations.into_iter().map(str::to_string).collect(),
             platform: None,
             planned_platform: None,
+            rsid: None,
+            calling_points: Vec::new(),
         }
     }
 

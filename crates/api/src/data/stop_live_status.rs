@@ -125,6 +125,7 @@ mod tests {
             booked_platform: None,
             live_status: None,
             late_minutes: None,
+            board: None,
         }
     }
 
