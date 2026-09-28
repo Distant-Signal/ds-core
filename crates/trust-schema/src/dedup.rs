@@ -7,7 +7,7 @@ use crate::schema::TrustMessage;
 /// (at-least-once delivery means this WILL happen). Built from the fields
 /// that together identify one real-world event -- not the whole message
 /// body, which may carry a redelivery-specific envelope field this pass
-/// doesn't model. Mirrors `crates/enricher/src/hash.rs`'s `text_hash` in
+/// doesn't model. Mirrors `crates/common/src/text_hash.rs`'s `text_hash` in
 /// shape and in the null-byte separator rationale (prevents field-boundary
 /// collisions).
 ///

@@ -428,9 +428,11 @@ pub struct LineStatus {
     /// Full-coverage analog of `sample_stats` -- see `FullCoverageAvailability`'s
     /// own doc comment and
     /// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
-    /// Decision 1. `None` for every line today (nothing produces this yet);
-    /// permanent, additive scaffolding, not a replacement for `sample_stats`
-    /// -- see that design doc's Decision 3.
+    /// Decision 1. Set by `aggregator::aggregation::merge_full_coverage_stats`
+    /// for a full-coverage-enabled line (see
+    /// `LineDefinition::full_coverage_enabled`) once `full-coverage-consumer`
+    /// has stats for it; `None` otherwise. Additive, not a replacement for
+    /// `sample_stats` -- see that design doc's Decision 3.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_coverage_stats: Option<SampleStats>,
     #[serde(default = "FullCoverageAvailability::not_enabled_default")]
@@ -831,16 +833,19 @@ pub struct LineDefinition {
     #[serde(default)]
     pub headcode_prefixes: Vec<String>,
     /// Opt-in per line, catalogue-authored -- mirrors `severity_overrides`'s
-    /// existing per-line-TOML-field precedent. Gates whether a future
-    /// full-coverage (TRUST-vs-schedule) consumer even attempts this line,
+    /// existing per-line-TOML-field precedent. Gates whether the
+    /// full-coverage (TRUST-vs-schedule) path even attempts this line,
     /// not merely whether its result is shown once resolved -- so a
     /// line's `LineStatus.full_coverage_availability` genuinely stays
     /// `NotEnabled` (not `Pending` forever) until this flag is set,
     /// distinguishing "not rolled out to yet" from "rolled out, still
     /// resolving." See
     /// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
-    /// Decision 3. `false` for every line in this repo's catalogue today
-    /// -- nothing consumes this yet (see `crates/aggregator::merge_full_coverage`).
+    /// Decision 3. Consumed by `aggregator::aggregation::merge_full_coverage`,
+    /// OR'd with the aggregator's `--full-coverage-enabled-default`
+    /// (binary default `false`; the Helm chart's
+    /// `aggregator.fullCoverageEnabledDefault` defaults it to `true`). Only
+    /// `lines/tfw-conwy-valley.toml` sets it in this repo's catalogue.
     #[serde(default)]
     pub full_coverage_enabled: bool,
 }

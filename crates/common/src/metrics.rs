@@ -1,10 +1,14 @@
-//! Shared Prometheus metrics installer for the six binaries that have no
-//! HTTP server of their own today (`aggregator`, `enricher`, and the five
-//! pollers) -- mirrors `crates/common::ingest`'s precedent of being "the
+//! Shared Prometheus metrics installer for every service binary that has
+//! no axum server of its own -- `aggregator`, `enricher`, `notifier`, the
+//! TRUST/movement consumers (`movement-relay`, `trust-consumer`,
+//! `full-coverage-consumer`, `trust-backlog-consumer`), `schedule-ingest`,
+//! `schedule-reference`, and every `poller-*` (through
+//! `common::poller_loop`) -- mirrors `crates/common::ingest`'s precedent of being "the
 //! one place that changes" for boilerplate every one of those binaries
 //! would otherwise repeat (`crates/common/src/ingest.rs`'s own module doc).
 //! `api` does NOT call `install` (see
-//! docs/superpowers/plans/2026-08-29-metrics.md's Task 2): it already has
+//! docs/superpowers/plans/2026-08-29-metrics.md's Task 2, since pruned --
+//! see history, commit `ec42cf95`): it already has
 //! an axum listener to attach `axum-prometheus`'s middleware to instead,
 //! and composes the same underlying `metrics` facade through that crate.
 //!

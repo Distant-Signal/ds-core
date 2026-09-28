@@ -16,14 +16,12 @@
 //!
 //! # What this crate is not
 //!
-//! - **Not wired into any production data path.** As of this commit,
-//!   nothing in `crates/trust-consumer`, `crates/aggregator`, or
-//!   `crates/api` depends on this crate -- mirroring the already-merged
-//!   full-coverage presentation scaffolding's own "kept honest about being
-//!   inert" precedent (see `common::FullCoverageAvailability` /
-//!   `LineDefinition.full_coverage_enabled`'s own doc comments: "nothing
-//!   consumes this yet"). This crate is built and tested, and left unused,
-//!   on purpose.
+//! - **Status (2026-09-28): now wired in.** This crate started out
+//!   deliberately unused by any production data path; that is no longer
+//!   true. `crates/api` (trip planning among others),
+//!   `crates/full-coverage-consumer`,
+//!   `crates/schedule-reference` and `crates/trip-planner` all depend on it
+//!   today. The crate itself still does no I/O (below).
 //! - **No I/O of any kind.** Every public function takes `&str`
 //!   (already-read file content) or already-parsed structures in, and
 //!   returns plain data out -- the same "parsing logic pure and testable

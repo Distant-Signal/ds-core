@@ -1,5 +1,5 @@
 //! Pure position-in-journey derivation from a sequence of TRUST events.
-//! Structured the way `crates/aggregator/src/matcher.rs` is pure and
+//! Structured the way `crates/common/src/matcher.rs` is pure and
 //! independently testable -- no I/O, no database, just "given the
 //! previous state and one new event, what's the new state."
 
