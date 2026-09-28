@@ -35,18 +35,17 @@
 //!   production CIF bytes** in the four validation sessions behind
 //!   `docs/superpowers/specs/2026-08-29-trust-schedule-delay-validation-findings.md`.
 //!
-//! # Why this exists anyway
+//! # What it is used for
 //!
-//! Independent of Option B's own still-open "does this add real value"
-//! question, this closes an already-documented gap in an already-shipped
-//! feature: `crates/trust-consumer/src/matching.rs`'s own module doc names
-//! "this app has no CIF schedule lookup to bridge Activation's `train_uid`
-//! to a departure time" as a real, current limitation of live pin
-//! resolution. Nothing in this crate wires into that module -- see the
-//! scoping doc's "Explicitly out of scope" -- but the gap it names is
-//! exactly the one this crate's two queries (`ScheduleIndex::schedule_for_uid`,
-//! `resolve::schedules_touching`) close, for a future pass to wire up
-//! deliberately.
+//! Bridging a pin's origin and departure time to a CIF `train_uid`:
+//! `crates/api/src/data/schedule_matching.rs` resolves pins schedule-first
+//! through [`match_pin`], so most pins reach trust-consumer already knowing
+//! their `train_uid` (trust-consumer itself still does no CIF lookup; see
+//! `crates/trust-consumer/src/matching.rs`). `crates/schedule-reference`
+//! publishes the per-line schedule population and network departures built
+//! with [`resolve::schedules_touching`], which full-coverage-consumer
+//! consumes, and `crates/trip-planner` builds its connections from the same
+//! resolved schedules.
 //!
 //! # Layout
 //!

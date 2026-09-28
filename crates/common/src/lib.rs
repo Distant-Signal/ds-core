@@ -996,9 +996,9 @@ pub struct StationFullCoverageSample {
 /// Tracking semantics, the pinned service is only ever known by what a
 /// departure-board view already has (RDM's ephemeral `serviceID`-adjacent
 /// fields), never by a durable train identity at pin time. Resolution to
-/// `(train_uid, service_date)` happens later, out of band, once
-/// trust-consumer observes a matching TRUST Activation (see
-/// docs/superpowers/plans/2026-08-28-train-tracking.md Task 10).
+/// `(train_uid, service_date)` happens later, out of band: api's
+/// schedule-first match (`crates/api/src/data/schedule_matching.rs`), or
+/// trust-consumer's live TRUST matching (`crates/trust-consumer/src/matching.rs`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackPinRequest {
     pub service_date: chrono::NaiveDate,
@@ -1077,8 +1077,8 @@ impl TimeWindow {
 /// Manual ticket-entry payload for `POST /Train/{trackingId}/tickets`
 /// (`crates/api/src/routes/train.rs`) -- the durable v1 backbone every
 /// ingestion tier ultimately funnels through (see
-/// docs/superpowers/plans/2026-08-29-journey-ticket-tracking.md's
-/// Architecture section). `source` defaults to "manual"; a `.pkpass`/PDF
+/// docs/superpowers/specs/2026-08-29-journey-ticket-tracking-design.md).
+/// `source` defaults to "manual"; a `.pkpass`/PDF
 /// upload preview (Tasks 6-9) is turned into a saved row by the client
 /// re-submitting this same request shape with `source` set to whichever
 /// tier produced the reviewed data ("pkpass-semantics" / "pkpass-heuristic"

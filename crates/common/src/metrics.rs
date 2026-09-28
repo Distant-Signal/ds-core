@@ -6,11 +6,9 @@
 //! `common::poller_loop`) -- mirrors `crates/common::ingest`'s precedent of being "the
 //! one place that changes" for boilerplate every one of those binaries
 //! would otherwise repeat (`crates/common/src/ingest.rs`'s own module doc).
-//! `api` does NOT call `install` (see
-//! docs/superpowers/plans/2026-08-29-metrics.md's Task 2, since pruned --
-//! see history, commit `ec42cf95`): it already has
-//! an axum listener to attach `axum-prometheus`'s middleware to instead,
-//! and composes the same underlying `metrics` facade through that crate.
+//! `api` does NOT call `install`: it already has an axum listener to attach
+//! `axum-prometheus`'s middleware to instead, and composes the same
+//! underlying `metrics` facade through that crate.
 //!
 //! See docs/superpowers/specs/2026-08-29-metrics-design.md's Architecture
 //! section for the full reasoning behind this split.
@@ -25,7 +23,7 @@ use metrics_exporter_prometheus::{Matcher, PrometheusBuilder};
 /// defaults (e.g. `process_cpu_seconds_total`) or a future metric from an
 /// unrelated process sharing the same Prometheus instance. Callers build a
 /// metric's full name through this function rather than hand-writing the
-/// prefix at each of the (many) call sites across six crates, so the one
+/// prefix at each of the many call sites across the workspace, so the one
 /// place that changes if the prefix itself ever does is this function, not
 /// every call site.
 pub fn metric_name(suffix: &str) -> String {
@@ -39,9 +37,9 @@ pub fn metric_name(suffix: &str) -> String {
 /// `metrics-exporter-prometheus` renders every histogram as a rolling
 /// 60-second-window summary instead of a true Prometheus histogram -- its
 /// quantiles silently read 0 once the last observation ages out of that
-/// window, which is misleading for any poller whose cycle is longer than
-/// 60s (five of the seven binaries this module serves). See this branch's
-/// final whole-branch review, Critical finding #1.
+/// window, which is misleading for any binary whose cycle is longer than
+/// 60s (most of the pollers, schedule-ingest and schedule-reference among
+/// them).
 const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0];
 
 /// Installs the process-global Prometheus recorder and starts its embedded
@@ -54,9 +52,9 @@ const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.
 ///
 /// No `axum` dependency: `metrics-exporter-prometheus`'s
 /// `with_http_listener` spins up its own minimal `hyper`-based listener, so
-/// this doesn't pull a web framework into six crates that have never
-/// needed one -- confirmed against the crate's docs.rs page as part of
-/// this feature's design pass
+/// this doesn't pull a web framework into the worker crates, which have
+/// never needed one -- confirmed against the crate's docs.rs page as part
+/// of this feature's design pass
 /// (docs/superpowers/specs/2026-08-29-metrics-design.md).
 ///
 /// Every histogram recorded through the recorder this installs gets
@@ -77,10 +75,8 @@ pub fn install(port: u16) -> Result<()> {
 /// `enricher` currently needs this (its LLM-call duration histogram,
 /// against `config.llm_request_timeout_secs`); every other caller of
 /// `install` has no such tuned-timeout metric and keeps using the plain,
-/// no-argument `install` -- see
-/// docs/superpowers/plans/2026-08-29-metrics.md's Task 9 for why this is a
-/// second function rather than a breaking signature change to `install`
-/// itself.
+/// no-argument `install`, which is why this is a second function rather
+/// than an extra parameter on `install` itself.
 pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> Result<()> {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let mut builder = PrometheusBuilder::new()

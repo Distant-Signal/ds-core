@@ -59,18 +59,26 @@ segment. The exclusive segment starts at the *next* station after the junction.
 For example, on SWR:
 
 ```
-WAT - CLJ - WIM - SUR - WOK | BSK - WIN - SOU - BMH - POO - WEY
-[------ swr-trunk-waterloo ------|---------- swr-swml-south ----------]
-                              junction
+WAT - CLJ - WIM - SUR - WOK | BSK - WIN - SOU | BCU | BMH - POO - WEY
+[---------- (1) -----------] [----- (2) -----]  (3)  [---- (2) -----]
+
+(1) swr-trunk-waterloo   (2) swr-swml-south   (3) swr-brockenhurst-junction
 ```
+
+(Simplified: `lines/swr-south-west-main.toml` has a few more stations.)
 
 WOK is on `swr-trunk-waterloo` (shared with Portsmouth Direct, Alton and
 the other SWR routes out of Waterloo).
 The South West Main Line's exclusive segment starts at BSK (Basingstoke).
+BCU (Brockenhurst), where the Lymington branch leaves, is a junction too, so
+it has its own narrow shared segment, `swr-brockenhurst-junction`, used by
+both `swr-south-west-main.toml` and `swr-lymington-branch.toml`. The
+stations either side of it stay on the exclusive `swr-swml-south`.
 
 This way an incident at Woking propagates to every line using
-`swr-trunk-waterloo` as a "shared trunk" event; an incident at Basingstoke or further south stays
-local to the South West Main.
+`swr-trunk-waterloo` as a "shared trunk" event, an incident at Brockenhurst
+reaches the South West Main and the Lymington branch, and an incident
+anywhere else from Basingstoke south stays local to the South West Main.
 
 ## Severity tuning
 
