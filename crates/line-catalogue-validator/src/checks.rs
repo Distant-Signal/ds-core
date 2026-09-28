@@ -239,18 +239,18 @@ pub fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Fi
 ///
 /// Station-level coverage gaps (real CRS codes with no line referencing
 /// them) are deliberately not computed here: `reference-data/crs-tiploc.csv`
-/// carries every location railwaycodes.org.uk has ever issued a CRS for --
-/// including long-closed stations and non-passenger pseudo-codes (`X`-
-/// prefixed) it does not distinguish from currently-open ones (see that
-/// file's provenance doc) -- so a bare set-difference against 4,500+ CRS
-/// codes would be overwhelmingly noise (this catalogue intentionally
-/// covers ~110 lines, not every minor request stop in Great Britain) with
-/// no reliable way from this data alone to scope it down to "currently-open
-/// passenger stations" as the task suggests. Rather than ship a report
-/// that's mostly noise, this is left as a documented gap: a genuine
-/// open/closed status column would need Network Rail's own CORPUS data
-/// (the live tier's territory, see `reference.rs`), not this vendored
-/// snapshot.
+/// carries every CRS in Network Rail's CORPUS -- including freight,
+/// engineering and Underground/bus pseudo-codes (`X`/`Z`/`Q`-prefixed) and
+/// locations with no passenger service, which it does not distinguish from
+/// currently-open stations (see that file's provenance doc) -- so a bare
+/// set-difference against 4,100+ CRS codes would be overwhelmingly noise
+/// (this catalogue intentionally covers ~240 line files, not every minor
+/// request stop in Great Britain) with no reliable way from this data alone
+/// to scope it down to "currently-open passenger stations" as the task
+/// suggests. Rather than ship a report that's mostly noise, this is left as
+/// a documented gap: CORPUS has no open/closed or passenger-service column
+/// either, so it would need another source (e.g. the Knowledgebase
+/// Stations feed).
 pub fn unused_operator_codes(
     lines: &[LoadedLine],
     reference: &ReferenceData,

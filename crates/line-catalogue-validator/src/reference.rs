@@ -5,9 +5,9 @@
 //! and [`ReferenceData::fetch_live`] (thorough tier: scrapes
 //! railwaycodes.org.uk's CRS pages live, and takes operator codes from the
 //! real RDM TOC feed when credentials are available, else from the vendored
-//! Knowledgebase `toc-codes.csv`). `crs-tiploc.csv` is still a
-//! railwaycodes.org.uk snapshot; `toc-codes.csv` is now a Knowledgebase TOC
-//! List snapshot (DQ13) -- see `regenerate.rs`.
+//! Knowledgebase `toc-codes.csv`). `crs-tiploc.csv` is a Network Rail
+//! CORPUS snapshot and `toc-codes.csv` a Knowledgebase TOC List snapshot
+//! (DQ13) -- see `regenerate.rs`.
 //!
 //! Both tiers build the exact same [`ReferenceData`] shape, so
 //! `checks::validate_lines`/`checks::coverage_report` have no idea which
@@ -131,6 +131,12 @@ impl ReferenceData {
 
         for letter in b'a'..=b'z' {
             let letter = letter as char;
+            // The only railwaycodes.org.uk fetch left. /attribution credits
+            // the site solely because of it (the `railwaycodes` entry in
+            // frontend/components/OpenDataAttribution.tsx): remove that
+            // credit when this scrape is removed.
+            // `tests::railwaycodes_credit_exists_exactly_while_the_live_tier_scrapes_it`
+            // fails if the two drift apart.
             let url = format!("https://www.railwaycodes.org.uk/crs/crs{letter}.shtm");
             let body = fetch_with_identifying_ua(client, &url)
                 .await
@@ -474,6 +480,46 @@ fn clean_html_text(tag_re: &regex::Regex, s: &str) -> String {
 mod tests {
     use super::*;
 
+    /// `/attribution` credits railwaycodes.org.uk only because the live
+    /// tier scrapes its CRS pages (no committed file comes from it any
+    /// more), so the credit and the scrape must come and go together. Reads
+    /// both source files at test time: this module's non-test code for a
+    /// string-literal railwaycodes.org.uk URL, and the frontend's
+    /// `DATA_SOURCES` for the `railwaycodes` entry.
+    #[test]
+    fn railwaycodes_credit_exists_exactly_while_the_live_tier_scrapes_it() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate lives at <repo>/crates/line-catalogue-validator");
+        let this_file =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/reference.rs"))
+                .expect("read reference.rs");
+        let non_test_code = this_file.split("#[cfg(test)]").next().unwrap_or_default();
+        let scrapes = non_test_code.contains("\"https://www.railwaycodes.org.uk/");
+        let attribution =
+            std::fs::read_to_string(repo_root.join("frontend/components/OpenDataAttribution.tsx"))
+                .expect("read frontend/components/OpenDataAttribution.tsx");
+        let credits = attribution.contains("id: 'railwaycodes'");
+        assert_eq!(
+            scrapes,
+            credits,
+            "the live tier {} railwaycodes.org.uk but /attribution {} it: remove the \
+             `railwaycodes` entry in frontend/components/OpenDataAttribution.tsx together \
+             with the scrape in reference.rs (or restore both)",
+            if scrapes {
+                "scrapes"
+            } else {
+                "no longer scrapes"
+            },
+            if credits {
+                "still credits"
+            } else {
+                "does not credit"
+            },
+        );
+    }
+
     /// LEG-24: the live tier identifies itself honestly and never
     /// impersonates a browser.
     #[test]
@@ -598,9 +644,10 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
 
         // No real TIPLOC is shared by a large number of unrelated CRS
         // codes; a token that is, is footnote prose (`CODE` reached 242).
-        // Genuine multi-CRS TIPLOCs top out at 4 in this snapshot (e.g.
-        // CANWHRF: CWF/CWX/ZCW/ZQC), so 6 is a comfortable ceiling that
-        // still catches the artifact class by two orders of magnitude.
+        // Genuine multi-CRS TIPLOCs topped out at 4 in the railwaycodes
+        // snapshot (e.g. CANWHRF: CWF/CWX/ZCW/ZQC) and at fewer in the
+        // CORPUS one, so 6 is a comfortable ceiling that still catches the
+        // artifact class by two orders of magnitude.
         let mut tiploc_to_crs: HashMap<&str, Vec<&str>> = HashMap::new();
         for (crs, tiplocs) in &data.crs_to_tiploc {
             for tiploc in tiplocs {

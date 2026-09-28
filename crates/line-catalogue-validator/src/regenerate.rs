@@ -3,8 +3,8 @@
 //! scrape (DQ13 / LEG-24).
 //!
 //! - `crs-tiploc.csv` from Network Rail's **CORPUS** extract
-//!   (`CORPUSExtract.json`, NRIL open-data licence -- the same licence
-//!   `/attribution` already credits). Run with
+//!   (`CORPUSExtract.json`, the Rail Data Marketplace "NWR CORPUS" product,
+//!   Open Government Licence v3.0 -- credited on `/attribution`). Run with
 //!   `--regenerate-crs-tiploc-from-corpus <CORPUSExtract.json>`.
 //! - `toc-codes.csv` from the **Knowledgebase Train Operating Company List**
 //!   (the RDM feed `crates/poller-tocs` ingests into the `tocs` table). Run
@@ -51,38 +51,42 @@ struct CorpusExtract {
 /// `tiploc` only for a CRS that no CORPUS row pairs with any TIPLOC.
 pub type CrsTiplocRow = (String, String, String);
 
-/// Which cross-referencing rule produced a `(crs, tiploc)` pair. Rules are
-/// tried in this order and the first that yields exactly one CRS wins.
+/// Which rule produced a `(crs, tiploc)` pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Rule {
     /// The TIPLOC's own CORPUS row carries a `3ALPHA`.
     Direct,
-    /// Exactly one CRS among the rows sharing the TIPLOC's 4-digit NLC
-    /// location prefix.
-    NlcGroup,
-    /// Exactly one CRS among the rows sharing the TIPLOC's STANOX.
-    StanoxGroup,
+    /// A CRS-less TIPLOC that is part of a station, named as such: it
+    /// shares a STANOX with that station's `3ALPHA` row and its description
+    /// is the station's name plus only platform-ish words
+    /// (`CLAPHAM JN (WINDSOR)`, `VICTORIA PLAT 10`). See
+    /// [`crs_tiploc_from_corpus`].
+    StationName,
+    /// A CRS-less TIPLOC that is part of a station, described only by
+    /// platform-ish words (`CENTRAL`, `SOUTH WEST`, `NO 4 BAY PLATFORM`):
+    /// it shares both the STANOX and the 4-digit NLC location with that
+    /// station's `3ALPHA` row.
+    StationQualifier,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 3] = [Rule::Direct, Rule::NlcGroup, Rule::StanoxGroup];
+    pub const ALL: [Rule; 3] = [Rule::Direct, Rule::StationName, Rule::StationQualifier];
 
     pub fn label(self) -> &'static str {
         match self {
             Rule::Direct => "direct (own 3ALPHA)",
-            Rule::NlcGroup => "NLC group (4-digit prefix)",
-            Rule::StanoxGroup => "STANOX group",
+            Rule::StationName => "station part by name (same STANOX)",
+            Rule::StationQualifier => "station part by platform words (same STANOX + NLC)",
         }
     }
 }
 
-/// A group (NLC location prefix or STANOX) that was consulted for at least
-/// one CRS-less TIPLOC and held two or more distinct CRS codes, so it could
-/// not settle any of them.
+/// A STANOX where one CRS-less TIPLOC's description matched two or more
+/// distinct stations' names, so it could not be settled.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct AmbiguousGroup {
     pub candidates: BTreeSet<String>,
-    /// The CRS-less TIPLOCs that consulted this group.
+    /// The CRS-less TIPLOCs that matched more than one of them.
     pub tiplocs: BTreeSet<String>,
 }
 
@@ -92,20 +96,22 @@ pub struct AmbiguousGroup {
 pub struct InferenceReport {
     /// Every `(crs, tiploc)` pair in the output and the rule behind it.
     pub pair_rules: BTreeMap<(String, String), Rule>,
-    /// Ambiguous NLC groups, keyed by 4-digit prefix (prefixes joined with
-    /// `+` for a TIPLOC whose rows carry several NLC locations).
-    pub ambiguous_nlc: BTreeMap<String, AmbiguousGroup>,
-    /// Ambiguous STANOX groups, keyed the same way.
-    pub ambiguous_stanox: BTreeMap<String, AmbiguousGroup>,
-    /// TIPLOCs assigned by the STANOX rule after their NLC group had been
-    /// ambiguous (as opposed to empty). These are the least certain
-    /// inferences: worth eyeballing.
-    pub stanox_after_ambiguous_nlc: BTreeSet<String>,
-    /// CRS-less TIPLOCs left out because neither group was decisive and at
-    /// least one of them was ambiguous.
-    pub left_out_ambiguous: BTreeSet<String>,
-    /// CRS-less TIPLOCs left out because neither group had any CRS at all
-    /// (junctions, sidings, depots: the great majority of CORPUS).
+    /// Description of each TIPLOC paired by an inference rule, for
+    /// eyeballing the inferences.
+    pub inferred_descs: BTreeMap<String, String>,
+    /// CRS-less TIPLOCs whose description matched several stations at
+    /// their STANOX, keyed by STANOX (joined with `+` for a TIPLOC whose
+    /// rows carry several).
+    pub ambiguous: BTreeMap<String, AmbiguousGroup>,
+    /// CRS-less TIPLOCs that share a STANOX with a station but were left
+    /// out because their description is not that station's name, or names
+    /// it followed by a non-station word (signal, junction, sidings, depot,
+    /// loop, ...): tiploc -> its description. Mostly signals and junctions
+    /// at the station throat.
+    pub left_out_by_name: BTreeMap<String, String>,
+    /// CRS-less TIPLOCs left out because no station `3ALPHA` row shares
+    /// their STANOX (junctions, sidings, depots: the great majority of
+    /// CORPUS).
     pub left_out_no_candidate: usize,
 }
 
@@ -165,38 +171,303 @@ fn trimmed(s: Option<&str>) -> &str {
     s.unwrap_or("").trim()
 }
 
-/// Outcome of consulting one kind of group for one CRS-less TIPLOC.
-enum GroupVerdict {
-    One(String),
-    Ambiguous(BTreeSet<String>),
-    Nothing,
-}
+/// Abbreviations CORPUS descriptions use for the words the name checks
+/// look at, mapped to one spelling.
+const ABBREVIATIONS: &[(&str, &str)] = &[
+    ("JN", "JUNCTION"),
+    ("JCN", "JUNCTION"),
+    ("JNC", "JUNCTION"),
+    ("JNCT", "JUNCTION"),
+    ("JCT", "JUNCTION"),
+    ("JUNC", "JUNCTION"),
+    ("JUNCTON", "JUNCTION"),
+    ("SIG", "SIGNAL"),
+    ("SIGS", "SIGNAL"),
+    ("SDG", "SIDINGS"),
+    ("SDGS", "SIDINGS"),
+    ("SDNGS", "SIDINGS"),
+    ("SIDNGS", "SIDINGS"),
+    ("SIDING", "SIDINGS"),
+    ("SIDDINGS", "SIDINGS"),
+    ("CARR", "CARRIAGE"),
+    ("XOVERS", "CROSSOVER"),
+    ("XOVER", "CROSSOVER"),
+    ("YD", "YARD"),
+];
 
-fn consult(keys: &BTreeSet<String>, index: &BTreeMap<String, BTreeSet<String>>) -> GroupVerdict {
-    let candidates: BTreeSet<String> = keys
-        .iter()
-        .filter_map(|k| index.get(k))
-        .flatten()
-        .cloned()
-        .collect();
-    match candidates.len() {
-        0 => GroupVerdict::Nothing,
-        1 => GroupVerdict::One(candidates.into_iter().next().unwrap_or_default()),
-        _ => GroupVerdict::Ambiguous(candidates),
+/// Words that mark a station's own `3ALPHA` row as not really a station
+/// (a pseudo-CRS carriage siding, yard or depot such as `XCP` "BR CARRIAGE
+/// SIDINGS" at Clapham Junction's STANOX), so it is never a candidate.
+/// Deliberately excludes place-name words (`JUNCTION`, `ROAD`, `TOWN`...).
+const NON_STATION_ANCHOR_WORDS: &[&str] = &[
+    "BALLAST",
+    "CARRIAGE",
+    "CROSSOVER",
+    "CSD",
+    "DEPOT",
+    "DEPOTS",
+    "ENTRANCE",
+    "ENTRY",
+    "EXIT",
+    "FREIGHT",
+    "FRT",
+    "GF",
+    "GOODS",
+    "HOLDING",
+    "LC",
+    "LOOP",
+    "RECEPTION",
+    "REV",
+    "SHED",
+    "SHEDS",
+    "SIDINGS",
+    "SIGNAL",
+    "SST",
+    "STABLING",
+    "TMD",
+    "TRAINCARE",
+    "WASHER",
+    "YARD",
+];
+
+/// Words that, following a station's name in a CRS-less TIPLOC's
+/// description, mark it as infrastructure or a non-rail point near the
+/// station rather than part of it: signals, junctions, sidings, depots,
+/// loops, yards, crossovers, level crossings, ground frames, staff and
+/// engineering locations, freight terminals, bus stops and the like.
+const NON_STATION_SUFFIX_WORDS: &[&str] = &[
+    "BALLAST",
+    "BOX",
+    "BRIDGE",
+    "BUS",
+    "CARRIAGE",
+    "CE",
+    "CENTRE",
+    "CHORD",
+    "CHS",
+    "CROSSING",
+    "CROSSOVER",
+    "CS",
+    "CSD",
+    "CURVE",
+    "DEPOT",
+    "DEPOTS",
+    "DMUD",
+    "DOCK",
+    "DOCKS",
+    "DRIVERS",
+    "EMUD",
+    "ENG",
+    "ENGOPS",
+    "ENTRANCE",
+    "ENTRY",
+    "EXIT",
+    "FRAME",
+    "FREIGHT",
+    "FRT",
+    "FUEL",
+    "FUELLING",
+    "GDS",
+    "GF",
+    "GOODS",
+    "GROUND",
+    "HEADSHUNT",
+    "HOLDING",
+    "HQ",
+    "JUNCTION",
+    "LC",
+    "LINE",
+    "LINES",
+    "LIP",
+    "LOOP",
+    "LOOPS",
+    "MAINTENANCE",
+    "MESS",
+    "MUSEUM",
+    "MUSM",
+    "NECK",
+    "OFFICE",
+    "OTS",
+    "PAYBILL",
+    "PW",
+    "PWAY",
+    "QUARRY",
+    "RECEPTION",
+    "RELIEF",
+    "REV",
+    "ROAD",
+    "SALES",
+    "SB",
+    "SERVICES",
+    "SHED",
+    "SHEDS",
+    "SHIP",
+    "SHUNT",
+    "SIDINGS",
+    "SIGNAL",
+    "SIGNALLING",
+    "SPUR",
+    "SST",
+    "STABLING",
+    "STAFF",
+    "STOP",
+    "TERMINAL",
+    "TERMINALS",
+    "TMD",
+    "TOWN",
+    "TRAINCARE",
+    "TUNNEL",
+    "TURNBACK",
+    "UPL",
+    "VIADUCT",
+    "WASH",
+    "WASHER",
+    "WELDERS",
+    "WHARF",
+    "WORKS",
+    "XNG",
+    "YARD",
+];
+
+/// Splits a CORPUS description into normalised words: uppercased, dots
+/// dropped (so `L.C.` is `LC`), split on anything not a letter or digit,
+/// runs of single letters joined (`C H S` is `CHS`, `B R` is `BR`), and
+/// [`ABBREVIATIONS`] expanded.
+fn words(desc: &str) -> Vec<String> {
+    let cleaned = desc.to_ascii_uppercase().replace('.', "");
+    let mut out: Vec<String> = Vec::new();
+    let mut letter_run = String::new();
+    let flush = |run: &mut String, out: &mut Vec<String>| {
+        if !run.is_empty() {
+            out.push(std::mem::take(run));
+        }
+    };
+    for w in cleaned
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        if w.len() == 1 && w.bytes().all(|b| b.is_ascii_uppercase()) {
+            letter_run.push_str(w);
+            continue;
+        }
+        flush(&mut letter_run, &mut out);
+        out.push(w.to_owned());
     }
+    flush(&mut letter_run, &mut out);
+    for w in &mut out {
+        if let Some((_, full)) = ABBREVIATIONS.iter().find(|(abbr, _)| abbr == w) {
+            *w = (*full).to_owned();
+        }
+    }
+    out
 }
 
-fn note_ambiguous(
-    map: &mut BTreeMap<String, AmbiguousGroup>,
-    keys: &BTreeSet<String>,
-    candidates: BTreeSet<String>,
-    tiploc: &str,
-) {
-    let key = keys.iter().cloned().collect::<Vec<_>>().join("+");
-    let group = map.entry(key).or_default();
-    group.candidates.extend(candidates);
-    group.tiplocs.insert(tiploc.to_owned());
+/// A station's name as matched against CRS-less TIPLOC descriptions: its
+/// words, less a trailing `LONDON` (`CLAPHAM JUNCTION LONDON`,
+/// `PADDINGTON LONDON`), or `None` if its description marks it as not a
+/// station (see [`NON_STATION_ANCHOR_WORDS`]).
+fn station_stem(desc: &str) -> Option<Vec<String>> {
+    let mut w = words(desc);
+    if w.iter()
+        .any(|w| NON_STATION_ANCHOR_WORDS.contains(&w.as_str()))
+    {
+        return None;
+    }
+    if w.len() > 1 && w.last().is_some_and(|l| l == "LONDON") {
+        w.pop();
+    }
+    (!w.is_empty()).then_some(w)
 }
+
+/// Whether `desc` names the station with stem `stem` (optionally after a
+/// leading `LONDON`, as in `LONDON VICTORIA (E)`) and then only
+/// platform-ish words: `CLAPHAM JN (WINDSOR)`, `VICTORIA PLAT 10`,
+/// `BASINGSTOKE EAST BAY`, but not `CLAPHAM JN SIGNAL TVC147`,
+/// `READING SOUTHERN JN` or `WIMBLEDON SIGNAL W1101`. A word of three or
+/// more characters containing a digit (`W149`, `TVC587`, `150`) is a
+/// signal number and also disqualifies.
+fn names_station_part(desc: &[String], stem: &[String]) -> bool {
+    let rest = desc.strip_prefix(stem).or_else(|| {
+        desc.strip_prefix(["LONDON".to_owned()].as_slice())
+            .and_then(|d| d.strip_prefix(stem))
+    });
+    let Some(rest) = rest else {
+        return false;
+    };
+    !rest.iter().any(|w| {
+        NON_STATION_SUFFIX_WORDS.contains(&w.as_str())
+            || (w.len() >= 3 && w.bytes().any(|b| b.is_ascii_digit()))
+    })
+}
+
+/// Words that, on their own, describe a part of a station: platform
+/// groups and bays (`CENTRAL`, `EASTERN`, `SOUTH WEST`, `NO 4 BAY
+/// PLATFORM`, `DOWN BAY`).
+const PLATFORM_WORDS: &[&str] = &[
+    "BAY",
+    "BAYS",
+    "CENTRAL",
+    "DOWN",
+    "EAST",
+    "EASTERN",
+    "FAST",
+    "HIGH",
+    "LOCAL",
+    "LOW",
+    "MAIN",
+    "MIDDLE",
+    "NO",
+    "NORTH",
+    "NORTHERN",
+    "PLAT",
+    "PLATFORM",
+    "PLATFORMS",
+    "PLATS",
+    "SLOW",
+    "SOUTH",
+    "SOUTHERN",
+    "SUBURBAN",
+    "UP",
+    "WEST",
+    "WESTERN",
+];
+
+/// Whether `desc` is made only of [`PLATFORM_WORDS`], platform numbers of
+/// at most two digits (`4`, `NO3`) and single letters (`C`).
+fn is_platform_words_only(desc: &[String]) -> bool {
+    !desc.is_empty()
+        && desc.iter().all(|w| {
+            PLATFORM_WORDS.contains(&w.as_str())
+                || (w.len() <= 2 && w.bytes().all(|b| b.is_ascii_digit()))
+                || w.strip_prefix("NO").is_some_and(|n| {
+                    (1..=2).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_digit())
+                })
+                || (w.len() == 1 && w.bytes().all(|b| b.is_ascii_uppercase()))
+        })
+}
+
+/// A station-like `3ALPHA` row, as a candidate for CRS-less TIPLOCs at its
+/// STANOX.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Station {
+    stem: Vec<String>,
+    nlc: Option<String>,
+    crs: String,
+}
+
+/// One row of a CRS-less TIPLOC.
+struct TiplocRow {
+    stanox: Option<String>,
+    nlc: Option<String>,
+    words: Vec<String>,
+    desc: String,
+}
+
+// The inference rule below is a deliberate, user-accepted trade-off
+// (precision over recall), with its known costs recorded in
+// reference-data/line-catalogue-validation.md, section "Decision
+// (2026-09-28): conservative CORPUS inference". Read that before loosening
+// it or editing the word lists above.
 
 /// Turns a CORPUS extract into `crs-tiploc.csv` rows.
 ///
@@ -207,16 +478,38 @@ fn note_ambiguous(
 /// 1. **Direct**: any of the TIPLOC's rows has a `3ALPHA` that is exactly
 ///    three uppercase letters -- every such CRS is kept, and no inference
 ///    is attempted.
-/// 2. **NLC group**: otherwise, if the rows sharing the TIPLOC's 4-digit
-///    NLC location prefix carry exactly one distinct CRS, that one.
-/// 3. **STANOX group**: otherwise (no CRS in the NLC group, or more than
-///    one), if the rows sharing its STANOX (blank/zero STANOX ignored)
-///    carry exactly one distinct CRS, that one.
-/// 4. Otherwise the TIPLOC is left out.
+/// 2. **Station part**: otherwise, the candidate stations for each of its
+///    rows are the `3ALPHA` rows with the same STANOX (blank/zero STANOX
+///    never match) whose own description does not mark them as a
+///    yard/sidings/depot pseudo-station, and that the row's description
+///    either
+///    - **names**: the station's name (description less a trailing
+///      `LONDON`, abbreviations normalised) followed only by platform-ish
+///      words -- no signal, junction, sidings, depot, loop, yard,
+///      crossover, level-crossing, freight or staff word, and no signal
+///      number ([`Rule::StationName`]); or
+///    - **qualifies**: the description is only platform words (`CENTRAL`,
+///      `SOUTH WEST`, `NO 4 BAY PLATFORM`) and the row also shares the
+///      station's 4-digit NLC location ([`Rule::StationQualifier`]).
 ///
-/// Group candidates come only from rows with a direct `3ALPHA` (including
-/// ones without a usable TIPLOC), never from other inferences, so the
-/// result does not depend on evaluation order.
+///    Exactly one distinct CRS over all its rows: that one (by name if
+///    any row named it). Several: left out and reported as ambiguous.
+/// 3. Otherwise the TIPLOC is left out.
+///
+/// This recovers genuine platform-group TIPLOCs (Clapham Junction's
+/// `CLPHMJC`/`CLPHMJW`/`CLPHMJM`/`CLPHMJ1`, London Bridge's `LNDNBDC`/
+/// `LNDNBDE`, Victoria's `VICT9`..`VICT19`, St Pancras's `STPADOM`)
+/// without handing station codes to the signals, junctions and sidings
+/// that share a station's NLC prefix or even its STANOX. Looser rules were
+/// measured on a real extract and rejected (see
+/// `reference-data/line-catalogue-validation.md`): "the only CRS in the
+/// 4-digit NLC group, else the only CRS at the STANOX" (4,613 inferences,
+/// overwhelmingly signals, junctions, sidings and freight terminals), and
+/// "NLC and STANOX groups agree" (132, still mostly junctions and signals).
+///
+/// Candidates come only from rows with a direct `3ALPHA` (including ones
+/// without a usable TIPLOC), never from other inferences, so the result
+/// does not depend on evaluation order.
 ///
 /// Output contract (unchanged from the direct-only generator, so the
 /// validator reads it as before): one row per distinct `(crs, tiploc)`
@@ -233,49 +526,48 @@ pub fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
     let mut direct: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     // crs -> name, for a CRS seen on a row without a usable TIPLOC.
     let mut bare: BTreeMap<String, String> = BTreeMap::new();
-    // group key -> CRS codes seen directly in that group.
-    let mut nlc_index: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let mut stanox_index: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    // tiploc -> (NLC locations, STANOX keys) over all of its rows.
-    let mut tiploc_keys: BTreeMap<String, (BTreeSet<String>, BTreeSet<String>)> = BTreeMap::new();
+    // STANOX -> every station-like 3ALPHA row there.
+    let mut stations_at: BTreeMap<String, BTreeSet<Station>> = BTreeMap::new();
+    let mut tiploc_rows: BTreeMap<String, Vec<TiplocRow>> = BTreeMap::new();
     let mut tiplocs_with_crs: BTreeSet<String> = BTreeSet::new();
 
     for row in &extract.tiploc_data {
         let crs = trimmed(row.three_alpha.as_deref());
         let tiploc = trimmed(row.tiploc.as_deref());
-        let nlc = nlc_location(row.nlc.as_ref());
+        let desc = trimmed(row.nlc_desc.as_deref());
         let stanox = stanox_key(row.stanox.as_ref());
-        let has_crs = is_crs(crs);
+        let nlc = nlc_location(row.nlc.as_ref());
 
-        if has_crs {
-            if let Some(n) = &nlc {
-                nlc_index
-                    .entry(n.clone())
-                    .or_default()
-                    .insert(crs.to_owned());
+        if is_crs(crs) {
+            if let (Some(s), Some(stem)) = (&stanox, station_stem(desc)) {
+                stations_at.entry(s.clone()).or_default().insert(Station {
+                    stem,
+                    nlc: nlc.clone(),
+                    crs: crs.to_owned(),
+                });
             }
-            if let Some(s) = &stanox {
-                stanox_index
-                    .entry(s.clone())
-                    .or_default()
-                    .insert(crs.to_owned());
-            }
-            let name = trimmed(row.nlc_desc.as_deref()).to_owned();
             if is_tiploc(tiploc) {
                 tiplocs_with_crs.insert(tiploc.to_owned());
                 direct
                     .entry(crs.to_owned())
                     .or_default()
                     .entry(tiploc.to_owned())
-                    .or_insert(name);
+                    .or_insert_with(|| desc.to_owned());
             } else {
-                bare.entry(crs.to_owned()).or_insert(name);
+                bare.entry(crs.to_owned())
+                    .or_insert_with(|| desc.to_owned());
             }
         }
         if is_tiploc(tiploc) {
-            let keys = tiploc_keys.entry(tiploc.to_owned()).or_default();
-            keys.0.extend(nlc);
-            keys.1.extend(stanox);
+            tiploc_rows
+                .entry(tiploc.to_owned())
+                .or_default()
+                .push(TiplocRow {
+                    stanox,
+                    nlc,
+                    words: words(desc),
+                    desc: desc.to_owned(),
+                });
         }
     }
 
@@ -291,50 +583,59 @@ pub fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
         }
     }
 
-    for (tiploc, (nlcs, stanoxes)) in &tiploc_keys {
+    for (tiploc, rows) in &tiploc_rows {
         if tiplocs_with_crs.contains(tiploc) {
             continue;
         }
-        let nlc_verdict = consult(nlcs, &nlc_index);
-        let (crs, rule) = match nlc_verdict {
-            GroupVerdict::One(crs) => (Some(crs), Rule::NlcGroup),
-            nlc_verdict => {
-                let nlc_ambiguous = match nlc_verdict {
-                    GroupVerdict::Ambiguous(c) => {
-                        note_ambiguous(&mut report.ambiguous_nlc, nlcs, c, tiploc);
-                        true
-                    }
-                    _ => false,
+        let mut stanoxes: BTreeSet<&str> = BTreeSet::new();
+        let mut any_station = false;
+        // crs -> (rule, description of the row that matched it).
+        let mut candidates: BTreeMap<String, (Rule, &str)> = BTreeMap::new();
+        for row in rows {
+            let Some(stations) = row.stanox.as_ref().and_then(|s| stations_at.get(s)) else {
+                continue;
+            };
+            any_station = true;
+            stanoxes.extend(row.stanox.as_deref());
+            for station in stations {
+                let rule = if names_station_part(&row.words, &station.stem) {
+                    Rule::StationName
+                } else if row.nlc.is_some()
+                    && row.nlc == station.nlc
+                    && is_platform_words_only(&row.words)
+                {
+                    Rule::StationQualifier
+                } else {
+                    continue;
                 };
-                match consult(stanoxes, &stanox_index) {
-                    GroupVerdict::One(crs) => {
-                        if nlc_ambiguous {
-                            report.stanox_after_ambiguous_nlc.insert(tiploc.clone());
-                        }
-                        (Some(crs), Rule::StanoxGroup)
-                    }
-                    GroupVerdict::Ambiguous(c) => {
-                        note_ambiguous(&mut report.ambiguous_stanox, stanoxes, c, tiploc);
-                        report.left_out_ambiguous.insert(tiploc.clone());
-                        (None, Rule::StanoxGroup)
-                    }
-                    GroupVerdict::Nothing => {
-                        if nlc_ambiguous {
-                            report.left_out_ambiguous.insert(tiploc.clone());
-                        } else {
-                            report.left_out_no_candidate += 1;
-                        }
-                        (None, Rule::StanoxGroup)
-                    }
+                let entry = candidates
+                    .entry(station.crs.clone())
+                    .or_insert((rule, row.desc.as_str()));
+                if rule < entry.0 {
+                    *entry = (rule, row.desc.as_str());
                 }
             }
-        };
-        if let Some(crs) = crs {
-            pairs.entry(crs.clone()).or_default().insert(tiploc.clone());
-            report.pair_rules.insert((crs, tiploc.clone()), rule);
+        }
+        if candidates.len() == 1 {
+            if let Some((crs, (rule, desc))) = candidates.into_iter().next() {
+                pairs.entry(crs.clone()).or_default().insert(tiploc.clone());
+                report.pair_rules.insert((crs, tiploc.clone()), rule);
+                report
+                    .inferred_descs
+                    .insert(tiploc.clone(), desc.to_owned());
+            }
+        } else if !candidates.is_empty() {
+            let key = stanoxes.into_iter().collect::<Vec<_>>().join("+");
+            let group = report.ambiguous.entry(key).or_default();
+            group.candidates.extend(candidates.into_keys());
+            group.tiplocs.insert(tiploc.clone());
+        } else if any_station {
+            let desc = rows.first().map(|r| r.desc.clone()).unwrap_or_default();
+            report.left_out_by_name.insert(tiploc.clone(), desc);
+        } else {
+            report.left_out_no_candidate += 1;
         }
     }
-
     let crs_codes: BTreeSet<&String> = pairs.keys().chain(bare.keys()).collect();
     let mut rows = Vec::new();
     for crs in crs_codes {
@@ -519,36 +820,37 @@ pub fn render_report(
     for rule in Rule::ALL {
         let _ = writeln!(out, "pairs by {}: {}", rule.label(), r.pairs_by_rule(rule));
     }
+    let ambiguous_tiplocs: usize = r.ambiguous.values().map(|g| g.tiplocs.len()).sum();
     let _ = writeln!(
         out,
-        "TIPLOCs assigned by STANOX after an ambiguous NLC group: {}{}",
-        r.stanox_after_ambiguous_nlc.len(),
-        if r.stanox_after_ambiguous_nlc.is_empty() {
-            String::new()
-        } else {
-            format!(" ({})", join(&r.stanox_after_ambiguous_nlc))
-        }
+        "CRS-less TIPLOCs left out as ambiguous (name matched several stations): {ambiguous_tiplocs}"
     );
     let _ = writeln!(
         out,
-        "CRS-less TIPLOCs left out as ambiguous: {}",
-        r.left_out_ambiguous.len()
+        "CRS-less TIPLOCs left out by name (at a station's STANOX, but a signal/junction/\
+         sidings/... or another name): {}",
+        r.left_out_by_name.len()
     );
     let _ = writeln!(
         out,
-        "CRS-less TIPLOCs left out with no candidate CRS: {}",
+        "CRS-less TIPLOCs left out with no station at their STANOX: {}",
         r.left_out_no_candidate
     );
     if detail >= ReportDetail::Standard {
-        write_groups(&mut out, "ambiguous NLC groups", &r.ambiguous_nlc);
-        write_groups(&mut out, "ambiguous STANOX groups", &r.ambiguous_stanox);
-    } else {
-        let _ = writeln!(
-            out,
-            "ambiguous groups: {} NLC, {} STANOX",
-            r.ambiguous_nlc.len(),
-            r.ambiguous_stanox.len()
-        );
+        let _ = writeln!(out, "\ninferred pairs:");
+        for ((crs, tiploc), rule) in &r.pair_rules {
+            if *rule != Rule::Direct {
+                let desc = r.inferred_descs.get(tiploc).map_or("", String::as_str);
+                let _ = writeln!(out, "  {crs},{tiploc} ({desc}) [{}]", rule.label());
+            }
+        }
+        write_groups(&mut out, "ambiguous STANOX groups", &r.ambiguous);
+    }
+    if detail == ReportDetail::Full {
+        let _ = writeln!(out, "\nleft out by name:");
+        for (tiploc, desc) in &r.left_out_by_name {
+            let _ = writeln!(out, "  {tiploc} ({desc})");
+        }
     }
 
     if let Some((path, c)) = comparison {
@@ -715,113 +1017,160 @@ mod tests {
         items.iter().map(|s| (*s).to_owned()).collect()
     }
 
-    /// Direct, NLC inheritance (numeric, string and zero-padded NLCs) and
-    /// STANOX fallback, in real CORPUS shape (blank values are one space).
-    #[test]
-    fn secondary_tiplocs_inherit_crs_by_nlc_then_stanox() {
-        let json = br#"{"TIPLOCDATA":[
-            {"NLC":548700,"STANOX":"87219","TIPLOC":"CLPHMJC","3ALPHA":"CLJ","UIC":" ","NLCDESC":"CLAPHAM JUNCTION","NLCDESC16":" "},
-            {"NLC":548703,"STANOX":"87200","TIPLOC":"CLPHMJW","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JN WINDSOR LINES","NLCDESC16":" "},
-            {"NLC":"548709","STANOX":" ","TIPLOC":"CLAPHMW","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM WEST","NLCDESC16":" "},
-            {"NLC":12300,"STANOX":" ","TIPLOC":"LZA","3ALPHA":"LZA","UIC":" ","NLCDESC":"LEADING ZERO","NLCDESC16":" "},
-            {"NLC":"012301","STANOX":" ","TIPLOC":"LZAB","3ALPHA":" ","UIC":" ","NLCDESC":"LEADING ZERO B","NLCDESC16":" "},
-            {"NLC":123400,"STANOX":"12345","TIPLOC":"FOOBAR","3ALPHA":"FOO","UIC":" ","NLCDESC":"FOO","NLCDESC16":" "},
-            {"NLC":999900,"STANOX":12345,"TIPLOC":"FOOBARX","3ALPHA":" ","UIC":" ","NLCDESC":"FOO EXTRA","NLCDESC16":" "},
-            {"NLC":777700,"STANOX":"00000","TIPLOC":"ZEROA","3ALPHA":"ZZA","UIC":" ","NLCDESC":"ZERO A","NLCDESC16":" "},
-            {"NLC":888800,"STANOX":"00000","TIPLOC":"ZEROB","3ALPHA":" ","UIC":" ","NLCDESC":"ZERO B","NLCDESC16":" "},
-            {"NLC":" ","STANOX":" ","TIPLOC":"BLANKX","3ALPHA":" ","UIC":" ","NLCDESC":"BLANK","NLCDESC16":" "},
-            {"NLC":0,"STANOX":0,"TIPLOC":"NOUGHT","3ALPHA":" ","UIC":" ","NLCDESC":"ZERO NLC","NLCDESC16":" "}
-        ]}"#;
-        let result = crs_tiploc_from_corpus(json).unwrap();
-        let s = |a: &str, b: &str, c: &str| (a.to_owned(), b.to_owned(), c.to_owned());
-        assert_eq!(
-            result.rows,
-            vec![
-                // CLAPHMW sorts first but is inferred, so the name stays
-                // the primary TIPLOC's.
-                s("CLJ", "CLAPHMW", "CLAPHAM JUNCTION"),
-                s("CLJ", "CLPHMJC", "CLAPHAM JUNCTION"),
-                s("CLJ", "CLPHMJW", "CLAPHAM JUNCTION"),
-                s("FOO", "FOOBAR", "FOO"),
-                s("FOO", "FOOBARX", "FOO"),
-                s("LZA", "LZA", "LEADING ZERO"),
-                s("LZA", "LZAB", "LEADING ZERO"),
-                // The all-zero STANOX is not a group: ZEROB stays out.
-                s("ZZA", "ZEROA", "ZERO A"),
-            ]
-        );
-        let r = &result.report;
-        assert_eq!(r.pair_rules[&pair("CLJ", "CLPHMJC")], Rule::Direct);
-        assert_eq!(r.pair_rules[&pair("CLJ", "CLPHMJW")], Rule::NlcGroup);
-        assert_eq!(r.pair_rules[&pair("CLJ", "CLAPHMW")], Rule::NlcGroup);
-        assert_eq!(r.pair_rules[&pair("LZA", "LZAB")], Rule::NlcGroup);
-        assert_eq!(r.pair_rules[&pair("FOO", "FOOBARX")], Rule::StanoxGroup);
-        assert_eq!(r.pairs_by_rule(Rule::Direct), 4);
-        assert_eq!(r.pairs_by_rule(Rule::NlcGroup), 3);
-        assert_eq!(r.pairs_by_rule(Rule::StanoxGroup), 1);
-        // ZEROB, BLANKX, NOUGHT.
-        assert_eq!(r.left_out_no_candidate, 3);
-        assert!(r.left_out_ambiguous.is_empty());
-        assert!(r.ambiguous_nlc.is_empty() && r.ambiguous_stanox.is_empty());
+    fn s(a: &str, b: &str, c: &str) -> CrsTiplocRow {
+        (a.to_owned(), b.to_owned(), c.to_owned())
     }
 
     #[test]
-    fn ambiguous_groups_assign_nothing_and_are_reported() {
+    fn words_normalise_dots_letter_runs_and_abbreviations() {
+        let w = |d: &str| words(d).join(" ");
+        assert_eq!(w("CLAPHAM JN (WINDSOR)"), "CLAPHAM JUNCTION WINDSOR");
+        assert_eq!(w("BRORA L.C."), "BRORA LC");
+        assert_eq!(w("HAYES (KENT) C H S"), "HAYES KENT CHS");
+        assert_eq!(
+            w("VICTORIA  PLAT  9    (TPS USE)"),
+            "VICTORIA PLAT 9 TPS USE"
+        );
+        assert_eq!(w("HARRINGAY UP REV SDGS"), "HARRINGAY UP REV SIDINGS");
+        assert_eq!(w("PECKHAM RYE (C)"), "PECKHAM RYE C");
+
+        let platform = |d: &str| is_platform_words_only(&words(d));
+        for d in [
+            "CENTRAL",
+            "SOUTH WEST",
+            "NO3 PLATFORM",
+            "NO 4 BAY PLATFORM",
+            "DOWN BAY",
+        ] {
+            assert!(platform(d), "{d}");
+        }
+        for d in [
+            "L H S",
+            "STATION FORECOURT",
+            "DOWN BAY SIDING",
+            "SIGNAL 570",
+            "NO 123",
+            "",
+        ] {
+            assert!(!platform(d), "{d}");
+        }
+    }
+
+    /// Real rows from a CORPUS extract (blank values are one space):
+    /// Clapham Junction's platform groups share its STANOX, and so do a
+    /// pseudo-CRS carriage siding (`XCP`), a loop and a signal; signals and
+    /// sidings sharing only its NLC prefix have their own STANOX.
+    #[test]
+    fn station_parts_inherit_crs_by_stanox_and_name() {
         let json = br#"{"TIPLOCDATA":[
-            {"NLC":400000,"STANOX":"40000","TIPLOC":"AAAA","3ALPHA":"AAA","NLCDESC":"A"},
-            {"NLC":400001,"STANOX":"40001","TIPLOC":"BBBB","3ALPHA":"BBB","NLCDESC":"B"},
-            {"NLC":400002,"STANOX":"40002","TIPLOC":"AMBIG1","3ALPHA":" ","NLCDESC":"NLC AMBIGUOUS"},
-            {"NLC":400003,"STANOX":"40000","TIPLOC":"AMBIG2","3ALPHA":" ","NLCDESC":"NLC AMBIGUOUS, STANOX NOT"},
-            {"NLC":500000,"STANOX":"50000","TIPLOC":"CCCC","3ALPHA":"CCC","NLCDESC":"C"},
-            {"NLC":510000,"STANOX":"50000","TIPLOC":"DDDD","3ALPHA":"DDD","NLCDESC":"D"},
-            {"NLC":520000,"STANOX":"50000","TIPLOC":"AMBIG3","3ALPHA":" ","NLCDESC":"STANOX AMBIGUOUS"}
+            {"NLC":559500,"STANOX":"87219","TIPLOC":"CLPHMJN","3ALPHA":"CLJ","UIC":"55950","NLCDESC":"CLAPHAM JUNCTION LONDON","NLCDESC16":" "},
+            {"NLC":559513,"STANOX":"87219","TIPLOC":"CLPHJCS","3ALPHA":"XCP","UIC":" ","NLCDESC":"BR CARRIAGE SIDINGS","NLCDESC16":" "},
+            {"NLC":559518,"STANOX":"87219","TIPLOC":"CLPHMJ1","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JUNCTION PLATS 0-2","NLCDESC16":" "},
+            {"NLC":559569,"STANOX":87219,"TIPLOC":"CLPHMJC","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JUNCTION (C)","NLCDESC16":" "},
+            {"NLC":559572,"STANOX":"87219","TIPLOC":"CLPHMJW","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JN (WINDSOR)","NLCDESC16":" "},
+            {"NLC":559595,"STANOX":"87219","TIPLOC":"CLPHJLP","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JUNCTION LOOP","NLCDESC16":" "},
+            {"NLC":559526,"STANOX":"87309","TIPLOC":"CLPH149","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JUNCTION SIGNAL W149","NLCDESC16":" "},
+            {"NLC":559532,"STANOX":"87227","TIPLOC":"CLPHMMS","3ALPHA":" ","UIC":" ","NLCDESC":"CLAPHAM JN MIDDLE SDG","NLCDESC16":" "},
+            {"NLC":557800,"STANOX":"87261","TIPLOC":"WIMBLDN","3ALPHA":"WIM","UIC":" ","NLCDESC":"WIMBLEDON","NLCDESC16":" "},
+            {"NLC":557831,"STANOX":"87261","TIPLOC":"WIMB827","3ALPHA":" ","UIC":" ","NLCDESC":"WIMBLEDON SIGNAL VC827","NLCDESC16":" "},
+            {"NLC":557802,"STANOX":"87261","TIPLOC":"WDON","3ALPHA":" ","UIC":" ","NLCDESC":"SOUTH WEST","NLCDESC16":" "},
+            {"NLC":557801,"STANOX":"87261","TIPLOC":"WDONSS","3ALPHA":" ","UIC":" ","NLCDESC":"SOUTH SIDINGS","NLCDESC16":" "},
+            {"NLC":999902,"STANOX":"87261","TIPLOC":"FAKECEN","3ALPHA":" ","UIC":" ","NLCDESC":"CENTRAL","NLCDESC16":" "},
+            {"NLC":542600,"STANOX":"87201","TIPLOC":"VICTRIA","3ALPHA":"VIC","UIC":" ","NLCDESC":"VICTORIA LONDON","NLCDESC16":" "},
+            {"NLC":542604,"STANOX":"87201","TIPLOC":"VICTRIE","3ALPHA":" ","UIC":" ","NLCDESC":"LONDON VICTORIA (E)","NLCDESC16":" "},
+            {"NLC":696900,"STANOX":"52226","TIPLOC":"STFD","3ALPHA":"SRA","UIC":" ","NLCDESC":"STRATFORD","NLCDESC16":" "},
+            {"NLC":696901,"STANOX":"52226","TIPLOC":"STFDCJ","3ALPHA":" ","UIC":" ","NLCDESC":"STRATFORD CENTRAL JUNCTION","NLCDESC16":" "},
+            {"NLC":154000,"STANOX":"63631","TIPLOC":"STPANCI","3ALPHA":"SPX","UIC":" ","NLCDESC":"ST PANCRAS","NLCDESC16":" "},
+            {"NLC":959200,"STANOX":"63631","TIPLOC":"STPADOM","3ALPHA":" ","UIC":" ","NLCDESC":"ST PANCRAS INTL (DOMESTIC)","NLCDESC16":" "},
+            {"NLC":777700,"STANOX":"00000","TIPLOC":"ZEROA","3ALPHA":"ZZA","UIC":" ","NLCDESC":"ZERO","NLCDESC16":" "},
+            {"NLC":888800,"STANOX":0,"TIPLOC":"ZEROB","3ALPHA":" ","UIC":" ","NLCDESC":"ZERO B","NLCDESC16":" "},
+            {"NLC":" ","STANOX":" ","TIPLOC":"BLANKX","3ALPHA":" ","UIC":" ","NLCDESC":"BLANK","NLCDESC16":" "}
+        ]}"#;
+        let result = crs_tiploc_from_corpus(json).unwrap();
+        assert_eq!(
+            result.rows,
+            vec![
+                s("CLJ", "CLPHMJ1", "CLAPHAM JUNCTION LONDON"),
+                s("CLJ", "CLPHMJC", "CLAPHAM JUNCTION LONDON"),
+                s("CLJ", "CLPHMJN", "CLAPHAM JUNCTION LONDON"),
+                s("CLJ", "CLPHMJW", "CLAPHAM JUNCTION LONDON"),
+                // STPADOM sorts after STPANCI but is inferred, so the name
+                // stays the primary TIPLOC's.
+                s("SPX", "STPADOM", "ST PANCRAS"),
+                s("SPX", "STPANCI", "ST PANCRAS"),
+                s("SRA", "STFD", "STRATFORD"),
+                s("VIC", "VICTRIA", "VICTORIA LONDON"),
+                s("VIC", "VICTRIE", "VICTORIA LONDON"),
+                s("WIM", "WDON", "WIMBLEDON"),
+                s("WIM", "WIMBLDN", "WIMBLEDON"),
+                s("XCP", "CLPHJCS", "BR CARRIAGE SIDINGS"),
+                s("ZZA", "ZEROA", "ZERO"),
+            ]
+        );
+        let r = &result.report;
+        assert_eq!(r.pair_rules[&pair("CLJ", "CLPHMJN")], Rule::Direct);
+        for t in ["CLPHMJ1", "CLPHMJC", "CLPHMJW"] {
+            assert_eq!(r.pair_rules[&pair("CLJ", t)], Rule::StationName, "{t}");
+        }
+        assert_eq!(r.pair_rules[&pair("SPX", "STPADOM")], Rule::StationName);
+        assert_eq!(r.pair_rules[&pair("VIC", "VICTRIE")], Rule::StationName);
+        // Platform words only, same STANOX and NLC location.
+        assert_eq!(r.pair_rules[&pair("WIM", "WDON")], Rule::StationQualifier);
+        assert_eq!(r.pairs_by_rule(Rule::Direct), 7);
+        assert_eq!(r.pairs_by_rule(Rule::StationName), 5);
+        assert_eq!(r.pairs_by_rule(Rule::StationQualifier), 1);
+        assert_eq!(r.inferred_descs["CLPHMJW"], "CLAPHAM JN (WINDSOR)");
+        assert_eq!(r.inferred_descs["WDON"], "SOUTH WEST");
+        // At a station's STANOX, but a loop, a signal, a junction, sidings,
+        // and platform words from another NLC location.
+        assert_eq!(
+            r.left_out_by_name.keys().cloned().collect::<BTreeSet<_>>(),
+            set(&["CLPHJLP", "FAKECEN", "STFDCJ", "WDONSS", "WIMB827"])
+        );
+        // CLPH149, CLPHMMS (own STANOX); ZEROB (zero STANOX is not a
+        // group); BLANKX.
+        assert_eq!(r.left_out_no_candidate, 4);
+        assert!(r.ambiguous.is_empty());
+    }
+
+    #[test]
+    fn ambiguous_names_assign_nothing_and_are_reported() {
+        // Two stations at one STANOX where one's name is a prefix of the
+        // other's: a TIPLOC naming the longer one matches both.
+        let json = br#"{"TIPLOCDATA":[
+            {"STANOX":"40000","TIPLOC":"FARR","3ALPHA":"AAA","NLCDESC":"FARRINGDON"},
+            {"STANOX":"40000","TIPLOC":"FARREL","3ALPHA":"BBB","NLCDESC":"FARRINGDON EL"},
+            {"STANOX":"40000","TIPLOC":"FARRELP","3ALPHA":" ","NLCDESC":"FARRINGDON EL PLATFORM"},
+            {"STANOX":"40000","TIPLOC":"FARRX","3ALPHA":" ","NLCDESC":"FARRINGDON X"}
         ]}"#;
         let result = crs_tiploc_from_corpus(json).unwrap();
         let r = &result.report;
-        let tiplocs: BTreeSet<&str> = result.rows.iter().map(|r| r.1.as_str()).collect();
-        assert!(!tiplocs.contains("AMBIG1") && !tiplocs.contains("AMBIG3"));
-
-        // An ambiguous NLC group falls through to STANOX, and a decisive
-        // STANOX there is flagged as the least-certain kind of inference.
-        assert_eq!(r.pair_rules[&pair("AAA", "AMBIG2")], Rule::StanoxGroup);
-        assert_eq!(r.stanox_after_ambiguous_nlc, set(&["AMBIG2"]));
-
+        assert_eq!(r.pair_rules[&pair("AAA", "FARRX")], Rule::StationName);
+        assert!(!r.pair_rules.keys().any(|(_, t)| t == "FARRELP"));
         assert_eq!(
-            r.ambiguous_nlc,
+            r.ambiguous,
             BTreeMap::from([(
-                "4000".to_owned(),
+                "40000".to_owned(),
                 AmbiguousGroup {
                     candidates: set(&["AAA", "BBB"]),
-                    tiplocs: set(&["AMBIG1", "AMBIG2"]),
+                    tiplocs: set(&["FARRELP"]),
                 }
             )])
         );
-        assert_eq!(
-            r.ambiguous_stanox,
-            BTreeMap::from([(
-                "50000".to_owned(),
-                AmbiguousGroup {
-                    candidates: set(&["CCC", "DDD"]),
-                    tiplocs: set(&["AMBIG3"]),
-                }
-            )])
-        );
-        assert_eq!(r.left_out_ambiguous, set(&["AMBIG1", "AMBIG3"]));
-        assert_eq!(r.left_out_no_candidate, 0);
-
         let text = render_report(&result, None, ReportDetail::Standard);
-        assert!(text.contains("4000: candidates AAA,BBB -- TIPLOC(s) AMBIG1,AMBIG2"));
-        assert!(text.contains("50000: candidates CCC,DDD -- TIPLOC(s) AMBIG3"));
+        assert!(text.contains("40000: candidates AAA,BBB -- TIPLOC(s) FARRELP"));
+        assert!(text.contains("  AAA,FARRX (FARRINGDON X) [station part by name (same STANOX)]\n"));
+        assert!(text.contains("left out as ambiguous (name matched several stations): 1"));
     }
 
     #[test]
     fn a_tiploc_with_a_direct_crs_on_any_row_is_never_inferred() {
-        // The second row for PRIMARY has no 3ALPHA and sits in another
-        // CRS's NLC group; the direct CRS on its first row still wins.
+        // The second row for PRIMARY has no 3ALPHA and names another
+        // station at that station's STANOX; the direct CRS still wins.
         let json = br#"{"TIPLOCDATA":[
-            {"NLC":600000,"STANOX":" ","TIPLOC":"PRIMARY","3ALPHA":"PRI","NLCDESC":"P"},
-            {"NLC":610000,"STANOX":" ","TIPLOC":"OTHER","3ALPHA":"OTH","NLCDESC":"O"},
-            {"NLC":610001,"STANOX":" ","TIPLOC":"PRIMARY","3ALPHA":" ","NLCDESC":"P2"}
+            {"STANOX":"60000","TIPLOC":"PRIMARY","3ALPHA":"PRI","NLCDESC":"P"},
+            {"STANOX":"61000","TIPLOC":"OTHER","3ALPHA":"OTH","NLCDESC":"O"},
+            {"STANOX":"61000","TIPLOC":"PRIMARY","3ALPHA":" ","NLCDESC":"O"}
         ]}"#;
         let result = crs_tiploc_from_corpus(json).unwrap();
         let pairs: Vec<_> = result.report.pair_rules.into_iter().collect();
@@ -837,16 +1186,16 @@ mod tests {
     #[test]
     fn comparison_against_an_existing_csv_reports_agreement_by_rule() {
         let json = br#"{"TIPLOCDATA":[
-            {"NLC":548700,"STANOX":"87219","TIPLOC":"CLPHMJC","3ALPHA":"CLJ","NLCDESC":"CLAPHAM JUNCTION"},
-            {"NLC":548703,"STANOX":" ","TIPLOC":"CLPHMJW","3ALPHA":" ","NLCDESC":"CLAPHAM JN W"},
-            {"NLC":123400,"STANOX":"12345","TIPLOC":"FOOBAR","3ALPHA":"FOO","NLCDESC":"FOO"},
-            {"NLC":999900,"STANOX":"12345","TIPLOC":"FOOBARX","3ALPHA":" ","NLCDESC":"FOO X"}
+            {"STANOX":"87219","TIPLOC":"CLPHMJN","3ALPHA":"CLJ","NLCDESC":"CLAPHAM JUNCTION LONDON"},
+            {"STANOX":"87219","TIPLOC":"CLPHMJW","3ALPHA":" ","NLCDESC":"CLAPHAM JN (WINDSOR)"},
+            {"STANOX":"12345","TIPLOC":"FOOBAR","3ALPHA":"FOO","NLCDESC":"FOO"},
+            {"STANOX":"12345","TIPLOC":"FOOBARX","3ALPHA":" ","NLCDESC":"FOO EAST BAY"}
         ]}"#;
         let result = crs_tiploc_from_corpus(json).unwrap();
         // CRLF, like the committed snapshot, with a bare-CRS row.
         let old_csv = "crs,tiploc,name\r\n\
                        BAR,FOOBARX,Bar\r\n\
-                       CLJ,CLPHMJC,Clapham Junction\r\n\
+                       CLJ,CLPHMJN,Clapham Junction\r\n\
                        CLJ,CLPHMJW,Clapham Junction\r\n\
                        FOO,FOOBAR,Foo\r\n\
                        NOT,,No Tiploc\r\n\
@@ -857,7 +1206,7 @@ mod tests {
         assert_eq!(
             c.matched,
             BTreeSet::from([
-                pair("CLJ", "CLPHMJC"),
+                pair("CLJ", "CLPHMJN"),
                 pair("CLJ", "CLPHMJW"),
                 pair("FOO", "FOOBAR")
             ])
@@ -879,8 +1228,8 @@ mod tests {
             conflicts,
         };
         assert_eq!(c.by_rule[&Rule::Direct], agreement(2, 0, 0));
-        assert_eq!(c.by_rule[&Rule::NlcGroup], agreement(1, 0, 0));
-        assert_eq!(c.by_rule[&Rule::StanoxGroup], agreement(0, 1, 1));
+        assert_eq!(c.by_rule[&Rule::StationName], agreement(1, 1, 1));
+        assert_eq!(c.by_rule[&Rule::StationQualifier], agreement(0, 0, 0));
 
         let path = Path::new("reference-data/crs-tiploc.csv");
         let summary = render_report(&result, Some((path, &c)), ReportDetail::Summary);
@@ -888,12 +1237,12 @@ mod tests {
         assert!(summary.contains("pairs only in old file (still missing): 2"));
         assert!(summary.contains("pairs only in new output: 1"));
         assert!(summary.contains("conflicts (TIPLOC in both, different CRS): 1"));
-        assert!(summary.contains("STANOX group: 0 / 1 / 1"));
+        assert!(summary.contains("station part by name (same STANOX): 1 / 1 / 1"));
         assert!(!summary.contains("FOOBARX: old BAR"));
         let full = render_report(&result, Some((path, &c)), ReportDetail::Full);
-        assert!(full.contains("FOOBARX: old BAR -> new FOO [STANOX group]"));
+        assert!(full.contains("FOOBARX: old BAR -> new FOO [station part by name (same STANOX)]"));
         assert!(full.contains("  OLD,OLDTIP\n"));
-        assert!(full.contains("  FOO,FOOBARX [STANOX group]\n"));
+        assert!(full.contains("  FOO,FOOBARX [station part by name (same STANOX)]\n"));
     }
 
     #[test]
