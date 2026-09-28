@@ -25,10 +25,10 @@ use serde::Deserialize;
 /// value with a single space rather than omitting it or using `null`, so
 /// every field is read leniently and trimmed. `NLC` and `STANOX` are read
 /// as raw JSON values because extracts have carried them both as numbers
-/// and as strings; see [`nlc_location`] and [`stanox_key`]. `UIC` and
+/// and as strings; see [`code_text`]. `UIC` and
 /// `NLCDESC16` are ignored.
 #[derive(Debug, Deserialize)]
-struct CorpusRow {
+struct RawCorpusRow {
     #[serde(rename = "NLC", default)]
     nlc: Option<serde_json::Value>,
     #[serde(rename = "STANOX", default)]
@@ -44,623 +44,56 @@ struct CorpusRow {
 #[derive(Debug, Deserialize)]
 struct CorpusExtract {
     #[serde(rename = "TIPLOCDATA")]
-    tiploc_data: Vec<CorpusRow>,
+    tiploc_data: Vec<RawCorpusRow>,
 }
 
-/// One output row of `crs-tiploc.csv`: `(crs, tiploc, name)`, with an empty
-/// `tiploc` only for a CRS that no CORPUS row pairs with any TIPLOC.
-pub type CrsTiplocRow = (String, String, String);
+pub use common::corpus_inference::{
+    AmbiguousGroup, CorpusCrsTiploc, CorpusRow, CrsTiplocRow, Rule,
+};
 
-/// Which rule produced a `(crs, tiploc)` pair.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Rule {
-    /// The TIPLOC's own CORPUS row carries a `3ALPHA`.
-    Direct,
-    /// A CRS-less TIPLOC that is part of a station, named as such: it
-    /// shares a STANOX with that station's `3ALPHA` row and its description
-    /// is the station's name plus only platform-ish words
-    /// (`CLAPHAM JN (WINDSOR)`, `VICTORIA PLAT 10`). See
-    /// [`crs_tiploc_from_corpus`].
-    StationName,
-    /// A CRS-less TIPLOC that is part of a station, described only by
-    /// platform-ish words (`CENTRAL`, `SOUTH WEST`, `NO 4 BAY PLATFORM`):
-    /// it shares both the STANOX and the 4-digit NLC location with that
-    /// station's `3ALPHA` row.
-    StationQualifier,
-}
-
-impl Rule {
-    pub const ALL: [Rule; 3] = [Rule::Direct, Rule::StationName, Rule::StationQualifier];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Rule::Direct => "direct (own 3ALPHA)",
-            Rule::StationName => "station part by name (same STANOX)",
-            Rule::StationQualifier => "station part by platform words (same STANOX + NLC)",
-        }
+/// A JSON code (`NLC`/`STANOX`) as text: extracts have carried them both as
+/// numbers and as strings. Anything else (a fraction, a negative number, an
+/// array...) is not a usable code.
+fn code_text(v: Option<&serde_json::Value>) -> Option<String> {
+    match v? {
+        serde_json::Value::Number(n) => n.as_u64().map(|n| n.to_string()),
+        serde_json::Value::String(s) => Some(s.clone()),
+        _ => None,
     }
 }
 
-/// A STANOX where one CRS-less TIPLOC's description matched two or more
-/// distinct stations' names, so it could not be settled.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct AmbiguousGroup {
-    pub candidates: BTreeSet<String>,
-    /// The CRS-less TIPLOCs that matched more than one of them.
-    pub tiplocs: BTreeSet<String>,
-}
-
-/// How [`crs_tiploc_from_corpus`] arrived at its output, for the
-/// regeneration report. Not written to the CSV.
-#[derive(Debug, Default, Clone)]
-pub struct InferenceReport {
-    /// Every `(crs, tiploc)` pair in the output and the rule behind it.
-    pub pair_rules: BTreeMap<(String, String), Rule>,
-    /// Description of each TIPLOC paired by an inference rule, for
-    /// eyeballing the inferences.
-    pub inferred_descs: BTreeMap<String, String>,
-    /// CRS-less TIPLOCs whose description matched several stations at
-    /// their STANOX, keyed by STANOX (joined with `+` for a TIPLOC whose
-    /// rows carry several).
-    pub ambiguous: BTreeMap<String, AmbiguousGroup>,
-    /// CRS-less TIPLOCs that share a STANOX with a station but were left
-    /// out because their description is not that station's name, or names
-    /// it followed by a non-station word (signal, junction, sidings, depot,
-    /// loop, ...): tiploc -> its description. Mostly signals and junctions
-    /// at the station throat.
-    pub left_out_by_name: BTreeMap<String, String>,
-    /// CRS-less TIPLOCs left out because no station `3ALPHA` row shares
-    /// their STANOX (junctions, sidings, depots: the great majority of
-    /// CORPUS).
-    pub left_out_no_candidate: usize,
-}
-
-impl InferenceReport {
-    pub fn pairs_by_rule(&self, rule: Rule) -> usize {
-        self.pair_rules.values().filter(|r| **r == rule).count()
-    }
-}
-
-/// Output of [`crs_tiploc_from_corpus`].
-#[derive(Debug, Clone)]
-pub struct CorpusCrsTiploc {
-    pub rows: Vec<CrsTiplocRow>,
-    pub report: InferenceReport,
-}
-
-fn is_crs(s: &str) -> bool {
-    s.len() == 3 && s.bytes().all(|b| b.is_ascii_uppercase())
-}
-
-fn is_tiploc(s: &str) -> bool {
-    (2..=7).contains(&s.len())
-        && s.bytes()
-            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
-}
-
-/// Digits of a numeric-or-string JSON value, trimmed; `None` for blank,
-/// non-digit or absent values.
-fn digits(v: Option<&serde_json::Value>) -> Option<String> {
-    let s = match v? {
-        serde_json::Value::Number(n) => n.as_u64()?.to_string(),
-        serde_json::Value::String(s) => s.trim().to_owned(),
-        _ => return None,
-    };
-    (!s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())).then_some(s)
-}
-
-/// The 4-digit location part of a 6-digit NLC (the last two digits
-/// distinguish sub-locations of the same place). A numeric NLC lost its
-/// leading zeros, so it is left-padded back to six digits first. An NLC of
-/// more than six digits, or of all zeros, is not usable.
-fn nlc_location(v: Option<&serde_json::Value>) -> Option<String> {
-    let d = digits(v)?;
-    if d.len() > 6 || d.bytes().all(|b| b == b'0') {
-        return None;
-    }
-    Some(format!("{d:0>6}")[..4].to_owned())
-}
-
-/// A STANOX usable as a group key: blank and all-zero STANOX values are
-/// placeholders that would lump unrelated locations together.
-fn stanox_key(v: Option<&serde_json::Value>) -> Option<String> {
-    digits(v).filter(|d| !d.bytes().all(|b| b == b'0'))
-}
-
-fn trimmed(s: Option<&str>) -> &str {
-    s.unwrap_or("").trim()
-}
-
-/// Abbreviations CORPUS descriptions use for the words the name checks
-/// look at, mapped to one spelling.
-const ABBREVIATIONS: &[(&str, &str)] = &[
-    ("JN", "JUNCTION"),
-    ("JCN", "JUNCTION"),
-    ("JNC", "JUNCTION"),
-    ("JNCT", "JUNCTION"),
-    ("JCT", "JUNCTION"),
-    ("JUNC", "JUNCTION"),
-    ("JUNCTON", "JUNCTION"),
-    ("SIG", "SIGNAL"),
-    ("SIGS", "SIGNAL"),
-    ("SDG", "SIDINGS"),
-    ("SDGS", "SIDINGS"),
-    ("SDNGS", "SIDINGS"),
-    ("SIDNGS", "SIDINGS"),
-    ("SIDING", "SIDINGS"),
-    ("SIDDINGS", "SIDINGS"),
-    ("CARR", "CARRIAGE"),
-    ("XOVERS", "CROSSOVER"),
-    ("XOVER", "CROSSOVER"),
-    ("YD", "YARD"),
-];
-
-/// Words that mark a station's own `3ALPHA` row as not really a station
-/// (a pseudo-CRS carriage siding, yard or depot such as `XCP` "BR CARRIAGE
-/// SIDINGS" at Clapham Junction's STANOX), so it is never a candidate.
-/// Deliberately excludes place-name words (`JUNCTION`, `ROAD`, `TOWN`...).
-const NON_STATION_ANCHOR_WORDS: &[&str] = &[
-    "BALLAST",
-    "CARRIAGE",
-    "CROSSOVER",
-    "CSD",
-    "DEPOT",
-    "DEPOTS",
-    "ENTRANCE",
-    "ENTRY",
-    "EXIT",
-    "FREIGHT",
-    "FRT",
-    "GF",
-    "GOODS",
-    "HOLDING",
-    "LC",
-    "LOOP",
-    "RECEPTION",
-    "REV",
-    "SHED",
-    "SHEDS",
-    "SIDINGS",
-    "SIGNAL",
-    "SST",
-    "STABLING",
-    "TMD",
-    "TRAINCARE",
-    "WASHER",
-    "YARD",
-];
-
-/// Words that, following a station's name in a CRS-less TIPLOC's
-/// description, mark it as infrastructure or a non-rail point near the
-/// station rather than part of it: signals, junctions, sidings, depots,
-/// loops, yards, crossovers, level crossings, ground frames, staff and
-/// engineering locations, freight terminals, bus stops and the like.
-const NON_STATION_SUFFIX_WORDS: &[&str] = &[
-    "BALLAST",
-    "BOX",
-    "BRIDGE",
-    "BUS",
-    "CARRIAGE",
-    "CE",
-    "CENTRE",
-    "CHORD",
-    "CHS",
-    "CROSSING",
-    "CROSSOVER",
-    "CS",
-    "CSD",
-    "CURVE",
-    "DEPOT",
-    "DEPOTS",
-    "DMUD",
-    "DOCK",
-    "DOCKS",
-    "DRIVERS",
-    "EMUD",
-    "ENG",
-    "ENGOPS",
-    "ENTRANCE",
-    "ENTRY",
-    "EXIT",
-    "FRAME",
-    "FREIGHT",
-    "FRT",
-    "FUEL",
-    "FUELLING",
-    "GDS",
-    "GF",
-    "GOODS",
-    "GROUND",
-    "HEADSHUNT",
-    "HOLDING",
-    "HQ",
-    "JUNCTION",
-    "LC",
-    "LINE",
-    "LINES",
-    "LIP",
-    "LOOP",
-    "LOOPS",
-    "MAINTENANCE",
-    "MESS",
-    "MUSEUM",
-    "MUSM",
-    "NECK",
-    "OFFICE",
-    "OTS",
-    "PAYBILL",
-    "PW",
-    "PWAY",
-    "QUARRY",
-    "RECEPTION",
-    "RELIEF",
-    "REV",
-    "ROAD",
-    "SALES",
-    "SB",
-    "SERVICES",
-    "SHED",
-    "SHEDS",
-    "SHIP",
-    "SHUNT",
-    "SIDINGS",
-    "SIGNAL",
-    "SIGNALLING",
-    "SPUR",
-    "SST",
-    "STABLING",
-    "STAFF",
-    "STOP",
-    "TERMINAL",
-    "TERMINALS",
-    "TMD",
-    "TOWN",
-    "TRAINCARE",
-    "TUNNEL",
-    "TURNBACK",
-    "UPL",
-    "VIADUCT",
-    "WASH",
-    "WASHER",
-    "WELDERS",
-    "WHARF",
-    "WORKS",
-    "XNG",
-    "YARD",
-];
-
-/// Splits a CORPUS description into normalised words: uppercased, dots
-/// dropped (so `L.C.` is `LC`), split on anything not a letter or digit,
-/// runs of single letters joined (`C H S` is `CHS`, `B R` is `BR`), and
-/// [`ABBREVIATIONS`] expanded.
-fn words(desc: &str) -> Vec<String> {
-    let cleaned = desc.to_ascii_uppercase().replace('.', "");
-    let mut out: Vec<String> = Vec::new();
-    let mut letter_run = String::new();
-    let flush = |run: &mut String, out: &mut Vec<String>| {
-        if !run.is_empty() {
-            out.push(std::mem::take(run));
-        }
-    };
-    for w in cleaned
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty())
-    {
-        if w.len() == 1 && w.bytes().all(|b| b.is_ascii_uppercase()) {
-            letter_run.push_str(w);
-            continue;
-        }
-        flush(&mut letter_run, &mut out);
-        out.push(w.to_owned());
-    }
-    flush(&mut letter_run, &mut out);
-    for w in &mut out {
-        if let Some((_, full)) = ABBREVIATIONS.iter().find(|(abbr, _)| abbr == w) {
-            *w = (*full).to_owned();
-        }
-    }
-    out
-}
-
-/// A station's name as matched against CRS-less TIPLOC descriptions: its
-/// words, less a trailing `LONDON` (`CLAPHAM JUNCTION LONDON`,
-/// `PADDINGTON LONDON`), or `None` if its description marks it as not a
-/// station (see [`NON_STATION_ANCHOR_WORDS`]).
-fn station_stem(desc: &str) -> Option<Vec<String>> {
-    let mut w = words(desc);
-    if w.iter()
-        .any(|w| NON_STATION_ANCHOR_WORDS.contains(&w.as_str()))
-    {
-        return None;
-    }
-    if w.len() > 1 && w.last().is_some_and(|l| l == "LONDON") {
-        w.pop();
-    }
-    (!w.is_empty()).then_some(w)
-}
-
-/// Whether `desc` names the station with stem `stem` (optionally after a
-/// leading `LONDON`, as in `LONDON VICTORIA (E)`) and then only
-/// platform-ish words: `CLAPHAM JN (WINDSOR)`, `VICTORIA PLAT 10`,
-/// `BASINGSTOKE EAST BAY`, but not `CLAPHAM JN SIGNAL TVC147`,
-/// `READING SOUTHERN JN` or `WIMBLEDON SIGNAL W1101`. A word of three or
-/// more characters containing a digit (`W149`, `TVC587`, `150`) is a
-/// signal number and also disqualifies.
-fn names_station_part(desc: &[String], stem: &[String]) -> bool {
-    let rest = desc.strip_prefix(stem).or_else(|| {
-        desc.strip_prefix(["LONDON".to_owned()].as_slice())
-            .and_then(|d| d.strip_prefix(stem))
-    });
-    let Some(rest) = rest else {
-        return false;
-    };
-    !rest.iter().any(|w| {
-        NON_STATION_SUFFIX_WORDS.contains(&w.as_str())
-            || (w.len() >= 3 && w.bytes().any(|b| b.is_ascii_digit()))
-    })
-}
-
-/// Words that, on their own, describe a part of a station: platform
-/// groups and bays (`CENTRAL`, `EASTERN`, `SOUTH WEST`, `NO 4 BAY
-/// PLATFORM`, `DOWN BAY`).
-const PLATFORM_WORDS: &[&str] = &[
-    "BAY",
-    "BAYS",
-    "CENTRAL",
-    "DOWN",
-    "EAST",
-    "EASTERN",
-    "FAST",
-    "HIGH",
-    "LOCAL",
-    "LOW",
-    "MAIN",
-    "MIDDLE",
-    "NO",
-    "NORTH",
-    "NORTHERN",
-    "PLAT",
-    "PLATFORM",
-    "PLATFORMS",
-    "PLATS",
-    "SLOW",
-    "SOUTH",
-    "SOUTHERN",
-    "SUBURBAN",
-    "UP",
-    "WEST",
-    "WESTERN",
-];
-
-/// Whether `desc` is made only of [`PLATFORM_WORDS`], platform numbers of
-/// at most two digits (`4`, `NO3`) and single letters (`C`).
-fn is_platform_words_only(desc: &[String]) -> bool {
-    !desc.is_empty()
-        && desc.iter().all(|w| {
-            PLATFORM_WORDS.contains(&w.as_str())
-                || (w.len() <= 2 && w.bytes().all(|b| b.is_ascii_digit()))
-                || w.strip_prefix("NO").is_some_and(|n| {
-                    (1..=2).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_digit())
-                })
-                || (w.len() == 1 && w.bytes().all(|b| b.is_ascii_uppercase()))
-        })
-}
-
-/// A station-like `3ALPHA` row, as a candidate for CRS-less TIPLOCs at its
-/// STANOX.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Station {
-    stem: Vec<String>,
-    nlc: Option<String>,
-    crs: String,
-}
-
-/// One row of a CRS-less TIPLOC.
-struct TiplocRow {
-    stanox: Option<String>,
-    nlc: Option<String>,
-    words: Vec<String>,
-    desc: String,
-}
-
-// The inference rule below is a deliberate, user-accepted trade-off
-// (precision over recall), with its known costs recorded in
-// reference-data/line-catalogue-validation.md, section "Decision
-// (2026-09-28): conservative CORPUS inference". Read that before loosening
-// it or editing the word lists above.
-
-/// Turns a CORPUS extract into `crs-tiploc.csv` rows.
-///
-/// CORPUS fills `3ALPHA` only on a station's primary TIPLOC, so each
-/// valid TIPLOC (2-7 uppercase letters/digits) gets its CRS by the first
-/// of these rules that applies (see [`Rule`]):
-///
-/// 1. **Direct**: any of the TIPLOC's rows has a `3ALPHA` that is exactly
-///    three uppercase letters -- every such CRS is kept, and no inference
-///    is attempted.
-/// 2. **Station part**: otherwise, the candidate stations for each of its
-///    rows are the `3ALPHA` rows with the same STANOX (blank/zero STANOX
-///    never match) whose own description does not mark them as a
-///    yard/sidings/depot pseudo-station, and that the row's description
-///    either
-///    - **names**: the station's name (description less a trailing
-///      `LONDON`, abbreviations normalised) followed only by platform-ish
-///      words -- no signal, junction, sidings, depot, loop, yard,
-///      crossover, level-crossing, freight or staff word, and no signal
-///      number ([`Rule::StationName`]); or
-///    - **qualifies**: the description is only platform words (`CENTRAL`,
-///      `SOUTH WEST`, `NO 4 BAY PLATFORM`) and the row also shares the
-///      station's 4-digit NLC location ([`Rule::StationQualifier`]).
-///
-///    Exactly one distinct CRS over all its rows: that one (by name if
-///    any row named it). Several: left out and reported as ambiguous.
-/// 3. Otherwise the TIPLOC is left out.
-///
-/// This recovers genuine platform-group TIPLOCs (Clapham Junction's
-/// `CLPHMJC`/`CLPHMJW`/`CLPHMJM`/`CLPHMJ1`, London Bridge's `LNDNBDC`/
-/// `LNDNBDE`, Victoria's `VICT9`..`VICT19`, St Pancras's `STPADOM`)
-/// without handing station codes to the signals, junctions and sidings
-/// that share a station's NLC prefix or even its STANOX. Looser rules were
-/// measured on a real extract and rejected (see
-/// `reference-data/line-catalogue-validation.md`): "the only CRS in the
-/// 4-digit NLC group, else the only CRS at the STANOX" (4,613 inferences,
-/// overwhelmingly signals, junctions, sidings and freight terminals), and
-/// "NLC and STANOX groups agree" (132, still mostly junctions and signals).
-///
-/// Candidates come only from rows with a direct `3ALPHA` (including ones
-/// without a usable TIPLOC), never from other inferences, so the result
-/// does not depend on evaluation order.
-///
-/// Output contract (unchanged from the direct-only generator, so the
-/// validator reads it as before): one row per distinct `(crs, tiploc)`
-/// pair, one row with an empty `tiploc` for a CRS that ends up with no
-/// TIPLOC; `name` is the `NLCDESC` of the lexicographically-first
-/// *directly* paired TIPLOC row for that CRS (or of the first bare row),
-/// so inferred pairs never change a station's name and the output does not
-/// depend on CORPUS's row order; sorted by `crs` then `tiploc`.
+/// Turns a CORPUS extract into `crs-tiploc.csv` rows by the shared
+/// conservative inference ([`common::corpus_inference::infer_crs_tiploc`],
+/// also used by `api`; its doc has the rules). Refuses an extract that
+/// yields no CRS at all.
 pub fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
     let extract: CorpusExtract =
         serde_json::from_slice(json).context("parsing CORPUS extract JSON")?;
+    let rows: Vec<CorpusRow> = extract
+        .tiploc_data
+        .into_iter()
+        .map(|row| CorpusRow {
+            nlc: code_text(row.nlc.as_ref()),
+            stanox: code_text(row.stanox.as_ref()),
+            tiploc: row.tiploc,
+            crs: row.three_alpha,
+            nlc_desc: row.nlc_desc,
+        })
+        .collect();
+    crs_tiploc_from_rows(&rows)
+}
 
-    // crs -> directly paired tiploc -> name.
-    let mut direct: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    // crs -> name, for a CRS seen on a row without a usable TIPLOC.
-    let mut bare: BTreeMap<String, String> = BTreeMap::new();
-    // STANOX -> every station-like 3ALPHA row there.
-    let mut stations_at: BTreeMap<String, BTreeSet<Station>> = BTreeMap::new();
-    let mut tiploc_rows: BTreeMap<String, Vec<TiplocRow>> = BTreeMap::new();
-    let mut tiplocs_with_crs: BTreeSet<String> = BTreeSet::new();
-
-    for row in &extract.tiploc_data {
-        let crs = trimmed(row.three_alpha.as_deref());
-        let tiploc = trimmed(row.tiploc.as_deref());
-        let desc = trimmed(row.nlc_desc.as_deref());
-        let stanox = stanox_key(row.stanox.as_ref());
-        let nlc = nlc_location(row.nlc.as_ref());
-
-        if is_crs(crs) {
-            if let (Some(s), Some(stem)) = (&stanox, station_stem(desc)) {
-                stations_at.entry(s.clone()).or_default().insert(Station {
-                    stem,
-                    nlc: nlc.clone(),
-                    crs: crs.to_owned(),
-                });
-            }
-            if is_tiploc(tiploc) {
-                tiplocs_with_crs.insert(tiploc.to_owned());
-                direct
-                    .entry(crs.to_owned())
-                    .or_default()
-                    .entry(tiploc.to_owned())
-                    .or_insert_with(|| desc.to_owned());
-            } else {
-                bare.entry(crs.to_owned())
-                    .or_insert_with(|| desc.to_owned());
-            }
-        }
-        if is_tiploc(tiploc) {
-            tiploc_rows
-                .entry(tiploc.to_owned())
-                .or_default()
-                .push(TiplocRow {
-                    stanox,
-                    nlc,
-                    words: words(desc),
-                    desc: desc.to_owned(),
-                });
-        }
-    }
-
-    let mut report = InferenceReport::default();
-    // crs -> tiploc, every pair whatever its rule.
-    let mut pairs: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for (crs, tiplocs) in &direct {
-        for tiploc in tiplocs.keys() {
-            pairs.entry(crs.clone()).or_default().insert(tiploc.clone());
-            report
-                .pair_rules
-                .insert((crs.clone(), tiploc.clone()), Rule::Direct);
-        }
-    }
-
-    for (tiploc, rows) in &tiploc_rows {
-        if tiplocs_with_crs.contains(tiploc) {
-            continue;
-        }
-        let mut stanoxes: BTreeSet<&str> = BTreeSet::new();
-        let mut any_station = false;
-        // crs -> (rule, description of the row that matched it).
-        let mut candidates: BTreeMap<String, (Rule, &str)> = BTreeMap::new();
-        for row in rows {
-            let Some(stations) = row.stanox.as_ref().and_then(|s| stations_at.get(s)) else {
-                continue;
-            };
-            any_station = true;
-            stanoxes.extend(row.stanox.as_deref());
-            for station in stations {
-                let rule = if names_station_part(&row.words, &station.stem) {
-                    Rule::StationName
-                } else if row.nlc.is_some()
-                    && row.nlc == station.nlc
-                    && is_platform_words_only(&row.words)
-                {
-                    Rule::StationQualifier
-                } else {
-                    continue;
-                };
-                let entry = candidates
-                    .entry(station.crs.clone())
-                    .or_insert((rule, row.desc.as_str()));
-                if rule < entry.0 {
-                    *entry = (rule, row.desc.as_str());
-                }
-            }
-        }
-        if candidates.len() == 1 {
-            if let Some((crs, (rule, desc))) = candidates.into_iter().next() {
-                pairs.entry(crs.clone()).or_default().insert(tiploc.clone());
-                report.pair_rules.insert((crs, tiploc.clone()), rule);
-                report
-                    .inferred_descs
-                    .insert(tiploc.clone(), desc.to_owned());
-            }
-        } else if !candidates.is_empty() {
-            let key = stanoxes.into_iter().collect::<Vec<_>>().join("+");
-            let group = report.ambiguous.entry(key).or_default();
-            group.candidates.extend(candidates.into_keys());
-            group.tiplocs.insert(tiploc.clone());
-        } else if any_station {
-            let desc = rows.first().map(|r| r.desc.clone()).unwrap_or_default();
-            report.left_out_by_name.insert(tiploc.clone(), desc);
-        } else {
-            report.left_out_no_candidate += 1;
-        }
-    }
-    let crs_codes: BTreeSet<&String> = pairs.keys().chain(bare.keys()).collect();
-    let mut rows = Vec::new();
-    for crs in crs_codes {
-        let name = direct
-            .get(crs)
-            .and_then(|t| t.values().next())
-            .or_else(|| bare.get(crs))
-            .cloned()
-            .unwrap_or_default();
-        match pairs.get(crs) {
-            Some(tiplocs) => {
-                for tiploc in tiplocs {
-                    rows.push((crs.clone(), tiploc.clone(), name.clone()));
-                }
-            }
-            None => rows.push((crs.clone(), String::new(), name)),
-        }
-    }
-    if rows.is_empty() {
+/// [`crs_tiploc_from_corpus`] for rows already read (e.g. from
+/// `corpus_locations`, see `--regenerate-crs-tiploc-from-db`).
+pub fn crs_tiploc_from_rows(rows: &[CorpusRow]) -> Result<CorpusCrsTiploc> {
+    let result = common::corpus_inference::infer_crs_tiploc(rows);
+    if result.rows.is_empty() {
         bail!(
             "CORPUS extract yielded zero CRS codes -- not a plausible real extract (wrong file, \
              or the TIPLOCDATA/3ALPHA field names changed); refusing to write an empty file"
         );
     }
-    Ok(CorpusCrsTiploc { rows, report })
+    Ok(result)
 }
 
 /// A set of `(crs, tiploc)` pairs.
@@ -1019,41 +452,6 @@ mod tests {
 
     fn s(a: &str, b: &str, c: &str) -> CrsTiplocRow {
         (a.to_owned(), b.to_owned(), c.to_owned())
-    }
-
-    #[test]
-    fn words_normalise_dots_letter_runs_and_abbreviations() {
-        let w = |d: &str| words(d).join(" ");
-        assert_eq!(w("CLAPHAM JN (WINDSOR)"), "CLAPHAM JUNCTION WINDSOR");
-        assert_eq!(w("BRORA L.C."), "BRORA LC");
-        assert_eq!(w("HAYES (KENT) C H S"), "HAYES KENT CHS");
-        assert_eq!(
-            w("VICTORIA  PLAT  9    (TPS USE)"),
-            "VICTORIA PLAT 9 TPS USE"
-        );
-        assert_eq!(w("HARRINGAY UP REV SDGS"), "HARRINGAY UP REV SIDINGS");
-        assert_eq!(w("PECKHAM RYE (C)"), "PECKHAM RYE C");
-
-        let platform = |d: &str| is_platform_words_only(&words(d));
-        for d in [
-            "CENTRAL",
-            "SOUTH WEST",
-            "NO3 PLATFORM",
-            "NO 4 BAY PLATFORM",
-            "DOWN BAY",
-        ] {
-            assert!(platform(d), "{d}");
-        }
-        for d in [
-            "L H S",
-            "STATION FORECOURT",
-            "DOWN BAY SIDING",
-            "SIGNAL 570",
-            "NO 123",
-            "",
-        ] {
-            assert!(!platform(d), "{d}");
-        }
     }
 
     /// Real rows from a CORPUS extract (blank values are one space):

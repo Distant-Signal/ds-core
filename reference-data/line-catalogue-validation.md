@@ -261,12 +261,14 @@ Accepted costs:
   error).
 - **Dependence on CORPUS wording**: the rule relies on how CORPUS words
   `NLCDESC` and on the word lists in
-  `crates/line-catalogue-validator/src/regenerate.rs`. They may need
+  `crates/common/src/corpus_inference.rs` (moved there from the validator's
+  `regenerate.rs` on 2026-09-28 so `api` applies the identical rule). They may need
   maintenance when CORPUS changes; read the regeneration report's inferred
   pairs and "left out by name" list on every regeneration.
 - **Point-in-time snapshot**: the file reflects the extract downloaded on
-  2026-09-28 and goes stale until it is regenerated. That stays manual until
-  the planned SFTP CORPUS ingest lands.
+  2026-09-28 and goes stale until it is regenerated. Regeneration is still
+  manual, but since the SFTP CORPUS ingest it no longer needs a download:
+  see "From the CORPUS the app has loaded" below.
 
 ## The live tier (`--live`)
 
@@ -361,9 +363,11 @@ here is already available to compare against.
 
 ### From Network Rail / Knowledgebase data (preferred, DQ13)
 
-`crates/line-catalogue-validator` has two regeneration modes (see its
+`crates/line-catalogue-validator` has three regeneration modes (see its
 `src/regenerate.rs`); each writes into `--reference-dir` (default
-`reference-data`) and exits without validating:
+`reference-data`) and exits without validating. The third,
+`--regenerate-crs-tiploc-from-db`, reads the CORPUS the app has loaded
+instead of a file; see "From the CORPUS the app has loaded" below.
 
 - `--regenerate-toc-codes-from-rdm-xml <file>`: a saved response from the
   Knowledgebase Train Operating Company List feed (the one `poller-tocs`
@@ -473,6 +477,76 @@ here is already available to compare against.
   report 0 errors: CORPUS drops closed and superseded codes, so a newer
   extract can remove a CRS a line still uses) and `cargo test -p
   line-catalogue-validator`, and update the `crs-tiploc.csv` section above.
+
+### From the CORPUS the app has loaded (no download needed, 2026-09-28)
+
+Once `schedule-ingest` loads CORPUS from the SFTP push
+(`scheduleFeed.corpus.enabled`, see
+`docs/superpowers/specs/2026-09-28-corpus-sftp-ingest-design.md`), the
+extract is already in production's `corpus_locations` table, so nobody has
+to download it. The inference is the same code either way
+(`common::corpus_inference`, shared with `api`), and so are the output, the
+report and `--compare-with`. Two routes:
+
+- **Production (manual runbook, about monthly after a CORPUS delivery).**
+  Production's Postgres is reachable only inside the cluster, but the api
+  image ships `corpus_compare`, which reads the pod's own `DATABASE_URL`.
+  Nothing needs a password or a port-forward, and nothing is written:
+
+  ```text
+  # 1. Export the loaded CORPUS in the RDM extract's own JSON shape (read-only).
+  kubectl -n distant-signal exec deploy/distant-signal-api -c api -- \
+    corpus_compare --export-corpus-json > ~/corpus-from-prod.json
+  # 2. Regenerate against it, exactly as from a downloaded extract.
+  cargo run -p line-catalogue-validator -- \
+    --regenerate-crs-tiploc-from-corpus ~/corpus-from-prod.json \
+    --compare-with reference-data/crs-tiploc.csv \
+    --report ~/crs-report.txt
+  # 3. Review the report and `git diff reference-data/crs-tiploc.csv`, run
+  #    `cargo run -p line-catalogue-validator` (must be 0 errors), then open a
+  #    PR. Delete ~/corpus-from-prod.json afterwards; do not commit it.
+  ```
+
+  The api Deployment's name follows the Helm release (`<release>-api`,
+  `distant-signal-api` in production); `kubectl get deploy -n
+  distant-signal` lists it.
+- **Any database you can reach directly** (a dev database, or production
+  through a port-forward with its credentials): `--regenerate-crs-tiploc-from-db`
+  reads `corpus_locations` from `DATABASE_URL`. It needs the `db` feature,
+  which the default build (and so CI's fast tier) leaves out:
+
+  ```text
+  DATABASE_URL=postgres://... cargo run -p line-catalogue-validator --features db -- \
+    --regenerate-crs-tiploc-from-db \
+    --compare-with reference-data/crs-tiploc.csv --report ~/crs-report.txt
+  ```
+
+Both routes produce byte-identical output for the same loaded delivery.
+
+**Not automated (a decision for the user).** A scheduled GitHub Actions job
+that regenerates the file and opens a PR when it changes cannot reach the
+data today: production has no public API ingress (tailnet only), and the
+database is in-cluster. Each way of automating it needs something new:
+
+1. **A tailnet auth key in GitHub secrets** (an ephemeral, tagged
+   Tailscale key with an ACL allowing only the api's port), plus a new
+   read-only endpoint (e.g. `GET /private/corpus-export`, gated on a new
+   internal-OAuth group with its own client credential, also a secret).
+   Weekly cron: fetch, regenerate, `peter-evans/create-pull-request`-style
+   PR on change. New secrets: two.
+2. **An in-cluster CronJob** that runs the export and pushes a branch or
+   opens the PR itself. It needs a GitHub token (a fine-grained PAT or a
+   GitHub App key with `contents:write` and `pull-requests:write` on this
+   repo) stored as a Kubernetes Secret, and git plus the validator in an
+   image. New secret: one, but it is a write credential for the repo
+   living in the cluster.
+3. **A public, unauthenticated CORPUS export** (CORPUS is OGL v3, already
+   credited on `/attribution`) behind a public ingress. No secret in CI,
+   but it adds public ingress to an api that has none today.
+
+Until one of those is chosen, the manual runbook above is the process. It
+is short, and a human has to read the inferred pairs and conflicts before
+committing anyway (see "Decision (2026-09-28)").
 
 ### `crs-tiploc.csv` from railwaycodes.org.uk (superseded 2026-09-28)
 

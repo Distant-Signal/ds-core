@@ -10,6 +10,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub mod backoff;
 pub mod config;
+pub mod corpus_inference;
 pub mod full_coverage_window;
 pub mod ingest;
 pub mod island_of_ireland;

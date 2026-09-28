@@ -60,6 +60,7 @@
 //! best-effort line number, the bad value, and what's wrong.
 
 mod checks;
+mod corpus_db;
 mod rdm_toc;
 mod reference;
 mod regenerate;
@@ -93,30 +94,28 @@ struct Args {
     /// from this Network Rail CORPUS extract (`CORPUSExtract.json`,
     /// decompressed). See `regenerate.rs` and
     /// `reference-data/line-catalogue-validation.md`.
-    #[arg(long, value_name = "CORPUS_JSON")]
+    #[arg(long, value_name = "CORPUS_JSON", group = "crs_tiploc_source")]
     regenerate_crs_tiploc_from_corpus: Option<PathBuf>,
 
-    /// With `--regenerate-crs-tiploc-from-corpus`: write the full inference
-    /// report (per-rule counts, ambiguous groups, and every differing pair
-    /// when `--compare-with` is given) to this file. A summary still goes
-    /// to stderr. Without it the report (minus per-pair lists) goes to
-    /// stderr.
-    #[arg(
-        long,
-        value_name = "PATH",
-        requires = "regenerate_crs_tiploc_from_corpus"
-    )]
+    /// Instead of validating, regenerate `<reference-dir>/crs-tiploc.csv`
+    /// from the CORPUS the app has loaded (`corpus_locations`, read from
+    /// `DATABASE_URL`), with the same rules, report and `--compare-with` as
+    /// `--regenerate-crs-tiploc-from-corpus`. Needs a build with
+    /// `--features db`. See reference-data/line-catalogue-validation.md.
+    #[arg(long, group = "crs_tiploc_source")]
+    regenerate_crs_tiploc_from_db: bool,
+
+    /// With a crs-tiploc regeneration: write the full inference report
+    /// (per-rule counts, ambiguous groups, and every differing pair when
+    /// `--compare-with` is given) to this file. A summary still goes to
+    /// stderr. Without it the report (minus per-pair lists) goes to stderr.
+    #[arg(long, value_name = "PATH", requires = "crs_tiploc_source")]
     report: Option<PathBuf>,
 
-    /// With `--regenerate-crs-tiploc-from-corpus`: compare the new output
-    /// against this existing `crs-tiploc.csv` (read before anything is
-    /// written, so it may be the file being replaced) and add agreement
-    /// stats to the report.
-    #[arg(
-        long,
-        value_name = "CRS_TIPLOC_CSV",
-        requires = "regenerate_crs_tiploc_from_corpus"
-    )]
+    /// With a crs-tiploc regeneration: compare the new output against this
+    /// existing `crs-tiploc.csv` (read before anything is written, so it may
+    /// be the file being replaced) and add agreement stats to the report.
+    #[arg(long, value_name = "CRS_TIPLOC_CSV", requires = "crs_tiploc_source")]
     compare_with: Option<PathBuf>,
 
     /// Instead of validating, regenerate `<reference-dir>/toc-codes.csv`
@@ -131,12 +130,24 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     if args.regenerate_crs_tiploc_from_corpus.is_some()
+        || args.regenerate_crs_tiploc_from_db
         || args.regenerate_toc_codes_from_rdm_xml.is_some()
     {
-        if let Some(corpus) = &args.regenerate_crs_tiploc_from_corpus {
+        let result = if let Some(corpus) = &args.regenerate_crs_tiploc_from_corpus {
             let json = std::fs::read(corpus)
                 .map_err(|e| anyhow::anyhow!("reading {}: {e}", corpus.display()))?;
-            let result = regenerate::crs_tiploc_from_corpus(&json)?;
+            Some(regenerate::crs_tiploc_from_corpus(&json)?)
+        } else if args.regenerate_crs_tiploc_from_db {
+            let rows = corpus_db::read_corpus_rows().await?;
+            eprintln!(
+                "read {} corpus_locations row(s) from DATABASE_URL",
+                rows.len()
+            );
+            Some(regenerate::crs_tiploc_from_rows(&rows)?)
+        } else {
+            None
+        };
+        if let Some(result) = result {
             // Read the comparison file before writing: it is often the
             // very file about to be replaced.
             let comparison = match &args.compare_with {
@@ -255,4 +266,50 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod args_tests {
+    use clap::Parser;
+
+    use super::Args;
+
+    fn parse(args: &[&str]) -> Result<Args, clap::Error> {
+        Args::try_parse_from(
+            std::iter::once("line-catalogue-validator").chain(args.iter().copied()),
+        )
+    }
+
+    #[test]
+    fn crs_tiploc_regeneration_takes_one_source_and_the_report_options() {
+        let db = parse(&[
+            "--regenerate-crs-tiploc-from-db",
+            "--compare-with",
+            "reference-data/crs-tiploc.csv",
+            "--report",
+            "r.txt",
+        ])
+        .unwrap();
+        assert!(db.regenerate_crs_tiploc_from_db);
+        assert!(
+            parse(&[
+                "--regenerate-crs-tiploc-from-corpus",
+                "c.json",
+                "--report",
+                "r.txt"
+            ])
+            .is_ok()
+        );
+        // Both sources at once, or report options with no source, are refused.
+        assert!(
+            parse(&[
+                "--regenerate-crs-tiploc-from-db",
+                "--regenerate-crs-tiploc-from-corpus",
+                "c.json"
+            ])
+            .is_err()
+        );
+        assert!(parse(&["--report", "r.txt"]).is_err());
+        assert!(parse(&["--compare-with", "x.csv"]).is_err());
+    }
 }
