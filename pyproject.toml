@@ -9,13 +9,17 @@
 
 [dependency-groups]
 # Every tool the scripts-lint job runs, pinned exactly. Renovate's pep621
-# manager bumps these. shellcheck-py / shfmt-py / actionlint-py ship the
-# upstream static binaries: shellcheck 0.11.0, shfmt 3.14.1 (shfmt-py's own
-# version number is independent of shfmt's), actionlint 1.7.12. PyYAML is
-# scripts/chart-values-doc.py's one dependency (the scripts-lint job also
-# runs its `check`); types-PyYAML lets mypy check it.
+# manager bumps these. shellcheck-py / shfmt-py / actionlint-py / hadolint-py
+# ship the upstream static binaries: shellcheck 0.11.0, shfmt 3.14.1
+# (shfmt-py's own version number is independent of shfmt's), actionlint
+# 1.7.12, hadolint 2.15.1 (hadolint-py's Linux x86_64 wheel carries the
+# byte-identical hadolint/hadolint v2.15.1 release binary, checked against
+# that release's checksums.sha256). PyYAML is the one dependency of
+# scripts/chart-values-doc.py (the scripts-lint job also runs its `check`)
+# and scripts/lint-containers.py; types-PyYAML lets mypy check them.
 lint = [
     "actionlint-py==1.7.12.25",
+    "hadolint-py==2.15.1.2",
     "mypy==2.3.1",
     "pyyaml==6.0.3",
     "ruff==0.16.9",
