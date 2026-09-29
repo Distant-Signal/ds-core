@@ -122,6 +122,7 @@ mod tests {
             platform: None,
             planned_platform: None,
             platform_changed: false,
+            platform_status: None,
             booked_platform: None,
             live_status: None,
             late_minutes: None,
