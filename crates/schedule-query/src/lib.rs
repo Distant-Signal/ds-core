@@ -78,7 +78,10 @@ pub mod resolve;
 pub mod tiploc;
 
 pub use compact::SmallStr;
-pub use connections::{CallingPointForConnections, Connection, build_connections};
+pub use connections::{
+    CallingPointForConnections, Connection, PassIndex, build_connections,
+    build_connections_with_passes,
+};
 pub use interchange::{
     ChangeTime, FixedLink, InterchangeData, fixed_links_from, minimum_change_time, sibling_tiplocs,
 };

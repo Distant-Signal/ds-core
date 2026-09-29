@@ -14,6 +14,8 @@
 //! in production) -- same "pure function over already-shaped data"
 //! convention every other function in this crate already follows.
 
+use std::collections::HashMap;
+
 use chrono::NaiveTime;
 
 /// One calling point, reduced to exactly what `build_connections` needs --
@@ -128,32 +130,104 @@ fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
 pub fn build_connections<'a>(
     schedules: impl IntoIterator<Item = (&'a str, &'a [CallingPointForConnections])>,
 ) -> Vec<Connection> {
-    let mut connections = Vec::new();
+    build(schedules, false).0
+}
+
+/// For each TIPLOC, the connections (indices into the array
+/// [`build_connections_with_passes`] returns) whose train runs past it
+/// WITHOUT calling -- the untimed rows [`build_connections`] walks over. What
+/// `/Trips/plan`'s pass-through `avoid` needs: a connection alone only names
+/// its two calls.
+#[derive(Debug, Clone, Default)]
+pub struct PassIndex {
+    by_tiploc: HashMap<String, Vec<u32>>,
+}
+
+impl PassIndex {
+    /// Indices of the connections running past `tiploc` (normalized here).
+    pub fn connections_passing(&self, tiploc: &str) -> &[u32] {
+        self.by_tiploc
+            .get(crate::normalize_tiploc(tiploc))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// How many (TIPLOC, connection) entries the index holds.
+    pub fn len(&self) -> usize {
+        self.by_tiploc.values().map(Vec::len).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_tiploc.is_empty()
+    }
+}
+
+/// [`build_connections`] plus the [`PassIndex`] over the same array. The
+/// rows skipped between a connection's two calls are exactly the ones
+/// [`build_connections`]'s doc describes (untimed pass points, or anything
+/// else with no booked arrival).
+pub fn build_connections_with_passes<'a>(
+    schedules: impl IntoIterator<Item = (&'a str, &'a [CallingPointForConnections])>,
+) -> (Vec<Connection>, PassIndex) {
+    build(schedules, true)
+}
+
+fn build<'a>(
+    schedules: impl IntoIterator<Item = (&'a str, &'a [CallingPointForConnections])>,
+    with_passes: bool,
+) -> (Vec<Connection>, PassIndex) {
+    let mut connections: Vec<(Connection, Vec<&'a str>)> = Vec::new();
     for (uid, calling_points) in schedules {
         for (i, from) in calling_points.iter().enumerate() {
             let Some(departure) = from.booked_departure else {
                 continue;
             };
-            let Some(to) = calling_points[i + 1..]
+            let Some(offset) = calling_points[i + 1..]
                 .iter()
-                .find(|cp| cp.booked_arrival.is_some())
+                .position(|cp| cp.booked_arrival.is_some())
             else {
                 continue;
             };
+            let to = &calling_points[i + 1 + offset];
             let arrival = to.booked_arrival.expect("just checked is_some");
-            connections.push(Connection {
-                uid: uid.to_string(),
-                from_tiploc: from.tiploc.clone(),
-                to_tiploc: to.tiploc.clone(),
-                departure_min: minutes_from_midnight(departure, from.day_offset),
-                arrival_min: minutes_from_midnight(arrival, to.day_offset),
-            });
+            let passes = if with_passes {
+                calling_points[i + 1..i + 1 + offset]
+                    .iter()
+                    .map(|cp| crate::normalize_tiploc(&cp.tiploc))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            connections.push((
+                Connection {
+                    uid: uid.to_string(),
+                    from_tiploc: from.tiploc.clone(),
+                    to_tiploc: to.tiploc.clone(),
+                    departure_min: minutes_from_midnight(departure, from.day_offset),
+                    arrival_min: minutes_from_midnight(arrival, to.day_offset),
+                },
+                passes,
+            ));
         }
     }
-    connections.sort_by(|a, b| {
+    connections.sort_by(|(a, _), (b, _)| {
         (a.departure_min, &a.uid, &a.from_tiploc).cmp(&(b.departure_min, &b.uid, &b.from_tiploc))
     });
-    connections
+    let mut index = PassIndex::default();
+    let connections = connections
+        .into_iter()
+        .enumerate()
+        .map(|(position, (connection, passes))| {
+            for tiploc in passes {
+                let entry = index.by_tiploc.entry(tiploc.to_string()).or_default();
+                if entry.last() != Some(&(position as u32)) {
+                    entry.push(position as u32);
+                }
+            }
+            connection
+        })
+        .collect();
+    (connections, index)
 }
 
 #[cfg(test)]
@@ -298,5 +372,40 @@ mod tests {
         assert_eq!(connections[1].to_tiploc, "MAN");
         assert_eq!(connections[1].departure_min, 8 * 60 + 21);
         assert_eq!(connections[1].arrival_min, 10 * 60 + 50);
+    }
+
+    #[test]
+    fn the_pass_index_names_the_connections_running_past_an_untimed_row() {
+        let schedule = vec![
+            cp("EUSTON", None, Some("08:00"), 0),
+            cp("CMDNJN ", None, None, 0),
+            cp("WATFDJ", None, None, 0),
+            cp("MKC", Some("08:40"), Some("08:42"), 0),
+            cp("RUGBY", Some("09:00"), None, 0),
+        ];
+        let (connections, passes) = build_connections_with_passes([("U1", schedule.as_slice())]);
+        assert_eq!(
+            connections,
+            build_connections([("U1", schedule.as_slice())])
+        );
+        assert_eq!(passes.len(), 2);
+        let passing: Vec<&Connection> = passes
+            .connections_passing("CMDNJN")
+            .iter()
+            .map(|&i| &connections[i as usize])
+            .collect();
+        assert_eq!(passing.len(), 1);
+        assert_eq!(
+            (
+                passing[0].from_tiploc.as_str(),
+                passing[0].to_tiploc.as_str()
+            ),
+            ("EUSTON", "MKC")
+        );
+        assert_eq!(
+            passes.connections_passing("WATFDJ"),
+            passes.connections_passing("CMDNJN")
+        );
+        assert!(passes.connections_passing("MKC").is_empty());
     }
 }
