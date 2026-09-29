@@ -36,10 +36,15 @@ pub struct CorpusRow {
     pub nlc_desc: Option<String>,
 }
 
-/// Bumped whenever [`infer_crs_tiploc`] or [`crosswalk`] can give a
-/// different answer for the same rows, so a crosswalk stored by an older
-/// build is rebuilt (see `api::data::corpus_crosswalk`).
-pub const RULES_VERSION: i32 = 1;
+/// Bumped whenever [`infer_crs_tiploc`], [`crosswalk`] or
+/// [`restrict_to_stations`] can give a different answer for the same rows,
+/// so a crosswalk stored by an older build is rebuilt (see
+/// `api::data::corpus_crosswalk`).
+///
+/// - 1: the conservative inference, narrowed to one CRS per key.
+/// - 2: the stored crosswalk keeps only CRS codes that are Knowledgebase
+///   stations ([`restrict_to_stations`]).
+pub const RULES_VERSION: i32 = 2;
 
 /// One output row of `crs-tiploc.csv`: `(crs, tiploc, name)`, with an empty
 /// `tiploc` only for a CRS that no CORPUS row pairs with any TIPLOC.
@@ -770,9 +775,124 @@ pub fn crosswalk(rows: &[CorpusRow], inferred: &CorpusCrsTiploc) -> Crosswalk {
     out
 }
 
+/// Why [`restrict_to_stations`] left a crosswalk row out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Exclusion {
+    /// An `X`/`Z`/`Q`-prefixed code that is not a station: the pseudo
+    /// codes CORPUS gives bus and ferry links, fares groupings and foreign
+    /// locations.
+    PseudoCode,
+    /// Any other code that is not a Knowledgebase station: London
+    /// Underground/Metrolink stops, closed stations and the like.
+    NotAStation,
+}
+
+impl Exclusion {
+    pub const ALL: [Exclusion; 2] = [Exclusion::PseudoCode, Exclusion::NotAStation];
+
+    /// Classifies a CRS already known not to be a station. (Some real
+    /// stations' codes start with X/Z/Q too, e.g. `ZFD` Farringdon; those
+    /// are stations, so never reach this.)
+    pub fn of(crs: &str) -> Self {
+        if matches!(crs.as_bytes().first(), Some(b'X' | b'Z' | b'Q')) {
+            Exclusion::PseudoCode
+        } else {
+            Exclusion::NotAStation
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Exclusion::PseudoCode => "pseudo_code",
+            Exclusion::NotAStation => "not_a_station",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Exclusion::PseudoCode => "pseudo X/Z/Q code",
+            Exclusion::NotAStation => "other CRS not in stations",
+        }
+    }
+}
+
+/// Splits `crosswalk` into the rows whose CRS `is_station` accepts (kept)
+/// and the rest (excluded), each list still sorted by key.
+///
+/// CORPUS gives a `3ALPHA` to far more than the railway stations the app
+/// knows (bus stops, tram and Underground stops, foreign and closed
+/// locations, pseudo codes), and a lookup resolving a TIPLOC to one of
+/// those only yields a CRS nothing else in the app can name or show. So the
+/// stored crosswalk keeps a TIPLOC or STANOX only when its CRS is a
+/// Knowledgebase station. Applied after [`crosswalk`]'s one-CRS-per-key
+/// narrowing, so a STANOX shared by a station and a non-station stays out
+/// as ambiguous rather than being handed to the station.
+pub fn restrict_to_stations(
+    crosswalk: Crosswalk,
+    is_station: impl Fn(&str) -> bool,
+) -> (Crosswalk, Crosswalk) {
+    let (tiplocs, tiplocs_out) = crosswalk
+        .tiplocs
+        .into_iter()
+        .partition(|t| is_station(&t.crs));
+    let (stanoxes, stanoxes_out) = crosswalk
+        .stanoxes
+        .into_iter()
+        .partition(|s| is_station(&s.crs));
+    (
+        Crosswalk { tiplocs, stanoxes },
+        Crosswalk {
+            tiplocs: tiplocs_out,
+            stanoxes: stanoxes_out,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restrict_to_stations_keeps_station_codes_and_classifies_the_rest() {
+        let rows = vec![
+            row(
+                "559500",
+                "87219",
+                "CLPHMJN",
+                "CLJ",
+                "CLAPHAM JUNCTION LONDON",
+            ),
+            row("559572", "87219", "CLPHMJW", " ", "CLAPHAM JN (WINDSOR)"),
+            row("111100", "11111", "BUSSTOP", "XBS", "SOMEWHERE BUS STATION"),
+            row("222200", "22222", "LULSTOP", "LUA", "SOMEWHERE LUL"),
+            row("333300", "33333", "FARRTL", "ZFD", "FARRINGDON"),
+        ];
+        let inferred = infer_crs_tiploc(&rows);
+        let all = crosswalk(&rows, &inferred);
+        assert_eq!(all.tiplocs.len(), 5);
+        let stations = ["CLJ", "ZFD"];
+        let (kept, out) = restrict_to_stations(all, |crs| stations.contains(&crs));
+        let keys = |c: &Crosswalk| {
+            c.tiplocs
+                .iter()
+                .map(|t| t.tiploc.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(keys(&kept), ["CLPHMJN", "CLPHMJW", "FARRTL"]);
+        assert_eq!(keys(&out), ["BUSSTOP", "LULSTOP"]);
+        assert_eq!(
+            kept.stanoxes
+                .iter()
+                .map(|s| s.stanox.as_str())
+                .collect::<Vec<_>>(),
+            ["33333", "87219"]
+        );
+        assert_eq!(out.stanoxes.len(), 2);
+        assert_eq!(Exclusion::of("XBS"), Exclusion::PseudoCode);
+        assert_eq!(Exclusion::of("ZFD"), Exclusion::PseudoCode);
+        assert_eq!(Exclusion::of("QQQ"), Exclusion::PseudoCode);
+        assert_eq!(Exclusion::of("LUA"), Exclusion::NotAStation);
+    }
 
     fn row(nlc: &str, stanox: &str, tiploc: &str, crs: &str, desc: &str) -> CorpusRow {
         let opt = |s: &str| Some(s.to_owned());

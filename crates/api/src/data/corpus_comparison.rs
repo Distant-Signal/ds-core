@@ -5,9 +5,15 @@
 //! CORPUS is put through the same conservative inference
 //! (`common::corpus_inference`) and narrowed to the same one-CRS-per-key
 //! crosswalk the runtime fallback would use
-//! ([`crate::data::corpus_crosswalk`]), so "CORPUS only" below is exactly
-//! what turning the fallback on would add, and "conflict" what it would
-//! NOT change (the timetable wins).
+//! ([`crate::data::corpus_crosswalk`]), and through the same stations
+//! filter (`common::corpus_inference::restrict_to_stations`, against the
+//! `stations` CRS codes read here), so "CORPUS only" below is exactly what
+//! turning the fallback on would add, and "conflict" what it would NOT
+//! change (the timetable wins). The fills the stations filter drops are
+//! counted separately, by [`Exclusion`], so its effect stays visible.
+//! Agreements and conflicts are counted before that filter: they compare
+//! the two data sets, and the fallback never overrides the timetable
+//! either way.
 //!
 //! Two ways to run it, both read-only:
 //!
@@ -26,7 +32,7 @@ use std::fmt::Write as _;
 
 use anyhow::Result;
 use chrono::NaiveDate;
-use common::corpus_inference::Rule;
+use common::corpus_inference::{Exclusion, Rule};
 use sqlx::PgPool;
 
 use crate::data::corpus::CorpusLocation;
@@ -143,6 +149,10 @@ pub struct CorpusComparison {
     pub corpus_rows: usize,
     pub corpus_tiplocs_with_crs: usize,
     pub corpus_stanoxes_with_crs: usize,
+    /// Of those, the ones whose CRS is in `stations`: what the stored
+    /// crosswalk keeps.
+    pub corpus_tiplocs_at_stations: usize,
+    pub corpus_stanoxes_at_stations: usize,
 
     /// TIPLOCs both sides map to the same CRS, by CORPUS rule.
     pub tiploc_agree: BTreeMap<Rule, usize>,
@@ -153,8 +163,12 @@ pub struct CorpusComparison {
     /// its STANOX, a signal/junction by name, ambiguous, or several
     /// `3ALPHA`s): TIPLOC -> CORPUS description.
     pub tiploc_timetable_only_no_corpus_crs: BTreeMap<String, String>,
-    /// TIPLOCs only CORPUS maps: the fallback's TIPLOC fills.
+    /// TIPLOCs only CORPUS maps, to a CRS in `stations`: the fallback's
+    /// TIPLOC fills.
     pub tiploc_corpus_only: Vec<Fill>,
+    /// TIPLOCs only CORPUS maps, to a CRS NOT in `stations`: left out by
+    /// the stations filter.
+    pub tiploc_corpus_only_not_stations: Vec<Fill>,
     /// With calling points loaded: the service date, how many TIPLOCs
     /// called at that day have no timetable CRS, and which of them CORPUS
     /// fills.
@@ -163,9 +177,12 @@ pub struct CorpusComparison {
     pub stanox_agree: usize,
     pub stanox_conflicts: Vec<Conflict>,
     pub stanox_timetable_only: BTreeSet<String>,
-    /// STANOXes the timetable does not know at all: the fallback's STANOX
-    /// fills.
+    /// STANOXes the timetable does not know at all, mapped to a CRS in
+    /// `stations`: the fallback's STANOX fills.
     pub stanox_corpus_only: Vec<Fill>,
+    /// The same, mapped to a CRS NOT in `stations`: left out by the
+    /// stations filter.
+    pub stanox_corpus_only_not_stations: Vec<Fill>,
     /// STANOXes CORPUS maps that the timetable deliberately left out of
     /// `stanox_crs` (in `tiploc_crs` only): never filled.
     pub stanox_corpus_blocked: Vec<Fill>,
@@ -211,10 +228,22 @@ pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusCom
         .collect();
     let desc_of = |tiploc: &str| corpus_desc.get(tiploc).cloned().unwrap_or_default();
 
+    let is_station = |crs: &str| timetable.station_names.contains_key(crs);
+
     let mut c = CorpusComparison {
         corpus_rows: locations.len(),
         corpus_tiplocs_with_crs: crosswalk.tiplocs.len(),
         corpus_stanoxes_with_crs: crosswalk.stanoxes.len(),
+        corpus_tiplocs_at_stations: crosswalk
+            .tiplocs
+            .iter()
+            .filter(|t| is_station(&t.crs))
+            .count(),
+        corpus_stanoxes_at_stations: crosswalk
+            .stanoxes
+            .iter()
+            .filter(|s| is_station(&s.crs))
+            .count(),
         ..CorpusComparison::default()
     };
 
@@ -252,12 +281,17 @@ pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusCom
     }
     for t in &crosswalk.tiplocs {
         if !timetable.tiplocs.contains_key(&t.tiploc) {
-            c.tiploc_corpus_only.push(Fill {
+            let fill = Fill {
                 key: t.tiploc.clone(),
                 crs: t.crs.clone(),
                 rule: Some(t.rule),
                 desc: desc_of(&t.tiploc),
-            });
+            };
+            if is_station(&t.crs) {
+                c.tiploc_corpus_only.push(fill);
+            } else {
+                c.tiploc_corpus_only_not_stations.push(fill);
+            }
         }
     }
     if let Some((date, called)) = &timetable.called_tiplocs {
@@ -305,8 +339,10 @@ pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusCom
         };
         if timetable.known_stanoxes.contains(&s.stanox) {
             c.stanox_corpus_blocked.push(fill);
-        } else {
+        } else if is_station(&s.crs) {
             c.stanox_corpus_only.push(fill);
+        } else {
+            c.stanox_corpus_only_not_stations.push(fill);
         }
     }
 
@@ -351,6 +387,28 @@ fn rule_label(rule: Option<Rule>) -> &'static str {
     rule.map_or("-", Rule::as_str)
 }
 
+/// `fills` (all left out by the stations filter) by [`Exclusion`].
+fn by_exclusion(fills: &[Fill]) -> BTreeMap<Exclusion, usize> {
+    let mut counts: BTreeMap<Exclusion, usize> = Exclusion::ALL.iter().map(|e| (*e, 0)).collect();
+    for f in fills {
+        *counts.entry(Exclusion::of(&f.crs)).or_default() += 1;
+    }
+    counts
+}
+
+fn excluded_counts(out: &mut String, fills: &[Fill]) {
+    let parts: Vec<String> = by_exclusion(fills)
+        .into_iter()
+        .map(|(e, n)| format!("{}: {n}", e.label()))
+        .collect();
+    let _ = writeln!(
+        out,
+        "  left out, CRS not in stations: {} ({})",
+        fills.len(),
+        parts.join("; ")
+    );
+}
+
 /// Renders the comparison as plain text.
 pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     let mut out = String::new();
@@ -358,8 +416,13 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     let _ = writeln!(out, "=== CORPUS vs timetable crosswalk ===");
     let _ = writeln!(
         out,
-        "CORPUS rows: {}; TIPLOCs with one CRS: {}; STANOXes with one CRS: {}",
-        c.corpus_rows, c.corpus_tiplocs_with_crs, c.corpus_stanoxes_with_crs
+        "CORPUS rows: {}; TIPLOCs with one CRS: {} ({} a station); \
+         STANOXes with one CRS: {} ({} a station)",
+        c.corpus_rows,
+        c.corpus_tiplocs_with_crs,
+        c.corpus_tiplocs_at_stations,
+        c.corpus_stanoxes_with_crs,
+        c.corpus_stanoxes_at_stations
     );
     let _ = writeln!(
         out,
@@ -391,7 +454,13 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     );
     let _ = writeln!(
         out,
-        "CORPUS only (the fallback would fill): {}",
+        "CORPUS only, before the stations filter: {}",
+        c.tiploc_corpus_only.len() + c.tiploc_corpus_only_not_stations.len()
+    );
+    excluded_counts(&mut out, &c.tiploc_corpus_only_not_stations);
+    let _ = writeln!(
+        out,
+        "CORPUS only, CRS is a station (the fallback would fill): {}",
         c.tiploc_corpus_only.len()
     );
     for rule in Rule::ALL {
@@ -419,7 +488,13 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     let _ = writeln!(out, "timetable only: {}", c.stanox_timetable_only.len());
     let _ = writeln!(
         out,
-        "CORPUS only, unknown to the timetable (the fallback would fill): {}",
+        "CORPUS only, unknown to the timetable, before the stations filter: {}",
+        c.stanox_corpus_only.len() + c.stanox_corpus_only_not_stations.len()
+    );
+    excluded_counts(&mut out, &c.stanox_corpus_only_not_stations);
+    let _ = writeln!(
+        out,
+        "CORPUS only, unknown to the timetable, CRS is a station (the fallback would fill): {}",
         c.stanox_corpus_only.len()
     );
     let _ = writeln!(
@@ -475,6 +550,11 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     };
     conflicts(&mut out, "TIPLOC conflicts", &c.tiploc_conflicts);
     fills(&mut out, "TIPLOC fills", &c.tiploc_corpus_only);
+    fills(
+        &mut out,
+        "TIPLOCs left out, CRS not in stations",
+        &c.tiploc_corpus_only_not_stations,
+    );
     if let Some((date, _, called_fills)) = &c.called {
         fills(
             &mut out,
@@ -484,6 +564,11 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     }
     conflicts(&mut out, "STANOX conflicts", &c.stanox_conflicts);
     fills(&mut out, "STANOX fills", &c.stanox_corpus_only);
+    fills(
+        &mut out,
+        "STANOXes left out, CRS not in stations",
+        &c.stanox_corpus_only_not_stations,
+    );
     fills(
         &mut out,
         "STANOXes CORPUS maps but the timetable left out on purpose",
@@ -547,6 +632,18 @@ pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     out
 }
 
+/// `corpus_not_station_<exclusion>` gauge outcomes for fills the stations
+/// filter left out.
+fn not_station_outcomes(fills: &[Fill]) -> impl Iterator<Item = (&'static str, usize)> {
+    by_exclusion(fills).into_iter().map(|(e, n)| {
+        let outcome = match e {
+            Exclusion::PseudoCode => "corpus_not_station_pseudo_code",
+            Exclusion::NotAStation => "corpus_not_station_other",
+        };
+        (outcome, n)
+    })
+}
+
 /// Sets the `distant_signal_api_corpus_comparison_*` gauges from `c`.
 pub fn record_metrics(c: &CorpusComparison) {
     let agree: usize = c.tiploc_agree.values().sum();
@@ -558,7 +655,10 @@ pub fn record_metrics(c: &CorpusComparison) {
             c.tiploc_timetable_only_absent.len() + c.tiploc_timetable_only_no_corpus_crs.len(),
         ),
         ("corpus_only", c.tiploc_corpus_only.len()),
-    ] {
+    ]
+    .into_iter()
+    .chain(not_station_outcomes(&c.tiploc_corpus_only_not_stations))
+    {
         metrics::gauge!(
             common::metrics::metric_name("api_corpus_comparison_tiplocs"),
             "outcome" => outcome
@@ -571,7 +671,10 @@ pub fn record_metrics(c: &CorpusComparison) {
         ("timetable_only", c.stanox_timetable_only.len()),
         ("corpus_only", c.stanox_corpus_only.len()),
         ("corpus_blocked", c.stanox_corpus_blocked.len()),
-    ] {
+    ]
+    .into_iter()
+    .chain(not_station_outcomes(&c.stanox_corpus_only_not_stations))
+    {
         metrics::gauge!(
             common::metrics::metric_name("api_corpus_comparison_stanoxes"),
             "outcome" => outcome
@@ -591,9 +694,11 @@ pub async fn log_after_load(pool: &PgPool, locations: &[CorpusLocation]) {
                 tiploc_agree = c.tiploc_agree.values().sum::<usize>(),
                 tiploc_conflicts = c.tiploc_conflicts.len(),
                 tiploc_corpus_only = c.tiploc_corpus_only.len(),
+                tiploc_corpus_only_not_stations = c.tiploc_corpus_only_not_stations.len(),
                 stanox_agree = c.stanox_agree,
                 stanox_conflicts = c.stanox_conflicts.len(),
                 stanox_corpus_only = c.stanox_corpus_only.len(),
+                stanox_corpus_only_not_stations = c.stanox_corpus_only_not_stations.len(),
                 report = %render(&c, ReportDetail::Summary),
                 "CORPUS vs timetable crosswalk comparison (run corpus_compare for the full report)"
             );
@@ -637,6 +742,7 @@ mod tests {
             loc("222200", "22222", "NEWSTN", "NEW", "NEW STATION"),
             loc("333300", "33333", "SHARED1", "SHA", "SHARED ONE"),
             loc("444400", "44444", "TTSTNX", "TTS", "TIMETABLE STANOX"),
+            loc("666600", "66666", "BUSSTN", "XBS", "SOMEWHERE BUS STATION"),
         ];
         let mut t = Timetable::default();
         let tip = |crs: &str, name: &str| (crs.to_owned(), name.to_owned());
@@ -662,6 +768,7 @@ mod tests {
         t.station_names
             .insert("VIC".into(), "London Victoria".into());
         t.station_names.insert("KBX".into(), "Kirby Cross".into());
+        t.station_names.insert("NEW".into(), "New Station".into());
         t.called_tiplocs = Some((
             NaiveDate::from_ymd_opt(2026, 9, 28).unwrap(),
             ["CLPHMJN", "CLPHMJW", "NOCRS"]
@@ -707,9 +814,30 @@ mod tests {
             vec![
                 ("CLPHMJW", "CLJ", Some(Rule::StationName)),
                 ("NEWSTN", "NEW", Some(Rule::Direct)),
-                ("SHARED1", "SHA", Some(Rule::Direct)),
-                ("TTSTNX", "TTS", Some(Rule::Direct)),
             ]
+        );
+        // The stations filter: SHA and TTS are not stations, XBS a pseudo
+        // code.
+        let not_stations: Vec<(&str, &str)> = c
+            .tiploc_corpus_only_not_stations
+            .iter()
+            .map(|f| (f.key.as_str(), f.crs.as_str()))
+            .collect();
+        assert_eq!(
+            not_stations,
+            vec![("BUSSTN", "XBS"), ("SHARED1", "SHA"), ("TTSTNX", "TTS")]
+        );
+        assert_eq!(
+            by_exclusion(&c.tiploc_corpus_only_not_stations),
+            BTreeMap::from([(Exclusion::PseudoCode, 1), (Exclusion::NotAStation, 2)])
+        );
+        assert_eq!(
+            (c.corpus_tiplocs_with_crs, c.corpus_tiplocs_at_stations),
+            (8, 4)
+        );
+        assert_eq!(
+            (c.corpus_stanoxes_with_crs, c.corpus_stanoxes_at_stations),
+            (7, 3)
         );
         let (_, without_crs, called_fills) = c.called.as_ref().unwrap();
         assert_eq!(*without_crs, 2);
@@ -731,6 +859,13 @@ mod tests {
             ["22222"]
         );
         assert_eq!(
+            c.stanox_corpus_only_not_stations
+                .iter()
+                .map(|f| (f.key.as_str(), f.crs.as_str()))
+                .collect::<Vec<_>>(),
+            [("66666", "XBS")]
+        );
+        assert_eq!(
             c.stanox_corpus_blocked
                 .iter()
                 .map(|f| f.key.as_str())
@@ -741,23 +876,31 @@ mod tests {
         // CLPHMJN's timetable name is shorter; VICTRIA's matches.
         assert_eq!(c.tiploc_names_same, 1);
         assert_eq!(c.tiploc_name_diffs.len(), 1);
-        assert_eq!(c.crs_names_same, 0);
+        assert_eq!(c.crs_names_same, 1);
         assert_eq!(c.crs_name_diffs.len(), 2);
         assert_eq!(
             c.crs_in_stations_not_corpus,
             BTreeSet::from(["KBX".to_owned()])
         );
-        assert!(c.crs_in_corpus_not_stations.contains("NEW"));
+        assert!(c.crs_in_corpus_not_stations.contains("SHA"));
+        assert!(!c.crs_in_corpus_not_stations.contains("NEW"));
 
         let summary = render(&c, ReportDetail::Summary);
         assert!(
             summary.contains("conflicting CRS (timetable wins): 1"),
             "{summary}"
         );
-        assert!(
-            summary.contains("CORPUS only (the fallback would fill): 4"),
-            "{summary}"
-        );
+        for line in [
+            "TIPLOCs with one CRS: 8 (4 a station); STANOXes with one CRS: 7 (3 a station)",
+            "CORPUS only, before the stations filter: 5\n  left out, CRS not in stations: 3 \
+             (pseudo X/Z/Q code: 1; other CRS not in stations: 2)\n\
+             CORPUS only, CRS is a station (the fallback would fill): 2\n",
+            "unknown to the timetable, before the stations filter: 2\n  left out, CRS not in \
+             stations: 1 (pseudo X/Z/Q code: 1; other CRS not in stations: 0)\n\
+             CORPUS only, unknown to the timetable, CRS is a station (the fallback would fill): 1\n",
+        ] {
+            assert!(summary.contains(line), "{line:?} missing from\n{summary}");
+        }
         assert!(!summary.contains("CONFLCT"));
         let full = render(&c, ReportDetail::Full);
         assert!(
@@ -769,6 +912,12 @@ mod tests {
             "{full}"
         );
         assert!(full.contains("  33333 -> SHA (SHARED ONE) [-]"), "{full}");
+        assert!(
+            full.contains(
+                "TIPLOCs left out, CRS not in stations: 3\n  BUSSTN -> XBS (SOMEWHERE BUS STATION) [direct]"
+            ),
+            "{full}"
+        );
     }
 
     #[test]
@@ -778,5 +927,13 @@ mod tests {
         assert_eq!(c.tiploc_agree.values().sum::<usize>(), 0);
         assert!(c.tiploc_corpus_only.is_empty());
         assert_eq!(c.tiploc_timetable_only_absent.len(), 5);
+        assert!(c.tiploc_corpus_only_not_stations.is_empty());
+        let summary = render(&c, ReportDetail::Summary);
+        assert!(
+            summary.contains(
+                "left out, CRS not in stations: 0 (pseudo X/Z/Q code: 0; other CRS not in stations: 0)"
+            ),
+            "{summary}"
+        );
     }
 }
