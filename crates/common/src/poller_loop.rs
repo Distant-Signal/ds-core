@@ -132,6 +132,20 @@ where
     .await
 }
 
+/// Registers both `result` series of `poller_cycle_total` at 0 for
+/// `poller_label`, so an alert's `increase()` sees the first failure (or
+/// success) after a pod start rather than the series merely appearing.
+fn register_cycle_metrics(poller_label: &'static str) {
+    for result in ["success", "failure"] {
+        metrics::counter!(
+            crate::metrics::metric_name("poller_cycle_total"),
+            "poller" => poller_label,
+            "result" => result
+        )
+        .increment(0);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_poll_loop_with<F, Fut>(
     policy: &RetryPolicy,
@@ -147,6 +161,7 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
+    register_cycle_metrics(poller_label);
     let delay = ingest::time_until_next_poll_waiting(
         client,
         api_ingest_url,
@@ -253,6 +268,23 @@ mod tests {
             username: "test".to_string(),
             password: "test".to_string(),
         })
+    }
+
+    /// Both `result` series exist at 0 before any cycle runs, so the
+    /// first failure after a pod start is an `increase()` Prometheus sees.
+    #[test]
+    fn both_cycle_result_series_are_registered_at_zero() {
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _guard = metrics::set_default_local_recorder(&recorder);
+        register_cycle_metrics("test-poller");
+        let rendered = handle.render();
+        for result in ["success", "failure"] {
+            let line = format!(
+                "distant_signal_poller_cycle_total{{poller=\"test-poller\",result=\"{result}\"}} 0"
+            );
+            assert!(rendered.contains(&line), "missing {line} in:\n{rendered}");
+        }
     }
 
     /// Finding #2 regression: the interval `run_poll_loop` ticks on must be
