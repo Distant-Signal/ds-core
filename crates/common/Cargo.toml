@@ -34,7 +34,7 @@ url = "2.5"
 # and enricher; the pollers and consumers do not build sqlx.
 postgres = ["dep:sqlx"]
 # `common::redis_conn` (bounded Redis connection settings). Enabled by
-# movement-relay, movement-feed and enricher.
+# movement-relay, movement-feed, enricher and api.
 redis = ["dep:redis"]
 
 [dev-dependencies]

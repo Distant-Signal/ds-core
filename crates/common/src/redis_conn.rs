@@ -1,7 +1,7 @@
 //! The Redis connection settings every long-running worker uses
 //! (movement-relay, the three movement-stream consumers via
-//! `movement-feed`, enricher), and a startup connect that waits for Redis
-//! without hiding the wait.
+//! `movement-feed`, enricher; api for its per-ingest text-changed publish),
+//! and a startup connect that waits for Redis without hiding the wait.
 //!
 //! **Why not redis-rs's defaults.** `Client::get_connection_manager()`
 //! retries a failed (re)connect 6 more times on a 1s-then-60s (capped)
