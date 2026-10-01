@@ -46,6 +46,17 @@
 //! row) is skipped. Every api replica takes [`MIGRATION_LOCK_KEY`] first, so
 //! another replica's in-flight migration is never one of those; a build a
 //! human started in psql is left alone.
+//!
+//! # Which role migrates
+//!
+//! The migrations connect with `MIGRATION_DATABASE_URL` when it is set and
+//! non-empty, else with `DATABASE_URL` ([`migration_url`]). With the role
+//! split (docs/postgres-app-role.md) that is the schema owner role, which
+//! may run DDL, while `DATABASE_URL` -- every pool -- is the non-superuser
+//! app role with DML only. The owner needs `pg_read_all_stats` so the heal
+//! above can see `pg_stat_progress_create_index` rows of other roles'
+//! builds; without it such a row hides its `index_relid`/`relid` and a
+//! human's in-flight build would look abandoned.
 
 use std::time::Duration;
 
@@ -68,6 +79,22 @@ pub const DEFAULT_MIGRATION_STATEMENT_TIMEOUT: Duration = Duration::from_secs(24
 
 pub const MIGRATION_LOCK_TIMEOUT_ENV: &str = "MIGRATION_LOCK_TIMEOUT_SECS";
 pub const MIGRATION_STATEMENT_TIMEOUT_ENV: &str = "MIGRATION_STATEMENT_TIMEOUT_SECS";
+
+/// Environment variable naming the migration connection's URL.
+pub const MIGRATION_DATABASE_URL_ENV: &str = "MIGRATION_DATABASE_URL";
+
+/// The URL the migrations connect with, and the variable it came from (for
+/// error messages): `migration_database_url` when set and not blank, else
+/// `database_url`. See the module docs, "Which role migrates".
+pub fn migration_url<'a>(
+    database_url: &'a str,
+    migration_database_url: Option<&'a str>,
+) -> (&'a str, &'static str) {
+    match migration_database_url {
+        Some(url) if !url.trim().is_empty() => (url, MIGRATION_DATABASE_URL_ENV),
+        _ => (database_url, "DATABASE_URL"),
+    }
+}
 
 /// Timeouts for the migration connection. See the module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,6 +255,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn migration_url_falls_back_to_database_url() {
+        let app = "postgres://app@db/ds";
+        let owner = "postgres://owner@db/ds";
+        assert_eq!(migration_url(app, None), (app, "DATABASE_URL"));
+        assert_eq!(migration_url(app, Some("")), (app, "DATABASE_URL"));
+        assert_eq!(migration_url(app, Some("  ")), (app, "DATABASE_URL"));
+        assert_eq!(
+            migration_url(app, Some(owner)),
+            (owner, MIGRATION_DATABASE_URL_ENV)
+        );
+    }
+
+    #[test]
     fn defaults_fit_inside_the_startup_probe_budget() {
         // api.probes.startup: 450 x 2s = 900s.
         let settings = MigrationSettings::default();
@@ -237,8 +277,10 @@ mod tests {
         assert!(settings.lock_timeout < settings.statement_timeout);
     }
 
+    /// As the schema owner (`MIGRATION_DATABASE_URL`, else `DATABASE_URL`):
+    /// these tests create tables, drop indexes and run the migrator.
     async fn connect() -> PgConnection {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let url = crate::test_support::owner_database_url();
         PgConnection::connect(&url).await.expect("connect")
     }
 
@@ -340,7 +382,7 @@ mod tests {
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
                 migrate::tests -- --ignored --test-threads=1`"]
     async fn run_is_a_no_op_on_a_migrated_database_and_releases_its_lock() {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let url = crate::test_support::owner_database_url();
         let base: PgConnectOptions = url.parse().unwrap();
         run(base, MigrationSettings::default())
             .await
@@ -357,5 +399,87 @@ mod tests {
             .execute(&mut conn)
             .await
             .unwrap();
+    }
+
+    /// With the role split (docs/postgres-app-role.md; CI's role-split run,
+    /// `scripts/test-postgres-roles.py`), proves the suite really ran as a
+    /// DML-only app role and the migrations as a separate owner: the
+    /// `DATABASE_URL` role is no superuser and may not create, alter or
+    /// truncate anything, while the `MIGRATION_DATABASE_URL` role owns schema
+    /// public and every table in it. Passes trivially (checks nothing) when
+    /// `DATABASE_URL` is a superuser, i.e. the ordinary single-role run.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=<app> \
+                MIGRATION_DATABASE_URL=<owner> cargo test -p api migrate::tests -- --ignored \
+                --test-threads=1`"]
+    async fn the_app_role_has_dml_only_and_the_owner_owns_the_schema() {
+        let app_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let mut app = PgConnection::connect(&app_url)
+            .await
+            .expect("connect as app");
+        let app_is_superuser: bool =
+            sqlx::query_scalar("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                .fetch_one(&mut app)
+                .await
+                .unwrap();
+        if app_is_superuser {
+            eprintln!("DATABASE_URL is a superuser: not a role-split run, nothing to check");
+            return;
+        }
+
+        for ddl in [
+            "CREATE TABLE app_role_must_not_create (id int)",
+            "CREATE UNLOGGED TABLE app_role_must_not_create (id int)",
+            "ALTER TABLE users ADD COLUMN app_role_must_not_add int",
+            "TRUNCATE corpus_deliveries",
+            "DROP INDEX IF EXISTS schedule_destination_departures_publish_keys_probe",
+            "CREATE INDEX app_role_must_not_index ON users (id)",
+            "INSERT INTO _sqlx_migrations (version, description, success, checksum, \
+             execution_time) VALUES (-1, 'app', true, '\\x00', 0)",
+        ] {
+            let err = sqlx::query(ddl)
+                .execute(&mut app)
+                .await
+                .expect_err(&format!("the app role must not be able to run: {ddl}"));
+            assert_eq!(
+                err.as_database_error().and_then(|db| db.code()).as_deref(),
+                Some("42501"),
+                "{ddl}: expected insufficient_privilege, got {err}"
+            );
+        }
+        let owner_name: String = {
+            let mut owner = connect().await;
+            sqlx::query_scalar("SELECT current_user::text")
+                .fetch_one(&mut owner)
+                .await
+                .unwrap()
+        };
+        let app_name: String = sqlx::query_scalar("SELECT current_user::text")
+            .fetch_one(&mut app)
+            .await
+            .unwrap();
+        assert_ne!(
+            owner_name, app_name,
+            "MIGRATION_DATABASE_URL must be the owner role, not the app role"
+        );
+        let (schema_owner, foreign_tables): (String, Vec<String>) = sqlx::query_as(
+            "SELECT (SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'public'), \
+                    COALESCE((SELECT array_agg(c.relname::text ORDER BY c.relname) \
+                              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+                              WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S') \
+                                AND pg_get_userbyid(c.relowner) <> $1 \
+                                AND NOT EXISTS (SELECT 1 FROM pg_depend d \
+                                                WHERE d.objid = c.oid AND d.deptype = 'e')), \
+                             '{}')",
+        )
+        .bind(&owner_name)
+        .fetch_one(&mut app)
+        .await
+        .unwrap();
+        assert_eq!(schema_owner, owner_name, "schema public's owner");
+        assert!(
+            foreign_tables.is_empty(),
+            "tables/sequences in public not owned by {owner_name}: {foreign_tables:?}"
+        );
     }
 }

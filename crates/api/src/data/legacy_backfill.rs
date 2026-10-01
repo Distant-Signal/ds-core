@@ -416,9 +416,10 @@ mod db_tests {
     use super::*;
     use sqlx::postgres::PgPoolOptions;
 
+    /// As the schema owner (`MIGRATION_DATABASE_URL`, else `DATABASE_URL`):
+    /// the fixture below is DDL in a throwaway schema.
     async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let database_url = crate::test_support::owner_database_url();
         PgPoolOptions::new()
             .connect(&database_url)
             .await
@@ -442,8 +443,7 @@ mod db_tests {
     /// `20260906100000_trains.sql` and `20260906110000_train_movement_trains_id.sql`),
     /// reduced to the columns these functions actually read or write.
     async fn expand_phase_fixture(schema: &str) -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let database_url = crate::test_support::owner_database_url();
         let admin = connect().await;
         sqlx::query(&format!("DROP SCHEMA IF EXISTS {schema} CASCADE"))
             .execute(&admin)
