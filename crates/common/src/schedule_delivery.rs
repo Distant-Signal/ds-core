@@ -8,7 +8,8 @@
 /// directory, after every entry has been extracted and fsynced, and before
 /// the directory is atomically renamed into place. `schedule-reference`
 /// ignores any delivery directory without it. Its contents list each
-/// extracted file as `name<TAB>bytes`, one per line, so a restarted
+/// extracted file as `name<TAB>bytes<TAB>sha256` (no hash in markers written
+/// before 2026-10-01), one per line, so a restarted
 /// `schedule-ingest` can re-POST a delivery without extracting it again.
 pub const COMPLETE_MARKER: &str = ".delivery-complete";
 

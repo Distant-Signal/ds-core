@@ -71,7 +71,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "scripts/tests/**" = [
     "INP001", # test modules found by unittest discovery, not a package
-    "PT009",  # stdlib unittest (no pytest dependency): self.assert* is its API
+    # unittest-style tests (stdlib only, no pytest in the lint group) use
+    # self.assert*, which these pytest-oriented rules reject.
+    "PT009",
+    "PT027",
+    # Literal expected values are the point of a test.
+    "PLR2004",
 ]
 
 [tool.ruff.format]
