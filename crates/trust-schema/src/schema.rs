@@ -213,6 +213,15 @@ pub struct Reinstatement {
     /// it yet, and a body without it still parses.
     #[serde(default)]
     pub dep_timestamp: Option<String>,
+    /// When the reinstatement was made (same encoding as
+    /// [`Cancellation::canx_timestamp`]). Seen on every `0005` in a live
+    /// production sample (`dep_timestamp division_code loc_stanox
+    /// reinstatement_timestamp toc_id train_id train_service_code`). It is
+    /// the field that tells two reinstatements of one train apart:
+    /// `dep_timestamp` is the PLANNED departure and repeats. Fills the
+    /// timestamp slot of the `0005` dedup key in both consumers.
+    #[serde(default)]
+    pub reinstatement_timestamp: Option<String>,
 }
 
 #[derive(Debug, Clone)]

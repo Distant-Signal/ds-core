@@ -592,7 +592,7 @@ async fn replay_backlog_history(
                 journey::apply_reinstatement(&previous),
                 None,
                 None,
-                None,
+                row.actual_timestamp, // reinstatement_timestamp, stored like canx_timestamp
                 None,
             ),
             // "0001" (Activation) carries no derivable state change of its
@@ -631,12 +631,24 @@ async fn replay_backlog_history(
         // `loc_stanox`, for the same reason: `ON CONFLICT (tracked_train_id,
         // dedup_key) DO NOTHING` only ever needs to make THIS replay
         // idempotent against itself.
+        //
+        // A Cancellation or Reinstatement has no planned time; its own
+        // event time (`actual_timestamp`) fills the key's timestamp slot
+        // instead, so cancel -> reinstate -> cancel -> reinstate on one day
+        // replays as four history rows rather than two (H4 residual,
+        // 2026-10-01).
+        let key_timestamp = match row.msg_type.as_str() {
+            "0002" | "0005" => actual,
+            _ => planned,
+        };
         let dedup = trust_schema::dedup::dedup_key(
             &row.train_id,
             &row.msg_type,
             event_type.as_deref(),
             None,
-            planned.map(|t| t.timestamp_millis().to_string()).as_deref(),
+            key_timestamp
+                .map(|t| t.timestamp_millis().to_string())
+                .as_deref(),
             row.service_date,
         );
 
@@ -3500,5 +3512,79 @@ mod db_tests {
 
         cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
         cleanup_absolute_time_fixture(&pool, &[], &[], other_uid).await;
+    }
+
+    /// H4 residual (2026-10-01): cancel -> reinstate -> cancel -> reinstate
+    /// on one day, stored as four backlog rows (the consumers now key each
+    /// reinstatement by its own `reinstatement_timestamp`), replays in
+    /// `received_at` order to a running train, and keeps all four as their
+    /// own history rows. Before the fix the replay keyed both
+    /// Cancellations, and both Reinstatements, identically (no planned
+    /// time), so the shared history held one of each.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+                repeat_cancel_and_reinstate_replays -- --ignored --test-threads=1`"]
+    async fn repeat_cancel_and_reinstate_replays_in_order_and_ends_running() {
+        let pool = connect().await;
+        let user_id = "TEST-H4R-USER";
+        let train_id = "TEST-H4R-TID";
+        let train_uid = "TEST-H4R";
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
+
+        let service_date: NaiveDate = "2026-09-21".parse().unwrap();
+        let departure: DateTime<Utc> = "2026-09-21T09:00:00Z".parse().unwrap();
+        seed_backlog_run(&pool, train_id, train_uid, service_date, "ZHR", departure).await;
+        // The run's ARRIVAL would complete the journey; drop it so the
+        // sequence below decides the final status.
+        sqlx::query(
+            "DELETE FROM trust_event_backlog WHERE train_id = $1 AND event_type = 'ARRIVAL'",
+        )
+        .bind(train_id)
+        .execute(&pool)
+        .await
+        .expect("drop the arrival");
+        for (minutes, msg_type) in [(5, "0002"), (10, "0005"), (15, "0002"), (20, "0005")] {
+            let at = departure + chrono::Duration::minutes(minutes);
+            sqlx::query(
+                "INSERT INTO trust_event_backlog \
+                    (crs, train_uid, train_id, service_date, msg_type, actual_timestamp, \
+                     dedup_key, received_at) \
+                 VALUES (NULL, NULL, $1, $2, $3, $4, $5, $4)",
+            )
+            .bind(train_id)
+            .bind(service_date)
+            .bind(msg_type)
+            .bind(at)
+            .bind(format!("test-h4r-{msg_type}-{minutes}"))
+            .execute(&pool)
+            .await
+            .expect("seed the cancel/reinstate sequence");
+        }
+
+        let tracked_train_id =
+            seed_pending_pin(&pool, user_id, service_date, "ZHR", departure).await;
+        assert!(
+            attempt_backlog_match(&pool, tracked_train_id, "ZHR", departure)
+                .await
+                .expect("attempt_backlog_match")
+        );
+        let status: String = sqlx::query_scalar(
+            "SELECT cs.status FROM train_current_state cs \
+             JOIN trains tr ON tr.id = cs.trains_id \
+             WHERE tr.train_uid = $1 AND tr.service_date = $2",
+        )
+        .bind(train_uid)
+        .bind(service_date)
+        .fetch_one(&pool)
+        .await
+        .expect("read the replayed status");
+        assert_eq!(status, "en_route", "the last reinstatement wins");
+        assert_eq!(
+            movement_count_for(&pool, train_uid, service_date).await,
+            Some(5),
+            "the departure plus all four cancel/reinstate rows"
+        );
+
+        cleanup_absolute_time_fixture(&pool, &[user_id], &[train_id], train_uid).await;
     }
 }
