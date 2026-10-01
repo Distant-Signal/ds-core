@@ -278,10 +278,9 @@ fn is_excluded(line: &LineDefinition, haystack: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn load_line(id: &str) -> HashMap<String, LineDefinition> {
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lines");
+        let dir = crate::manifest_dir!().join("../../lines");
         let all = LineDefinition::from_dir(&dir).expect("lines/ directory should parse");
         all.into_iter()
             .filter(|l| l.id == id)
@@ -290,7 +289,7 @@ mod tests {
     }
 
     fn load_all_lines() -> HashMap<String, LineDefinition> {
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lines");
+        let dir = crate::manifest_dir!().join("../../lines");
         LineDefinition::from_dir(&dir)
             .expect("lines/ directory should parse")
             .into_iter()
@@ -11091,7 +11090,7 @@ mod tests {
     // ---------------------------------------------------------------
 
     fn full_catalogue_matcher() -> LineMatcher {
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lines");
+        let dir = crate::manifest_dir!().join("../../lines");
         let lines = LineDefinition::from_dir(&dir).expect("lines/ directory should parse");
         LineMatcher::new(&lines)
     }

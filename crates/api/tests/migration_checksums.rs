@@ -36,8 +36,14 @@ use std::path::PathBuf;
 
 use sha2::{Digest, Sha384};
 
+/// Resolved at run time from the `CARGO_MANIFEST_DIR` cargo sets for the
+/// test process, not baked in with `env!` (Train Register verification
+/// 2026-10-01, N6): with a target dir shared between worktrees, a reused
+/// binary would otherwise read another worktree's migrations. Not embedded
+/// with `sqlx::migrate!` either: that cannot see a NEW file until something
+/// else forces a rebuild.
 fn api_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    common::manifest_dir!()
 }
 
 fn locked_checksums() -> BTreeMap<String, String> {

@@ -135,10 +135,28 @@ const GRANDFATHERED_TABLE_LOCK_HAZARDS: &[(&str, TableLockHazard)] = &[
         "20260906110000_train_movement_trains_id.sql",
         TableLockHazard::RewritingAddColumn,
     ),
+    // `incidents` gained four CHECK-constrained extraction columns, each a
+    // full scan of `incidents` under ACCESS EXCLUSIVE. Found when
+    // ValidatingAddColumn was added on 2026-10-01 (R-030 follow-up);
+    // applied in production since August, so they can never be edited.
+    (
+        "20260820120000_incident_extraction.sql",
+        TableLockHazard::ValidatingAddColumn,
+    ),
+    (
+        "20260821090000_incident_severity_escalation.sql",
+        TableLockHazard::ValidatingAddColumn,
+    ),
 ];
 
+/// Resolved at run time (`common::manifest_dir!`), not baked in with `env!`
+/// (Train Register verification 2026-10-01, N6): with a target dir shared
+/// between worktrees, a reused binary would otherwise check another
+/// worktree's migrations. Not embedded with `sqlx::migrate!` either: that
+/// cannot see a NEW file until something else forces a rebuild, so the guard
+/// would silently skip a just-added migration.
 fn migrations_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
+    common::manifest_dir!().join("migrations")
 }
 
 fn migration_files() -> Vec<PathBuf> {
@@ -281,6 +299,43 @@ fn dollar_quote_tag(rest: &str) -> Option<&str> {
     (bytes.get(j) == Some(&b'$')).then(|| &rest[..=j])
 }
 
+/// The top-level statements of `sql`, followed by the table-level commands
+/// found inside each `DO $tag$ ... $tag$` block (R-030 follow-up,
+/// 2026-10-01): an `ALTER TABLE` wrapped in `DO $$ BEGIN IF ... THEN ...
+/// END IF; END $$` takes exactly the same lock as a bare one, but the
+/// per-statement checks below are anchored at the start of a statement and
+/// never saw it.
+///
+/// Each body statement is cut at its first table command, which drops
+/// PL/pgSQL wrapping such as `BEGIN`, `IF ... THEN` or `EXECUTE '`. That is a
+/// heuristic, not a PL/pgSQL parser: a command spelled out in a `RAISE`
+/// message is counted too, which errs on the safe side.
+fn statements(sql: &str) -> Vec<String> {
+    let do_block = Regex::new(r"(?is)^DO\s+(?:LANGUAGE\s+\w+\s+)?(\$[A-Za-z_0-9]*\$)").unwrap();
+    let table_command = Regex::new(
+        r"(?i)\b(?:ALTER\s+TABLE\b|LOCK\s+(?:TABLE\b|[A-Za-z_\x22])|TRUNCATE\b|REINDEX\b|CLUSTER\b|VACUUM\b)",
+    )
+    .unwrap();
+    let top_level = lex(sql).statements;
+    let mut out = top_level.clone();
+    for statement in &top_level {
+        let Some(caps) = do_block.captures(statement) else {
+            continue;
+        };
+        let tag = caps.get(1).unwrap();
+        let body_start = tag.end();
+        let body_end = statement[body_start..]
+            .find(tag.as_str())
+            .map_or(statement.len(), |n| body_start + n);
+        for inner in lex(&statement[body_start..body_end]).statements {
+            if let Some(found) = table_command.find(&inner) {
+                out.push(inner[found.start()..].to_string());
+            }
+        }
+    }
+    out
+}
+
 /// An identifier, optionally schema-qualified, bare or double-quoted.
 const IDENT: &str = r#"(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*))?"#;
 
@@ -335,18 +390,29 @@ fn blocking_index_builds(sql: &str) -> Vec<(String, String)> {
     ))
     .unwrap();
     let using_index = Regex::new(r"(?i)\bUSING\s+INDEX\s+[A-Za-z_\x22]").unwrap();
+    let inline_index = Regex::new(&format!(
+        r"(?i)^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?({IDENT})\s+.*?\b(UNIQUE|PRIMARY\s+KEY)\b"
+    ))
+    .unwrap();
     for (table, action) in alter_table_actions(sql) {
         if created.contains(&canonical_ident(&table)) {
             continue;
         }
-        if let Some(caps) = constraint_index.captures(&action)
-            && !using_index.is_match(&action)
-        {
-            let name = caps.get(1).map_or_else(
-                || format!("<unnamed {}>", caps[2].to_uppercase()),
-                |m| m.as_str().to_string(),
-            );
-            found.push((name, table));
+        if let Some(caps) = constraint_index.captures(&action) {
+            if !using_index.is_match(&action) {
+                let name = caps.get(1).map_or_else(
+                    || format!("<unnamed {}>", caps[2].to_uppercase()),
+                    |m| m.as_str().to_string(),
+                );
+                found.push((name, table));
+            }
+        } else if let Some(caps) = inline_index.captures(&action) {
+            // `ADD COLUMN c int UNIQUE` builds its index under the
+            // statement's ACCESS EXCLUSIVE lock just like `ADD UNIQUE (c)`.
+            found.push((
+                format!("<inline {} on {}>", caps[2].to_uppercase(), &caps[1]),
+                table,
+            ));
         }
     }
     found
@@ -362,7 +428,7 @@ fn alter_table_actions(sql: &str) -> Vec<(String, String)> {
     .unwrap();
     let ws = Regex::new(r"\s+").unwrap();
     let mut out = Vec::new();
-    for statement in lex(sql).statements {
+    for statement in statements(sql) {
         let statement = ws.replace_all(&statement, " ").to_string();
         let Some(caps) = alter.captures(&statement) else {
             continue;
@@ -422,6 +488,85 @@ enum TableLockHazard {
     /// `VACUUM FULL` rewrites the table under ACCESS EXCLUSIVE. Never in a
     /// migration; plain `VACUUM` is fine.
     VacuumFull,
+    /// `ALTER TABLE ... SET LOGGED / SET UNLOGGED / SET TABLESPACE / SET
+    /// ACCESS METHOD` copies the whole table (and, for TABLESPACE, every
+    /// index) under ACCESS EXCLUSIVE. Never on a table with rows.
+    TableRewrite,
+    /// `ADD COLUMN ... CHECK (...)`, or `ADD COLUMN ... REFERENCES ...` with
+    /// a `DEFAULT`: an inline column constraint cannot be `NOT VALID`, so
+    /// Postgres checks every existing row under the lock. (An inline FK on a
+    /// column added with no default is all NULL, and Postgres skips its
+    /// validation -- `transformFKConstraints` -- so that form is allowed.
+    /// Checked on 2026-10-01 against local Postgres with
+    /// `pg_stat_user_tables.seq_scan`: a bare FK column added 0 scans, an FK
+    /// column with a DEFAULT 1, a CHECK column 1.)
+    /// Add the column bare, then the constraint `NOT VALID`, then
+    /// `VALIDATE` it.
+    ValidatingAddColumn,
+}
+
+/// Statements that take a strong table lock with no scan of their own --
+/// `LOCK TABLE`, `TRUNCATE` -- plus any table command inside a `DO` block.
+/// They are not banned, but a file that runs one must set `lock_timeout`
+/// first, so a long-running reader makes the migration fail fast (and the
+/// startup retry converge) rather than queue every query on the table
+/// behind the pending lock until the startup probe kills the pod (R-030
+/// follow-up, 2026-10-01).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum LockTimeoutRequired {
+    LockTable,
+    Truncate,
+    DoBlockTableCommand,
+}
+
+/// Every [`LockTimeoutRequired`] statement in `sql` that runs before (or
+/// without) a `SET [LOCAL] lock_timeout`, as `(kind, statement)`. A table
+/// the same file creates is exempt, as everywhere else in this guard.
+fn missing_lock_timeouts(sql: &str) -> Vec<(LockTimeoutRequired, String)> {
+    let created = created_tables(sql);
+    let ws = Regex::new(r"\s+").unwrap();
+    let set_lock_timeout =
+        Regex::new(r"(?i)^SET\s+(?:LOCAL\s+|SESSION\s+)?lock_timeout\s*(?:=|TO)\s*").unwrap();
+    let lock_table =
+        Regex::new(&format!(r"(?i)^LOCK\s+(?:TABLE\s+)?(?:ONLY\s+)?({IDENT})")).unwrap();
+    let truncate = Regex::new(&format!(
+        r"(?i)^TRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?({IDENT})"
+    ))
+    .unwrap();
+    let do_block = Regex::new(r"(?i)^DO\s").unwrap();
+    let table_command = Regex::new(&format!(
+        r"(?i)\b(?:ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?|LOCK\s+(?:TABLE\s+)?(?:ONLY\s+)?|TRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?)({IDENT})"
+    ))
+    .unwrap();
+    let existing = |caps: &regex::Captures<'_>| !created.contains(&canonical_ident(&caps[1]));
+
+    let mut out = Vec::new();
+    for statement in lex(sql).statements {
+        let statement = ws.replace_all(statement.trim(), " ").to_string();
+        if set_lock_timeout.is_match(&statement) {
+            break;
+        }
+        let kind = if lock_table
+            .captures(&statement)
+            .is_some_and(|c| existing(&c))
+        {
+            Some(LockTimeoutRequired::LockTable)
+        } else if truncate.captures(&statement).is_some_and(|c| existing(&c)) {
+            Some(LockTimeoutRequired::Truncate)
+        } else if do_block.is_match(&statement)
+            && table_command
+                .captures_iter(&statement)
+                .any(|c| existing(&c))
+        {
+            Some(LockTimeoutRequired::DoBlockTableCommand)
+        } else {
+            None
+        };
+        if let Some(kind) = kind {
+            out.push((kind, statement));
+        }
+    }
+    out
 }
 
 fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
@@ -449,23 +594,31 @@ fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
         r"(?i)^(?:small|big)?serial[248]?\b|\bGENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY\b|\bGENERATED\s+ALWAYS\s+AS\s*\(.*\bSTORED\b|\bDEFAULT\b.*\b(?:random|gen_random_uuid|uuidv[47]|uuid_generate_v(?:1|1mc|4)|clock_timestamp|timeofday|nextval)\s*\(",
     )
     .unwrap();
+    let table_rewrite =
+        Regex::new(r"(?i)^SET\s+(?:LOGGED|UNLOGGED|TABLESPACE|ACCESS\s+METHOD)\b").unwrap();
+    let check_on_add = Regex::new(r"(?i)\bCHECK\s*\(").unwrap();
+    let fk_with_default_on_add =
+        Regex::new(r"(?i)\bREFERENCES\b.*\bDEFAULT\b|\bDEFAULT\b.*\bREFERENCES\b").unwrap();
 
     let mut out = Vec::new();
     for (table, action) in alter_table_actions(sql) {
         if created.contains(&canonical_ident(&table)) {
             continue;
         }
-        let hazard = if set_not_null.is_match(&action) {
+        let added_column = add_column.captures(&action).and_then(|caps| caps.get(1));
+        let hazard = if table_rewrite.is_match(&action) {
+            Some(TableLockHazard::TableRewrite)
+        } else if added_column.is_some_and(|rest| {
+            check_on_add.is_match(rest.as_str()) || fk_with_default_on_add.is_match(rest.as_str())
+        }) {
+            Some(TableLockHazard::ValidatingAddColumn)
+        } else if set_not_null.is_match(&action) {
             Some(TableLockHazard::SetNotNull)
         } else if validating.is_match(&action) && !not_valid.is_match(&action) {
             Some(TableLockHazard::ValidatingConstraint)
         } else if alter_type.is_match(&action) {
             Some(TableLockHazard::AlterType)
-        } else if add_column
-            .captures(&action)
-            .and_then(|caps| caps.get(1))
-            .is_some_and(|rest| rewrites_on_add.is_match(rest.as_str()))
-        {
+        } else if added_column.is_some_and(|rest| rewrites_on_add.is_match(rest.as_str())) {
             Some(TableLockHazard::RewritingAddColumn)
         } else {
             None
@@ -486,7 +639,7 @@ fn table_lock_hazards(sql: &str) -> Vec<(TableLockHazard, String)> {
     let vacuum_full =
         Regex::new(r"(?i)^VACUUM\s+(?:FULL\b|\([^)]*\bFULL\b(?:\s+(?:TRUE|ON|1)\b)?\s*[,)])")
             .unwrap();
-    for statement in lex(sql).statements {
+    for statement in statements(sql) {
         let statement = ws.replace_all(statement.trim(), " ").to_string();
         let hazard = if reindex.is_match(&statement) && !concurrently.is_match(&statement) {
             Some(TableLockHazard::Reindex)
@@ -662,7 +815,7 @@ fn no_new_migration_scans_or_rewrites_an_existing_table_under_its_lock() {
 fn the_table_lock_hazard_grandfather_list_has_no_stale_entries() {
     assert_eq!(
         GRANDFATHERED_TABLE_LOCK_HAZARDS.len(),
-        3,
+        5,
         "GRANDFATHERED_TABLE_LOCK_HAZARDS must only ever shrink; lower this cap when removing an \
          entry"
     );
@@ -708,6 +861,168 @@ fn a_no_transaction_migration_holds_exactly_one_statement() {
          one file per statement: {}",
         broken.join(", ")
     );
+}
+
+/// Already-applied migrations that run a [`LockTimeoutRequired`] statement
+/// without setting `lock_timeout` first. Same rules as `GRANDFATHERED`: they
+/// can never be edited, and this list must only ever shrink.
+const GRANDFATHERED_MISSING_LOCK_TIMEOUT: &[(&str, LockTimeoutRequired)] = &[
+    // TRUNCATEs `pinned_lines` / `pinned_stations` (pre-accounts rows with
+    // no owner) before adding a NOT NULL `user_id`. Applied in production
+    // on 2026-08-28, long before the lock_timeout convention.
+    (
+        "20260828100000_add_ownership.sql",
+        LockTimeoutRequired::Truncate,
+    ),
+];
+
+#[test]
+fn lock_taking_statements_run_under_a_lock_timeout() {
+    let grandfathered: BTreeSet<(&str, LockTimeoutRequired)> =
+        GRANDFATHERED_MISSING_LOCK_TIMEOUT.iter().copied().collect();
+    let mut offenders = Vec::new();
+    for path in migration_files() {
+        let name = file_name(&path);
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
+        for (kind, statement) in missing_lock_timeouts(&raw) {
+            if !grandfathered.contains(&(name.as_str(), kind)) {
+                offenders.push(format!("{name}: {kind:?}: {statement}"));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "these migrations take a strong table lock (LOCK TABLE, TRUNCATE, or a table command \
+         inside a DO block) without setting lock_timeout first:\n  {}\n\nWhile such a lock request \
+         waits behind a long-running query, every other query on the table queues behind it. \
+         Start the file with `SET LOCAL lock_timeout = '5s';` so it fails fast and api's startup \
+         retry converges.",
+        offenders.join("\n  ")
+    );
+}
+
+#[test]
+fn the_missing_lock_timeout_grandfather_list_has_no_stale_entries() {
+    assert_eq!(
+        GRANDFATHERED_MISSING_LOCK_TIMEOUT.len(),
+        1,
+        "GRANDFATHERED_MISSING_LOCK_TIMEOUT must only ever shrink; lower this cap when removing \
+         an entry"
+    );
+    let dir = migrations_dir();
+    for (name, kind) in GRANDFATHERED_MISSING_LOCK_TIMEOUT {
+        let raw = std::fs::read_to_string(dir.join(name))
+            .unwrap_or_else(|err| panic!("grandfathered {name} is missing: {err}"));
+        assert!(
+            missing_lock_timeouts(&raw)
+                .iter()
+                .any(|(found, _)| found == kind),
+            "{name} no longer has {kind:?}; delete its entry"
+        );
+    }
+}
+
+#[test]
+fn guard_requires_lock_timeout_for_lock_truncate_and_do_block_ddl() {
+    use LockTimeoutRequired::*;
+    let kinds = |sql: &str| -> Vec<LockTimeoutRequired> {
+        missing_lock_timeouts(sql)
+            .into_iter()
+            .map(|(kind, _)| kind)
+            .collect()
+    };
+    for (sql, expected) in [
+        ("LOCK TABLE t IN ACCESS EXCLUSIVE MODE;", vec![LockTable]),
+        ("lock only public.t;", vec![LockTable]),
+        ("TRUNCATE TABLE t;", vec![Truncate]),
+        ("TRUNCATE t, u CASCADE;", vec![Truncate]),
+        (
+            "DO $$ BEGIN IF true THEN ALTER TABLE t ADD COLUMN a int; END IF; END $$;",
+            vec![DoBlockTableCommand],
+        ),
+        (
+            "DO $body$ BEGIN EXECUTE 'TRUNCATE t'; END $body$;",
+            vec![DoBlockTableCommand],
+        ),
+        // Too late: the timeout only covers statements after it.
+        ("TRUNCATE t; SET LOCAL lock_timeout = '5s';", vec![Truncate]),
+    ] {
+        assert_eq!(kinds(sql), expected, "{sql}");
+    }
+    for sql in [
+        "SET LOCAL lock_timeout = '5s'; LOCK TABLE t; TRUNCATE t;",
+        "SET lock_timeout TO '5s'; DO $$ BEGIN ALTER TABLE t ADD COLUMN a int; END $$;",
+        "CREATE TABLE t (a int); TRUNCATE t; LOCK TABLE t;",
+        "DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS pg_stat_statements; END $$;",
+        "-- TRUNCATE t;\nSELECT 1;",
+    ] {
+        assert!(kinds(sql).is_empty(), "{sql}");
+    }
+}
+
+#[test]
+fn guard_sees_ddl_inside_do_blocks() {
+    use TableLockHazard::*;
+    assert_eq!(
+        hazard_kinds(
+            "DO $$ BEGIN IF NOT EXISTS (SELECT 1) THEN \
+             ALTER TABLE t ALTER COLUMN a SET NOT NULL; END IF; END $$;"
+        ),
+        vec![SetNotNull]
+    );
+    assert_eq!(
+        index_hits("DO $do$ BEGIN ALTER TABLE t ADD CONSTRAINT t_u UNIQUE (a); END $do$;"),
+        vec![("t_u".to_string(), "t".to_string())]
+    );
+    assert!(
+        hazard_kinds("DO $$ BEGIN RAISE NOTICE 'hello; world'; END $$;").is_empty(),
+        "a DO block with no table command is not a hazard"
+    );
+}
+
+#[test]
+fn guard_catches_table_rewrites_and_validating_or_indexed_add_column() {
+    use TableLockHazard::*;
+    for (sql, expected) in [
+        ("ALTER TABLE t SET LOGGED;", vec![TableRewrite]),
+        ("ALTER TABLE t SET UNLOGGED;", vec![TableRewrite]),
+        ("ALTER TABLE t SET TABLESPACE fast;", vec![TableRewrite]),
+        ("ALTER TABLE t SET ACCESS METHOD heap2;", vec![TableRewrite]),
+        (
+            "ALTER TABLE t ADD COLUMN a int NOT NULL DEFAULT 0 CHECK (a >= 0);",
+            vec![ValidatingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN u text DEFAULT 'x' REFERENCES users(id);",
+            vec![ValidatingAddColumn],
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN a int CONSTRAINT a_pos CHECK(a > 0);",
+            vec![ValidatingAddColumn],
+        ),
+    ] {
+        assert_eq!(hazard_kinds(sql), expected, "{sql}");
+    }
+    assert_eq!(
+        index_hits("ALTER TABLE t ADD COLUMN a int UNIQUE;"),
+        vec![("<inline UNIQUE on a>".to_string(), "t".to_string())]
+    );
+    assert_eq!(
+        index_hits("ALTER TABLE t ADD COLUMN id bigint PRIMARY KEY;"),
+        vec![("<inline PRIMARY KEY on id>".to_string(), "t".to_string())]
+    );
+    for sql in [
+        "ALTER TABLE t SET (fillfactor = 90);",
+        "ALTER TABLE t ADD COLUMN c text DEFAULT 'check';",
+        "ALTER TABLE t ADD COLUMN u text REFERENCES users(id) ON DELETE CASCADE;",
+        "CREATE TABLE t (a int); ALTER TABLE t ADD COLUMN u text REFERENCES users(id);",
+        "CREATE TABLE t (a int); ALTER TABLE t SET LOGGED;",
+    ] {
+        assert!(hazard_kinds(sql).is_empty(), "{sql}");
+        assert!(index_hits(sql).is_empty(), "{sql}");
+    }
+    assert!(index_hits("ALTER TABLE t ADD CONSTRAINT t_u UNIQUE USING INDEX t_u_idx;").is_empty());
 }
 
 // ---- The guard's own patterns, against sample SQL ----

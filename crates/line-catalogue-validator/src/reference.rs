@@ -488,13 +488,13 @@ mod tests {
     /// `DATA_SOURCES` for the `railwaycodes` entry.
     #[test]
     fn railwaycodes_credit_exists_exactly_while_the_live_tier_scrapes_it() {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let manifest_dir = common::manifest_dir!();
+        let repo_root = manifest_dir
             .parent()
             .and_then(Path::parent)
             .expect("crate lives at <repo>/crates/line-catalogue-validator");
-        let this_file =
-            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/reference.rs"))
-                .expect("read reference.rs");
+        // This file as compiled, not whatever is on disk (N6).
+        let this_file = include_str!("reference.rs");
         let non_test_code = this_file.split("#[cfg(test)]").next().unwrap_or_default();
         let scrapes = non_test_code.contains("\"https://www.railwaycodes.org.uk/");
         let attribution =
@@ -624,7 +624,8 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
     /// forgets to strip footnotes fails here instead of silently shipping.
     #[test]
     fn vendored_crs_tiploc_snapshot_carries_no_footnote_artifacts() {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let manifest_dir = common::manifest_dir!();
+        let repo_root = manifest_dir
             .parent()
             .and_then(Path::parent)
             .expect("crate lives at <repo>/crates/line-catalogue-validator");
@@ -905,7 +906,7 @@ ABBEYWD<span class="popup" onclick="popup26()"><span class="popuptext" id="myPop
     }
 
     fn vendored_toc_codes_csv() -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
+        common::manifest_dir!()
             .parent()
             .and_then(Path::parent)
             .expect("crate lives at <repo>/crates/line-catalogue-validator")
