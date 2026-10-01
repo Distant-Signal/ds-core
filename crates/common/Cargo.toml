@@ -27,6 +27,9 @@ sha2 = "0.10"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "net"] }
 toml = { version = "1.1.2", features = ["serde"] }
 tracing = "0.1.44"
+# `common::logging`: the one subscriber setup every binary shares. `json` for
+# the span-field storage (`JsonFields`) behind the JSON line format.
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5"
 
 [features]
@@ -38,6 +41,10 @@ postgres = ["dep:sqlx"]
 redis = ["dep:redis"]
 
 [dev-dependencies]
+# `logging`'s test of `log`-crate events (both already in the workspace via
+# tracing-subscriber's default `tracing-log` feature).
+log = "0.4"
+tracing-log = "0.2"
 # Only to prove `redis_auth` URLs parse back to the same credentials in the
 # redis crate the services use (already in the workspace; no new crate).
 redis = { version = "0.27", default-features = false }

@@ -15,6 +15,7 @@ pub mod full_coverage_window;
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod log_once;
+pub mod logging;
 pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;
