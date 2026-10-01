@@ -24,6 +24,7 @@ pub mod outbound_endpoint_guard;
 pub mod pg;
 pub mod poller_loop;
 pub mod progress;
+pub mod public_delay;
 pub mod rail_day;
 pub mod redis_auth;
 #[cfg(feature = "redis")]

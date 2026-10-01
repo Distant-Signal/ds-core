@@ -14,8 +14,9 @@ glob = "0.3.3"
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
 # Only with the `postgres` feature: `common::pg`, the pool settings shared by
-# the crates that hold a Postgres pool. Same version the workspace already uses.
-sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"], optional = true }
+# the crates that hold a Postgres pool, and `common::public_delay::db` (hence
+# `chrono` and `derive`). Same version and features the workspace already uses.
+sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio", "chrono", "derive"], optional = true }
 # Only with the `redis` feature: `common::redis_conn`, the bounded
 # ConnectionManager settings shared by every worker that holds a Redis
 # connection. Same version and features those crates already use.

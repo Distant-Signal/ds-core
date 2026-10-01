@@ -80,7 +80,15 @@ fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
     let mut last_time: Option<NaiveTime> = None;
 
     for cp in calling_points.iter_mut() {
-        let first_time = cp.booked_arrival.or(cp.booked_departure);
+        // A passing point's only time is its pass time (truncated to the
+        // minute, like every booked time compared here): it takes part in
+        // the ordering too, so a pass just after midnight is dated the next
+        // day rather than inheriting the evening's offset (the detailed
+        // working-timetable view showed it a day early).
+        let pass = cp
+            .booked_pass
+            .map(crate::records::HalfMinuteTime::whole_minute);
+        let first_time = cp.booked_arrival.or(cp.booked_departure).or(pass);
         if let (Some(last), Some(first)) = (last_time, first_time)
             && first < last
         {
@@ -95,7 +103,7 @@ fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
             offset = offset.saturating_add(1);
         }
 
-        if let Some(latest) = cp.booked_departure.or(cp.booked_arrival) {
+        if let Some(latest) = cp.booked_departure.or(cp.booked_arrival).or(pass) {
             last_time = Some(latest);
         }
     }
@@ -590,11 +598,16 @@ pub fn departures_by_destination_crs(
             if is_before(departure_day_offset, departure, now) {
                 continue;
             }
-            // Same "a booked departure is not a boardable departure" filter as
-            // `departures_by_crs` above -- this product backs
-            // `GET /public/trains/search`, where every row is offered to a
-            // user as a train they can catch FROM `origin_crs`.
-            if !cp.is_public_pickup() {
+            // A boardable call, or a set-down-only one (design doc §10,
+            // "Journeys leg search"): the latter is published, flagged
+            // `can_board: false`, so a journey leg can END there. Every
+            // reader offering a row as a train to catch FROM `origin_crs`
+            // (`GET /public/trains/search`, the leg searches) filters on
+            // `can_board`, so the old "a booked departure is not a boardable
+            // departure" rule still holds for them.
+            let can_board = cp.is_public_pickup();
+            let can_alight = cp.can_alight();
+            if !can_board && !can_alight {
                 continue;
             }
             let Some(origin_crs) = tiploc_to_crs.get(normalize_tiploc(&cp.tiploc)) else {
@@ -623,6 +636,8 @@ pub fn departures_by_destination_crs(
                     public_departure: cp.public_departure,
                     public_calling_point_arrival: cp.public_arrival,
                     public_destination_arrival,
+                    can_board,
+                    can_alight,
                 });
         }
     }
@@ -1233,11 +1248,12 @@ mod tests {
         );
     }
 
-    /// The same filter on the whole-network search product, which backs
-    /// `GET /public/trains/search` -- every row there is offered to a user as a
-    /// train they can catch FROM `origin_crs`.
+    /// The same rule on the whole-network search product, which backs
+    /// `GET /public/trains/search` and the journey leg search: a row offered
+    /// as a train to catch FROM `origin_crs` must be boardable. A
+    /// set-down-only call is still published, flagged, so a leg can end there.
     #[test]
-    fn departures_by_destination_crs_excludes_a_set_down_only_calling_point() {
+    fn departures_by_destination_crs_flags_a_set_down_only_calling_point_unboardable() {
         let raw = vec![RawSchedule {
             basic: basic(
                 "C11052",
@@ -1269,15 +1285,66 @@ mod tests {
         let by_destination =
             departures_by_destination_crs(&index, date, NaiveTime::MIN, &tiploc_to_crs);
 
-        let origins: Vec<&str> = by_destination["CRE"]
+        // Published (so a journey leg can END at Carlisle), but flagged:
+        // only the genuinely boardable calling point may be offered as an
+        // origin, and every such reader filters on `can_board`.
+        let rows: Vec<(&str, bool, bool)> = by_destination["CRE"]
             .iter()
-            .map(|d| d.origin_crs.as_str())
+            .map(|d| (d.origin_crs.as_str(), d.can_board, d.can_alight))
             .collect();
-        assert_eq!(
-            origins,
-            vec!["EUS"],
-            "only the genuinely boardable calling point may be offered as an origin"
-        );
+        assert_eq!(rows, vec![("EUS", true, false), ("CAR", false, true)]);
+    }
+
+    /// A pick-up-only (`U`) call stays boardable and is flagged
+    /// unalightable; a not-advertised (`N`) call is neither, and is not
+    /// published.
+    #[test]
+    fn departures_by_destination_crs_flags_pick_up_only_and_drops_not_advertised() {
+        let raw = vec![RawSchedule {
+            basic: basic(
+                "C01355",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                WEEKDAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure_and_activity(
+                    "EUSTON ",
+                    CallingPointKind::Origin,
+                    "20:16",
+                    "TB",
+                ),
+                calling_point_with_departure_and_activity(
+                    "WATFDJ ",
+                    CallingPointKind::Intermediate,
+                    "20:31",
+                    "U",
+                ),
+                calling_point_with_departure_and_activity(
+                    "BLTCHLY",
+                    CallingPointKind::Intermediate,
+                    "20:45",
+                    "N",
+                ),
+                calling_point_with_arrival("MKNSCEN", CallingPointKind::Terminate, "20:50"),
+            ],
+        }];
+        let index = ScheduleIndex::build(raw);
+        let date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        let tiploc_to_crs = tiploc_map(&[
+            ("EUSTON", "EUS"),
+            ("WATFDJ", "WFJ"),
+            ("BLTCHLY", "BLY"),
+            ("MKNSCEN", "MKC"),
+        ]);
+        let by_destination =
+            departures_by_destination_crs(&index, date, NaiveTime::MIN, &tiploc_to_crs);
+        let rows: Vec<(&str, bool, bool)> = by_destination["MKC"]
+            .iter()
+            .map(|d| (d.origin_crs.as_str(), d.can_board, d.can_alight))
+            .collect();
+        assert_eq!(rows, vec![("EUS", true, false), ("WFJ", true, false)]);
     }
 
     /// The fail-open property at the consumer level: a calling point with NO
@@ -2547,6 +2614,46 @@ mod tests {
                 calling_point_with_arrival("SHENFLD", CallingPointKind::Terminate, "01:01"),
             ],
         }]
+    }
+
+    /// Design doc §10's known gap: a passing point just after midnight was
+    /// dated the previous evening (it has no arrival or departure, so it
+    /// inherited the offset of the stop before), and the detailed
+    /// working-timetable view showed it a day early. Its pass time now takes
+    /// part, truncated like the booked times: a half-minute pass followed by
+    /// a stop in the same minute is not a second midnight.
+    #[test]
+    fn assign_day_offsets_dates_a_pass_just_after_midnight_on_the_next_day() {
+        let mut pass = calling_point("BOWJ", CallingPointKind::Intermediate);
+        pass.booked_pass = Some(crate::records::HalfMinuteTime::new(
+            NaiveTime::from_hms_opt(0, 1, 0).unwrap(),
+            true,
+        ));
+        let mut points = vec![
+            calling_point_with_departure("LIVST", CallingPointKind::Origin, "23:57"),
+            pass,
+            calling_point_with_both("STFD", CallingPointKind::Intermediate, "00:01", "00:02"),
+            calling_point_with_arrival("SHENFLD", CallingPointKind::Terminate, "00:30"),
+        ];
+        assign_day_offsets(&mut points);
+        let offsets: Vec<u8> = points.iter().map(|cp| cp.day_offset).collect();
+        assert_eq!(offsets, vec![0, 1, 1, 1]);
+
+        // A pass before midnight stays on the evening's date, and the
+        // crossing still lands on the first stop after it.
+        let mut evening_pass = calling_point("BOWJ", CallingPointKind::Intermediate);
+        evening_pass.booked_pass = Some(crate::records::HalfMinuteTime::new(
+            NaiveTime::from_hms_opt(23, 59, 0).unwrap(),
+            false,
+        ));
+        let mut points = vec![
+            calling_point_with_departure("LIVST", CallingPointKind::Origin, "23:57"),
+            evening_pass,
+            calling_point_with_arrival("STFD", CallingPointKind::Terminate, "00:01"),
+        ];
+        assign_day_offsets(&mut points);
+        let offsets: Vec<u8> = points.iter().map(|cp| cp.day_offset).collect();
+        assert_eq!(offsets, vec![0, 0, 1]);
     }
 
     #[test]

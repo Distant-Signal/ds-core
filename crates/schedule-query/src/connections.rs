@@ -42,6 +42,13 @@ pub struct CallingPointForConnections {
     /// A passenger may alight here ([`crate::records::CallingPoint::can_alight`]).
     /// `false` at a pick-up-only (`U`) stop.
     pub can_alight: bool,
+    /// The public (GBTT) arrival and departure
+    /// ([`crate::records::CallingPoint::public_arrival`]/`public_departure`):
+    /// what [`build_connections`] plans on. `None` where the call has no
+    /// public time in that direction (or the row predates the column), and
+    /// the working time is used instead.
+    pub public_arrival: Option<NaiveTime>,
+    pub public_departure: Option<NaiveTime>,
 }
 
 impl From<&crate::records::CallingPoint> for CallingPointForConnections {
@@ -53,6 +60,8 @@ impl From<&crate::records::CallingPoint> for CallingPointForConnections {
             day_offset: cp.day_offset,
             can_board: cp.can_board(),
             can_alight: cp.can_alight(),
+            public_arrival: cp.public_arrival,
+            public_departure: cp.public_departure,
         }
     }
 }
@@ -73,8 +82,19 @@ pub struct Connection {
     /// calling points fall on a later calendar day than the schedule's own
     /// service date is already correctly ordered against same-day
     /// connections, with no adjacent-pair rollover heuristic needed.
+    ///
+    /// These are the PUBLIC (GBTT) times the passenger is sold, which every
+    /// search plans on, minimum change times included (design doc §10, P6);
+    /// a call with no public time in that direction falls back to its
+    /// working time. See [`build_connections`].
     pub departure_min: u32,
     pub arrival_min: u32,
+    /// The same two times on the WORKING timetable (truncated to the
+    /// minute): what `scheduledDeparture`/`scheduledArrival` still serve
+    /// for one release, and what the live overlay matches TRUST and Darwin
+    /// reports against.
+    pub working_departure_min: u32,
+    pub working_arrival_min: u32,
     /// A passenger may board this train at `from_tiploc`. Riding through a
     /// stop is always allowed; this only gates a fresh boarding there.
     pub can_board: bool,
@@ -86,6 +106,31 @@ pub struct Connection {
 fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
     use chrono::Timelike;
     time.num_seconds_from_midnight() / 60 + u32::from(day_offset) * 1440
+}
+
+/// The public minute for a call whose working minute is `working_min`
+/// (`working` being that time of day): the public time read as the nearest
+/// one to the working time across midnight (a 23:59H working arrival is a
+/// 00:00 public one, the next day), or the working minute itself when there
+/// is no public time.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "clamped to >= 0; within a minute or two of a u32 minute value"
+)]
+fn public_minute(working_min: u32, working: NaiveTime, public: Option<NaiveTime>) -> u32 {
+    use chrono::Timelike;
+    let Some(public) = public else {
+        return working_min;
+    };
+    let mut gap = i64::from(public.num_seconds_from_midnight() / 60)
+        - i64::from(working.num_seconds_from_midnight() / 60);
+    if gap > 720 {
+        gap -= 1440;
+    } else if gap < -720 {
+        gap += 1440;
+    }
+    (i64::from(working_min) + gap).max(0) as u32
 }
 
 /// Builds and sorts the whole connections array. `schedules` is every
@@ -130,6 +175,16 @@ fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
 /// (`Terminate`) or cannot be the `to` of (`Origin`) a connection, never a
 /// fabricated one. A schedule with fewer than two calling points, or one
 /// whose remaining timed points are fewer than two, contributes nothing.
+///
+/// **Public times.** A connection's `departure_min`/`arrival_min` are the
+/// public times of its two calls, falling back to the working time per call
+/// and direction where there is none (a set-down-only stop's departure, a
+/// pick-up-only stop's arrival, a row published before public times were);
+/// `working_departure_min`/`working_arrival_min` keep the working ones. The
+/// public times are kept consistent along the train: a departure is never
+/// before the train's public arrival at the same call, and an arrival never
+/// before the departure it follows, so a same-train continuation is never
+/// sorted ahead of the connection it continues.
 ///
 /// Sorted by `(departure_min, uid, from_tiploc)`, not `departure_min`
 /// alone: `schedules` is commonly driven by a `HashMap` at the call site
@@ -197,6 +252,9 @@ fn build<'a>(
 ) -> (Vec<Connection>, PassIndex) {
     let mut connections: Vec<(Connection, Vec<&'a str>)> = Vec::new();
     for (uid, calling_points) in schedules {
+        // The public arrival minute at the call the previous connection
+        // ended at (the one the next connection leaves from).
+        let mut arrived_at: Option<(usize, u32)> = None;
         for (i, from) in calling_points.iter().enumerate() {
             let Some(departure) = from.booked_departure else {
                 continue;
@@ -217,22 +275,34 @@ fn build<'a>(
             } else {
                 Vec::new()
             };
+            // The departure's own day: a stop dwelling across midnight
+            // departs a day after it arrives (R-043).
+            let working_departure_min = minutes_from_midnight(
+                departure,
+                crate::records::departure_day_offset(
+                    from.booked_arrival,
+                    Some(departure),
+                    from.day_offset,
+                ),
+            );
+            let working_arrival_min = minutes_from_midnight(arrival, to.day_offset);
+            let mut departure_min =
+                public_minute(working_departure_min, departure, from.public_departure);
+            if let Some((_, arrived)) = arrived_at.filter(|(call, _)| *call == i) {
+                departure_min = departure_min.max(arrived);
+            }
+            let arrival_min =
+                public_minute(working_arrival_min, arrival, to.public_arrival).max(departure_min);
+            arrived_at = Some((i + 1 + offset, arrival_min));
             connections.push((
                 Connection {
                     uid: uid.to_string(),
                     from_tiploc: from.tiploc.clone(),
                     to_tiploc: to.tiploc.clone(),
-                    // The departure's own day: a stop dwelling across
-                    // midnight departs a day after it arrives (R-043).
-                    departure_min: minutes_from_midnight(
-                        departure,
-                        crate::records::departure_day_offset(
-                            from.booked_arrival,
-                            Some(departure),
-                            from.day_offset,
-                        ),
-                    ),
-                    arrival_min: minutes_from_midnight(arrival, to.day_offset),
+                    departure_min,
+                    arrival_min,
+                    working_departure_min,
+                    working_arrival_min,
                     can_board: from.can_board,
                     can_alight: to.can_alight,
                 },
@@ -277,7 +347,105 @@ mod tests {
             day_offset,
             can_board: true,
             can_alight: true,
+            public_arrival: None,
+            public_departure: None,
         }
+    }
+
+    fn public(
+        mut point: CallingPointForConnections,
+        arrival: Option<&str>,
+        departure: Option<&str>,
+    ) -> CallingPointForConnections {
+        point.public_arrival = arrival.map(|t| t.parse().unwrap());
+        point.public_departure = departure.map(|t| t.parse().unwrap());
+        point
+    }
+
+    /// Design doc §4: Avanti 9G44, WTT 20:31 from Watford Junction to
+    /// Milton Keynes 20:50H, public 20:51. The planner arrives at 20:51;
+    /// the working minutes are kept alongside.
+    #[test]
+    fn connections_plan_on_public_times_and_keep_the_working_ones() {
+        let points = vec![
+            public(
+                cp("WATFDJ", None, Some("20:31:00"), 0),
+                None,
+                Some("20:31:00"),
+            ),
+            public(
+                cp("MKNSCEN", Some("20:50:00"), Some("20:52:00"), 0),
+                Some("20:51:00"),
+                Some("20:52:00"),
+            ),
+            public(
+                cp("WVRMPTN", Some("22:03:00"), None, 0),
+                Some("22:04:00"),
+                None,
+            ),
+        ];
+        let connections = build_connections([("C01355", points.as_slice())]);
+        let minutes: Vec<(u32, u32, u32, u32)> = connections
+            .iter()
+            .map(|c| {
+                (
+                    c.departure_min,
+                    c.arrival_min,
+                    c.working_departure_min,
+                    c.working_arrival_min,
+                )
+            })
+            .collect();
+        assert_eq!(
+            minutes,
+            vec![
+                (20 * 60 + 31, 20 * 60 + 51, 20 * 60 + 31, 20 * 60 + 50),
+                (20 * 60 + 52, 22 * 60 + 4, 20 * 60 + 52, 22 * 60 + 3),
+            ]
+        );
+    }
+
+    /// A set-down-only stop has no public departure and a pick-up-only one
+    /// no public arrival: each falls back to the working time on that side.
+    #[test]
+    fn a_missing_public_time_falls_back_to_the_working_time_per_direction() {
+        let points = vec![
+            public(
+                cp("EUSTON", None, Some("15:40:00"), 0),
+                None,
+                Some("15:39:00"),
+            ),
+            public(
+                cp("MOTHRWL", Some("17:00:00"), Some("17:02:00"), 0),
+                Some("17:01:00"),
+                None,
+            ),
+            cp("GLGC", Some("18:00:00"), None, 0),
+        ];
+        let connections = build_connections([("C01372", points.as_slice())]);
+        assert_eq!(connections[0].departure_min, 15 * 60 + 39);
+        assert_eq!(connections[0].arrival_min, 17 * 60 + 1);
+        assert_eq!(connections[1].departure_min, 17 * 60 + 2);
+        assert_eq!(connections[1].arrival_min, 18 * 60);
+    }
+
+    /// A 23:59H working arrival is a 00:00 public one, the next day; and a
+    /// public departure is never before the public arrival at the same call.
+    #[test]
+    fn public_times_cross_midnight_and_stay_in_order_along_the_train() {
+        let points = vec![
+            cp("A", None, Some("23:40:00"), 0),
+            public(
+                cp("B", Some("23:59:00"), Some("23:59:00"), 0),
+                Some("00:00:00"),
+                Some("23:59:00"),
+            ),
+            cp("C", Some("00:10:00"), None, 1),
+        ];
+        let connections = build_connections([("U", points.as_slice())]);
+        assert_eq!(connections[0].arrival_min, 1440);
+        assert_eq!(connections[1].departure_min, 1440);
+        assert_eq!(connections[1].working_departure_min, 23 * 60 + 59);
     }
 
     #[test]

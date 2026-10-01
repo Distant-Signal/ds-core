@@ -800,6 +800,21 @@ pub struct DestinationDeparture {
     /// later than the WTT one.
     #[serde(default)]
     pub public_destination_arrival: Option<NaiveTime>,
+    /// A passenger may board at this row's call
+    /// ([`CallingPoint::can_board`]). `false` on a set-down-only (`D`) call,
+    /// which is published so a journey leg can END there; any reader that
+    /// offers a row as a train to catch FROM `origin_crs` filters on it.
+    #[serde(default = "default_true")]
+    pub can_board: bool,
+    /// A passenger may alight at this row's call
+    /// ([`CallingPoint::can_alight`]): `false` at a pick-up-only (`U`) call
+    /// and at the schedule's origin.
+    #[serde(default = "default_true")]
+    pub can_alight: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
