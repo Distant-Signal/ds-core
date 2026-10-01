@@ -8,14 +8,23 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 /// Sorted so the returned list (and therefore `poller-ldbws`'s poll order)
 /// is deterministic across runs, not dependent on `Vec<LineDefinition>`
 /// iteration order.
+///
+/// Codes are trimmed and uppercased first, so a custom line stored before
+/// write-time normalisation (e.g. `" wok"`) can't add a second poll of a
+/// station another line already lists as `WOK`.
 pub fn dedup_sample_stations(lines: &[LineDefinition]) -> Vec<String> {
     let mut set = BTreeSet::new();
     for line in lines {
         for crs in &line.sample_stations {
-            set.insert(crs.clone());
+            set.insert(normalize_crs(crs));
         }
     }
     set.into_iter().collect()
+}
+
+/// The same trim-and-uppercase `data::custom_lines` applies on write.
+fn normalize_crs(crs: &str) -> String {
+    crs.trim().to_ascii_uppercase()
 }
 
 /// Operator knobs (LEG-18) that narrow the sample-station list. Both are
@@ -83,7 +92,7 @@ pub fn select_sample_stations(
                 break 'rounds;
             }
             if let Some(crs) = line.sample_stations.get(depth) {
-                chosen.insert(crs.clone());
+                chosen.insert(normalize_crs(crs));
             }
         }
     }
@@ -135,6 +144,26 @@ mod tests {
         assert_eq!(
             dedup_sample_stations(&lines),
             vec!["BSK", "PMH", "WAT", "WOK"]
+        );
+    }
+
+    #[test]
+    fn differently_cased_or_padded_codes_are_one_station() {
+        let lines = vec![
+            line_with_samples("swr-main", &["WAT", "WOK"]),
+            line_with_samples("custom-legacy", &[" wok", "wat ", "Clj"]),
+        ];
+        assert_eq!(dedup_sample_stations(&lines), vec!["CLJ", "WAT", "WOK"]);
+        assert_eq!(
+            select_sample_stations(
+                &lines,
+                &HashMap::new(),
+                SampleSelection {
+                    pinned_lines_only: false,
+                    max_stations: Some(10),
+                },
+            ),
+            vec!["CLJ", "WAT", "WOK"]
         );
     }
 

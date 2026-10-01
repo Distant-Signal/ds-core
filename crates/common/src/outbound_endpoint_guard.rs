@@ -465,4 +465,61 @@ mod tests {
         };
         assert!(chain.contains("disallowed"), "{chain}");
     }
+
+    /// L9: the public-only client never follows a redirect -- a `Location`
+    /// is a second URL nothing validated. A local server 302s to a second
+    /// local server; the client must hand back the 302 itself and the
+    /// redirect target must never see a connection. (IP literals skip the
+    /// resolver, which is what lets this test reach 127.0.0.1 at all.)
+    #[tokio::test]
+    async fn a_public_only_client_does_not_follow_a_redirect() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let target = TcpListener::bind("127.0.0.1:0").await.expect("bind target");
+        let target_addr = target.local_addr().expect("target addr");
+        let target_hits = Arc::new(AtomicUsize::new(0));
+        let hits = Arc::clone(&target_hits);
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = target.accept().await {
+                hits.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                    .await;
+            }
+        });
+
+        let redirector = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind redirector");
+        let redirector_addr = redirector.local_addr().expect("redirector addr");
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = redirector.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = format!(
+                    "HTTP/1.1 302 Found\r\nlocation: http://{target_addr}/internal\r\n\
+                     content-length: 0\r\nconnection: close\r\n\r\n"
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = public_only_client_builder().build().expect("client");
+        let response = client
+            .post(format!("http://{redirector_addr}/push"))
+            .send()
+            .await
+            .expect("the redirect response itself is returned");
+        assert_eq!(response.status(), reqwest::StatusCode::FOUND);
+        assert_eq!(
+            target_hits.load(Ordering::SeqCst),
+            0,
+            "the redirect target must never be contacted"
+        );
+    }
 }
