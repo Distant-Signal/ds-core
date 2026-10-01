@@ -1,15 +1,33 @@
 # Tooling config for the repo's scripts (scripts/*.py, every *.sh, and the
-# workflow run: blocks). There is no Python package here, hence no [project]
-# table. CI: the `scripts-lint` job in .github/workflows/ci.yml; locally,
-# `scripts/lint-scripts.sh` runs the same checks.
+# workflow run: blocks), managed with uv (Ranma-Config new-service guidance
+# 3.3a). CI: the `scripts-lint` job in .github/workflows/ci.yml; locally,
+# `uv run scripts/lint-scripts.py` runs the same checks.
 #
 # Strict by default. Opt out per line (`# noqa: XXXX  # reason`,
 # `# type: ignore[code]  # reason`) rather than here, unless a rule genuinely
 # conflicts repo-wide.
 
+[project]
+# Not a package: the table exists so uv has a requires-python (uv's
+# documented layout for a non-package project, with `package = false` below).
+name = "distant-signal-scripts"
+version = "0"
+# The oldest Python the scripts support; equal to ruff's target-version and
+# mypy's python_version below. .python-version (3.14) is what CI and
+# `uv run` actually use.
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false # don't build or install the repo itself
+# `uv sync` / `uv run` install the lint group without a --group flag, so
+# `uv run scripts/lint-scripts.py` works from a fresh clone.
+default-groups = ["lint"]
+
 [dependency-groups]
-# Every tool the scripts-lint job runs, pinned exactly. Renovate's pep621
-# manager bumps these. shellcheck-py / shfmt-py / actionlint-py / hadolint-py
+# Every tool the scripts-lint job runs, pinned exactly; uv.lock pins the
+# rest of the tree with hashes. Renovate's pep621 manager bumps these and
+# uv.lock together. shellcheck-py / shfmt-py / actionlint-py / hadolint-py
 # ship the upstream static binaries: shellcheck 0.11.0, shfmt 3.14.1
 # (shfmt-py's own version number is independent of shfmt's), actionlint
 # 1.7.12, hadolint 2.15.1 (hadolint-py's Linux x86_64 wheel carries the
@@ -48,6 +66,12 @@ ignore = [
     # (Rust, TypeScript or shell); a header only in Python files would be
     # the odd one out.
     "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/tests/**" = [
+    "INP001", # test modules found by unittest discovery, not a package
+    "PT009",  # stdlib unittest (no pytest dependency): self.assert* is its API
 ]
 
 [tool.ruff.format]

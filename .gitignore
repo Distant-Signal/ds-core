@@ -27,3 +27,11 @@ mise.local.toml
 # SSO client secret) -- anchored to the repo root only, so this does NOT
 # match charts/distant-signal/values.yaml, the real tracked chart values.
 /values.yaml
+
+# Python tool state from `uv sync` / `uv run` and the lint tools. Locally,
+# UV_PROJECT_ENVIRONMENT, RUFF_CACHE_DIR and MYPY_CACHE_DIR can point these
+# at a scratch directory instead; these entries are the backstop.
+.venv/
+__pycache__/
+.ruff_cache/
+.mypy_cache/

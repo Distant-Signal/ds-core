@@ -1,6 +1,6 @@
 # hadolint config for every tracked Dockerfile (docker/*.Dockerfile,
 # frontend/Dockerfile). CI: the `scripts-lint` job, via
-# scripts/lint-scripts.sh, which passes this file explicitly. hadolint is
+# scripts/lint-scripts.py, which passes this file explicitly. hadolint is
 # pinned in pyproject.toml's `lint` dependency group (hadolint-py).
 #
 # Strict by default: every rule on at its default severity, and any finding,
