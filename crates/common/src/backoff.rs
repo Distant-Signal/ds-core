@@ -1,7 +1,9 @@
 //! Capped exponential backoff with jitter, shared by every retry loop that
 //! waits on a dependency that may simply not be ready yet (the OAuth token
 //! fetch in [`crate::oauth_client`], `schedule-reference`'s startup seed and
-//! its per-product publish retries).
+//! its per-product publish retries, full-coverage-consumer's population
+//! reload, and trust-consumer's tracked-trains reload through
+//! [`RetrySchedule`]).
 //!
 //! **Why jitter.** Every container in a Pod, and every Pod on a rebooted
 //! node, starts at the same instant and hits the same not-yet-ready
@@ -52,6 +54,57 @@ impl Backoff {
     }
 }
 
+/// When a periodic reload is next due: `interval` after a success, and
+/// after a failure the [`Backoff`] delay for however many have failed in a
+/// row -- so a reload checked on every pass of a busy loop is not retried on
+/// every pass while its dependency is down (trust-consumer's tracked-trains
+/// reload, ~23.6k failed GETs in the 2026-10-01 outage).
+#[derive(Debug, Clone, Copy)]
+pub struct RetrySchedule {
+    interval: Duration,
+    retry: Backoff,
+    due: tokio::time::Instant,
+    failures: u32,
+}
+
+impl RetrySchedule {
+    /// A schedule whose first attempt is due at once.
+    pub fn new(interval: Duration, retry: Backoff) -> Self {
+        Self {
+            interval,
+            retry,
+            due: tokio::time::Instant::now(),
+            failures: 0,
+        }
+    }
+
+    /// Whether the next attempt is due.
+    pub fn is_due(&self) -> bool {
+        tokio::time::Instant::now() >= self.due
+    }
+
+    /// Records a success: the next attempt is a full `interval` away.
+    pub fn succeeded(&mut self) {
+        self.failures = 0;
+        self.due = tokio::time::Instant::now() + self.interval;
+    }
+
+    /// Records a failure and returns how long until the next attempt: the
+    /// backoff delay for this many failures in a row, never more than
+    /// `interval`.
+    pub fn failed(&mut self) -> Duration {
+        let delay = self.retry.delay(self.failures).min(self.interval);
+        self.failures = self.failures.saturating_add(1);
+        self.due = tokio::time::Instant::now() + delay;
+        delay
+    }
+
+    /// How many attempts have failed in a row.
+    pub fn failures(&self) -> u32 {
+        self.failures
+    }
+}
+
 /// `ceiling/2 + fraction * ceiling/2`, with `fraction` clamped to `[0, 1]`.
 fn jittered(ceiling: Duration, fraction: f64) -> Duration {
     let half = ceiling / 2;
@@ -95,6 +148,50 @@ mod tests {
         for attempt in 0..20 {
             let delay = B.delay(attempt);
             assert!(delay >= B.ceiling(attempt) / 2 && delay <= B.ceiling(attempt));
+        }
+    }
+
+    /// Consecutive failures back off (1s, 2s, 4s, ... jittered, capped at
+    /// 60s and at the interval); a success resets to the full interval.
+    #[tokio::test(start_paused = true)]
+    async fn a_retry_schedule_backs_off_on_consecutive_failures() {
+        let mut schedule = RetrySchedule::new(Duration::from_secs(300), B);
+        assert!(schedule.is_due(), "the first attempt is due at once");
+        let mut previous_ceiling = Duration::ZERO;
+        for attempt in 0..10 {
+            let delay = schedule.failed();
+            let ceiling = B.ceiling(attempt);
+            assert!(
+                delay >= ceiling / 2 && delay <= ceiling,
+                "attempt {attempt}: {delay:?} outside [{:?}, {ceiling:?}]",
+                ceiling / 2
+            );
+            assert!(ceiling >= previous_ceiling, "the ceiling never shrinks");
+            previous_ceiling = ceiling;
+            assert!(!schedule.is_due(), "not due again straight after a failure");
+            tokio::time::advance(delay).await;
+            assert!(schedule.is_due(), "due once the delay has passed");
+        }
+        assert_eq!(schedule.failures(), 10);
+        assert_eq!(previous_ceiling, Duration::from_secs(60), "capped at 60s");
+
+        schedule.succeeded();
+        assert_eq!(schedule.failures(), 0);
+        tokio::time::advance(Duration::from_secs(299)).await;
+        assert!(!schedule.is_due());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert!(schedule.is_due());
+        assert!(
+            schedule.failed() <= Duration::from_secs(1),
+            "the backoff restarts"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_retry_never_waits_longer_than_the_interval() {
+        let mut schedule = RetrySchedule::new(Duration::from_secs(5), B);
+        for _ in 0..10 {
+            assert!(schedule.failed() <= Duration::from_secs(5));
         }
     }
 
