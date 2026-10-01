@@ -276,6 +276,21 @@ pub struct EnvelopeFailure {
 /// that has no `header.msg_type` at all.
 pub const MISSING_MSG_TYPE: &str = "missing";
 
+/// Every `msg_type` an [`EnvelopeFailure`] can carry: the typed TRUST
+/// messages `parse_envelope` checks, plus [`MISSING_MSG_TYPE`]. Consumers
+/// register their `*_errors_total{operation="parse_envelope",msg_type}`
+/// series at 0 for each, so the parse-drop alert's `increase()` sees the
+/// first failure too (R-097).
+pub const ENVELOPE_FAILURE_MSG_TYPES: [&str; 7] = [
+    "0001",
+    "0002",
+    "0003",
+    "0005",
+    "0006",
+    "0007",
+    MISSING_MSG_TYPE,
+];
+
 /// Every message a payload yielded, plus every envelope that was dropped.
 #[derive(Debug, Default)]
 pub struct ParsedBatch {
@@ -463,6 +478,21 @@ fn parse_envelope(envelope: Envelope) -> Result<TrustMessage, EnvelopeFailure> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every msg_type a dropped envelope can be counted under is in
+    /// ENVELOPE_FAILURE_MSG_TYPES, so the consumers pre-register them all.
+    #[test]
+    fn every_envelope_failure_msg_type_is_pre_registerable() {
+        for msg_type in ["0001", "0002", "0003", "0005", "0006", "0007"] {
+            let raw = format!(r#"[{{"header":{{"msg_type":"{msg_type}"}},"body":42}}]"#);
+            let parsed = parse_batch_detailed(&raw).unwrap();
+            assert_eq!(parsed.failures.len(), 1, "{msg_type}");
+            assert!(ENVELOPE_FAILURE_MSG_TYPES.contains(&parsed.failures[0].msg_type.as_str()));
+        }
+        let parsed = parse_batch_detailed(r#"[{"body":{}}]"#).unwrap();
+        assert_eq!(parsed.failures[0].msg_type, MISSING_MSG_TYPE);
+        assert!(ENVELOPE_FAILURE_MSG_TYPES.contains(&MISSING_MSG_TYPE));
+    }
 
     #[test]
     fn parses_an_activation_message() {

@@ -69,11 +69,12 @@ pub struct ResolvedSchedule {
 /// and every remaining calling point (and the destination arrival) was
 /// filed a day early.
 ///
-/// **Remaining, accepted limitation**: `CallingPoint` has one `day_offset`
-/// for both of its times, so the dwelling stop keeps its ARRIVAL's offset
-/// and its own `booked_departure` alone is a day early. Modelling a second
-/// per-stop offset would change every published product's row shape for
-/// this one field.
+/// `CallingPoint` has one `day_offset` for both of its times, so the
+/// dwelling stop stores its ARRIVAL's offset. Its departure is one day
+/// later: every reader of `booked_departure` uses
+/// [`CallingPoint::departure_day_offset`] (or the free
+/// [`crate::records::departure_day_offset`] for a stored row) rather than
+/// `day_offset` (R-043), which keeps the published row shape unchanged.
 fn assign_day_offsets(calling_points: &mut [CallingPoint]) {
     let mut offset: u8 = 0;
     let mut last_time: Option<NaiveTime> = None;
@@ -255,7 +256,7 @@ pub fn match_pin_with_delta<'a>(
             let Some(booked) = cp.booked_departure else {
                 continue;
             };
-            let Some(candidate_utc) = to_utc(booked, cp.day_offset) else {
+            let Some(candidate_utc) = to_utc(booked, cp.departure_day_offset()) else {
                 continue;
             };
             let delta = (scheduled - candidate_utc).abs();
@@ -391,10 +392,12 @@ fn collect_crs_departures(
         return;
     }
     for cp in &resolved.calling_points {
-        if cp.day_offset < min_day_offset {
+        // The departure's own day, not the arrival's (R-043).
+        let departure_day_offset = cp.departure_day_offset();
+        if departure_day_offset < min_day_offset {
             continue;
         }
-        let day_offset = cp.day_offset - min_day_offset;
+        let day_offset = departure_day_offset - min_day_offset;
         let Some(departure) = cp.booked_departure else {
             continue;
         };
@@ -569,7 +572,9 @@ pub fn departures_by_destination_crs(
             let Some(departure) = cp.booked_departure else {
                 continue;
             };
-            if is_before(cp.day_offset, departure, now) {
+            // The departure's own day, not the arrival's (R-043).
+            let departure_day_offset = cp.departure_day_offset();
+            if is_before(departure_day_offset, departure, now) {
                 continue;
             }
             // Same "a booked departure is not a boardable departure" filter as
@@ -589,7 +594,7 @@ pub fn departures_by_destination_crs(
                     uid: resolved.uid.clone(),
                     origin_crs: origin_crs.clone(),
                     scheduled: departure,
-                    day_offset: cp.day_offset,
+                    day_offset: departure_day_offset,
                     true_origin_crs: true_origin_crs.clone(),
                     // THIS calling point's own arrival -- recomputed per
                     // entry, unlike destination_arrival below, which is
@@ -2596,6 +2601,121 @@ mod tests {
             vec![0, 0, 1, 1],
             "the dwelling stop keeps its arrival's day; everything after it is the next day, \
              counted once (Motherwell is not compared against the 23:55 arrival)"
+        );
+    }
+
+    /// R-043: real-shaped C22645 (Sutton -> Bedford Thameslink, from
+    /// production's schedule_calling_points_full for 2026-09-28): it
+    /// arrives at Blackfriars 23:55 and leaves 00:02. That 00:02 departure
+    /// is on the NEXT day, on Blackfriars' board and in the
+    /// destination-departures product, while the arrival keeps day 0.
+    fn c22645_raw() -> Vec<RawSchedule> {
+        vec![RawSchedule {
+            basic: basic(
+                "C22645",
+                StpIndicator::Permanent,
+                "2026-05-18",
+                "2026-12-11",
+                ALL_DAYS,
+            ),
+            calling_points: vec![
+                calling_point_with_departure("SUTTON ", CallingPointKind::Origin, "23:18"),
+                calling_point_with_both(
+                    "TULSEH ",
+                    CallingPointKind::Intermediate,
+                    "23:38",
+                    "23:40",
+                ),
+                calling_point_with_both(
+                    "ELPHNAC",
+                    CallingPointKind::Intermediate,
+                    "23:50",
+                    "23:51",
+                ),
+                calling_point_with_both(
+                    "BLFR   ",
+                    CallingPointKind::Intermediate,
+                    "23:55",
+                    "00:02",
+                ),
+                calling_point_with_both(
+                    "FRNDNLT",
+                    CallingPointKind::Intermediate,
+                    "00:05",
+                    "00:06",
+                ),
+                calling_point_with_both(
+                    "STPXBOX",
+                    CallingPointKind::Intermediate,
+                    "00:10",
+                    "00:11",
+                ),
+                calling_point_with_arrival("BEDFDM ", CallingPointKind::Terminate, "01:22"),
+            ],
+        }]
+    }
+
+    fn c22645_crs() -> HashMap<String, String> {
+        tiploc_map(&[
+            ("SUTTON", "SUO"),
+            ("TULSEH", "TUH"),
+            ("ELPHNAC", "EPH"),
+            ("BLFR", "BFR"),
+            ("FRNDNLT", "ZFD"),
+            ("STPXBOX", "STP"),
+            ("BEDFDM", "BDM"),
+        ])
+    }
+
+    #[test]
+    fn a_midnight_dwell_files_the_dwelling_stops_departure_on_the_next_day() {
+        let index = ScheduleIndex::build(c22645_raw());
+        let date = NaiveDate::from_ymd_opt(2026, 9, 28).unwrap();
+        let resolved = index.schedule_for_uid("C22645", date).unwrap();
+        let blackfriars = &resolved.calling_points[3];
+        assert_eq!(
+            blackfriars.day_offset, 0,
+            "the 23:55 arrival is on the service date"
+        );
+        assert_eq!(
+            blackfriars.departure_day_offset(),
+            1,
+            "the 00:02 departure is the next day"
+        );
+        assert_eq!(resolved.calling_points[2].departure_day_offset(), 0);
+        assert_eq!(resolved.calling_points[4].departure_day_offset(), 1);
+
+        // Departure board at 23:30 on the service date.
+        let now = NaiveTime::from_hms_opt(23, 30, 0).unwrap();
+        let boards = departures_by_crs(&index, date, now, &c22645_crs());
+        let bfr: Vec<_> = boards["BFR"].iter().filter(|d| d.uid == "C22645").collect();
+        assert_eq!(bfr.len(), 1);
+        assert_eq!(bfr[0].scheduled, NaiveTime::from_hms_opt(0, 2, 0).unwrap());
+        assert_eq!(
+            bfr[0].day_offset, 1,
+            "Blackfriars' 00:02 is tomorrow, not 24h earlier"
+        );
+
+        // Destination departures (schedule_destination_departures).
+        let by_destination = departures_by_destination_crs(&index, date, now, &c22645_crs());
+        let bfr_row = by_destination["BDM"]
+            .iter()
+            .find(|d| d.origin_crs == "BFR")
+            .expect("Blackfriars departs towards Bedford");
+        assert_eq!(bfr_row.day_offset, 1);
+        assert_eq!(bfr_row.destination_arrival_day_offset, 1);
+
+        // At 00:01 the next day the departure is still to come: it is on
+        // that day's board (from the previous day's instance, rebased to 0)
+        // and not dropped as though 00:02 on the service date had passed.
+        let next_day = date.succ_opt().unwrap();
+        let after_midnight = NaiveTime::from_hms_opt(0, 1, 0).unwrap();
+        let next_board = departures_by_crs(&index, next_day, after_midnight, &c22645_crs());
+        assert!(
+            next_board["BFR"].iter().any(|d| d.uid == "C22645"
+                && d.day_offset == 0
+                && d.scheduled == NaiveTime::from_hms_opt(0, 2, 0).unwrap()),
+            "yesterday's instance departs Blackfriars at 00:02 today"
         );
     }
 

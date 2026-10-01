@@ -203,7 +203,16 @@ fn build<'a>(
                     uid: uid.to_string(),
                     from_tiploc: from.tiploc.clone(),
                     to_tiploc: to.tiploc.clone(),
-                    departure_min: minutes_from_midnight(departure, from.day_offset),
+                    // The departure's own day: a stop dwelling across
+                    // midnight departs a day after it arrives (R-043).
+                    departure_min: minutes_from_midnight(
+                        departure,
+                        crate::records::departure_day_offset(
+                            from.booked_arrival,
+                            Some(departure),
+                            from.day_offset,
+                        ),
+                    ),
                     arrival_min: minutes_from_midnight(arrival, to.day_offset),
                 },
                 passes,
@@ -263,6 +272,22 @@ mod tests {
         assert_eq!(connections[0].arrival_min, 500);
         assert_eq!(connections[1].from_tiploc, "WATFDJ");
         assert_eq!(connections[1].to_tiploc, "MKC");
+    }
+
+    /// R-043: C22645 arrives at Blackfriars 23:55 and departs 00:02 (both
+    /// stored with the arrival's day_offset 0). The departure is the next
+    /// day, so the connection on to Farringdon (00:05) is 3 minutes long,
+    /// not -1437.
+    #[test]
+    fn a_midnight_dwell_departs_on_the_next_day() {
+        let points = vec![
+            cp("BLFR", Some("23:55:00"), Some("00:02:00"), 0),
+            cp("FRNDNLT", Some("00:05:00"), Some("00:06:00"), 1),
+        ];
+        let connections = build_connections([("C22645", points.as_slice())]);
+        assert_eq!(connections.len(), 1);
+        assert_eq!(connections[0].departure_min, 1440 + 2);
+        assert_eq!(connections[0].arrival_min, 1440 + 5);
     }
 
     #[test]

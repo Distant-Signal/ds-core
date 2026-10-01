@@ -347,7 +347,31 @@ const PICKUP_ACTIVITY_CODES: [&str; 4] = ["T", "TB", "U", "R"];
 /// unadvertised stop is not a place this app may tell a user to board.
 const NOT_ADVERTISED_ACTIVITY_CODE: &str = "N";
 
+/// The calendar-day offset of a stop's `booked_departure`, given the offset
+/// [`crate::resolve::assign_day_offsets`] stored for the stop (its
+/// ARRIVAL's day). A stop that dwells across midnight (arrival 23:55,
+/// departure 00:02) departs one day later than it arrives; every other
+/// stop departs on its stored day. A free function so a caller holding
+/// only the three columns (a `schedule_calling_points_full` row) applies
+/// the same rule (R-043).
+pub fn departure_day_offset(
+    booked_arrival: Option<NaiveTime>,
+    booked_departure: Option<NaiveTime>,
+    day_offset: u8,
+) -> u8 {
+    match (booked_arrival, booked_departure) {
+        (Some(arrival), Some(departure)) if departure < arrival => day_offset.saturating_add(1),
+        _ => day_offset,
+    }
+}
+
 impl CallingPoint {
+    /// The day offset of this stop's `booked_departure` -- see
+    /// [`departure_day_offset`]. `day_offset` itself is the arrival's.
+    pub fn departure_day_offset(&self) -> u8 {
+        departure_day_offset(self.booked_arrival, self.booked_departure, self.day_offset)
+    }
+
     /// The two-character Activity codes packed into [`Self::activity`], each
     /// trimmed, blanks dropped. `"TB          "` yields `["TB"]`;
     /// `"T           "` yields `["T"]` (single-character codes are
