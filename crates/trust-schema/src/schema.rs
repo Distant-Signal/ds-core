@@ -96,14 +96,14 @@ pub struct Activation {
     pub tp_origin_timestamp: Option<String>,
 }
 
-// `gbtt_timestamp`/`reporting_stanox`/`toc_id` are part of `0003`'s
-// confirmed shape but have no consumer yet -- see the Activation comment
-// above for why they're kept rather than deleted.
+// `reporting_stanox`/`toc_id` are part of `0003`'s confirmed shape but
+// have no consumer yet -- see the Activation comment above for why they're
+// kept rather than deleted. `gbtt_timestamp` (the public-timetable time)
+// is stored by trust-consumer on `train_movement_events`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Movement {
     pub train_id: String,
     pub event_type: String, // ARRIVAL | DEPARTURE | PASS
-    #[allow(dead_code)]
     pub gbtt_timestamp: Option<String>,
     pub planned_timestamp: Option<String>,
     pub actual_timestamp: Option<String>,

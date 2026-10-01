@@ -39,8 +39,8 @@
 use chrono::{NaiveDate, NaiveTime};
 
 use crate::records::{
-    Activity, BasicSchedule, CallingPoint, CallingPointKind, Platform, RawSchedule, StpIndicator,
-    Tiploc,
+    Activity, BasicSchedule, CallingPoint, CallingPointKind, HalfMinuteTime, Platform, RawSchedule,
+    StpIndicator, Tiploc,
 };
 
 /// Minimum length of a `BS` line this parser can decode: needs bytes
@@ -588,6 +588,14 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
     let activity: Activity = ascii_field(line, activity_start, activity_end)
         .trim_end()
         .into();
+    // CIF Scheduled Pass: `LI` `20..24` `HHMM` and `24..25` the `H`
+    // half-minute flag (see `activity_range`'s byte-layout diagram). Only a
+    // passing point carries one, and it then has no arrival or departure.
+    let booked_pass = match kind {
+        CallingPointKind::Intermediate => parse_time_field(ascii_field(line, 20, 24))
+            .map(|time| HalfMinuteTime::new(time, ascii_field(line, 24, 25) == "H")),
+        CallingPointKind::Origin | CallingPointKind::Terminate => None,
+    };
 
     Some(CallingPoint {
         tiploc,
@@ -600,6 +608,7 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
         public_arrival,
         public_departure,
         platform,
+        booked_pass,
         // Always 0 here: a single BS(+BX)/LO/LI*/LT block is decoded in
         // isolation and has no reason to own cross-calling-point
         // day-rollover bookkeeping. The real value is computed once, over
@@ -1420,6 +1429,83 @@ mod activity_tests {
                 "activity {code} must be treated as boardable"
             );
         }
+    }
+
+    /// Direction per activity code: `D` may alight but not board, `U` the
+    /// reverse, `T` and `R` both, and `N` neither.
+    #[test]
+    fn can_board_and_can_alight_follow_the_activity_direction() {
+        for (code, board, alight, request) in [
+            ("T", true, true, false),
+            ("D", false, true, false),
+            ("U", true, false, false),
+            ("R", true, true, true),
+            ("T N", false, false, false),
+            ("OP", false, false, false),
+        ] {
+            let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, code);
+            let parsed = cp(&line, CallingPointKind::Intermediate);
+            assert_eq!(parsed.can_board(), board, "{code} can_board");
+            assert_eq!(parsed.can_alight(), alight, "{code} can_alight");
+            assert_eq!(parsed.is_request_stop(), request, "{code} request stop");
+        }
+    }
+
+    /// An origin is never somewhere to alight and a terminus never somewhere
+    /// to board, whatever their activity says.
+    #[test]
+    fn the_origin_cannot_be_alighted_at_and_the_terminus_cannot_be_boarded() {
+        let origin = cp(LO_EUSTON, CallingPointKind::Origin);
+        assert!(origin.can_board());
+        assert!(!origin.can_alight());
+        let terminus = cp(LT_EUSTON, CallingPointKind::Terminate);
+        assert!(!terminus.can_board());
+        assert!(terminus.can_alight());
+    }
+
+    /// The Scheduled Pass field (`LI` `20..25`), decoded with its half-minute
+    /// flag. The line is built at the real verified offsets: no arrival or
+    /// departure, a pass of `20:30H`, `0000` public times, blank activity.
+    #[test]
+    fn a_passing_point_decodes_its_pass_time_and_is_never_a_stop() {
+        let line = "LIWMBY              2030H00000000";
+        let parsed = cp(line, CallingPointKind::Intermediate);
+        assert_eq!(parsed.booked_arrival, None);
+        assert_eq!(parsed.booked_departure, None);
+        let pass = parsed.booked_pass.expect("pass time decoded");
+        assert!(pass.is_half_minute());
+        assert_eq!(parsed.working_pass(), NaiveTime::from_hms_opt(20, 30, 30));
+        assert_eq!(
+            pass.whole_minute(),
+            NaiveTime::from_hms_opt(20, 30, 0).unwrap()
+        );
+        assert!(parsed.is_pass());
+        assert!(!parsed.can_board());
+        assert!(!parsed.can_alight());
+        // A calling `LI` has no pass time.
+        assert_eq!(
+            cp(LI_CARLILE, CallingPointKind::Intermediate).booked_pass,
+            None
+        );
+    }
+
+    /// Working times keep the half-minute as `:30` seconds.
+    #[test]
+    fn working_times_carry_the_half_minute_as_thirty_seconds() {
+        let parsed = cp(
+            "LIMKNSCEN 2050H2052H     205120526  FL FL T",
+            CallingPointKind::Intermediate,
+        );
+        assert_eq!(parsed.booked_arrival, NaiveTime::from_hms_opt(20, 50, 0));
+        assert_eq!(
+            parsed.working_arrival(),
+            NaiveTime::from_hms_opt(20, 50, 30)
+        );
+        assert_eq!(
+            parsed.working_departure(),
+            NaiveTime::from_hms_opt(20, 52, 30)
+        );
+        assert_eq!(parsed.public_arrival, NaiveTime::from_hms_opt(20, 51, 0));
     }
 
     /// A real origin: `TB` (train begins) must always be boardable -- if this

@@ -35,6 +35,13 @@ pub struct CallingPointForConnections {
     /// improvement over a same-pair-only heuristic -- see this plan's
     /// Judgment Call 5).
     pub day_offset: u8,
+    /// A passenger may board here ([`crate::records::CallingPoint::can_board`]).
+    /// `false` at a set-down-only (`D`) stop: the train calls, and the
+    /// connection leaving it exists, but nobody may get on there.
+    pub can_board: bool,
+    /// A passenger may alight here ([`crate::records::CallingPoint::can_alight`]).
+    /// `false` at a pick-up-only (`U`) stop.
+    pub can_alight: bool,
 }
 
 impl From<&crate::records::CallingPoint> for CallingPointForConnections {
@@ -44,6 +51,8 @@ impl From<&crate::records::CallingPoint> for CallingPointForConnections {
             booked_arrival: cp.booked_arrival,
             booked_departure: cp.booked_departure,
             day_offset: cp.day_offset,
+            can_board: cp.can_board(),
+            can_alight: cp.can_alight(),
         }
     }
 }
@@ -66,6 +75,12 @@ pub struct Connection {
     /// connections, with no adjacent-pair rollover heuristic needed.
     pub departure_min: u32,
     pub arrival_min: u32,
+    /// A passenger may board this train at `from_tiploc`. Riding through a
+    /// stop is always allowed; this only gates a fresh boarding there.
+    pub can_board: bool,
+    /// A passenger may get off this train at `to_tiploc`. When `false` the
+    /// searches carry on along the train but never record an arrival there.
+    pub can_alight: bool,
 }
 
 fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
@@ -214,6 +229,8 @@ fn build<'a>(
                         ),
                     ),
                     arrival_min: minutes_from_midnight(arrival, to.day_offset),
+                    can_board: from.can_board,
+                    can_alight: to.can_alight,
                 },
                 passes,
             ));
@@ -254,6 +271,8 @@ mod tests {
             booked_arrival: arrival.map(|t| t.parse().unwrap()),
             booked_departure: departure.map(|t| t.parse().unwrap()),
             day_offset,
+            can_board: true,
+            can_alight: true,
         }
     }
 
@@ -272,6 +291,42 @@ mod tests {
         assert_eq!(connections[0].arrival_min, 500);
         assert_eq!(connections[1].from_tiploc, "WATFDJ");
         assert_eq!(connections[1].to_tiploc, "MKC");
+    }
+
+    /// A connection carries boarding from its `from` call and alighting from
+    /// its `to` call, so a set-down-only stop still links the train through.
+    #[test]
+    fn each_connection_carries_its_ends_direction_flags() {
+        let mut set_down_only = cp("MOTHRWL", Some("17:00:00"), Some("17:02:00"), 0);
+        set_down_only.can_board = false;
+        let mut pick_up_only = cp("WATFDJ", Some("16:00:00"), Some("16:01:00"), 0);
+        pick_up_only.can_alight = false;
+        let points = vec![
+            cp("EUSTON", None, Some("15:40:00"), 0),
+            pick_up_only,
+            set_down_only,
+            cp("GLGC", Some("18:00:00"), None, 0),
+        ];
+        let connections = build_connections([("C01372", points.as_slice())]);
+        let flags: Vec<(&str, &str, bool, bool)> = connections
+            .iter()
+            .map(|c| {
+                (
+                    c.from_tiploc.as_str(),
+                    c.to_tiploc.as_str(),
+                    c.can_board,
+                    c.can_alight,
+                )
+            })
+            .collect();
+        assert_eq!(
+            flags,
+            vec![
+                ("EUSTON", "WATFDJ", true, false),
+                ("WATFDJ", "MOTHRWL", true, true),
+                ("MOTHRWL", "GLGC", false, true),
+            ]
+        );
     }
 
     /// R-043: C22645 arrives at Blackfriars 23:55 and departs 00:02 (both

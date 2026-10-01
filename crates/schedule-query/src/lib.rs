@@ -87,7 +87,7 @@ pub use interchange::{
 };
 pub use parse::{ScheduleRecordParser, parse_schedule_records};
 pub use records::{
-    Activity, BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture,
+    Activity, BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture, HalfMinuteTime,
     LinePopulationEntry, Platform, RawSchedule, ScheduleDeparture, StpIndicator, Tiploc,
     is_bus_or_ship,
 };

@@ -38,6 +38,64 @@ pub type Tiploc = SmallStr<7>;
 /// A [`CallingPoint::activity`] field: CIF's 12-byte packed activity codes,
 /// inline.
 pub type Activity = SmallStr<12>;
+
+/// A working-timetable (WTT) time to the half-minute, stored as
+/// half-minutes since midnight so it costs 2 bytes (an `Option` of it, 4)
+/// on a [`CallingPoint`] -- see [`crate::compact`] for why that struct's
+/// size matters.
+///
+/// Serializes as an `"HH:MM:SS"` string, the same shape `chrono::NaiveTime`
+/// uses, with `:30` seconds for a half-minute (`"20:50:30"` is CIF's
+/// `2050H`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HalfMinuteTime(u16);
+
+impl HalfMinuteTime {
+    /// `time` (whole minutes; seconds are ignored) plus 30 seconds when
+    /// `half_minute`.
+    pub fn new(time: NaiveTime, half_minute: bool) -> Self {
+        use chrono::Timelike;
+        let minutes = (time.hour() * 60 + time.minute()) as u16;
+        Self(minutes * 2 + u16::from(half_minute))
+    }
+
+    /// The exact WTT time, with `:30` seconds for a half-minute.
+    pub fn time(self) -> NaiveTime {
+        let half_minutes = u32::from(self.0);
+        NaiveTime::from_num_seconds_from_midnight_opt(half_minutes * 30, 0)
+            .unwrap_or(NaiveTime::MIN)
+    }
+
+    /// The time truncated to the whole minute -- how every other WTT time
+    /// in this crate (`booked_arrival`/`booked_departure`) is stored.
+    pub fn whole_minute(self) -> NaiveTime {
+        use chrono::Timelike;
+        self.time().with_second(0).unwrap_or(NaiveTime::MIN)
+    }
+
+    pub fn is_half_minute(self) -> bool {
+        self.0 % 2 == 1
+    }
+}
+
+impl Serialize for HalfMinuteTime {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.time().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for HalfMinuteTime {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use chrono::Timelike;
+        let time = NaiveTime::deserialize(deserializer)?;
+        Ok(Self::new(time, time.second() >= 30))
+    }
+}
+
+/// `booked` plus 30 seconds when `half_minute` -- the exact WTT time.
+fn working_time(booked: Option<NaiveTime>, half_minute: bool) -> Option<NaiveTime> {
+    booked.map(|time| HalfMinuteTime::new(time, half_minute).time())
+}
 /// A [`CallingPoint::platform`] value: CIF's 3-byte platform field, inline.
 pub type Platform = SmallStr<3>;
 
@@ -324,6 +382,18 @@ pub struct CallingPoint {
     /// [`crate::compact`].
     #[serde(default)]
     pub platform: Option<Platform>,
+    /// The CIF Scheduled Pass time (`LI` `20..25`, `HHMM` plus the `H`
+    /// half-minute flag): set only on a passing point, an `LI` the train
+    /// runs through without stopping, which carries no arrival or
+    /// departure. `None` on every other calling point, and on a
+    /// `schedule_line_population`/`trains.calling_points` blob written
+    /// before this field existed (`#[serde(default)]`). Not serialized
+    /// when `None`, so a stored blob for a non-passing point is unchanged.
+    ///
+    /// Shown only by the train page's optional "detailed" working-timetable
+    /// view; passing points are never offered as stops.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub booked_pass: Option<HalfMinuteTime>,
 }
 
 /// Two-character CIF Activity codes that mean a passenger may BOARD at this
@@ -346,6 +416,21 @@ const PICKUP_ACTIVITY_CODES: [&str; 4] = ["T", "TB", "U", "R"];
 /// appear ALONGSIDE a passenger code, and when it does it wins: an
 /// unadvertised stop is not a place this app may tell a user to board.
 const NOT_ADVERTISED_ACTIVITY_CODE: &str = "N";
+
+/// Two-character CIF Activity codes that mean a passenger may ALIGHT at
+/// this calling point -- the mirror of [`PICKUP_ACTIVITY_CODES`].
+///
+/// * `T` -- stops to take up and set down passengers.
+/// * `TF` -- train finishes (the passenger service's destination).
+/// * `D` -- stops to set down passengers only.
+/// * `R` -- request stop.
+///
+/// Deliberately NOT included: `U` (take up only -- you may get on, never
+/// off), `TB` (train begins), `OP`, `N` and the engineering codes.
+const SET_DOWN_ACTIVITY_CODES: [&str; 4] = ["T", "TF", "D", "R"];
+
+/// The CIF Activity code for a request stop.
+const REQUEST_STOP_ACTIVITY_CODE: &str = "R";
 
 /// The calendar-day offset of a stop's `booked_departure`, given the offset
 /// [`crate::resolve::assign_day_offsets`] stored for the stop (its
@@ -425,6 +510,72 @@ impl CallingPoint {
         }
         boardable
     }
+
+    /// A passing point: the train runs through without calling (a Scheduled
+    /// Pass time and no arrival or departure). Never a stop for a
+    /// passenger.
+    pub fn is_pass(&self) -> bool {
+        self.booked_pass.is_some()
+            && self.booked_arrival.is_none()
+            && self.booked_departure.is_none()
+    }
+
+    /// Can a passenger BOARD here? [`Self::is_public_pickup`], except that a
+    /// passing point and a terminating stop are never boardable. Published
+    /// per stop as `can_board`, and what the trip planner checks before
+    /// boarding a train here.
+    pub fn can_board(&self) -> bool {
+        self.kind != CallingPointKind::Terminate && !self.is_pass() && self.is_public_pickup()
+    }
+
+    /// Can a passenger ALIGHT here? The mirror of [`Self::can_board`]: `T`,
+    /// `TF`, `D` or `R`; never `N` (not advertised), never a passing point
+    /// and never the origin. A pick-up-only (`U`) stop is a stop where the
+    /// train calls but nobody may get off -- SWR's down trains at Clapham
+    /// Junction are the commonest real case.
+    ///
+    /// An empty `activity` reads as alightable, for the same fail-open
+    /// reason [`Self::is_public_pickup`] gives.
+    pub fn can_alight(&self) -> bool {
+        if self.kind == CallingPointKind::Origin || self.is_pass() {
+            return false;
+        }
+        if self.activity.trim().is_empty() {
+            return true;
+        }
+        let mut alightable = false;
+        for code in self.activity_codes() {
+            if code == NOT_ADVERTISED_ACTIVITY_CODE {
+                return false;
+            }
+            if SET_DOWN_ACTIVITY_CODES.contains(&code) {
+                alightable = true;
+            }
+        }
+        alightable
+    }
+
+    /// A request stop (`R`): the train calls only if a passenger asks the
+    /// conductor, or signals the driver from the platform.
+    pub fn is_request_stop(&self) -> bool {
+        self.activity_codes()
+            .any(|code| code == REQUEST_STOP_ACTIVITY_CODE)
+    }
+
+    /// The exact WTT arrival, with `:30` seconds for a half-minute.
+    pub fn working_arrival(&self) -> Option<NaiveTime> {
+        working_time(self.booked_arrival, self.is_half_minute_arrival)
+    }
+
+    /// The exact WTT departure, with `:30` seconds for a half-minute.
+    pub fn working_departure(&self) -> Option<NaiveTime> {
+        working_time(self.booked_departure, self.is_half_minute_departure)
+    }
+
+    /// The exact WTT pass time of a passing point.
+    pub fn working_pass(&self) -> Option<NaiveTime> {
+        self.booked_pass.map(HalfMinuteTime::time)
+    }
 }
 
 /// One UID's resolved calling points, as published over the wire between
@@ -496,6 +647,13 @@ pub struct ScheduleDeparture {
     #[serde(default)]
     pub day_offset: u8,
     pub destination_crs: Option<String>,
+    /// The CIF public departure for this call (see
+    /// [`CallingPoint::public_departure`]) -- what a passenger timetable
+    /// shows, where `scheduled` is the working (WTT) time. `None` when the
+    /// CIF carries none, and on a row published before this field existed
+    /// (`#[serde(default)]`); not serialized when `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_departure: Option<NaiveTime>,
 }
 
 /// One departure-bearing calling point of a schedule that TERMINATES at
@@ -623,6 +781,21 @@ pub struct DestinationDeparture {
     /// contributes, exactly like `operator_atoc`/`headcode` above.
     #[serde(default)]
     pub rsid: Option<String>,
+    /// The public departure for this entry's own call (`scheduled` is the
+    /// WTT one). See [`CallingPoint::public_departure`].
+    #[serde(default)]
+    pub public_departure: Option<NaiveTime>,
+    /// The public arrival for this entry's own call -- the public
+    /// counterpart of `calling_point_arrival`.
+    #[serde(default)]
+    pub public_calling_point_arrival: Option<NaiveTime>,
+    /// The public arrival at the schedule's terminus -- the public
+    /// counterpart of `destination_arrival`, and on the same day
+    /// (`destination_arrival_day_offset`). This is where the terminus
+    /// recovery margin shows: 22% of terminating arrivals are 0.5-4 minutes
+    /// later than the WTT one.
+    #[serde(default)]
+    pub public_destination_arrival: Option<NaiveTime>,
 }
 
 /// One `BS`(+`BX`)/`LO`/`LI`*/`LT` block, pre-STP-resolution.
@@ -660,6 +833,7 @@ mod tests {
                 public_arrival: None,
                 public_departure: None,
                 platform: None,
+                booked_pass: None,
             }],
             operator_atoc: Some("LM".to_string()),
             headcode: None,
@@ -701,6 +875,29 @@ mod tests {
             serde_json::to_string(&old).unwrap(),
             r#"{"uid":"C11052","calling_points":[]}"#
         );
+    }
+
+    /// The half-minute time round-trips through its `"HH:MM:SS"` JSON form,
+    /// and a blob without `booked_pass` still deserializes.
+    #[test]
+    fn half_minute_time_serializes_as_a_time_string() {
+        let time = HalfMinuteTime::new(chrono::NaiveTime::from_hms_opt(20, 50, 0).unwrap(), true);
+        let json = serde_json::to_string(&time).unwrap();
+        assert_eq!(json, r#""20:50:30""#);
+        assert_eq!(serde_json::from_str::<HalfMinuteTime>(&json).unwrap(), time);
+        let whole: HalfMinuteTime = serde_json::from_str(r#""23:59:00""#).unwrap();
+        assert!(!whole.is_half_minute());
+        assert_eq!(
+            whole.time(),
+            chrono::NaiveTime::from_hms_opt(23, 59, 0).unwrap()
+        );
+    }
+
+    /// Adding the pass time must not grow the struct the schedule index holds
+    /// ~7.9M of (see `crate::compact`).
+    #[test]
+    fn calling_point_stays_104_bytes() {
+        assert_eq!(std::mem::size_of::<CallingPoint>(), 104);
     }
 
     #[test]

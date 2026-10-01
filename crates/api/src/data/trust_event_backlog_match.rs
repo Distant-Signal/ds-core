@@ -670,6 +670,7 @@ async fn replay_backlog_history(
             loc_stanox: None, // never persisted by trust_event_backlog -- see the dedup_key note above
             loc_crs: row.crs.clone(),
             planned_timestamp: planned,
+            gbtt_timestamp: None,
             actual_timestamp: actual,
             variation_status,
             raw_body: serde_json::json!({}),

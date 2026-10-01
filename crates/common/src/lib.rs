@@ -1315,6 +1315,14 @@ pub struct TrainMovementEventMessage {
     pub loc_crs: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planned_timestamp: Option<DateTime<Utc>>,
+    /// TRUST's public-timetable (GBTT) time for this movement
+    /// (`gbtt_timestamp`), where `planned_timestamp` is the working-timetable
+    /// one. `None` for a pass or another non-public event (TRUST sends it
+    /// empty), and on a message from an older trust-consumer. Stored as
+    /// `train_movement_events.gbtt_timestamp`; nothing reads it yet -- it is
+    /// the baseline the public-time delay work will measure against.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gbtt_timestamp: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actual_timestamp: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -88,6 +88,21 @@ struct ScheduleCallingPointDto {
     /// `None` both for a blank CIF field and (on read) for a
     /// `trains.calling_points` row stored before this field existed.
     platform: Option<String>,
+    /// The CIF public (GBTT) times -- `schedule_query::CallingPoint::public_arrival`
+    /// / `public_departure`. Like every field below, absent from a row
+    /// stored before it existed, which the reader
+    /// (`journey::RawTimetable`) defaults.
+    public_arrival: Option<chrono::NaiveTime>,
+    public_departure: Option<chrono::NaiveTime>,
+    /// The exact WTT times, `:30` seconds for a half-minute, and the pass
+    /// time of a passing point.
+    working_arrival: Option<chrono::NaiveTime>,
+    working_departure: Option<chrono::NaiveTime>,
+    working_pass: Option<chrono::NaiveTime>,
+    /// `CallingPoint::can_board`/`can_alight`/`is_request_stop`.
+    can_board: bool,
+    can_alight: bool,
+    request_stop: bool,
 }
 
 impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
@@ -101,6 +116,14 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
             is_half_minute_departure: cp.is_half_minute_departure,
             day_offset: cp.day_offset,
             platform: cp.platform.as_deref().map(str::to_owned),
+            public_arrival: cp.public_arrival,
+            public_departure: cp.public_departure,
+            working_arrival: cp.working_arrival(),
+            working_departure: cp.working_departure(),
+            working_pass: cp.working_pass(),
+            can_board: cp.can_board(),
+            can_alight: cp.can_alight(),
+            request_stop: cp.is_request_stop(),
         }
     }
 }
