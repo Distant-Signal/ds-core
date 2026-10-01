@@ -1110,6 +1110,13 @@ pub struct StationSample {
     pub departures: Vec<StationDeparture>,
 }
 
+/// How old a [`StationSample`] may be (by `polled_at`) and still count as
+/// live data. The aggregator ignores older `station_samples` rows; see
+/// `aggregator::aggregation::drop_stale_samples` for why 15 minutes.
+/// `poller-ldbws` warns when a full station rotation takes longer than
+/// this, since stations would then go stale between visits.
+pub const STATION_SAMPLE_MAX_AGE_MINUTES: u32 = 15;
+
 /// One resolved `(crs, operator)` full-coverage row, mirroring
 /// `StationSample`'s own per-station shape one level finer. Written
 /// directly by a future `full-coverage-consumer` to `POST
