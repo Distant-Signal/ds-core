@@ -21,6 +21,15 @@
 //! not merged yet); append its line to the lock when it does. An unlisted file
 //! older than the newest locked one fails: it was either renamed or inserted
 //! out of order.
+//!
+//! "Append it when it merges" was not enough on its own: the lock lagged
+//! four deployed migrations (`20260928100000` to `20260928180000`) behind
+//! main, and an unlocked migration is unprotected. So an unlisted migration
+//! whose timestamp is more than `UNLOCKED_GRACE_DAYS` old also fails
+//! (`unlocked_migrations_do_not_linger`). That test depends on the date: it
+//! can start failing on an unchanged tree, which is the point. The fix is
+//! always the line the failure message prints; add it in the PR that adds the
+//! migration, or in the next PR after it merges.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -126,4 +135,34 @@ fn the_checksum_matches_what_sqlx_records() {
         .find(|(file, _)| file.starts_with("20260831090001_"))
         .expect("20260831090001 is locked");
     assert_eq!(&sqlx_hex, locked_hex);
+}
+
+/// How long a migration may stay out of the lock, counted from the timestamp
+/// in its file name. Long enough for an ordinary PR to merge first; short
+/// enough that the lock cannot silently lag main for weeks.
+const UNLOCKED_GRACE_DAYS: i64 = 14;
+
+#[test]
+fn unlocked_migrations_do_not_linger() {
+    let locked = locked_checksums();
+    let now = chrono::Utc::now().naive_utc();
+
+    let mut problems = Vec::new();
+    for (file, checksum) in current_checksums() {
+        if locked.contains_key(&file) {
+            continue;
+        }
+        let stamp = file.split('_').next().unwrap_or_default();
+        let created = chrono::NaiveDateTime::parse_from_str(stamp, "%Y%m%d%H%M%S")
+            .unwrap_or_else(|err| panic!("{file}: timestamp prefix {stamp:?}: {err}"));
+        let age_days = (now - created).num_days();
+        if age_days > UNLOCKED_GRACE_DAYS {
+            problems.push(format!(
+                "{file}: {age_days} days old and still not in tests/migration_checksums.lock; \
+                 once it is on main, add `{file} {checksum}`"
+            ));
+        }
+    }
+
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
