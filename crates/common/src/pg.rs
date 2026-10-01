@@ -25,6 +25,12 @@
 //!   hung await), which would otherwise hold its locks and pin the xmin
 //!   horizon indefinitely.
 //!
+//! * dead-client detection ([`DEAD_CLIENT_DETECTION_SETTINGS`]):
+//!   `client_connection_check_interval` and TCP keepalives, so a query
+//!   running for a client that has gone away is aborted instead of running
+//!   to completion. Was api-only until 2026-10-01 (Train Register N4); every
+//!   pool built here now carries it.
+//!
 //! and the pool fails an `acquire` after 5s (was 30s), so an overloaded pool
 //! surfaces as a fast error rather than a queue of requests each waiting half
 //! a minute.
@@ -53,6 +59,28 @@ pub const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// Default pool `acquire_timeout`.
 pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Session settings that make Postgres notice a client that has gone away
+/// (2026-09-27 incident: schedule publish deletes kept running for many
+/// minutes on behalf of an `api` pod that had already died -- sqlx does not
+/// cancel a query when the future awaiting it is dropped).
+///
+/// * `client_connection_check_interval` (PG 14+; production runs 16) makes
+///   a long-running query poll its socket and abort once the client is gone.
+/// * The TCP keepalives turn a peer that vanished without a FIN/RST (a
+///   killed pod, a dropped node) into a closed socket that check can see:
+///   ~60s idle + 6 x 10s probes.
+///
+/// All are user-settable, so they go in the startup packet's `options`
+/// with the rest of [`PoolSettings::session_options`]. The chart sets the
+/// same values server-wide as a backstop for connections that skip this
+/// module.
+pub const DEAD_CLIENT_DETECTION_SETTINGS: [(&str, &str); 4] = [
+    ("client_connection_check_interval", "10s"),
+    ("tcp_keepalives_idle", "60"),
+    ("tcp_keepalives_interval", "10"),
+    ("tcp_keepalives_count", "6"),
+];
 
 pub const STATEMENT_TIMEOUT_ENV: &str = "DATABASE_STATEMENT_TIMEOUT_SECS";
 pub const IDLE_IN_TRANSACTION_TIMEOUT_ENV: &str = "DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_SECS";
@@ -132,11 +160,12 @@ impl PoolSettings {
         Ok(settings)
     }
 
-    /// The server settings sent as `-c name=value` in the startup packet,
-    /// in milliseconds (a bare integer is read in the setting's base unit,
-    /// ms for both). A zero timeout is omitted.
+    /// The server settings sent as `-c name=value` in the startup packet:
+    /// the timeouts in milliseconds (a bare integer is read in the setting's
+    /// base unit, ms for both; a zero timeout is omitted), then
+    /// [`DEAD_CLIENT_DETECTION_SETTINGS`].
     pub fn session_options(&self) -> Vec<(&'static str, String)> {
-        let mut options = Vec::with_capacity(2);
+        let mut options = Vec::with_capacity(2 + DEAD_CLIENT_DETECTION_SETTINGS.len());
         if !self.statement_timeout.is_zero() {
             options.push((
                 "statement_timeout",
@@ -149,6 +178,11 @@ impl PoolSettings {
                 self.idle_in_transaction_timeout.as_millis().to_string(),
             ));
         }
+        options.extend(
+            DEAD_CLIENT_DETECTION_SETTINGS
+                .iter()
+                .map(|(name, value)| (*name, (*value).to_owned())),
+        );
         options
     }
 
@@ -157,12 +191,7 @@ impl PoolSettings {
     /// api's dead-client detection), so those keep working.
     pub fn connect_options(&self, base: PgConnectOptions) -> PgConnectOptions {
         let base = base.application_name(&self.application_name);
-        let options = self.session_options();
-        if options.is_empty() {
-            base
-        } else {
-            base.options(options)
-        }
+        base.options(self.session_options())
     }
 
     /// Pool sizing and `acquire_timeout`.
@@ -278,6 +307,10 @@ mod tests {
             vec![
                 ("statement_timeout", "60000".to_owned()),
                 ("idle_in_transaction_session_timeout", "30000".to_owned()),
+                ("client_connection_check_interval", "10s".to_owned()),
+                ("tcp_keepalives_idle", "60".to_owned()),
+                ("tcp_keepalives_interval", "10".to_owned()),
+                ("tcp_keepalives_count", "6".to_owned()),
             ]
         );
     }
@@ -315,7 +348,18 @@ mod tests {
             ]),
         )
         .unwrap();
-        assert!(settings.session_options().is_empty());
+        let names: Vec<&str> = settings
+            .session_options()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert!(!names.contains(&"statement_timeout"), "{names:?}");
+        assert!(
+            !names.contains(&"idle_in_transaction_session_timeout"),
+            "{names:?}"
+        );
+        // Dead-client detection is not a timeout and always applies.
+        assert!(names.contains(&"client_connection_check_interval"));
     }
 
     #[test]
@@ -366,6 +410,12 @@ mod tests {
             ("statement_timeout", "42s"),
             ("idle_in_transaction_session_timeout", "17s"),
             ("application_name", "distant-signal-pg-test"),
+            // Dead-client detection, on every pool (aggregator, notifier,
+            // enricher as well as api).
+            ("client_connection_check_interval", "10s"),
+            ("tcp_keepalives_idle", "60"),
+            ("tcp_keepalives_interval", "10"),
+            ("tcp_keepalives_count", "6"),
         ] {
             let value: String = sqlx::query_scalar(&format!("SHOW {name}"))
                 .fetch_one(&pool)

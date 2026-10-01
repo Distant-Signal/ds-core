@@ -136,6 +136,8 @@ fn embedded_ipv4s(v6: Ipv6Addr) -> [Option<Ipv4Addr>; 2] {
         [0, 0, 0, 0, 0, 0, hi, lo] => [Some(v4(hi, lo)), None],
         // 64:ff9b::/96 -- NAT64 well-known prefix (RFC6052): the last 32 bits.
         [0x0064, 0xff9b, 0, 0, 0, 0, hi, lo] => [Some(v4(hi, lo)), None],
+        // ::ffff:0:a.b.c.d -- SIIT "IPv4-translated" (RFC2765, ::ffff:0:0/96).
+        [0, 0, 0, 0, 0xffff, 0, hi, lo] => [Some(v4(hi, lo)), None],
         // 2002::/16 -- 6to4 (RFC3056): bits 16..48.
         [0x2002, hi, lo, ..] => [Some(v4(hi, lo)), None],
         // 2001::/32 -- Teredo (RFC4380): the server in bits 32..64, the
@@ -387,6 +389,14 @@ mod tests {
         ] {
             assert!(!is_disallowed_ip(ip), "{ip} should be allowed");
         }
+    }
+
+    #[test]
+    fn the_ipv4_translated_form_is_checked_against_its_embedded_ipv4() {
+        assert!(is_disallowed_ip(v6("::ffff:0:a00:7"))); // 10.0.0.7
+        assert!(is_disallowed_ip(v6("::ffff:0:7f00:1"))); // 127.0.0.1
+        assert!(is_disallowed_ip(v6("::ffff:0:a9fe:a9fe"))); // 169.254.169.254
+        assert!(!is_disallowed_ip(v6("::ffff:0:808:808"))); // 8.8.8.8
     }
 
     #[test]
