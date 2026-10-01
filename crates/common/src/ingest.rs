@@ -505,7 +505,7 @@ async fn fetch_last_fetched(
 /// `None` (never fetched) means "poll now" (`Duration::ZERO`). Otherwise,
 /// the elapsed time since `fetched_at` is clamped to zero if it would be
 /// negative (a `fetched_at` in the future — clock skew between hosts —
-/// never underflows or panics); a poll_interval already exceeded by that
+/// never underflows or panics); a `poll_interval` already exceeded by that
 /// elapsed time means "poll now", otherwise the remainder is returned.
 /// Return value is always `<= poll_interval` — this only ever delays the
 /// *first* tick of a fresh process, so it can't compound across restarts.
@@ -528,6 +528,10 @@ fn duration_until_next_poll(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_statements,
+    reason = "test code: fixtures sit next to their use"
+)]
 mod tests {
     use super::*;
 
@@ -553,14 +557,13 @@ mod tests {
             .mount(&server)
             .await;
 
-        let tokens =
-            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
-                token_url: format!("{}/token/", server.uri()),
-                client_id: "c".to_string(),
-                scope: "groups".to_string(),
-                username: "u".to_string(),
-                password: "p".to_string(),
-            });
+        let tokens = OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+            token_url: format!("{}/token/", server.uri()),
+            client_id: "c".to_string(),
+            scope: "groups".to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+        });
         let client = reqwest::Client::new();
 
         #[derive(serde::Deserialize)]
@@ -602,19 +605,18 @@ mod tests {
             .mount(&server)
             .await;
 
-        let tokens =
-            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
-                token_url: format!("{}/token/", server.uri()),
-                client_id: "c".to_string(),
-                scope: "groups".to_string(),
-                username: "u".to_string(),
-                password: "p".to_string(),
-            });
+        let tokens = OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+            token_url: format!("{}/token/", server.uri()),
+            client_id: "c".to_string(),
+            scope: "groups".to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+        });
         let client = reqwest::Client::new();
 
         #[derive(serde::Deserialize)]
         struct Thing {
-            #[allow(dead_code)]
+            #[expect(dead_code, reason = "the field exists only so the JSON deserializes")]
             value: u32,
         }
 
@@ -652,14 +654,13 @@ mod tests {
             .mount(&server)
             .await;
 
-        let tokens =
-            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
-                token_url: format!("{}/token/", server.uri()),
-                client_id: "c".to_string(),
-                scope: "groups".to_string(),
-                username: "u".to_string(),
-                password: "p".to_string(),
-            });
+        let tokens = OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+            token_url: format!("{}/token/", server.uri()),
+            client_id: "c".to_string(),
+            scope: "groups".to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+        });
         let client = reqwest::Client::new();
 
         #[derive(serde::Serialize)]
@@ -770,14 +771,13 @@ mod tests {
             })))
             .mount(&server)
             .await;
-        let tokens =
-            crate::oauth_client::OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
-                token_url: format!("{}/token/", server.uri()),
-                client_id: "c".to_string(),
-                scope: "groups".to_string(),
-                username: "u".to_string(),
-                password: "p".to_string(),
-            });
+        let tokens = OAuthTokenCache::new(crate::oauth_client::OAuthCredentials {
+            token_url: format!("{}/token/", server.uri()),
+            client_id: "c".to_string(),
+            scope: "groups".to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+        });
         (server, tokens)
     }
 

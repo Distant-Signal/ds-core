@@ -35,3 +35,11 @@ mise.local.toml
 __pycache__/
 .ruff_cache/
 .mypy_cache/
+.pytest_cache/
+
+# Build output and Node state anywhere in the tree (frontend/.gitignore has
+# its own copies); from the strict-config guide's baseline.
+dist/
+coverage/
+*.tsbuildinfo
+node_modules/

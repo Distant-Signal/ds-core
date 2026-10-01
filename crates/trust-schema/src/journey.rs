@@ -180,6 +180,10 @@ pub fn apply_movement(
 /// that guard's own regression test, unchanged by this fix, and
 /// `a_movement_after_cancellation_reflects_real_running_again` for this
 /// one's.
+#[expect(
+    clippy::match_same_arms,
+    reason = "separate arms document distinct cases"
+)]
 fn status_rank(status: &str) -> u8 {
     match status {
         "awaiting_activation" => 0,
@@ -233,16 +237,20 @@ pub fn apply_reinstatement(previous: &DerivedState) -> DerivedState {
 
 /// TRUST's `variation_status` is a category ("ON TIME", "LATE", "EARLY"),
 /// not itself a minute count in the confirmed field list -- delay minutes
-/// have to come from actual_timestamp - planned_timestamp instead, which
+/// have to come from `actual_timestamp` - `planned_timestamp` instead, which
 /// this function deliberately does NOT compute (it needs both timestamps
 /// parsed, done by the caller in Task 14 where they're already in scope).
 /// This function only normalizes the enum-shaped part: "ON TIME"/"EARLY"
 /// clamp to zero (never negative -- a train running early isn't a
 /// passenger-facing "delay"), "LATE" is left for the caller to fill in
 /// with the real minute count, and anything else is `None`.
+#[expect(
+    clippy::match_same_arms,
+    reason = "separate arms document distinct cases"
+)]
 fn variation_to_minutes(variation_status: Option<&str>) -> Option<i32> {
     match variation_status {
-        Some("ON TIME") | Some("EARLY") => Some(0),
+        Some("ON TIME" | "EARLY") => Some(0),
         Some("LATE") => None, // caller overwrites with a real value
         _ => None,
     }

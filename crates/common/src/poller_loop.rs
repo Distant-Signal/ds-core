@@ -100,7 +100,10 @@ fn delay_after_failed_cycle(
 // `aggregator`/`full-coverage-consumer`/`schedule-ingest`'s own
 // `#[allow(clippy::too_many_arguments)]` on their analogous top-level loop
 // functions.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
+)]
 pub async fn run_poll_loop<F, Fut>(
     poller_label: &'static str,
     client: &reqwest::Client,
@@ -146,7 +149,10 @@ fn register_cycle_metrics(poller_label: &'static str) {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
+)]
 async fn run_poll_loop_with<F, Fut>(
     policy: &RetryPolicy,
     poller_label: &'static str,

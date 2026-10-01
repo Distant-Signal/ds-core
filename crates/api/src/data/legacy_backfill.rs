@@ -63,7 +63,7 @@ use sqlx::PgPool;
 /// The contract migration this module's whole precondition exists to gate.
 /// Matches `_sqlx_migrations.version`, which sqlx derives from the
 /// migration filename's own numeric prefix.
-const CONTRACT_MIGRATION_VERSION: i64 = 20260906140000;
+const CONTRACT_MIGRATION_VERSION: i64 = 20_260_906_140_000;
 
 /// What one [`run_backfill`] pass did, plus what it could not do. Returned
 /// (rather than only logged) so both the binary and this module's own tests
@@ -253,6 +253,7 @@ async fn backfill_movement_table(
 /// Counts rows that STILL have no `trains_id` after a backfill pass and
 /// never can -- the accepted gap. Only meaningful while the legacy columns
 /// still exist; `0` once they don't.
+#[expect(clippy::cast_sign_loss, reason = "COUNT(*) is never negative")]
 async fn count_accepted_gaps(pool: &PgPool, subscriptions: &str) -> anyhow::Result<u64> {
     let mut gaps: i64 = 0;
     if column_exists(pool, subscriptions, "train_uid").await? {
@@ -412,6 +413,10 @@ pub async fn ensure_ready_for_contract_migration(pool: &PgPool) -> anyhow::Resul
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "test code: scenario tests read top to bottom"
+)]
 mod db_tests {
     use super::*;
     use sqlx::postgres::PgPoolOptions;

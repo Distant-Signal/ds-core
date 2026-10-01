@@ -47,7 +47,7 @@ struct CorpusExtract {
     tiploc_data: Vec<RawCorpusRow>,
 }
 
-pub use common::corpus_inference::{
+pub(crate) use common::corpus_inference::{
     AmbiguousGroup, CorpusCrsTiploc, CorpusRow, CrsTiplocRow, Rule,
 };
 
@@ -66,7 +66,7 @@ fn code_text(v: Option<&serde_json::Value>) -> Option<String> {
 /// conservative inference ([`common::corpus_inference::infer_crs_tiploc`],
 /// also used by `api`; its doc has the rules). Refuses an extract that
 /// yields no CRS at all.
-pub fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
+pub(crate) fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
     let extract: CorpusExtract =
         serde_json::from_slice(json).context("parsing CORPUS extract JSON")?;
     let rows: Vec<CorpusRow> = extract
@@ -85,7 +85,7 @@ pub fn crs_tiploc_from_corpus(json: &[u8]) -> Result<CorpusCrsTiploc> {
 
 /// [`crs_tiploc_from_corpus`] for rows already read (e.g. from
 /// `corpus_locations`, see `--regenerate-crs-tiploc-from-db`).
-pub fn crs_tiploc_from_rows(rows: &[CorpusRow]) -> Result<CorpusCrsTiploc> {
+pub(crate) fn crs_tiploc_from_rows(rows: &[CorpusRow]) -> Result<CorpusCrsTiploc> {
     let result = common::corpus_inference::infer_crs_tiploc(rows);
     if result.rows.is_empty() {
         bail!(
@@ -97,12 +97,12 @@ pub fn crs_tiploc_from_rows(rows: &[CorpusRow]) -> Result<CorpusCrsTiploc> {
 }
 
 /// A set of `(crs, tiploc)` pairs.
-pub type CrsTiplocPairs = BTreeSet<(String, String)>;
+pub(crate) type CrsTiplocPairs = BTreeSet<(String, String)>;
 
 /// Reads the `(crs, tiploc)` pairs (non-empty `tiploc` only) and the set of
 /// CRS codes from an existing `crs-tiploc.csv`, normalised the way
 /// `ReferenceData::from_vendored_csvs` normalises them.
-pub fn read_crs_tiploc_pairs<R: std::io::Read>(
+pub(crate) fn read_crs_tiploc_pairs<R: std::io::Read>(
     reader: R,
 ) -> Result<(CrsTiplocPairs, BTreeSet<String>)> {
     #[derive(Deserialize)]
@@ -126,7 +126,7 @@ pub fn read_crs_tiploc_pairs<R: std::io::Read>(
 
 /// Per-rule agreement between a new output and an existing file.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct RuleAgreement {
+pub(crate) struct RuleAgreement {
     pub matched: usize,
     pub only_new: usize,
     /// TIPLOCs (not pairs) whose CRS set differs from the old file's.
@@ -136,7 +136,7 @@ pub struct RuleAgreement {
 /// Agreement between a freshly generated `crs-tiploc.csv` and an existing
 /// one (normally the committed railwaycodes-derived snapshot).
 #[derive(Debug, Default, Clone)]
-pub struct Comparison {
+pub(crate) struct Comparison {
     pub matched: BTreeSet<(String, String)>,
     /// Pairs the old file has and the new output lacks.
     pub only_old: BTreeSet<(String, String)>,
@@ -159,7 +159,7 @@ fn crs_by_tiploc(pairs: &BTreeSet<(String, String)>) -> BTreeMap<&str, BTreeSet<
     m
 }
 
-pub fn compare(
+pub(crate) fn compare(
     new: &CorpusCrsTiploc,
     old_pairs: &BTreeSet<(String, String)>,
     old_crs: &BTreeSet<String>,
@@ -229,7 +229,7 @@ fn write_groups(out: &mut String, title: &str, groups: &BTreeMap<String, Ambiguo
 
 /// How much of the report [`render_report`] renders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ReportDetail {
+pub(crate) enum ReportDetail {
     /// Counts only.
     Summary,
     /// Counts, ambiguous groups and conflicts.
@@ -240,7 +240,7 @@ pub enum ReportDetail {
 
 /// Renders the regeneration report: counts per rule, ambiguous groups,
 /// and (when given) the comparison against an existing file.
-pub fn render_report(
+pub(crate) fn render_report(
     result: &CorpusCrsTiploc,
     comparison: Option<(&Path, &Comparison)>,
     detail: ReportDetail,
@@ -363,7 +363,7 @@ pub fn render_report(
 /// into `toc-codes.csv` rows `(atoc_code, name)`, sorted by code. Every
 /// operator in the feed is kept: it is the same list production's `tocs`
 /// table holds, so "valid" here means "an operator code this app knows".
-pub fn toc_codes_from_rdm_xml(xml: &str) -> Result<Vec<(String, String)>> {
+pub(crate) fn toc_codes_from_rdm_xml(xml: &str) -> Result<Vec<(String, String)>> {
     let tocs = crate::rdm_toc::parse_rdm_tocs(xml)?;
     let sorted: BTreeMap<String, String> = tocs.into_iter().collect();
     if sorted.is_empty() {
@@ -372,7 +372,7 @@ pub fn toc_codes_from_rdm_xml(xml: &str) -> Result<Vec<(String, String)>> {
     Ok(sorted.into_iter().collect())
 }
 
-pub fn write_crs_tiploc_csv(path: &Path, rows: &[CrsTiplocRow]) -> Result<()> {
+pub(crate) fn write_crs_tiploc_csv(path: &Path, rows: &[CrsTiplocRow]) -> Result<()> {
     let mut w =
         csv::Writer::from_path(path).with_context(|| format!("writing {}", path.display()))?;
     w.write_record(["crs", "tiploc", "name"])?;
@@ -383,7 +383,7 @@ pub fn write_crs_tiploc_csv(path: &Path, rows: &[CrsTiplocRow]) -> Result<()> {
     Ok(())
 }
 
-pub fn write_toc_codes_csv(path: &Path, rows: &[(String, String)]) -> Result<()> {
+pub(crate) fn write_toc_codes_csv(path: &Path, rows: &[(String, String)]) -> Result<()> {
     let mut w =
         csv::Writer::from_path(path).with_context(|| format!("writing {}", path.display()))?;
     w.write_record(["atoc_code", "name"])?;
@@ -645,10 +645,10 @@ mod tests {
 
     #[test]
     fn rdm_toc_xml_becomes_sorted_toc_codes() {
-        let xml = r#"<TrainOperatingCompanyList>
+        let xml = r"<TrainOperatingCompanyList>
             <TrainOperatingCompany><AtocCode>xc</AtocCode><Name>CrossCountry</Name><LegalName>XC Trains Limited</LegalName></TrainOperatingCompany>
             <TrainOperatingCompany><AtocCode>AW</AtocCode><Name>Transport for Wales</Name><LegalName>TfW</LegalName></TrainOperatingCompany>
-        </TrainOperatingCompanyList>"#;
+        </TrainOperatingCompanyList>";
         assert_eq!(
             toc_codes_from_rdm_xml(xml).unwrap(),
             vec![

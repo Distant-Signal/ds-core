@@ -1,7 +1,9 @@
 [package]
 name = "schedule-query"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
 # Deliberately lib-only: no `main.rs`/`[[bin]]`, no dependency on `tokio`,
 # `reqwest`, `sqlx`, or `rdkafka`. See src/lib.rs's module doc. `tracing` is
@@ -18,3 +20,6 @@ tracing = "0.1.44"
 
 [dev-dependencies]
 serde_json = "1.0.149"
+
+[lints]
+workspace = true

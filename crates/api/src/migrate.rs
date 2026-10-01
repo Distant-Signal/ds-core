@@ -442,7 +442,9 @@ mod tests {
                 .await
                 .expect_err(&format!("the app role must not be able to run: {ddl}"));
             assert_eq!(
-                err.as_database_error().and_then(|db| db.code()).as_deref(),
+                err.as_database_error()
+                    .and_then(sqlx::error::DatabaseError::code)
+                    .as_deref(),
                 Some("42501"),
                 "{ddl}: expected insufficient_privilege, got {err}"
             );

@@ -377,7 +377,7 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
     let headcode = parse_train_identity(&line[TRAIN_IDENTITY_RANGE]);
     // Same bounds argument as the headcode above.
     let train_status =
-        Some(line.as_bytes()[TRAIN_STATUS_COL] as char).filter(|c| c.is_ascii_alphanumeric());
+        Some(line.as_bytes()[TRAIN_STATUS_COL] as char).filter(char::is_ascii_alphanumeric);
 
     Some(BasicSchedule {
         uid,
@@ -814,7 +814,7 @@ mod tests {
 
     fn wrap_full_block(body: &[&str]) -> String {
         let mut lines = vec![BS_C00573_PERMANENT.to_string()];
-        lines.extend(body.iter().map(|s| s.to_string()));
+        lines.extend(body.iter().map(ToString::to_string));
         lines.join("\n")
     }
 
@@ -982,7 +982,7 @@ mod tests {
         // handles them.
         for at in [0, 2, 3, 8, 9, 14, 15, 20, 21, 27, 28] {
             let mut line = BS_C00573_PERMANENT.to_string();
-            line.replace_range(at..at + 1, "\u{20AC}");
+            line.replace_range(at..=at, "\u{20AC}");
             let schedules = parse_schedule_records(&line);
             assert!(
                 schedules.is_empty(),
@@ -1000,7 +1000,7 @@ mod tests {
         for body in [LO_EUSTON, LT_EUSTON, LI_CARLILE] {
             for at in [2, 8, 9, 10, 13, 14, 15, 18, 19] {
                 let mut line = body.to_string();
-                line.replace_range(at..at + 1, "\u{20AC}");
+                line.replace_range(at..=at, "\u{20AC}");
                 let text = wrap_full_block(&[line.as_str()]);
                 let schedules = parse_schedule_records(&text);
                 assert_eq!(schedules.len(), 1, "the BS block itself must survive");
@@ -1649,7 +1649,7 @@ mod drop_warning_tests {
 
     fn wrap_full_block(body: &[&str]) -> String {
         let mut lines = vec![BS_C00573_PERMANENT.to_string()];
-        lines.extend(body.iter().map(|s| s.to_string()));
+        lines.extend(body.iter().map(ToString::to_string));
         lines.join("\n")
     }
 

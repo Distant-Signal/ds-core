@@ -127,6 +127,10 @@ fn is_disallowed_ipv6(v6: Ipv6Addr) -> bool {
 /// The IPv4 addresses an IPv6 address hands traffic on to, for the
 /// transition forms that embed one. Up to two (Teredo names a server and a
 /// client).
+#[expect(
+    clippy::match_same_arms,
+    reason = "separate arms document distinct cases"
+)]
 fn embedded_ipv4s(v6: Ipv6Addr) -> [Option<Ipv4Addr>; 2] {
     let s = v6.segments();
     let v4 = |hi: u16, lo: u16| Ipv4Addr::from((u32::from(hi) << 16) | u32::from(lo));
@@ -172,37 +176,37 @@ fn is_carrier_grade_nat_v4(v4: Ipv4Addr) -> bool {
     a == 100 && (64..=127).contains(&b) // 100.64.0.0/10
 }
 
-/// fc00::/7 -- IPv6 Unique Local Addresses (RFC4193), the IPv6 rough
+/// `fc00::/7` -- IPv6 Unique Local Addresses (RFC4193), the IPv6 rough
 /// equivalent of RFC1918.
 fn is_unique_local_v6(v6: Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xfe00) == 0xfc00
 }
 
-/// fec0::/10 -- IPv6 site-local (RFC3879 deprecated it; never public).
+/// `fec0::/10` -- IPv6 site-local (RFC3879 deprecated it; never public).
 fn is_site_local_v6(v6: Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xffc0) == 0xfec0
 }
 
-/// 2001:db8::/32 -- IPv6 documentation (RFC3849).
+/// `2001:db8::/32` -- IPv6 documentation (RFC3849).
 fn is_documentation_v6(v6: Ipv6Addr) -> bool {
     let s = v6.segments();
     s[0] == 0x2001 && s[1] == 0x0db8
 }
 
-/// 100::/64 -- IPv6 discard-only (RFC6666).
+/// `100::/64` -- IPv6 discard-only (RFC6666).
 fn is_discard_only_v6(v6: Ipv6Addr) -> bool {
     let s = v6.segments();
     s[0] == 0x0100 && s[1] == 0 && s[2] == 0 && s[3] == 0
 }
 
-/// 64:ff9b:1::/48 -- NAT64 local-use prefix (RFC8215). Operator-defined
+/// `64:ff9b:1::/48` -- NAT64 local-use prefix (RFC8215). Operator-defined
 /// translation inside one network, so never a legitimate public target.
 fn is_local_use_nat64_v6(v6: Ipv6Addr) -> bool {
     let s = v6.segments();
     s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 0x0001
 }
 
-/// fe80::/10 -- IPv6 link-local (RFC4291).
+/// `fe80::/10` -- IPv6 link-local (RFC4291).
 fn is_link_local_v6(v6: Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xffc0) == 0xfe80
 }
@@ -289,7 +293,7 @@ mod tests {
 
     #[test]
     fn loopback_is_disallowed() {
-        assert!(is_disallowed_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        assert!(is_disallowed_ip(IpAddr::V4(Ipv4Addr::LOCALHOST)));
         assert!(is_disallowed_ip(IpAddr::V6(Ipv6Addr::LOCALHOST)));
     }
 
@@ -446,9 +450,8 @@ mod tests {
     async fn the_public_only_resolver_refuses_a_name_resolving_to_loopback() {
         use reqwest::dns::Resolve;
         let name: reqwest::dns::Name = "localhost".parse().expect("valid name");
-        let err = match PublicOnlyResolver.resolve(name).await {
-            Ok(_) => panic!("localhost must not resolve through the public-only resolver"),
-            Err(err) => err,
+        let Err(err) = PublicOnlyResolver.resolve(name).await else {
+            panic!("localhost must not resolve through the public-only resolver")
         };
         assert!(err.to_string().contains("disallowed"), "{err}");
     }

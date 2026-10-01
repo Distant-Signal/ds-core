@@ -54,7 +54,7 @@
 //! modified` from `sqlx migrate run`, and `sqlx migrate info` reported
 //! `20260906111500/installed (different checksum)`. In production that is
 //! `sqlx::migrate!()` returning `Err` before `api` ever binds -- i.e. a
-//! permanent CrashLoopBackOff, made worse by the api Deployment's
+//! permanent `CrashLoopBackOff`, made worse by the api Deployment's
 //! `strategy: Recreate`.
 //!
 //! A new migration cannot retroactively help either: the old file still runs
@@ -62,6 +62,12 @@
 //! there is nothing left to build. So the honest scope is forward-looking,
 //! which is what this test enforces: the NEXT index migration must use the
 //! concurrent pattern, and this list must not grow.
+
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test code: a panic is the right failure in a test"
+)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

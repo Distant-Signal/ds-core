@@ -1,7 +1,9 @@
 [package]
 name = "line-catalogue-validator"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
 [dependencies]
 anyhow = "1.0.102"
@@ -22,3 +24,6 @@ sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "r
 
 [features]
 db = ["dep:sqlx"]
+
+[lints]
+workspace = true

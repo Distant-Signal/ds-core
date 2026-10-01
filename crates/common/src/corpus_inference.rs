@@ -526,6 +526,10 @@ struct TiplocRow {
 /// *directly* paired TIPLOC row for that CRS (or of the first bare row),
 /// so inferred pairs never change a station's name and the output does not
 /// depend on CORPUS's row order; sorted by `crs` then `tiploc`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear; splitting it would scatter its shared state across helpers"
+)]
 pub fn infer_crs_tiploc(extract: &[CorpusRow]) -> CorpusCrsTiploc {
     // crs -> directly paired tiploc -> name.
     let mut direct: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
@@ -702,6 +706,10 @@ pub struct Crosswalk {
 ///   all carry the same CRS. A STANOX shared by two stations is left out:
 ///   the same "don't guess between stations" posture as the timetable's
 ///   own `stanox_crs` exclusions.
+#[expect(
+    clippy::items_after_statements,
+    reason = "a local type or import sits next to its only use"
+)]
 pub fn crosswalk(rows: &[CorpusRow], inferred: &CorpusCrsTiploc) -> Crosswalk {
     let mut stanoxes_of: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for row in rows {
@@ -731,7 +739,7 @@ pub fn crosswalk(rows: &[CorpusRow], inferred: &CorpusCrsTiploc) -> Crosswalk {
     let mut out = Crosswalk::default();
     // stanox -> crs -> [(rule, tiploc)]
     type ByCrs<'a> = BTreeMap<&'a str, Vec<(Rule, &'a str)>>;
-    let mut at_stanox: BTreeMap<String, ByCrs> = BTreeMap::new();
+    let mut at_stanox: BTreeMap<String, ByCrs<'_>> = BTreeMap::new();
     for (tiploc, crs_list) in &crs_of {
         let [(crs, rule)] = crs_list.as_slice() else {
             continue;

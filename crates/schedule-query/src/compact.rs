@@ -8,7 +8,7 @@
 //! as plain `String`s, each calling point cost 128 bytes of struct plus up to
 //! three separate heap allocations of 2-7 bytes each (32 bytes apiece under
 //! glibc's malloc) -- ~2.3GiB resident for the index alone, which is what
-//! OOMKilled `schedule-reference`'s 3Gi `reference` container once
+//! `OOMKilled` `schedule-reference`'s 3Gi `reference` container once
 //! `platform` was added. The same three fields as `SmallStr` are 16 bytes
 //! each with no allocation at all.
 //!
@@ -80,13 +80,9 @@ impl InlineLen {
 
 #[derive(Clone)]
 enum Repr<const N: usize> {
-    Inline {
-        len: InlineLen,
-        buf: [u8; N],
-    },
+    Inline { len: InlineLen, buf: [u8; N] },
     // `Box<Box<str>>`, not `Box<str>`: a thin 8-byte pointer, so this rare
     // variant fits alongside the inline one in 16 bytes.
-    #[allow(clippy::box_collection, clippy::redundant_allocation)]
     Heap(Box<Box<str>>),
 }
 
@@ -279,10 +275,10 @@ mod tests {
 
     #[test]
     fn every_width_this_crate_uses_is_sixteen_bytes_including_the_option() {
-        assert_eq!(std::mem::size_of::<SmallStr<3>>(), 16);
-        assert_eq!(std::mem::size_of::<SmallStr<7>>(), 16);
-        assert_eq!(std::mem::size_of::<SmallStr<12>>(), 16);
-        assert_eq!(std::mem::size_of::<Option<SmallStr<3>>>(), 16);
+        assert_eq!(size_of::<SmallStr<3>>(), 16);
+        assert_eq!(size_of::<SmallStr<7>>(), 16);
+        assert_eq!(size_of::<SmallStr<12>>(), 16);
+        assert_eq!(size_of::<Option<SmallStr<3>>>(), 16);
     }
 
     #[test]
@@ -292,7 +288,7 @@ mod tests {
             assert_eq!(small.as_str(), value);
             assert_eq!(small, value);
             assert_eq!(format!("{small:?}"), format!("{value:?}"));
-            assert!(matches!(small.0, Repr::Heap(_)) == (value.len() > 7));
+            assert_eq!(matches!(small.0, Repr::Heap(_)), (value.len() > 7));
         }
     }
 

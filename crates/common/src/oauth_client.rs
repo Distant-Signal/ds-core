@@ -1,4 +1,4 @@
-//! Client-credentials OAuth2 token fetch + cache, shared by every real
+//! Client-credentials `OAuth2` token fetch + cache, shared by every real
 //! internal caller of `api`'s `/private/*` routes. Hand-rolled (not the
 //! `oauth2` crate) -- see
 //! docs/superpowers/specs/2026-09-02-internal-service-oauth2-design.md
@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
-/// Every real caller's own OAuth2 client-credentials config -- mirrors the
+/// Every real caller's own `OAuth2` client-credentials config -- mirrors the
 /// design's Decision 6 field table exactly: `token_url`/`client_id`/`scope`
 /// are shared (the same value repeated per binary, like the old shared
 /// secret this design retired was before it), `username`/`password` are
@@ -97,21 +97,21 @@ const TOKEN_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 /// cached token's `refresh_at`, used as a fallback when the IdP-supplied
 /// `expires_in` is so large that `Instant::now().checked_add(..)` would
 /// overflow (see [`compute_refresh_at`], Signal Box Audit common-crate Low
-/// finding "Instant arithmetic panics on an absurd expires_in"). Trusted
-/// IdP (Authentik), so a real `expires_in` this large should never happen
+/// finding "Instant arithmetic panics on an absurd `expires_in`"). Trusted
+/// `IdP` (Authentik), so a real `expires_in` this large should never happen
 /// in practice -- but if it ever does, treating the token as "refresh in a
 /// day" is a conservative, clearly-wrong-in-the-safe-direction fallback:
-/// far shorter than whatever the IdP actually meant, so a bogus/corrupted
+/// far shorter than whatever the `IdP` actually meant, so a bogus/corrupted
 /// `expires_in` can't pin a caller to one token indefinitely, and nowhere
 /// near large enough to itself risk overflowing `Instant::checked_add`.
 /// How many times [`OAuthTokenCache::get_token`] attempts the token-fetch POST
 /// before giving up, when the failures are TRANSIENT (see
 /// [`TokenFetchError::is_transient`]): a connect failure -- DNS resolution
-/// included -- or a 5xx/429 from the IdP.
+/// included -- or a 5xx/429 from the `IdP`.
 ///
 /// **Why (2026-09-26 node reboot).** Every container on the node started
-/// before cluster DNS could resolve the IdP (`dns error ... Temporary failure
-/// in name resolution`), and the IdP itself then answered 502 for most of a
+/// before cluster DNS could resolve the `IdP` (`dns error ... Temporary failure
+/// in name resolution`), and the `IdP` itself then answered 502 for most of a
 /// minute. With a single attempt, every `/private/*` call in that window
 /// failed outright on its token fetch, and each caller's own error handling
 /// took over -- which for `schedule-reference` meant falling back to
@@ -148,6 +148,10 @@ impl TokenFetchError {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "callers hand over values they no longer need"
+    )]
     fn from_status(status: reqwest::StatusCode, text: String) -> Self {
         Self {
             error: anyhow::anyhow!("oauth2 token fetch failed: {status} {text}"),
@@ -167,13 +171,13 @@ const MAX_SANE_REFRESH_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
 /// `REFRESH_MARGIN`'s own doc comment.
 ///
 /// Signal Box Audit, common-crate Low finding "Instant arithmetic panics on
-/// an absurd expires_in": this used to be plain `Instant::now() +
+/// an absurd `expires_in"`: this used to be plain `Instant::now() +
 /// Duration::from_secs(expires_in).saturating_sub(REFRESH_MARGIN)`.
 /// `Duration::from_secs` never panics (a `Duration` can represent up to
 /// ~584 billion years), but `Instant`'s `Add<Duration>` impl calls
 /// `Instant::checked_add(..).expect(..)` internally and DOES panic on
 /// overflow -- so a sufficiently large `expires_in` from a
-/// malfunctioning/compromised IdP would panic every real caller's
+/// malfunctioning/compromised `IdP` would panic every real caller's
 /// `get_token()`, and with it whatever poll/ingest loop called it. Using
 /// `checked_add` and falling back to `MAX_SANE_REFRESH_WINDOW` (itself
 /// added via a second, guaranteed-not-to-overflow `checked_add`, with an
@@ -224,9 +228,10 @@ impl OAuthTokenCache {
     }
 
     /// Overrides how transient token-fetch failures are retried -- for tests
-    /// (here and in callers' crates) that exercise a failing IdP and should
+    /// (here and in callers' crates) that exercise a failing `IdP` and should
     /// neither wait out the production backoff nor, with `attempts: 1`,
     /// retry at all.
+    #[must_use]
     pub fn with_fetch_retry(mut self, attempts: u32, backoff: crate::backoff::Backoff) -> Self {
         self.fetch_attempts = attempts.max(1);
         self.fetch_backoff = backoff;
@@ -246,6 +251,10 @@ impl OAuthTokenCache {
     /// already refreshed the cache while this call was waiting for the
     /// lock, in which case this call reuses that result instead of firing
     /// its own redundant fetch too.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned lock means another thread already panicked"
+    )]
     pub async fn get_token(&self, client: &reqwest::Client) -> anyhow::Result<String> {
         if let Some(token) = self.fresh_cached_token() {
             return Ok(token);
@@ -282,6 +291,10 @@ impl OAuthTokenCache {
     /// `get_json`/`post_json`/`post_batch`) call this whenever they observe
     /// a 401 or 403 response using that token, so the very next call
     /// refetches instead of repeating the same rejected credential.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned lock means another thread already panicked"
+    )]
     pub fn invalidate(&self) {
         *self
             .cached
@@ -289,6 +302,10 @@ impl OAuthTokenCache {
             .expect("oauth token cache mutex poisoned") = None;
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned lock means another thread already panicked"
+    )]
     fn fresh_cached_token(&self) -> Option<String> {
         let guard = self
             .cached
@@ -504,7 +521,7 @@ mod tests {
     const FAST_RETRY: crate::backoff::Backoff =
         crate::backoff::Backoff::new(Duration::from_millis(1), Duration::from_millis(5));
 
-    /// 2026-09-26 node reboot: the IdP answered 502 for most of a minute
+    /// 2026-09-26 node reboot: the `IdP` answered 502 for most of a minute
     /// after the node came back. A transient 5xx must be retried inside one
     /// `get_token` call rather than failing it outright.
     #[tokio::test]
@@ -526,7 +543,7 @@ mod tests {
         assert_eq!(token.unwrap(), "fake-jwt-access-token");
     }
 
-    /// The retry is bounded: an IdP that keeps failing still surfaces as an
+    /// The retry is bounded: an `IdP` that keeps failing still surfaces as an
     /// `Err` after `attempts` tries, so the caller's own error handling runs.
     #[tokio::test]
     async fn a_persistent_5xx_gives_up_after_the_configured_attempts() {
@@ -695,7 +712,7 @@ mod tests {
         );
     }
 
-    /// Regression for "Instant arithmetic panics on an absurd expires_in":
+    /// Regression for "Instant arithmetic panics on an absurd `expires_in"`:
     /// `u64::MAX` seconds is trivially representable as a `Duration` (a
     /// `Duration` holds up to ~584 billion years), but adding it to
     /// `Instant::now()` via plain `+` would overflow `Instant`'s own,
@@ -729,7 +746,9 @@ mod tests {
 
         assert_eq!(
             refresh_at,
-            now + Duration::from_secs(300) - REFRESH_MARGIN,
+            (now + Duration::from_secs(300))
+                .checked_sub(REFRESH_MARGIN)
+                .unwrap(),
             "a normal expires_in must be unaffected by the overflow guard"
         );
     }

@@ -1,7 +1,9 @@
 [package]
 name = "common"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
 [dependencies]
 anyhow = "1.0.102"
@@ -50,3 +52,6 @@ tracing-log = "0.2"
 redis = { version = "0.27", default-features = false }
 wiremock = "0.6"
 tokio = { version = "1.52.3", features = ["test-util", "io-util"] }
+
+[lints]
+workspace = true

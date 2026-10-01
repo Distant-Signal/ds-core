@@ -31,7 +31,7 @@ use serde::Serialize;
 
 use crate::data::journey::{JourneyStop, StopStatus};
 
-/// See the module doc for each value's meaning. PascalCase on the wire,
+/// See the module doc for each value's meaning. `PascalCase` on the wire,
 /// like `StopStatus` beside it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum LiveStopStatus {
@@ -85,6 +85,10 @@ pub fn apply(stops: &mut [JourneyStop], cancelled: bool, live: bool) {
 
 /// Estimated minus booked, in whole minutes: departure where the stop has
 /// one, else arrival.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "lateness in minutes is far below i32::MAX"
+)]
 fn expected_lateness_minutes(stop: &JourneyStop) -> Option<i32> {
     let pair = match (stop.scheduled_departure, stop.estimated_departure) {
         (Some(scheduled), Some(estimated)) => Some((scheduled, estimated)),
@@ -94,8 +98,13 @@ fn expected_lateness_minutes(stop: &JourneyStop) -> Option<i32> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "test code: fakes mirror the signatures they stand in for"
+)]
 mod tests {
     use super::*;
+    use crate::data::journey::StopTimetable;
     use chrono::{DateTime, Utc};
 
     fn at(hhmm: &str) -> Option<DateTime<Utc>> {
@@ -127,7 +136,7 @@ mod tests {
             live_status: None,
             late_minutes: None,
             board: None,
-            timetable: Default::default(),
+            timetable: StopTimetable::default(),
         }
     }
 

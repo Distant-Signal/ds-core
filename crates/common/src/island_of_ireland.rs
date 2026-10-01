@@ -1,7 +1,7 @@
 //! Shared data model for both Irish-jurisdiction rail networks -- Iarnród
 //! Éireann (Republic of Ireland) and, once
 //! docs/superpowers/specs/2026-09-05-ireland-rail-support-design.md's open
-//! question #1 (NIR's OpenDataNI stations-CSV schema) is resolved, Northern
+//! question #1 (NIR's `OpenDataNI` stations-CSV schema) is resolved, Northern
 //! Ireland Railways/Translink. See that design doc's §3 for the full
 //! reasoning behind one generic, network-tagged type rather than two
 //! parallel network-specific ones.

@@ -59,6 +59,12 @@
 //! why). Non-zero otherwise, with one line per finding giving the file,
 //! best-effort line number, the bad value, and what's wrong.
 
+#![expect(
+    clippy::print_stdout,
+    clippy::too_many_lines,
+    reason = "CLI tool: stdout is its output; report printing reads top to bottom"
+)]
+
 mod checks;
 mod corpus_db;
 mod rdm_toc;

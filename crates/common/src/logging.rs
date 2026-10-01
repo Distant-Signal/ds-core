@@ -9,7 +9,7 @@
 //!   binary logged in before this module existed), for a terminal.
 //!
 //! Anything else falls back to `json` and says so in the first log line.
-//! The level filter is unchanged: `RUST_LOG` (EnvFilter syntax) for every
+//! The level filter is unchanged: `RUST_LOG` (`EnvFilter` syntax) for every
 //! binary, except the callers of [`init_with_filter`] that build their own.
 //!
 //! # The JSON line schema
@@ -23,7 +23,7 @@
 //! | `service` | the binary/workload name, static per process (`api`, `poller-ldbws`) |
 //! | `target` | the event's target (its module path unless overridden) |
 //! | `message` | the event's message, when it has one |
-//! | *(event fields)* | flattened to the top level under their own snake_case names |
+//! | *(event fields)* | flattened to the top level under their own `snake_case` names |
 //! | `error` | an error's text (`error = ?err` / `error = %err` at the call site) |
 //! | `stack` | a backtrace, for panics (and fatal errors, when one was captured) |
 //! | `spans` | the enclosing spans, root first, each `{"name": ..., <span fields>}`; omitted outside any span |
@@ -204,7 +204,7 @@ const RESERVED: [&str; 5] = ["timestamp", "level", "service", "target", "spans"]
 /// The [`FormatEvent`] behind the JSON lines. tracing-subscriber's own
 /// `.json().flatten_event(true)` cannot carry a static `service` field and
 /// keeps the `log` bridge's `log.*` fields, so the line is written here
-/// with serde_json instead; span fields are still recorded by
+/// with `serde_json` instead; span fields are still recorded by
 /// tracing-subscriber's [`JsonFields`].
 struct JsonLine {
     service: &'static str,
@@ -227,7 +227,7 @@ where
         let spans: Vec<Map<String, Value>> = ctx
             .event_scope()
             .into_iter()
-            .flat_map(|scope| scope.from_root())
+            .flat_map(tracing_subscriber::registry::Scope::from_root)
             .map(|span| {
                 let mut entry = Map::new();
                 entry.insert("name".into(), Value::from(span.name()));
@@ -565,7 +565,7 @@ mod tests {
         }
         let err = Outer(io::Error::other("disk on fire"));
         let lines = capture("api", || {
-            tracing::error!(error = &err as &(dyn std::error::Error + 'static), "failed")
+            tracing::error!(error = &err as &(dyn std::error::Error + 'static), "failed");
         });
         assert_eq!(lines[0]["error"], "could not read config: disk on fire");
     }

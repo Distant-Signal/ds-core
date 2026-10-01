@@ -11,7 +11,11 @@ use common::corpus_inference::CorpusRow;
 /// Every `corpus_locations` row as inference input. Refuses an empty table
 /// (no CORPUS loaded yet) rather than writing an empty CSV.
 #[cfg(feature = "db")]
-pub async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
+#[expect(
+    clippy::items_after_statements,
+    reason = "a local type or import sits next to its only use"
+)]
+pub(crate) async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
     use anyhow::Context;
 
     let url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
@@ -50,7 +54,11 @@ pub async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
 }
 
 #[cfg(not(feature = "db"))]
-pub async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
+#[expect(
+    clippy::unused_async,
+    reason = "matches the async signature of the `db` build, which main awaits"
+)]
+pub(crate) async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
     anyhow::bail!(
         "--regenerate-crs-tiploc-from-db needs a build with the `db` feature: \
          cargo run -p line-catalogue-validator --features db -- --regenerate-crs-tiploc-from-db ..."

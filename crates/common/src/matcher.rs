@@ -32,7 +32,6 @@ pub enum MatchScope {
 // as API surface for future consumers (e.g. richer disruption messages,
 // debugging) even though only `.stations` is read today.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Evidence {
     pub stations: Vec<String>,
     pub segments: Vec<String>,
@@ -60,6 +59,10 @@ pub struct Match<'a> {
 /// one -- update `load_batch` there in the same change, or backfilled rows
 /// will silently get answers computed from fabricated values, with no
 /// compile error to warn you.**
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub fn lines_affected_by<'a>(
     incident: &IncidentMessage,
     lines: &'a HashMap<String, LineDefinition>,
@@ -308,8 +311,8 @@ mod tests {
             incident_id: id.to_string(),
             summary: summary.to_string(),
             description: description.to_string(),
-            operators: operators.iter().map(|s| s.to_string()).collect(),
-            affected_stations: affected_stations.iter().map(|s| s.to_string()).collect(),
+            operators: operators.iter().map(ToString::to_string).collect(),
+            affected_stations: affected_stations.iter().map(ToString::to_string).collect(),
             priority: 0,
             validity: vec![],
             is_planned: false,
@@ -629,7 +632,7 @@ mod tests {
     /// with it the Chessington branch) leaves the South West Main Line, so
     /// per the README's junction rule both suburban files carry it on
     /// `swr-trunk-waterloo`. An incident there must therefore be a
-    /// SharedSegment event across both of them.
+    /// `SharedSegment` event across both of them.
     ///
     /// It must NOT reach the three fast-line SWR files: their services run
     /// through Raynes Park without calling, so none of them lists RAY, and
@@ -690,7 +693,7 @@ mod tests {
     /// verbatim (Shepperton's own trains run over this exact New Malden-
     /// Teddington stretch before diverging at Shacklegate Junction, several
     /// stations further on) -- so an incident here must now reach BOTH
-    /// files as SharedSegment. See
+    /// files as `SharedSegment`. See
     /// `swr_kingston_loop_own_exclusive_segment_incident_does_not_propagate`
     /// immediately below for the genuinely-still-exclusive case
     /// (Strawberry Hill, past the point where Shepperton's own trains
@@ -785,8 +788,8 @@ mod tests {
     /// own Vauxhall/Richmond-side approach is copied verbatim from
     /// swr-windsor-lines.toml). So Richmond is now a genuine four-way case:
     /// swr-kingston-loop, swr-windsor-lines and swr-waterloo-reading share
-    /// real track and all resolve as SharedSegment, while overground-
-    /// mildmay stays ExclusiveSegment (still separate infrastructure,
+    /// real track and all resolve as `SharedSegment`, while overground-
+    /// mildmay stays `ExclusiveSegment` (still separate infrastructure,
     /// unaffected by either new file).
     #[test]
     fn richmond_station_overlap_between_kingston_loop_and_mildmay_stays_exclusive_each_line() {

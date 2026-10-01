@@ -9,7 +9,7 @@
 //! line, `LO_EUSTON`/`LO_WATRLMN`, `LI_CARLILE`, `LT_EUSTON` -- see
 //! `src/parse.rs`'s tests), padded to CIF's real 80-byte record width, with
 //! only the UID, TIPLOC, times, platform and activity bytes varied. Its
-//! proportions match the 2026-09 production delivery that OOMKilled the
+//! proportions match the 2026-09 production delivery that `OOMKilled` the
 //! `reference` container: 427k schedules, ~7.05M `LI`, 427k `LO`, 427k `LT`
 //! (~7.9M calling points), ~43% of them carrying a platform, ~700MB of text.
 //!
@@ -33,6 +33,11 @@
 //! `BS`/`BX`/`LO`/`LI`/`CR`/`LT` line into one `String`, then
 //! `ScheduleIndex::from_text`. `file-stream` is the current one: feed the file
 //! line by line into a `ScheduleIndexBuilder`, never holding the text.
+
+#![expect(
+    clippy::expect_used,
+    reason = "example program: a panic with a message is the right failure"
+)]
 
 use std::io::{BufRead, Write};
 
@@ -164,8 +169,8 @@ fn summarize(index: &ScheduleIndex) {
     eprintln!(
         "indexed {} distinct UID(s); size_of::<CallingPoint>() = {}, size_of::<RawSchedule>() = {}",
         index.uids().count(),
-        std::mem::size_of::<CallingPoint>(),
-        std::mem::size_of::<RawSchedule>()
+        size_of::<CallingPoint>(),
+        size_of::<RawSchedule>()
     );
 }
 

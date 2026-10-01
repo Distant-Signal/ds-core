@@ -208,6 +208,10 @@ fn name_key(name: &str) -> String {
 }
 
 /// Compares one CORPUS delivery with the timetable side.
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear; splitting it would scatter its shared state across helpers"
+)]
 pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusComparison {
     let rows = corpus_crosswalk::corpus_rows(locations);
     let (inferred, crosswalk) = corpus_crosswalk::derive(&rows);
@@ -410,6 +414,10 @@ fn excluded_counts(out: &mut String, fills: &[Fill]) {
 }
 
 /// Renders the comparison as plain text.
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear; splitting it would scatter its shared state across helpers"
+)]
 pub fn render(c: &CorpusComparison, detail: ReportDetail) -> String {
     let mut out = String::new();
     let agree: usize = c.tiploc_agree.values().sum();
@@ -645,6 +653,10 @@ fn not_station_outcomes(fills: &[Fill]) -> impl Iterator<Item = (&'static str, u
 }
 
 /// Sets the `distant_signal_api_corpus_comparison_*` gauges from `c`.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "metric gauges take f64, and these counts and timestamps stay far below 2^52"
+)]
 pub fn record_metrics(c: &CorpusComparison) {
     let agree: usize = c.tiploc_agree.values().sum();
     for (outcome, n) in [
@@ -704,12 +716,16 @@ pub async fn log_after_load(pool: &PgPool, locations: &[CorpusLocation]) {
             );
         }
         Err(err) => {
-            tracing::error!(error = ?err, "CORPUS vs timetable comparison failed; the load itself succeeded")
+            tracing::error!(error = ?err, "CORPUS vs timetable comparison failed; the load itself succeeded");
         }
     }
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "test code: scenario tests read top to bottom"
+)]
 mod tests {
     use super::*;
 

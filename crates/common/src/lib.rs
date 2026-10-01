@@ -42,7 +42,7 @@ pub use full_coverage_window::{
     FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,
 };
 
-/// Status severity scale. Mirrors TfL's `statusSeverity` codes 0–14 where the
+/// Status severity scale. Mirrors `TfL`'s `statusSeverity` codes 0–14 where the
 /// meanings carry over, with NR-specific extensions above 14. Lower is worse,
 /// except 0 (Special Service) and 10 (Good Service) which are canonical "fine"
 /// states. Sort ascending for disrupted-lines-first UI ordering.
@@ -71,22 +71,22 @@ pub enum Severity {
     Recovering = 20,
     /// Services running on an alternative route (NR extension).
     Diverted = 21,
-    /// TfL code 20. The line is shut for the night (or has not started for
+    /// `TfL` code 20. The line is shut for the night (or has not started for
     /// the day) — the ordinary overnight state of the Underground, not a
     /// fault. Deliberately NOT discriminant 20: that is already the NR
     /// extension `Recovering`, and renumbering would change the meaning of
     /// every `statusSeverity` already stored in `line_status.statuses` and
     /// rendered by `frontend/lib/severity.ts`.
     ServiceClosed = 22,
-    /// TfL code 16. Unlike `ServiceClosed`, this is a service that should
+    /// `TfL` code 16. Unlike `ServiceClosed`, this is a service that should
     /// be running and is not.
     NotRunning = 23,
-    /// TfL code 17.
+    /// `TfL` code 17.
     IssuesReported = 24,
-    /// TfL code 18. TfL's own "everything is fine" wording for modes that
+    /// `TfL` code 18. `TfL`'s own "everything is fine" wording for modes that
     /// don't use `Good Service`.
     NoIssues = 25,
-    /// TfL code 19, and this crate's landing place for any future TfL code
+    /// `TfL` code 19, and this crate's landing place for any future `TfL` code
     /// it has never heard of (see `severity_from_tfl_code`).
     Information = 26,
 }
@@ -124,7 +124,7 @@ impl Severity {
 /// direction from the discriminant.
 ///
 /// `Severity`'s derived `Ord` sorts by declaration order / discriminant
-/// value, and TfL's `statusSeverity` codes are **not** monotonic with actual
+/// value, and `TfL`'s `statusSeverity` codes are **not** monotonic with actual
 /// severity: `Diverted = 21` and `PartClosed = 11` are numerically high (so
 /// they compare as "mild") but are genuinely severe, while `GoodService = 10`
 /// sits in the middle of the numeric range. Anywhere the real question is
@@ -212,18 +212,18 @@ mod severity_rank_tests {
     }
 }
 
-/// Maps a TfL Unified API `statusSeverity` code to this app's `Severity`.
+/// Maps a `TfL` Unified API `statusSeverity` code to this app's `Severity`.
 ///
 /// Codes 0–14 are the same scale in both systems (ours was modelled on
-/// TfL's). 15–20 are not: TfL 15 is its own `Diverted` where ours is 21,
-/// and TfL 20 is `Service Closed` where our 20 is the NR extension
+/// `TfL`'s). 15–20 are not: `TfL` 15 is its own `Diverted` where ours is 21,
+/// and `TfL` 20 is `Service Closed` where our 20 is the NR extension
 /// `Recovering` — so a raw numeric passthrough would have mislabelled the
 /// ordinary overnight closure of every Underground line as "Recovering".
 ///
-/// `None` means TfL has published a code this table has never seen. Callers
+/// `None` means `TfL` has published a code this table has never seen. Callers
 /// must not drop the status (a line with no statuses renders as Good
 /// Service) and must not guess a severity: `crates/poller-tfl` records it
-/// as `Severity::Information` and carries TfL's own description through in
+/// as `Severity::Information` and carries `TfL`'s own description through in
 /// the reason text.
 pub fn severity_from_tfl_code(code: u8) -> Option<Severity> {
     Some(match code {
@@ -252,9 +252,9 @@ pub fn severity_from_tfl_code(code: u8) -> Option<Severity> {
     })
 }
 
-/// The `operators` entry every TfL-sourced line carries. TfL has no
+/// The `operators` entry every TfL-sourced line carries. `TfL` has no
 /// per-line ATOC-style operator code the way National Rail does — tube,
-/// DLR, Overground, Elizabeth line and tram are all "TfL" — so this is a
+/// DLR, Overground, Elizabeth line and tram are all "`TfL`" — so this is a
 /// constant rather than anything derived from the feed.
 pub const TFL_OPERATOR: &str = "TfL";
 
@@ -272,20 +272,20 @@ pub const TFL_OPERATOR: &str = "TfL";
 /// behavior change.
 pub const MATCH_TOLERANCE: chrono::Duration = chrono::Duration::minutes(20);
 
-/// Prefix on every TfL line id. `line_status.line_id` is a primary key and
-/// TfL's tube line id is `northern`, which is also the id in
+/// Prefix on every `TfL` line id. `line_status.line_id` is a primary key and
+/// `TfL`'s tube line id is `northern`, which is also the id in
 /// `lines/northern.toml`; without this prefix the two railways would fight
 /// over one row. Applied once, in `crates/poller-tfl`.
 pub const TFL_LINE_ID_PREFIX: &str = "tfl-";
 
-/// Maps a TfL line id (already `TFL_LINE_ID_PREFIX`-namespaced) to the NR
+/// Maps a `TfL` line id (already `TFL_LINE_ID_PREFIX`-namespaced) to the NR
 /// catalogue line id covering the same railway, for the small set of lines
 /// where a TfL-sourced `line_status` row and an NR/Darwin-sourced one exist
 /// independently for what is, to a passenger, one railway. See
 /// `docs/superpowers/specs/2026-08-22-tfl-service-metrics-v2-design.md`
 /// Areas 1 and 2. Elizabeth line is Area 1; the six London Overground lines
 /// (Area 2) were added once `lines/overground-*.toml` existed for them --
-/// their TfL `id`s (`liberty`, `lioness`, `mildmay`, `suffragette`,
+/// their `TfL` `id`s (`liberty`, `lioness`, `mildmay`, `suffragette`,
 /// `weaver`, `windrush`) were verified against a live
 /// `GET /Line/Mode/overground/Status` call rather than guessed.
 /// `nr_line_id_for_tfl`/`tfl_line_id_for_nr` are written generically over
@@ -300,9 +300,9 @@ const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[
     ("tfl-windrush", "overground-windrush"),
 ];
 
-/// The NR catalogue line id a TfL line's status should be merged into for
-/// display, or `None` if this TfL line has no NR counterpart (true for
-/// every TfL line except the ones in `TFL_TO_NR_LINE_ID`).
+/// The NR catalogue line id a `TfL` line's status should be merged into for
+/// display, or `None` if this `TfL` line has no NR counterpart (true for
+/// every `TfL` line except the ones in `TFL_TO_NR_LINE_ID`).
 pub fn nr_line_id_for_tfl(tfl_line_id: &str) -> Option<&'static str> {
     TFL_TO_NR_LINE_ID
         .iter()
@@ -310,8 +310,8 @@ pub fn nr_line_id_for_tfl(tfl_line_id: &str) -> Option<&'static str> {
         .map(|(_, nr)| *nr)
 }
 
-/// The TfL line id whose status should be overlaid onto this NR catalogue
-/// line id's detail view, or `None` if this NR line has no TfL counterpart.
+/// The `TfL` line id whose status should be overlaid onto this NR catalogue
+/// line id's detail view, or `None` if this NR line has no `TfL` counterpart.
 pub fn tfl_line_id_for_nr(nr_line_id: &str) -> Option<&'static str> {
     TFL_TO_NR_LINE_ID
         .iter()
@@ -349,9 +349,9 @@ pub enum DataQuality {
     /// `escalate_from_sample_stats`'s existing behavior for LDBWS).
     TrustInferred,
     Planned,
-    /// Published by TfL as line status, not inferred by this app from
+    /// Published by `TfL` as line status, not inferred by this app from
     /// incidents or departure boards. The most authoritative quality there
-    /// is for a TfL line, and deliberately not folded into
+    /// is for a `TfL` line, and deliberately not folded into
     /// `Knowledgebase` — that name means the National Rail RDM
     /// Knowledgebase feed specifically.
     Tfl,
@@ -403,7 +403,7 @@ pub struct Disruption {
     /// -- the currently-governing period's `impact_type`, per
     /// `aggregator::governing_impact_type`. `None` for a disruption with no
     /// currently-Active period stating one of these facts (the overwhelming
-    /// majority), and unconditionally `None` for a TfL- or LDBWS-derived
+    /// majority), and unconditionally `None` for a `TfL`- or LDBWS-derived
     /// disruption, which never runs the enricher's extraction pipeline at
     /// all. `#[serde(default, ...)]` matches `source`'s own attribute --
     /// load-bearing for deserializing `line_status_history` rows written
@@ -786,9 +786,9 @@ pub fn match_darwin_departure<'a>(
 pub fn match_darwin_departure_near_time<'a>(
     samples: &'a [StationDeparture],
     target_destination: Option<&str>,
-    target_scheduled: chrono::DateTime<chrono::Utc>,
+    target_scheduled: DateTime<Utc>,
     tolerance: chrono::Duration,
-    to_utc: impl Fn(chrono::NaiveTime) -> Option<chrono::DateTime<chrono::Utc>>,
+    to_utc: impl Fn(chrono::NaiveTime) -> Option<DateTime<Utc>>,
 ) -> Option<&'a StationDeparture> {
     let target = target_destination?;
     let mut best: Option<(&'a StationDeparture, chrono::Duration)> = None;
@@ -818,7 +818,7 @@ pub fn match_darwin_departure_near_time<'a>(
 /// skipped calling points (Darwin's per-calling-point `isCancelled`,
 /// `StationDeparture::skipped_stations`) -- the one-line predicate shared
 /// by every caller of [`match_darwin_departure`] that cares about skips, so
-/// "how do we test skipped_stations membership" has exactly one
+/// "how do we test `skipped_stations` membership" has exactly one
 /// implementation, not several independently-written
 /// `eq_ignore_ascii_case` loops that could quietly drift apart.
 pub fn departure_skips_station(matched: &StationDeparture, crs: &str) -> bool {
@@ -1146,7 +1146,7 @@ pub struct StationFullCoverageSample {
 /// trust-consumer's live TRUST matching (`crates/trust-consumer/src/matching.rs`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackPinRequest {
-    pub service_date: chrono::NaiveDate,
+    pub service_date: NaiveDate,
     pub origin_crs: String,
     pub scheduled_departure: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1467,7 +1467,7 @@ pub struct TrainReasonMessage {
 /// (where the brief's ingest-route return type is otherwise defined)
 /// because `trust-consumer` (Task 14), which has no direct DB access,
 /// deserializes this exact struct from the JSON `GET
-/// /private/tracked-trains` returns — the same snake_case,
+/// /private/tracked-trains` returns — the same `snake_case`,
 /// `Serialize + Deserialize`, no-`sqlx::FromRow` wire-type convention
 /// already used by `TrainMovementEventMessage` above. `crates/api`'s
 /// `list_active_tracked_trains` still queries Postgres directly; it maps
@@ -1476,7 +1476,7 @@ pub struct TrainReasonMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackedTrainRef {
     pub id: i64,
-    pub service_date: chrono::NaiveDate,
+    pub service_date: NaiveDate,
     /// `None` for an NR-primary subscription (Task 20's
     /// `POST /Train/by-uid/{uid}/{date}/track`) whose `trains` row has no
     /// schedule data yet -- the design spec's own accepted §1 gap. A
@@ -1745,13 +1745,13 @@ impl FullCoverageAvailability {
 /// (`crates/aggregator/src/queries.rs::load_full_coverage_line_stats`,
 /// NOT over HTTP -- see
 /// docs/superpowers/plans/2026-09-04-option-b-live-consumer-plan.md's
-/// Correction 1). snake_case field names -- a private producer payload
+/// Correction 1). `snake_case` field names -- a private producer payload
 /// between this app's own crates, not a public wire type (see that plan's
 /// Global Constraints).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullCoverageLineStatsRow {
     pub line_id: String,
-    pub service_date: chrono::NaiveDate,
+    pub service_date: NaiveDate,
     pub availability: String, // "pending" | "available"
     pub stats: SampleStats,
     /// The producer does not hold every event of `service_date` for this
@@ -2025,6 +2025,10 @@ pub struct Defaults {
 }
 
 impl Default for Defaults {
+    #[expect(
+        clippy::expect_used,
+        reason = "every Defaults field has a serde default, so an empty table parses"
+    )]
     fn default() -> Self {
         toml::from_str("")
             .expect("Defaults must deserialize from an empty TOML table via serde_inline_default")
@@ -2035,6 +2039,11 @@ impl Default for Defaults {
 /// returning a new `Defaults` with any recognized keys overridden. Unknown
 /// keys are ignored (there's no field for them to override). Ported from
 /// Python's `config.thresholds_for`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::implicit_hasher,
+    reason = "thresholds are small whole numbers from the checked-in defaults; callers always use the default hasher"
+)]
 pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> Defaults {
     let mut merged = defaults.clone();
     for (key, value) in overrides {
@@ -2049,7 +2058,7 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
             "knowledgebase_severity_floor" => merged.knowledgebase_severity_floor = *value as i8,
             "min_sample_size" => merged.min_sample_size = *value as i64,
             "full_coverage_delay_threshold_minutes" => {
-                merged.full_coverage_delay_threshold_minutes = *value as i64
+                merged.full_coverage_delay_threshold_minutes = *value as i64;
             }
             "full_coverage_min_sample_size" => merged.full_coverage_min_sample_size = *value as i64,
             "full_coverage_min_affected" => merged.full_coverage_min_affected = *value as i64,
@@ -2069,6 +2078,10 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
 /// Decision 4) means "skips calling at this specific station"
 /// (`skipped_stations.contains(this_crs)`). Only ever evaluated for a
 /// non-cancelled departure, matching every existing caller.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts stay far below 2^52, so the f64 ratio is exact"
+)]
 pub fn compute_sample_stats(
     departures: &[&StationDeparture],
     delay_threshold_minutes: i64,
@@ -2078,7 +2091,7 @@ pub fn compute_sample_stats(
     let cancelled = departures.iter().filter(|d| d.is_cancelled).count();
     let delayed = departures
         .iter()
-        .filter(|d| !d.is_cancelled && d.delay_minutes as i64 >= delay_threshold_minutes)
+        .filter(|d| !d.is_cancelled && i64::from(d.delay_minutes) >= delay_threshold_minutes)
         .count();
     let skipped = departures
         .iter()
@@ -2088,7 +2101,11 @@ pub fn compute_sample_stats(
     let avg_delay_minutes = if running.is_empty() {
         0.0
     } else {
-        running.iter().map(|d| d.delay_minutes as f64).sum::<f64>() / running.len() as f64
+        running
+            .iter()
+            .map(|d| f64::from(d.delay_minutes))
+            .sum::<f64>()
+            / running.len() as f64
     };
 
     SampleStats {
@@ -2112,6 +2129,7 @@ mod defaults_tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "the override copies the exact value")]
     fn partial_override_changes_only_named_fields() {
         let defaults = Defaults::default();
         let mut overrides = HashMap::new();
@@ -2125,6 +2143,7 @@ mod defaults_tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "the override copies the exact value")]
     fn every_field_can_be_overridden() {
         let defaults = Defaults::default();
         let mut overrides = HashMap::new();
@@ -2175,6 +2194,10 @@ mod defaults_tests {
 /// real, distinct outcome from "the combined total was zero," and a caller
 /// should render the former as "no data" rather than a claimed 0-delay,
 /// 0%-cancelled figure.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts stay far below 2^52, so the f64 ratio is exact"
+)]
 pub fn merge_sample_stats(all: &[SampleStats]) -> Option<SampleStats> {
     if all.is_empty() {
         return None;
@@ -2203,6 +2226,10 @@ pub fn merge_sample_stats(all: &[SampleStats]) -> Option<SampleStats> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "test code: exact expected values are the point"
+)]
 mod merge_sample_stats_tests {
     use super::*;
 
@@ -2234,6 +2261,10 @@ mod merge_sample_stats_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the weighted mean of these inputs is exactly 8.0"
+    )]
     fn counts_sum_and_avg_delay_is_weighted_by_running_count() {
         // Line A: 8 running (10 total, 2 cancelled), avg delay 10.0.
         // Line B: 2 running (2 total, 0 cancelled), avg delay 0.0.
@@ -2258,6 +2289,10 @@ mod merge_sample_stats_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "test code: exact expected values are the point"
+)]
 mod compute_sample_stats_tests {
     use super::*;
 
@@ -2518,12 +2553,12 @@ mod line_definition_loading_tests {
 mod tfl_severity_tests {
     use super::*;
 
-    /// TfL's own `GET /Line/Meta/Severity` table, transcribed verbatim from
+    /// `TfL`'s own `GET /Line/Meta/Severity` table, transcribed verbatim from
     /// a live fetch on 2026-08-22. The descriptions were identical for
     /// every mode this app ingests (tube, dlr, overground, elizabeth-line,
     /// tram) — checked all five, zero differences — which is why the
     /// mapping is a compile-time table here instead of a per-cycle request
-    /// to that endpoint. If TfL extends or renumbers the scale, this test
+    /// to that endpoint. If `TfL` extends or renumbers the scale, this test
     /// is what fails.
     const TFL_SEVERITY_TABLE: [(u8, &str); 21] = [
         (0, "Special Service"),

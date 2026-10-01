@@ -10,7 +10,7 @@ use crate::LineDefinition;
 pub struct SegmentRegistry {
     /// segment -> ordered list of unique line IDs that include it.
     segment_lines: HashMap<String, Vec<String>>,
-    /// (line_id, crs) -> segment.
+    /// (`line_id`, crs) -> segment.
     station_segments: HashMap<(String, String), String>,
 }
 
@@ -43,17 +43,13 @@ impl SegmentRegistry {
     /// Ported public API surface from the Python `SegmentRegistry`
     /// (`src/segments.py`); currently exercised only by unit tests, not by
     /// the `bin` target that clippy's dead-code lint checks against.
-    #[allow(dead_code)]
     pub fn lines_for_segment(&self, segment: &str) -> Vec<String> {
         self.segment_lines.get(segment).cloned().unwrap_or_default()
     }
 
     /// A segment is shared if more than one line uses it.
     pub fn is_shared(&self, segment: &str) -> bool {
-        self.segment_lines
-            .get(segment)
-            .map(|v| v.len() > 1)
-            .unwrap_or(false)
+        self.segment_lines.get(segment).is_some_and(|v| v.len() > 1)
     }
 
     /// True if `line_id` is the only line using this segment.
@@ -64,11 +60,10 @@ impl SegmentRegistry {
     /// Ported public API surface from the Python `SegmentRegistry`
     /// (`src/segments.py`); currently exercised only by unit tests, not by
     /// the `bin` target that clippy's dead-code lint checks against.
-    #[allow(dead_code)]
     pub fn segment_at(&self, line_id: &str, crs: &str) -> Option<&str> {
         self.station_segments
             .get(&(line_id.to_string(), crs.to_string()))
-            .map(|s| s.as_str())
+            .map(String::as_str)
     }
 
     /// Which of this line's segments are touched by these stations.

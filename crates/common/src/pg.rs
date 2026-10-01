@@ -274,7 +274,7 @@ pub fn is_query_canceled(err: &anyhow::Error) -> bool {
         cause
             .downcast_ref::<sqlx::Error>()
             .and_then(sqlx::Error::as_database_error)
-            .and_then(|db| db.code())
+            .and_then(sqlx::error::DatabaseError::code)
             .is_some_and(|code| code == "57014")
     })
 }

@@ -59,6 +59,10 @@ impl SampleSelection {
 /// -- until the cap is reached. A cap therefore thins out each line's
 /// coverage before it drops any line entirely, and drops unpinned lines
 /// before pinned ones. The result is sorted, like the unrestricted list.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub fn select_sample_stations(
     lines: &[LineDefinition],
     pin_counts: &HashMap<String, i64>,
@@ -114,10 +118,10 @@ mod tests {
             category: "main-line".to_string(),
             operators: vec![],
             stations: vec![],
-            sample_stations: sample_stations.iter().map(|s| s.to_string()).collect(),
+            sample_stations: sample_stations.iter().map(ToString::to_string).collect(),
             match_keywords: vec![],
             excluded_keywords: vec![],
-            severity_overrides: Default::default(),
+            severity_overrides: HashMap::default(),
             destination_crs_filter: vec![],
             headcode_prefixes: vec![],
             full_coverage_enabled: false,
@@ -170,7 +174,7 @@ mod tests {
     fn pins(entries: &[(&str, i64)]) -> HashMap<String, i64> {
         entries
             .iter()
-            .map(|(id, count)| (id.to_string(), *count))
+            .map(|(id, count)| ((*id).to_string(), *count))
             .collect()
     }
 

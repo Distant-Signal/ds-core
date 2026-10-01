@@ -100,6 +100,10 @@ struct PendingWrite<'a> {
 /// (A row the poller writes concurrently is written *with* its
 /// `affected_lines`, so missing it would be harmless anyway -- the keyset
 /// is belt-and-braces.)
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "collection lengths stay far below i64::MAX"
+)]
 pub async fn run_backfill(pool: &PgPool, matcher: &LineMatcher) -> Result<BackfillReport> {
     // Guarded here rather than only in the binary: an empty catalogue
     // matches nothing, so running with one would *clear* every row's

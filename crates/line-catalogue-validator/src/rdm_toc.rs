@@ -40,7 +40,7 @@ struct TrainOperatingCompany {
     name: String,
 }
 
-pub async fn fetch_rdm_tocs(
+pub(crate) async fn fetch_rdm_tocs(
     client: &reqwest::Client,
     base_url: &str,
     api_key: &str,
@@ -58,7 +58,7 @@ pub async fn fetch_rdm_tocs(
 
 /// Parses a TOC List XML body into ATOC code (uppercased) -> name. Shared by
 /// the live tier and `regenerate::toc_codes_from_rdm_xml`.
-pub fn parse_rdm_tocs(xml: &str) -> Result<HashMap<String, String>> {
+pub(crate) fn parse_rdm_tocs(xml: &str) -> Result<HashMap<String, String>> {
     let list: TrainOperatingCompanyList = quick_xml::de::from_str(xml)?;
     Ok(list
         .train_operating_company
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn parses_the_spec_example_shape() {
-        let xml = r#"
+        let xml = r"
             <TrainOperatingCompanyList>
                 <TrainOperatingCompany>
                     <AtocCode>LE</AtocCode>
@@ -86,7 +86,7 @@ mod tests {
                     <LegalName>London Eastern Railways</LegalName>
                 </TrainOperatingCompany>
             </TrainOperatingCompanyList>
-        "#;
+        ";
         let list: TrainOperatingCompanyList = quick_xml::de::from_str(xml).unwrap();
         assert_eq!(list.train_operating_company.len(), 1);
         assert_eq!(list.train_operating_company[0].atoc_code, "LE");

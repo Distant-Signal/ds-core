@@ -35,6 +35,8 @@
 //! `unzip -p ... | ...` streaming convention (see the findings/verification
 //! docs' own commands).
 
+#![expect(clippy::print_stdout, reason = "example program: stdout is its output")]
+
 use std::io::Read;
 
 use chrono::NaiveDate;

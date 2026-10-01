@@ -49,7 +49,7 @@ mod db_tests {
     /// A real `trains` row to satisfy `notifier_forward_queue.trains_id`'s
     /// `REFERENCES trains(id) ON DELETE CASCADE` foreign key -- deleting it
     /// at the end of a test also cleans up any queue rows this test wrote
-    /// (cascade), same posture as `trust_event_backlog.rs`'s own db_tests
+    /// (cascade), same posture as `trust_event_backlog.rs`'s own `db_tests`
     /// cleaning up by deleting the `trains` row they created.
     async fn fixture_train(pool: &PgPool, train_uid: &str) -> i64 {
         crate::data::trains::find_or_create_train(pool, train_uid, "2026-09-06".parse().unwrap())

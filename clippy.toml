@@ -1,0 +1,7 @@
+# Keys are kebab-case. msrv is read from Cargo.toml's rust-version, so it
+# isn't repeated here.
+# A panic is the right failure in a test.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-print-in-tests = true
+allow-dbg-in-tests = false

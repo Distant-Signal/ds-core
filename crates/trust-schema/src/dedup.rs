@@ -57,6 +57,10 @@ use crate::schema::TrustMessage;
 /// than live messages and passes each row's `service_date` -- that function's
 /// own doc comment already documents (and accepts) its keys differing from
 /// a live consumer's.
+#[expect(
+    clippy::format_collect,
+    reason = "short strings off the hot path; format! reads clearer"
+)]
 pub fn dedup_key(
     train_id: &str,
     msg_type: &str,
@@ -79,7 +83,7 @@ pub fn dedup_key(
         hasher.update(b"\0");
     }
     let digest = hasher.finalize();
-    digest.iter().map(|b| format!("{:02x}", b)).collect()
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// The `event_date` for [`dedup_key`]: a date read from the message itself,

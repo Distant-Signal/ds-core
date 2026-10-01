@@ -102,6 +102,10 @@ const NO_INTERCHANGE_SENTINELS: [i32; 2] = [98, 99];
 /// on the bare form (see [`InterchangeData::change_time_by_tiploc`]'s own
 /// doc comment). Callers should still normalize, and all of them do, but
 /// correctness must not depend on their remembering to.
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "the value is clamped to >= 0 first, and minute values fit easily"
+)]
 pub fn minimum_change_time(data: &InterchangeData, tiploc: &str) -> ChangeTime {
     let tiploc = crate::normalize_tiploc(tiploc);
     match data.change_time_by_tiploc.get(tiploc) {
@@ -178,6 +182,10 @@ fn to_hhmm(minutes: u32) -> String {
 /// `fetch_interchange_data`), and the final result is sorted again since
 /// `shortest_by_destination` is itself a `HashMap`, whose iteration order
 /// is otherwise randomized per-process.
+#[expect(
+    clippy::similar_names,
+    reason = "the similar names are distinct domain terms"
+)]
 pub fn fixed_links_from<'a>(
     data: &'a InterchangeData,
     from_crs: &str,
@@ -191,6 +199,10 @@ pub fn fixed_links_from<'a>(
         return Vec::new();
     };
 
+    #[expect(
+        clippy::items_after_statements,
+        reason = "a local type or import sits next to its only use"
+    )]
     fn sort_key(link: &FixedLink) -> (&str, i32, &str) {
         (link.to_crs.as_str(), link.minutes, link.mode.as_str())
     }

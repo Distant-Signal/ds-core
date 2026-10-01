@@ -7,7 +7,7 @@
 //! before it binds, so a merged migration edited in place makes `api` fail
 //! at startup on every database that already applied it
 //! ("migration ... was previously applied but has been modified"), a
-//! CrashLoopBackOff under the Deployment's `strategy: Recreate`. See also
+//! `CrashLoopBackOff` under the Deployment's `strategy: Recreate`. See also
 //! `migration_index_locking.rs`'s module docs.
 //!
 //! M16 found two files edited after merge (`20260831090001`,
@@ -30,6 +30,13 @@
 //! can start failing on an unchanged tree, which is the point. The fix is
 //! always the line the failure message prints; add it in the PR that adds the
 //! migration, or in the next PR after it merges.
+
+#![expect(
+    clippy::expect_used,
+    clippy::format_collect,
+    clippy::unwrap_used,
+    reason = "test code: a panic is the right failure in a test; test string building is not hot"
+)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -129,7 +136,7 @@ fn the_checksum_matches_what_sqlx_records() {
     let migrator = sqlx::migrate!("./migrations");
     let migration = migrator
         .iter()
-        .find(|m| m.version == 20260831090001)
+        .find(|m| m.version == 20_260_831_090_001)
         .expect("migration 20260831090001 exists");
     let sqlx_hex: String = migration
         .checksum

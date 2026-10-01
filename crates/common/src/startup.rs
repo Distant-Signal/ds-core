@@ -4,12 +4,12 @@
 //! After a node reboot every pod starts at once, and Postgres spends tens
 //! of seconds (minutes, for a large WAL redo) in crash recovery answering
 //! "the database system is starting up". A binary that connects eagerly and
-//! exits on failure lands in CrashLoopBackOff, whose exponential restart
+//! exits on failure lands in `CrashLoopBackOff`, whose exponential restart
 //! delay (10s doubling to 5 min) then keeps it down for minutes AFTER the
 //! dependency is back. Retrying in-process with a capped backoff instead
 //! comes up within seconds of the dependency, logs where it is stuck, and
 //! -- because the caller only flips its readiness state once this returns
-//! -- stays NotReady until then.
+//! -- stays `NotReady` until then.
 //!
 //! Unbounded on purpose: a restart cannot fix an unreachable dependency, it
 //! only adds backoff. A persistent misconfiguration (wrong password) is
@@ -29,7 +29,7 @@ pub const CONNECT_BACKOFF: Backoff = Backoff::new(Duration::from_secs(1), Durati
 /// Calls `attempt` until it succeeds, sleeping `backoff` between failures
 /// and logging each one. `progress`, when given, is beaten on every failed
 /// attempt: the process is alive and retrying, so a liveness probe must not
-/// restart it (a restart would only add CrashLoopBackOff delay).
+/// restart it (a restart would only add `CrashLoopBackOff` delay).
 pub async fn retry_until_ready<T, E, F, Fut>(
     what: &str,
     backoff: Backoff,
@@ -99,15 +99,15 @@ mod tests {
             }
         }
 
-        async fn connect(&self) -> Result<&'static str, &'static str> {
+        fn connect(&self) -> impl Future<Output = Result<&'static str, &'static str>> {
             self.attempts.set(self.attempts.get() + 1);
-            match self.refusals_left.get() {
+            std::future::ready(match self.refusals_left.get() {
                 0 => Ok("connection"),
                 n => {
                     self.refusals_left.set(n - 1);
                     Err("the database system is starting up")
                 }
-            }
+            })
         }
     }
 

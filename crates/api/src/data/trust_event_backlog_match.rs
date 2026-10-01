@@ -177,7 +177,7 @@ struct BacklogRow {
 /// written by Task 9's own consumer (only an Activation row ever carries
 /// one), so the matching row found here is realistically always a
 /// Movement (the only kept type that carries a `crs`) and its `train_uid`
-/// column is realistically always NULL. The real train_uid lookup is the
+/// column is realistically always NULL. The real `train_uid` lookup is the
 /// second, explicit query below, by `train_id`.
 ///
 /// **Plausibility guard (defense-in-depth against the still-unconfirmed
@@ -251,6 +251,10 @@ struct BacklogRow {
 /// `trust_event_backlog_upper_crs_time (UPPER(crs), planned_timestamp)
 /// WHERE crs IS NOT NULL` (20260926182000): an equality on `UPPER(crs)` and
 /// a range on `planned_timestamp`, both index conditions.
+#[expect(
+    clippy::similar_names,
+    reason = "the similar names are distinct domain terms"
+)]
 async fn find_backlog_match(
     pool: &PgPool,
     pin_origin_crs: &str,
@@ -393,7 +397,7 @@ async fn known_train_uid_for_subscription(
 /// The exact same shape, and the exact same reasoning, as the
 /// contradiction filter `trust-consumer::process::process_message` applies
 /// in front of `matching::resolve_origin_departure` (commit
-/// `4340c97f`, "a parked Activation's train_uid vetoes a wrong CRS+time
+/// `4340c97f`, "a parked Activation's `train_uid` vetoes a wrong CRS+time
 /// claim"): only a comparison between two identities that are BOTH already
 /// known can ever prove a mismatch. When either side is unknown the
 /// underlying CRS+time heuristic is all there is, and it must run exactly
@@ -511,6 +515,11 @@ async fn fetch_backlog_history(
 /// Each row's own `service_date` is `dedup_key`'s date component (see the
 /// call below, and `trust_schema::dedup::dedup_key`'s own doc comment on why
 /// that component exists at all: TRUST recycles `train_id`s monthly).
+#[expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "the similar names are distinct domain terms; long but linear; splitting it would scatter its shared state across helpers"
+)]
 async fn replay_backlog_history(
     pool: &PgPool,
     tracked_train_id: i64,
@@ -652,11 +661,11 @@ async fn replay_backlog_history(
             row.service_date,
         );
 
-        let (resolved_train_uid, resolved_train_id) = if !resolution_claimed {
+        let (resolved_train_uid, resolved_train_id) = if resolution_claimed {
+            (None, None)
+        } else {
             resolution_claimed = true;
             (train_uid.map(str::to_string), Some(row.train_id.clone()))
-        } else {
-            (None, None)
         };
 
         let event = common::TrainMovementEventMessage {
@@ -693,7 +702,7 @@ async fn replay_backlog_history(
 /// least one history row was replayed. `Ok(false)` covers every honest
 /// "nothing in the backlog for this pin" outcome (no CRS+time match, or
 /// the backlog's retention window has already rolled past this
-/// service_date) -- exactly Decision 3 step 8's "no regression, no new
+/// `service_date`) -- exactly Decision 3 step 8's "no regression, no new
 /// failure mode" posture: a pin left `Ok(false)` here is exactly as it
 /// would have been without this feature at all. Since the contradiction
 /// filter below, `Ok(false)` also covers "the CRS+time candidate is
@@ -1009,6 +1018,11 @@ pub struct BacklogReplayOutcome {
 /// an honest, expected outcome, exactly as `Ok(false)` is for
 /// [`attempt_backlog_match`] -- or that the subscription is bound to a
 /// different train, which this never repoints (DB2-5; logged at warn).
+#[expect(
+    clippy::expect_used,
+    clippy::similar_names,
+    reason = "the invariant is established just above; the expect message names it; the similar names are distinct domain terms"
+)]
 pub async fn attempt_backlog_match_by_uid(
     pool: &PgPool,
     tracked_train_id: i64,
@@ -1188,6 +1202,11 @@ mod contradiction_filter_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "test code: paired test values share names; scenario tests read top to bottom"
+)]
 mod db_tests {
     use super::*;
     use sqlx::postgres::PgPoolOptions;
@@ -1217,7 +1236,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
 
         // Faithful to Task 9's real producer behavior, NOT a shortcut:
@@ -1335,7 +1354,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T09:00:00Z".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
@@ -1393,7 +1412,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
         // `planned_timestamp` is inside the pin's SCHEDULED_DEPARTURE_TOLERANCE
         // window -- `find_backlog_match`'s own SQL WHERE clause finds this row -- but
@@ -1498,7 +1517,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
 
         // Candidate 1: sorts FIRST by planned_timestamp (exactly on time),
@@ -1644,7 +1663,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-25".parse().unwrap();
         // The pin's own scheduled departure.
         let scheduled: DateTime<Utc> = "2026-09-25T18:15:00Z".parse().unwrap();
 
@@ -1761,7 +1780,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-06".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-06T18:15:00Z".parse().unwrap();
 
         sqlx::query(
@@ -1839,7 +1858,7 @@ mod db_tests {
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api find_train_id_by_uid_resolves_via_the_activation_row -- --ignored --test-threads=1`"]
     async fn find_train_id_by_uid_resolves_via_the_activation_row() {
         let pool = connect().await;
-        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-06".parse().unwrap();
         sqlx::query(
             "INSERT INTO trust_event_backlog \
                 (crs, train_uid, train_id, service_date, msg_type, dedup_key) \
@@ -1914,8 +1933,8 @@ mod db_tests {
         // `actual_timestamp` safely behind `received_at` regardless of the
         // clock, the same way every fixed-date sibling test in this file
         // (e.g. "2026-09-05T18:15:00Z") is safely in the past by construction.
-        let scheduled: DateTime<Utc> = chrono::Utc::now() - chrono::Duration::minutes(30);
-        let service_date: chrono::NaiveDate = scheduled.date_naive();
+        let scheduled: DateTime<Utc> = Utc::now() - Duration::minutes(30);
+        let service_date: NaiveDate = scheduled.date_naive();
 
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
@@ -2043,7 +2062,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
 
         // An unrelated train's ARRIVAL at the pin's own origin CRS, exactly
@@ -2123,7 +2142,7 @@ mod db_tests {
     /// train's ARRIVAL lands exactly on the pin's scheduled time (sorts
     /// first); the real train's own DEPARTURE lands 4 minutes later (sorts
     /// second, still inside the M9-tightened +/-5 minute
-    /// SCHEDULED_DEPARTURE_TOLERANCE). Only the DEPARTURE may resolve
+    /// `SCHEDULED_DEPARTURE_TOLERANCE`). Only the DEPARTURE may resolve
     /// the pin.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
@@ -2142,7 +2161,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
 
         // Unrelated train: ARRIVAL, sorts FIRST by planned_timestamp
@@ -2273,7 +2292,7 @@ mod db_tests {
         pin_scheduled: DateTime<Utc>,
     ) -> (i64, i64) {
         let service_date = pin_scheduled.date_naive();
-        let backlog_planned = pin_scheduled - chrono::Duration::minutes(4);
+        let backlog_planned = pin_scheduled - Duration::minutes(4);
         let dedup_prefix = backlog_train_id;
 
         // Defensive pre-clean, not belt-and-braces: `trust_event_backlog` has
@@ -2658,7 +2677,7 @@ mod db_tests {
         // `seed_identified_pin_and_a_backlog_train`'s own doc comment gives.
         let pin_scheduled: DateTime<Utc> = "2026-09-20T12:56:00Z".parse().unwrap();
         let service_date = pin_scheduled.date_naive();
-        let backlog_planned = pin_scheduled - chrono::Duration::minutes(4);
+        let backlog_planned = pin_scheduled - Duration::minutes(4);
 
         sqlx::query(
             "INSERT INTO trust_event_backlog \
@@ -2764,7 +2783,7 @@ mod db_tests {
 
         insert_departure(
             far_train_id,
-            pin_scheduled - chrono::Duration::minutes(10),
+            pin_scheduled - Duration::minutes(10),
             "test-m9-far-departure",
         )
         .await;
@@ -2779,7 +2798,7 @@ mod db_tests {
 
         insert_departure(
             near_train_id,
-            pin_scheduled - chrono::Duration::minutes(4),
+            pin_scheduled - Duration::minutes(4),
             "test-m9-near-departure",
         )
         .await;
@@ -2817,8 +2836,8 @@ mod db_tests {
         crs: &str,
         departure: DateTime<Utc>,
     ) {
-        let arrival = departure + chrono::Duration::minutes(30);
-        let received = departure - chrono::Duration::hours(1);
+        let arrival = departure + Duration::minutes(30);
+        let received = departure - Duration::hours(1);
         sqlx::query(
             "INSERT INTO trust_event_backlog \
                 (crs, train_uid, train_id, service_date, msg_type, event_type, \
@@ -2987,13 +3006,9 @@ mod db_tests {
         // M9's tolerance still applies across midnight: 10 minutes off is
         // not the same booked departure.
         assert_eq!(
-            find_backlog_match(
-                &pool,
-                "ZMA",
-                intermediate_departure + chrono::Duration::minutes(10)
-            )
-            .await
-            .expect("find_backlog_match"),
+            find_backlog_match(&pool, "ZMA", intermediate_departure + Duration::minutes(10))
+                .await
+                .expect("find_backlog_match"),
             None,
             "a pin 10 minutes off must not match, whatever the dates"
         );
@@ -3158,7 +3173,7 @@ mod db_tests {
         seed_backlog_run(&pool, train_id, train_uid, service_date, "ZMC", departure).await;
 
         // Booked 3 minutes apart (GBTT vs WTT), inside M9's 5 minutes.
-        let pin_scheduled = departure + chrono::Duration::minutes(3);
+        let pin_scheduled = departure + Duration::minutes(3);
         let tracked_train_id =
             seed_pending_pin(&pool, user_id, service_date, "ZMC", pin_scheduled).await;
         assert!(
@@ -3545,7 +3560,7 @@ mod db_tests {
         .await
         .expect("drop the arrival");
         for (minutes, msg_type) in [(5, "0002"), (10, "0005"), (15, "0002"), (20, "0005")] {
-            let at = departure + chrono::Duration::minutes(minutes);
+            let at = departure + Duration::minutes(minutes);
             sqlx::query(
                 "INSERT INTO trust_event_backlog \
                     (crs, train_uid, train_id, service_date, msg_type, actual_timestamp, \

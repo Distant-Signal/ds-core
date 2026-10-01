@@ -29,7 +29,7 @@ use serde::Deserialize;
 /// deliberately does not check" section), and which ATOC operator codes
 /// are currently valid.
 #[derive(Debug, Default, Clone)]
-pub struct ReferenceData {
+pub(crate) struct ReferenceData {
     /// CRS -> every TIPLOC seen paired with it. An empty set means the CRS
     /// is known-real but no TIPLOC pairing could be confirmed for it (see
     /// the vendored CSV's provenance doc) -- callers must not treat an
@@ -45,11 +45,11 @@ pub struct ReferenceData {
 }
 
 impl ReferenceData {
-    pub fn known_crs(&self, crs: &str) -> bool {
+    pub(crate) fn known_crs(&self, crs: &str) -> bool {
         self.crs_to_tiploc.contains_key(crs)
     }
 
-    pub fn known_operator(&self, code: &str) -> bool {
+    pub(crate) fn known_operator(&self, code: &str) -> bool {
         self.toc_codes.contains_key(code)
     }
 
@@ -58,7 +58,7 @@ impl ReferenceData {
     /// given TIPLOC is a confirmed pairing for that CRS, or no TIPLOC
     /// pairing at all could be confirmed for the CRS (see the doc on
     /// `crs_to_tiploc` -- deliberately not treated as a mismatch).
-    pub fn tiploc_matches(&self, crs: &str, tiploc: &str) -> Option<bool> {
+    pub(crate) fn tiploc_matches(&self, crs: &str, tiploc: &str) -> Option<bool> {
         let known = self.crs_to_tiploc.get(crs)?;
         if known.is_empty() {
             return Some(true);
@@ -70,7 +70,11 @@ impl ReferenceData {
     /// CSVs vendored in `reference-data/` (see
     /// `reference-data/line-catalogue-validation.md` for exactly how they
     /// were generated and their documented limitations).
-    pub fn from_vendored_csvs(crs_tiploc_csv: &Path, toc_codes_csv: &Path) -> Result<Self> {
+    #[expect(
+        clippy::items_after_statements,
+        reason = "a local type or import sits next to its only use"
+    )]
+    pub(crate) fn from_vendored_csvs(crs_tiploc_csv: &Path, toc_codes_csv: &Path) -> Result<Self> {
         let mut data = ReferenceData::default();
 
         #[derive(Deserialize)]
@@ -121,7 +125,7 @@ impl ReferenceData {
     /// This hits the network 26 times (one per CRS page), plus once more
     /// for the RDM feed if configured, and is deliberately not used by the
     /// fast/CI-blocking tier -- see `main.rs`.
-    pub async fn fetch_live(
+    pub(crate) async fn fetch_live(
         client: &reqwest::Client,
         toc_codes_csv: &Path,
         rdm_api_key: Option<&str>,
@@ -376,7 +380,7 @@ fn extract_shape_valid_tokens(
     Ok(decoded
         .split_whitespace()
         .filter(|t| shape_re.is_match(t))
-        .map(|t| t.to_ascii_uppercase())
+        .map(str::to_ascii_uppercase)
         .collect())
 }
 
@@ -411,6 +415,10 @@ fn suspicious_zero_row_match(html: &str, matched_rows: usize) -> Option<String> 
 /// Extraction rules mirrored exactly from
 /// `reference-data/line-catalogue-validation.md`'s "Where the data comes
 /// from" section -- keep the two in sync if either changes.
+#[expect(
+    clippy::unwrap_used,
+    reason = "constant regex literals, compiled by the tests"
+)]
 fn parse_crs_tiploc_page(html: &str, data: &mut ReferenceData) -> Result<()> {
     let row_re = regex::Regex::new(r"(?s)<tr>(.*?)</tr>").unwrap();
     let cell_re = regex::Regex::new(r"(?s)<td[^>]*>(.*?)</td>").unwrap();
@@ -531,8 +539,8 @@ mod tests {
 
     #[test]
     fn parses_a_real_crs_tiploc_row_shape() {
-        let html = r#"<table><tr><td>Euston</td><td>EUS</td><td>512900</td>
-            <td>EUSTON</td><td>EUSTON</td><td>72410</td></tr></table>"#;
+        let html = r"<table><tr><td>Euston</td><td>EUS</td><td>512900</td>
+            <td>EUSTON</td><td>EUSTON</td><td>72410</td></tr></table>";
         let mut data = ReferenceData::default();
         parse_crs_tiploc_page(html, &mut data).unwrap();
         assert!(data.known_crs("EUS"));
@@ -543,8 +551,8 @@ mod tests {
 
     #[test]
     fn a_crs_with_no_tiploc_recorded_is_still_known_and_never_mismatches() {
-        let html = r#"<table><tr><td>Somewhere</td><td>SMW</td><td>1</td>
-            <td></td><td></td><td></td></tr></table>"#;
+        let html = r"<table><tr><td>Somewhere</td><td>SMW</td><td>1</td>
+            <td></td><td></td><td></td></tr></table>";
         let mut data = ReferenceData::default();
         parse_crs_tiploc_page(html, &mut data).unwrap();
         assert!(data.known_crs("SMW"));

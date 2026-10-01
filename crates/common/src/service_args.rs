@@ -26,7 +26,7 @@ pub struct MetricsArgs {
 /// every one of the 3 real callers today -- flattening changes nothing
 /// about defaultedness or requiredness.
 ///
-/// Signal Box Audit, Finding #2 (common/service_args.rs): does NOT derive
+/// Signal Box Audit, Finding #2 (`common/service_args.rs)`: does NOT derive
 /// `Debug` -- `kafka_sasl_password` is a real secret (RDM's "Consumer
 /// secret" for this Kafka product), and a future accidental
 /// `tracing::debug!("{args:?}")` on a `Config` that flattens this in would

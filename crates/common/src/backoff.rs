@@ -112,6 +112,11 @@ fn jittered(ceiling: Duration, fraction: f64) -> Duration {
 }
 
 /// A uniform-ish value in `[0, 1)` from a freshly keyed `RandomState`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "jitter only needs the low 64 bits of the clock and 53 random bits"
+)]
 fn random_fraction() -> f64 {
     let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
     hasher.write_u64(
@@ -125,6 +130,10 @@ fn random_fraction() -> f64 {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "test code: exact expected values are the point"
+)]
 mod tests {
     use super::*;
 

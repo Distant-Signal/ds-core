@@ -173,6 +173,10 @@ impl RedisConn {
     /// The live connection and its generation, opening a new one if a
     /// timeout dropped the last. The lock is never held across an await:
     /// concurrent callers may each open one; the first to finish is kept.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "these durations are seconds to hours, far below u64::MAX milliseconds"
+    )]
     async fn current(&self) -> RedisResult<(u64, ConnectionManager)> {
         {
             let slot = self.slot();
@@ -363,7 +367,7 @@ mod tests {
             .await
             .expect("handshake is answered");
         let started = std::time::Instant::now();
-        let result: redis::RedisResult<String> = redis::cmd("PING").query_async(&mut conn).await;
+        let result: RedisResult<String> = redis::cmd("PING").query_async(&mut conn).await;
         let err = result.unwrap_err();
         assert!(err.is_timeout(), "{err:?}");
         assert!(
@@ -436,6 +440,10 @@ mod tests {
     /// A fake Redis whose `n`th accepted connection behaves as
     /// `script[n]` (the last entry repeats). Returns its port and a count
     /// of the connections accepted so far.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "separate arms document distinct cases"
+    )]
     fn scripted_redis(script: Vec<Behaviour>) -> (u16, Arc<AtomicUsize>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -534,8 +542,7 @@ mod tests {
                 .await
                 .unwrap();
             for _ in 0..3 {
-                let result: RedisResult<redis::Value> =
-                    redis::cmd("PING").query_async(&mut conn).await;
+                let result: RedisResult<Value> = redis::cmd("PING").query_async(&mut conn).await;
                 if let Err(err) = result {
                     assert!(!err.is_timeout(), "{err:?}");
                 }

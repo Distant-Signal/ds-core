@@ -1,6 +1,6 @@
 //! TRUST movement-feed message parsing. Field shapes are drawn only from
 //! what docs/superpowers/specs/2026-08-28-train-tracking-design.md's
-//! research pass independently confirmed (five of eight msg_types, by
+//! research pass independently confirmed (five of eight `msg_types`, by
 //! name and field), plus `0005` (Reinstatement -- see the H4 finding of
 //! the 2026-09-26 review, and the `Reinstatement` struct's own doc comment
 //! below for why this one additional type is now modeled too). `0008` alone
@@ -41,7 +41,7 @@ struct Header {
 /// the 2026-09-25 review). They used to be required `String`s, faithful to
 /// the confirmed wire shape, even though only `toc_id` has a reader at all
 /// (`full-coverage-consumer`'s `station_correlate::apply_activation`, which
-/// already treats "no toc_id learned for this uid" as a first-class case).
+/// already treats "no `toc_id` learned for this uid" as a first-class case).
 /// Required fields make deserialization all-or-nothing: a single `null` or
 /// absent `schedule_wtt_id` -- a feed schema tweak, a VSTP activation, a
 /// TOC-specific quirk -- made `parse_envelope` drop the WHOLE Activation,
@@ -67,13 +67,10 @@ pub struct Activation {
     /// means that consumer learns no `toc_id` for this uid, which it
     /// already handles.
     pub toc_id: Option<String>,
-    #[allow(dead_code)]
     pub train_service_code: Option<String>,
-    #[allow(dead_code)]
     pub schedule_wtt_id: Option<String>,
     /// The CIF schedule's validity-window START, NOT this instance's
     /// running date -- see this struct's own doc comment. No reader.
-    #[allow(dead_code)]
     pub schedule_start_date: Option<String>,
     /// The CIF schedule's validity-window END, months away for a permanent
     /// schedule. Read only as a secondary pruning signal for
@@ -107,10 +104,8 @@ pub struct Movement {
     pub gbtt_timestamp: Option<String>,
     pub planned_timestamp: Option<String>,
     pub actual_timestamp: Option<String>,
-    #[allow(dead_code)]
     pub reporting_stanox: Option<String>,
     pub loc_stanox: Option<String>,
-    #[allow(dead_code)]
     pub toc_id: Option<String>,
     pub variation_status: Option<String>,
     /// TRUST's own lateness in whole minutes, as a string (`"12"`), against
@@ -129,7 +124,7 @@ pub struct Movement {
 /// report that says nothing about lateness.
 pub fn movement_delay_minutes(movement: &Movement) -> Option<i32> {
     match movement.variation_status.as_deref() {
-        Some("ON TIME") | Some("EARLY") => Some(0),
+        Some("ON TIME" | "EARLY") => Some(0),
         Some("LATE") => movement
             .timetable_variation
             .as_deref()
@@ -190,7 +185,7 @@ pub struct ChangeOfIdentity {
 /// header doc) flagged `0005` as unconfirmed, since a "community summary"
 /// it found named it "Unidentified Train" rather than "Reinstatement" and
 /// that wasn't checked against a primary source. Network Rail's own
-/// published Train Movements message list (the same TRAIN_MVT_ALL_TOC
+/// published Train Movements message list (the same `TRAIN_MVT_ALL_TOC`
 /// product this whole crate targets) names `0005` as Train Reinstatement,
 /// independent of that unverified community summary -- so unlike `0008`
 /// (still genuinely unresolved either way), this one type is now confirmed
@@ -350,8 +345,7 @@ fn warn_once(failure: &EnvelopeFailure) {
     let first = SEEN
         .get_or_init(|| Mutex::new(HashSet::new()))
         .lock()
-        .map(|mut seen| seen.insert(failure.msg_type.clone()))
-        .unwrap_or(true);
+        .map_or(true, |mut seen| seen.insert(failure.msg_type.clone()));
     if first {
         tracing::warn!(
             msg_type = %failure.msg_type,
@@ -479,8 +473,8 @@ fn parse_envelope(envelope: Envelope) -> Result<TrustMessage, EnvelopeFailure> {
 mod tests {
     use super::*;
 
-    /// Every msg_type a dropped envelope can be counted under is in
-    /// ENVELOPE_FAILURE_MSG_TYPES, so the consumers pre-register them all.
+    /// Every `msg_type` a dropped envelope can be counted under is in
+    /// `ENVELOPE_FAILURE_MSG_TYPES`, so the consumers pre-register them all.
     #[test]
     fn every_envelope_failure_msg_type_is_pre_registerable() {
         for msg_type in ["0001", "0002", "0003", "0005", "0006", "0007"] {
@@ -855,7 +849,7 @@ mod tests {
     }
 
     /// PL-8: a confirmed type whose body fails its shape is reported with
-    /// its msg_type and error, not silently dropped.
+    /// its `msg_type` and error, not silently dropped.
     #[test]
     fn parse_batch_detailed_reports_each_dropped_envelope() {
         let raw = r#"[

@@ -325,6 +325,10 @@ fn is_before(day_offset: u8, time: NaiveTime, now: NaiveTime) -> bool {
     (day_offset, time) < (0, now)
 }
 
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub fn departures_by_crs(
     index: &ScheduleIndex,
     date: NaiveDate,
@@ -500,6 +504,10 @@ fn collect_crs_departures(
 /// day is published uncapped and the `now`-forward filter and pagination
 /// happen at READ time instead, as an indexed range scan with a keyset
 /// cursor. Do not reintroduce a cap in this function's caller.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub fn departures_by_destination_crs(
     index: &ScheduleIndex,
     date: NaiveDate,
@@ -567,8 +575,7 @@ pub fn departures_by_destination_crs(
         let destination_arrival_day_offset = resolved
             .calling_points
             .last()
-            .map(|last| last.day_offset)
-            .unwrap_or(0);
+            .map_or(0, |last| last.day_offset);
         // Computed once per schedule, exactly like true_origin_crs above,
         // and attached unchanged to every entry this schedule contributes.
         let operator_atoc = resolved.operator_atoc.clone();
@@ -770,6 +777,10 @@ fn unresolved_destination_key(terminus_tiploc: &str) -> String {
 /// this function's own output -- and any test asserting on it -- is
 /// deterministic regardless of `index`'s internal `HashMap` iteration
 /// order.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub fn unresolved_booked_tiplocs(
     index: &ScheduleIndex,
     date: NaiveDate,
@@ -834,7 +845,7 @@ impl ScheduleIndex {
     /// missing. A thin, `ScheduleIndex`-scoped convenience over
     /// [`resolve_for_date`].
     pub fn schedule_for_uid(&self, uid: &str, date: NaiveDate) -> Option<ResolvedSchedule> {
-        let raw = self.by_uid.get(uid).map(Vec::as_slice).unwrap_or(&[]);
+        let raw = self.by_uid.get(uid).map_or(&[][..], Vec::as_slice);
         resolve_for_date(raw, uid, date)
     }
 
@@ -854,7 +865,7 @@ impl ScheduleIndex {
 /// `String` and hand it to [`ScheduleIndex::from_text`], keeping ~700MB of
 /// text (plus `String` growth slack) resident alongside the index it was
 /// building -- one of the contributors to the `reference` container being
-/// OOMKilled at its 3Gi limit. Feeding lines here straight off a
+/// `OOMKilled` at its 3Gi limit. Feeding lines here straight off a
 /// `BufRead` means the text is never held at all.
 #[derive(Debug, Default)]
 pub struct ScheduleIndexBuilder {
@@ -877,15 +888,14 @@ impl ScheduleIndexBuilder {
     }
 
     fn insert_into(by_uid: &mut HashMap<String, Vec<RawSchedule>>, schedule: RawSchedule) {
-        match by_uid.get_mut(schedule.basic.uid.as_str()) {
-            Some(schedules) => schedules.push(schedule),
-            None => {
-                // Most UIDs carry exactly one schedule: `vec![x]` allocates
-                // room for exactly one, where `or_default().push` would
-                // allocate four.
-                let uid = schedule.basic.uid.clone();
-                by_uid.insert(uid, vec![schedule]);
-            }
+        if let Some(schedules) = by_uid.get_mut(schedule.basic.uid.as_str()) {
+            schedules.push(schedule);
+        } else {
+            // Most UIDs carry exactly one schedule: `vec![x]` allocates
+            // room for exactly one, where `or_default().push` would
+            // allocate four.
+            let uid = schedule.basic.uid.clone();
+            by_uid.insert(uid, vec![schedule]);
         }
     }
 
@@ -908,6 +918,7 @@ impl ScheduleIndexBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SmallStr;
     use crate::records::{BasicSchedule, CallingPointKind};
 
     fn basic(uid: &str, stp: StpIndicator, from: &str, to: &str, days: [bool; 7]) -> BasicSchedule {
@@ -933,7 +944,7 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: Default::default(),
+            activity: SmallStr::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -954,7 +965,7 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: Default::default(),
+            activity: SmallStr::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -975,7 +986,7 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: Default::default(),
+            activity: SmallStr::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -997,7 +1008,7 @@ mod tests {
             is_half_minute_arrival: false,
             is_half_minute_departure: false,
             day_offset: 0,
-            activity: Default::default(),
+            activity: SmallStr::default(),
             public_arrival: None,
             public_departure: None,
             platform: None,
@@ -1024,7 +1035,7 @@ mod tests {
     fn tiploc_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
             .iter()
-            .map(|(tiploc, crs)| (tiploc.to_string(), crs.to_string()))
+            .map(|(tiploc, crs)| ((*tiploc).to_string(), (*crs).to_string()))
             .collect()
     }
 
@@ -1339,7 +1350,7 @@ mod tests {
     }
 
     /// **Regression test for the L2 overnight-carryover fix.** `F49687`
-    /// (ALL_DAYS) is booked under `2026-09-04`'s instance too, and that
+    /// (`ALL_DAYS`) is booked under `2026-09-04`'s instance too, and that
     /// instance's Barking (`00:07`, `day_offset: 1` relative to
     /// `2026-09-04`) genuinely lands on `2026-09-05` -- a delivery processed
     /// at `00:05` on `2026-09-05` (a real post-midnight cycle time, e.g. a
@@ -1722,7 +1733,7 @@ mod tests {
         let manchester = &by_destination["MAN"];
         assert_eq!(manchester.len(), 2);
         let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
-        origins.sort();
+        origins.sort_unstable();
         assert_eq!(origins, vec!["CRE", "EUS"]);
     }
 
@@ -1760,7 +1771,7 @@ mod tests {
             assert_eq!(entry.true_origin_crs, Some("EUS".to_string()));
         }
         let mut origins: Vec<&str> = manchester.iter().map(|d| d.origin_crs.as_str()).collect();
-        origins.sort();
+        origins.sort_unstable();
         assert_eq!(origins, vec!["CRE", "EUS"]);
     }
 
@@ -2258,7 +2269,7 @@ mod tests {
         let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
         move |t, day_offset| {
             Some(DateTime::<Utc>::from_naive_utc_and_offset(
-                (date + Duration::days(day_offset as i64)).and_time(t),
+                (date + Duration::days(i64::from(day_offset))).and_time(t),
                 Utc,
             ))
         }
@@ -2456,7 +2467,7 @@ mod tests {
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 1,
-                activity: Default::default(),
+                activity: SmallStr::default(),
                 public_arrival: None,
                 public_departure: None,
                 platform: None,
@@ -2506,7 +2517,7 @@ mod tests {
     // ---- assign_day_offsets / resolve_for_date day-offset tests ----
 
     /// The real live-confirmed c2c overnight working (2026-09-09
-    /// investigation), UID F49687, service_date 2026-09-05: Liverpool
+    /// investigation), UID F49687, `service_date` 2026-09-05: Liverpool
     /// Street 23:48 -> Stratford 23:54/23:55 -> Barking 00:06/00:07 ->
     /// Shoeburyness 01:01. Every stop from Barking onward is really
     /// 2026-09-06 wall-clock.
@@ -2619,7 +2630,7 @@ mod tests {
     }
 
     /// R-043: real-shaped C22645 (Sutton -> Bedford Thameslink, from
-    /// production's schedule_calling_points_full for 2026-09-28): it
+    /// production's `schedule_calling_points_full` for 2026-09-28): it
     /// arrives at Blackfriars 23:55 and leaves 00:02. That 00:02 departure
     /// is on the NEXT day, on Blackfriars' board and in the
     /// destination-departures product, while the arrival keeps day 0.

@@ -16,13 +16,13 @@ use crate::reference::ReferenceData;
 /// can cite a real line number (`common::LineDefinition::from_file`
 /// discards the source text once parsed, and TOML line numbers aren't
 /// otherwise recoverable from the parsed struct).
-pub struct LoadedLine {
+pub(crate) struct LoadedLine {
     pub path: PathBuf,
     pub definition: LineDefinition,
     pub raw: String,
 }
 
-pub fn load_all(lines_dir: &Path) -> anyhow::Result<Vec<LoadedLine>> {
+pub(crate) fn load_all(lines_dir: &Path) -> anyhow::Result<Vec<LoadedLine>> {
     let pattern = format!("{}/*.toml", lines_dir.display());
     let mut out = Vec::new();
     for entry in glob::glob(&pattern)? {
@@ -40,7 +40,7 @@ pub fn load_all(lines_dir: &Path) -> anyhow::Result<Vec<LoadedLine>> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Severity {
+pub(crate) enum Severity {
     /// Fails the build.
     Error,
     /// Printed, does not affect the exit code -- see
@@ -51,7 +51,7 @@ pub enum Severity {
 }
 
 #[derive(Debug)]
-pub struct Finding {
+pub(crate) struct Finding {
     pub path: PathBuf,
     pub line_no: Option<usize>,
     pub severity: Severity,
@@ -93,7 +93,7 @@ fn operators_line_number(raw: &str) -> Option<usize> {
         .map(|i| i + 1)
 }
 
-pub fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Finding> {
+pub(crate) fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     for line in lines {
@@ -251,7 +251,7 @@ pub fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) -> Vec<Fi
 /// a documented gap: CORPUS has no open/closed or passenger-service column
 /// either, so it would need another source (e.g. the Knowledgebase
 /// Stations feed).
-pub fn unused_operator_codes(
+pub(crate) fn unused_operator_codes(
     lines: &[LoadedLine],
     reference: &ReferenceData,
 ) -> Vec<(String, String)> {
@@ -278,17 +278,19 @@ mod tests {
     fn reference_with(crs_tiploc: &[(&str, &[&str])], tocs: &[&str]) -> ReferenceData {
         let mut data = ReferenceData::default();
         for (crs, tiplocs) in crs_tiploc {
-            data.crs_to_name.insert(crs.to_string(), crs.to_string());
+            data.crs_to_name
+                .insert((*crs).to_string(), (*crs).to_string());
             data.crs_to_tiploc.insert(
-                crs.to_string(),
+                (*crs).to_string(),
                 tiplocs
                     .iter()
-                    .map(|t| t.to_string())
+                    .map(ToString::to_string)
                     .collect::<HashSet<_>>(),
             );
         }
         for toc in tocs {
-            data.toc_codes.insert(toc.to_string(), toc.to_string());
+            data.toc_codes
+                .insert((*toc).to_string(), (*toc).to_string());
         }
         data
     }

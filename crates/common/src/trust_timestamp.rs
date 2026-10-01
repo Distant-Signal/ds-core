@@ -375,6 +375,10 @@ pub struct TrustTimestampPair {
 /// `crates/trust-consumer/src/config.rs`/`crates/trust-backlog-consumer/src/config.rs`'s
 /// `trust_timestamp_correction_enabled` field for how an operator sets
 /// this at deploy time.
+#[expect(
+    clippy::expect_used,
+    reason = "the invariant is established just above; the expect message names it"
+)]
 pub fn parse_trust_epoch_millis_pair(
     planned: Option<&str>,
     actual: Option<&str>,
@@ -475,6 +479,10 @@ pub const MAX_PLAUSIBLE_DELAY_MINUTES: i64 = 24 * 60;
 /// class of corruption this module already guards `is_plausible_actual_timestamp`
 /// against, just unfiltered at this particular call site) could turn into
 /// a delay of literally millions of minutes.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "bounded by MAX_PLAUSIBLE_DELAY_MINUTES just above"
+)]
 pub fn plausible_delay_minutes(actual: DateTime<Utc>, planned: DateTime<Utc>) -> Option<i32> {
     let delta_minutes = (actual - planned).num_minutes();
     if delta_minutes.unsigned_abs() > MAX_PLAUSIBLE_DELAY_MINUTES as u64 {
@@ -492,6 +500,10 @@ pub fn plausible_delay_minutes(actual: DateTime<Utc>, planned: DateTime<Utc>) ->
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "test code: casts of small known test values"
+)]
 mod tests {
     use super::*;
 

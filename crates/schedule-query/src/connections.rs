@@ -163,8 +163,7 @@ impl PassIndex {
     pub fn connections_passing(&self, tiploc: &str) -> &[u32] {
         self.by_tiploc
             .get(crate::normalize_tiploc(tiploc))
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], Vec::as_slice)
     }
 
     /// How many (TIPLOC, connection) entries the index holds.
@@ -187,6 +186,11 @@ pub fn build_connections_with_passes<'a>(
     build(schedules, true)
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::expect_used,
+    reason = "a day's connection count is far below u32::MAX; the invariant is established just above; the expect message names it"
+)]
 fn build<'a>(
     schedules: impl IntoIterator<Item = (&'a str, &'a [CallingPointForConnections])>,
     with_passes: bool,
@@ -330,7 +334,7 @@ mod tests {
     }
 
     /// R-043: C22645 arrives at Blackfriars 23:55 and departs 00:02 (both
-    /// stored with the arrival's day_offset 0). The departure is the next
+    /// stored with the arrival's `day_offset` 0). The departure is the next
     /// day, so the connection on to Farringdon (00:05) is 3 minutes long,
     /// not -1437.
     #[test]

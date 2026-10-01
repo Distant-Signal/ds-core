@@ -134,6 +134,7 @@ fn serve(
     });
 }
 
+#[expect(clippy::unused_async, reason = "axum handlers must be async")]
 async fn healthz(
     state: ConnectionState,
     progress: Option<Progress>,
@@ -160,8 +161,9 @@ async fn healthz(
 ///
 /// `/healthz` is readiness-shaped (503 until the caller is connected), which
 /// is wrong for a liveness probe on a service that is still retrying its
-/// initial connection (INF-5): restarting it would only add CrashLoopBackOff
+/// initial connection (INF-5): restarting it would only add `CrashLoopBackOff`
 /// delay. A caller with no progress watchdog is always alive.
+#[expect(clippy::unused_async, reason = "axum handlers must be async")]
 async fn livez(progress: Option<Progress>) -> (StatusCode, &'static str) {
     match progress.filter(Progress::is_stalled) {
         Some(_) => (StatusCode::SERVICE_UNAVAILABLE, "stalled"),
@@ -258,7 +260,7 @@ mod tests {
 
     /// INF-5: while a service is still retrying its initial connection,
     /// readiness (`/healthz`) is false but liveness (`/livez`) must stay true,
-    /// or the liveness probe would restart it into CrashLoopBackOff.
+    /// or the liveness probe would restart it into `CrashLoopBackOff`.
     #[tokio::test]
     async fn livez_ignores_the_connection_state_but_not_a_stall() {
         let progress = Progress::new(Duration::from_millis(100));

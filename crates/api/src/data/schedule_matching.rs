@@ -64,11 +64,15 @@ pub fn crs_to_line_ids(lines: &[LineDefinition]) -> HashMap<String, Vec<String>>
 }
 
 /// camelCase wire shape for one calling point, converted from
-/// `schedule_query::CallingPoint` (whose own JSON keys are snake_case --
+/// `schedule_query::CallingPoint` (whose own JSON keys are `snake_case` --
 /// see this task's own note) BEFORE storage, so `schedule_calling_points`
 /// is stored already camelCase and the read path can relay it verbatim.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors the CIF calling-point flags on the wire"
+)]
 struct ScheduleCallingPointDto {
     tiploc: String,
     kind: schedule_query::CallingPointKind,
@@ -179,7 +183,11 @@ impl From<&schedule_query::CallingPoint> for ScheduleCallingPointDto {
 /// atomically. The only state a crash can now leave behind is "the shared
 /// row got its schedule data, the subscription is still `pending`" -- which
 /// the next sweep tick simply retries to completion.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::implicit_hasher,
+    clippy::too_many_arguments,
+    reason = "each argument is an independent input from the single caller; a struct would only wrap them; callers always use the default hasher"
+)]
 pub async fn attempt_schedule_match(
     pool: &PgPool,
     tracked_train_id: i64,
@@ -481,6 +489,10 @@ pub struct ScheduleMatch {
 /// genuine bug (a schedule reachable only from a later candidate line was
 /// unreachable), and its own regression test exercises exactly that shape;
 /// it simply was never what `Y80908` was hitting.
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear; splitting it would scatter its shared state across helpers"
+)]
 async fn find_schedule_match(
     pool: &PgPool,
     pin_origin_crs: &str,
@@ -772,7 +784,7 @@ fn closest_population_entry(
     // WRONG day, permanently stuck "Waiting to hear from Network Rail"
     // for any pin on one of them.
     let to_utc = |t: chrono::NaiveTime, day_offset: u8| {
-        london_to_utc((base_date + Duration::days(day_offset as i64)).and_time(t))
+        london_to_utc((base_date + Duration::days(i64::from(day_offset))).and_time(t))
     };
 
     let (matched, best_delta) = schedule_query::match_pin_with_delta(
@@ -892,6 +904,10 @@ fn terminates_at_any(entry: &LinePopulationEntry, destination_tiplocs: &[String]
 /// column is `COALESCE`d against the existing value -- so this can never
 /// clobber schedule data an earlier match already wrote, and is safe to
 /// call repeatedly.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub async fn attempt_schedule_match_for_shared_train(
     pool: &PgPool,
     train_uid: &str,
@@ -971,6 +987,10 @@ pub async fn attempt_schedule_match_for_shared_train(
 /// own `WHERE` already excludes such rows, so the `None` arm below should
 /// never actually run; it exists so a row that somehow slips through is
 /// skipped rather than panicking this whole sweep.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub async fn run_schedule_match_sweep(
     pool: &PgPool,
     crs_line_index: &HashMap<String, Vec<String>>,
@@ -1060,7 +1080,7 @@ mod tests {
                     LICARLILE 1202 1213      12021213         T\n\
                     LTEUSTON  0804 08079     TF";
         let index = schedule_query::ScheduleIndex::from_text(text);
-        let date = chrono::NaiveDate::from_ymd_opt(2026, 5, 17).unwrap();
+        let date = NaiveDate::from_ymd_opt(2026, 5, 17).unwrap();
         let resolved = index
             .schedule_for_uid("C00573", date)
             .expect("fixture schedule resolves");
@@ -1099,7 +1119,7 @@ mod tests {
             sample_stations: vec![],
             match_keywords: vec![],
             excluded_keywords: vec![],
-            severity_overrides: std::collections::HashMap::new(),
+            severity_overrides: HashMap::new(),
             destination_crs_filter: vec![],
             headcode_prefixes: vec![],
             full_coverage_enabled: false,
@@ -1159,6 +1179,11 @@ mod tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "test code: fixtures sit next to their use; scenario tests read top to bottom"
+)]
 mod db_tests {
     use super::*;
     use sqlx::postgres::PgPoolOptions;
@@ -1228,7 +1253,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         sqlx::query(
             "INSERT INTO schedule_line_population (line_id, service_date, population) \
              VALUES ('west-coast-main-line', $1, $2) \
@@ -1246,8 +1271,7 @@ mod db_tests {
         // live TRUST Movement for it will ever arrive within this
         // process's test window, exactly mirroring "pinned an hour late,
         // TRUST's own ±20-minute window already closed").
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-05T19:15:00+01:00".parse().unwrap(); // BST -> 18:15 UTC
+        let scheduled_departure: DateTime<Utc> = "2026-09-05T19:15:00+01:00".parse().unwrap(); // BST -> 18:15 UTC
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -1325,7 +1349,7 @@ mod db_tests {
     }
 
     /// The exact live-confirmed midnight-crossing bug (2026-09-09
-    /// investigation: c2c UID F49687, service_date 2026-09-05, Liverpool
+    /// investigation: c2c UID F49687, `service_date` 2026-09-05, Liverpool
     /// Street 23:48 -> Stratford 23:54/55 -> Barking 00:06/00:07 -> ... ->
     /// Shoeburyness 01:01 -- every calling point from Barking onward is
     /// really 2026-09-06 wall-clock), reproduced end to end through
@@ -1364,7 +1388,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let population = serde_json::json!([{
             "uid": "TEST-F49687",
             "calling_points": [
@@ -1404,8 +1428,7 @@ mod db_tests {
         // schedule's own service_date (2026-09-05), which is exactly what
         // day_offset: 1 says. The pin is dated with this REAL, correct
         // instant, as a genuine tracked-train pin would be.
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-06T00:07:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-06T00:07:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -1502,9 +1525,9 @@ mod db_tests {
         let line_id = "test-m7r-overnight-line";
         let overnight_uid = "TEST-M7S-NIGHT";
         let other_uid = "TEST-M7S-OTHER";
-        let day_one: chrono::NaiveDate = "2026-09-10".parse().unwrap();
-        let day_two: chrono::NaiveDate = "2026-09-11".parse().unwrap();
-        let day_three: chrono::NaiveDate = "2026-09-12".parse().unwrap();
+        let day_one: NaiveDate = "2026-09-10".parse().unwrap();
+        let day_two: NaiveDate = "2026-09-11".parse().unwrap();
+        let day_three: NaiveDate = "2026-09-12".parse().unwrap();
 
         let cleanup = || async {
             for user_id in users {
@@ -1593,10 +1616,10 @@ mod db_tests {
         let mut crs_line_index = HashMap::new();
         crs_line_index.insert("ZSB".to_string(), vec![line_id.to_string()]);
 
-        let pin_and_match = |user_id: &'static str, pin_date: chrono::NaiveDate, at: &str| {
+        let pin_and_match = |user_id: &'static str, pin_date: NaiveDate, at: &str| {
             let pool = pool.clone();
             let crs_line_index = crs_line_index.clone();
-            let scheduled: chrono::DateTime<chrono::Utc> = at.parse().unwrap();
+            let scheduled: DateTime<Utc> = at.parse().unwrap();
             async move {
                 sqlx::query(
                     "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) \
@@ -1634,7 +1657,7 @@ mod db_tests {
                 .await
                 .expect("attempt_schedule_match");
                 assert!(matched, "{user_id}'s pin must schedule-match");
-                let identity: (String, chrono::NaiveDate, String) = sqlx::query_as(
+                let identity: (String, NaiveDate, String) = sqlx::query_as(
                     "SELECT tr.train_uid, tr.service_date, ts.resolution_status \
                      FROM train_subscriptions ts JOIN trains tr ON tr.id = ts.trains_id \
                      WHERE ts.id = $1",
@@ -1723,7 +1746,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs");
 
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
         let population = serde_json::json!([{
             "uid": "TEST-ECSXVR",
             "calling_points": [
@@ -1758,8 +1781,7 @@ mod db_tests {
         .await
         .expect("seed schedule_line_population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T23:10:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T23:10:00+01:00".parse().unwrap();
         let mut crs_line_index = HashMap::new();
         crs_line_index.insert("ZEC".to_string(), vec!["test-ecs-line".to_string()]);
 
@@ -1828,7 +1850,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs destination");
 
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
         let population = serde_json::json!([{
             "uid": "TEST-REALBSK",
             "calling_points": [
@@ -1863,8 +1885,7 @@ mod db_tests {
         .await
         .expect("seed schedule_line_population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T12:00:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T12:00:00+01:00".parse().unwrap();
         let mut crs_line_index = HashMap::new();
         crs_line_index.insert("ZBS".to_string(), vec!["test-real-bsk-line".to_string()]);
 
@@ -1919,7 +1940,7 @@ mod db_tests {
             sample_stations: vec![],
             match_keywords: vec![],
             excluded_keywords: vec![],
-            severity_overrides: std::collections::HashMap::new(),
+            severity_overrides: HashMap::new(),
             destination_crs_filter: vec![],
             headcode_prefixes: vec![],
             full_coverage_enabled: false,
@@ -1967,7 +1988,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs");
 
-        let service_date: chrono::NaiveDate = "2026-09-09".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-09".parse().unwrap();
         sqlx::query(
             "INSERT INTO schedule_line_population (line_id, service_date, population) \
              VALUES ('test-no-toml-tiploc-line', $1, $2) \
@@ -1979,8 +2000,7 @@ mod db_tests {
         .await
         .expect("seed schedule_line_population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-09T19:15:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-09T19:15:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -2078,7 +2098,7 @@ mod db_tests {
         .await
         .expect("seed fixture user");
 
-        let service_date: chrono::NaiveDate = "2026-09-05".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -2086,7 +2106,7 @@ mod db_tests {
         .bind(user_id)
         .bind(service_date)
         .bind("ZZZ")
-        .bind("2026-09-05T19:15:00Z".parse::<chrono::DateTime<chrono::Utc>>().unwrap())
+        .bind("2026-09-05T19:15:00Z".parse::<DateTime<Utc>>().unwrap())
         .fetch_one(&pool)
         .await
         .expect("seed fixture tracked_trains row");
@@ -2152,7 +2172,7 @@ mod db_tests {
         .await
         .expect("seed stanox_crs");
 
-        let service_date: chrono::NaiveDate = "2026-09-06".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-06".parse().unwrap();
         sqlx::query(
             "INSERT INTO schedule_line_population (line_id, service_date, population) \
              VALUES ('west-coast-main-line', $1, $2) \
@@ -2164,8 +2184,7 @@ mod db_tests {
         .await
         .expect("seed schedule_line_population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-06T19:15:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-06T19:15:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -2268,7 +2287,7 @@ mod db_tests {
      {
         let pool = connect().await;
         let train_uid = "TEST-Y80908-SHAPE";
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
 
         // Simulates `trust-backlog-consumer`'s bare `find_or_create_train` +
         // `mark_train_resolved` -- real live TRUST identity, no
@@ -2319,8 +2338,7 @@ mod db_tests {
         .await
         .expect("seed the correct candidate line's population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T12:00:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T12:00:00+01:00".parse().unwrap();
         let mut crs_line_index = HashMap::new();
         // Order matters: the wrong line MUST be iterated first to reproduce
         // the bug -- `Vec` insertion order here mirrors the real
@@ -2416,7 +2434,7 @@ mod db_tests {
         let pool = connect().await;
         let train_uid = "TEST-Y80908-TIE";
         let rival_uid = "TEST-W75898-TIE";
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
 
         let trains_id = crate::data::trains::find_or_create_train(&pool, train_uid, service_date)
             .await
@@ -2451,8 +2469,7 @@ mod db_tests {
         .await
         .expect("seed the busy line's population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T16:06:00+01:00".parse().unwrap();
         let mut crs_line_index = HashMap::new();
         crs_line_index.insert("TTB".to_string(), vec!["test-bhm-peak-shape".to_string()]);
 
@@ -2518,7 +2535,7 @@ mod db_tests {
     async fn attempt_schedule_match_still_takes_the_closest_entry_of_the_whole_population() {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-UNTARGETED";
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
         sqlx::query(
             "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
         )
@@ -2552,8 +2569,7 @@ mod db_tests {
         .await
         .expect("seed population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T16:06:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -2705,7 +2721,7 @@ mod db_tests {
         let user_id = "TEST-SCHEDULE-MATCH-DEST-TIE";
         let wanted_uid = "TEST-TIE-TO-EUSTON";
         let rival_uid = "TEST-TIE-TO-LICHFIELD";
-        let service_date: chrono::NaiveDate = "2026-09-24".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-24".parse().unwrap();
 
         sqlx::query(
             "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
@@ -2747,16 +2763,15 @@ mod db_tests {
         .await
         .expect("seed the busy line's population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-24T16:06:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-24T16:06:00+01:00".parse().unwrap();
         let mut crs_line_index = HashMap::new();
         crs_line_index.insert("TDO".to_string(), vec!["test-dest-tie-line".to_string()]);
 
         async fn seed_pin(
             pool: &PgPool,
             user_id: &str,
-            service_date: chrono::NaiveDate,
-            scheduled_departure: chrono::DateTime<chrono::Utc>,
+            service_date: NaiveDate,
+            scheduled_departure: DateTime<Utc>,
             destination_crs: Option<&str>,
         ) -> i64 {
             let (id,): (i64,) = sqlx::query_as(
@@ -2914,7 +2929,7 @@ mod db_tests {
      {
         let pool = connect().await;
         let train_uid = "TEST-UNCATALOGUED-ORIGIN";
-        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-25".parse().unwrap();
 
         // Cleanup FIRST as well as last: `find_or_create_train` is idempotent
         // per `(train_uid, service_date)`, so a row left behind by an earlier
@@ -2959,8 +2974,7 @@ mod db_tests {
         .await
         .expect("seed the catalogued line's population");
 
-        let scheduled_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-25T09:14:00+01:00".parse().unwrap();
+        let scheduled_departure: DateTime<Utc> = "2026-09-25T09:14:00+01:00".parse().unwrap();
         // The load-bearing omission: 'TUO' is absent. Only an unrelated
         // station of the same line is catalogued, exactly as for a real
         // uncatalogued branch terminus.
@@ -3067,7 +3081,7 @@ mod db_tests {
     async fn apply_schedule_match_writes_status_and_trains_id_together() {
         let pool = connect().await;
         let user_id = "TEST-APPLY-ATOMIC";
-        let service_date: chrono::NaiveDate = "2026-09-25".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-25".parse().unwrap();
         sqlx::query(
             "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
         )
@@ -3094,11 +3108,7 @@ mod db_tests {
         )
         .bind(user_id)
         .bind(service_date)
-        .bind(
-            "2026-09-25T09:00:00Z"
-                .parse::<chrono::DateTime<chrono::Utc>>()
-                .unwrap(),
-        )
+        .bind("2026-09-25T09:00:00Z".parse::<DateTime<Utc>>().unwrap())
         .fetch_one(&pool)
         .await
         .expect("seed a pending subscription");
@@ -3134,11 +3144,7 @@ mod db_tests {
         )
         .bind(user_id)
         .bind(service_date)
-        .bind(
-            "2026-09-25T09:00:00Z"
-                .parse::<chrono::DateTime<chrono::Utc>>()
-                .unwrap(),
-        )
+        .bind("2026-09-25T09:00:00Z".parse::<DateTime<Utc>>().unwrap())
         .bind(other_trains_id)
         .fetch_one(&pool)
         .await
@@ -3198,7 +3204,7 @@ mod db_tests {
         let user_id = "TEST-DB2-8-USER";
         let train_uid = "TEST-DB2-8-UID";
         let line_id = "test-db2-8-line";
-        let service_date: chrono::NaiveDate = "2026-09-07".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-07".parse().unwrap();
         let cleanup = || async {
             sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
                 .bind(user_id)
@@ -3264,8 +3270,7 @@ mod db_tests {
         .expect("seed population");
 
         // 08:30 BST at the intermediate stop.
-        let pin_departure: chrono::DateTime<chrono::Utc> =
-            "2026-09-07T08:30:00+01:00".parse().unwrap();
+        let pin_departure: DateTime<Utc> = "2026-09-07T08:30:00+01:00".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions \
                 (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
@@ -3298,7 +3303,7 @@ mod db_tests {
 
         let (origin_crs, scheduled_departure, platform): (
             Option<String>,
-            Option<chrono::DateTime<chrono::Utc>>,
+            Option<DateTime<Utc>>,
             Option<String>,
         ) = sqlx::query_as(
             "SELECT origin_crs, scheduled_departure, platform FROM trains \

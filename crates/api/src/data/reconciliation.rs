@@ -138,6 +138,10 @@ pub(crate) async fn true_origin_departure(
 /// every subscriber sharing this identity should be advanced together,
 /// since the schedule data now exists for all of them, not just whichever
 /// one happened to trigger this candidate row.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub async fn retry_schedule_enrichment_for_nr_primary_trains(
     pool: &PgPool,
     crs_line_index: &HashMap<String, Vec<String>>,
@@ -227,6 +231,10 @@ pub struct ReconciliationSweepResult {
     pub schedule_enrichment_matched: u64,
 }
 
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
 pub async fn run_reconciliation_sweep(
     pool: &PgPool,
     crs_line_index: &HashMap<String, Vec<String>>,
@@ -272,7 +280,7 @@ mod db_tests {
         .expect("seed fixture user");
     }
 
-    async fn seed_train(pool: &PgPool, train_uid: &str, service_date: chrono::NaiveDate) -> i64 {
+    async fn seed_train(pool: &PgPool, train_uid: &str, service_date: NaiveDate) -> i64 {
         let (id,): (i64,) = sqlx::query_as(
             "INSERT INTO trains (train_uid, service_date) VALUES ($1, $2) RETURNING id",
         )
@@ -287,7 +295,7 @@ mod db_tests {
     async fn seed_pending_subscription(
         pool: &PgPool,
         user_id: &str,
-        service_date: chrono::NaiveDate,
+        service_date: NaiveDate,
         trains_id: i64,
     ) -> i64 {
         let (id,): (i64,) = sqlx::query_as(
@@ -350,8 +358,8 @@ mod db_tests {
     /// `2020-01-01`) would otherwise be silently excluded by that bound the
     /// moment it landed, turning every "skips" test green for the wrong
     /// reason instead of red for the right one.
-    fn recent_service_date() -> chrono::NaiveDate {
-        chrono::Utc::now().date_naive() - chrono::Duration::days(1)
+    fn recent_service_date() -> NaiveDate {
+        Utc::now().date_naive() - chrono::Duration::days(1)
     }
 
     /// The real UTC instant a `service_date`'s local (`Europe/London`)
@@ -360,12 +368,8 @@ mod db_tests {
     /// internally, so a test's `now` fixture stays correct year-round
     /// (BST vs GMT) without the test author having to reason about the
     /// offset by hand.
-    fn london_departure_utc(
-        service_date: chrono::NaiveDate,
-        hour: u32,
-        minute: u32,
-    ) -> chrono::DateTime<chrono::Utc> {
-        crate::data::eta_blend::london_to_utc(
+    fn london_departure_utc(service_date: NaiveDate, hour: u32, minute: u32) -> DateTime<Utc> {
+        london_to_utc(
             service_date
                 .and_hms_opt(hour, minute, 0)
                 .expect("valid local time"),
@@ -393,12 +397,15 @@ mod db_tests {
     /// `schedule_line_population` entry) and a `schedule_destination_departures`
     /// row for `true_origin_departure` to find. Returns
     /// `(trains_id, subscription_id, crs_line_index)`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "test fixture: one positional argument per column it seeds"
+    )]
     async fn seed_enrichment_fixture(
         pool: &PgPool,
         user_id: &str,
         train_uid: &str,
-        service_date: chrono::NaiveDate,
+        service_date: NaiveDate,
         origin_crs: &str,
         stanox: &str,
         line_id: &str,
@@ -448,11 +455,8 @@ mod db_tests {
         (trains_id, subscription_id, crs_line_index)
     }
 
-    async fn read_schedule_matched_at(
-        pool: &PgPool,
-        trains_id: i64,
-    ) -> Option<chrono::DateTime<chrono::Utc>> {
-        let schedule_matched_at: Option<chrono::DateTime<chrono::Utc>> =
+    async fn read_schedule_matched_at(pool: &PgPool, trains_id: i64) -> Option<DateTime<Utc>> {
+        let schedule_matched_at: Option<DateTime<Utc>> =
             sqlx::query_scalar("SELECT schedule_matched_at FROM trains WHERE id = $1")
                 .bind(trains_id)
                 .fetch_one(pool)
@@ -467,7 +471,7 @@ mod db_tests {
         train_uid: &str,
         stanox: &str,
         line_id: &str,
-        service_date: chrono::NaiveDate,
+        service_date: NaiveDate,
     ) {
         cleanup(pool, user_id, train_uid).await;
         sqlx::query("DELETE FROM schedule_destination_departures WHERE train_uid = $1")
@@ -499,7 +503,7 @@ mod db_tests {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL1-A";
         let train_uid = "TEST-RECON-STALL1-UID-A";
-        let service_date: chrono::NaiveDate = "2026-09-08".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-08".parse().unwrap();
         seed_user(&pool, user_id).await;
         let trains_id = seed_train(&pool, train_uid, service_date).await;
         let subscription_id =
@@ -533,7 +537,7 @@ mod db_tests {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL1-B";
         let train_uid = "TEST-RECON-STALL1-UID-B";
-        let service_date: chrono::NaiveDate = "2026-09-08".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-08".parse().unwrap();
         seed_user(&pool, user_id).await;
         let trains_id = seed_train(&pool, train_uid, service_date).await;
         let subscription_id =
@@ -560,7 +564,7 @@ mod db_tests {
         let pool = connect().await;
         let user_id = "TEST-RECON-STALL1-C";
         let train_uid = "TEST-RECON-STALL1-UID-C";
-        let service_date: chrono::NaiveDate = "2026-09-08".parse().unwrap();
+        let service_date: NaiveDate = "2026-09-08".parse().unwrap();
         seed_user(&pool, user_id).await;
         let trains_id = seed_train(&pool, train_uid, service_date).await;
         let (subscription_id,): (i64,) = sqlx::query_as(

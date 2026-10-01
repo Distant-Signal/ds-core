@@ -15,6 +15,10 @@ use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
 ///
 /// UK clocks change exactly at the 01:00/02:00 boundary in both directions,
 /// so local 02:00 itself is never ambiguous or missing on a transition day.
+#[expect(
+    clippy::expect_used,
+    reason = "a constant or range-checked time is always valid"
+)]
 pub fn next_rail_day_boundary(at: DateTime<Utc>) -> DateTime<Utc> {
     let local = at.with_timezone(&chrono_tz::Europe::London);
     let boundary_time = NaiveTime::from_hms_opt(2, 0, 0).expect("2:00:00 is a valid time");
@@ -53,6 +57,10 @@ pub fn next_rail_day_boundary(at: DateTime<Utc>) -> DateTime<Utc> {
 /// the wrong (next) rail day -- which is exactly the class of date bug
 /// `trust-backlog-consumer`'s own `service_date` handling was already burned
 /// by in production.
+#[expect(
+    clippy::expect_used,
+    reason = "a constant or range-checked time is always valid"
+)]
 pub fn current_rail_day(at: DateTime<Utc>) -> chrono::NaiveDate {
     let local = at.with_timezone(&chrono_tz::Europe::London);
     let cutoff = NaiveTime::from_hms_opt(2, 0, 0).expect("2:00:00 is a valid time");
@@ -76,8 +84,7 @@ pub fn london_to_utc(date: chrono::NaiveDate, time: NaiveTime) -> DateTime<Utc> 
         chrono::LocalResult::None => chrono_tz::Europe::London
             .from_local_datetime(&(naive + Duration::hours(1)))
             .earliest()
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|| naive.and_utc()),
+            .map_or_else(|| naive.and_utc(), |dt| dt.with_timezone(&Utc)),
     }
 }
 

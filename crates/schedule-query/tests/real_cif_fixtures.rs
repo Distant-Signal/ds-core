@@ -15,6 +15,11 @@
 //! such, not presented as real" rule. Fully synthetic edge-case lines
 //! (a minimal two-point block, a malformed line) are labeled the same way.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test code: a panic is the right failure in a test"
+)]
+
 use chrono::NaiveDate;
 use schedule_query::{CallingPointKind, ScheduleIndex};
 

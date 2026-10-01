@@ -53,6 +53,10 @@ pub struct HalfMinuteTime(u16);
 impl HalfMinuteTime {
     /// `time` (whole minutes; seconds are ignored) plus 30 seconds when
     /// `half_minute`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "minutes since midnight are at most 1439"
+    )]
     pub fn new(time: NaiveTime, half_minute: bool) -> Self {
         use chrono::Timelike;
         let minutes = (time.hour() * 60 + time.minute()) as u16;
@@ -198,7 +202,7 @@ pub struct BasicSchedule {
     /// Extra Details) line's `11..13` byte range (0-based, half-open) --
     /// verified against the real `BX         SRYSR408800` line quoted in
     /// `docs/superpowers/specs/2026-08-29-trust-schedule-delay-inference-timetable-verification.md`
-    /// ("Claim 1" section), which decodes to `"SR"` (ScotRail). `None` when
+    /// ("Claim 1" section), which decodes to `"SR"` (`ScotRail`). `None` when
     /// no `BX` line follows the `BS` (or the `BX` line is too short/
     /// non-ASCII to decode, or its ATOC Code field is blank) -- this is the
     /// only `BX` field this crate decodes; every other `BX` field remains
@@ -825,11 +829,11 @@ mod tests {
                 tiploc: "EUSTON ".into(),
                 kind: CallingPointKind::Origin,
                 booked_arrival: None,
-                booked_departure: chrono::NaiveTime::from_hms_opt(8, 22, 0),
+                booked_departure: NaiveTime::from_hms_opt(8, 22, 0),
                 is_half_minute_arrival: false,
                 is_half_minute_departure: false,
                 day_offset: 0,
-                activity: Default::default(),
+                activity: SmallStr::default(),
                 public_arrival: None,
                 public_departure: None,
                 platform: None,
@@ -881,23 +885,20 @@ mod tests {
     /// and a blob without `booked_pass` still deserializes.
     #[test]
     fn half_minute_time_serializes_as_a_time_string() {
-        let time = HalfMinuteTime::new(chrono::NaiveTime::from_hms_opt(20, 50, 0).unwrap(), true);
+        let time = HalfMinuteTime::new(NaiveTime::from_hms_opt(20, 50, 0).unwrap(), true);
         let json = serde_json::to_string(&time).unwrap();
         assert_eq!(json, r#""20:50:30""#);
         assert_eq!(serde_json::from_str::<HalfMinuteTime>(&json).unwrap(), time);
         let whole: HalfMinuteTime = serde_json::from_str(r#""23:59:00""#).unwrap();
         assert!(!whole.is_half_minute());
-        assert_eq!(
-            whole.time(),
-            chrono::NaiveTime::from_hms_opt(23, 59, 0).unwrap()
-        );
+        assert_eq!(whole.time(), NaiveTime::from_hms_opt(23, 59, 0).unwrap());
     }
 
     /// Adding the pass time must not grow the struct the schedule index holds
     /// ~7.9M of (see `crate::compact`).
     #[test]
     fn calling_point_stays_104_bytes() {
-        assert_eq!(std::mem::size_of::<CallingPoint>(), 104);
+        assert_eq!(size_of::<CallingPoint>(), 104);
     }
 
     #[test]
