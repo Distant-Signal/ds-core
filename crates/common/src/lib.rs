@@ -2030,6 +2030,12 @@ pub struct Defaults {
     /// The lower tiers keep `full_coverage_min_affected`.
     #[serde_inline_default(full_coverage_window::FULL_COVERAGE_SEVERE_MIN_AFFECTED)]
     pub full_coverage_severe_min_affected: i64,
+    /// Rule A (user decision, 2026-10-02): a full-coverage window below
+    /// `full_coverage_min_sample_size` reads Part Suspended when every
+    /// evaluable train, and at least this many, was explicitly cancelled
+    /// (`full_coverage_window::sparse_all_cancelled`). 0 turns it off.
+    #[serde_inline_default(full_coverage_window::FULL_COVERAGE_SPARSE_MIN_CANCELLED)]
+    pub full_coverage_sparse_min_cancelled: i64,
 }
 
 impl Default for Defaults {
@@ -2072,6 +2078,9 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
             "full_coverage_min_affected" => merged.full_coverage_min_affected = *value as i64,
             "full_coverage_severe_min_affected" => {
                 merged.full_coverage_severe_min_affected = *value as i64;
+            }
+            "full_coverage_sparse_min_cancelled" => {
+                merged.full_coverage_sparse_min_cancelled = *value as i64;
             }
             _ => {}
         }

@@ -38,6 +38,20 @@ pub const FULL_COVERAGE_SEVERE_MIN_AFFECTED: i64 = 5;
 /// writes every 60 s, so three missed writes mean it has stopped.
 pub const FULL_COVERAGE_WINDOW_MAX_AGE_SECS: i64 = 180;
 
+/// The default of `Defaults::full_coverage_sparse_min_cancelled` (user
+/// decision, 2026-10-02): a window too small for the rate tiers (fewer than
+/// `full_coverage_min_sample_size` evaluable trains) still reads Part
+/// Suspended when every one of at least this many trains was explicitly
+/// cancelled. 0 turns the rule off. 3 would drop exactly the branch lines
+/// the rule exists for (a two-trains-an-hour shuttle), so the default is 2.
+pub const FULL_COVERAGE_SPARSE_MIN_CANCELLED: i64 = 2;
+
+/// An explicit cancellation that arrived at least this many minutes before
+/// the train was due counts as "cancelled in advance"
+/// (`FullCoverageWindowCounts::cancelled_in_advance`). Only an annotation
+/// on the sparse rule's reason; it changes no verdict.
+pub const FULL_COVERAGE_CANCELLED_IN_ADVANCE_MINUTES: u32 = 180;
+
 /// The default phase gate (user decision, 2026-09-27): only verdicts at the
 /// Severe tier (`severity_rank` 4: Severe Delays, Part Suspended) are
 /// enforced. Lower tiers are still computed and stored as
@@ -86,6 +100,11 @@ pub struct FullCoverageWindowCounts {
     /// Due before this process could see every event. Not in `total`.
     pub unobserved: u32,
     pub avg_delay_minutes: f64,
+    /// Of `cancelled_explicit`, the trains whose cancellation arrived at
+    /// least [`FULL_COVERAGE_CANCELLED_IN_ADVANCE_MINUTES`] before they were
+    /// due. 0 from a consumer older than this field.
+    #[serde(default)]
+    pub cancelled_in_advance: u32,
 }
 
 impl FullCoverageWindowCounts {
@@ -154,11 +173,46 @@ impl IneligibleReason {
     }
 }
 
+/// Which rule produced an `Escalate` verdict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EscalationBasis {
+    /// The rate tiers, over a window of at least
+    /// `full_coverage_min_sample_size` evaluable trains.
+    Rate,
+    /// Rule A ([`sparse_all_cancelled`]): a window below the sample size in
+    /// which every train was explicitly cancelled. The aggregator enforces
+    /// it under its own allowlist (`FULL_COVERAGE_WINDOW_SPARSE_ENFORCE_LINES`),
+    /// so it can stay shadow-only while the rate tiers are enforced.
+    SparseAllCancelled,
+}
+
+impl EscalationBasis {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Rate => "rate",
+            Self::SparseAllCancelled => "sparse_all_cancelled",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "rate" => Some(Self::Rate),
+            "sparse_all_cancelled" => Some(Self::SparseAllCancelled),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum WindowVerdict {
     Ineligible(IneligibleReason),
     Good,
-    Escalate { severity: Severity, reason: String },
+    Escalate {
+        severity: Severity,
+        reason: String,
+        basis: EscalationBasis,
+    },
 }
 
 impl WindowVerdict {
@@ -177,13 +231,24 @@ impl WindowVerdict {
             _ => None,
         }
     }
+
+    /// The rule behind an `Escalate`; `None` for any other verdict.
+    pub fn basis(&self) -> Option<EscalationBasis> {
+        match self {
+            Self::Escalate { basis, .. } => Some(*basis),
+            _ => None,
+        }
+    }
 }
 
 /// The severity a `recent` window supports on its own (design section 6):
 ///
 /// 1. Ineligible when `feed_stale`, `partial`, older than
 ///    [`FULL_COVERAGE_WINDOW_MAX_AGE_SECS`] at `now`, or
-///    `total < full_coverage_min_sample_size`.
+///    `total < full_coverage_min_sample_size` -- except that a window below
+///    the sample size in which every train was explicitly cancelled is Part
+///    Suspended ([`sparse_all_cancelled`], basis
+///    [`EscalationBasis::SparseAllCancelled`]).
 /// 2. Otherwise the first tier met, in this order (rates over `total`, each
 ///    also needing at least `full_coverage_min_affected` trains, and the
 ///    three Severe-rank tiers at least `full_coverage_severe_min_affected`):
@@ -210,7 +275,8 @@ pub fn classify_full_coverage_window(
     }
     let c = &row.counts;
     if i64::from(c.total) < thresholds.full_coverage_min_sample_size || c.total == 0 {
-        return WindowVerdict::Ineligible(IneligibleReason::BelowThreshold);
+        return sparse_all_cancelled(row, thresholds)
+            .unwrap_or(WindowVerdict::Ineligible(IneligibleReason::BelowThreshold));
     }
 
     let total = f64::from(c.total);
@@ -281,10 +347,57 @@ pub fn classify_full_coverage_window(
             return WindowVerdict::Escalate {
                 severity,
                 reason: reason(),
+                basis: EscalationBasis::Rate,
             };
         }
     }
     WindowVerdict::Good
+}
+
+/// Rule A, sparse all-cancelled detection ("Decisions (2026-10-02, sparse
+/// windows)"): a window too small for the rate tiers is Part Suspended when
+/// ALL of these hold, and `None` (still `BelowThreshold`) otherwise:
+///
+/// - `2 <= total < full_coverage_min_sample_size`;
+/// - every evaluable train was explicitly cancelled, and there are at least
+///   `full_coverage_sparse_min_cancelled` of them (0 turns the rule off);
+/// - nothing is `pending`, presumed cancelled or `unobserved`;
+/// - the population carried train status (`relevance == "full"`).
+///
+/// Only reached after the `feed_stale`, `partial` and row-age checks, which
+/// still win. A feed gap cannot fake it: missing TRUST data yields pending
+/// or presumed trains, never explicit cancellations, and planned closures
+/// (STP-cancelled trains, buses) are not in the population at all.
+pub fn sparse_all_cancelled(
+    row: &FullCoverageWindowStatsRow,
+    thresholds: &Defaults,
+) -> Option<WindowVerdict> {
+    let c = &row.counts;
+    let min_cancelled = thresholds.full_coverage_sparse_min_cancelled;
+    let applies = min_cancelled > 0
+        && c.total >= 2
+        && i64::from(c.total) < thresholds.full_coverage_min_sample_size
+        && c.cancelled_explicit == c.total
+        && i64::from(c.cancelled_explicit) >= min_cancelled
+        && c.pending == 0
+        && c.cancelled_presumed == 0
+        && c.unobserved == 0
+        && row.relevance == "full";
+    if !applies {
+        return None;
+    }
+    let n = c.total;
+    let span = window_phrase(row);
+    let in_advance = if c.cancelled_in_advance >= n {
+        " (cancelled in advance)"
+    } else {
+        ""
+    };
+    Some(WindowVerdict::Escalate {
+        severity: Severity::PartSuspended,
+        reason: format!("All {n} trains due {span} were cancelled{in_advance}."),
+        basis: EscalationBasis::SparseAllCancelled,
+    })
 }
 
 fn window_phrase(row: &FullCoverageWindowStatsRow) -> String {
@@ -618,6 +731,180 @@ mod tests {
         assert_eq!(d.would_escalate_to, None);
     }
 
+    // --- Rule A: sparse all-cancelled (2026-10-02) ---
+
+    fn sparse(total: u32, explicit: u32) -> FullCoverageWindowCounts {
+        counts(total, 0, explicit, 0, 0)
+    }
+
+    #[test]
+    fn two_of_two_cancelled_is_part_suspended_on_the_sparse_basis() {
+        let v = verdict(sparse(2, 2));
+        assert_eq!(
+            v,
+            WindowVerdict::Escalate {
+                severity: Severity::PartSuspended,
+                reason: "All 2 trains due in the last hour were cancelled.".to_string(),
+                basis: EscalationBasis::SparseAllCancelled,
+            }
+        );
+        assert_eq!(v.basis(), Some(EscalationBasis::SparseAllCancelled));
+        // Up to one below the sample size.
+        assert_eq!(
+            verdict(sparse(5, 5)).basis(),
+            Some(EscalationBasis::SparseAllCancelled)
+        );
+    }
+
+    #[test]
+    fn sparse_needs_every_train_and_at_least_two_cancelled() {
+        let below = WindowVerdict::Ineligible(IneligibleReason::BelowThreshold);
+        assert_eq!(verdict(sparse(1, 1)), below, "a single cancellation");
+        assert_eq!(verdict(sparse(3, 2)), below, "one train ran");
+        let mut c = sparse(3, 2);
+        c.skipped = 1;
+        c.on_time = 0;
+        assert_eq!(verdict(c), below, "one train ran part of the line");
+    }
+
+    #[test]
+    fn sparse_needs_nothing_pending_presumed_or_unobserved() {
+        let below = WindowVerdict::Ineligible(IneligibleReason::BelowThreshold);
+        let mut c = sparse(2, 2);
+        c.pending = 1;
+        assert_eq!(verdict(c), below, "2 cancelled + 1 pending");
+        // 2 explicit + 1 presumed: total 3, explicit != total.
+        assert_eq!(verdict(counts(3, 0, 2, 1, 0)), below);
+        let mut c = sparse(2, 2);
+        c.cancelled_presumed = 1;
+        assert_eq!(verdict(c), below, "presumed > 0 even if miscounted");
+        let mut c = sparse(2, 2);
+        c.unobserved = 1;
+        assert_eq!(verdict(c), below);
+    }
+
+    #[test]
+    fn sparse_needs_full_relevance() {
+        let mut r = row(sparse(3, 3));
+        r.relevance = "stops_only".to_string();
+        assert_eq!(
+            classify_full_coverage_window(&r, &Defaults::default(), now()),
+            WindowVerdict::Ineligible(IneligibleReason::BelowThreshold)
+        );
+    }
+
+    /// At or above the sample size the rate tiers decide, on the rate
+    /// basis, exactly as before.
+    #[test]
+    fn six_or_more_trains_use_the_rate_tiers() {
+        let v = verdict(sparse(6, 6));
+        assert_eq!(v.severity(), Some(Severity::PartSuspended));
+        assert_eq!(v.basis(), Some(EscalationBasis::Rate));
+        assert_eq!(
+            verdict(sparse(6, 6)),
+            WindowVerdict::Escalate {
+                severity: Severity::PartSuspended,
+                reason: "6 of 6 trains due in the last hour were cancelled.".to_string(),
+                basis: EscalationBasis::Rate,
+            }
+        );
+        assert_eq!(
+            verdict(counts(6, 0, 4, 0, 0)).basis(),
+            Some(EscalationBasis::Rate)
+        );
+    }
+
+    #[test]
+    fn sparse_min_cancelled_override_and_zero_is_off() {
+        let mut overrides = HashMap::new();
+        overrides.insert("full_coverage_sparse_min_cancelled".to_string(), 3.0);
+        let t = thresholds_for(&Defaults::default(), &overrides);
+        assert_eq!(t.full_coverage_sparse_min_cancelled, 3);
+        let judge = |c, t: &Defaults| classify_full_coverage_window(&row(c), t, now());
+        assert_eq!(
+            judge(sparse(2, 2), &t),
+            WindowVerdict::Ineligible(IneligibleReason::BelowThreshold)
+        );
+        assert_eq!(
+            judge(sparse(3, 3), &t).severity(),
+            Some(Severity::PartSuspended)
+        );
+        overrides.insert("full_coverage_sparse_min_cancelled".to_string(), 0.0);
+        let off = thresholds_for(&Defaults::default(), &overrides);
+        assert_eq!(
+            judge(sparse(5, 5), &off),
+            WindowVerdict::Ineligible(IneligibleReason::BelowThreshold)
+        );
+        // A min-cancelled of 1 still needs two trains.
+        overrides.insert("full_coverage_sparse_min_cancelled".to_string(), 1.0);
+        let one = thresholds_for(&Defaults::default(), &overrides);
+        assert_eq!(
+            judge(sparse(1, 1), &one),
+            WindowVerdict::Ineligible(IneligibleReason::BelowThreshold)
+        );
+    }
+
+    #[test]
+    fn cancelled_in_advance_is_an_annotation_only() {
+        let mut c = sparse(3, 3);
+        c.cancelled_in_advance = 3;
+        let WindowVerdict::Escalate {
+            severity, reason, ..
+        } = verdict(c)
+        else {
+            panic!()
+        };
+        assert_eq!(severity, Severity::PartSuspended);
+        assert_eq!(
+            reason,
+            "All 3 trains due in the last hour were cancelled (cancelled in advance)."
+        );
+        // Only when every one of them was.
+        let mut c = sparse(3, 3);
+        c.cancelled_in_advance = 2;
+        let WindowVerdict::Escalate { reason, .. } = verdict(c) else {
+            panic!()
+        };
+        assert_eq!(reason, "All 3 trains due in the last hour were cancelled.");
+    }
+
+    /// `feed_stale`, `partial` and a stale row still win over the sparse
+    /// rule.
+    #[test]
+    fn existing_guards_win_over_the_sparse_rule() {
+        let mut r = row(sparse(3, 3));
+        r.feed_stale = true;
+        assert_eq!(
+            classify_full_coverage_window(&r, &Defaults::default(), now()),
+            WindowVerdict::Ineligible(IneligibleReason::FeedStale)
+        );
+        let mut r = row(sparse(3, 3));
+        r.partial = true;
+        assert_eq!(
+            classify_full_coverage_window(&r, &Defaults::default(), now()),
+            WindowVerdict::Ineligible(IneligibleReason::Partial)
+        );
+        let r = row(sparse(3, 3));
+        assert_eq!(
+            classify_full_coverage_window(
+                &r,
+                &Defaults::default(),
+                now() + chrono::Duration::minutes(4)
+            ),
+            WindowVerdict::Ineligible(IneligibleReason::StaleRow)
+        );
+    }
+
+    #[test]
+    fn basis_round_trips() {
+        for b in [EscalationBasis::Rate, EscalationBasis::SparseAllCancelled] {
+            assert_eq!(EscalationBasis::parse(b.as_str()), Some(b));
+        }
+        assert_eq!(EscalationBasis::parse("other"), None);
+        assert_eq!(WindowVerdict::Good.basis(), None);
+        assert_eq!(Defaults::default().full_coverage_sparse_min_cancelled, 2);
+    }
+
     #[test]
     fn wire_shape() {
         let r = row(counts(12, 1, 1, 0, 0));
@@ -627,5 +914,13 @@ mod tests {
         let back: FullCoverageWindowStatsRow = serde_json::from_value(json).unwrap();
         assert_eq!(back, r);
         assert_eq!(r.counts.to_sample_stats().cancelled, 1);
+        // A row from a consumer without `cancelled_in_advance` still parses.
+        let mut json = serde_json::to_value(&r).unwrap();
+        json["counts"]
+            .as_object_mut()
+            .unwrap()
+            .remove("cancelled_in_advance");
+        let back: FullCoverageWindowStatsRow = serde_json::from_value(json).unwrap();
+        assert_eq!(back.counts.cancelled_in_advance, 0);
     }
 }
