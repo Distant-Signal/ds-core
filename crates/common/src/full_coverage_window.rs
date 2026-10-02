@@ -26,6 +26,14 @@ pub const FULL_COVERAGE_STATS_VERSION: u16 = 2;
 /// were taken at 5, so expect more delayed trains than it reports.
 pub const FULL_COVERAGE_DELAY_THRESHOLD_MINUTES: i64 = 3;
 
+/// The default of `Defaults::full_coverage_severe_min_affected` (user
+/// decision, 2026-10-02): the Severe tiers (Part Suspended, Severe Delays)
+/// need at least 5 affected trains. The 4.3-weekday shadow run fired Severe
+/// on 3.53% of judgeable windows (limit 3%), with 8 lines Severe in more
+/// than 20% of their daytime windows, mostly "3 of 6 trains 3+ minutes
+/// late".
+pub const FULL_COVERAGE_SEVERE_MIN_AFFECTED: i64 = 5;
+
 /// A window row older than this is `Ineligible(StaleRow)`: the consumer
 /// writes every 60 s, so three missed writes mean it has stopped.
 pub const FULL_COVERAGE_WINDOW_MAX_AGE_SECS: i64 = 180;
@@ -177,11 +185,12 @@ impl WindowVerdict {
 ///    [`FULL_COVERAGE_WINDOW_MAX_AGE_SECS`] at `now`, or
 ///    `total < full_coverage_min_sample_size`.
 /// 2. Otherwise the first tier met, in this order (rates over `total`, each
-///    also needing at least `full_coverage_min_affected` trains): Part
-///    Suspended (cancelled), Severe Delays (late), Severe Delays (skipped),
-///    Reduced Service (cancelled), Minor Delays (late), Minor Delays
-///    (skipped), else Good. Severe is checked before Reduced because it
-///    ranks higher.
+///    also needing at least `full_coverage_min_affected` trains, and the
+///    three Severe-rank tiers at least `full_coverage_severe_min_affected`):
+///    Part Suspended (cancelled), Severe Delays (late), Severe Delays
+///    (skipped), Reduced Service (cancelled), Minor Delays (late), Minor
+///    Delays (skipped), else Good. Severe is checked before Reduced because
+///    it ranks higher.
 /// 3. Presumed cancellations never decide a tier: the cancellation tiers
 ///    count explicit cancellations only, which is the same as dropping to
 ///    the next tier met without the presumed ones.
@@ -206,8 +215,15 @@ pub fn classify_full_coverage_window(
 
     let total = f64::from(c.total);
     let min_affected = thresholds.full_coverage_min_affected.max(1);
-    let met =
-        |count: u32, pct: f64| i64::from(count) >= min_affected && f64::from(count) / total >= pct;
+    // A Severe tier never needs fewer affected trains than a lower one.
+    let severe_min_affected = thresholds
+        .full_coverage_severe_min_affected
+        .max(min_affected);
+    let met_with = |count: u32, pct: f64, floor: i64| {
+        i64::from(count) >= floor && f64::from(count) / total >= pct
+    };
+    let met = |count: u32, pct: f64| met_with(count, pct, min_affected);
+    let met_severe = |count: u32, pct: f64| met_with(count, pct, severe_min_affected);
     let span = window_phrase(row);
     let n = c.total;
 
@@ -230,17 +246,17 @@ pub fn classify_full_coverage_window(
 
     let tiers: [(bool, Severity, &dyn Fn() -> String); 6] = [
         (
-            met(cancelled, thresholds.part_suspended_pct),
+            met_severe(cancelled, thresholds.part_suspended_pct),
             Severity::PartSuspended,
             &cancel_reason,
         ),
         (
-            met(c.delayed, thresholds.severe_delays_pct),
+            met_severe(c.delayed, thresholds.severe_delays_pct),
             Severity::SevereDelays,
             &late_reason,
         ),
         (
-            met(c.skipped, thresholds.severe_delays_skip_pct),
+            met_severe(c.skipped, thresholds.severe_delays_skip_pct),
             Severity::SevereDelays,
             &skip_reason,
         ),
@@ -367,6 +383,8 @@ mod tests {
         let d = Defaults::default();
         assert_eq!(d.full_coverage_min_sample_size, 6);
         assert_eq!(d.full_coverage_min_affected, 3);
+        assert_eq!(d.full_coverage_severe_min_affected, 5);
+        assert_eq!(FULL_COVERAGE_SEVERE_MIN_AFFECTED, 5);
         assert_eq!(
             d.full_coverage_delay_threshold_minutes,
             FULL_COVERAGE_DELAY_THRESHOLD_MINUTES
@@ -422,11 +440,63 @@ mod tests {
     #[test]
     fn the_min_affected_edge() {
         assert_eq!(verdict(counts(6, 2, 0, 0, 0)), WindowVerdict::Good);
+        assert_eq!(verdict(counts(6, 0, 2, 0, 0)), WindowVerdict::Good);
+    }
+
+    /// The 2026-10-02 calibration: 3 of 6 trains late is 50%, but below the
+    /// Severe tiers' five-train minimum, so it reads Minor Delays.
+    #[test]
+    fn three_of_six_late_is_minor_not_severe() {
+        assert_eq!(severity(counts(6, 3, 0, 0, 0)), Some(Severity::MinorDelays));
+    }
+
+    #[test]
+    fn five_of_eight_late_is_severe() {
         assert_eq!(
-            severity(counts(6, 3, 0, 0, 0)),
+            severity(counts(8, 5, 0, 0, 0)),
             Some(Severity::SevereDelays)
         );
-        assert_eq!(verdict(counts(6, 0, 2, 0, 0)), WindowVerdict::Good);
+    }
+
+    /// Exactly 5 affected trains meet the Severe tiers; 4 do not, even at
+    /// a rate well over the Severe threshold.
+    #[test]
+    fn the_severe_min_affected_boundary() {
+        // Late: 5 of 10 is exactly 50% and exactly 5 trains.
+        assert_eq!(
+            severity(counts(10, 5, 0, 0, 0)),
+            Some(Severity::SevereDelays)
+        );
+        assert_eq!(severity(counts(6, 4, 0, 0, 0)), Some(Severity::MinorDelays));
+        // Cancelled: 5 of 8 (62.5%) is Part Suspended; 4 of 6 (67%) only
+        // Reduced Service.
+        assert_eq!(
+            severity(counts(8, 0, 5, 0, 0)),
+            Some(Severity::PartSuspended)
+        );
+        assert_eq!(
+            severity(counts(6, 0, 4, 0, 0)),
+            Some(Severity::ReducedService)
+        );
+        // Skipped: 5 of 10 is Severe Delays; 4 of 6 only Minor Delays.
+        assert_eq!(
+            severity(counts(10, 0, 0, 0, 5)),
+            Some(Severity::SevereDelays)
+        );
+        assert_eq!(severity(counts(6, 0, 0, 0, 4)), Some(Severity::MinorDelays));
+    }
+
+    /// A Severe floor set below `full_coverage_min_affected` is raised to it.
+    #[test]
+    fn the_severe_floor_is_never_below_the_lower_tiers_floor() {
+        let mut overrides = HashMap::new();
+        overrides.insert("full_coverage_severe_min_affected".to_string(), 1.0);
+        let t = thresholds_for(&Defaults::default(), &overrides);
+        assert_eq!(t.full_coverage_severe_min_affected, 1);
+        let v = classify_full_coverage_window(&row(counts(6, 2, 0, 0, 0)), &t, now());
+        assert_eq!(v, WindowVerdict::Good);
+        let v = classify_full_coverage_window(&row(counts(6, 3, 0, 0, 0)), &t, now());
+        assert_eq!(v.severity(), Some(Severity::SevereDelays));
     }
 
     #[test]
@@ -498,6 +568,12 @@ mod tests {
         assert_eq!(t.full_coverage_min_sample_size, 4);
         assert_eq!(t.full_coverage_min_affected, 2);
         assert_eq!(t.full_coverage_delay_threshold_minutes, 5);
+        assert_eq!(t.full_coverage_severe_min_affected, 5);
+        let v = classify_full_coverage_window(&row(counts(4, 2, 0, 0, 0)), &t, now());
+        assert_eq!(v.severity(), Some(Severity::MinorDelays));
+        overrides.insert("full_coverage_severe_min_affected".to_string(), 2.0);
+        let t = thresholds_for(&Defaults::default(), &overrides);
+        assert_eq!(t.full_coverage_severe_min_affected, 2);
         let v = classify_full_coverage_window(&row(counts(4, 2, 0, 0, 0)), &t, now());
         assert_eq!(v.severity(), Some(Severity::SevereDelays));
     }

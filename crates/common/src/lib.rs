@@ -2023,6 +2023,13 @@ pub struct Defaults {
     /// (so "2 of 6 late" never reads Minor Delays).
     #[serde_inline_default(3)]
     pub full_coverage_min_affected: i64,
+    /// The Severe tiers (Part Suspended, Severe Delays) of a full-coverage
+    /// window also need at least this many affected trains (user decision,
+    /// 2026-10-02): with the 3-minute "late" threshold, "3 of 6 trains 3+
+    /// minutes late" fired Severe on 3.5% of judgeable windows in shadow.
+    /// The lower tiers keep `full_coverage_min_affected`.
+    #[serde_inline_default(full_coverage_window::FULL_COVERAGE_SEVERE_MIN_AFFECTED)]
+    pub full_coverage_severe_min_affected: i64,
 }
 
 impl Default for Defaults {
@@ -2063,6 +2070,9 @@ pub fn thresholds_for(defaults: &Defaults, overrides: &HashMap<String, f64>) -> 
             }
             "full_coverage_min_sample_size" => merged.full_coverage_min_sample_size = *value as i64,
             "full_coverage_min_affected" => merged.full_coverage_min_affected = *value as i64,
+            "full_coverage_severe_min_affected" => {
+                merged.full_coverage_severe_min_affected = *value as i64;
+            }
             _ => {}
         }
     }
