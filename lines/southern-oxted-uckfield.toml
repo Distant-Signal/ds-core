@@ -165,6 +165,18 @@ segment = "oxted-victoria-approach"
 # OVERLAP above.
 
 [[stations]]
+crs = "CLJ"
+role = "major"
+segment = "oxted-victoria-approach"
+# Clapham Junction (added 2026-10-06, incident line-evidence misses study).
+# Every Victoria-East Grinstead train calls here between Victoria and East
+# Croydon (CIF timetable, schedule_calling_points_full, Wed 7 Oct 2026: 73
+# of 73 Victoria workings, "VIC CLJ ECR ... EGR"), and incidents "between
+# Clapham Junction and London Victoria" are this line's too. On the
+# Victoria approach's own segment, like VIC; station overlap only with the
+# Brighton Main Line, the metro lines and the SWR/Overground files.
+
+[[stations]]
 crs = "LBG"
 role = "terminus"
 segment = "oxted-london-bridge-approach"

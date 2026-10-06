@@ -245,8 +245,22 @@ segment = "coastway-east-hastings"
 
 [[stations]]
 crs = "HGS"
-role = "terminus"
+role = "major"
 segment = "coastway-east-hastings"
 # Hastings. See the HASTINGS comment above for why this is NOT currently a
 # station overlap with any other file in the catalogue, despite the
-# brief's flag that it might be.
+# brief's flag that it might be. (2026-10-06: no longer this line's
+# terminus, see Ore below; also southern-marshlink.toml's station.)
+
+[[stations]]
+crs = "ORE"
+role = "terminus"
+segment = "coastway-east-hastings"
+# Ore (added 2026-10-06, incident line-evidence misses study): the
+# Coastway's real eastern terminus. Brighton-Ore, Eastbourne-Ore and
+# Victoria-Ore workings all run on from Hastings to Ore (CIF timetable,
+# schedule_calling_points_full, Wed 7 Oct 2026: e.g. "BTN FMR LWS PLG HMD
+# EBN BEX SLQ HGS ORE"), and incidents name it ("between Ore / Eastbourne
+# and London Victoria", CD74FB58). Also a station of
+# southern-marshlink.toml (its trains run Ashford-Ore-Hastings-Eastbourne):
+# station overlap only.

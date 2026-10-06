@@ -50,14 +50,58 @@ pub fn effective_operator(code: &str) -> &str {
 /// Hand-written aliases, `(CRS, name as written in incident text)`, for
 /// spellings that neither the reference name nor the derived aliases
 /// (below) cover. Kept short on purpose: each one was seen in production
-/// text, or is the everyday form of a terminus name.
-const EXTRA_ALIASES: [(&str, &str); 6] = [
+/// text, or is the everyday form of a terminus name. An alias listed for
+/// several codes is one place that may mean any of them ("Heathrow
+/// Airport" is all three Heathrow stations).
+///
+/// City names (2026-10-06 misses study): RDM writes "between Birmingham and
+/// Bristol" and "Manchester to Glasgow", and those cities' stations all
+/// carry a suffix in the reference table. Each maps to the city's main
+/// terminal(s), the big-city terminals of the catalogue; a longer name in
+/// the text still wins ("Birmingham International", "Manchester Airport").
+const EXTRA_ALIASES: [(&str, &str); 33] = [
     ("LVJ", "James Street"),
     ("LIV", "Lime Street"),
     ("STP", "London St Pancras"),
     ("STP", "St Pancras"),
     ("HUL", "Hull Paragon"),
     ("MKC", "Milton Keynes"),
+    // 7CE5A87E: "Heathrow Terminals", "Heathrow Airport Terminal 5".
+    ("HXX", "Heathrow Terminals"),
+    ("HAF", "Heathrow Terminals"),
+    ("HWV", "Heathrow Terminals"),
+    ("HXX", "Heathrow Airport"),
+    ("HAF", "Heathrow Airport"),
+    ("HWV", "Heathrow Airport"),
+    ("HXX", "Heathrow"),
+    ("HAF", "Heathrow"),
+    ("HWV", "Heathrow"),
+    ("HXX", "Heathrow Airport Terminals 2 & 3"),
+    ("HXX", "Heathrow Terminals 2 and 3"),
+    ("HAF", "Heathrow Airport Terminal 4"),
+    ("HWV", "Heathrow Airport Terminal 5"),
+    ("BHM", "Birmingham"),
+    ("MAN", "Manchester"),
+    ("GLC", "Glasgow"),
+    ("GLQ", "Glasgow"),
+    ("BRI", "Bristol"),
+    ("CDF", "Cardiff"),
+    ("LIV", "Liverpool"),
+    ("EXD", "Exeter"),
+    ("SOU", "Southampton"),
+    ("BTH", "Bath"),
+    ("EDB", "Edinburgh Waverley"),
+    ("BDI", "Bradford"),
+    ("BDQ", "Bradford"),
+    ("WKF", "Wakefield"),
+];
+
+/// The London termini a bare "London" stands for when it is the end of an
+/// explicit section ("between London and Stevenage"): one place, which on
+/// each line is that line's own London terminus.
+const LONDON_TERMINI: [&str; 15] = [
+    "PAD", "MYB", "EUS", "STP", "KGX", "LST", "FST", "CST", "CHX", "LBG", "WAT", "VIC", "BFR",
+    "WAE", "MOG",
 ];
 
 /// Trailing county words some reference names carry without parentheses
@@ -114,6 +158,26 @@ const COMMON_WORD_NAMES: [&str; 16] = [
 const PLACE_CONTEXT_WORDS: [&str; 12] = [
     "between", "and", "at", "to", "from", "via", "near", "serving", "towards", "of", "for", "or",
 ];
+
+/// Words before a place that put the disruption at it ("a signalling fault
+/// at Lewisham", "near Gloucester"); "<place> area" does too. See
+/// [`PlaceMention::localised`].
+const LOCALISING_WORDS: [&str; 4] = ["at", "near", "outside", "through"];
+
+/// One place named in a text: every CRS code the name may mean (in scope),
+/// and whether the text puts the disruption at it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceMention {
+    /// The station(s) the name means, in scope. Several for an alias of
+    /// more than one station ("Heathrow Airport"), a name several stations
+    /// share once their qualifiers are dropped ("Bramley"), or a bare
+    /// "London" section end (every London terminus).
+    pub crs: Vec<String>,
+    /// "at X", "near X", "outside X", "through X" or "the X area": the
+    /// disruption is at this place, not merely somewhere on a section
+    /// ending at it.
+    pub localised: bool,
+}
 
 /// Lowercase; apostrophes dropped ("Shepherd's" = "Shepherds"); a
 /// parenthesised qualifier dropped ("Richmond (London)"); "&" read as "and";
@@ -207,7 +271,23 @@ impl StationGazetteer {
     }
 
     /// The CRS codes of every station `text` names, in order of first
-    /// mention, keeping only codes `in_scope` accepts.
+    /// mention, keeping only codes `in_scope` accepts: [`Self::places_in`]
+    /// flattened, as for a description (no bare "London").
+    pub fn stations_in(&self, text: &str, in_scope: impl Fn(&str) -> bool) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for place in self.places_in(text, in_scope, false) {
+            for crs in place.crs {
+                if !out.contains(&crs) {
+                    out.push(crs);
+                }
+            }
+        }
+        out
+    }
+
+    /// Every place `text` names, in order, one [`PlaceMention`] per mention
+    /// with at least one code `in_scope` accepts (a place named twice is
+    /// listed twice).
     ///
     /// Longest match first: "Purley Oaks" is Purley Oaks, not Purley, and
     /// a longer name consumes its words even when its station is out of
@@ -217,13 +297,26 @@ impl StationGazetteer {
     /// ([`COMMON_WORD_NAMES`]), and a name followed by "line", "lines",
     /// "branch", "route", "main line" or "Trains" is a line or operator
     /// name, not a station.
-    pub fn stations_in(&self, text: &str, in_scope: impl Fn(&str) -> bool) -> Vec<String> {
+    ///
+    /// `headline` is true for an incident's summary: only there is a bare
+    /// "London" read, and only as the end of an explicit section ("between
+    /// London and Stevenage", "between Stevenage and London"), as every
+    /// London terminus in scope (2026-10-06 decision 4): on each line, that
+    /// line's own London terminus. Never inside parentheses ("Stratford
+    /// (London)") and never in a description, where "London" is mostly
+    /// ticket acceptance and travel advice.
+    pub fn places_in(
+        &self,
+        text: &str,
+        in_scope: impl Fn(&str) -> bool,
+        headline: bool,
+    ) -> Vec<PlaceMention> {
         if self.is_empty() {
             return Vec::new();
         }
         let cleaned = strip_markup(text);
         let tokens = tokenize(&cleaned);
-        let mut out: Vec<String> = Vec::new();
+        let mut out: Vec<PlaceMention> = Vec::new();
         let mut i = 0;
         while i < tokens.len() {
             if !tokens[i].capitalised {
@@ -241,6 +334,19 @@ impl StationGazetteer {
                     self.by_name.get(&key).map(|crs| (n, key, crs))
                 });
             let Some((n, key, crs_list)) = longest else {
+                if headline && is_bare_london_section_end(&cleaned, &tokens, i) {
+                    let crs: Vec<String> = LONDON_TERMINI
+                        .iter()
+                        .filter(|crs| self.names.contains_key(**crs) && in_scope(crs))
+                        .map(ToString::to_string)
+                        .collect();
+                    if !crs.is_empty() {
+                        out.push(PlaceMention {
+                            crs,
+                            localised: false,
+                        });
+                    }
+                }
                 i += 1;
                 continue;
             };
@@ -248,16 +354,63 @@ impl StationGazetteer {
                 && (!COMMON_WORD_NAMES.contains(&key.as_str())
                     || in_place_context(&cleaned, &tokens, i, i + n));
             if accepted {
-                for crs in crs_list {
-                    if in_scope(crs) && !out.contains(crs) {
-                        out.push(crs.clone());
-                    }
+                let crs: Vec<String> = crs_list.iter().filter(|c| in_scope(c)).cloned().collect();
+                if !crs.is_empty() {
+                    out.push(PlaceMention {
+                        crs,
+                        localised: is_localised(&cleaned, &tokens, i, i + n),
+                    });
                 }
             }
             i += n;
         }
         out
     }
+}
+
+/// Whether the capitalised "London" at `tokens[at]` (where no station name
+/// starts) ends an explicit section: "between London and X", or "between
+/// X and London" within one clause. Not inside parentheses.
+fn is_bare_london_section_end(text: &str, tokens: &[Token], at: usize) -> bool {
+    if tokens[at].word != "london" || at == 0 {
+        return false;
+    }
+    let space_only = |a: &Token, b: &Token| text[a.end..b.start].trim().is_empty();
+    let before = &text[..tokens[at].start];
+    if before.rfind('(') > before.rfind(')') {
+        return false;
+    }
+    let previous = &tokens[at - 1];
+    if !space_only(previous, &tokens[at]) {
+        return false;
+    }
+    if previous.word == "between" {
+        return tokens
+            .get(at + 1)
+            .is_some_and(|next| next.word == "and" && space_only(&tokens[at], next));
+    }
+    if previous.word != "and" {
+        return false;
+    }
+    let clause_start = before.rfind(['.', ';', ':', '!', '?']).map_or(0, |i| i + 1);
+    tokens[..at]
+        .iter()
+        .any(|t| t.start >= clause_start && t.word == "between")
+}
+
+/// Whether the place at `tokens[start..end]` is where the disruption is:
+/// right after "at", "near", "outside" or "through", or right before
+/// "area".
+fn is_localised(text: &str, tokens: &[Token], start: usize, end: usize) -> bool {
+    let space_only = |from: usize, to: usize| text[from..to].chars().all(char::is_whitespace);
+    let before = start.checked_sub(1).is_some_and(|i| {
+        LOCALISING_WORDS.contains(&tokens[i].word.as_str())
+            && space_only(tokens[i].end, tokens[start].start)
+    });
+    let after = tokens
+        .get(end)
+        .is_some_and(|t| t.word == "area" && space_only(tokens[end - 1].end, t.start));
+    before || after
 }
 
 fn derived_aliases(normalised: &str) -> Vec<String> {
@@ -344,7 +497,10 @@ fn names_a_line(text: &str, tokens: &[Token], next: usize) -> bool {
     }
     match first.word.as_str() {
         "line" | "lines" | "branch" | "route" => true,
+        // "Hull Trains", "Heathrow Express" (an operator brand, now that
+        // "Heathrow" alone is a place).
         "trains" => text[first.start..].starts_with('T'),
+        "express" => text[first.start..].starts_with('E'),
         "main" => tokens
             .get(next + 1)
             .is_some_and(|t| t.word == "line" && gap_is_space(first.end, t.start)),
@@ -354,6 +510,11 @@ fn names_a_line(text: &str, tokens: &[Token], next: usize) -> bool {
 
 /// Whether a common-word name at `tokens[start..end]` reads as a place:
 /// after a place word or a "/", and not beside a number.
+///
+/// The "/" is checked before the number in front of it (2026-10-06): in
+/// "Paddington and Heathrow Terminal 5 / Reading" (7CE5A87E) the "5" ends
+/// the previous place and "/ Reading" lists another. A number after the
+/// name still rules it out ("from March 2027").
 fn in_place_context(text: &str, tokens: &[Token], start: usize, end: usize) -> bool {
     let is_number = |t: &Token| t.word.chars().all(|c| c.is_ascii_digit());
     if tokens.get(end).is_some_and(is_number) {
@@ -362,12 +523,12 @@ fn in_place_context(text: &str, tokens: &[Token], start: usize, end: usize) -> b
     let Some(previous) = start.checked_sub(1).map(|i| &tokens[i]) else {
         return false;
     };
-    if is_number(previous) {
-        return false;
-    }
     let gap = &text[previous.end..tokens[start].start];
     if gap.contains('/') {
         return true;
+    }
+    if is_number(previous) {
+        return false;
     }
     gap.chars().all(char::is_whitespace) && PLACE_CONTEXT_WORDS.contains(&previous.word.as_str())
 }
@@ -547,7 +708,117 @@ mod tests {
             ("BMY", "Bramley (Hampshire)"),
             ("STP", "London St Pancras International"),
             ("SPX", "London St Pancras (Eurostar)"),
+            ("PAD", "London Paddington"),
+            ("KGX", "London Kings Cross"),
+            ("HXX", "Heathrow Terminals 2 & 3 (Rail Station Only)"),
+            ("HAF", "Heathrow Terminal 4 (Rail Station Only)"),
+            ("HWV", "Heathrow Terminal 5 (Rail Station Only)"),
+            ("BHM", "Birmingham New Street"),
+            ("BHI", "Birmingham International"),
+            ("MAN", "Manchester Piccadilly"),
+            ("SRA", "Stratford (London)"),
+            ("SVG", "Stevenage"),
+            ("GCR", "Gloucester"),
+            ("LEW", "Lewisham"),
         ])
+    }
+
+    fn places(text: &str, headline: bool) -> Vec<(Vec<String>, bool)> {
+        gazetteer()
+            .places_in(text, |_| true, headline)
+            .into_iter()
+            .map(|p| (p.crs, p.localised))
+            .collect()
+    }
+
+    #[test]
+    fn a_slash_lists_a_common_word_place_even_after_a_number() {
+        // 7CE5A87E: Reading was dropped as "next to a number".
+        assert_eq!(
+            all("Disruption between London Paddington and Heathrow Terminal 5 / Reading"),
+            ["PAD", "HWV", "RDG"]
+        );
+        // A number after the name still rules it out.
+        assert!(all("Works from March 2027").is_empty());
+    }
+
+    #[test]
+    fn heathrow_and_city_aliases() {
+        let heathrow = vec!["HXX".to_string(), "HAF".to_string(), "HWV".to_string()];
+        assert_eq!(
+            places("Disruption at Heathrow Airport", true),
+            [(heathrow.clone(), true)]
+        );
+        assert_eq!(
+            places("Trains to Heathrow Terminals are delayed", true),
+            [(heathrow, false)]
+        );
+        // 7CE5A87E: "Heathrow Airport Terminal 5" is Terminal 5 alone.
+        assert_eq!(
+            all("Trains will not serve Heathrow Airport Terminal 5"),
+            ["HWV"]
+        );
+        // The operator brand is not a place.
+        assert!(all("Tickets valid on Heathrow Express").is_empty());
+        assert_eq!(
+            all("Disruption between Birmingham and Manchester"),
+            ["BHM", "MAN"]
+        );
+        // A longer name still wins over the city alias.
+        assert_eq!(all("Disruption at Birmingham International"), ["BHI"]);
+    }
+
+    #[test]
+    fn an_area_is_its_place_and_localises_it() {
+        assert_eq!(
+            places("Major disruption in the Gloucester area", true),
+            [(vec!["GCR".to_string()], true)]
+        );
+        assert_eq!(
+            places("A signalling fault at Lewisham", false),
+            [(vec!["LEW".to_string()], true)]
+        );
+        assert_eq!(
+            places("Disruption between Lewisham and Gloucester", true),
+            [
+                (vec!["LEW".to_string()], false),
+                (vec!["GCR".to_string()], false)
+            ]
+        );
+    }
+
+    #[test]
+    fn bare_london_only_ends_an_explicit_section_in_a_summary() {
+        let london = |found: &[(Vec<String>, bool)]| {
+            found
+                .iter()
+                .any(|(crs, _)| crs.contains(&"KGX".to_string()) && crs.len() > 1)
+        };
+        // 0BD0471E: "between London and Stevenage".
+        let found = places(
+            "Lines reopened: disruption between London and Stevenage",
+            true,
+        );
+        assert!(london(&found), "{found:?}");
+        assert_eq!(found.len(), 2);
+        let found = places(
+            "Disruption between Stevenage and London expected until 18:00",
+            true,
+        );
+        assert!(london(&found), "{found:?}");
+        // Not in a description, not without a section, not in parentheses.
+        let found = places("Disruption between London and Stevenage", false);
+        assert!(!london(&found), "{found:?}");
+        let found = places("Trains to London are delayed at Stevenage", true);
+        assert!(!london(&found), "{found:?}");
+        let found = places("Disruption between Stratford (London) and Lewisham", true);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(!london(&found), "{found:?}");
+        // A named London station is itself.
+        assert_eq!(
+            all("Disruption between London Kings Cross and Stevenage"),
+            ["KGX", "SVG"]
+        );
     }
 
     fn all(text: &str) -> Vec<String> {

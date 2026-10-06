@@ -237,7 +237,12 @@ async fn main() -> anyhow::Result<()> {
         args.lines_dir.display()
     );
 
-    let findings = checks::validate_lines(&lines, &reference);
+    let mut findings = checks::validate_lines(&lines, &reference);
+    findings.extend(checks::validate_pass_through(
+        &args.lines_dir,
+        &lines,
+        &reference,
+    ));
     let (errors, warnings): (Vec<_>, Vec<_>) =
         findings.iter().partition(|f| f.severity == Severity::Error);
 

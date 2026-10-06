@@ -69,6 +69,17 @@ segment = "tpe-north-scarborough"
 # Manchester Victoria; see the sourcing note above.
 
 [[stations]]
+crs = "MAN"
+role = "minor"
+segment = "tpe-north-scarborough"
+# Manchester Piccadilly (added 2026-10-06, incident line-evidence misses
+# study). The Manchester Airport workings above run via Piccadilly to
+# Victoria (CIF timetable, schedule_calling_points_full, Wed 7 Oct 2026:
+# "MIA MAN MCV ... SCA", "SCA ... MCV MAN MIA"), so the line passes through
+# it; "at Manchester Piccadilly" incidents are this line's too. Station
+# overlap only with the other Piccadilly files.
+
+[[stations]]
 crs = "MCV"
 role = "terminus"
 segment = "tpe-north-scarborough"

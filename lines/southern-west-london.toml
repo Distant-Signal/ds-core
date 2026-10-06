@@ -1,0 +1,126 @@
+id = "southern-west-london"
+name = "West London Line (Southern)"
+mode = "national-rail"
+category = "commuter"
+operators = ["SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS (added 2026-10-06, incident line-evidence misses study)
+# ============================================================================
+# Southern's Watford Junction - Clapham Junction - East Croydon service over
+# the West London Line had no catalogue line. Incidents on it ("No Southern
+# trains between Shepherds Bush and Watford Junction", 5BB09F13; "Urgent
+# repair work ... between Shepherds Bush and Watford Junction", 7C6D2415;
+# "between Clapham Junction and Shepherds Bush", 97D895CE) named no station
+# of any Southern line, so they showed on every Southern line operator-wide,
+# or (since the 2026-10-06 matcher) nowhere.
+#
+# Route, as Southern runs it: CIF timetable (schedule_calling_points_full,
+# Wed 7 / Sat 10 / Sun 11 Oct 2026), 29 of 38 Wednesday workings calling
+# "WFJ HRW WMB SPB KPA WBP IMW CLJ BAL SRC NRB TTH SRS ECR" (the rest skip
+# Wembley Central, or start or end at Clapham Junction or Selhurst). No
+# Southern train runs to Milton Keynes Central in the current timetable
+# (the extension ended), so the line ends at Watford Junction.
+#
+# Segments: Shepherd's Bush - Clapham Junction is the West London Line
+# itself, shared with overground-mildmay.toml's Clapham branch, so those
+# stations reuse its `overground-mildmay-clapham-branch` segment (a genuine
+# shared trunk). The rest is this line's own segments, station overlap
+# only with the WCML, Overground, metro and Brighton Main Line files: their
+# segments there run on beyond the stations these trains share, so reusing
+# them would mark the whole of those stretches shared with this line.
+
+sample_stations = ["SPB", "KPA", "IMW"]
+# At the sample stations only this line's own trains and the Overground
+# Mildmay line's call; the Mildmay's run to Stratford or Clapham Junction,
+# never to these ends.
+destination_crs_filter = ["WFJ", "ECR"]
+
+[severity_overrides]
+# Roughly hourly: one late or cancelled train is a large share.
+minor_delays_pct = 0.30
+delay_threshold_minutes = 5
+
+[[stations]]
+crs = "WFJ"
+role = "terminus"
+segment = "southern-west-london-north"
+# Watford Junction.
+
+[[stations]]
+crs = "HRW"
+role = "minor"
+segment = "southern-west-london-north"
+# Harrow & Wealdstone.
+
+[[stations]]
+crs = "WMB"
+role = "minor"
+segment = "southern-west-london-north"
+# Wembley Central (some workings run through).
+
+[[stations]]
+crs = "SPB"
+role = "major"
+segment = "overground-mildmay-clapham-branch"
+# Shepherd's Bush: joins the West London Line.
+
+[[stations]]
+crs = "KPA"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+# Kensington (Olympia).
+
+[[stations]]
+crs = "WBP"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+# West Brompton.
+
+[[stations]]
+crs = "IMW"
+role = "minor"
+segment = "overground-mildmay-clapham-branch"
+# Imperial Wharf.
+
+[[stations]]
+crs = "CLJ"
+role = "junction"
+segment = "overground-mildmay-clapham-branch"
+# Clapham Junction: the West London Line's southern end.
+
+[[stations]]
+crs = "BAL"
+role = "minor"
+segment = "southern-west-london-south"
+# Balham.
+
+[[stations]]
+crs = "SRC"
+role = "minor"
+segment = "southern-west-london-south"
+# Streatham Common.
+
+[[stations]]
+crs = "NRB"
+role = "minor"
+segment = "southern-west-london-south"
+# Norbury.
+
+[[stations]]
+crs = "TTH"
+role = "minor"
+segment = "southern-west-london-south"
+# Thornton Heath.
+
+[[stations]]
+crs = "SRS"
+role = "minor"
+segment = "southern-west-london-south"
+# Selhurst.
+
+[[stations]]
+crs = "ECR"
+role = "terminus"
+segment = "southern-west-london-south"
+# East Croydon.

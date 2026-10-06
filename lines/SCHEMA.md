@@ -112,3 +112,59 @@ See `west-coast-main-line.toml` and `thameslink-core.toml` in this directory.
   beats ten that produce false positives. Test each addition against recent
   incidents before merging.
 - **One line per file.** Makes review and PR diffs sane.
+
+## Generated pass-through stations (`generated/pass-through.toml`)
+
+A line's `[[stations]]` are the stops worth showing, so they skip stations
+its trains run through without the catalogue listing them: the Brighton
+Main Line lists London Bridge and East Croydon, and its trains pass New
+Cross Gate, Sydenham and Norwood Junction in between. An incident "between
+New Cross Gate and Norwood Junction" would otherwise name no station of the
+line. `generated/pass-through.toml` lists, per line and per pair of
+consecutive `[[stations]]`, the stations its trains really run through
+(calling or passing), from the CIF timetable:
+
+```toml
+source_dates = ["2026-10-07", "2026-10-10", "2026-10-11"]
+
+[lines.southern-brighton-main-line]
+LBG-ECR = ["NXG", "BCY", "HPA", "FOH", "SYD", "PNW", "ANZ", "NWD"]
+```
+
+It is used **only** by the incident matcher (`common::matcher`), so a
+named place there counts as on the line for the station tier and the
+two-place rule. It is never a stop: never in `stations`, never sampled,
+never in a segment, never serialised to the API or shown on a page. It
+lives in a subdirectory so the `*.toml` line glob never reads it as a line.
+
+**It is generated, not edited.** `scripts/generate-pass-through.py` takes,
+for each leg, the most common path of the line's own trains (the trains
+whose route best fits the line) on a representative Wednesday, Saturday
+and Sunday, and keeps only stations in the `stations` reference table. A
+pair of consecutive stations none of the line's trains runs between
+directly (a branch boundary in the station order, such as the Brighton Main
+Line's Clapham Junction - London Bridge) is listed under `[breaks]`
+(`southern-brighton-main-line = ["CLJ-LBG"]`), so the matcher never treats
+that stretch as track when it measures how much of a section a line shares.
+
+**Regenerate it** after each timetable change (the December and May
+principal changes, once the new timetable is in `schedule_calling_points_full`,
+which holds a rolling fortnight) and after changing a line's `[[stations]]`,
+then commit the result:
+
+```sh
+# Against any database holding the schedule tables:
+uv run scripts/generate-pass-through.py --database-url postgres://...
+# Against production, read-only (each query runs in a READ ONLY transaction):
+HTTPS_PROXY=socks5://127.0.0.1:1055 uv run scripts/generate-pass-through.py \
+  --psql "kubectl --context mine-bringer-ts -n distant-signal exec -i \
+  distant-signal-postgres-0 -- psql -U distant_signal -d distant_signal"
+```
+
+By default it uses the latest Wednesday, Saturday and Sunday the table
+holds; `--date YYYY-MM-DD` (repeatable) picks others. CI
+(`line-catalogue-validator`) fails if the file is missing or does not
+parse, or names a line or CRS code the catalogue and
+`reference-data/crs-tiploc.csv` do not know, and warns about legs left
+stale by a catalogue edit (which the loader ignores until the next
+regeneration). CI never queries a database.

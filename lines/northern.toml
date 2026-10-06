@@ -6,9 +6,14 @@ operators = ["NT"]
 
 destination_crs_filter = ["LIV", "MCV", "LDS", "YRK", "HUD"]
 sample_stations = ["LIV", "MCV", "HUD", "LDS", "YRK"]
-# "Northern" alone is far too loose — it matches "northern section",
-# "northbound" and the Underground's Northern line.
-match_keywords = ["Northern Rail", "Northern Trains", "Northern services"]
+# No match_keywords (2026-10-06 misses study, user decision 2). This is an
+# operator umbrella, and "Northern services" / "Northern Rail" / "Northern
+# Trains" name the operator, not this line: nearly every Northern incident
+# says "delays to Northern services at <station>", so the keywords added this
+# line beside the station evidence of the line really affected (wrong-line
+# line-days on "Leeds and York", "Blackpool North and Preston", ...). The
+# line still matches by its stations, and every Northern line (this one
+# included) shows a network-wide notice or a notice naming no place.
 excluded_keywords = ["Northern line", "Northern City Line"]
 
 # --- Restructuring review (Yorkshire real-world-sanity review, 2026-09-21)

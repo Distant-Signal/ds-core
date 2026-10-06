@@ -44,7 +44,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::segments::SegmentRegistry;
 use crate::station_resolver::{
-    StationGazetteer, effective_operator, has_network_scope_marker, needs_all_operator_scope,
+    PlaceMention, StationGazetteer, effective_operator, has_network_scope_marker,
+    needs_all_operator_scope,
 };
 use crate::{IncidentMessage, LineDefinition};
 
@@ -104,30 +105,15 @@ pub fn lines_affected_by<'a>(
     gazetteer: &StationGazetteer,
 ) -> Vec<Match<'a>> {
     let haystack = format!("{} {}", incident.summary, incident.description).to_lowercase();
-    let mut operators: Vec<String> = incident
-        .operators
-        .iter()
-        .map(|op| effective_operator(op).to_string())
-        .collect();
-    operators.sort();
-    operators.dedup();
-    let known: HashSet<&str> = lines
-        .values()
-        .flat_map(|line| line.operators.iter().map(String::as_str))
-        .collect();
-    let scope = OperatorScope {
-        all_operators: needs_all_operator_scope(&operators, &known),
-        operators,
-    };
-    let eligible: Vec<&'a LineDefinition> = lines
-        .values()
-        .filter(|line| !is_excluded(line, &haystack))
-        .collect();
+    let (scope, eligible) = scope_and_eligible(incident, lines);
     let places = resolve_places(incident, &eligible, &scope, gazetteer);
 
     let mut out: Vec<Match<'a>> = Vec::new();
     for line in eligible {
-        let place_hits = places.get(line.id.as_str()).map_or(&[][..], Vec::as_slice);
+        let place_hits = places
+            .per_line
+            .get(line.id.as_str())
+            .map_or(&[][..], Vec::as_slice);
         if let Some(m) = match_one(line, incident, registry, &haystack, &scope, place_hits) {
             out.push(m);
         }
@@ -139,9 +125,10 @@ pub fn lines_affected_by<'a>(
     if has_network_scope_marker(&incident.summary, &incident.description) {
         return out;
     }
-    // A place resolved: the incident is local, so the operator-wide
-    // fallback does not apply to any operator.
-    if !places.is_empty() {
+    // A place named: the incident is local, so the operator-wide fallback
+    // does not apply to any operator, even when no line holds the place
+    // (2026-10-06 decision 5).
+    if places.named {
         out.retain(|m| m.scope != MatchScope::OperatorOnly);
         return out;
     }
@@ -177,6 +164,35 @@ pub fn lines_affected_by<'a>(
     });
 
     out
+}
+
+/// The incident's operator scope, and the lines its summary does not veto
+/// ([`is_excluded`]).
+fn scope_and_eligible<'a>(
+    incident: &IncidentMessage,
+    lines: &'a HashMap<String, LineDefinition>,
+) -> (OperatorScope, Vec<&'a LineDefinition>) {
+    let mut operators: Vec<String> = incident
+        .operators
+        .iter()
+        .map(|op| effective_operator(op).to_string())
+        .collect();
+    operators.sort();
+    operators.dedup();
+    let known: HashSet<&str> = lines
+        .values()
+        .flat_map(|line| line.operators.iter().map(String::as_str))
+        .collect();
+    let scope = OperatorScope {
+        all_operators: needs_all_operator_scope(&operators, &known),
+        operators,
+    };
+    let summary = incident.summary.to_lowercase();
+    let eligible: Vec<&'a LineDefinition> = lines
+        .values()
+        .filter(|line| !is_excluded(line, &summary))
+        .collect();
+    (scope, eligible)
 }
 
 /// Owns a line catalogue and its derived [`SegmentRegistry`] so a caller
@@ -243,6 +259,29 @@ impl LineMatcher {
     pub fn line_count(&self) -> usize {
         self.lines.len()
     }
+
+    /// Whether the incident's text is local yet names no place the matcher
+    /// can resolve: no network-scope marker, and neither the summary nor
+    /// (the summary naming none) the description's first paragraph names a
+    /// station of a catalogue line. Such an incident falls back to every
+    /// line of its operators. Counted per poll by the api
+    /// (2026-10-06 decision 9), so the phrasings the resolver misses
+    /// ("in the Sussex area", "Guilford") become visible and fixable.
+    /// False with an empty gazetteer (nothing could resolve; that failure
+    /// is logged where the gazetteer loads).
+    pub fn names_no_resolvable_place(
+        &self,
+        incident: &IncidentMessage,
+        gazetteer: &StationGazetteer,
+    ) -> bool {
+        if gazetteer.is_empty()
+            || has_network_scope_marker(&incident.summary, &incident.description)
+        {
+            return false;
+        }
+        let (scope, eligible) = scope_and_eligible(incident, &self.lines);
+        !resolve_places(incident, &eligible, &scope, gazetteer).named
+    }
 }
 
 /// The incident's operators as the catalogue spells them, and whether its
@@ -260,87 +299,440 @@ impl OperatorScope {
     }
 }
 
-/// The places the incident names, per line: line id -> the resolved CRS
-/// codes on that line, for every line with enough of them (module docs:
-/// two or more when any line has two or more, else one). Empty when
-/// nothing resolved.
+/// What an incident's text says about places: the lines it puts them on,
+/// and whether it named any place at all.
+struct Resolution<'a> {
+    /// Line id -> the CRS codes of that line's stations the text names,
+    /// for every line with enough of them ([`resolve_places`]).
+    per_line: HashMap<&'a str, Vec<String>>,
+    /// The text names a place (the summary any place on a catalogue line,
+    /// or else the description one in scope): the incident is local, so
+    /// the operator-wide fallback does not apply even when `per_line` is
+    /// empty (2026-10-06 decision 5).
+    named: bool,
+}
+
+/// The places the incident names, per line (module docs).
+///
+/// 1. The summary's places, resolved against every catalogue line. Those
+///    on in-scope lines go through [`select_lines`].
+/// 2. When no in-scope line holds any of the summary's places, the lines
+///    of ANY operator holding two or more of them (2026-10-06 decision 5:
+///    a mis-tagged operator, 06724BDE's "XC" on "Grantham and Skegness" is
+///    the Poacher line), else none: a summary naming only places the
+///    operator's lines do not hold shows nowhere rather than operator-wide.
+///    Not when an in-scope line holds one of them: "Reduced Thameslink
+///    service between London Kings Cross and Peterborough" (DB1DA9F3) is
+///    Thameslink's Peterborough line, not every line between Kings Cross
+///    and Peterborough.
+/// 3. A summary naming no place at all: the description's in-scope places
+///    (descriptions add ticket acceptance and diversion routes, so they are
+///    read only then, and never across operators).
 fn resolve_places<'a>(
     incident: &IncidentMessage,
     eligible: &[&'a LineDefinition],
     scope: &OperatorScope,
     gazetteer: &StationGazetteer,
-) -> HashMap<&'a str, Vec<String>> {
+) -> Resolution<'a> {
+    let nothing = |named| Resolution {
+        per_line: HashMap::new(),
+        named,
+    };
     if gazetteer.is_empty() {
-        return HashMap::new();
+        return nothing(false);
     }
     let in_scope: Vec<&'a LineDefinition> = eligible
         .iter()
         .copied()
         .filter(|line| scope.covers(line))
         .collect();
-    let pool: HashSet<&str> = in_scope
-        .iter()
-        .flat_map(|line| line.stations.iter().map(|s| s.crs.as_str()))
-        .collect();
-    // The summary is the headline and names the disrupted place; the
-    // description often adds ticket acceptance and diversion routes, so it
-    // is read only when the summary names no place in scope.
-    let mut named = gazetteer.stations_in(&incident.summary, |crs| pool.contains(crs));
-    if named.is_empty() {
-        named = gazetteer.stations_in(&incident.description, |crs| pool.contains(crs));
-    }
-    if named.is_empty() {
-        return HashMap::new();
-    }
-    let per_line: Vec<(&'a str, Vec<String>)> = in_scope
-        .iter()
-        .map(|line| {
-            let hits: Vec<String> = named
-                .iter()
-                .filter(|crs| line.has_station(crs))
-                .cloned()
-                .collect();
-            (line.id.as_str(), hits)
-        })
-        .collect();
-    let best = per_line
-        .iter()
-        .map(|(_, hits)| hits.len())
-        .max()
-        .unwrap_or(0);
-    if best >= 2 {
-        return per_line
-            .into_iter()
-            .filter(|(_, hits)| hits.len() >= 2)
-            .collect();
-    }
-    // No line holds two of the places. A place on more than `HUB_LINES`
-    // lines in scope (a London terminus, say) is then dropped when a more
-    // local one was also named: "between Ore / Eastbourne and London
-    // Victoria" is about the Eastbourne lines, not every line into
-    // Victoria. A hub named alone still fans out to all its lines.
-    let lines_holding = |crs: &str| {
-        per_line
+    let pool = |lines: &[&LineDefinition]| -> HashSet<String> {
+        lines
             .iter()
-            .filter(|(_, hits)| hits.iter().any(|h| h == crs))
-            .count()
+            .flat_map(|line| {
+                line.stations
+                    .iter()
+                    .map(|s| s.crs.clone())
+                    .chain(line.pass_through.iter().flat_map(|leg| leg.via.clone()))
+            })
+            .collect()
     };
-    let local: Vec<&String> = named
+    let scope_pool = pool(&in_scope);
+    let catalogue_pool = pool(eligible);
+
+    let summary = distinct_places(gazetteer.places_in(
+        &incident.summary,
+        |crs| catalogue_pool.contains(crs),
+        true,
+    ));
+    let localised: Vec<String> = summary
         .iter()
-        .filter(|crs| (1..=HUB_LINES).contains(&lines_holding(crs)))
+        .chain(&gazetteer.places_in(
+            first_paragraph(&incident.description),
+            |crs| catalogue_pool.contains(crs),
+            false,
+        ))
+        .filter(|place| place.localised)
+        .flat_map(|place| place.crs.iter().cloned())
         .collect();
-    let has_hub = named.iter().any(|crs| lines_holding(crs) > HUB_LINES);
-    per_line
-        .into_iter()
-        .filter(|(_, hits)| {
-            !hits.is_empty()
-                && (!has_hub || local.is_empty() || hits.iter().any(|h| local.contains(&h)))
+    let context = OverlapContext {
+        catalogue: eligible,
+        localised,
+    };
+    if summary.is_empty() {
+        let description = distinct_places(gazetteer.places_in(
+            first_paragraph(&incident.description),
+            |crs| scope_pool.contains(crs),
+            false,
+        ));
+        if description.is_empty() {
+            return nothing(false);
+        }
+        return Resolution {
+            per_line: evidence_of(select_lines(&in_scope, &description, &context)),
+            named: true,
+        };
+    }
+    let in_scope_places = restrict(&summary, |crs| scope_pool.contains(crs));
+    if in_scope_places.is_empty() {
+        let mut per_line = select_lines(eligible, &summary, &context);
+        per_line.retain(|line| line.held >= 2);
+        return Resolution {
+            per_line: evidence_of(per_line),
+            named: true,
+        };
+    }
+    Resolution {
+        per_line: evidence_of(select_lines(&in_scope, &in_scope_places, &context)),
+        named: true,
+    }
+}
+
+/// The description's first paragraph (up to the first `</p>`, or all of a
+/// description without one).
+fn first_paragraph(description: &str) -> &str {
+    description
+        .find("</p>")
+        .map_or(description, |end| &description[..end])
+}
+
+/// `places` with each mention's codes narrowed to those `keep` accepts,
+/// dropping mentions left with none.
+fn restrict(places: &[PlaceMention], keep: impl Fn(&str) -> bool) -> Vec<PlaceMention> {
+    places
+        .iter()
+        .filter_map(|place| {
+            let crs: Vec<String> = place.crs.iter().filter(|c| keep(c)).cloned().collect();
+            (!crs.is_empty()).then_some(PlaceMention {
+                crs,
+                localised: place.localised,
+            })
         })
         .collect()
 }
 
-/// See [`resolve_places`]: a place on more lines than this is a hub.
+/// Each place once (a place named twice is one place), localised if any
+/// mention of it was.
+fn distinct_places(places: Vec<PlaceMention>) -> Vec<PlaceMention> {
+    let mut out: Vec<PlaceMention> = Vec::new();
+    for place in places {
+        match out.iter_mut().find(|p| p.crs == place.crs) {
+            Some(seen) => seen.localised |= place.localised,
+            None => out.push(place),
+        }
+    }
+    out
+}
+
+/// One line [`select_lines`] put the incident on.
+struct LinePlaces<'a> {
+    id: &'a str,
+    /// How many of the named places the line holds.
+    held: usize,
+    /// The line's own stations standing for them
+    /// ([`LineDefinition::stations_for_place`]): the station tier's
+    /// evidence, in place order.
+    stations: Vec<String>,
+}
+
+/// Line id -> its evidence stations.
+fn evidence_of(lines: Vec<LinePlaces<'_>>) -> HashMap<&str, Vec<String>> {
+    lines
+        .into_iter()
+        .map(|line| (line.id, line.stations))
+        .collect()
+}
+
+/// Which of `lines` the named `places` put the incident on, and the codes
+/// of each one's stations they name.
+///
+/// Counted by place, not by code: "London St Pancras" (two codes) or
+/// "Heathrow Airport" (three) is one place, so naming it alone is never a
+/// two-place section. A line holds a place when it is one of its stations
+/// or one its trains run through ([`LineDefinition::holds_place`]).
+///
+/// - **Sections.** If any line holds two or more of the places ("between
+///   Purley and Gatwick Airport"), the lines holding two or more count,
+///   plus the lines sharing a significant part of the section
+///   ([`partial_overlaps`]).
+/// - **Hubs.** Otherwise every line holding one counts ("at Clapham
+///   Junction"), except a hub beside a local place: a place on
+///   [`RELATIVE_HUB_LINES`] or more of `lines` is dropped when another
+///   named place is on only one (2026-10-06 decision 6: CD74FB58's
+///   Victoria, on four Southern lines, beside Eastbourne), and a place on
+///   more than [`HUB_LINES`] is dropped when another is on [`HUB_LINES`]
+///   or fewer. A hub named alone still fans out to all its lines.
+fn select_lines<'a>(
+    lines: &[&'a LineDefinition],
+    places: &[PlaceMention],
+    context: &OverlapContext<'_>,
+) -> Vec<LinePlaces<'a>> {
+    let per_line: Vec<(&'a LineDefinition, Vec<usize>)> = lines
+        .iter()
+        .map(|line| {
+            let held: Vec<usize> = (0..places.len())
+                .filter(|&p| places[p].crs.iter().any(|crs| line.holds_place(crs)))
+                .collect();
+            (*line, held)
+        })
+        .filter(|(_, held)| !held.is_empty())
+        .collect();
+    let best = per_line
+        .iter()
+        .map(|(_, held)| held.len())
+        .max()
+        .unwrap_or(0);
+    if best >= 2 {
+        let sections: Vec<(&'a LineDefinition, Vec<usize>)> = per_line
+            .iter()
+            .filter(|(_, held)| held.len() >= 2)
+            .cloned()
+            .collect();
+        let partial = partial_overlaps(&per_line, &sections, places, context);
+        return sections
+            .iter()
+            .map(|(line, held)| line_places(line, held, places))
+            .chain(partial)
+            .collect();
+    }
+    let lines_holding: Vec<usize> = (0..places.len())
+        .map(|p| {
+            per_line
+                .iter()
+                .filter(|(_, held)| held.contains(&p))
+                .count()
+        })
+        .collect();
+    let has_single = lines_holding.contains(&1);
+    let has_local = lines_holding.iter().any(|n| (1..=HUB_LINES).contains(n));
+    let dropped: Vec<bool> = lines_holding
+        .iter()
+        .map(|&n| (has_single && n >= RELATIVE_HUB_LINES) || (has_local && n > HUB_LINES))
+        .collect();
+    per_line
+        .iter()
+        .filter(|(_, held)| held.iter().any(|&p| !dropped[p]))
+        .map(|(line, held)| line_places(line, held, places))
+        .collect()
+}
+
+/// `line`'s evidence for the places it holds: its own stations standing for
+/// them.
+fn line_places<'a>(
+    line: &'a LineDefinition,
+    held: &[usize],
+    places: &[PlaceMention],
+) -> LinePlaces<'a> {
+    let mut stations: Vec<String> = Vec::new();
+    for &p in held {
+        for code in &places[p].crs {
+            for station in line.stations_for_place(code) {
+                if !stations.contains(&station) {
+                    stations.push(station);
+                }
+            }
+        }
+    }
+    LinePlaces {
+        id: line.id.as_str(),
+        held: held.len(),
+        stations,
+    }
+}
+
+/// What the partial-overlap rule needs besides the named places.
+struct OverlapContext<'a> {
+    /// Every eligible catalogue line (any operator), to count the lines
+    /// running through a junction.
+    catalogue: &'a [&'a LineDefinition],
+    /// The CRS codes the text puts the disruption at: "at X", "near X",
+    /// "the X area" in the summary or in the description's first paragraph
+    /// (which says what happened: "a signalling fault at Lewisham" under a
+    /// summary naming the section). Not the rest of the description, which
+    /// is travel advice ("change at Vauxhall", "tickets accepted at ...").
+    localised: Vec<String>,
+}
+
+impl OverlapContext<'_> {
+    /// Whether `crs` is a place the text puts the disruption at and a major
+    /// junction: [`MAJOR_JUNCTION_LINES`] or more catalogue lines run
+    /// through it.
+    fn disrupted_junction(&self, crs: &str) -> bool {
+        self.localised.iter().any(|l| l == crs)
+            && self
+                .catalogue
+                .iter()
+                .filter(|line| line.holds_place(crs))
+                .count()
+                >= MAJOR_JUNCTION_LINES
+    }
+}
+
+/// The stretch of `line`'s route from place `from` to place `to`
+/// (catalogue and pass-through stations, in order), within one run of its
+/// route ([`LineDefinition::route_runs`]: never across a branch boundary);
+/// empty when no run reaches both.
+fn section_path<'l>(
+    line: &'l LineDefinition,
+    from: &PlaceMention,
+    to: &PlaceMention,
+) -> Vec<&'l str> {
+    for run in line.route_runs() {
+        let at = |place: &PlaceMention| {
+            run.iter()
+                .position(|crs| place.crs.iter().any(|c| c == crs))
+        };
+        if let (Some(i), Some(j)) = (at(from), at(to)) {
+            return if i <= j {
+                run[i..=j].to_vec()
+            } else {
+                run[j..=i].iter().rev().copied().collect()
+            };
+        }
+    }
+    Vec::new()
+}
+
+/// Lines holding exactly one of a section's places that share a
+/// significant part of it (2026-10-06 decision 8; the design doc's
+/// "partial overlap" section has worked examples). For a line P holding
+/// place p, and every section line S holding p and another place q, the
+/// shared stretch is the run of S's route from p towards q that P's route
+/// follows station by station (P's own stations and the ones its trains
+/// pass, consecutive on P's route too: `shared_stretch`).
+/// P counts when, for some such S and q:
+///
+/// - (a) the shared stretch is at least [`PARTIAL_SHARE_PERCENT`] of the
+///   stretch from p to q, counted in hops between consecutive stations on
+///   it (so sharing only p itself is sharing none of it); or
+/// - (b) the shared stretch includes a major junction the text puts the
+///   disruption at (`OverlapContext::disrupted_junction`): disruption at a
+///   junction delays every line routed through it.
+///
+/// Otherwise P shares too little of the section for it to be P's
+/// disruption: the Bexleyheath line shares only the London end of
+/// "Maidstone East and London Charing Cross", leaving at Lewisham.
+fn partial_overlaps<'a>(
+    per_line: &[(&'a LineDefinition, Vec<usize>)],
+    sections: &[(&'a LineDefinition, Vec<usize>)],
+    places: &[PlaceMention],
+    context: &OverlapContext<'_>,
+) -> Vec<LinePlaces<'a>> {
+    let mut out = Vec::new();
+    for (line, held) in per_line {
+        let [p] = held.as_slice() else {
+            continue;
+        };
+        // The longest qualifying shared stretch's far end.
+        let mut shared_end: Option<(usize, &str)> = None;
+        for (section, section_held) in sections {
+            if !section_held.contains(p) {
+                continue;
+            }
+            for q in section_held.iter().filter(|q| *q != p) {
+                let path = section_path(section, &places[*p], &places[*q]);
+                let shared = shared_stretch(line, &path);
+                // Another code of the same place (a different London
+                // terminus) shares nothing of this section line's path.
+                let (Some(&last), Some(hops)) = (shared.last(), path.len().checked_sub(1)) else {
+                    continue;
+                };
+                // In hops between consecutive stations: sharing only the
+                // end itself is sharing none of the section.
+                let substantial =
+                    hops > 0 && (shared.len() - 1) * 100 >= hops * PARTIAL_SHARE_PERCENT;
+                let junction = shared.iter().any(|crs| context.disrupted_junction(crs));
+                if (substantial || junction) && shared_end.is_none_or(|(n, _)| shared.len() > n) {
+                    shared_end = Some((shared.len(), last));
+                }
+            }
+        }
+        if let Some((_, end)) = shared_end {
+            let mut evidence = line_places(line, held, places);
+            for station in line.stations_for_place(end) {
+                if !evidence.stations.contains(&station) {
+                    evidence.stations.push(station);
+                }
+            }
+            out.push(evidence);
+        }
+    }
+    out
+}
+
+/// The start of `path` that `line` runs along too, up to the last station
+/// of it that `line` holds with every station of `line`'s before it on the
+/// path next to each other on one run of `line`'s route. Stations of `path`
+/// that `line` does not hold are passed over (CIF records passing points
+/// only at timing points, so one line's route may list a station another's
+/// omits, such as Earlsfield between Clapham Junction and Wimbledon); a
+/// station `line` holds but does not reach next ends the shared part (the
+/// two lines run there by different tracks, or across a branch boundary of
+/// either).
+fn shared_stretch<'p>(line: &LineDefinition, path: &[&'p str]) -> Vec<&'p str> {
+    let Some(first) = path.first() else {
+        return Vec::new();
+    };
+    if !line.holds_place(first) {
+        return Vec::new();
+    }
+    let runs = line.route_runs();
+    let adjacent = |a: &str, b: &str| {
+        runs.iter().any(|run| {
+            run.windows(2)
+                .any(|pair| (pair[0] == a && pair[1] == b) || (pair[0] == b && pair[1] == a))
+        })
+    };
+    let mut last = 0;
+    for (i, crs) in path.iter().enumerate().skip(1) {
+        if !line.holds_place(crs) {
+            continue;
+        }
+        if !adjacent(path[last], crs) {
+            break;
+        }
+        last = i;
+    }
+    path[..=last].to_vec()
+}
+
+/// See [`partial_overlaps`] (a): the share of a section a line must run
+/// along to count, in percent. Chosen from the 2026-10-06 replay (design
+/// doc, "partial overlap"): the prototype's 50%.
+const PARTIAL_SHARE_PERCENT: usize = 50;
+
+/// See [`OverlapContext::disrupted_junction`]: a place this many catalogue
+/// lines (any operator) run through is a major junction. Chosen from the
+/// 2026-10-06 replay (design doc, "partial overlap").
+const MAJOR_JUNCTION_LINES: usize = 4;
+
+/// See [`select_lines`]: a place on more lines than this is a hub beside
+/// any place on this many or fewer.
 const HUB_LINES: usize = 4;
+
+/// See [`select_lines`]: a place on this many lines or more is a hub beside
+/// a place on only one (2026-10-06 decision 6).
+const RELATIVE_HUB_LINES: usize = 3;
 
 fn match_one<'a>(
     line: &'a LineDefinition,
@@ -450,10 +842,19 @@ fn match_one<'a>(
     None
 }
 
-fn is_excluded(line: &LineDefinition, haystack: &str) -> bool {
+/// Whether one of `line`'s `excluded_keywords` vetoes it, given the
+/// incident's lowercased summary.
+///
+/// The summary only (2026-10-06 decision 1). A description routinely names
+/// other lines and operators for ticket acceptance and alternative routes:
+/// 7CE5A87E ("Reduced service between London Paddington and Heathrow
+/// Terminal 5 / Reading") described what "Elizabeth line" and "Heathrow
+/// Express" trains were doing, which vetoed both Heathrow lines -- each
+/// excludes the other's name -- on the incident that was about them.
+fn is_excluded(line: &LineDefinition, summary: &str) -> bool {
     line.excluded_keywords
         .iter()
-        .any(|kw| haystack.contains(&kw.to_lowercase()))
+        .any(|kw| summary.contains(&kw.to_lowercase()))
 }
 
 #[cfg(test)]
@@ -542,6 +943,47 @@ mod tests {
         );
         let matches = lines_affected_by(&inc, &lines, &registry);
         assert!(matches.is_empty(), "excluded keyword should veto match");
+    }
+
+    #[test]
+    fn excluded_keywords_veto_on_the_summary_only() {
+        // 7CE5A87E: the description says what Elizabeth line and Heathrow
+        // Express trains are doing; each Heathrow line excludes the other's
+        // name, so a whole-text veto removed both.
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "7CE5A87E",
+            "Reduced service between London Paddington and Heathrow Airport Terminal 5 / Reading",
+            "<p>Elizabeth line trains will not serve Heathrow Airport Terminal 5.</p>\
+             <p>Heathrow Express services will operate to Terminal 5.</p>",
+            &["XR", "GW", "HX"],
+            &[],
+        );
+        let found: Vec<&str> = super::lines_affected_by(&inc, &lines, &registry, &real_gazetteer())
+            .into_iter()
+            .map(|m| m.line.id.as_str())
+            .collect();
+        for id in ["elizabeth-heathrow", "heathrow-express"] {
+            assert!(found.contains(&id), "{id}: {found:?}");
+        }
+        // A veto in the summary still applies.
+        let inc = incident(
+            "T",
+            "Heathrow Express: disruption between London Paddington and Heathrow Airport",
+            "",
+            &["XR", "HX"],
+            &[],
+        );
+        let found: Vec<String> =
+            super::lines_affected_by(&inc, &lines, &registry, &real_gazetteer())
+                .into_iter()
+                .map(|m| m.line.id.clone())
+                .collect();
+        assert!(
+            !found.contains(&"elizabeth-heathrow".to_string()),
+            "{found:?}"
+        );
     }
 
     #[test]
@@ -7050,6 +7492,9 @@ mod tests {
                 "southeastern-highspeed".to_string(),
                 "southeastern-maidstone-east".to_string(),
                 "southeastern-canterbury-west".to_string(),
+                // 2026-10-06: Southern's Marshlink line starts here, on
+                // its own segment (station overlap only).
+                "southern-marshlink".to_string(),
             ])
         );
         for m in &matches {
@@ -8636,10 +9081,15 @@ mod tests {
                 "thameslink-southern".to_string(),
                 "southern-brighton-main-line".to_string(),
                 "southern-oxted-uckfield".to_string(),
+                // 2026-10-06: Southern's West London line ends here, on
+                // its own segment.
+                "southern-west-london".to_string(),
             ])
         );
         for m in &matches {
-            let expected = if m.line.id == "southern-oxted-uckfield" {
+            let expected = if ["southern-oxted-uckfield", "southern-west-london"]
+                .contains(&m.line.id.as_str())
+            {
                 MatchScope::ExclusiveSegment
             } else {
                 MatchScope::SharedSegment
@@ -10605,6 +11055,12 @@ mod tests {
                 "southern-brighton-main-line".to_string(),
                 "southern-metro-crystal-palace".to_string(),
                 "southern-metro-sutton".to_string(),
+                // 2026-10-06: Southern's West London line (sharing the
+                // Mildmay line's Clapham branch segment, so both are now
+                // SharedSegment here) and the Oxted line (which calls at
+                // Clapham Junction on its own Victoria approach segment).
+                "southern-west-london".to_string(),
+                "southern-oxted-uckfield".to_string(),
             ])
         );
         for m in &matches {
@@ -10625,6 +11081,8 @@ mod tests {
                 "swr-epsom-mole-valley",
                 "southern-metro-crystal-palace",
                 "southern-metro-sutton",
+                "southern-west-london",
+                "overground-mildmay",
             ]
             .contains(&m.line.id.as_str())
             {
@@ -11254,26 +11712,58 @@ mod tests {
     }
 
     // Decision 2 must not regress the case cross-country.toml's own
-    // comment documents: "Cross Country Route" names real
-    // Birmingham-Bristol infrastructure, not the CrossCountry brand, and
-    // must keep matching via keyword alone when the incident's structured
-    // operators list agrees (XC).
+    // comment documented: "Cross Country Route" names real
+    // Birmingham-Bristol infrastructure, and an XC incident on it must
+    // still reach the line. Since 2026-10-06 the line has no brand keyword
+    // (an umbrella-style brand match beside station evidence was the
+    // misses study's wrong-line case); it matches by the places named,
+    // with "Birmingham" a city alias for New Street.
     #[test]
     fn decision2_cross_country_route_infrastructure_mention_still_matches() {
         let lines = load_line("cross-country");
         let registry = SegmentRegistry::new(&lines);
         let inc = incident(
             "D2-3",
-            "Cross Country Route disruption",
+            "Cross Country Route disruption between Birmingham and Bristol",
             "Disruption on the Cross Country Route between Birmingham and \
              Bristol due to a landslip.",
             &["XC"],
             &[],
         );
-        let matches = lines_affected_by(&inc, &lines, &registry);
+        let matches = super::lines_affected_by(&inc, &lines, &registry, &real_gazetteer());
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].line.id, "cross-country");
-        assert_eq!(matches[0].scope, MatchScope::KeywordOnly);
+        assert_ne!(matches[0].scope, MatchScope::KeywordOnly);
+        assert_ne!(matches[0].scope, MatchScope::OperatorOnly);
+    }
+
+    #[test]
+    fn umbrella_brand_names_are_not_line_evidence() {
+        // 03552B44 / 853C6AE3 (2026-10-06 misses study): "Northern services"
+        // and "CrossCountry" name the operator, not the umbrella line; as
+        // keywords they put `northern` / `cross-country` beside the line
+        // really affected.
+        let found = evidence(
+            "Disruption between Selby and Hull",
+            "<p>Northern services between Selby and Hull may be delayed.</p>",
+            &["NT", "TP"],
+        );
+        assert!(!ids(&found).contains(&"northern"), "{found:?}");
+        let found = evidence(
+            "Disruption between Southampton Central and Brockenhurst",
+            "<p>CrossCountry services may be delayed.</p>",
+            &["XC", "SW"],
+        );
+        assert!(ids(&found).contains(&"xc-south-coast"), "{found:?}");
+        assert!(!ids(&found).contains(&"cross-country"), "{found:?}");
+        // A line named in the summary still matches by keyword beside a
+        // place ("Suffragette line" is not an operator brand).
+        let found = evidence(
+            "Disruption to Suffragette line services between Gospel Oak and Barking Riverside",
+            "",
+            &["LO"],
+        );
+        assert_eq!(ids(&found), ["overground-suffragette"]);
     }
 
     // ---------------------------------------------------------------
@@ -12282,17 +12772,16 @@ mod tests {
 
     #[test]
     fn woking_brookwood_stays_on_the_lines_through_both() {
-        // 147D1B86: before, all five SW lines operator-wide; now the four
-        // lines that run between Woking and Brookwood, by station.
+        // 147D1B86: before, all five SW lines operator-wide. No catalogue
+        // line lists Brookwood, so until the pass-through stations
+        // (lines/generated/pass-through.toml) only Woking resolved, a hub on
+        // four lines including the Portsmouth Direct, whose trains turn off
+        // to Guildford there. Now the three lines whose trains run through
+        // Brookwood, a two-place section.
         let found = evidence("Disruption between Woking and Brookwood", "", &["SW"]);
         assert_eq!(
             ids(&found),
-            [
-                "swr-alton",
-                "swr-portsmouth-direct",
-                "swr-south-west-main",
-                "swr-west-of-england"
-            ]
+            ["swr-alton", "swr-south-west-main", "swr-west-of-england"]
         );
         assert_no_operator_only(&found);
     }
@@ -12337,7 +12826,12 @@ mod tests {
             "",
             &["WM"],
         );
-        assert_eq!(ids(&found), ["wmr-camp-hill-line", "wmr-cross-city"]);
+        // The Malvern line's trains run through Kings Norton (a
+        // pass-through station between University and Bromsgrove).
+        assert_eq!(
+            ids(&found),
+            ["wmr-camp-hill-line", "wmr-cross-city", "wmr-malvern-line"]
+        );
         // With no place named, LN falls back to every LM line.
         let found = evidence(
             "Disruption to London Northwestern Railway services",
@@ -12387,6 +12881,31 @@ mod tests {
     }
 
     #[test]
+    fn bare_london_is_each_lines_own_terminus_at_a_section_end() {
+        // 4582FCFA: "between Stevenage and London". Before 2026-10-06 (the
+        // fix), Stevenage alone resolved, a one-place hub.
+        let found = evidence(
+            "Disruption between Stevenage and London expected until 15:00",
+            "",
+            &["GN", "GC", "HT", "GR", "LD", "TL"],
+        );
+        let found_ids = ids(&found);
+        for id in [
+            "great-northern-kings-lynn",
+            "lner-ecml",
+            "thameslink-cambridge",
+        ] {
+            assert!(found_ids.contains(&id), "{id}: {found_ids:?}");
+        }
+        assert_no_operator_only(&found);
+        // Every place named is one place, however many codes it has: the
+        // Heathrow lines hold all three Heathrow stations, but "Heathrow
+        // Airport" alone is a hub, not a section.
+        let found = evidence("Disruption at Heathrow Airport", "", &["XR", "HX"]);
+        assert_eq!(ids(&found), ["elizabeth-heathrow", "heathrow-express"]);
+    }
+
+    #[test]
     fn a_hub_named_alone_fans_out_to_its_lines() {
         let found = evidence("Disruption at Clapham Junction", "", &["SW"]);
         assert!(found.len() >= 10, "{found:?}");
@@ -12420,14 +12939,14 @@ mod tests {
              Victoria.</p>",
             &["SW"],
         );
-        assert_eq!(found.len(), 4, "{found:?}");
+        assert_eq!(found.len(), 3, "{found:?}");
         // A summary without a place: the description supplies it.
         let found = evidence(
             "Disruption to South Western Railway services",
             "<p>A fault between Woking and Brookwood means trains may be delayed.</p>",
             &["SW"],
         );
-        assert_eq!(found.len(), 4, "{found:?}");
+        assert_eq!(found.len(), 3, "{found:?}");
     }
 
     #[test]
@@ -12474,5 +12993,327 @@ mod tests {
         let found = evidence("Disruption to Southern services", "", &["SN"]);
         assert!(found.len() > 5, "{found:?}");
         assert_all_operator_only(&found);
+    }
+
+    #[test]
+    fn places_no_in_scope_line_holds_use_any_operators_section() {
+        // 06724BDE, one text version tagged "XC": no CrossCountry line
+        // holds Grantham or Skegness, the Poacher line holds both. Before
+        // 2026-10-06 decision 5, every XC line operator-wide.
+        let found = evidence(
+            "Lines reopened: disruption between Grantham and Skegness expected until 19:00",
+            "<p>Tickets are valid on CrossCountry services between Birmingham New Street \
+             and Derby.</p>",
+            &["XC"],
+        );
+        assert_eq!(ids(&found), ["emr-poacher"]);
+        assert_no_operator_only(&found);
+        // Correctly tagged, the same answer.
+        let found = evidence("Disruption between Grantham and Skegness", "", &["EM"]);
+        assert_eq!(ids(&found), ["emr-poacher"]);
+        // DB1DA9F3: a Thameslink line holds Peterborough, so the section
+        // does not jump to the lines between Kings Cross and Peterborough.
+        let found = evidence(
+            "Reduced Thameslink service between London Kings Cross and Peterborough",
+            "",
+            &["TL"],
+        );
+        assert!(
+            found.iter().all(|(id, _)| id.starts_with("thameslink-")),
+            "{found:?}"
+        );
+        assert!(!found.is_empty());
+    }
+
+    #[test]
+    fn pass_through_stations_put_a_section_on_the_lines_running_through_it() {
+        // 30F25B61 / C279C8AB (2026-10-06 misses study): no Brighton Main
+        // Line or Oxted line stop is named, but their trains run through
+        // New Cross Gate and Norwood Junction between London Bridge and
+        // East Croydon (lines/generated/pass-through.toml).
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "30F25B61",
+            "Issue resolved: disruption between London Bridge and Norwood Junction",
+            "",
+            &["SN"],
+            &[],
+        );
+        let found = super::lines_affected_by(&inc, &lines, &registry, &real_gazetteer());
+        let ids: Vec<&str> = found.iter().map(|m| m.line.id.as_str()).collect();
+        for id in ["southern-brighton-main-line", "southern-oxted-uckfield"] {
+            assert!(ids.contains(&id), "{id}: {ids:?}");
+        }
+        // The evidence (and so the affected stops and route) is only ever
+        // the line's own stations.
+        for m in &found {
+            for crs in &m.evidence.stations {
+                assert!(m.line.has_station(crs), "{}: {crs}", m.line.id);
+            }
+        }
+        let bml = found
+            .iter()
+            .find(|m| m.line.id == "southern-brighton-main-line")
+            .expect("matched");
+        assert!(bml.evidence.stations.contains(&"ECR".to_string()));
+        assert!(!bml.evidence.stations.contains(&"NWD".to_string()));
+    }
+
+    #[test]
+    fn a_hub_beside_a_place_on_one_line_is_dropped() {
+        // CD74FB58 (2026-10-06 decision 6): Victoria is on four Southern
+        // lines, Eastbourne on one. Under the absolute rule alone (a hub is
+        // on more than four lines) Victoria fanned out to all four.
+        let found = evidence(
+            "Temporary changes to weekday off-peak services between Eastbourne and London \
+             Victoria from Monday 14 September",
+            "",
+            &["SN"],
+        );
+        assert_eq!(ids(&found), ["southern-coastway-east"]);
+        // Named alone, the hub still fans out.
+        let found = evidence("Disruption at London Victoria", "", &["SN"]);
+        assert!(found.len() >= 3, "{found:?}");
+    }
+
+    fn station_list(id: &str) -> Vec<String> {
+        load_line(id)[id]
+            .stations
+            .iter()
+            .map(|s| s.crs.clone())
+            .collect()
+    }
+
+    // ---- Partial overlap (2026-10-06 decision 8; design doc examples) ----
+
+    #[test]
+    fn a_line_sharing_only_a_sections_far_end_is_not_affected() {
+        // 38DE9D6A: the Bexleyheath line shares only the London end of
+        // "Maidstone East and London Charing Cross"; Charing Cross (on many
+        // Southeastern lines) is a hub beside Maidstone East (on one).
+        let found = evidence(
+            "Disruption between Maidstone East and London Charing Cross",
+            "",
+            &["SE"],
+        );
+        assert_eq!(ids(&found), ["southeastern-maidstone-east"]);
+        // 6A545EF3: the Far North line shares Inverness-Dingwall, under a
+        // third of the way to Kyle of Lochalsh.
+        let found = evidence(
+            "Disruption between Inverness and Kyle of Lochalsh",
+            "",
+            &["SR"],
+        );
+        assert_eq!(ids(&found), ["scotrail-kyle"]);
+        // A line sharing only the Clapham Junction end of "Clapham Junction
+        // and London Victoria" (Southern's West London line) is not on it.
+        let found = evidence(
+            "Major disruption between Clapham Junction and London Victoria",
+            "",
+            &["GX", "SN"],
+        );
+        assert!(!ids(&found).contains(&"southern-west-london"), "{found:?}");
+    }
+
+    #[test]
+    fn a_line_sharing_most_of_a_section_is_affected() {
+        // 87C865A3: the South West Main Line (and the other Woking lines)
+        // runs Clapham Junction - Wimbledon, two of the three hops to
+        // Raynes Park, without holding Raynes Park.
+        let found = evidence(
+            "Disruption between Raynes Park and Clapham Junction",
+            "",
+            &["SW"],
+        );
+        let found_ids = ids(&found);
+        for id in [
+            "swr-new-guildford",
+            "swr-south-west-main",
+            "swr-portsmouth-direct",
+        ] {
+            assert!(found_ids.contains(&id), "{id}: {found_ids:?}");
+        }
+        // But not the Windsor lines, which leave at Clapham Junction.
+        assert!(!found_ids.contains(&"swr-windsor-lines"), "{found_ids:?}");
+        // 03552B44: TransPennine's Hull trains run Leeds - Micklefield, most
+        // of the way to York, and are on "Leeds and York".
+        let found = evidence("Disruption between Leeds and York", "", &["NT", "TP"]);
+        let found_ids = ids(&found);
+        assert!(found_ids.contains(&"tpe-north-hull"), "{found_ids:?}");
+        assert!(
+            !found_ids.contains(&"northern-calder-valley"),
+            "{found_ids:?}"
+        );
+    }
+
+    #[test]
+    fn a_disrupted_major_junction_reaches_every_line_through_it() {
+        // "Lewisham and Hayes": alone, the Hayes line; with the fault at
+        // Lewisham (a junction on four or more lines), every line through
+        // Lewisham.
+        let found = evidence("Disruption between Lewisham and Hayes", "", &["SE"]);
+        assert_eq!(ids(&found), ["southeastern-hayes-line"]);
+        let found = evidence(
+            "Disruption between Lewisham and Hayes",
+            "<p>A signalling fault at Lewisham means trains may be delayed.</p>\
+             <p>Tickets are accepted at Bromley South.</p>",
+            &["SE"],
+        );
+        let found_ids = ids(&found);
+        for id in [
+            "southeastern-hayes-line",
+            "southeastern-bexleyheath",
+            "southeastern-dartford-loop",
+        ] {
+            assert!(found_ids.contains(&id), "{id}: {found_ids:?}");
+        }
+        // A points failure at Inverness reaches the Far North line.
+        let found = evidence(
+            "Disruption between Inverness and Kyle of Lochalsh",
+            "<p>A points failure at Inverness means trains may be delayed.</p>",
+            &["SR"],
+        );
+        assert!(ids(&found).contains(&"scotrail-far-north"), "{found:?}");
+        // Only the description's first paragraph localises: travel advice
+        // later on ("change at Lewisham") does not.
+        let found = evidence(
+            "Disruption between Lewisham and Hayes",
+            "<p>A tree has fallen on the line.</p><p>Change at Lewisham for DLR services.</p>",
+            &["SE"],
+        );
+        assert_eq!(ids(&found), ["southeastern-hayes-line"]);
+    }
+
+    #[test]
+    fn lines_added_from_the_timetable_have_their_real_calling_points() {
+        // 2026-10-06 misses study, each checked against the CIF timetable
+        // (schedule_calling_points_full, 7/10/11 Oct 2026; see the files).
+        assert_eq!(
+            station_list("southern-west-london"),
+            [
+                "WFJ", "HRW", "WMB", "SPB", "KPA", "WBP", "IMW", "CLJ", "BAL", "SRC", "NRB", "TTH",
+                "SRS", "ECR"
+            ]
+        );
+        assert_eq!(
+            station_list("southern-marshlink"),
+            [
+                "AFK", "HMT", "APD", "RYE", "WSE", "DLH", "TOK", "ORE", "HGS"
+            ]
+        );
+        let oxted = station_list("southern-oxted-uckfield");
+        assert_eq!(oxted[..3], ["VIC", "CLJ", "LBG"]);
+        let scarborough = station_list("tpe-north-scarborough");
+        assert_eq!(scarborough[..3], ["MIA", "MAN", "MCV"]);
+        assert!(station_list("southern-coastway-east").ends_with(&["HGS".into(), "ORE".into()]));
+        let wakefield = station_list("northern-wakefield-line");
+        assert!(wakefield.ends_with(&["SES".into(), "AWK".into(), "BYK".into(), "DON".into()]));
+        assert_eq!(
+            station_list("gwr-bristol-gloucester"),
+            ["BRI", "FIT", "BPW", "YAE", "CDU", "GCR", "CNM"]
+        );
+    }
+
+    #[test]
+    fn incidents_on_the_added_lines_find_them() {
+        // 5BB09F13 / 7C6D2415: no Southern line held either place.
+        let found = evidence(
+            "No Southern trains between Shepherds Bush and Watford Junction until approximately \
+             17:00",
+            "",
+            &["SN"],
+        );
+        assert_eq!(ids(&found), ["southern-west-london"]);
+        // 5D2795F5.
+        let found = evidence(
+            "Disruption between Ashford International and Rye expected until 18:00",
+            "",
+            &["SN"],
+        );
+        assert_eq!(ids(&found), ["southern-marshlink"]);
+        // 0B8DB84A: the Wakefield line's Doncaster fork.
+        let found = evidence(
+            "Major disruption between Wakefield Westgate and Doncaster expected until 10:30",
+            "",
+            &["XC", "GR", "NT"],
+        );
+        assert!(
+            ids(&found).contains(&"northern-wakefield-line"),
+            "{found:?}"
+        );
+        // B0080AB8: Bristol Parkway and Cheltenham Spa are now on the line.
+        let found = evidence(
+            "Disruption between Cheltenham Spa / Gloucester and Bristol Parkway expected until \
+             18:00",
+            "",
+            &["XC", "GW"],
+        );
+        assert!(ids(&found).contains(&"gwr-bristol-gloucester"), "{found:?}");
+        // 5930CC6A: the Oxted line calls at Clapham Junction.
+        let found = evidence(
+            "Major disruption between Clapham Junction and London Victoria",
+            "",
+            &["GX", "SN"],
+        );
+        assert!(
+            ids(&found).contains(&"southern-oxted-uckfield"),
+            "{found:?}"
+        );
+        // 5977B842: the Scarborough line's Airport workings.
+        let found = evidence("Disruption at Manchester Piccadilly", "", &["TP"]);
+        assert!(ids(&found).contains(&"tpe-north-scarborough"), "{found:?}");
+    }
+
+    #[test]
+    fn incidents_naming_no_resolvable_place_are_flagged() {
+        let lines: Vec<LineDefinition> = load_all_lines().into_values().collect();
+        let matcher = LineMatcher::new(&lines);
+        let gazetteer = real_gazetteer();
+        let flagged = |summary: &str, description: &str| {
+            matcher.names_no_resolvable_place(
+                &incident("U", summary, description, &["SN"], &[]),
+                &gazetteer,
+            )
+        };
+        // C70BA3DB: a region, not a station.
+        assert!(flagged(
+            "Disruption to Southern services in the Sussex area",
+            "<p>Issues with communications systems in the Sussex area.</p>"
+        ));
+        assert!(!flagged(
+            "Disruption between Purley and Gatwick Airport",
+            ""
+        ));
+        // The description's lead names the place.
+        assert!(!flagged(
+            "Disruption to Southern services",
+            "<p>A fault at Three Bridges.</p>"
+        ));
+        // A network-wide notice needs no place.
+        assert!(!flagged(
+            "Industrial action affecting Southern services",
+            ""
+        ));
+        // Without station names nothing resolves, and nothing is flagged.
+        assert!(!matcher.names_no_resolvable_place(
+            &incident("U", "Disruption in the Sussex area", "", &["SN"], &[]),
+            &StationGazetteer::default()
+        ));
+    }
+
+    #[test]
+    fn a_summary_naming_only_places_off_the_operators_lines_shows_nowhere() {
+        // Not operator-wide (2026-10-06 decision 5): the summary names a
+        // place, so the incident is local, and no line holds two of them.
+        let found = evidence("Disruption at Skegness", "", &["XC"]);
+        assert!(found.is_empty(), "{found:?}");
+        // The description is not read once the summary names a place.
+        let found = evidence(
+            "Disruption at Skegness",
+            "<p>A fault between Birmingham New Street and Derby.</p>",
+            &["XC"],
+        );
+        assert!(found.is_empty(), "{found:?}");
     }
 }

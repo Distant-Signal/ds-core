@@ -1,0 +1,86 @@
+id = "southern-marshlink"
+name = "Marshlink Line"
+mode = "national-rail"
+category = "regional"
+operators = ["SN"]
+
+# ============================================================================
+# WHY THIS FILE EXISTS (added 2026-10-06, incident line-evidence misses study)
+# ============================================================================
+# Southern's Ashford International - Hastings service via Rye had no
+# catalogue line, so "Disruption between Ashford International and Rye"
+# (5D2795F5) named no station of any Southern line and showed on every
+# Southern line operator-wide, or (since the 2026-10-06 matcher) nowhere.
+#
+# Route: CIF timetable (schedule_calling_points_full, Wed 7 / Sat 10 / Sun
+# 11 Oct 2026), every Rye working: "AFK HMT APD RYE WSE [DLH] TOK ORE HGS",
+# most continuing along the Coastway to Eastbourne
+# (southern-coastway-east.toml from Hastings). Doleham is a request stop
+# served by a few trains a day.
+#
+# Segments: the line's own throughout. Ashford International, Ore and
+# Hastings are station overlap only with the Southeastern files and
+# southern-coastway-east.toml: their segments there run on beyond the
+# stations these trains share.
+
+sample_stations = ["HMT", "RYE"]
+match_keywords = ["Marshlink", "Marsh Link"]
+
+[severity_overrides]
+# Hourly single-track rural line: one late train is a large share.
+minor_delays_pct = 0.30
+delay_threshold_minutes = 10
+
+[[stations]]
+crs = "AFK"
+role = "terminus"
+segment = "southern-marshlink"
+# Ashford International.
+
+[[stations]]
+crs = "HMT"
+role = "minor"
+segment = "southern-marshlink"
+# Ham Street.
+
+[[stations]]
+crs = "APD"
+role = "minor"
+segment = "southern-marshlink"
+# Appledore (Kent).
+
+[[stations]]
+crs = "RYE"
+role = "major"
+segment = "southern-marshlink"
+# Rye.
+
+[[stations]]
+crs = "WSE"
+role = "minor"
+segment = "southern-marshlink"
+# Winchelsea.
+
+[[stations]]
+crs = "DLH"
+role = "minor"
+segment = "southern-marshlink"
+# Doleham (request stop).
+
+[[stations]]
+crs = "TOK"
+role = "minor"
+segment = "southern-marshlink"
+# Three Oaks.
+
+[[stations]]
+crs = "ORE"
+role = "minor"
+segment = "southern-marshlink"
+# Ore.
+
+[[stations]]
+crs = "HGS"
+role = "terminus"
+segment = "southern-marshlink"
+# Hastings.

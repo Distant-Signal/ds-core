@@ -233,6 +233,113 @@ pub(crate) fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) ->
     findings
 }
 
+/// Checks the generated `lines/generated/pass-through.toml`
+/// (`scripts/generate-pass-through.py`, `common::pass_through`) against the
+/// catalogue and the reference data, without touching a database.
+///
+/// Errors: the file is missing or does not parse, names a line the
+/// catalogue does not have, or carries a CRS code
+/// `reference-data/crs-tiploc.csv` does not know. Warnings (stale after a
+/// catalogue edit; the loader skips them, and regenerating fixes them): a
+/// leg whose ends are not consecutive stations of its line, or a passed
+/// station that is one of the line's own stations.
+pub(crate) fn validate_pass_through(
+    lines_dir: &Path,
+    lines: &[LoadedLine],
+    reference: &ReferenceData,
+) -> Vec<Finding> {
+    let path = lines_dir.join(common::pass_through::PASS_THROUGH_FILE);
+    let error = |line_no: Option<usize>, message: String| Finding {
+        path: path.clone(),
+        line_no,
+        severity: Severity::Error,
+        message,
+    };
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            return vec![error(
+                None,
+                format!(
+                    "cannot read the generated pass-through file ({e}); generate it with \
+                     scripts/generate-pass-through.py (lines/SCHEMA.md)"
+                ),
+            )];
+        }
+    };
+    let file = match common::pass_through::PassThrough::parse(&raw) {
+        Ok(file) => file,
+        Err(e) => return vec![error(None, format!("does not parse: {e:#}"))],
+    };
+    let line_no = |needle: &str| {
+        raw.lines()
+            .position(|l| l.trim_start().starts_with(needle))
+            .map(|i| i + 1)
+    };
+    let mut findings = Vec::new();
+    for (line_id, legs) in &file.lines {
+        let header = format!("[lines.{line_id}]");
+        let Some(line) = lines.iter().find(|l| l.definition.id == *line_id) else {
+            findings.push(error(
+                line_no(&header),
+                format!("names line {line_id:?}, which no lines/*.toml defines"),
+            ));
+            continue;
+        };
+        let stations: Vec<&str> = line
+            .definition
+            .stations
+            .iter()
+            .map(|s| s.crs.as_str())
+            .collect();
+        for leg in legs {
+            let key = format!("{}-{}", leg.from, leg.to);
+            let at = line_no(&format!("{key} ="));
+            for crs in [&leg.from, &leg.to].into_iter().chain(&leg.via) {
+                if !reference.known_crs(crs) {
+                    findings.push(error(
+                        at,
+                        format!(
+                            "{line_id} {key}: unknown CRS code {crs:?} (not in \
+                             reference-data/crs-tiploc.csv)"
+                        ),
+                    ));
+                }
+            }
+            let consecutive = stations
+                .windows(2)
+                .any(|pair| pair[0] == leg.from && pair[1] == leg.to);
+            if !consecutive {
+                findings.push(Finding {
+                    path: path.clone(),
+                    line_no: at,
+                    severity: Severity::Warning,
+                    message: format!(
+                        "{line_id} {key}: not two consecutive stations of the line any more \
+                         -- stale; regenerate with scripts/generate-pass-through.py"
+                    ),
+                });
+            }
+            for crs in leg
+                .via
+                .iter()
+                .filter(|crs| stations.contains(&crs.as_str()))
+            {
+                findings.push(Finding {
+                    path: path.clone(),
+                    line_no: at,
+                    severity: Severity::Warning,
+                    message: format!(
+                        "{line_id} {key}: {crs} is one of the line's own stations -- stale; \
+                         regenerate with scripts/generate-pass-through.py"
+                    ),
+                });
+            }
+        }
+    }
+    findings
+}
+
 /// Stretch goal: informational-only coverage gaps -- currently-valid ATOC
 /// codes that no `lines/*.toml` file's `operators` references at all.
 /// Never affects the exit code (see `main.rs`).
@@ -454,6 +561,92 @@ operators = ["XC"]
         let reference = reference_with(&[("EUS", &["EUSTON"])], &["XC", "GW"]);
         let gaps = unused_operator_codes(&lines, &reference);
         assert_eq!(gaps, vec![("GW".to_string(), "GW".to_string())]);
+    }
+
+    fn write_pass_through(dir: &Path, body: &str) {
+        std::fs::create_dir_all(dir.join("generated")).unwrap();
+        std::fs::write(dir.join(common::pass_through::PASS_THROUGH_FILE), body).unwrap();
+    }
+
+    fn pass_through_findings(body: Option<&str>) -> Vec<Finding> {
+        let dir = tempfile_dir();
+        let line = format!(
+            "{HEADER}\n[[stations]]\ncrs = \"LBG\"\n[[stations]]\ncrs = \"ECR\"\n\
+             [[stations]]\ncrs = \"GTW\"\n"
+        );
+        write_line_file(&dir, "test-line", &line);
+        if let Some(body) = body {
+            write_pass_through(&dir, body);
+        }
+        let lines = load_all(&dir).unwrap();
+        let reference = reference_with(
+            &[
+                ("LBG", &[]),
+                ("ECR", &[]),
+                ("GTW", &[]),
+                ("NXG", &[]),
+                ("NWD", &[]),
+            ],
+            &["XC"],
+        );
+        validate_pass_through(&dir, &lines, &reference)
+    }
+
+    const PASS_THROUGH_HEADER: &str = "source_dates = [\"2026-10-07\"]\n";
+
+    #[test]
+    fn a_valid_pass_through_file_passes_clean() {
+        let body =
+            format!("{PASS_THROUGH_HEADER}[lines.test-line]\nLBG-ECR = [\"NXG\", \"NWD\"]\n");
+        assert!(pass_through_findings(Some(&body)).is_empty());
+    }
+
+    #[test]
+    fn a_missing_or_malformed_pass_through_file_is_a_hard_error() {
+        for body in [
+            None,
+            Some("not toml ["),
+            Some("[lines.test-line]\nLBG-ECR = [\"NXG\"]\n"),
+            Some("source_dates = []\n[lines.test-line]\nLBG = [\"NXG\"]\n"),
+        ] {
+            let findings = pass_through_findings(body);
+            assert_eq!(findings.len(), 1, "{body:?}: {findings:?}");
+            assert_eq!(findings[0].severity, Severity::Error);
+        }
+    }
+
+    #[test]
+    fn unknown_lines_and_crs_in_the_pass_through_file_are_hard_errors() {
+        let body = format!("{PASS_THROUGH_HEADER}[lines.no-such-line]\nLBG-ECR = [\"NXG\"]\n");
+        let findings = pass_through_findings(Some(&body));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Error);
+        assert!(findings[0].message.contains("no-such-line"));
+        assert_eq!(findings[0].line_no, Some(2));
+
+        let body = format!("{PASS_THROUGH_HEADER}[breaks]\nno-such-line = [\"LBG-ECR\"]\n");
+        let findings = pass_through_findings(Some(&body));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Error);
+
+        let body = format!("{PASS_THROUGH_HEADER}[lines.test-line]\nLBG-ECR = [\"ZZZ\"]\n");
+        let findings = pass_through_findings(Some(&body));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Error);
+        assert!(findings[0].message.contains("ZZZ"));
+        assert_eq!(findings[0].line_no, Some(3));
+    }
+
+    #[test]
+    fn stale_pass_through_legs_are_warnings() {
+        // Not consecutive (the catalogue gained or reordered a station),
+        // and a passed station that is now one of the line's own stops.
+        let body = format!(
+            "{PASS_THROUGH_HEADER}[lines.test-line]\nLBG-GTW = [\"NXG\"]\nECR-GTW = [\"LBG\"]\n"
+        );
+        let findings = pass_through_findings(Some(&body));
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        assert!(findings.iter().all(|f| f.severity == Severity::Warning));
     }
 
     /// A per-test tempdir under the crate's own `target/` -- avoids a new

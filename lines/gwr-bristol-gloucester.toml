@@ -107,6 +107,18 @@ segment = "gwr-bristol-gloucester"
 # ds.cursed.solutions/api/stations.
 
 [[stations]]
+crs = "BPW"
+role = "junction"
+segment = "gwr-bristol-gloucester"
+# Bristol Parkway (added 2026-10-06, misses study). Every GWR Bristol-
+# Gloucester train calls here between Filton Abbey Wood and Yate
+# (schedule_calling_points_full, Wed 7 / Sat 10 / Sun 11 Oct 2026: "BRI FIT
+# BPW YAE CDU GCR [CNM ASC WOS WOF]"), and incidents name it ("disruption
+# between Cheltenham Spa / Gloucester and Bristol Parkway", B0080AB8). Also
+# a station of gwr-south-wales.toml and cross-country.toml: station
+# overlap only, this line's own segment kept.
+
+[[stations]]
 crs = "YAE"
 role = "major"
 segment = "gwr-bristol-gloucester"
@@ -129,26 +141,18 @@ segment = "gwr-bristol-gloucester"
 # live against ds.cursed.solutions/api/stations and returned no current
 # CRS; all three confirmed closed and correctly excluded.
 
-[[stations]]
-crs = "SHU"
-role = "minor"
-segment = "gwr-golden-valley"
-# Stonehouse. Real convergence point with gwr-golden-valley.toml's own
-# route (see segment-naming comment above) — `gwr-golden-valley` reused
-# verbatim, row copied directly from that file, rather than treated as a
-# single-waypoint station overlap. Haresfield, between here and Gloucester
-# on this route's own historical infobox, was checked the same way as
-# Charfield/Wickwar/Coaley Junction above and returned no current CRS —
-# confirmed closed.
+# Stonehouse (SHU) was listed here until 2026-10-06. It is on the Golden
+# Valley line (gwr-golden-valley.toml) east of Standish Junction, where the
+# two routes meet; no Bristol-Gloucester train calls or passes there (the
+# timetable above), so it is no longer a station of this line.
 
 [[stations]]
 crs = "GCR"
 role = "major"
 segment = "gwr-golden-valley"
-# Gloucester. This file's own scope ends here (matching
-# gwr-golden-valley.toml's own scope boundary); real GWR services continue
-# to Cheltenham Spa/Ashchurch/Worcester (see the destination_crs_filter
-# comment above). Row copied verbatim from gwr-golden-valley.toml.
+# Gloucester. Most GWR services continue to Cheltenham Spa (the next row,
+# added 2026-10-06), Ashchurch and Worcester. Row copied verbatim from
+# gwr-golden-valley.toml.
 #
 # Also, separately, a real station overlap with xc-cardiff.toml (its own
 # `xc-cardiff` segment, Cheltenham-Gloucester-Newport-Cardiff) — already
@@ -163,3 +167,14 @@ segment = "gwr-golden-valley"
 # separate coverage gap in cross-country.toml's own Bristol arm, out of
 # this task's scope (lines/gwr-bristol-gloucester.toml only) and flagged
 # here for the controller alongside this task's other findings.
+
+[[stations]]
+crs = "CNM"
+role = "major"
+segment = "gwr-golden-valley"
+# Cheltenham Spa (added 2026-10-06, misses study): most GWR Bristol-
+# Gloucester trains run on from Gloucester to Cheltenham Spa (and on to
+# Worcester), per the timetable above, and incidents name the pair
+# ("between Cheltenham Spa / Gloucester and Bristol Parkway"). Shares
+# gwr-golden-valley.toml's `gwr-golden-valley` segment with Gloucester, as
+# that file's own Cheltenham row does.

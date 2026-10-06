@@ -21,6 +21,7 @@ pub mod matcher;
 pub mod metrics;
 pub mod oauth_client;
 pub mod outbound_endpoint_guard;
+pub mod pass_through;
 #[cfg(feature = "postgres")]
 pub mod pg;
 pub mod poller_loop;
@@ -1006,6 +1007,16 @@ pub struct LineDefinition {
     /// `lines/tfw-conwy-valley.toml` sets it in this repo's catalogue.
     #[serde(default)]
     pub full_coverage_enabled: bool,
+    /// Stations this line's trains run through between two of its
+    /// consecutive `stations` without the catalogue listing them, from
+    /// `lines/generated/pass-through.toml` ([`crate::pass_through`];
+    /// attached by [`Self::from_dir`]). For the incident matcher ONLY
+    /// ([`Self::holds_place`]): never a stop, never sampled, never in a
+    /// segment, and never serialised, so no API response or page shows it.
+    /// Not read from a line's own TOML file (`skip`), and empty for custom
+    /// lines.
+    #[serde(skip)]
+    pub pass_through: Vec<pass_through::PassThroughLeg>,
 }
 
 impl LineDefinition {
@@ -1015,9 +1026,81 @@ impl LineDefinition {
         Ok(line)
     }
 
+    /// Every `*.toml` line in `dir_path`, with the generated pass-through
+    /// stations (`generated/pass-through.toml`, in a subdirectory so this
+    /// glob never reads it as a line) attached when the file exists.
     pub fn from_dir(dir_path: &Path) -> Result<Vec<Self>> {
         let paths = glob(&format!("{}/*.toml", dir_path.display()))?;
-        paths.map(|path| Self::from_file(&path?)).collect()
+        let mut lines: Vec<Self> = paths
+            .map(|path| Self::from_file(&path?))
+            .collect::<Result<_>>()?;
+        if let Some(pass_through) = pass_through::PassThrough::load(dir_path)? {
+            attach_pass_through(&mut lines, &pass_through);
+        }
+        Ok(lines)
+    }
+
+    /// Whether `crs` is on this line for resolving the places an incident
+    /// names: one of its `stations`, or a station its trains run through
+    /// between two of them ([`Self::pass_through`]).
+    pub fn holds_place(&self, crs: &str) -> bool {
+        self.has_station(crs)
+            || self
+                .pass_through
+                .iter()
+                .any(|leg| leg.via.iter().any(|v| v == crs))
+    }
+
+    /// The line's route for matching, as the stretches its trains really
+    /// run: its stations in catalogue order with the stations its trains
+    /// pass between each consecutive pair ([`Self::pass_through`]) in
+    /// between, split at every break (consecutive catalogue stations none
+    /// of its trains runs between: a branch boundary in the station order).
+    /// Never shown: see `pass_through`.
+    pub fn route_runs(&self) -> Vec<Vec<&str>> {
+        let mut runs: Vec<Vec<&str>> = Vec::new();
+        let mut current: Vec<&str> = Vec::new();
+        for (i, station) in self.stations.iter().enumerate() {
+            current.push(station.crs.as_str());
+            let Some(next) = self.stations.get(i + 1) else {
+                continue;
+            };
+            for leg in self
+                .pass_through
+                .iter()
+                .filter(|leg| leg.from == station.crs && leg.to == next.crs)
+            {
+                if leg.runs {
+                    current.extend(leg.via.iter().map(String::as_str));
+                } else {
+                    runs.push(std::mem::take(&mut current));
+                }
+            }
+        }
+        runs.push(current);
+        runs
+    }
+
+    /// The line's own stations standing for place `crs`: `crs` itself when
+    /// it is one of them, else the catalogue stations either side of every
+    /// leg its trains run through it on (so evidence, affected stops and
+    /// routes only ever name the line's own stations). Empty when the line
+    /// does not hold it.
+    pub fn stations_for_place(&self, crs: &str) -> Vec<String> {
+        if self.has_station(crs) {
+            return vec![crs.to_string()];
+        }
+        let mut out: Vec<String> = Vec::new();
+        for leg in &self.pass_through {
+            if leg.via.iter().any(|v| v == crs) {
+                for end in [&leg.from, &leg.to] {
+                    if !out.contains(end) {
+                        out.push(end.clone());
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Signal Box Audit, Finding #6 (common/matcher.rs): both
@@ -1092,6 +1175,48 @@ impl LineDefinition {
         };
         let (lo, hi) = if i <= j { (i, j) } else { (j, i) };
         crs_list[lo..=hi].to_vec()
+    }
+}
+
+/// Gives each line its legs from the generated pass-through file. A leg
+/// whose ends are no longer both on the line (its stations changed since
+/// the file was generated) is dropped, as is a line id the catalogue does
+/// not have; both are logged, and `line-catalogue-validator` reports them
+/// in CI. The file is regenerated with `scripts/generate-pass-through.py`.
+fn attach_pass_through(lines: &mut [LineDefinition], file: &pass_through::PassThrough) {
+    let known: HashSet<String> = lines.iter().map(|l| l.id.clone()).collect();
+    for unknown in file.lines.keys().filter(|id| !known.contains(*id)) {
+        tracing::warn!(
+            line_id = %unknown,
+            "lines/generated/pass-through.toml names a line the catalogue does not have -- \
+             ignored; regenerate it with scripts/generate-pass-through.py"
+        );
+    }
+    for line in lines.iter_mut() {
+        let Some(legs) = file.lines.get(&line.id) else {
+            continue;
+        };
+        let (fresh, stale): (Vec<_>, Vec<_>) = legs
+            .iter()
+            .cloned()
+            .partition(|leg| line.has_station(&leg.from) && line.has_station(&leg.to));
+        if !stale.is_empty() {
+            tracing::warn!(
+                line_id = %line.id,
+                stale = stale.len(),
+                "lines/generated/pass-through.toml has legs whose ends are no longer this \
+                 line's stations -- ignored; regenerate it with scripts/generate-pass-through.py"
+            );
+        }
+        line.pass_through = fresh
+            .into_iter()
+            .map(|mut leg| {
+                leg.via
+                    .retain(|crs| !line.stations.iter().any(|s| s.crs == *crs));
+                leg
+            })
+            .filter(|leg| !leg.runs || !leg.via.is_empty())
+            .collect();
     }
 }
 
@@ -2008,6 +2133,7 @@ impl From<CustomLine> for LineDefinition {
             // candidate -- that catalogue is curated by this repo, not by
             // an end user picking arbitrary stations.
             full_coverage_enabled: false,
+            pass_through: Vec::new(),
         }
     }
 }
@@ -2767,5 +2893,116 @@ mod tfl_nr_merge_tests {
     #[test]
     fn an_nr_line_with_no_tfl_counterpart_has_no_mapping() {
         assert_eq!(tfl_line_id_for_nr("waterloo-main-line"), None);
+    }
+}
+
+#[cfg(test)]
+mod pass_through_attach_tests {
+    use super::*;
+
+    fn catalogue_dir(pass_through: Option<&str>) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "pass-through-attach-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("generated")).expect("temp dir");
+        std::fs::write(
+            dir.join("bml.toml"),
+            "id = \"bml\"\nname = \"B\"\nmode = \"national-rail\"\ncategory = \"main-line\"\n\
+             operators = [\"SN\"]\n[[stations]]\ncrs = \"LBG\"\n[[stations]]\ncrs = \"ECR\"\n\
+             [[stations]]\ncrs = \"GTW\"\n",
+        )
+        .expect("line file");
+        if let Some(body) = pass_through {
+            std::fs::write(dir.join(pass_through::PASS_THROUGH_FILE), body).expect("file");
+        }
+        dir
+    }
+
+    #[test]
+    fn from_dir_attaches_pass_through_stations_for_matching_only() {
+        let dir = catalogue_dir(Some(
+            "source_dates = [\"2026-10-07\"]\n[lines.bml]\nLBG-ECR = [\"NXG\", \"NWD\"]\n\
+             LBG-GTW = [\"ZZZ\"]\nECR-GTW = [\"ECR\"]\n[lines.gone]\nAAA-BBB = [\"CCC\"]\n",
+        ));
+        let lines = LineDefinition::from_dir(&dir).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(lines.len(), 1, "the generated file is not a line");
+        let line = &lines[0];
+        // LBG-GTW is kept (both ends are stations); ECR-GTW's only station
+        // is a stop, so that leg is dropped.
+        assert_eq!(line.pass_through.len(), 2);
+        assert_eq!(line.route_runs(), [["LBG", "NXG", "NWD", "ECR", "GTW"]]);
+        assert!(line.holds_place("NWD"));
+        assert!(line.holds_place("ECR"));
+        // A stop, never: not a station, and the evidence is the line's own
+        // stations either side.
+        assert!(!line.has_station("NWD"));
+        assert_eq!(line.stations_for_place("NWD"), ["LBG", "ECR"]);
+        assert_eq!(line.stations_for_place("ECR"), ["ECR"]);
+        assert!(line.stations_for_place("BTN").is_empty());
+        // Never serialised: no API response carries it.
+        let json = serde_json::to_value(line).expect("serialises");
+        assert!(json.get("pass_through").is_none(), "{json}");
+        assert_eq!(json["stations"].as_array().map(Vec::len), Some(3));
+    }
+
+    #[test]
+    fn breaks_split_the_route() {
+        let dir = catalogue_dir(Some(
+            "source_dates = [\"2026-10-07\"]\n[lines.bml]\nECR-GTW = [\"PUR\"]\n\
+             [breaks]\nbml = [\"LBG-ECR\"]\n",
+        ));
+        let lines = LineDefinition::from_dir(&dir).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(
+            lines[0].route_runs(),
+            [vec!["LBG"], vec!["ECR", "PUR", "GTW"]]
+        );
+        assert!(!lines[0].holds_place("LBG-ECR"));
+    }
+
+    #[test]
+    fn from_dir_drops_legs_whose_ends_left_the_line() {
+        let dir = catalogue_dir(Some(
+            "source_dates = [\"2026-10-07\"]\n[lines.bml]\nLBG-BTN = [\"NXG\"]\n",
+        ));
+        let lines = LineDefinition::from_dir(&dir).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(lines[0].pass_through.is_empty());
+    }
+
+    #[test]
+    fn from_dir_without_the_generated_file_has_no_pass_through() {
+        let dir = catalogue_dir(None);
+        let lines = LineDefinition::from_dir(&dir).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(lines[0].pass_through.is_empty());
+    }
+
+    #[test]
+    fn from_dir_rejects_a_malformed_generated_file() {
+        let dir = catalogue_dir(Some("[lines.bml]\nLBG-ECR = \"NXG\"\n"));
+        let result = LineDefinition::from_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn the_real_catalogue_gets_the_brighton_main_lines_pass_through_stations() {
+        let dir = crate::manifest_dir!().join("../../lines");
+        let lines = LineDefinition::from_dir(&dir).expect("lines/ parses");
+        let bml = lines
+            .iter()
+            .find(|l| l.id == "southern-brighton-main-line")
+            .expect("exists");
+        for crs in ["NXG", "SYD", "NWD"] {
+            assert!(bml.holds_place(crs), "{crs}");
+            assert!(!bml.has_station(crs), "{crs} must not become a stop");
+        }
     }
 }

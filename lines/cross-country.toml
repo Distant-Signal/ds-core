@@ -13,9 +13,7 @@ operators = ["XC"]
 # cross-checked against the operator's own site), so the display name below
 # follows that route wording instead. `id` is left unchanged (`cross-country`
 # is a stable, published identifier per SCHEMA.md and isn't touched by a
-# display-name-only rename), and "CrossCountry"/"Cross Country" stay in
-# `match_keywords` below unchanged -- the brand name is still exactly what
-# Knowledgebase incident text uses.
+# display-name-only rename).
 
 # North, midpoint(s), south. LDS added for the Leeds branch (review2
 # finding, see the YRK/DON/LDS/WKF comments below) -- one sample per
@@ -23,10 +21,15 @@ operators = ["XC"]
 # Edinburgh extension above NCL (also review2, lower priority) -- this
 # file's new true northern terminus for most Scotland-bound services.
 sample_stations = ["EDB", "NCL", "YRK", "LDS", "BHM", "BRI", "EXD"]
-match_keywords = ["CrossCountry", "Cross Country"]
-# No excluded_keywords: "Cross Country Route" (the Birmingham-Bristol
-# infrastructure name) shows up in messages that genuinely do affect XC, so
-# vetoing on it would cost more matches than it saves.
+# No match_keywords (2026-10-06 misses study, user decision 2): "CrossCountry"
+# and "Cross Country" name the operator, which runs five catalogue lines, not
+# this one. As a keyword the brand put this line beside the station evidence
+# of the XC line really affected ("Disruption between Southampton Central and
+# Brockenhurst", "Major disruption in the Basingstoke area"), and on a notice
+# naming no place it suppressed XC's other lines. The line now matches by its
+# stations (including those its trains pass through, e.g. Gloucester between
+# Cheltenham Spa and Bristol Parkway: lines/generated/pass-through.toml), and
+# every XC line shows a network-wide notice or one naming no place.
 
 # Long-distance, roughly hourly: the same 5-minute delay matters less than it
 # does on a metro-frequency line, and a single cancellation is a bigger share

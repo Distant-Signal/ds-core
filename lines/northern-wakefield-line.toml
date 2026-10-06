@@ -1,5 +1,5 @@
 id = "northern-wakefield-line"
-name = "Wakefield Line (Sheffield service)"
+name = "Wakefield Line"
 mode = "national-rail"
 category = "regional"
 operators = ["NT"]
@@ -58,7 +58,12 @@ operators = ["NT"]
 # route-truncation correction further below).
 
 sample_stations = ["SHF", "SWN", "WKF", "LDS"]
-destination_crs_filter = ["LDS"]
+destination_crs_filter = ["LDS", "DON"]
+# 2026-10-06 (misses study): the Doncaster fork is now modelled (see the
+# DONCASTER FORK note above its stations), so the line's own Doncaster-bound
+# trains count at the shared sample stations too, and the display name drops
+# "(Sheffield service)". The "no match_keywords" reasoning below predates
+# that and is kept: station evidence carries the line.
 # Updated (Yorkshire review, 2026-09-21) from `["WKF"]`: this file's own
 # route was truncated at Wakefield Westgate (see the route-truncation
 # correction below) and now runs through to Leeds, its real terminus -- LDS
@@ -234,8 +239,8 @@ segment = "northern-wakefield-sheffield"
 crs = "FZW"
 role = "junction"
 segment = "northern-wakefield-sheffield"
-# Fitzwilliam -- junction where the (unmodelled) Doncaster fork diverges;
-# see the scope note above.
+# Fitzwilliam -- junction where the Doncaster fork (the last four stations
+# below, added 2026-10-06) diverges.
 
 [[stations]]
 crs = "SNA"
@@ -281,3 +286,40 @@ segment = "northern-outwood-wakefield-trunk"
 # `northern-leeds-castleford` fact), so this specific station's use of the
 # name is exclusive to this file even though the name itself is genuinely
 # shared overall (via WKF/OUT).
+
+# --- DONCASTER FORK (added 2026-10-06, incident line-evidence misses study)
+# ---
+# The "scope boundary" note above left the Wakefield line's Doncaster fork
+# as a documented gap; incidents on it ("Major disruption between Wakefield
+# Westgate and Doncaster", 0B8DB84A; "between Wakefield Westgate and
+# Moorthorpe / Doncaster", 34D6968C) then had no Northern line to show on.
+# Northern's Leeds-Doncaster service, per the CIF timetable
+# (schedule_calling_points_full, Wed 7 / Sat 10 / Sun 11 Oct 2026, 37
+# trains on the Wednesday): "LDS OUT WKF SNA FZW SES AWK BYK DON". Listed
+# after Leeds as a branch from Fitzwilliam (lines/SCHEMA.md: branches one
+# after the other), on its own segment; Doncaster is station overlap only
+# with the ECML and other Doncaster files.
+
+[[stations]]
+crs = "SES"
+role = "minor"
+segment = "northern-wakefield-doncaster"
+# South Elmsall.
+
+[[stations]]
+crs = "AWK"
+role = "minor"
+segment = "northern-wakefield-doncaster"
+# Adwick.
+
+[[stations]]
+crs = "BYK"
+role = "minor"
+segment = "northern-wakefield-doncaster"
+# Bentley (South Yorkshire).
+
+[[stations]]
+crs = "DON"
+role = "terminus"
+segment = "northern-wakefield-doncaster"
+# Doncaster.
