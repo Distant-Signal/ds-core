@@ -1103,6 +1103,30 @@ pub struct IncidentMessage {
     pub is_cleared: bool, // maps ClearedIncident (spec: feed retains cleared incidents for a time)
 }
 
+/// `POST /private/incidents`' body since 2026-10-06: one poll of the whole
+/// Knowledgebase feed, plus whether that poll saw ALL of it.
+///
+/// The api infers that an incident has left the feed ("Ended (no longer
+/// listed)", `incidents.source_removed_at`) only from snapshots it can trust
+/// to be whole, so the poller says so explicitly rather than the api
+/// guessing from the batch alone. See
+/// docs/superpowers/specs/2026-10-06-incident-source-removal-design.md.
+///
+/// The api still accepts the old bare `[IncidentMessage, ...]` array, read as
+/// `complete: false`; so does a missing `complete` here. Either way an older
+/// poller can never trigger removal inference.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct IncidentSnapshot {
+    pub incidents: Vec<IncidentMessage>,
+    /// True only if the feed document was well-formed through its closing
+    /// root tag and every `<PtIncident>` in it parsed (`skipped == 0`).
+    #[serde(default)]
+    pub complete: bool,
+    /// `<PtIncident>` elements dropped as malformed by the poller.
+    #[serde(default)]
+    pub skipped: u64,
+}
+
 /// An LDBWS poll result for one station along a line.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StationSample {

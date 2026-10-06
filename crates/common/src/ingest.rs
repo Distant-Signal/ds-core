@@ -222,15 +222,31 @@ pub async fn post_batch_with_timeout<T: Serialize>(
     noun: &str,
     timeout: Option<Duration>,
 ) -> anyhow::Result<()> {
+    post_counted_with_timeout(client, url, tokens, items, items.len(), noun, timeout).await
+}
+
+/// [`post_batch_with_timeout`] for a body that is not a bare JSON array
+/// (e.g. [`crate::IncidentSnapshot`], which wraps its items with metadata):
+/// `count` is the item count the success log line reports. Same token
+/// handling and the same `"ingestion POST failed: ..."` error text.
+async fn post_counted_with_timeout<B: Serialize + ?Sized>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    body: &B,
+    count: usize,
+    noun: &str,
+    timeout: Option<Duration>,
+) -> anyhow::Result<()> {
     let token = tokens.get_token(client).await?;
-    let mut request = client.post(url).bearer_auth(&token).json(items);
+    let mut request = client.post(url).bearer_auth(&token).json(body);
     if let Some(timeout) = timeout {
         request = request.timeout(timeout);
     }
     let response = request.send().await?;
 
     if response.status().is_success() {
-        tracing::info!(count = items.len(), "posted {noun} to ingestion API");
+        tracing::info!(count, "posted {noun} to ingestion API");
         Ok(())
     } else {
         let status = response.status();
@@ -459,6 +475,31 @@ pub async fn post_batch_retrying<T: Serialize>(
     post_batch_retrying_with(client, url, tokens, items, noun, budget, POST_RETRY_BACKOFF).await
 }
 
+/// [`post_batch_retrying`] for a non-array body, see
+/// [`post_counted_with_timeout`]: `count` is only what the success log line
+/// reports.
+pub async fn post_counted_retrying<B: Serialize + ?Sized>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    body: &B,
+    count: usize,
+    noun: &str,
+    budget: Duration,
+) -> anyhow::Result<()> {
+    post_counted_retrying_with(
+        client,
+        url,
+        tokens,
+        body,
+        count,
+        noun,
+        budget,
+        POST_RETRY_BACKOFF,
+    )
+    .await
+}
+
 async fn post_batch_retrying_with<T: Serialize>(
     client: &reqwest::Client,
     url: &str,
@@ -468,13 +509,41 @@ async fn post_batch_retrying_with<T: Serialize>(
     budget: Duration,
     backoff: Backoff,
 ) -> anyhow::Result<()> {
+    post_counted_retrying_with(
+        client,
+        url,
+        tokens,
+        items,
+        items.len(),
+        noun,
+        budget,
+        backoff,
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the shared body of the two retrying POSTs; a struct would only wrap them"
+)]
+async fn post_counted_retrying_with<B: Serialize + ?Sized>(
+    client: &reqwest::Client,
+    url: &str,
+    tokens: &OAuthTokenCache,
+    body: &B,
+    count: usize,
+    noun: &str,
+    budget: Duration,
+    backoff: Backoff,
+) -> anyhow::Result<()> {
     let started = tokio::time::Instant::now();
     let mut failures: u32 = 0;
     loop {
-        let err = match post_batch(client, url, tokens, items, noun).await {
-            Ok(()) => return Ok(()),
-            Err(err) => err,
-        };
+        let err =
+            match post_counted_with_timeout(client, url, tokens, body, count, noun, None).await {
+                Ok(()) => return Ok(()),
+                Err(err) => err,
+            };
         if classify_failure(&err) == FailureClass::Rejected {
             return Err(err);
         }
@@ -888,6 +957,52 @@ mod tests {
         )
         .await
         .expect("the third attempt succeeds");
+    }
+
+    /// The incidents poller's snapshot is an object, not an array: it must
+    /// reach the api as-is (not wrapped in a one-element array), and get
+    /// the same transient-failure retry as a batch.
+    #[tokio::test]
+    async fn a_counted_object_body_is_posted_unwrapped_and_retried() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        let snapshot = crate::IncidentSnapshot {
+            incidents: Vec::new(),
+            complete: true,
+            skipped: 0,
+        };
+        let expected = serde_json::json!({"incidents": [], "complete": true, "skipped": 0});
+        Mock::given(method("POST"))
+            .and(path("/private/incidents"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/private/incidents"))
+            .and(body_json(&expected))
+            .respond_with(ResponseTemplate::new(200))
+            .with_priority(2)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        post_counted_retrying_with(
+            &reqwest::Client::new(),
+            &format!("{}/private/incidents", server.uri()),
+            &tokens,
+            &snapshot,
+            0,
+            "incidents",
+            Duration::from_secs(5),
+            FAST_WAIT.backoff,
+        )
+        .await
+        .expect("the second attempt succeeds");
     }
 
     #[tokio::test]
