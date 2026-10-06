@@ -51,6 +51,9 @@ tracing-log = "0.2"
 # Only to prove `redis_auth` URLs parse back to the same credentials in the
 # redis crate the services use (already in the workspace; no new crate).
 redis = { version = "0.27", default-features = false }
+# `gcp_external_account`'s subject-token files (already in the workspace,
+# same spec as schedule-ingest's).
+tempfile = "3"
 wiremock = "0.6"
 tokio = { version = "1.52.3", features = ["test-util", "io-util"] }
 

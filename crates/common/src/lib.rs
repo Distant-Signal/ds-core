@@ -12,6 +12,7 @@ pub mod backoff;
 pub mod config;
 pub mod corpus_inference;
 pub mod full_coverage_window;
+pub mod gcp_external_account;
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod log_once;
