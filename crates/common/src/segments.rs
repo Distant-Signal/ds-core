@@ -331,6 +331,38 @@ mod tests {
         );
     }
 
+    // Basingstoke is the junction of the South West Main Line, the West of
+    // England line and CrossCountry's south-coast route: one narrow shared
+    // segment in all three, so each line's own exclusive segment starts at
+    // the next station (lines/SCHEMA.md's junction rule).
+    #[test]
+    fn swr_basingstoke_junction_is_shared_by_the_three_lines_through_basingstoke() {
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let mut users = registry.lines_for_segment("swr-basingstoke-junction");
+        users.sort();
+        assert_eq!(
+            users,
+            vec![
+                "swr-south-west-main",
+                "swr-west-of-england",
+                "xc-south-coast"
+            ]
+        );
+        for line in [
+            "swr-south-west-main",
+            "swr-west-of-england",
+            "xc-south-coast",
+        ] {
+            assert_eq!(
+                registry.segment_at(line, "BSK"),
+                Some("swr-basingstoke-junction")
+            );
+        }
+        assert!(!registry.is_shared("swr-swml-south"));
+        assert!(!registry.is_shared("swr-west-of-england"));
+    }
+
     // Same precise-blast-radius shape again, for Salisbury: the SWR
     // suburban-gap batch's own swr-romsey-salisbury.toml genuinely shares
     // this one station with gwr-wessex-main.toml (both run the real

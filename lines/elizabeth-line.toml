@@ -15,6 +15,18 @@ match_keywords = ["Elizabeth line", "Crossrail"]
 minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
+# The timetable (CIF) gives the Elizabeth line platforms of five central
+# stations their own TIPLOC and CRS (PADTLL is PDX, not PAD). Stations, boards
+# and LDBWS sampling keep the catalogue CRS; these aliases only let the
+# schedule line population and train membership see a Paddington-Abbey Wood
+# train calling at its core stations (see lines/SCHEMA.md).
+[crs_aliases]
+PDX = "PAD"
+FDX = "ZFD"
+LSX = "LST"
+WHX = "ZLW"
+ABX = "ABW"
+
 # Reading to Abbey Wood, ordered west to east. The two other arms are separate
 # definitions sharing the XR operator code: `elizabeth-heathrow` (diverges at
 # Hayes & Harlington, so it shares `elizabeth-trunk-west` and

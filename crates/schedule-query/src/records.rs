@@ -591,7 +591,7 @@ impl CallingPoint {
 /// carries `stp_indicator`/`cancelled`, neither of which either producer
 /// or consumer needs on the wire -- `schedules_touching` already filters
 /// to non-cancelled results before this type is ever constructed).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinePopulationEntry {
     pub uid: String,
     pub calling_points: Vec<CallingPoint>,
@@ -608,6 +608,33 @@ pub struct LinePopulationEntry {
     /// string. Same compatibility posture as `operator_atoc`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub train_status: Option<char>,
+    /// This train's membership of the line
+    /// ([`crate::line_membership::LineScope`]): `line` (one of its own
+    /// trains), `shared` (runs a stretch of it) or `touch` (only touches
+    /// it). Same compatibility posture as `operator_atoc`: an old reader
+    /// ignores it, and a population from a `schedule-reference` that
+    /// predates it reads `None` -- readers then fall back to their old
+    /// behaviour (`api` does not filter; `full-coverage-consumer` applies
+    /// the windowed-stats §4.1 rule). See
+    /// docs/superpowers/specs/2026-10-06-line-membership-design.md.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<crate::line_membership::LineScope>,
+    /// First line station of the train's run on the line (catalogue CRS).
+    /// `None` without a run (`touch`) or on an older population.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_first_crs: Option<String>,
+    /// Last line station of the run. As `run_first_crs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_last_crs: Option<String>,
+    /// `up`/`down` by the line's catalogue station order, `loop` when the
+    /// run starts and ends at the same station. As `run_first_crs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<crate::line_membership::RunDirection>,
+    /// The train's first booked public call at one of the line's stations
+    /// (London local time, with its day offset). `None` when it makes no
+    /// public call on the line, or on an older population.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_due: Option<crate::line_membership::LineDue>,
 }
 
 impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
@@ -617,6 +644,11 @@ impl From<crate::resolve::ResolvedSchedule> for LinePopulationEntry {
             calling_points: resolved.calling_points,
             operator_atoc: resolved.operator_atoc,
             train_status: resolved.train_status,
+            scope: None,
+            run_first_crs: None,
+            run_last_crs: None,
+            direction: None,
+            line_due: None,
         }
     }
 }
@@ -877,6 +909,7 @@ mod tests {
             calling_points: vec![],
             operator_atoc: Some("LM".to_string()),
             train_status: Some('5'),
+            ..Default::default()
         };
         let json = serde_json::to_string(&new).unwrap();
         assert!(json.contains(r#""operator_atoc":"LM""#), "{json}");
@@ -894,6 +927,47 @@ mod tests {
             serde_json::to_string(&old).unwrap(),
             r#"{"uid":"C11052","calling_points":[]}"#
         );
+    }
+
+    /// The membership fields (2026-10-06) follow the same skew rules: a new
+    /// entry carries them under their snake-case names, an old body reads
+    /// them as `None`, and a `None` is never serialized.
+    #[test]
+    fn line_population_entry_round_trips_membership_fields() {
+        use crate::line_membership::{LineDue, LineScope, RunDirection};
+        let new = LinePopulationEntry {
+            uid: "L80147".to_string(),
+            scope: Some(LineScope::Line),
+            run_first_crs: Some("WAT".to_string()),
+            run_last_crs: Some("WEY".to_string()),
+            direction: Some(RunDirection::Down),
+            line_due: Some(LineDue {
+                time: NaiveTime::from_hms_opt(23, 35, 0).unwrap(),
+                day_offset: 0,
+            }),
+            ..LinePopulationEntry::default()
+        };
+        let json = serde_json::to_string(&new).unwrap();
+        for needle in [
+            r#""scope":"line""#,
+            r#""run_first_crs":"WAT""#,
+            r#""run_last_crs":"WEY""#,
+            r#""direction":"down""#,
+            r#""line_due":{"time":"23:35:00","day_offset":0}"#,
+        ] {
+            assert!(json.contains(needle), "{needle} in {json}");
+        }
+        assert_eq!(
+            serde_json::from_str::<LinePopulationEntry>(&json).unwrap(),
+            new
+        );
+
+        let old: LinePopulationEntry =
+            serde_json::from_str(r#"{"uid": "L80147", "calling_points": []}"#).unwrap();
+        assert_eq!(old.scope, None);
+        assert_eq!(old.line_due, None);
+        let reserialized = serde_json::to_string(&old).unwrap();
+        assert!(!reserialized.contains("scope"), "{reserialized}");
     }
 
     /// The half-minute time round-trips through its `"HH:MM:SS"` JSON form,

@@ -3,6 +3,10 @@ name = "LNER East Coast Main Line"
 mode = "national-rail"
 category = "main-line"
 operators = ["GR"]
+# Train membership (lines/SCHEMA.md `trunk_for`): a train whose best-fit
+# line is one of these runs over this line's trunk, so it is one of this
+# line's own trains too.
+trunk_for = ["lner-leeds", "lner-lincoln", "lner-hull"]
 # GR is the historic reporting mark ("GNER"), carried unchanged through
 # National Express East Coast, state-run "East Coast", Virgin Trains East
 # Coast and now LNER (DfT Operator Ltd, took over 9 June 2018) — the same

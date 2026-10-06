@@ -21,6 +21,8 @@ named `<id>.toml`.
 | `full_coverage_enabled` | bool | no | Opts the line into full-coverage (TRUST-vs-schedule) statistics. Defaults to `false`; the chart's `aggregator.fullCoverageEnabledDefault`/`api.fullCoverageEnabledDefault` (both `true` by default) enable it for every line regardless. |
 | `destination_crs_filter` | list[string] | no | When inferring from LDBWS, only count services whose `destination_crs` is in this list. Use this to disambiguate at shared trunk stations. Entries are service destinations, so they may lie beyond this line's own stations, but each must be a real CRS (enforced by `line-catalogue-validator`). |
 | `headcode_prefixes` | list[string] | no | Same idea, but matches against the service's headcode. |
+| `trunk_for` | list[string] | no | Ids of other lines this line is the trunk of. Train membership (below) makes a train a `line` member here when its best-fit line is one of these: an LNER Leeds train is one of `lner-ecml`'s own trains between King's Cross and Doncaster. Each id must exist and share an operator with this line (enforced by `line-catalogue-validator`). |
+| `crs_aliases` | table (CRS → CRS) | no | CIF CRS codes that count as one of this line's own stations for schedule membership only. The timetable gives some platforms their own TIPLOC and CRS (the Elizabeth line's `PADTLL` is `PDX`, not `PAD`; Thameslink's `STPXBOX` is `SPL`, not `STP`). Station pages, boards, LDBWS sampling and the incident matcher keep the catalogue CRS. Each key must be a real CRS that is not already one of the line's stations; each value must be one of them (enforced by `line-catalogue-validator`). Written as a `[crs_aliases]` table, e.g. `PDX = "PAD"`. |
 
 ## Station object
 
@@ -79,6 +81,33 @@ This way an incident at Woking propagates to every line using
 `swr-trunk-waterloo` as a "shared trunk" event, an incident at Brockenhurst
 reaches the South West Main and the Lymington branch, and an incident
 anywhere else from Basingstoke south stays local to the South West Main.
+
+Basingstoke (BSK) follows the same rule: the South West Main Line, the
+West of England line and CrossCountry's south-coast route all run through
+it, so it carries the narrow shared segment `swr-basingstoke-junction` in
+all three files, and each line's exclusive segment starts at the next
+station.
+
+## Train membership (which trains are a line's own)
+
+`schedule-reference` publishes, per line and day, every schedule touching
+one of the line's stations (its *population*), and tags each one with a
+`scope` (design: `docs/superpowers/specs/2026-10-06-line-membership-design.md`):
+
+- `line`: one of the line's own trains. It runs at least two consecutive
+  catalogue stations along the line's route (a *run*), is run by one of
+  `operators`, and either runs wholly on the line, spans at least 75% of
+  its stations, has this line as its best fit among its operator's lines,
+  or has a best-fit line listed in this line's `trunk_for`.
+- `shared`: has a run but is not one of the line's own trains (another
+  operator along the same track, or the operator's train for another line).
+- `touch`: only touches the line (a hub call, a crossing). Line pages ask
+  for `scope=line,shared`; touch-only trains stay in the population for
+  schedule matching, movement correlation and Delay Repay.
+
+What this needs from the catalogue: accurate `operators`, stations in
+route order, `crs_aliases` where the timetable uses a sub-CRS, and
+`trunk_for` on a trunk line whose operator also has branch lines.
 
 ## Severity tuning
 

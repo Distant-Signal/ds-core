@@ -2321,6 +2321,7 @@ mod tests {
             calling_points,
             operator_atoc: None,
             train_status: None,
+            ..Default::default()
         }
     }
 

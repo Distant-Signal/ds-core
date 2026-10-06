@@ -3,6 +3,10 @@ name = "Thameslink Core"
 mode = "national-rail"
 category = "commuter"
 operators = ["TL"]
+# Train membership (lines/SCHEMA.md `trunk_for`): a train whose best-fit
+# line is one of these runs over this line's trunk, so it is one of this
+# line's own trains too.
+trunk_for = ["thameslink-bedford", "thameslink-cambridge", "thameslink-rainham", "thameslink-southern"]
 
 sample_stations = ["STP", "ZFD", "LBG"]
 # A bare "Thameslink" would collide with every branch file in this catalogue
@@ -19,6 +23,12 @@ match_keywords = ["Thameslink core"]
 [severity_overrides]
 minor_delays_pct = 0.20
 delay_threshold_minutes = 4
+
+# The timetable (CIF) gives St Pancras's Thameslink platforms their own TIPLOC
+# and CRS (STPXBOX is SPL, not STP). Only the schedule line population and
+# train membership read this (see lines/SCHEMA.md).
+[crs_aliases]
+SPL = "STP"
 
 # The "core" through-London section. Northern and southern branches
 # (to Bedford, Cambridge, Brighton, Sutton, etc.) are separate lines.

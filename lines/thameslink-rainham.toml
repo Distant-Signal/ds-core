@@ -34,6 +34,12 @@ match_keywords = ["Thameslink Rainham"]
 minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
+# The timetable (CIF) gives St Pancras's Thameslink platforms their own TIPLOC
+# and CRS (STPXBOX is SPL, not STP). Only the schedule line population and
+# train membership read this (see lines/SCHEMA.md).
+[crs_aliases]
+SPL = "STP"
+
 # ============================================================================
 # SOURCING AND VERIFICATION
 # ============================================================================

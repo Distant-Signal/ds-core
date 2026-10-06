@@ -72,6 +72,7 @@
 pub mod compact;
 pub mod connections;
 pub mod interchange;
+pub mod line_membership;
 pub mod parse;
 pub mod records;
 pub mod resolve;
@@ -84,6 +85,10 @@ pub use connections::{
 };
 pub use interchange::{
     ChangeTime, FixedLink, InterchangeData, fixed_links_from, minimum_change_time, sibling_tiplocs,
+};
+pub use line_membership::{
+    DayTrains, LineDue, LineMembers, LineScope, Membership, MembershipLine, RunDirection, classify,
+    line_due,
 };
 pub use parse::{ScheduleRecordParser, parse_schedule_records};
 pub use records::{

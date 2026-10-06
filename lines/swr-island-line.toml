@@ -2,7 +2,12 @@ id = "swr-island-line"
 name = "Island Line"
 mode = "national-rail"
 category = "regional"
-operators = ["SW"]
+operators = ["IL"]
+# "IL", not SWR's "SW" (corrected 2026-10-06): the timetable (CIF) and
+# TRUST run Island Line trains under their own ATOC code, IL "Island Line"
+# in reference-data/toc-codes.csv (e.g. 2026-10-06 UID G21519, Ryde Pier
+# Head-Shanklin). With "SW" no train on the line matched its operator.
+#
 # South Western Railway. en.wikipedia.org/wiki/Island_Line (Isle of Wight)
 # confirms current SWR operation (nationalised as of May 2025, per this
 # catalogue's existing nationalisation precedent for other SWR files — the

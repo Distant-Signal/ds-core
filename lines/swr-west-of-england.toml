@@ -142,11 +142,15 @@ segment = "swr-trunk-waterloo"
 crs = "BSK"
 tiploc = "BSNGSEB"
 role = "junction"
-segment = "swr-west-of-england"
-# Basingstoke. Real shared trunk with swr-south-west-main.toml and
-# xc-south-coast.toml as far as Worting Junction (no CRS/TIPLOC of its own,
-# just west of here) — kept as station overlap only, not a shared segment
-# name; see the SEGMENTS comment above for why.
+segment = "swr-basingstoke-junction"
+# Basingstoke: its own narrow shared junction segment (2026-10-06), per
+# lines/SCHEMA.md's junction rule, used identically by
+# swr-south-west-main.toml, swr-west-of-england.toml and xc-south-coast.toml
+# (all three run through it; the West of England line leaves at Worting
+# Junction just west, which has no CRS). Same shape as
+# `swr-brockenhurst-junction`.
+# (Superseded the station-overlap-only arrangement the SEGMENTS comment
+# above describes: the sibling files now carry the same narrow segment.)
 
 [[stations]]
 crs = "OVR"

@@ -228,6 +228,9 @@ pub(crate) fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) ->
                 });
             }
         }
+
+        findings.extend(crs_alias_findings(line, reference));
+        findings.extend(trunk_for_findings(line, lines));
     }
 
     findings
@@ -338,6 +341,97 @@ pub(crate) fn validate_pass_through(
         }
     }
     findings
+}
+
+fn key_line_number(raw: &str, key: &str) -> Option<usize> {
+    let needle = format!("{key} =");
+    raw.lines()
+        .position(|l| l.trim_start().starts_with(&needle))
+        .map(|i| i + 1)
+}
+
+/// `crs_aliases` (lines/SCHEMA.md): each key a real CRS that is NOT one of
+/// the line's own stations (an alias of a listed station would be a no-op
+/// at best and a loop at worst), each value one of the line's stations.
+fn crs_alias_findings(line: &LoadedLine, reference: &ReferenceData) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let stations: BTreeSet<&str> = line
+        .definition
+        .stations
+        .iter()
+        .map(|s| s.crs.as_str())
+        .collect();
+    for (alias, target) in &line.definition.crs_aliases {
+        let line_no = key_line_number(&line.raw, alias);
+        let mut error = |message: String| {
+            out.push(Finding {
+                path: line.path.clone(),
+                line_no,
+                severity: Severity::Error,
+                message,
+            });
+        };
+        if !reference.known_crs(alias) {
+            error(format!(
+                "crs_aliases key \"{alias}\" is not a known CRS in reference-data/crs-tiploc.csv"
+            ));
+        }
+        if stations.contains(alias.as_str()) {
+            error(format!(
+                "crs_aliases key \"{alias}\" is already one of this line's stations -- an alias \
+                 names a CIF CRS the catalogue does NOT list"
+            ));
+        }
+        if !stations.contains(target.as_str()) {
+            error(format!(
+                "crs_aliases \"{alias}\" points at \"{target}\", which is not one of this line's \
+                 own stations"
+            ));
+        }
+    }
+    out
+}
+
+/// `trunk_for` (lines/SCHEMA.md): every id names another catalogue line
+/// that shares at least one operator with this one -- train membership
+/// only follows a trunk for the operator's own trains.
+fn trunk_for_findings(line: &LoadedLine, all: &[LoadedLine]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let line_no = key_line_number(&line.raw, "trunk_for");
+    for id in &line.definition.trunk_for {
+        let message = if id == &line.definition.id {
+            Some(format!("trunk_for lists the line itself (\"{id}\")"))
+        } else {
+            match all.iter().find(|other| &other.definition.id == id) {
+                None => Some(format!(
+                    "trunk_for names \"{id}\", which is not a line id in this catalogue"
+                )),
+                Some(other)
+                    if !other
+                        .definition
+                        .operators
+                        .iter()
+                        .any(|op| line.definition.operators.contains(op)) =>
+                {
+                    Some(format!(
+                        "trunk_for names \"{id}\", which shares no operator with this line \
+                         (its operators: {:?}; this line's: {:?})",
+                        other.definition.operators, line.definition.operators
+                    ))
+                }
+                Some(_) => None,
+            }
+        };
+        if let Some(message) = message {
+            out.push(Finding {
+                path: line.path.clone(),
+                line_no,
+                severity: Severity::Error,
+                message,
+            });
+        }
+    }
+    out
 }
 
 /// Stretch goal: informational-only coverage gaps -- currently-valid ATOC
@@ -489,6 +583,101 @@ operators = ["XC"]
         let reference = reference_with(&[("EUS", &["EUSTON"]), ("MAN", &["MNCRPIC"])], &["XC"]);
         let findings = validate_lines(&lines, &reference);
         assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    fn line_body(id: &str, operator: &str, extra_top: &str, extra_tables: &str) -> String {
+        format!(
+            "id = \"{id}\"\nname = \"{id}\"\nmode = \"national-rail\"\ncategory = \"regional\"\n\
+             operators = [\"{operator}\"]\n{extra_top}\n{extra_tables}\n\
+             [[stations]]\ncrs = \"PAD\"\n\n[[stations]]\ncrs = \"BDS\"\n"
+        )
+    }
+
+    fn alias_reference() -> ReferenceData {
+        reference_with(
+            &[
+                ("PAD", &["PADTON"]),
+                ("BDS", &["BONDST"]),
+                ("PDX", &["PADTLL"]),
+            ],
+            &["XR", "GW"],
+        )
+    }
+
+    #[test]
+    fn a_crs_alias_to_one_of_the_lines_stations_passes_clean() {
+        let dir = tempfile_dir();
+        write_line_file(
+            &dir,
+            "a",
+            &line_body("a", "XR", "", "[crs_aliases]\nPDX = \"PAD\"\n"),
+        );
+        let lines = load_all(&dir).unwrap();
+        let findings = validate_lines(&lines, &alias_reference());
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn a_bad_crs_alias_is_a_hard_error() {
+        let dir = tempfile_dir();
+        // Unknown key, a key that is already a station, a target off the line.
+        write_line_file(
+            &dir,
+            "a",
+            &line_body(
+                "a",
+                "XR",
+                "",
+                "[crs_aliases]\nQQQ = \"PAD\"\nBDS = \"PAD\"\nPDX = \"EUS\"\n",
+            ),
+        );
+        let lines = load_all(&dir).unwrap();
+        let findings = validate_lines(&lines, &alias_reference());
+        let messages: Vec<&str> = findings.iter().map(|f| f.message.as_str()).collect();
+        assert_eq!(findings.len(), 3, "{messages:?}");
+        assert!(findings.iter().all(|f| f.severity == Severity::Error));
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("\"QQQ\" is not a known CRS"))
+        );
+        assert!(messages.iter().any(|m| m.contains("\"BDS\" is already")));
+        assert!(messages.iter().any(|m| m.contains("\"EUS\"")));
+    }
+
+    #[test]
+    fn trunk_for_must_name_an_existing_line_sharing_an_operator() {
+        let dir = tempfile_dir();
+        write_line_file(
+            &dir,
+            "trunk",
+            &line_body(
+                "trunk",
+                "XR",
+                "trunk_for = [\"branch\", \"other-operator\", \"missing\"]",
+                "",
+            ),
+        );
+        write_line_file(&dir, "branch", &line_body("branch", "XR", "", ""));
+        write_line_file(
+            &dir,
+            "other-operator",
+            &line_body("other-operator", "GW", "", ""),
+        );
+        let lines = load_all(&dir).unwrap();
+        let findings = validate_lines(&lines, &alias_reference());
+        let messages: Vec<&str> = findings.iter().map(|f| f.message.as_str()).collect();
+        assert_eq!(findings.len(), 2, "{messages:?}");
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("\"other-operator\", which shares no operator"))
+        );
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("\"missing\", which is not a line id"))
+        );
     }
 
     #[test]

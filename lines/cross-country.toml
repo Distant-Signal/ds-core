@@ -3,6 +3,10 @@ name = "CrossCountry: North East - South West"
 mode = "national-rail"
 category = "main-line"
 operators = ["XC"]
+# Train membership (lines/SCHEMA.md `trunk_for`): a train whose best-fit
+# line is one of these runs over this line's trunk, so it is one of this
+# line's own trains too.
+trunk_for = ["xc-cardiff", "xc-manchester", "xc-south-coast", "xc-stansted"]
 
 # Display name (review2 finding): "CrossCountry" alone is the operator's own
 # brand name doing double duty as a LINE name, which sits oddly next to

@@ -93,7 +93,13 @@ segment = "swr-trunk-waterloo"
 crs = "BSK"
 tiploc = "BSNGSEB"
 role = "junction"
-segment = "swr-swml-south"
+segment = "swr-basingstoke-junction"
+# Basingstoke: its own narrow shared junction segment (2026-10-06), per
+# lines/SCHEMA.md's junction rule, used identically by
+# swr-south-west-main.toml, swr-west-of-england.toml and xc-south-coast.toml
+# (all three run through it; the West of England line leaves at Worting
+# Junction just west, which has no CRS). Same shape as
+# `swr-brockenhurst-junction`.
 
 [[stations]]
 crs = "WIN"

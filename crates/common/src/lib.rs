@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Result;
@@ -1017,6 +1017,26 @@ pub struct LineDefinition {
     /// lines.
     #[serde(skip)]
     pub pass_through: Vec<pass_through::PassThroughLeg>,
+    /// CIF CRS -> one of this line's own `stations` CRS: a sub-CRS the
+    /// timetable gives some platforms of a catalogue station (the Elizabeth
+    /// line's `PADTLL` is `PDX`, not `PAD`; Thameslink's `STPXBOX` is
+    /// `SPL`, not `STP`). Read ONLY by the schedule line-population
+    /// publisher (`schedule-reference`) and its train membership
+    /// (`schedule_query::line_membership`): a train calling at an aliased
+    /// TIPLOC counts as calling at the catalogue station. Station pages,
+    /// LDBWS sampling and the incident matcher keep the catalogue CRS.
+    /// Validated by `line-catalogue-validator` (key a real CRS not itself
+    /// on the line, value one of the line's stations).
+    #[serde(default)]
+    pub crs_aliases: BTreeMap<String, String>,
+    /// Ids of lines this line is the trunk of: a train whose best-fit line
+    /// (`schedule_query::line_membership`) is one of these is a `line`
+    /// member here too, wherever it leaves the trunk. LNER's East Coast
+    /// main line lists `lner-leeds`, `lner-lincoln` and `lner-hull`.
+    /// Validated by `line-catalogue-validator` (ids exist, and each shares
+    /// an operator with this line). See `lines/SCHEMA.md`.
+    #[serde(default)]
+    pub trunk_for: Vec<String>,
 }
 
 impl LineDefinition {
@@ -2134,6 +2154,8 @@ impl From<CustomLine> for LineDefinition {
             // an end user picking arbitrary stations.
             full_coverage_enabled: false,
             pass_through: Vec::new(),
+            crs_aliases: BTreeMap::new(),
+            trunk_for: Vec::new(),
         }
     }
 }

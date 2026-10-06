@@ -13,6 +13,15 @@ match_keywords = ["Shenfield branch", "Shenfield line"]
 minor_delays_pct = 0.20
 delay_threshold_minutes = 4
 
+# The timetable (CIF) gives the Elizabeth line platforms of the central
+# stations their own TIPLOC and CRS (PADTLL is PDX, not PAD). Only the schedule
+# line population and train membership read these (see lines/SCHEMA.md).
+[crs_aliases]
+PDX = "PAD"
+FDX = "ZFD"
+LSX = "LST"
+WHX = "ZLW"
+
 # The central section out to Shenfield, ordered west to east. Shares
 # `elizabeth-central` with `elizabeth-line` and `elizabeth-heathrow`;
 # the exclusive branch starts at Stratford, east of the Whitechapel junction.
