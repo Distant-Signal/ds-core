@@ -84,7 +84,8 @@ pub use connections::{
     build_connections_with_passes,
 };
 pub use interchange::{
-    ChangeTime, FixedLink, InterchangeData, fixed_links_from, minimum_change_time, sibling_tiplocs,
+    ChangeTime, FixedLink, InterchangeData, ModalChangeBuffer, fixed_links_from,
+    minimum_change_time, sibling_tiplocs,
 };
 pub use line_membership::{
     DayTrains, LineDue, LineMembers, LineScope, Membership, MembershipLine, RunDirection, classify,
@@ -93,8 +94,8 @@ pub use line_membership::{
 pub use parse::{ScheduleRecordParser, parse_schedule_records};
 pub use records::{
     Activity, BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture, HalfMinuteTime,
-    LinePopulationEntry, Platform, RawSchedule, ScheduleDeparture, StpIndicator, Tiploc,
-    is_bus_or_ship,
+    LinePopulationEntry, Platform, RawSchedule, ScheduleDeparture, ServiceMode, StpIndicator,
+    Tiploc, TrainCategory, is_bus_or_ship, service_mode,
 };
 pub use resolve::{
     ResolvedSchedule, ScheduleIndex, ScheduleIndexBuilder, departures_by_crs,

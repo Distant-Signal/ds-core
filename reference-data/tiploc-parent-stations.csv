@@ -1,0 +1,18 @@
+# Curated parent stations for bus stops and ferry terminals that neither of
+# schedule-reference's automatic rules links: the stop's own TI/MSN code is
+# not a station CRS, and its MSN grid reference is more than 400 m from the
+# nearest station's. Used only when both automatic rules find nothing (see
+# crates/schedule-reference/src/locations.rs and
+# docs/superpowers/specs/2026-10-06-tiploc-locations-design.md).
+#
+# Add a row only when the stop plainly serves that one station: an airport
+# bus stop whose airport has its own station, a quay beside the station.
+# Distances are between MSN grid references (100 m resolution), checked
+# against RJTTF980MSN.txt (2026-10-05).
+#
+# tiploc: the stop's TIPLOC; parent_crs: a CRS in `stations`; note: why.
+tiploc,parent_crs,note
+HTRBUS3,HXX,Heathrow Terminal 3 bus stops; Heathrow Terminals 2 & 3 station is 412 m away by MSN grid reference
+CRDFAIR,RIA,Cardiff Airport bus stop; the airport's station is Rhoose Cardiff International Airport (728 m)
+IVRNABS,IVA,Inverness Airport bus stance; Inverness Airport station (943 m)
+PNZQUAY,PNZ,Penzance Quay (Isles of Scilly ferry); Penzance station (539 m)

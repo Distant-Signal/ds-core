@@ -71,6 +71,9 @@ const TRAIN_IDENTITY_RANGE: std::ops::Range<usize> = 32..36;
 /// 0-based byte offset of the `BS` record's Train Status (CIF column 30,
 /// 1-based) -- see [`BasicSchedule::train_status`].
 const TRAIN_STATUS_COL: usize = 29;
+/// 0-based, half-open byte range of the `BS` record's Train Category (CIF
+/// columns 31-32, 1-based) -- see [`BasicSchedule::train_category`].
+const TRAIN_CATEGORY_RANGE: std::ops::Range<usize> = 30..32;
 
 /// Is `line` safe to decode with this module's fixed-offset byte slices?
 ///
@@ -378,6 +381,8 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
     // Same bounds argument as the headcode above.
     let train_status =
         Some(line.as_bytes()[TRAIN_STATUS_COL] as char).filter(char::is_ascii_alphanumeric);
+    // Same bounds argument as the headcode above.
+    let train_category = parse_train_category(&line[TRAIN_CATEGORY_RANGE]);
 
     Some(BasicSchedule {
         uid,
@@ -394,7 +399,16 @@ fn parse_basic_schedule(line: &str) -> Option<BasicSchedule> {
         // Filled in by the BX arm, exactly like `operator_atoc` above.
         rsid: None,
         train_status,
+        train_category,
     })
+}
+
+/// Decodes the `BS` record's Train Category -- see
+/// [`BasicSchedule::train_category`]. `None` unless both bytes are ASCII
+/// alphanumeric (a real `C`-indicator line leaves the field blank).
+fn parse_train_category(field: &str) -> Option<crate::records::TrainCategory> {
+    (field.len() == 2 && field.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .then(|| crate::records::TrainCategory::new(field))
 }
 
 /// Decodes the `BS` record's Train Identity field (the 4-character
@@ -622,7 +636,7 @@ fn parse_calling_point(line: &str, kind: CallingPointKind) -> Option<CallingPoin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::records::StpIndicator;
+    use crate::records::{ServiceMode, StpIndicator};
 
     // Real `BS` lines, byte-verbatim, quoted in
     // docs/superpowers/specs/2026-08-29-trust-schedule-delay-validation-findings.md
@@ -700,6 +714,91 @@ mod tests {
         assert_eq!(bus[0].basic.uid, "C00573");
         assert_eq!(bus[0].basic.train_status, Some('5'));
         assert!(crate::records::is_bus_or_ship(bus[0].basic.train_status));
+    }
+
+    /// The real `BS` line prefix of UID `C30818` (a Monday-Friday
+    /// permanent bus, Train Status `B`, Category `BS`, headcode `0B00`) as
+    /// measured on the production extract on 2026-10-06, up to and
+    /// including its Train Identity; the free-text tail after byte 36 is
+    /// blank-padded here (this decoder reads none of it) to the real
+    /// 80-byte width, with the real `P` STP indicator in column 80.
+    fn bs_c30818_bus() -> String {
+        let prefix = "BSNC308182605182612111111100 BBS0B00";
+        let line = format!("{prefix}{:>44}", "P");
+        assert_eq!(line.len(), 80);
+        line
+    }
+
+    #[test]
+    fn decodes_the_train_category() {
+        let express = parse_schedule_records(BS_C00573_PERMANENT);
+        assert_eq!(express[0].basic.train_category.as_deref(), Some("XX"));
+        let ordinary = parse_schedule_records(BS_W68468_OVERLAY);
+        assert_eq!(ordinary[0].basic.train_category.as_deref(), Some("OO"));
+        let cancelled = parse_schedule_records(BS_G00704_CANCELLATION);
+        assert_eq!(cancelled[0].basic.train_category, None);
+    }
+
+    #[test]
+    fn classifies_a_real_permanent_bus_line_as_a_bus() {
+        let bus = parse_schedule_records(&bs_c30818_bus());
+        let basic = &bus[0].basic;
+        assert_eq!(basic.uid, "C30818");
+        assert_eq!(basic.train_status, Some('B'));
+        assert_eq!(basic.train_category.as_deref(), Some("BS"));
+        assert_eq!(basic.headcode.as_deref(), Some("0B00"));
+        assert_eq!(basic.stp_indicator, StpIndicator::Permanent);
+        assert_eq!(
+            basic.days_of_week,
+            [true, true, true, true, true, false, false]
+        );
+        assert_eq!(basic.service_mode(), ServiceMode::Bus);
+        assert!(!basic.service_mode().is_live_tracked());
+    }
+
+    #[test]
+    fn classifies_passenger_trains_as_trains() {
+        for line in [BS_C00573_PERMANENT, BS_C00574_PERMANENT, BS_W68468_OVERLAY] {
+            let schedules = parse_schedule_records(line);
+            assert_eq!(
+                schedules[0].basic.service_mode(),
+                ServiceMode::Train,
+                "{line}"
+            );
+        }
+    }
+
+    /// Replacement buses and ferries, built from the real C30818 prefix
+    /// with only the status/category bytes swapped (the shapes measured on
+    /// the 2026-09-26 and 2026-10-06 extracts: `5BR` STP replacement bus,
+    /// `BBR` permanent replacement bus, `S` ship).
+    #[test]
+    fn classifies_replacement_buses_and_ferries() {
+        let with = |status_category: &str| {
+            let base = bs_c30818_bus();
+            format!("{}{status_category}{}", &base[..29], &base[32..])
+        };
+        let cases = [
+            ("5BR", ServiceMode::ReplacementBus),
+            ("5BS", ServiceMode::ReplacementBus),
+            ("BBR", ServiceMode::ReplacementBus),
+            ("PBR", ServiceMode::ReplacementBus),
+            ("PBS", ServiceMode::Bus),
+            ("S  ", ServiceMode::Ferry),
+            ("4  ", ServiceMode::Ferry),
+            ("POO", ServiceMode::Train),
+            ("1XX", ServiceMode::Train),
+        ];
+        for (status_category, expected) in cases {
+            let line = with(status_category);
+            assert_eq!(line.len(), 80);
+            let schedules = parse_schedule_records(&line);
+            assert_eq!(
+                schedules[0].basic.service_mode(),
+                expected,
+                "{status_category:?}"
+            );
+        }
     }
 
     #[test]

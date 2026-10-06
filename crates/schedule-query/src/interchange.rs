@@ -29,7 +29,7 @@ use chrono::NaiveDate;
 /// still owes the real minimum-change-time cost, charged at the TIPLOC
 /// actually being boarded at -- Phase 3/4's own scan logic is where that
 /// charge is applied, not here.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct InterchangeData {
     /// TIPLOC -> raw minimum-change-time minutes, straight from
     /// `stanox_crs.change_time_minutes` (Phase 1) -- `None`/absent means
@@ -43,6 +43,39 @@ pub struct InterchangeData {
     /// unfiltered by date/time -- [`fixed_links_from`] applies the
     /// date/time filter at lookup time.
     pub fixed_links_from_crs: HashMap<String, Vec<FixedLink>>,
+    /// The extra change time owed when changing to or from a bus or ferry
+    /// (see [`ModalChangeBuffer`]). Empty (no extra time) by default.
+    pub modal_change: ModalChangeBuffer,
+}
+
+/// The extra minimum change time a change costs on a bus or ferry side:
+/// `minutes` for alighting from a service in `road_or_water_uids` to make a
+/// change, and `minutes` again for boarding one at a change -- so a
+/// bus-to-train or train-to-ferry change costs the station's own minimum
+/// change time plus `minutes`, and a bus-to-bus change plus twice
+/// `minutes`. Never charged at the journey's origin or destination.
+///
+/// Rail minimum change times assume a platform-to-platform walk; a coach
+/// stand or a ferry berth is usually further away and its services less
+/// punctual. `api` fills this from `TRIP_PLAN_ROAD_WATER_CHANGE_MINUTES`
+/// (default 5). See docs/superpowers/specs/2026-10-06-tiploc-locations-design.md.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModalChangeBuffer {
+    /// UIDs of the bus and ship services in the graph.
+    pub road_or_water_uids: std::collections::HashSet<String>,
+    pub minutes: u32,
+}
+
+impl ModalChangeBuffer {
+    /// The buffer owed for one side of a change on `uid`'s service: its
+    /// `minutes` for a bus or ferry, 0 for a train.
+    pub fn extra_for(&self, uid: &str) -> u32 {
+        if self.minutes > 0 && self.road_or_water_uids.contains(uid) {
+            self.minutes
+        } else {
+            0
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +273,7 @@ mod tests {
 
     fn empty_data() -> InterchangeData {
         InterchangeData {
+            modal_change: ModalChangeBuffer::default(),
             change_time_by_tiploc: HashMap::new(),
             tiploc_to_crs: HashMap::new(),
             crs_to_tiplocs: HashMap::new(),

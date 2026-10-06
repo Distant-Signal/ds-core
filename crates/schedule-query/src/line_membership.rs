@@ -756,6 +756,7 @@ mod tests {
             headcode: None,
             rsid: None,
             train_status: Some(status),
+            train_category: None,
         }
     }
 

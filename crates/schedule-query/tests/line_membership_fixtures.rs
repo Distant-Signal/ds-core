@@ -113,6 +113,7 @@ fn load() -> Fixture {
                     headcode: None,
                     rsid: None,
                     train_status: fields[3].chars().next().filter(|c| *c != '-'),
+                    train_category: None,
                 });
             }
             other => panic!("unknown fixture row kind {other}"),

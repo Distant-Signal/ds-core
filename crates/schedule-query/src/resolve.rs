@@ -38,6 +38,18 @@ pub struct ResolvedSchedule {
     /// winning (STP-resolved) record, so an STP bus overlay (`5`) of a
     /// permanent train wins.
     pub train_status: Option<char>,
+    /// See [`crate::records::BasicSchedule::train_category`]; taken from
+    /// the winning record, like `train_status`.
+    pub train_category: Option<crate::records::TrainCategory>,
+}
+
+impl ResolvedSchedule {
+    /// [`crate::records::service_mode`] of the winning record, so an STP
+    /// bus overlay of a permanent train classifies as a replacement bus
+    /// for exactly the dates it covers.
+    pub fn service_mode(&self) -> crate::records::ServiceMode {
+        crate::records::service_mode(self.train_status, self.train_category.as_deref())
+    }
 }
 
 /// Assigns [`CallingPoint::day_offset`] over `calling_points`, IN PLACE, by
@@ -160,6 +172,7 @@ pub fn resolve_for_date(
         headcode: winner.basic.headcode.clone(),
         rsid: winner.basic.rsid.clone(),
         train_status: winner.basic.train_status,
+        train_category: winner.basic.train_category.clone(),
     })
 }
 
@@ -714,26 +727,25 @@ pub fn departures_by_destination_crs(
 /// **Never collides with a real CRS.** Every real CRS (including
 /// `X`-prefixed pseudo-codes) is exactly 3 uppercase ASCII letters by
 /// Network Rail's own convention -- see `reference-data/stanox-crs.md`.
-/// `~` is not a valid CRS byte, so prefixing with it makes this key
-/// unambiguously distinguishable from a real CRS regardless of the
-/// TIPLOC's own length (some real TIPLOCs, e.g. `ASH`/`LEE`/`ORE` in
-/// `reference-data/crs-tiploc.csv`, are themselves exactly 3 letters and so
-/// would otherwise risk looking like a real CRS on the wire).
+/// The `tiploc:` prefix (lower case, with a colon) can never be one, so this
+/// key stays distinguishable from a real CRS regardless of the TIPLOC's own
+/// length (some real TIPLOCs, e.g. `ASH`/`LEE`/`ORE`, are themselves three
+/// letters).
 ///
-/// A caller-supplied `stops_at=<CRS>`/`destination` filter can never match
-/// this key (a real caller never types a `~`-prefixed value), which is the
-/// correct degrade: the code correctly declines to claim a station this
-/// schedule's terminus cannot be honestly named as. `GET
-/// /public/trains/search`'s own `destinationCrs` response field passes this
-/// value straight through as-is -- `render::calling_point_departure_json`
-/// does now look up a display name for `destinationCrs` (added after this
-/// paragraph was first written; see that function's own doc comment), but
-/// a `~`-prefixed key is never a real CRS and so never has a `stations`
-/// row to resolve a name from -- so it degrades to a visibly-not-a-
-/// station-code string with a `null` name on the wire rather than silently
-/// pretending to be a real one.
+/// **2026-10-07:** the prefix was `~` until the bus-stop naming work
+/// (docs/superpowers/specs/2026-10-06-tiploc-locations-design.md); it is now
+/// `tiploc:`, the same identifier `GET /Trips/plan` and the location search
+/// use for a stop with no CRS (`common::location_naming::tiploc_code`), so
+/// one key means one place everywhere. `api` names these keys from
+/// `tiploc_locations` (`queries::station_names_for_crs_batch`), and still
+/// reads a `~` key from rows published before the change, until the next
+/// publish replaces them.
+///
+/// A caller-supplied `stops_at=<CRS>`/`destination` filter (validated as a
+/// CRS) never matches this key: the search declines to claim a station this
+/// schedule's terminus cannot honestly be named as.
 fn unresolved_destination_key(terminus_tiploc: &str) -> String {
-    format!("~{terminus_tiploc}")
+    format!("tiploc:{terminus_tiploc}")
 }
 
 /// The observability counterpart to [`departures_by_crs`]/
@@ -947,6 +959,7 @@ mod tests {
             headcode: None,
             rsid: None,
             train_status: None,
+            train_category: None,
         }
     }
 
@@ -1090,6 +1103,54 @@ mod tests {
                 calling_points: Vec::new(),
             },
         ]
+    }
+
+    /// Classification is per `(uid, date)`: an STP bus overlay (status
+    /// `5`, category `BR`) makes a permanent train a replacement bus for
+    /// exactly the dates it covers -- the P69679..P69695 shape seen in
+    /// production, trains on some dates and buses on others.
+    #[test]
+    fn service_mode_follows_the_stp_winner_per_date() {
+        let mut train = basic(
+            "P69680",
+            StpIndicator::Permanent,
+            "2026-05-18",
+            "2026-12-11",
+            WEEKDAYS,
+        );
+        train.train_status = Some('P');
+        train.train_category = Some("OO".into());
+        let mut bus = basic(
+            "P69680",
+            StpIndicator::Overlay,
+            "2026-10-05",
+            "2026-10-06",
+            WEEKDAYS,
+        );
+        bus.train_status = Some('5');
+        bus.train_category = Some("BR".into());
+        let raw = vec![
+            RawSchedule {
+                basic: train,
+                calling_points: vec![calling_point("EUSTON ", CallingPointKind::Origin)],
+            },
+            RawSchedule {
+                basic: bus,
+                calling_points: vec![calling_point("EUSTON ", CallingPointKind::Origin)],
+            },
+        ];
+        let on = |d: u32| {
+            resolve_for_date(
+                &raw,
+                "P69680",
+                NaiveDate::from_ymd_opt(2026, 10, d).unwrap(),
+            )
+            .unwrap()
+            .service_mode()
+        };
+        assert_eq!(on(5), crate::records::ServiceMode::ReplacementBus);
+        assert_eq!(on(6), crate::records::ServiceMode::ReplacementBus);
+        assert_eq!(on(7), crate::records::ServiceMode::Train);
     }
 
     #[test]
@@ -2036,7 +2097,7 @@ mod tests {
             "the fallback key must be visibly distinct from a bare TIPLOC, never the raw string"
         );
         let bucket = by_destination
-            .get("~CREWE")
+            .get("tiploc:CREWE")
             .expect("EUSTON's resolvable entry must surface under the CREWE fallback key");
         assert_eq!(bucket.len(), 1);
         assert_eq!(bucket[0].origin_crs, "EUS");
@@ -2081,7 +2142,7 @@ mod tests {
 
         let by_destination = departures_by_destination_crs(&index, date, now, &tiploc_to_crs);
         let bucket = by_destination
-            .get("~ASHFKI")
+            .get("tiploc:ASHFKI")
             .expect("Tonbridge's resolvable entry must not vanish just because Ashford International's own TIPLOC is unresolvable");
         assert_eq!(bucket.len(), 1);
         assert_eq!(bucket[0].origin_crs, "TON");

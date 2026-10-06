@@ -15,6 +15,7 @@ pub mod full_coverage_window;
 pub mod gcp_external_account;
 pub mod ingest;
 pub mod island_of_ireland;
+pub mod location_naming;
 pub mod log_once;
 pub mod logging;
 pub mod matcher;
@@ -1770,6 +1771,78 @@ pub struct TiplocCrsRecord {
     pub source_sequence: i32,
     #[serde(default)]
     pub change_time_minutes: Option<i32>,
+}
+
+/// How a [`TiplocLocationRecord`]'s `parent_crs` was found. See
+/// docs/superpowers/specs/2026-10-06-tiploc-locations-design.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParentSource {
+    /// The TIPLOC's own `TI`/MSN code is a station's CRS (an MSN
+    /// subsidiary record, e.g. `BANSBUS` -> `BAD`).
+    SameTiploc,
+    /// The nearest station by MSN grid reference, within 400 m.
+    Nearest,
+    /// `reference-data/tiploc-parent-stations.csv`.
+    Curated,
+}
+
+impl ParentSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ParentSource::SameTiploc => "same_tiploc",
+            ParentSource::Nearest => "nearest",
+            ParentSource::Curated => "curated",
+        }
+    }
+}
+
+/// One TIPLOC's location identity, as `crates/schedule-reference` derives
+/// it from a CIF delivery's `TI` records, its MSN `A` records and the
+/// delivery's own service mix, and POSTs to `api`'s
+/// `/private/tiploc-locations` (table `tiploc_locations`). Every `TI` record
+/// gets one, stations included, so a TIPLOC with no CRS still has a name.
+///
+/// Deliberately a separate product from [`TiplocCrsRecord`]: `tiploc_crs`
+/// feeds the planner's interchange data and the CRS crosswalks, and a bus
+/// stop must not become a "station" there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TiplocLocationRecord {
+    pub tiploc: String,
+    pub location_type: location_naming::LocationType,
+    /// Title-cased place name (`Heathrow Terminal 3`).
+    pub name: String,
+    /// Passenger-facing label (`Heathrow Terminal 3 (bus stop)`).
+    pub display_name: String,
+    /// The raw `TI` description (26 characters, upper case).
+    pub ti_name: Option<String>,
+    /// The `TI` record's own CRS field, when set.
+    pub ti_crs: Option<String>,
+    /// The `TI` STANOX; `None` for blank or `00000`.
+    pub stanox: Option<String>,
+    /// The MSN `A` record's station name, when this TIPLOC has one.
+    pub msn_name: Option<String>,
+    /// The MSN `A` record's 3-letter code (a CRS for a station, an
+    /// MSN-only code such as `SAO` for a bus stop).
+    pub msn_code: Option<String>,
+    /// OSGB36 grid reference in metres, from the MSN record (which carries
+    /// it to 100 m); `None` when absent or a placeholder.
+    pub msn_easting: Option<i32>,
+    pub msn_northing: Option<i32>,
+    /// The MSN interchange status digit (0-3; 9 = a subsidiary TIPLOC).
+    pub msn_interchange: Option<i32>,
+    /// The station this stop belongs to or stands next to.
+    pub parent_crs: Option<String>,
+    pub parent_source: Option<ParentSource>,
+    /// Grid distance to `parent_crs`'s MSN reference, when both are known.
+    pub parent_distance_m: Option<i32>,
+    /// Calls (timed stops) by rail, bus and ship services, and rail passes,
+    /// over every schedule in the delivery.
+    pub rail_calls: i32,
+    pub rail_passes: i32,
+    pub bus_calls: i32,
+    pub ship_calls: i32,
+    pub source_sequence: i32,
 }
 
 /// One resolved CIF `ALF` fixed-link row, as published between

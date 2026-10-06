@@ -66,6 +66,13 @@ struct EnrichmentCandidate {
 /// long as `trains_retention_days` (30 days) keeps the row alive --
 /// guaranteed-futile repeated work. Found by this plan's own final
 /// whole-branch review.
+///
+/// Buses and ferries (`schedule_services.mode <> 'train'`) are excluded
+/// (2026-10-06): they are timetable-only, enriched once at track time
+/// (`routes::train::enrich_shared_train`) with no grace period to wait out,
+/// and a sweep that cannot match one would otherwise re-select it every
+/// tick. Their page needs no match anyway: journey stops fall back to the
+/// published calling points.
 async fn list_trains_needing_schedule_enrichment(
     pool: &PgPool,
 ) -> anyhow::Result<Vec<EnrichmentCandidate>> {
@@ -74,11 +81,27 @@ async fn list_trains_needing_schedule_enrichment(
          FROM trains tr \
          JOIN train_subscriptions ts ON ts.trains_id = tr.id \
          WHERE tr.schedule_matched_at IS NULL \
-           AND tr.service_date >= CURRENT_DATE - INTERVAL '2 days'",
+           AND tr.service_date >= CURRENT_DATE - INTERVAL '2 days' \
+           AND NOT EXISTS ( \
+               SELECT 1 FROM schedule_services ss \
+               WHERE ss.service_date = tr.service_date AND ss.uid = tr.train_uid \
+                 AND ss.mode <> 'train')",
     )
     .fetch_all(pool)
     .await?;
     Ok(rows)
+}
+
+/// The ids [`list_trains_needing_schedule_enrichment`] selects, for
+/// `train_tracking`'s sweep-exclusion test.
+#[cfg(test)]
+pub(crate) async fn enrichment_candidate_ids_for_tests(pool: &PgPool) -> Vec<i64> {
+    list_trains_needing_schedule_enrichment(pool)
+        .await
+        .expect("list enrichment candidates")
+        .into_iter()
+        .map(|candidate| candidate.id)
+        .collect()
 }
 
 /// The one row of `schedule_destination_departures` for `(train_uid,

@@ -879,6 +879,56 @@ fn terminates_at_any(entry: &LinePopulationEntry, destination_tiplocs: &[String]
 /// `trust_event_backlog_match::attempt_backlog_match_by_uid`'s
 /// `origin_departure`.
 ///
+/// The read-only half of [`attempt_schedule_match_for_shared_train`]: the
+/// match for a train whose `train_uid` is already known, or `None` (no
+/// match, or -- defensively -- a match for a different uid). Writes
+/// nothing; `routes::train::get_by_uid_and_date` uses it on its own to show
+/// an untracked train's schedule without creating a `trains` row.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "callers always use the default hasher"
+)]
+pub async fn find_schedule_match_for_known_train(
+    pool: &PgPool,
+    train_uid: &str,
+    origin_crs: &str,
+    scheduled_departure: DateTime<Utc>,
+    service_date: NaiveDate,
+    crs_line_index: &HashMap<String, Vec<String>>,
+) -> anyhow::Result<Option<ScheduleMatch>> {
+    let Some(matched) = find_schedule_match(
+        pool,
+        origin_crs,
+        scheduled_departure,
+        // A known-identity lookup has no departure-board pin at all, so
+        // there is no pinned destination to break a tie with -- and it
+        // needs none: the population is narrowed to `train_uid` before
+        // matching, so no rival can tie with it.
+        None,
+        service_date,
+        crs_line_index,
+        Some(train_uid),
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    if matched.uid != train_uid {
+        tracing::warn!(
+            train_uid,
+            matched_uid = matched.uid,
+            origin_crs,
+            "schedule match for a known-identity train resolved a DIFFERENT uid after checking \
+             every candidate line -- this should be unreachable now that find_schedule_match \
+             enforces expected_uid itself; discarding rather than using another train's \
+             calling points"
+        );
+        return Ok(None);
+    }
+    Ok(Some(matched))
+}
+
 /// Refuses a match whose `uid` isn't the `train_uid` we already know. The
 /// CRS+time heuristic can legitimately land on a different service at a
 /// busy terminus; for this path that is not an acceptable outcome, because
@@ -916,36 +966,18 @@ pub async fn attempt_schedule_match_for_shared_train(
     service_date: NaiveDate,
     crs_line_index: &HashMap<String, Vec<String>>,
 ) -> anyhow::Result<bool> {
-    let Some(matched) = find_schedule_match(
+    let Some(matched) = find_schedule_match_for_known_train(
         pool,
+        train_uid,
         origin_crs,
         scheduled_departure,
-        // This path has no departure-board pin at all (see this function's
-        // own doc comment), so there is no pinned destination to break a tie
-        // with -- and it needs none: the population is narrowed to
-        // `train_uid` before matching, so no rival can tie with it.
-        None,
         service_date,
         crs_line_index,
-        Some(train_uid),
     )
     .await?
     else {
         return Ok(false);
     };
-
-    if matched.uid != train_uid {
-        tracing::warn!(
-            train_uid,
-            matched_uid = matched.uid,
-            origin_crs,
-            "schedule match for a known-identity train resolved a DIFFERENT uid after checking \
-             every candidate line -- this should be unreachable now that find_schedule_match \
-             enforces expected_uid itself; discarding rather than writing another train's \
-             calling points onto this shared row"
-        );
-        return Ok(false);
-    }
 
     crate::data::trains::find_or_create_train_with_schedule_match(
         pool,

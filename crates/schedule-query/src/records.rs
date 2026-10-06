@@ -181,7 +181,8 @@ impl TryFrom<char> for StpIndicator {
 ///   Holiday") -- so bit index 0 set alone means "Monday only".
 /// - `28` Bank Holiday Running (not decoded)
 /// - `29` Train Status (CIF column 30) -- see [`BasicSchedule::train_status`]
-/// - `30..32` Train Category (not decoded)
+/// - `30..32` Train Category (e.g. `"XX"`, `"OO"`, `"BS"`, `"BR"`) -- see
+///   [`BasicSchedule::train_category`]
 /// - `32..36` Train Identity (the 4-character signalling headcode, e.g.
 ///   `"1S00"`) -- see [`BasicSchedule::headcode`]
 /// - `36..40` CIF's separately-named "Headcode" field (not decoded; NOT
@@ -253,6 +254,81 @@ pub struct BasicSchedule {
     /// field existed still deserializes.
     #[serde(default)]
     pub train_status: Option<char>,
+    /// The `BS` record's Train Category (bytes `30..32`, 0-based; CIF
+    /// columns 31-32), e.g. `XX` express passenger, `OO` ordinary
+    /// passenger, `BS` bus service, `BR` bus replacing a train. `None` when
+    /// blank (a `C`-indicator line) or not two ASCII alphanumerics. Inline
+    /// ([`TrainCategory`]), so the resident schedule index pays no heap
+    /// allocation for it. Read by [`service_mode`]; `#[serde(default)]` for
+    /// the same compatibility reason as `train_status`.
+    #[serde(default)]
+    pub train_category: Option<TrainCategory>,
+}
+
+/// A [`BasicSchedule::train_category`] value: CIF's 2-byte category, inline.
+pub type TrainCategory = SmallStr<2>;
+
+/// What kind of vehicle a CIF schedule describes, for the passenger: a
+/// train, or one of the three non-rail services the timetable also carries.
+///
+/// TRUST never reports a bus or a ferry (0 activations or movements over 4
+/// days of production data, 2026-10-06), so everything but [`Self::Train`]
+/// is timetable-only: there is no live position, delay or arrival for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceMode {
+    #[default]
+    Train,
+    /// A bus replacing a train, usually for engineering work: Train Status
+    /// `5` (STP bus) or Train Category `BR`.
+    ReplacementBus,
+    /// A timetabled bus that is not standing in for a train (Train Status
+    /// `B` or Train Category `BS`), e.g. a permanent rail-link bus.
+    Bus,
+    /// A ship (Train Status `S`, or `4` for an STP one).
+    Ferry,
+}
+
+impl ServiceMode {
+    /// The stored/wire spelling: `train`, `replacement_bus`, `bus`, `ferry`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Train => "train",
+            Self::ReplacementBus => "replacement_bus",
+            Self::Bus => "bus",
+            Self::Ferry => "ferry",
+        }
+    }
+
+    /// Whether TRUST can report on this service at all (only a train).
+    pub const fn is_live_tracked(self) -> bool {
+        matches!(self, Self::Train)
+    }
+}
+
+/// Classifies a schedule from its CIF Train Status and Train Category.
+///
+/// - Status `S`/`4` (ship) is a [`ServiceMode::Ferry`].
+/// - Status `5` (STP bus) or category `BR` is a
+///   [`ServiceMode::ReplacementBus`]: an STP bus overlay of a train is the
+///   rail-replacement case, whatever its category says.
+/// - Any other bus, status `B` or category `BS`, is a [`ServiceMode::Bus`].
+/// - Everything else, including an unknown or blank status, is a
+///   [`ServiceMode::Train`], so a schedule this cannot read stays tracked.
+pub fn service_mode(train_status: Option<char>, train_category: Option<&str>) -> ServiceMode {
+    match (train_status, train_category) {
+        (Some('S' | '4'), _) => ServiceMode::Ferry,
+        (Some('5'), _) | (_, Some("BR")) => ServiceMode::ReplacementBus,
+        (Some('B'), _) | (_, Some("BS")) => ServiceMode::Bus,
+        _ => ServiceMode::Train,
+    }
+}
+
+impl BasicSchedule {
+    /// [`service_mode`] of this record.
+    pub fn service_mode(&self) -> ServiceMode {
+        service_mode(self.train_status, self.train_category.as_deref())
+    }
 }
 
 /// Whether a CIF Train Status is a road vehicle or a ship (`B`/`5` bus,
@@ -890,6 +966,7 @@ mod tests {
             headcode: None,
             rsid: None,
             train_status: Some('P'),
+            train_category: None,
         };
         let entry: LinePopulationEntry = resolved.clone().into();
         assert_eq!(entry.uid, "C11052");
