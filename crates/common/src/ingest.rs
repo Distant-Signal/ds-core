@@ -79,6 +79,39 @@ pub struct HttpStatusError {
     pub prefix: &'static str,
     pub status: reqwest::StatusCode,
     pub body: String,
+    /// The response's `Retry-After`, when it was a number of seconds. `api`
+    /// sends one with every 503 (database unavailable, load shedding) and
+    /// 429; see [`retry_after`].
+    pub retry_after: Option<Duration>,
+}
+
+/// A `Retry-After` header's delay, when it is delta-seconds (all `api`
+/// sends). An HTTP-date or garbage is ignored: the caller's own backoff
+/// still applies.
+pub fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .map(Duration::from_secs)
+}
+
+/// The `Retry-After` of a 503 or 429 anywhere in `err`'s chain: how long
+/// `api` asked to be left alone. Pass it to
+/// [`Backoff::delay_honouring`](crate::backoff::Backoff::delay_honouring).
+pub fn retry_after(err: &anyhow::Error) -> Option<Duration> {
+    err.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<HttpStatusError>()
+            .filter(|e| {
+                e.status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+                    || e.status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            })
+            .and_then(|e| e.retry_after)
+    })
 }
 
 impl std::fmt::Display for HttpStatusError {
@@ -148,8 +181,24 @@ pub async fn get_json<T: DeserializeOwned>(
     let token = tokens.get_token(client).await?;
     let response = client.get(url).bearer_auth(&token).send().await?;
     invalidate_on_auth_rejection(tokens, response.status());
-    let response = response.error_for_status()?;
+    if !response.status().is_success() {
+        return Err(status_error("GET failed", response).await.into());
+    }
     Ok(response.json().await?)
+}
+
+/// The [`HttpStatusError`] for a non-2xx `response`: its status,
+/// `Retry-After` and body.
+async fn status_error(prefix: &'static str, response: reqwest::Response) -> HttpStatusError {
+    let status = response.status();
+    let retry_after = parse_retry_after(response.headers());
+    let body = response.text().await.unwrap_or_default();
+    HttpStatusError {
+        prefix,
+        status,
+        body,
+        retry_after,
+    }
 }
 
 /// Single-object POST + bearer-token -- deliberately distinct from
@@ -174,15 +223,8 @@ pub async fn post_json<T: Serialize>(
     if response.status().is_success() {
         Ok(())
     } else {
-        let status = response.status();
-        invalidate_on_auth_rejection(tokens, status);
-        let body = response.text().await.unwrap_or_default();
-        Err(HttpStatusError {
-            prefix: "POST failed",
-            status,
-            body,
-        }
-        .into())
+        invalidate_on_auth_rejection(tokens, response.status());
+        Err(status_error("POST failed", response).await.into())
     }
 }
 
@@ -249,15 +291,8 @@ async fn post_counted_with_timeout<B: Serialize + ?Sized>(
         tracing::info!(count, "posted {noun} to ingestion API");
         Ok(())
     } else {
-        let status = response.status();
-        invalidate_on_auth_rejection(tokens, status);
-        let body = response.text().await.unwrap_or_default();
-        Err(HttpStatusError {
-            prefix: "ingestion POST failed",
-            status,
-            body,
-        }
-        .into())
+        invalidate_on_auth_rejection(tokens, response.status());
+        Err(status_error("ingestion POST failed", response).await.into())
     }
 }
 
@@ -284,15 +319,8 @@ pub async fn post_batch_for_response<T: Serialize, R: DeserializeOwned>(
         tracing::info!(count = items.len(), "posted {noun} to ingestion API");
         Ok(response.json().await?)
     } else {
-        let status = response.status();
-        invalidate_on_auth_rejection(tokens, status);
-        let body = response.text().await.unwrap_or_default();
-        Err(HttpStatusError {
-            prefix: "ingestion POST failed",
-            status,
-            body,
-        }
-        .into())
+        invalidate_on_auth_rejection(tokens, response.status());
+        Err(status_error("ingestion POST failed", response).await.into())
     }
 }
 
@@ -386,7 +414,7 @@ pub async fn wait_for_last_fetched(
             }
             Err(err) => err,
         };
-        let delay = wait.backoff.delay(failures);
+        let delay = wait.backoff.delay_honouring(failures, retry_after(&err));
         if started.elapsed() + delay > wait.max_wait {
             return Err(err);
         }
@@ -547,7 +575,8 @@ async fn post_counted_retrying_with<B: Serialize + ?Sized>(
         if classify_failure(&err) == FailureClass::Rejected {
             return Err(err);
         }
-        let delay = backoff.delay(failures);
+        // At least api's Retry-After on a 503 (database unavailable).
+        let delay = backoff.delay_honouring(failures, retry_after(&err));
         if started.elapsed() + delay > budget {
             return Err(err);
         }
@@ -751,8 +780,105 @@ mod tests {
             prefix: "ingestion POST failed",
             status: reqwest::StatusCode::from_u16(status).unwrap(),
             body: "body".to_string(),
+            retry_after: None,
         }
         .into()
+    }
+
+    #[test]
+    fn retry_after_is_read_from_a_503_or_429_only() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(parse_retry_after(&headers), None);
+        headers.insert(reqwest::header::RETRY_AFTER, "30".parse().unwrap());
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(30)));
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "Wed, 21 Oct 2015 07:28:00 GMT".parse().unwrap(),
+        );
+        assert_eq!(parse_retry_after(&headers), None, "HTTP-dates are ignored");
+
+        let with = |status: u16| -> anyhow::Error {
+            anyhow::Error::from(HttpStatusError {
+                prefix: "ingestion POST failed",
+                status: reqwest::StatusCode::from_u16(status).unwrap(),
+                body: String::new(),
+                retry_after: Some(Duration::from_secs(30)),
+            })
+            .context("posting stations")
+        };
+        assert_eq!(retry_after(&with(503)), Some(Duration::from_secs(30)));
+        assert_eq!(retry_after(&with(429)), Some(Duration::from_secs(30)));
+        assert_eq!(retry_after(&with(500)), None);
+        assert_eq!(retry_after(&anyhow::anyhow!("connection refused")), None);
+    }
+
+    /// A GET answered 503 keeps its status (still transient) and its
+    /// Retry-After.
+    #[tokio::test]
+    async fn get_json_carries_a_503s_retry_after() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("GET"))
+            .and(path("/private/thing"))
+            .respond_with(
+                ResponseTemplate::new(503)
+                    .insert_header("Retry-After", "30")
+                    .set_body_string(r#"{"error":"service_unavailable","retryable":true}"#),
+            )
+            .mount(&server)
+            .await;
+        let err = get_json::<serde_json::Value>(
+            &reqwest::Client::new(),
+            &format!("{}/private/thing", server.uri()),
+            &tokens,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(classify_failure(&err), FailureClass::Transient);
+        assert_eq!(retry_after(&err), Some(Duration::from_secs(30)));
+        assert!(err.to_string().contains("503"), "{err}");
+    }
+
+    /// A transient POST failure answered 503 + Retry-After waits at least
+    /// that long before retrying, however short the backoff.
+    #[tokio::test]
+    async fn a_503_post_retry_waits_for_retry_after() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("POST"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "1"))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(200))
+            .with_priority(2)
+            .mount(&server)
+            .await;
+        let started = std::time::Instant::now();
+        post_batch_retrying_with(
+            &reqwest::Client::new(),
+            &format!("{}/private/tocs", server.uri()),
+            &tokens,
+            &["TOC"],
+            "TOCs",
+            Duration::from_secs(5),
+            FAST_WAIT.backoff,
+        )
+        .await
+        .expect("the retry succeeds");
+        assert!(
+            started.elapsed() >= Duration::from_secs(1),
+            "waited only {:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

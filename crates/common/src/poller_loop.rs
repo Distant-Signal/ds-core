@@ -371,6 +371,7 @@ mod tests {
             prefix: "ingestion POST failed",
             status: reqwest::StatusCode::BAD_GATEWAY,
             body: String::new(),
+            retry_after: None,
         }
         .into()
     }
@@ -453,6 +454,7 @@ mod tests {
                         prefix: "ingestion POST failed",
                         status: reqwest::StatusCode::UNPROCESSABLE_ENTITY,
                         body: String::new(),
+                        retry_after: None,
                     }
                     .into())
                 }
