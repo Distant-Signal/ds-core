@@ -4,6 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["LO"]
 sample_stations = ["GPO", "LEM", "BGV"]
+# The line's own London Overground brand, as RDM names it in summaries
+# ("Reduced Suffragette line service"). Without it such an incident matched
+# every Overground line operator-wide (2026-10-06 study: 12 incidents in
+# 30 days).
+match_keywords = ["Suffragette line"]
 
 # Former Gospel Oak to Barking line ("Goblin"), 13 stations, extended to
 # Barking Riverside in Feb 2022.

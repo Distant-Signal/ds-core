@@ -16,8 +16,9 @@
 //! The line attribution is not derivable in SQL. It is
 //! `common::matcher::lines_affected_by` -- substring matching each line's
 //! `match_keywords`/`excluded_keywords` against the incident prose, gated
-//! by the feed's structured operator list, with a cross-line post-filter
-//! over the whole match set. That lives in Rust and reads the `lines/*.toml`
+//! by the feed's structured operator list, places named in the prose
+//! resolved against the `stations` table (2026-10-06), with a cross-line
+//! post-filter over the whole match set. That lives in Rust and reads the `lines/*.toml`
 //! catalogue; a migration cannot call it. Same reasoning, and the same
 //! shape, as `legacy_backfill`/`backfill_trains`.
 //!
@@ -115,6 +116,18 @@ pub async fn run_backfill(pool: &PgPool, matcher: &LineMatcher) -> Result<Backfi
          it would clear every row's attribution rather than fill it"
     );
 
+    // The same station names the live ingest path resolves places with
+    // (2026-10-06), so a backfilled row gets the answer a live one would.
+    // A failed read fails the run rather than silently recomputing every
+    // row without places.
+    let gazetteer = crate::data::queries::load_station_gazetteer(pool).await?;
+    if gazetteer.is_empty() {
+        tracing::warn!(
+            "the stations table is empty: incident places cannot be resolved, so rows get the \
+             operator-wide fallback"
+        );
+    }
+
     let mut report = BackfillReport::default();
     let mut after: Option<String> = None;
 
@@ -133,7 +146,7 @@ pub async fn run_backfill(pool: &PgPool, matcher: &LineMatcher) -> Result<Backfi
             if stored.stored_lines.is_none() {
                 report.rows_never_computed += 1;
             }
-            let recomputed = matcher.affected_line_ids(&stored.message);
+            let recomputed = matcher.affected_line_ids(&stored.message, &gazetteer);
             if recomputed.is_empty() {
                 report.rows_matching_no_line += 1;
             }

@@ -4,6 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["LO"]
 sample_stations = ["LST", "HAC", "ENF", "CHN", "CHI"]
+# The line's own London Overground brand, as RDM names it in summaries
+# ("Reduced Weaver line service"). Without it such an incident matched
+# every Overground line operator-wide (2026-10-06 study: 12 incidents in
+# 30 days).
+match_keywords = ["Weaver line"]
 
 # Former Lea Valley lines. A trunk from Liverpool Street splits into three
 # branches (Enfield Town, Cheshunt, Chingford); the Enfield Town and

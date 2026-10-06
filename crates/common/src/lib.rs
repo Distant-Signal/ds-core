@@ -34,6 +34,7 @@ pub mod secret;
 pub mod segments;
 pub mod service_args;
 pub mod startup;
+pub mod station_resolver;
 pub mod test_paths;
 pub mod text_hash;
 pub mod trust_timestamp;
@@ -441,6 +442,23 @@ pub struct LineStatus {
     pub full_coverage_stats: Option<SampleStats>,
     #[serde(default = "FullCoverageAvailability::not_enabled_default")]
     pub full_coverage_availability: FullCoverageAvailability,
+}
+
+/// A disruption announced for a line that has not started yet (2026-10-06
+/// user decision 10): an unplanned incident's high-confidence, ongoing
+/// period that starts in the future -- industrial action, or any dated
+/// period starting within two weeks. A note beside the line's status,
+/// never part of its severity. Written by the aggregator to
+/// `line_status.upcoming`, rendered by the api as `upcoming`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpcomingDisruption {
+    /// When the period starts.
+    pub from: DateTime<Utc>,
+    /// When it ends (exclusive), if stated.
+    pub to: Option<DateTime<Utc>>,
+    /// The incident's summary, as published.
+    pub summary: String,
+    pub incident_id: String,
 }
 
 /// Top-level object returned by the API for one line.

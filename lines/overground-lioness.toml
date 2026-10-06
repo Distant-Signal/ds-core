@@ -4,6 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["LO"]
 sample_stations = ["EUS", "WMB", "HRW", "WFJ"]
+# The line's own London Overground brand, as RDM names it in summaries
+# ("Reduced Lioness line service"). Without it such an incident matched
+# every Overground line operator-wide (2026-10-06 study: 12 incidents in
+# 30 days).
+match_keywords = ["Lioness line"]
 
 # The former Watford DC line, Euston to Watford Junction, 19 stations.
 #

@@ -1,0 +1,32 @@
+SET LOCAL lock_timeout = '5s';
+
+-- -------------------------------------------------------------------------
+-- `incidents.active_since`: when the incident's CURRENT episode began, the
+-- anchor of the unplanned-incident rail-day cutoff (user decision
+-- 2026-10-06; docs/superpowers/specs/2026-07-16-stale-incident-handling-design.md,
+-- "Decision (2026-10-06): cutoff anchor and exemptions").
+--
+-- The cutoff used to run from `first_seen_at`, which never moves. RDM
+-- reuses incident ids: a cleared incident is reopened days later for a new
+-- disruption (B852BEF3, Purley - Gatwick Airport, on 11, 12 and 13 Sep), and
+-- the cutoff hid it from the moment it reopened. `api`'s upsert now stamps
+-- `active_since = NOW()`:
+--
+-- * on insert;
+-- * when `is_cleared` goes true -> false (a reopen);
+-- * when the summary or description changes while the incident is not
+--   cleared (the source re-stated it).
+--
+-- Being listed again after an "Ended" spell (`source_removed_at`) does NOT
+-- re-arm it on its own: the feed's nightly purge and relisting would
+-- otherwise renew a stale incident every day. A relisted incident that is
+-- really new comes back with new text, which does.
+--
+-- Nullable with no default: catalog-only, nothing is rewritten or scanned
+-- (crates/api/tests/migration_index_locking.rs). Readers use
+-- `COALESCE(active_since, first_seen_at)`, so a row this migration does not
+-- backfill keeps exactly the cutoff it had. The backfill is the next
+-- migration, in its own transaction so this ALTER's ACCESS EXCLUSIVE lock
+-- is held only for the catalog change.
+-- -------------------------------------------------------------------------
+ALTER TABLE incidents ADD COLUMN active_since TIMESTAMPTZ;

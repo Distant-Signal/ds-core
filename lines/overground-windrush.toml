@@ -4,6 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["LO"]
 sample_stations = ["HHY", "SQE", "NWX", "CYP", "WCY", "CLJ"]
+# The line's own London Overground brand, as RDM names it in summaries
+# ("Reduced Windrush line service"). Without it such an incident matched
+# every Overground line operator-wide (2026-10-06 study: 12 incidents in
+# 30 days).
+match_keywords = ["Windrush line"]
 
 # Former East London line (extended). Core from the shared Canonbury
 # curve down to Surrey Quays, then four branches: New Cross (direct); a

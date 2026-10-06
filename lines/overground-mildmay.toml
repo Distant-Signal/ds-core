@@ -4,6 +4,11 @@ mode = "national-rail"
 category = "commuter"
 operators = ["LO"]
 sample_stations = ["RMD", "CMD", "SRA", "CLJ"]
+# The line's own London Overground brand, as RDM names it in summaries
+# ("Reduced Mildmay line service"). Without it such an incident matched
+# every Overground line operator-wide (2026-10-06 study: 12 incidents in
+# 30 days).
+match_keywords = ["Mildmay line"]
 
 # Former North London line core (Richmond to Stratford) plus the former
 # West London line's north end (a Clapham Junction branch), converging at
