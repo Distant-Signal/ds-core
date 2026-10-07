@@ -1,8 +1,46 @@
-//! The schema version this build needs: [`REQUIRED_MIGRATION`] (1A.12),
-//! then the schema gate `wait_for_schema` (1B.2, spec §12.2).
+//! The schema gate (spec §12.2, plan task 1B.2): a DB service waits, before
+//! it spawns loops or binds, until the database has the schema it was built
+//! for and its role has the grants it was built against.
 //!
-//! No caller yet: the gate in 1B.2 compares it with
-//! `SELECT max(version) FROM _sqlx_migrations WHERE success`.
+//! [`wait_for_schema`] polls every [`POLL_INTERVAL`] until
+//!
+//! 1. `SELECT max(version) FROM _sqlx_migrations WHERE success` is at least
+//!    [`REQUIRED_MIGRATION`], the newest migration embedded in this build;
+//!    and
+//! 2. `current_user` holds every privilege the chart's `db-grants.yaml`
+//!    gives the service's role ([`DbRole`]): one `has_table_privilege` per
+//!    required table and privilege (`has_column_privilege` for a
+//!    column-limited grant), plus SELECT on every shared table for a
+//!    `read_shared` member. `build.rs` bakes the list in at build time.
+//!
+//! and errors after [`DEADLINE`], so the process exits non-zero and a crash
+//! loop makes the problem visible.
+//!
+//! **Why the grants too.** With the migrate Job (1B.4) the release's roles
+//! setup Job grants a new table only after the upgrade (spec §12.1). New
+//! code waits here, not ready, until its grants exist, instead of failing
+//! its first query with `permission denied`. A database migrated past this
+//! build (an older pod during a rollout) passes: migrations are expand-only.
+//!
+//! **Which role.** The privileges are `current_user`'s, so the check is as
+//! strict as the role the service actually connects as: a superuser or the
+//! shared app role (no per-service roles yet) holds them all.
+//!
+//! **A probe that errors** (the database is still starting, no
+//! `_sqlx_migrations` yet on a fresh install, a dropped connection) counts
+//! as "not ready yet" and is retried until the deadline.
+//!
+//! # Metric
+//!
+//! `distant_signal_db_schema_ready` (gauge, no labels; the scrape's `job`
+//! and `pod` say which service): 0 while waiting, 1 once the gate passed.
+
+use std::time::Duration;
+
+use anyhow::{Result, bail};
+use common::metrics::metric_name;
+use common::progress::Progress;
+use sqlx::PgPool;
 
 /// The version of the newest migration this build embeds: the largest
 /// `<version>` among `crates/ds-store/migrations/<version>_<description>.sql`
@@ -13,6 +51,230 @@
     reason = "generated: the version exactly as in the migration's file name"
 )]
 pub const REQUIRED_MIGRATION: i64 = include!(concat!(env!("OUT_DIR"), "/required_migration.rs"));
+
+/// `db_schema_ready`: 1 once [`wait_for_schema`] passed, 0 while it waits.
+pub const SCHEMA_READY_METRIC: &str = "db_schema_ready";
+
+/// How often the gate re-checks (spec §12.2).
+pub const POLL_INTERVAL: Duration = Duration::from_secs(5);
+/// How long the gate waits before it errors (spec §12.2). The chart's
+/// migrate Job has the same 900 s budget (`activeDeadlineSeconds`).
+pub const DEADLINE: Duration = Duration::from_secs(15 * 60);
+
+/// One privilege the gate checks, from `db-grants.yaml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RequiredPrivilege {
+    /// The table or view, unqualified (resolved through `search_path`, as
+    /// the services' own queries are).
+    pub table: &'static str,
+    /// `SELECT`, `INSERT`, `UPDATE` or `DELETE`.
+    pub privilege: &'static str,
+    /// Set for a column-limited grant.
+    pub column: Option<&'static str>,
+}
+
+/// Every role key in `db-grants.yaml` with its privileges (`build.rs`).
+const ROLE_PRIVILEGES: &[(&str, &[RequiredPrivilege])] =
+    include!(concat!(env!("OUT_DIR"), "/required_privileges.rs"));
+
+/// The services that run the gate, by their role in `db-grants.yaml`
+/// (`roles.<key>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DbRole {
+    Api,
+    Aggregator,
+    Enricher,
+    Notifier,
+    Writer,
+}
+
+impl DbRole {
+    /// The role's key in `db-grants.yaml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Api => "api",
+            Self::Aggregator => "aggregator",
+            Self::Enricher => "enricher",
+            Self::Notifier => "notifier",
+            Self::Writer => "writer",
+        }
+    }
+
+    /// The privileges `db-grants.yaml` gives this role.
+    pub fn required_privileges(self) -> &'static [RequiredPrivilege] {
+        privileges_for(self.key()).unwrap_or(&[])
+    }
+}
+
+fn privileges_for(key: &str) -> Option<&'static [RequiredPrivilege]> {
+    ROLE_PRIVILEGES
+        .iter()
+        .find(|(role, _)| *role == key)
+        .map(|(_, privileges)| *privileges)
+}
+
+/// What [`wait_for_schema_with`] waits for, and how long.
+#[derive(Debug, Clone)]
+pub struct SchemaGate {
+    pub required_migration: i64,
+    pub privileges: &'static [RequiredPrivilege],
+    pub poll_interval: Duration,
+    pub deadline: Duration,
+}
+
+impl SchemaGate {
+    /// This build's gate for `role`: [`REQUIRED_MIGRATION`], the role's
+    /// privileges, [`POLL_INTERVAL`] and [`DEADLINE`].
+    pub fn for_role(role: DbRole) -> Self {
+        Self {
+            required_migration: REQUIRED_MIGRATION,
+            privileges: role.required_privileges(),
+            poll_interval: POLL_INTERVAL,
+            deadline: DEADLINE,
+        }
+    }
+}
+
+/// One check's result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchemaStatus {
+    /// `max(version)` of the successful migrations; `None` when none.
+    pub applied_migration: Option<i64>,
+    /// The required privileges `current_user` lacks (or whose table or
+    /// column does not exist), as `PRIVILEGE on table[.column]`.
+    pub missing: Vec<String>,
+}
+
+impl SchemaStatus {
+    fn is_ready(&self, required_migration: i64) -> bool {
+        self.applied_migration
+            .is_some_and(|applied| applied >= required_migration)
+            && self.missing.is_empty()
+    }
+}
+
+/// The gate with this build's settings for `role` ([`SchemaGate::for_role`]).
+/// Returns the applied migration version. `progress`, when given, is beaten
+/// on every poll, so a liveness probe does not restart a service that is
+/// only waiting.
+pub async fn wait_for_schema(
+    pool: &PgPool,
+    role: DbRole,
+    progress: Option<&Progress>,
+) -> Result<i64> {
+    wait_for_schema_with(pool, &SchemaGate::for_role(role), progress).await
+}
+
+/// [`wait_for_schema`] with explicit settings (tests use a short deadline).
+pub async fn wait_for_schema_with(
+    pool: &PgPool,
+    gate: &SchemaGate,
+    progress: Option<&Progress>,
+) -> Result<i64> {
+    let ready_gauge = metrics::gauge!(metric_name(SCHEMA_READY_METRIC));
+    ready_gauge.set(0.0);
+    let started = tokio::time::Instant::now();
+    loop {
+        if let Some(progress) = progress {
+            progress.beat();
+        }
+        let last = match check(pool, gate.privileges).await {
+            Ok(status) if status.is_ready(gate.required_migration) => {
+                ready_gauge.set(1.0);
+                let applied = status.applied_migration.unwrap_or_default();
+                tracing::info!(
+                    applied_migration = applied,
+                    required_migration = gate.required_migration,
+                    privileges = gate.privileges.len(),
+                    waited_secs = started.elapsed().as_secs(),
+                    "schema gate passed"
+                );
+                return Ok(applied);
+            }
+            Ok(status) => {
+                tracing::info!(
+                    applied_migration = ?status.applied_migration,
+                    required_migration = gate.required_migration,
+                    missing = ?status.missing,
+                    waited_secs = started.elapsed().as_secs(),
+                    "schema gate: waiting for the schema"
+                );
+                describe(&status, gate.required_migration)
+            }
+            Err(err) => {
+                tracing::warn!(
+                    error = ?err,
+                    waited_secs = started.elapsed().as_secs(),
+                    "schema gate: the check failed; retrying"
+                );
+                format!("the check failed: {err:#}")
+            }
+        };
+        let elapsed = started.elapsed();
+        if elapsed >= gate.deadline {
+            bail!(
+                "schema gate: not ready after {}s (needs migration {}): {last}",
+                elapsed.as_secs(),
+                gate.required_migration
+            );
+        }
+        tokio::time::sleep(
+            gate.poll_interval
+                .min(gate.deadline.saturating_sub(elapsed)),
+        )
+        .await;
+    }
+}
+
+fn describe(status: &SchemaStatus, required_migration: i64) -> String {
+    let mut parts = Vec::new();
+    match status.applied_migration {
+        Some(applied) if applied >= required_migration => {}
+        Some(applied) => parts.push(format!("the database is at migration {applied}")),
+        None => parts.push("no migration has been applied".to_owned()),
+    }
+    if !status.missing.is_empty() {
+        parts.push(format!("missing {}", status.missing.join(", ")));
+    }
+    parts.join("; ")
+}
+
+/// One check: the applied version, then the privileges `current_user`
+/// lacks, in one query each.
+pub async fn check(pool: &PgPool, privileges: &[RequiredPrivilege]) -> Result<SchemaStatus> {
+    let applied_migration: Option<i64> =
+        sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations WHERE success")
+            .fetch_one(pool)
+            .await?;
+    let tables: Vec<&str> = privileges.iter().map(|p| p.table).collect();
+    let kinds: Vec<&str> = privileges.iter().map(|p| p.privilege).collect();
+    let columns: Vec<Option<&str>> = privileges.iter().map(|p| p.column).collect();
+    // A missing table or column counts as missing, not as an error (the
+    // privilege functions raise on an unknown relation or column).
+    let missing: Vec<String> = sqlx::query_scalar(
+        "SELECT p || ' on ' || t || coalesce('.' || c, '') \
+           FROM unnest($1::text[], $2::text[], $3::text[]) WITH ORDINALITY AS r(t, p, c, n) \
+          WHERE NOT CASE \
+                  WHEN to_regclass(quote_ident(t)) IS NULL THEN false \
+                  WHEN c IS NULL THEN has_table_privilege(to_regclass(quote_ident(t)), p) \
+                  WHEN NOT EXISTS (SELECT 1 FROM pg_attribute \
+                                    WHERE attrelid = to_regclass(quote_ident(t)) \
+                                      AND attname = c AND attnum > 0 AND NOT attisdropped) \
+                    THEN false \
+                  ELSE has_column_privilege(to_regclass(quote_ident(t)), c, p) \
+                END \
+          ORDER BY n",
+    )
+    .bind(&tables)
+    .bind(&kinds)
+    .bind(&columns)
+    .fetch_all(pool)
+    .await?;
+    Ok(SchemaStatus {
+        applied_migration,
+        missing,
+    })
+}
 
 #[cfg(test)]
 mod tests {
@@ -41,5 +303,296 @@ mod tests {
             version,
             "newest migration file: {newest}"
         );
+    }
+
+    fn has(role: DbRole, table: &str, privilege: &str) -> bool {
+        role.required_privileges()
+            .iter()
+            .any(|p| p.table == table && p.privilege == privilege && p.column.is_none())
+    }
+
+    #[test]
+    fn every_role_is_in_db_grants() {
+        for role in [
+            DbRole::Api,
+            DbRole::Aggregator,
+            DbRole::Enricher,
+            DbRole::Notifier,
+            DbRole::Writer,
+        ] {
+            assert!(privileges_for(role.key()).is_some(), "{role:?}");
+            assert!(!role.required_privileges().is_empty(), "{role:?}");
+        }
+    }
+
+    /// Spot checks against db-grants.yaml: own grants, each letter, and the
+    /// `read_shared` group's SELECT.
+    #[test]
+    fn privileges_follow_db_grants() {
+        // `users: {class: personal, grants: {api: SIUD}}`
+        for privilege in ["SELECT", "INSERT", "UPDATE", "DELETE"] {
+            assert!(has(DbRole::Api, "users", privilege), "{privilege}");
+        }
+        // `journey_templates: {..., grants: {api: SIUD, notifier: SU}}`
+        assert!(has(DbRole::Notifier, "journey_templates", "UPDATE"));
+        assert!(!has(DbRole::Notifier, "journey_templates", "DELETE"));
+        assert!(!has(DbRole::Notifier, "users", "SELECT"));
+        // The enricher is not in read_shared: only its own tables.
+        assert!(has(DbRole::Enricher, "incidents", "UPDATE"));
+        assert!(!has(DbRole::Enricher, "stations", "SELECT"));
+        // The aggregator is: SELECT on a reference table it lists nowhere.
+        assert!(has(DbRole::Aggregator, "tocs", "SELECT"));
+        // ...but not on a personal one.
+        assert!(!has(DbRole::Aggregator, "users", "SELECT"));
+        // No role is required to hold anything on the migrations table
+        // beyond what the version query itself needs.
+        assert!(
+            !DbRole::Api
+                .required_privileges()
+                .iter()
+                .any(|p| p.table == "_sqlx_migrations")
+        );
+    }
+
+    #[test]
+    fn readiness_needs_the_version_and_every_privilege() {
+        let ready = SchemaStatus {
+            applied_migration: Some(10),
+            missing: Vec::new(),
+        };
+        assert!(ready.is_ready(10));
+        assert!(ready.is_ready(9), "a newer schema passes (expand-only)");
+        assert!(!ready.is_ready(11));
+        let none = SchemaStatus {
+            applied_migration: None,
+            missing: Vec::new(),
+        };
+        assert!(!none.is_ready(1));
+        let missing = SchemaStatus {
+            applied_migration: Some(10),
+            missing: vec!["SELECT on users".to_owned()],
+        };
+        assert!(!missing.is_ready(10));
+        assert_eq!(describe(&missing, 10), "missing SELECT on users");
+        assert_eq!(
+            describe(&none, 1),
+            "no migration has been applied",
+            "describes what blocks"
+        );
+    }
+}
+
+/// Against a migrated database (`DATABASE_URL`). The gate's version query
+/// reads `_sqlx_migrations` unqualified, so each test shadows it with a
+/// TEMP table of its own on a one-connection pool: no test writes the real
+/// migrations table (the role-split app role cannot), and nothing is left
+/// behind.
+#[cfg(test)]
+mod db_tests {
+    use sqlx::postgres::PgPoolOptions;
+
+    use super::*;
+
+    fn database_url() -> String {
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test")
+    }
+
+    /// One connection, so the TEMP table is visible to every query.
+    async fn pool_with_fake_migrations(applied: &[i64]) -> PgPool {
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url())
+            .await
+            .expect("connect");
+        sqlx::query(
+            "CREATE TEMP TABLE _sqlx_migrations (version bigint PRIMARY KEY, success boolean NOT NULL)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for version in applied {
+            apply(&pool, *version).await;
+        }
+        pool
+    }
+
+    async fn apply(pool: &PgPool, version: i64) {
+        sqlx::query("INSERT INTO _sqlx_migrations (version, success) VALUES ($1, true)")
+            .bind(version)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    fn gate(required_migration: i64, privileges: &'static [RequiredPrivilege]) -> SchemaGate {
+        SchemaGate {
+            required_migration,
+            privileges,
+            poll_interval: Duration::from_millis(50),
+            deadline: Duration::from_secs(10),
+        }
+    }
+
+    /// The real database and this build's gate for the api role: the
+    /// migrations are applied and (as whichever role `DATABASE_URL` is: CI
+    /// runs this as the superuser, the app role and the per-service api
+    /// role) every privilege db-grants.yaml gives the api is held.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn this_build_passes_on_a_migrated_database() {
+        let pool = PgPool::connect(&database_url()).await.expect("connect");
+        let gate = SchemaGate {
+            deadline: Duration::ZERO,
+            ..SchemaGate::for_role(DbRole::Api)
+        };
+        let status = check(&pool, gate.privileges).await.unwrap();
+        assert_eq!(status.missing, Vec::<String>::new());
+        let applied = wait_for_schema_with(&pool, &gate, None).await.unwrap();
+        assert!(applied >= REQUIRED_MIGRATION);
+    }
+
+    /// Spec §12.2: the gate waits while the database is behind, and
+    /// returns once the migration it needs is applied.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn waits_until_a_later_migration_is_applied() {
+        let pool = pool_with_fake_migrations(&[1, 2]).await;
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _guard = metrics::set_default_local_recorder(&recorder);
+        let progress = Progress::new(Duration::from_secs(60));
+
+        let migrator = {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                apply(&pool, 3).await;
+            })
+        };
+        let started = tokio::time::Instant::now();
+        let applied = wait_for_schema_with(&pool, &gate(3, &[]), Some(&progress))
+            .await
+            .unwrap();
+        migrator.await.unwrap();
+        assert_eq!(applied, 3);
+        assert!(
+            started.elapsed() >= Duration::from_millis(300),
+            "returned before the migration was applied"
+        );
+        let rendered = handle.render();
+        assert!(
+            rendered.contains("distant_signal_db_schema_ready 1"),
+            "{rendered}"
+        );
+    }
+
+    /// Spec §12.2: still behind at the deadline, the gate errors (and the
+    /// service exits non-zero); the gauge stays 0.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn times_out_and_errors() {
+        let pool = pool_with_fake_migrations(&[1]).await;
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _guard = metrics::set_default_local_recorder(&recorder);
+        let gate = SchemaGate {
+            deadline: Duration::from_millis(300),
+            ..gate(2, &[])
+        };
+        let started = tokio::time::Instant::now();
+        let err = wait_for_schema_with(&pool, &gate, None).await.unwrap_err();
+        assert!(started.elapsed() >= Duration::from_millis(300));
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the deadline was ignored"
+        );
+        let message = format!("{err:#}");
+        assert!(message.contains("needs migration 2"), "{message}");
+        assert!(message.contains("at migration 1"), "{message}");
+        let rendered = handle.render();
+        assert!(
+            rendered.contains("distant_signal_db_schema_ready 0"),
+            "{rendered}"
+        );
+    }
+
+    /// A required privilege the role lacks (here: on a table or column
+    /// that does not exist, so no role can hold it) keeps the gate waiting
+    /// even with the schema current, and the error names it.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn a_missing_privilege_keeps_it_waiting() {
+        static PRIVILEGES: &[RequiredPrivilege] = &[
+            RequiredPrivilege {
+                table: "stations",
+                privilege: "SELECT",
+                column: None,
+            },
+            RequiredPrivilege {
+                table: "stations",
+                privilege: "SELECT",
+                column: Some("crs"),
+            },
+            RequiredPrivilege {
+                table: "schema_gate_test_no_such_table",
+                privilege: "SELECT",
+                column: None,
+            },
+            RequiredPrivilege {
+                table: "stations",
+                privilege: "UPDATE",
+                column: Some("schema_gate_test_no_such_column"),
+            },
+        ];
+        let pool = pool_with_fake_migrations(&[1]).await;
+        let status = check(&pool, PRIVILEGES).await.unwrap();
+        assert_eq!(
+            status.missing,
+            [
+                "SELECT on schema_gate_test_no_such_table",
+                "UPDATE on stations.schema_gate_test_no_such_column",
+            ]
+        );
+        let gate = SchemaGate {
+            deadline: Duration::from_millis(200),
+            ..gate(1, PRIVILEGES)
+        };
+        let message = format!(
+            "{:#}",
+            wait_for_schema_with(&pool, &gate, None).await.unwrap_err()
+        );
+        assert!(
+            message.contains("missing SELECT on schema_gate_test_no_such_table"),
+            "{message}"
+        );
+    }
+
+    /// A database with no `_sqlx_migrations` at all (a fresh install
+    /// before the migrate Job): the check errors, and the gate retries it
+    /// until the deadline rather than failing at once.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn a_failing_check_is_retried_until_the_deadline() {
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url())
+            .await
+            .expect("connect");
+        // An empty search path: `_sqlx_migrations` resolves to nothing.
+        sqlx::query("SET search_path = ''")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let gate = SchemaGate {
+            deadline: Duration::from_millis(200),
+            ..gate(1, &[])
+        };
+        let started = tokio::time::Instant::now();
+        let message = format!(
+            "{:#}",
+            wait_for_schema_with(&pool, &gate, None).await.unwrap_err()
+        );
+        assert!(started.elapsed() >= Duration::from_millis(200));
+        assert!(message.contains("the check failed"), "{message}");
     }
 }

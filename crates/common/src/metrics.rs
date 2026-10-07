@@ -107,6 +107,26 @@ fn unix_now() -> f64 {
 #[cfg(feature = "http")]
 const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0];
 
+/// `ds_store::pool`'s `distant_signal_db_pool_acquire_seconds`, by its full
+/// name (a test in `ds_store::pool` checks it matches).
+pub const DB_POOL_ACQUIRE_SECONDS: &str = "distant_signal_db_pool_acquire_seconds";
+
+/// Buckets for [`DB_POOL_ACQUIRE_SECONDS`]: 1 ms to 5 s. A healthy acquire
+/// takes well under a millisecond and `acquire_timeout` defaults to 5 s
+/// (`common::pg`), so the range covers a pool from idle to exhausted, which
+/// [`DEFAULT_BUCKETS`] (from 50 ms) could not resolve.
+pub const DB_POOL_ACQUIRE_SECONDS_BUCKETS: &[f64] = &[
+    0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+];
+
+/// Per-metric buckets for the histograms a shared crate records in every
+/// service, by full name: applied by [`install`] and
+/// [`install_with_buckets`], and by the api's own recorder
+/// (`api::route_metrics::install_recorder`), so each renders as a real
+/// histogram (`_bucket` series) everywhere it is recorded.
+pub const SHARED_BUCKETS: &[(&str, &[f64])] =
+    &[(DB_POOL_ACQUIRE_SECONDS, DB_POOL_ACQUIRE_SECONDS_BUCKETS)];
+
 /// Installs the process-global Prometheus recorder and starts its embedded
 /// HTTP listener on `0.0.0.0:<port>`, serving `/metrics` in Prometheus text
 /// exposition format. Must be called exactly once, near the top of `main`,
@@ -123,8 +143,8 @@ const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.
 /// (docs/superpowers/specs/2026-08-29-metrics-design.md).
 ///
 /// Every histogram recorded through the recorder this installs gets
-/// [`DEFAULT_BUCKETS`] unless `install_with_buckets` was given an explicit
-/// per-metric override for it.
+/// [`DEFAULT_BUCKETS`] unless it is in [`SHARED_BUCKETS`] or
+/// `install_with_buckets` was given an explicit per-metric override for it.
 #[cfg(feature = "http")]
 pub fn install(port: u16) -> Result<()> {
     install_with_buckets(port, &[])
@@ -146,21 +166,29 @@ pub fn install(port: u16) -> Result<()> {
 #[cfg(feature = "http")]
 pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> Result<()> {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
-    let mut builder = PrometheusBuilder::new()
+    builder(bucket_overrides)?
         .with_http_listener(addr)
+        .install()
+        .context("failed to install the Prometheus metrics exporter")?;
+    Ok(())
+}
+
+/// The recorder [`install_with_buckets`] installs, minus the listener:
+/// [`DEFAULT_BUCKETS`], then [`SHARED_BUCKETS`] and `bucket_overrides` for
+/// the names they match.
+#[cfg(feature = "http")]
+fn builder(bucket_overrides: &[(&str, &[f64])]) -> Result<PrometheusBuilder> {
+    let mut builder = PrometheusBuilder::new()
         // Global default first; the per-metric `set_buckets_for_metric`
         // calls below take precedence over it for the names they match.
         .set_buckets(DEFAULT_BUCKETS)
         .context("failed to set the default histogram buckets")?;
-    for (name, buckets) in bucket_overrides {
+    for (name, buckets) in SHARED_BUCKETS.iter().chain(bucket_overrides) {
         builder = builder
             .set_buckets_for_metric(Matcher::Full((*name).to_string()), buckets)
             .context("failed to set histogram bucket overrides")?;
     }
-    builder
-        .install()
-        .context("failed to install the Prometheus metrics exporter")?;
-    Ok(())
+    Ok(builder)
 }
 
 #[cfg(test)]
@@ -175,6 +203,36 @@ mod tests {
             metric_name("poller_cycle_total"),
             "distant_signal_poller_cycle_total"
         );
+    }
+
+    /// The pool's acquire time renders as a histogram with its own 1 ms-5 s
+    /// buckets, not as a summary nor with the 50 ms-2 min default.
+    #[cfg(feature = "http")]
+    #[test]
+    fn the_pool_acquire_time_gets_its_own_buckets() {
+        let recorder = builder(&[]).unwrap().build_recorder();
+        let handle = recorder.handle();
+        metrics::with_local_recorder(&recorder, || {
+            metrics::histogram!(DB_POOL_ACQUIRE_SECONDS).record(0.0005);
+            metrics::histogram!("distant_signal_other_seconds").record(0.0005);
+        });
+        let rendered = handle.render();
+        for series in [
+            r#"distant_signal_db_pool_acquire_seconds_bucket{le="0.001"} 1"#,
+            r#"distant_signal_db_pool_acquire_seconds_bucket{le="5"} 1"#,
+            r#"distant_signal_db_pool_acquire_seconds_bucket{le="+Inf"} 1"#,
+            r#"distant_signal_other_seconds_bucket{le="0.05"} 1"#,
+        ] {
+            assert!(
+                rendered.contains(series),
+                "{series} missing from {rendered}"
+            );
+        }
+        assert!(
+            !rendered.contains(r#"distant_signal_db_pool_acquire_seconds_bucket{le="120"}"#),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("quantile"), "{rendered}");
     }
 
     #[test]

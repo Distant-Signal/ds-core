@@ -18,6 +18,11 @@
 //!
 //! `idle + in_use` is the pool's size (`PgPool::size`).
 //!
+//! `db_pool_acquire_seconds` has buckets from 1 ms to 5 s
+//! (`common::metrics::SHARED_BUCKETS`), which `common::metrics::install`
+//! and the api's recorder both apply; without them the exporter renders a
+//! summary.
+//!
 //! **Acquire time is only seen through [`acquire`] and [`begin`].** sqlx has
 //! no hook at the start of an acquire, so a query run straight on the pool
 //! (`.execute(&pool)`) is not timed. Today the only caller is the health
@@ -289,6 +294,21 @@ mod tests {
         let handle = recorder.handle();
         metrics::with_local_recorder(&recorder, f);
         handle.render()
+    }
+
+    /// `common::metrics::SHARED_BUCKETS` gives the acquire time its buckets
+    /// by full name; the two must not drift apart.
+    #[test]
+    fn the_acquire_histogram_is_the_one_with_shared_buckets() {
+        assert_eq!(
+            metric_name(POOL_ACQUIRE_SECONDS_METRIC),
+            common::metrics::DB_POOL_ACQUIRE_SECONDS
+        );
+        assert!(
+            common::metrics::SHARED_BUCKETS
+                .iter()
+                .any(|(name, _)| *name == common::metrics::DB_POOL_ACQUIRE_SECONDS)
+        );
     }
 
     fn health() -> DbHealth {
