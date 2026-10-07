@@ -1,5 +1,5 @@
 //! Named background loops, each guarded by a session advisory lock (spec
-//! §10 and §12.3, plan 1B.6).
+//! §10 and §12.3, plan 1B.6 and 1B.7).
 //!
 //! Every [`LoopSpec`] runs on its own interval. Before each tick the loop
 //! asks the runner's [`LockSession`] for `pg_try_advisory_lock(key)`:
@@ -11,6 +11,11 @@
 //! - **error** (the lock connection is gone and could not be reopened): the
 //!   tick is skipped and logged at warn.
 //!
+//! The ingest-writer and the api (`API_BACKGROUND_LOOPS`) both run their
+//! train-domain loops through this runner, on the same keys
+//! ([`common::advisory_locks`]), so during the cutover each sweep runs in
+//! one process at a time.
+//!
 //! # Holding, not taking per tick
 //!
 //! A lock, once taken, is held for the life of the [`LockSession`]'s
@@ -20,16 +25,29 @@
 //! is what lets the writer and the api overlap safely during the cutover
 //! (spec §12.3, "turn the writer on before the api off").
 //!
+//! The one exception is [`LoopRunner::run_once`] (the api's one-shot
+//! CORPUS crosswalk check at startup): it takes the lock, runs the body and
+//! releases the lock again, so it never keeps the writer's periodic loop
+//! off that key for the rest of the api's life.
+//!
 //! # One connection for every lock
 //!
-//! The session is ONE dedicated connection, opened from the pool's own
-//! connect options (same `application_name` and timeouts) but outside the
-//! pool, for all of the runner's locks. So the runner costs one connection
-//! beyond the pool's `max_connections` however many loops it runs (spec
-//! §6.6: the writer's pool is 6, its role limit 7). The bodies use the
-//! pool. Postgres advisory locks are re-entrant per session, so the
-//! session remembers which keys it holds rather than asking again: two
-//! runners in one process must each have their own session.
+//! The session is ONE connection for all of the runner's locks, however
+//! many loops it runs; the bodies use the pool. Two kinds:
+//!
+//! - [`LockSession::new`] (the ingest-writer): opened from the pool's own
+//!   connect options (same timeouts) but outside the pool, so one
+//!   connection beyond the pool's `max_connections` (spec §6.6: the
+//!   writer's pool is 6, its role limit 7);
+//! - [`LockSession::from_pool`] (the api): checked out of the pool and
+//!   held, so the api's connection budgets are unchanged and its pool has
+//!   one connection fewer for requests while the loops run. It is closed,
+//!   never returned to the pool, when the session lets it go, so no lock
+//!   can leak to another user of the pool.
+//!
+//! Postgres advisory locks are re-entrant per session,
+//! so the session remembers which keys it holds rather than asking again:
+//! two runners in one process must each have their own session.
 //!
 //! Before a tick of a lock it already holds, the session pings its
 //! connection. If the connection has died, Postgres has released every
@@ -38,18 +56,29 @@
 //! the same sweep before this body finishes; every sweep is idempotent, so
 //! that window costs at most one duplicate pass.
 //!
+//! # Logging
+//!
+//! A body logs its own outcome (the sweeps' messages are the ones the api's
+//! loops have always logged, so they read the same from either process).
+//! The runner logs a failed body only at debug, so a failure is not logged
+//! twice.
+//!
 //! # Metrics
 //!
-//! With `service` the runner's metric prefix (`ingest_writer`):
+//! One family whichever process runs the loop (the api or the
+//! ingest-writer; Prometheus's `job`/`pod` labels tell them apart), so a
+//! dashboard or alert follows a sweep across the cutover:
 //!
-//! - `distant_signal_<service>_cycles_total{cycle, result}` and
-//!   `distant_signal_<service>_last_success_timestamp_seconds{cycle}`
-//!   ([`common::metrics::register_cycle`]): the body's outcomes;
-//! - `distant_signal_<service>_loop_ticks_total{loop, outcome}`, outcome
-//!   `ran`, `failed`, `skipped` (lock held elsewhere) or `lock_error`;
-//! - `distant_signal_<service>_loop_lock_held{loop}`: 1 while this process
-//!   holds the loop's lock;
-//! - `distant_signal_<service>_loop_seconds{loop}`: body duration.
+//! - `distant_signal_loop_cycles_total{cycle, result}` and
+//!   `distant_signal_loop_last_success_timestamp_seconds{cycle}`
+//!   ([`common::metrics::register_cycle`] with the service [`METRIC_SERVICE`]):
+//!   the body's outcomes. A standby process's gauge stays at its start
+//!   time, so read it as `max by (cycle)`;
+//! - `distant_signal_loop_ticks_total{loop, outcome}`, outcome `ran`,
+//!   `failed`, `skipped` (lock held elsewhere) or `lock_error`;
+//! - `distant_signal_loop_lock_held{loop}`: 1 while this process holds the
+//!   loop's lock (`sum by (loop)` is 1 while exactly one process runs it);
+//! - `distant_signal_loop_seconds{loop}`: body duration.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -62,9 +91,17 @@ use anyhow::{Context, Result};
 use common::advisory_locks::LoopLock;
 use common::metrics::metric_name;
 use common::progress::Progress;
-use sqlx::{ConnectOptions, Connection, PgConnection, PgPool};
+use sqlx::pool::PoolConnection;
+use sqlx::{ConnectOptions, Connection, PgConnection, PgPool, Postgres};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+
+/// The `<service>` of [`common::metrics::register_cycle`]'s metric names,
+/// and the prefix of the runner's own: `distant_signal_loop_*`.
+pub const METRIC_SERVICE: &str = "loop";
+const TICKS_METRIC: &str = "loop_ticks_total";
+const LOCK_HELD_METRIC: &str = "loop_lock_held";
+const SECONDS_METRIC: &str = "loop_seconds";
 
 /// A loop body's future.
 pub type LoopFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
@@ -96,6 +133,12 @@ impl LoopSpec {
     pub fn name(&self) -> &'static str {
         self.lock.name
     }
+
+    /// The body alone, with no lock (to wrap one spec in another, as the
+    /// lock tests do to watch the real sweeps).
+    pub fn run_body(&self, pool: PgPool) -> LoopFuture {
+        (self.body)(pool)
+    }
 }
 
 impl fmt::Debug for LoopSpec {
@@ -112,7 +155,7 @@ impl fmt::Debug for LoopSpec {
 pub enum TickOutcome {
     /// Held the lock; the body succeeded.
     Ran,
-    /// Held the lock; the body returned an error (logged).
+    /// Held the lock; the body returned an error (the body logged it).
     Failed,
     /// Another session holds the lock; the body did not run.
     Skipped,
@@ -133,23 +176,57 @@ impl TickOutcome {
     }
 }
 
-/// The dedicated connection holding a runner's loop locks. See the module
-/// docs.
+/// The connection holding a runner's loop locks. See the module docs.
 pub struct LockSession {
     pool: PgPool,
-    application_name: String,
+    source: LockSource,
     state: Mutex<SessionState>,
+}
+
+/// Where a [`LockSession`] gets its connection.
+enum LockSource {
+    /// Opened from the pool's connect options, outside the pool: one
+    /// connection beyond its `max_connections` (the ingest-writer, whose
+    /// chart budget counts it).
+    Dedicated { application_name: String },
+    /// Checked out of the pool and held, closed (never returned) when the
+    /// session drops it: one of the pool's own `max_connections` (the api,
+    /// so no connection budget changes).
+    Pooled,
+}
+
+/// The lock connection, either kind.
+enum LockConn {
+    Dedicated(PgConnection),
+    Pooled(PoolConnection<Postgres>),
+}
+
+impl LockConn {
+    fn raw(&mut self) -> &mut PgConnection {
+        match self {
+            Self::Dedicated(conn) => conn,
+            Self::Pooled(conn) => conn,
+        }
+    }
+
+    async fn close(self) -> Result<(), sqlx::Error> {
+        match self {
+            Self::Dedicated(conn) => conn.close().await,
+            Self::Pooled(conn) => conn.close().await,
+        }
+    }
 }
 
 #[derive(Default)]
 struct SessionState {
-    conn: Option<PgConnection>,
+    conn: Option<LockConn>,
     held: HashSet<i64>,
 }
 
 impl SessionState {
-    /// Forgets the connection and every lock on it. Dropping a
-    /// `PgConnection` closes its socket, so Postgres releases the locks.
+    /// Forgets the connection and every lock on it. Dropping it closes its
+    /// socket (a pooled one is marked `close_on_drop`, so it never goes back
+    /// to the pool with a lock on it), so Postgres releases the locks.
     fn reset(&mut self) {
         self.conn = None;
         self.held.clear();
@@ -157,12 +234,26 @@ impl SessionState {
 }
 
 impl LockSession {
-    /// Connections are opened from `pool`'s connect options, reported in
-    /// `pg_stat_activity` as `application_name`.
+    /// A dedicated connection, opened from `pool`'s connect options and
+    /// reported in `pg_stat_activity` as `application_name`: one beyond the
+    /// pool.
     pub fn new(pool: PgPool, application_name: &str) -> Self {
         Self {
             pool,
-            application_name: application_name.to_owned(),
+            source: LockSource::Dedicated {
+                application_name: application_name.to_owned(),
+            },
+            state: Mutex::new(SessionState::default()),
+        }
+    }
+
+    /// A connection checked out of `pool` and held: it counts in the pool's
+    /// own `max_connections` (one fewer for everything else while held) and
+    /// shows as the pool's `application_name`.
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self {
+            pool,
+            source: LockSource::Pooled,
             state: Mutex::new(SessionState::default()),
         }
     }
@@ -175,7 +266,7 @@ impl LockSession {
         let state = &mut *guard;
         if state.held.contains(&key) {
             let alive = match state.conn.as_mut() {
-                Some(conn) => conn.ping().await.is_ok(),
+                Some(conn) => conn.raw().ping().await.is_ok(),
                 None => false,
             };
             if alive {
@@ -194,15 +285,33 @@ impl LockSession {
         result
     }
 
+    async fn open(&self) -> Result<LockConn> {
+        match &self.source {
+            LockSource::Dedicated { application_name } => {
+                let options = (*self.pool.connect_options())
+                    .clone()
+                    .application_name(application_name);
+                let conn = options
+                    .connect()
+                    .await
+                    .context("could not open the advisory-lock connection")?;
+                Ok(LockConn::Dedicated(conn))
+            }
+            LockSource::Pooled => {
+                let mut conn = self
+                    .pool
+                    .acquire()
+                    .await
+                    .context("could not check out the advisory-lock connection")?;
+                conn.close_on_drop();
+                Ok(LockConn::Pooled(conn))
+            }
+        }
+    }
+
     async fn take(&self, state: &mut SessionState, key: i64) -> Result<bool> {
         if state.conn.is_none() {
-            let options = (*self.pool.connect_options())
-                .clone()
-                .application_name(&self.application_name);
-            let conn = options
-                .connect()
-                .await
-                .context("could not open the advisory-lock connection")?;
+            let conn = self.open().await?;
             state.held.clear();
             state.conn = Some(conn);
         }
@@ -211,7 +320,7 @@ impl LockSession {
         };
         let taken: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock($1)")
             .bind(key)
-            .fetch_one(&mut *conn)
+            .fetch_one(conn.raw())
             .await
             .context("pg_try_advisory_lock failed")?;
         if taken {
@@ -225,6 +334,31 @@ impl LockSession {
         self.state.lock().await.held.contains(&key)
     }
 
+    /// Releases `key` if this session holds it (`pg_advisory_unlock`). A
+    /// failure drops the connection, which releases every lock on it.
+    pub async fn release(&self, key: i64) {
+        let mut guard = self.state.lock().await;
+        let state = &mut *guard;
+        if !state.held.remove(&key) {
+            return;
+        }
+        let Some(conn) = state.conn.as_mut() else {
+            return;
+        };
+        let result: Result<bool, sqlx::Error> = sqlx::query_scalar("SELECT pg_advisory_unlock($1)")
+            .bind(key)
+            .fetch_one(conn.raw())
+            .await;
+        if let Err(err) = result {
+            tracing::warn!(
+                key,
+                error = ?err,
+                "releasing an advisory lock failed; closing the lock connection to release it"
+            );
+            state.reset();
+        }
+    }
+
     /// Releases every lock and closes the connection (graceful shutdown).
     /// The explicit `pg_advisory_unlock_all` makes the release synchronous:
     /// a closed socket alone frees the locks only once the server backend
@@ -233,7 +367,7 @@ impl LockSession {
         let mut state = self.state.lock().await;
         if let Some(mut conn) = state.conn.take() {
             if let Err(err) = sqlx::query("SELECT pg_advisory_unlock_all()")
-                .execute(&mut conn)
+                .execute(conn.raw())
                 .await
             {
                 tracing::debug!(error = ?err, "releasing the loop locks failed; closing anyway");
@@ -248,17 +382,14 @@ impl LockSession {
 
 /// A set of loops sharing one [`LockSession`].
 pub struct LoopRunner {
-    service: &'static str,
     pool: PgPool,
     session: Arc<LockSession>,
     loops: Vec<LoopSpec>,
 }
 
 impl LoopRunner {
-    /// `service` is the metric prefix (`ingest_writer`).
-    pub fn new(service: &'static str, pool: PgPool, session: LockSession) -> Self {
+    pub fn new(pool: PgPool, session: LockSession) -> Self {
         Self {
-            service,
             pool,
             session: Arc::new(session),
             loops: Vec::new(),
@@ -285,20 +416,7 @@ impl LoopRunner {
                 existing.name()
             );
         }
-        common::metrics::register_cycle(self.service, spec.name());
-        for outcome in TickOutcome::ALL {
-            metrics::counter!(
-                metric_name(&format!("{}_loop_ticks_total", self.service)),
-                "loop" => spec.name(),
-                "outcome" => outcome.label()
-            )
-            .increment(0);
-        }
-        metrics::gauge!(
-            metric_name(&format!("{}_loop_lock_held", self.service)),
-            "loop" => spec.name()
-        )
-        .set(0.0);
+        register_metrics(spec.name());
         self.loops.push(spec);
         Ok(())
     }
@@ -314,7 +432,17 @@ impl LoopRunner {
     /// One tick of `self.loops()[index]`, now: try the lock, then run the
     /// body if this session holds it.
     pub async fn tick(&self, index: usize) -> TickOutcome {
-        tick(self.service, &self.pool, &self.session, &self.loops[index]).await
+        tick(&self.pool, &self.session, &self.loops[index]).await
+    }
+
+    /// One tick of `spec`, which need not be registered, then releases its
+    /// lock again unless this session held it before (a registered loop
+    /// keeps its own). For a one-shot task that must not overlap the same
+    /// loop elsewhere but must not keep it either: the api's CORPUS
+    /// crosswalk check at startup, while the ingest-writer runs that check
+    /// every 10 minutes.
+    pub async fn run_once(&self, spec: &LoopSpec) -> TickOutcome {
+        run_once(&self.pool, &self.session, spec).await
     }
 
     /// Spawns every loop on its own task. Each gets its own [`Progress`]
@@ -327,7 +455,6 @@ impl LoopRunner {
             let loop_progress = Progress::new(stall_after);
             progress.push((spec.name(), loop_progress.clone()));
             tasks.spawn(run_loop(
-                self.service,
                 self.pool.clone(),
                 Arc::clone(&self.session),
                 spec,
@@ -368,6 +495,16 @@ impl RunningLoops {
         self.progress.is_empty()
     }
 
+    /// Keeps the loops running until every task has ended (which only a
+    /// panic does), logging each that ends. For a process with no
+    /// liveness wiring of its own (the api): spawn this and forget it.
+    /// Dropping a [`RunningLoops`] instead aborts its loops.
+    pub async fn run_until_all_end(mut self) {
+        while let Some(result) = self.tasks.join_next().await {
+            tracing::error!(error = ?result.err(), "a background loop task ended");
+        }
+    }
+
     /// Stops every loop (a body in flight is dropped mid-await; each is
     /// idempotent and transactional) and closes the lock session, so a
     /// standby can take the locks on its next tick.
@@ -377,56 +514,54 @@ impl RunningLoops {
     }
 }
 
-async fn run_loop(
-    service: &'static str,
-    pool: PgPool,
-    session: Arc<LockSession>,
-    spec: LoopSpec,
-    progress: Progress,
-) {
+/// [`LoopRunner::run_once`] on a runner's session after the runner has
+/// been spawned (take the session from [`LoopRunner::session`] first), so
+/// the one-shot runs alongside the periodic loops.
+pub async fn run_once(pool: &PgPool, session: &LockSession, spec: &LoopSpec) -> TickOutcome {
+    let key = spec.lock.key;
+    let held_before = session.holds(key).await;
+    register_metrics(spec.name());
+    let outcome = tick(pool, session, spec).await;
+    if !held_before && session.holds(key).await {
+        session.release(key).await;
+        set_lock_held(spec.name(), false);
+    }
+    outcome
+}
+
+async fn run_loop(pool: PgPool, session: Arc<LockSession>, spec: LoopSpec, progress: Progress) {
     let mut interval = tokio::time::interval(spec.interval);
     // A slow tick delays the next one rather than bursting the missed ones
-    // (the api's `sweep_interval` does the same).
+    // (the api's `sweep_interval` did the same).
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         progress.idle(interval.tick()).await;
-        tick(service, &pool, &session, &spec).await;
+        tick(&pool, &session, &spec).await;
         progress.beat();
     }
 }
 
-async fn tick(
-    service: &'static str,
-    pool: &PgPool,
-    session: &LockSession,
-    spec: &LoopSpec,
-) -> TickOutcome {
+async fn tick(pool: &PgPool, session: &LockSession, spec: &LoopSpec) -> TickOutcome {
     let name = spec.name();
     let outcome = match session.try_hold(spec.lock.key).await {
         Ok(true) => {
-            set_lock_held(service, name, true);
+            set_lock_held(name, true);
             let started = tokio::time::Instant::now();
             let result = (spec.body)(pool.clone()).await;
-            metrics::histogram!(
-                metric_name(&format!("{service}_loop_seconds")),
-                "loop" => name
-            )
-            .record(started.elapsed().as_secs_f64());
-            common::metrics::record_cycle(service, name, result.is_ok());
+            metrics::histogram!(metric_name(SECONDS_METRIC), "loop" => name)
+                .record(started.elapsed().as_secs_f64());
+            common::metrics::record_cycle(METRIC_SERVICE, name, result.is_ok());
             match result {
                 Ok(()) => TickOutcome::Ran,
                 Err(err) => {
-                    tracing::error!(
-                        loop_name = name,
-                        error = ?err,
-                        "background loop failed; will retry next interval"
-                    );
+                    // The body has logged it (module docs, Logging).
+                    tracing::debug!(loop_name = name, error = ?err, "background loop body failed");
                     TickOutcome::Failed
                 }
             }
         }
         Ok(false) => {
-            set_lock_held(service, name, false);
+            set_lock_held(name, false);
             tracing::debug!(
                 loop_name = name,
                 key = spec.lock.key,
@@ -435,7 +570,7 @@ async fn tick(
             TickOutcome::Skipped
         }
         Err(err) => {
-            set_lock_held(service, name, false);
+            set_lock_held(name, false);
             tracing::warn!(
                 loop_name = name,
                 error = ?err,
@@ -445,7 +580,7 @@ async fn tick(
         }
     };
     metrics::counter!(
-        metric_name(&format!("{service}_loop_ticks_total")),
+        metric_name(TICKS_METRIC),
         "loop" => name,
         "outcome" => outcome.label()
     )
@@ -453,12 +588,25 @@ async fn tick(
     outcome
 }
 
-fn set_lock_held(service: &str, name: &'static str, held: bool) {
-    metrics::gauge!(
-        metric_name(&format!("{service}_loop_lock_held")),
-        "loop" => name
-    )
-    .set(if held { 1.0 } else { 0.0 });
+fn register_metrics(name: &'static str) {
+    common::metrics::register_cycle(METRIC_SERVICE, name);
+    for outcome in TickOutcome::ALL {
+        metrics::counter!(
+            metric_name(TICKS_METRIC),
+            "loop" => name,
+            "outcome" => outcome.label()
+        )
+        .increment(0);
+    }
+    set_lock_held(name, false);
+}
+
+fn set_lock_held(name: &'static str, held: bool) {
+    metrics::gauge!(metric_name(LOCK_HELD_METRIC), "loop" => name).set(if held {
+        1.0
+    } else {
+        0.0
+    });
 }
 
 #[cfg(test)]
@@ -480,14 +628,24 @@ mod tests {
         LoopSpec::new(lock, interval, |_pool| async { Ok(()) })
     }
 
+    #[test]
+    fn the_metric_names_are_one_family_for_every_process() {
+        assert_eq!(metric_name(TICKS_METRIC), "distant_signal_loop_ticks_total");
+        assert_eq!(
+            metric_name(LOCK_HELD_METRIC),
+            "distant_signal_loop_lock_held"
+        );
+        assert_eq!(metric_name(SECONDS_METRIC), "distant_signal_loop_seconds");
+        assert_eq!(
+            metric_name(&format!("{METRIC_SERVICE}_cycles_total")),
+            "distant_signal_loop_cycles_total"
+        );
+    }
+
     #[tokio::test]
     async fn register_refuses_a_zero_interval_and_clashes() {
         let pool = lazy_pool();
-        let mut runner = LoopRunner::new(
-            "ingest_writer_test",
-            pool.clone(),
-            LockSession::new(pool, "t"),
-        );
+        let mut runner = LoopRunner::new(pool.clone(), LockSession::new(pool, "t"));
         assert!(runner.register(noop(LOCK, Duration::ZERO)).is_err());
         runner.register(noop(LOCK, Duration::from_secs(1))).unwrap();
         let same_key = LoopLock {
@@ -520,11 +678,7 @@ mod tests {
             .unwrap();
         let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = Arc::clone(&ran);
-        let mut runner = LoopRunner::new(
-            "ingest_writer_test",
-            pool.clone(),
-            LockSession::new(pool, "t"),
-        );
+        let mut runner = LoopRunner::new(pool.clone(), LockSession::new(pool, "t"));
         runner
             .register(LoopSpec::new(LOCK, Duration::from_secs(1), move |_pool| {
                 let flag = Arc::clone(&flag);
@@ -535,6 +689,10 @@ mod tests {
             }))
             .unwrap();
         assert_eq!(runner.tick(0).await, TickOutcome::LockError);
+        assert_eq!(
+            runner.run_once(&runner.loops()[0].clone()).await,
+            TickOutcome::LockError
+        );
         assert!(!ran.load(std::sync::atomic::Ordering::SeqCst));
         assert!(!runner.session().holds(LOCK.key).await);
     }
@@ -547,11 +705,7 @@ mod tests {
             .unwrap();
         runtime.block_on(async {
             let pool = lazy_pool();
-            let runner = LoopRunner::new(
-                "ingest_writer_test",
-                pool.clone(),
-                LockSession::new(pool, "t"),
-            );
+            let runner = LoopRunner::new(pool.clone(), LockSession::new(pool, "t"));
             let running = runner.spawn(Duration::from_secs(60));
             assert!(running.is_empty());
             assert!(running.stalled().is_empty());

@@ -34,7 +34,8 @@ serde_json = { version = "1.0.149", features = ["raw_value"] }
 # `migrate`'s `sqlx::migrate!()` (plan 1B.1), not for `query!`. `derive`
 # keeps `#[derive(sqlx::FromRow)]`.
 sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "derive", "json", "macros", "migrate", "postgres", "runtime-tokio", "tls-native-tls"] }
-tokio = { version = "1.52.3", features = ["sync", "time"] }
+# `rt`: the loop runner's `JoinSet` (`loops::runner`).
+tokio = { version = "1.52.3", features = ["rt", "sync", "time"] }
 tracing = "0.1.44"
 trust-schema = { path = "../trust-schema" }
 

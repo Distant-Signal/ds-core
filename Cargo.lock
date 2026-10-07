@@ -2271,11 +2271,11 @@ name = "ingest-writer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "common",
  "ds-store",
  "health-http",
- "metrics",
  "sqlx",
  "tokio",
  "tracing",

@@ -43,6 +43,7 @@
 //! | [`pool`] | 1A.11 | `common::pg::PoolSettings` wrapped with `db_pool_*` metrics, the DB health probe |
 //! | [`schema`] | 1A.12 | `REQUIRED_MIGRATION`; `wait_for_schema` in 1B.2 |
 //! | [`migrate`] | 1B.1 | `api::migrate` and the contract-migration guard, with `migrations/` |
+//! | [`loops`] | 1B.6, 1B.7 | the advisory-locked loop runner and the train-domain loops the api and the ingest-writer both run |
 //!
 //! `test_support` (built for this crate's tests and, through the
 //! off-by-default `test-support` feature, for the tests of crates that
@@ -55,6 +56,7 @@ pub mod backlog;
 pub mod corpus;
 pub mod freshness;
 pub mod incidents;
+pub mod loops;
 pub mod migrate;
 pub mod pool;
 pub mod reference;
