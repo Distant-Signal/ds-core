@@ -13,9 +13,12 @@
 //! See docs/superpowers/specs/2026-08-29-metrics-design.md's Architecture
 //! section for the full reasoning behind this split.
 
+#[cfg(feature = "http")]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+#[cfg(feature = "http")]
 use anyhow::{Context, Result};
+#[cfg(feature = "http")]
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder};
 
 /// Every metric this app emits by hand is prefixed `distant_signal_`, so it
@@ -101,6 +104,7 @@ fn unix_now() -> f64 {
 /// window, which is misleading for any binary whose cycle is longer than
 /// 60s (most of the pollers, schedule-ingest and schedule-reference among
 /// them).
+#[cfg(feature = "http")]
 const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0];
 
 /// Installs the process-global Prometheus recorder and starts its embedded
@@ -121,6 +125,7 @@ const DEFAULT_BUCKETS: &[f64] = &[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.
 /// Every histogram recorded through the recorder this installs gets
 /// [`DEFAULT_BUCKETS`] unless `install_with_buckets` was given an explicit
 /// per-metric override for it.
+#[cfg(feature = "http")]
 pub fn install(port: u16) -> Result<()> {
     install_with_buckets(port, &[])
 }
@@ -138,6 +143,7 @@ pub fn install(port: u16) -> Result<()> {
 /// `install` has no such tuned-timeout metric and keeps using the plain,
 /// no-argument `install`, which is why this is a second function rather
 /// than an extra parameter on `install` itself.
+#[cfg(feature = "http")]
 pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> Result<()> {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let mut builder = PrometheusBuilder::new()
@@ -159,6 +165,8 @@ pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> R
 
 #[cfg(test)]
 mod tests {
+    use metrics_exporter_prometheus::PrometheusBuilder;
+
     use super::*;
 
     #[test]

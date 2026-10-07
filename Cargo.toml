@@ -5,6 +5,7 @@
 resolver = "3"
 members = [
     "crates/common",
+    "crates/ds-store",
     "crates/api",
     "crates/poller-incidents",
     "crates/poller-stations",

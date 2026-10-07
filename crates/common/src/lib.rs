@@ -13,7 +13,9 @@ pub mod backoff;
 pub mod config;
 pub mod corpus_inference;
 pub mod full_coverage_window;
+#[cfg(feature = "http")]
 pub mod gcp_external_account;
+#[cfg(feature = "http")]
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod location_naming;
@@ -21,11 +23,14 @@ pub mod log_once;
 pub mod logging;
 pub mod matcher;
 pub mod metrics;
+#[cfg(feature = "http")]
 pub mod oauth_client;
+#[cfg(feature = "http")]
 pub mod outbound_endpoint_guard;
 pub mod pass_through;
 #[cfg(feature = "postgres")]
 pub mod pg;
+#[cfg(feature = "http")]
 pub mod poller_loop;
 pub mod progress;
 pub mod public_delay;

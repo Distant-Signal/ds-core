@@ -12,7 +12,9 @@ chrono-tz = "0.10"
 clap = { version = "4.6.6", features = ["derive", "env"] }
 glob = "0.3.3"
 metrics = "0.24"
-metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
+# The listener (`http-listener`, hence hyper) only with the `http` feature;
+# without it the crate still builds recorders (tests, `ds-store`).
+metrics-exporter-prometheus = { version = "0.18", default-features = false }
 # Only with the `postgres` feature: `common::pg`, the pool settings shared by
 # the crates that hold a Postgres pool, and `common::public_delay::db` (hence
 # `chrono` and `derive`). Same version and features the workspace already uses.
@@ -21,7 +23,8 @@ sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "r
 # ConnectionManager settings shared by every worker that holds a Redis
 # connection. Same version and features those crates already use.
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
-reqwest = { version = "0.13.4", default-features = false, features = ["json", "form", "native-tls", "gzip"] }
+# Only with the `http` feature (on by default): see [features].
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "form", "native-tls", "gzip"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-inline-default = "1.0.1"
 serde_json = "1.0.149"
@@ -36,6 +39,14 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5"
 
 [features]
+# Every service uses the defaults. `ds-store` turns them off: its normal
+# dependency closure must not contain hyper or reqwest
+# (scripts/check-crate-deps.py, ingest architecture spec §5.1).
+default = ["http"]
+# Outbound HTTP (reqwest: `ingest`, `poller_loop`, `oauth_client`,
+# `gcp_external_account`, `outbound_endpoint_guard`) and the metrics HTTP
+# listener (`metrics::install`, hyper via `http-listener`).
+http = ["dep:reqwest", "metrics-exporter-prometheus/http-listener"]
 # `common::pg` (Postgres pool settings). Enabled by api, aggregator, notifier
 # and enricher; the pollers and consumers do not build sqlx.
 postgres = ["dep:sqlx"]
