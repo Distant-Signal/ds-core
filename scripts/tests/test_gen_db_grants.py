@@ -49,11 +49,11 @@ class RepoFilesTest(unittest.TestCase):
         self.assertEqual(status, 0, out.getvalue())
 
     def test_phase_0b_creates_only_observed_members_of_app(self) -> None:
-        """Phase 0b: the four existing DB services, nothing narrowed."""
+        """Phase 0b/1B: the four DB services and the writer, nothing narrowed."""
         model = gen.load()
         self.assertEqual(
             sorted(r.key for r in model.created()),
-            ["aggregator", "api", "enricher", "notifier"],
+            ["aggregator", "api", "enricher", "notifier", "writer"],
         )
         self.assertTrue(all(r.status == "observed" for r in model.created()))
 

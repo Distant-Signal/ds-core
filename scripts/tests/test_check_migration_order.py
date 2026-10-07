@@ -1,24 +1,50 @@
-"""Tests for scripts/check-migration-order.py, run against throwaway git repos.
+"""Tests for scripts/check-migration-order.py.
 
   uv run python -m unittest discover -s scripts/tests
 
-Each test builds a repo whose first commit is BASE, changes
-crates/api/migrations in a second commit, and runs the script (as CI does:
-from the repo root, with BASE as its argument).
+CheckMigrationOrderTest builds throwaway repos whose first commit is BASE,
+changes crates/api/migrations in a second commit, and runs the script (as
+CI does: from the repo root, with BASE as its argument).
+DestructiveDdlTest runs the destructive-DDL scanner over the fixture
+migrations in fixtures/migration-contract/{fails,passes}.
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType
 from typing import override
 
 SCRIPT = Path(__file__).resolve().parent.parent / "check-migration-order.py"
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "migration-contract"
+REPO_MIGRATIONS = Path(__file__).resolve().parents[2] / "crates" / "api" / "migrations"
 MIGRATIONS = "crates/api/migrations"
 OLD = f"{MIGRATIONS}/20260901000000_old.sql"
 NEWEST = f"{MIGRATIONS}/20260927120200_newest.sql"
+NO_CONTRACT_FINDINGS = (
+    "no destructive DDL without a contract header in {} checked migration(s) "
+    "(added since BASE, or newer than 20261007210000)"
+)
+DROP = "DROP TABLE old_things;\n"
+HEADER = "-- contract: drop old_things (code stopped using it in 0123abc)\n"
+
+
+def _load() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("check_migration_order", SCRIPT)
+    if spec is None or spec.loader is None:
+        msg = f"cannot load {SCRIPT}"
+        raise ImportError(msg)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["check_migration_order"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+cmo = _load()
 # A fixed identity and no user/system config, so the host's git setup
 # (signing, hooks, default branch) cannot leak into the throwaway repos.
 GIT_ENV = {
@@ -105,6 +131,7 @@ class CheckMigrationOrderTest(unittest.TestCase):
             [
                 f"no migrations added since {base} (newest there: 20260927120200)",
                 f"no existing migrations modified, deleted or renamed since {base}",
+                NO_CONTRACT_FINDINGS.format(0),
             ],
         )
 
@@ -121,6 +148,7 @@ class CheckMigrationOrderTest(unittest.TestCase):
             [
                 f"ok: {added} (20260927120300 > 20260927120200)",
                 f"no existing migrations modified, deleted or renamed since {base}",
+                NO_CONTRACT_FINDINGS.format(1),
             ],
         )
 
@@ -221,6 +249,167 @@ class CheckMigrationOrderTest(unittest.TestCase):
         status, out = self.check("0" * 40)
         self.assertNotEqual(status, 0)
         self.assertEqual(out, "")
+
+    def test_added_destructive_without_header_fails(self) -> None:
+        """An added migration with destructive DDL and no header fails."""
+        base = self.base_with(OLD, NEWEST)
+        added = f"{MIGRATIONS}/20260927120300_drop.sql"
+        self.write(added, f"-- Drop it.\n\n{DROP}")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 1)
+        self.assertIn(f"ok: {added} (20260927120300 > 20260927120200)\n", out)
+        self.assertIn(
+            f"::error file={added},line=3::{added}:3: DROP TABLE old_things is "
+            "destructive DDL. Add a `-- contract: <what> (code stopped using it in "
+            "<commit>)` header",
+            out,
+        )
+        self.assertNotIn("no destructive DDL", out)
+
+    def test_added_destructive_with_header_passes(self) -> None:
+        """The contract header makes the same migration pass."""
+        base = self.base_with(OLD, NEWEST)
+        self.write(f"{MIGRATIONS}/20260927120300_drop.sql", f"{HEADER}{DROP}")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 0)
+        self.assertIn(NO_CONTRACT_FINDINGS.format(1), out)
+
+    def test_grandfathered_destructive_migration_passes(self) -> None:
+        """An unchanged base migration at or below the cutoff is not scanned."""
+        old_drop = f"{MIGRATIONS}/{cmo.CONTRACT_CHECK_CUTOFF}_old_drop.sql"
+        self.write(old_drop, DROP)
+        base = self.base_with(OLD)
+        self.write("README")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 0)
+        self.assertIn(NO_CONTRACT_FINDINGS.format(0), out)
+
+    def test_unchanged_migration_after_cutoff_is_scanned(self) -> None:
+        """A base migration newer than the cutoff is scanned even if unchanged."""
+        newer = f"{MIGRATIONS}/{cmo.CONTRACT_CHECK_CUTOFF + 1}_drop.sql"
+        self.write(newer, DROP)
+        base = self.base_with(OLD)
+        self.write("README")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 1)
+        self.assertIn(f"::error file={newer},line=1::", out)
+
+
+class DestructiveDdlTest(unittest.TestCase):
+    """The destructive-DDL scanner, over the fixture migrations."""
+
+    def findings(self, kind: str, name: str) -> list[tuple[int, str]]:
+        """Return the scanner's (line, description) list for one fixture."""
+        sql = (FIXTURES / kind / name).read_text(encoding="utf-8")
+        return list(cmo.destructive_statements(sql))
+
+    def test_every_fixture_is_covered(self) -> None:
+        """Each fixture file has a test below (a new one must get one)."""
+        names = {f"{p.parent.name}/{p.name}" for p in FIXTURES.glob("*/*.sql")}
+        self.assertEqual(
+            names,
+            {
+                "fails/alters.sql",
+                "fails/do-block.sql",
+                "fails/drops.sql",
+                "fails/header-too-late.sql",
+                "passes/additive.sql",
+                "passes/contract-header.sql",
+                "passes/no-transaction-header.sql",
+                "passes/same-file.sql",
+            },
+        )
+
+    def test_fails_fixtures_have_no_header(self) -> None:
+        """Every failing fixture lacks a (leading) contract header."""
+        for path in (FIXTURES / "fails").glob("*.sql"):
+            with self.subTest(path=path.name):
+                sql = path.read_text(encoding="utf-8")
+                self.assertFalse(cmo.has_contract_header(sql))
+                self.assertTrue(cmo.contract_findings(path.name, sql))
+
+    def test_passes_fixtures_pass(self) -> None:
+        """Every passing fixture yields no ::error line."""
+        for path in (FIXTURES / "passes").glob("*.sql"):
+            with self.subTest(path=path.name):
+                sql = path.read_text(encoding="utf-8")
+                self.assertEqual(cmo.contract_findings(path.name, sql), [])
+
+    def test_drops(self) -> None:
+        """DROP of each object kind, and column drops with or without COLUMN."""
+        self.assertEqual(
+            self.findings("fails", "drops.sql"),
+            [
+                (4, "DROP TABLE old_things"),
+                (5, "DROP VIEW legacy_view"),
+                (6, "DROP MATERIALIZED VIEW legacy_stats"),
+                (7, "DROP FUNCTION legacy_fn"),
+                (10, "ALTER TABLE trains DROP COLUMN legacy_uid"),
+                (11, "ALTER TABLE trains DROP COLUMN legacy_headcode"),
+                (12, "ALTER TABLE quoted DROP COLUMN gone"),
+            ],
+        )
+
+    def test_alters(self) -> None:
+        """Renames, type changes and SET NOT NULL; SET DEFAULT is fine."""
+        self.assertEqual(
+            self.findings("fails", "alters.sql"),
+            [
+                (4, "ALTER TABLE stations ... RENAME"),
+                (5, "ALTER TABLE stops ... RENAME"),
+                (6, "ALTER INDEX stations_crs ... RENAME"),
+                (7, "ALTER TABLE stops ALTER COLUMN tiploc TYPE"),
+                (10, "ALTER TABLE stops ALTER COLUMN name SET NOT NULL"),
+                (11, "ALTER TABLE stops ALTER COLUMN lat TYPE"),
+            ],
+        )
+
+    def test_do_block_body_is_scanned(self) -> None:
+        """DDL inside a DO block (after IF ... THEN) is found, on its line."""
+        self.assertEqual(
+            self.findings("fails", "do-block.sql"), [(5, "DROP TABLE old_things")]
+        )
+
+    def test_header_after_a_statement_does_not_count(self) -> None:
+        """A contract line after the first statement is just a comment."""
+        self.assertEqual(
+            self.findings("fails", "header-too-late.sql"),
+            [(4, "DROP TABLE old_things")],
+        )
+
+    def test_additive_ddl_comments_strings_and_function_bodies(self) -> None:
+        """Additive DDL, comments, literals and function bodies are clean."""
+        self.assertEqual(self.findings("passes", "additive.sql"), [])
+
+    def test_changes_to_objects_created_in_the_same_file(self) -> None:
+        """New tables and columns may be changed in the migration creating them."""
+        self.assertEqual(self.findings("passes", "same-file.sql"), [])
+
+    def test_headers_cover_destructive_ddl(self) -> None:
+        """The header files do hold destructive DDL, which the header allows."""
+        for name in ("contract-header.sql", "no-transaction-header.sql"):
+            with self.subTest(name=name):
+                self.assertTrue(self.findings("passes", name))
+                sql = (FIXTURES / "passes" / name).read_text(encoding="utf-8")
+                self.assertTrue(cmo.has_contract_header(sql))
+
+    def test_empty_contract_header_does_not_count(self) -> None:
+        """`-- contract:` needs text after it."""
+        self.assertFalse(cmo.has_contract_header("-- contract:\nDROP TABLE t;\n"))
+
+    def test_cutoff_is_an_existing_migration(self) -> None:
+        """The cutoff names a real migration, and no later one is destructive."""
+        versions = {int(p.name.split("_", 1)[0]) for p in REPO_MIGRATIONS.glob("*.sql")}
+        self.assertIn(cmo.CONTRACT_CHECK_CUTOFF, versions)
+        for path in REPO_MIGRATIONS.glob("*.sql"):
+            if int(path.name.split("_", 1)[0]) > cmo.CONTRACT_CHECK_CUTOFF:
+                with self.subTest(path=path.name):
+                    sql = path.read_text(encoding="utf-8")
+                    self.assertEqual(cmo.contract_findings(path.name, sql), [])
 
 
 if __name__ == "__main__":
