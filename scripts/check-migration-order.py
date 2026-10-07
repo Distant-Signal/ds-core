@@ -54,6 +54,10 @@ the pre-push commit for a push. Run it before merging a worktree branch
 locally:
   uv run scripts/check-migration-order.py "$(git merge-base main HEAD)"
 
+The migrations are in crates/ds-store/migrations. Plan task 1B.1 moved
+them there from crates/api/migrations, byte for byte; a BASE from before
+the move is compared file by file across the two directories.
+
 Paths are relative to the current directory, which must be the repo root
 (as in CI). Findings are GitHub Actions `::error file=...::` lines on
 stdout. A git failure (e.g. an unknown BASE) exits with git's status.
@@ -67,7 +71,12 @@ import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
-MIGRATIONS = "crates/api/migrations"
+MIGRATIONS = "crates/ds-store/migrations"
+# Where the migrations lived before plan task 1B.1 moved them (a pure
+# rename, decision D9). A BASE from before the move is read from here, and
+# each of its files is compared with the file of the same name in
+# MIGRATIONS, so the move itself is no finding but an edit made with it is.
+OLD_MIGRATIONS = ("crates/api/migrations",)
 # The version is the leading digits of the file name: <dir>/<version>_<name>.sql.
 VERSION = re.compile(r".*/([0-9]+)_[^/]*\.sql")
 # Migrations at or below this version predate the contract check and are
@@ -428,6 +437,28 @@ def contract_findings(path: str, sql: str) -> list[str]:
     ]
 
 
+def migration_tree(commit: str, directory: str) -> dict[str, str]:
+    """Return {path under DIRECTORY: "<mode> <object id>"} at COMMIT."""
+    tree: dict[str, str] = {}
+    listing = git_output("ls-tree", "-r", "-z", commit, "--", f"{directory}/")
+    for entry in listing.split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        mode, _, object_id = meta.split(" ")
+        tree[path.removeprefix(f"{directory}/")] = f"{mode} {object_id}"
+    return tree
+
+
+def base_migrations(base: str) -> tuple[str, dict[str, str]]:
+    """Return BASE's migrations directory and its tree (MIGRATIONS if empty)."""
+    for directory in (MIGRATIONS, *OLD_MIGRATIONS):
+        tree = migration_tree(base, directory)
+        if tree:
+            return directory, tree
+    return MIGRATIONS, {}
+
+
 def version_of(path: str) -> str | None:
     """Return a migration path's version digits, or None if it has none."""
     match = VERSION.fullmatch(path)
@@ -460,34 +491,29 @@ def check_contracts(added: list[str]) -> int:
 
 def check(base: str) -> int:
     """Print the findings for BASE..HEAD; 1 if any, else 0."""
+    base_dir, base_tree = base_migrations(base)
     base_versions = [
         version
-        for path in git("ls-tree", "-r", "--name-only", base, "--", f"{MIGRATIONS}/")
-        if (version := version_of(path)) is not None
+        for name in base_tree
+        if (version := version_of(f"{base_dir}/{name}")) is not None
     ]
     if not base_versions:
         print(f"no migrations at {base}; nothing to compare")
         return 0
     max_base = max(base_versions, key=int)
+    head_tree = migration_tree("HEAD", MIGRATIONS)
 
     status = 0
 
-    # --no-renames reports a rename as a deletion plus an addition, so the old
-    # name fails here and the new name is checked as an added file below.
+    # By file name, so a rename within the directory is a deletion plus an
+    # addition: the old name fails here and the new name is checked as an
+    # added file below. A changed mode or content is "modified".
     changed = [
-        (kind, path)
-        for line in git(
-            "diff",
-            "--no-renames",
-            "--name-status",
-            "--diff-filter=MDT",
-            base,
-            "HEAD",
-            "--",
-            f"{MIGRATIONS}/",
-        )
-        for kind, _, path in [line.partition("\t")]
-        if path.endswith(".sql")
+        ("D", f"{base_dir}/{name}")
+        if name not in head_tree
+        else ("M", f"{MIGRATIONS}/{name}")
+        for name, entry in sorted(base_tree.items())
+        if name.endswith(".sql") and head_tree.get(name) != entry
     ]
     for kind, path in changed:
         what = "deleted (or renamed)" if kind == "D" else "modified"
@@ -499,18 +525,9 @@ def check(base: str) -> int:
         status = 1
 
     added = [
-        path
-        for path in git(
-            "diff",
-            "--no-renames",
-            "--name-only",
-            "--diff-filter=A",
-            base,
-            "HEAD",
-            "--",
-            f"{MIGRATIONS}/",
-        )
-        if path.endswith(".sql")
+        f"{MIGRATIONS}/{name}"
+        for name in sorted(head_tree)
+        if name.endswith(".sql") and name not in base_tree
     ]
     for path in added:
         version = version_of(path)

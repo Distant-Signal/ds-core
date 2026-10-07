@@ -13,7 +13,7 @@
 //!
 //! # Keys already in use elsewhere (not moved here)
 //!
-//! - `api::migrate::MIGRATION_LOCK_KEY`, ASCII `"dsmigrat"`
+//! - `ds_store::migrate::MIGRATION_LOCK_KEY`, ASCII `"dsmigrat"`
 //!   (`0x6473_6d69_6772_6174`), a session lock held while migrating;
 //! - `api::data::corpus::CORPUS_LOAD_LOCK_KEY` (`0x0C0B_9053`), a
 //!   transaction lock around a CORPUS load and the crosswalk rebuild;

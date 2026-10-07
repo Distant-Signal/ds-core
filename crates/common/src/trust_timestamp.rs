@@ -16,7 +16,7 @@
 //! timezone-safe by construction) against a sustained live sample, and is
 //! NOT explained by this codebase's own DB session timezone or column
 //! types (`TIMESTAMPTZ` throughout, confirmed against
-//! `crates/api/migrations/20260828120000_train_tracking.sql`).
+//! `crates/ds-store/migrations/20260828120000_train_tracking.sql`).
 //!
 //! The best-evidenced hypothesis: whatever upstream system stamps these
 //! fields is emitting Europe/London LOCAL wall-clock time (BST, currently

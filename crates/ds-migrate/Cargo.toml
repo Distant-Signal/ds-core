@@ -1,0 +1,27 @@
+[package]
+name = "ds-migrate"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The schema migrator (ingest architecture spec §12.1, plan 1B.1): the
+# chart's migrate hook Job runs `ds-migrate run` from the api image. It
+# links only `ds-store`'s `migrate` (and, from 1B.2, `schema`), so like
+# `ds-store` its normal dependency closure must not contain axum, tower,
+# hyper, redis, reqwest, oauth2, openidconnect or api
+# (scripts/check-crate-deps.py). Every dependency is already in the
+# workspace, at the versions and features ds-store and the api use.
+[dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive", "env"] }
+# No default features: they bring reqwest and the metrics HTTP listener
+# (hyper). `postgres`: `common::pg`'s dead-client detection settings.
+common = { path = "../common", default-features = false, features = ["postgres"] }
+ds-store = { path = "../ds-store" }
+sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio", "tls-native-tls"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1.44"
+
+[lints]
+workspace = true

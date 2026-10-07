@@ -10,7 +10,7 @@
 //! Network Rail CORPUS location reference data (`corpus_locations`,
 //! `corpus_deliveries`), loaded by `schedule-ingest` through
 //! `POST /private/corpus-locations`. See
-//! `crates/api/migrations/20260928100000_corpus_locations.sql` and
+//! `crates/ds-store/migrations/20260928100000_corpus_locations.sql` and
 //! docs/superpowers/specs/2026-09-28-corpus-sftp-ingest-design.md.
 //!
 //! Every load also rebuilds the CORPUS-derived crosswalk in the same

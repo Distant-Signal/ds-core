@@ -29,11 +29,11 @@ serde = { version = "1.0.228", features = ["derive"] }
 # `raw_value`: the schedule line population is carried as raw JSON (see the
 # api's `upsert_schedule_line_population`).
 serde_json = { version = "1.0.149", features = ["raw_value"] }
-# The api's sqlx features minus `macros` and `migrate` (spec §5.1, §5.4):
-# runtime-checked `sqlx::query` only, so no compile-time query cache, and
-# the migrator stays in the api until phase 1B. `derive` keeps
-# `#[derive(sqlx::FromRow)]`.
-sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "derive", "json", "postgres", "runtime-tokio", "tls-native-tls"] }
+# The api's sqlx features (spec §5.1, §5.4). Runtime-checked `sqlx::query`
+# only, so no compile-time query cache: `macros` and `migrate` are here for
+# `migrate`'s `sqlx::migrate!()` (plan 1B.1), not for `query!`. `derive`
+# keeps `#[derive(sqlx::FromRow)]`.
+sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "derive", "json", "macros", "migrate", "postgres", "runtime-tokio", "tls-native-tls"] }
 tokio = { version = "1.52.3", features = ["sync", "time"] }
 tracing = "0.1.44"
 trust-schema = { path = "../trust-schema" }

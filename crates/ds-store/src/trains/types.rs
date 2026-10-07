@@ -254,7 +254,7 @@ impl StopTimetable {
 ///    crosswalk keyed on TIPLOC rather than STANOX resolves every one of
 ///    them with no tiebreaker or inheritance step required. The fix: a new
 ///    `tiploc_crs` table (`PRIMARY KEY (tiploc)`,
-///    `crates/api/migrations/20260924130000_tiploc_crs.sql`), populated by
+///    `crates/ds-store/migrations/20260924130000_tiploc_crs.sql`), populated by
 ///    a new `crates/schedule-reference::parser::resolve_tiploc_crs`
 ///    function that keeps EVERY TIPLOC with a resolvable CRS as its own
 ///    row -- no STANOX-based grouping or exclusion -- alongside the

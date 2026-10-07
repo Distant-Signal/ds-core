@@ -3,7 +3,7 @@
   uv run python -m unittest discover -s scripts/tests
 
 CheckMigrationOrderTest builds throwaway repos whose first commit is BASE,
-changes crates/api/migrations in a second commit, and runs the script (as
+changes crates/ds-store/migrations in a second commit, and runs the script (as
 CI does: from the repo root, with BASE as its argument).
 DestructiveDdlTest runs the destructive-DDL scanner over the fixture
 migrations in fixtures/migration-contract/{fails,passes}.
@@ -21,8 +21,12 @@ from typing import override
 
 SCRIPT = Path(__file__).resolve().parent.parent / "check-migration-order.py"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "migration-contract"
-REPO_MIGRATIONS = Path(__file__).resolve().parents[2] / "crates" / "api" / "migrations"
-MIGRATIONS = "crates/api/migrations"
+REPO_MIGRATIONS = (
+    Path(__file__).resolve().parents[2] / "crates" / "ds-store" / "migrations"
+)
+MIGRATIONS = "crates/ds-store/migrations"
+# The directory before plan task 1B.1 moved it.
+API_MIGRATIONS = "crates/api/migrations"
 OLD = f"{MIGRATIONS}/20260901000000_old.sql"
 NEWEST = f"{MIGRATIONS}/20260927120200_newest.sql"
 NO_CONTRACT_FINDINGS = (
@@ -232,6 +236,50 @@ class CheckMigrationOrderTest(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn(f"::error file={OLD}::{OLD} already exists", out)
         self.assertIn(f"ok: {renamed} (20260927120300 > 20260927120200)\n", out)
+
+    def move_from_the_api(self) -> str:
+        """Commit BASE with OLD and NEWEST in the api's directory, then move them."""
+        base = self.base_with(
+            OLD.replace(MIGRATIONS, API_MIGRATIONS),
+            NEWEST.replace(MIGRATIONS, API_MIGRATIONS),
+        )
+        (self.repo / MIGRATIONS).parent.mkdir(parents=True)
+        self.git("mv", API_MIGRATIONS, MIGRATIONS)
+        return base
+
+    def test_the_move_to_ds_store_is_no_finding(self) -> None:
+        """Plan 1B.1's rename from the api's directory passes."""
+        base = self.move_from_the_api()
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(
+            out.splitlines(),
+            [
+                f"no migrations added since {base} (newest there: 20260927120200)",
+                f"no existing migrations modified, deleted or renamed since {base}",
+                NO_CONTRACT_FINDINGS.format(0),
+            ],
+        )
+
+    def test_the_move_is_checked_file_by_file(self) -> None:
+        """Across the move, an edit, a deletion and an old version still fail."""
+        base = self.move_from_the_api()
+        self.write(NEWEST, "SELECT 2;\n")
+        (self.repo / OLD).unlink()
+        late = f"{MIGRATIONS}/20260927120100_late.sql"
+        self.write(late)
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 1)
+        old = OLD.replace(MIGRATIONS, API_MIGRATIONS)
+        self.assertIn(f"::error file={old}::{old} already exists on the base", out)
+        self.assertIn(
+            f"::error file={NEWEST}::{NEWEST} already exists on the base and was "
+            "modified.",
+            out,
+        )
+        self.assertIn(f"::error file={late}::{late} (version 20260927120100)", out)
 
     def test_non_sql_files_ignored(self) -> None:
         """Only .sql files under the migrations directory count."""

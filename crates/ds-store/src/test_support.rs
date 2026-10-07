@@ -211,7 +211,7 @@ pub async fn cleanup_user(pool: &PgPool, user_id: &str) {
 }
 
 /// Minimal fixture row -- only the `NOT NULL` columns
-/// (`crates/api/migrations/20260828120000_train_tracking.sql:40-76`).
+/// (`crates/ds-store/migrations/20260828120000_train_tracking.sql:40-76`).
 pub async fn seed_tracked_train(pool: &PgPool, user_id: &str) -> i64 {
     let (id,): (i64,) = sqlx::query_as(
         "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \

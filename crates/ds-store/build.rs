@@ -1,17 +1,18 @@
 //! Generates `schema::REQUIRED_MIGRATION` (plan task 1A.12): the version
-//! of the newest migration in `crates/api/migrations`, the directory the
-//! api's `sqlx::migrate!()` embeds. Generated rather than hand-written so
-//! adding a migration needs no second edit, and so it is, by construction,
-//! the newest migration built into the same binary (spec §12.2).
+//! of the newest migration in `crates/ds-store/migrations`, the directory
+//! `migrate`'s `sqlx::migrate!()` embeds (plan task 1B.1 moved it here from
+//! `crates/api`). Generated rather than hand-written so adding a migration
+//! needs no second edit, and so it is, by construction, the newest
+//! migration built into the same binary (spec §12.2).
 //!
-//! Plan task 1B.1 moves the directory to `crates/ds-store/migrations`;
-//! [`MIGRATIONS`] then becomes `migrations`.
+//! The `rerun-if-changed` on the directory also makes cargo rebuild this
+//! crate, and so re-embed the migrations, when a migration is added.
 
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 /// The migrations directory, relative to this crate.
-const MIGRATIONS: &str = "../api/migrations";
+const MIGRATIONS: &str = "migrations";
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap_or_default());

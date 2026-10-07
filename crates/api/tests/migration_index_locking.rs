@@ -4,8 +4,8 @@
 //! `UPDATE` and `DELETE`) for the whole duration of the build.
 //!
 //! That matters here more than in most codebases, because of WHERE migrations
-//! run. `crates/api/src/main.rs` calls `sqlx::migrate!().run(...)` BEFORE it
-//! binds its listener, so:
+//! run. `crates/api/src/main.rs` calls `ds_store::migrate::run` (its
+//! `sqlx::migrate!().run(...)`) BEFORE it binds its listener, so:
 //!
 //! 1. writes to the table are blocked for the length of the index build; and
 //! 2. `/public/health` does not answer for the length of the index build
@@ -161,8 +161,11 @@ const GRANDFATHERED_TABLE_LOCK_HAZARDS: &[(&str, TableLockHazard)] = &[
 /// worktree's migrations. Not embedded with `sqlx::migrate!` either: that
 /// cannot see a NEW file until something else forces a rebuild, so the guard
 /// would silently skip a just-added migration.
+///
+/// The directory is `crates/ds-store/migrations` (moved from this crate by
+/// plan task 1B.1); the guard stays here with `migration_checksums`.
 fn migrations_dir() -> PathBuf {
-    common::manifest_dir!().join("migrations")
+    common::manifest_dir!().join("../ds-store/migrations")
 }
 
 fn migration_files() -> Vec<PathBuf> {
@@ -703,7 +706,7 @@ fn no_new_migration_builds_a_blocking_index_on_an_existing_table() {
          instead: make `-- no-transaction` the FIRST line of the file (sqlx only recognises it \
          there) and write `CREATE INDEX CONCURRENTLY`.\n\nTRADEOFF to accept deliberately: a \
          CONCURRENTLY build that fails leaves an INVALID index behind, which Postgres will not \
-         use and will not clean up itself. api's startup (`api::migrate`) drops INVALID \
+         use and will not clean up itself. The migrator (`ds_store::migrate`) drops INVALID \
          indexes before migrating, so the retry rebuilds it; keep the file to exactly one \
          statement so that retry is clean. That is the price of not locking the table, and it \
          is the right trade for any table with production-scale rows.",
@@ -1300,7 +1303,7 @@ const LOCK_TIMEOUT_CONVENTION_FROM: &str = "20260927050000";
 /// transaction fails fast (and the crash-loop retry converges) instead of
 /// waiting -- and blocking every other query on the table behind its lock
 /// request -- until the startup probe kills the pod. api's migration
-/// connection also sets a session `lock_timeout` (`api::migrate`), but a
+/// connection also sets a session `lock_timeout` (`ds_store::migrate`), but a
 /// hand-run `sqlx migrate run` does not.
 #[test]
 fn a_new_transactional_migration_starts_with_set_local_lock_timeout() {

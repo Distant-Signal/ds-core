@@ -1,12 +1,19 @@
-//! Runs the embedded migrations at `api` startup, on a dedicated connection
-//! rather than the request pool (DB review 2026-09-27: A1/DB2-32, A3/DB2-34).
+//! Runs the embedded migrations (`crates/ds-store/migrations`) on a
+//! dedicated connection rather than a request pool (DB review 2026-09-27:
+//! A1/DB2-32, A3/DB2-34). Moved from `api::migrate` with the directory (plan
+//! task 1B.1, decision D9); the api re-exports it as `api::migrate`.
+//!
+//! Two callers run [`run`], after [`ensure_ready_for_contract_migration`]:
+//! the api at startup (while `api.migrateOnStartup` is on), and
+//! `ds-migrate run`, the chart's migrate hook Job (`migrate.job`, whose
+//! `activeDeadlineSeconds` is the same 900s budget as the probe below).
 //!
 //! # Budget: the startup probe
 //!
-//! `main.rs` migrates BEFORE it binds, so `api.probes.startup` in the chart
-//! (450 x 2s = 900s) is a hard ceiling on the whole migration run: past it
-//! the kubelet SIGKILLs the pod mid-DDL. The dedicated connection therefore
-//! carries:
+//! The api's `main.rs` migrates BEFORE it binds, so `api.probes.startup` in
+//! the chart (450 x 2s = 900s) is a hard ceiling on the whole migration run:
+//! past it the kubelet SIGKILLs the pod mid-DDL. The dedicated connection
+//! therefore carries:
 //!
 //! * `lock_timeout` (default 10s, `MIGRATION_LOCK_TIMEOUT_SECS`): DDL that
 //!   cannot get its lock -- an `ALTER TABLE` queued behind a long reader, or
@@ -43,9 +50,9 @@
 //!
 //! An index that is INVALID because a `CREATE INDEX [CONCURRENTLY]` or
 //! `REINDEX` is building it RIGHT NOW (it has a `pg_stat_progress_create_index`
-//! row) is skipped. Every api replica takes [`MIGRATION_LOCK_KEY`] first, so
-//! another replica's in-flight migration is never one of those; a build a
-//! human started in psql is left alone.
+//! row) is skipped. Every migrator (each api replica, `ds-migrate`) takes
+//! [`MIGRATION_LOCK_KEY`] first, so another run's in-flight migration is
+//! never one of those; a build a human started in psql is left alone.
 //!
 //! # Which role migrates
 //!
@@ -58,20 +65,24 @@
 //! builds; without it such a row hides its `index_relid`/`relid` and a
 //! human's in-flight build would look abandoned.
 
+pub mod contract;
+
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{ConnectOptions, Connection, PgConnection};
 
+pub use contract::ensure_ready_for_contract_migration;
+
 /// `pg_stat_activity.application_name` of the migration connection.
 pub const MIGRATION_APPLICATION_NAME: &str = "distant-signal-api-migrations";
 
-/// Session advisory lock every api replica holds while it heals and
-/// migrates, so one replica's heal can never drop the index another replica's
-/// in-flight `CREATE INDEX CONCURRENTLY` is building. ASCII "dsmigrat";
-/// distinct from sqlx's own migration lock and from the publish locks in
-/// `data::queries`.
+/// Session advisory lock every migrator (each api replica, `ds-migrate`)
+/// holds while it heals and migrates, so one run's heal can never drop the
+/// index another run's in-flight `CREATE INDEX CONCURRENTLY` is building.
+/// ASCII "dsmigrat"; distinct from sqlx's own migration lock and from the
+/// publish locks in `ds_store::schedule`.
 pub const MIGRATION_LOCK_KEY: i64 = 0x6473_6d69_6772_6174;
 
 pub const DEFAULT_MIGRATION_LOCK_TIMEOUT: Duration = Duration::from_secs(10);
@@ -277,10 +288,21 @@ mod tests {
         assert!(settings.lock_timeout < settings.statement_timeout);
     }
 
+    /// `MIGRATION_DATABASE_URL` when set and not blank, else
+    /// `DATABASE_URL`: the schema owner with the role split.
+    fn owner_database_url() -> String {
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let migration_database_url = std::env::var(MIGRATION_DATABASE_URL_ENV).ok();
+        migration_url(&database_url, migration_database_url.as_deref())
+            .0
+            .to_owned()
+    }
+
     /// As the schema owner (`MIGRATION_DATABASE_URL`, else `DATABASE_URL`):
     /// these tests create tables, drop indexes and run the migrator.
     async fn connect() -> PgConnection {
-        let url = crate::test_support::owner_database_url();
+        let url = owner_database_url();
         PgConnection::connect(&url).await.expect("connect")
     }
 
@@ -289,7 +311,7 @@ mod tests {
     /// valid one on the same table is kept, and re-running the CIC then
     /// succeeds.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 migrate::tests -- --ignored --test-threads=1`"]
     async fn heal_drops_an_invalid_index_and_keeps_valid_ones() {
         let mut conn = connect().await;
@@ -379,10 +401,10 @@ mod tests {
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 migrate::tests -- --ignored --test-threads=1`"]
     async fn run_is_a_no_op_on_a_migrated_database_and_releases_its_lock() {
-        let url = crate::test_support::owner_database_url();
+        let url = owner_database_url();
         let base: PgConnectOptions = url.parse().unwrap();
         run(base, MigrationSettings::default())
             .await
@@ -410,7 +432,7 @@ mod tests {
     /// `DATABASE_URL` is a superuser, i.e. the ordinary single-role run.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=<app> \
-                MIGRATION_DATABASE_URL=<owner> cargo test -p api migrate::tests -- --ignored \
+                MIGRATION_DATABASE_URL=<owner> cargo test -p ds-store migrate::tests -- --ignored \
                 --test-threads=1`"]
     async fn the_app_role_has_dml_only_and_the_owner_owns_the_schema() {
         let app_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

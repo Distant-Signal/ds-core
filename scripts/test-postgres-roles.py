@@ -54,7 +54,7 @@ from collections.abc import Mapping, Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SETUP_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-roles.sql"
-MIGRATIONS = ROOT / "crates" / "api" / "migrations"
+MIGRATIONS = ROOT / "crates" / "ds-store" / "migrations"
 GRANTS_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-grants.sql"
 GEN_DB_GRANTS = ROOT / "scripts" / "gen-db-grants.py"
 KINDS = ("owner", "app", "exporter", "dump", "backup")

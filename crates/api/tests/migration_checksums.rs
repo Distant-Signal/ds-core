@@ -4,8 +4,10 @@
 //! sqlx stores the SHA-384 of every applied migration file in
 //! `_sqlx_migrations.checksum` and compares it on every
 //! `sqlx::migrate!().run(...)`. `crates/api/src/main.rs` runs migrations
-//! before it binds, so a merged migration edited in place makes `api` fail
-//! at startup on every database that already applied it
+//! (`ds_store::migrate`, over `crates/ds-store/migrations`; the chart's
+//! `ds-migrate` Job runs the same code) before it binds, so a merged
+//! migration edited in place makes `api` fail at startup on every database
+//! that already applied it
 //! ("migration ... was previously applied but has been modified"), a
 //! `CrashLoopBackOff` under the Deployment's `strategy: Recreate`. See also
 //! `migration_index_locking.rs`'s module docs.
@@ -70,7 +72,8 @@ fn locked_checksums() -> BTreeMap<String, String> {
 }
 
 fn current_checksums() -> BTreeMap<String, String> {
-    let dir = api_dir().join("migrations");
+    // Plan task 1B.1 moved the directory into ds-store; the lock stays here.
+    let dir = api_dir().join("../ds-store/migrations");
     std::fs::read_dir(&dir)
         .unwrap_or_else(|err| panic!("read_dir {}: {err}", dir.display()))
         .map(|entry| entry.expect("read migrations dir entry").path())
@@ -133,7 +136,7 @@ fn the_checksum_matches_what_sqlx_records() {
     // sqlx's own resolver so a change in how sqlx checksums would show up
     // here rather than as a surprise in production.
     let locked = locked_checksums();
-    let migrator = sqlx::migrate!("./migrations");
+    let migrator = sqlx::migrate!("../ds-store/migrations");
     let migration = migrator
         .iter()
         .find(|m| m.version == 20_260_831_090_001)

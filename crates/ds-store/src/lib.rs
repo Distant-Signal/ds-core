@@ -15,8 +15,9 @@
 //!   CI's scripts-lint job). A function that publishes to Redis today
 //!   takes a callback or returns what to publish; the caller publishes.
 //! - Runtime-checked `sqlx::query` only: no `query!` macros, no `.sqlx`
-//!   cache, no `migrate!` (spec §5.4). Query correctness comes from the
-//!   DB-gated `#[ignore]` tests, which move with their functions.
+//!   cache (spec §5.4). Query correctness comes from the DB-gated
+//!   `#[ignore]` tests, which move with their functions. The one macro is
+//!   [`migrate`]'s `sqlx::migrate!()`, which embeds `migrations/`.
 //!
 //! # Phase 1A: behaviour-neutral moves
 //!
@@ -41,19 +42,20 @@
 //! | [`sweeps`] | 1A.10 | the schedule-match and reconciliation sweeps |
 //! | [`pool`] | 1A.11 | `common::pg::PoolSettings` wrapped with `db_pool_*` metrics, the DB health probe |
 //! | [`schema`] | 1A.12 | `REQUIRED_MIGRATION`; `wait_for_schema` in 1B.2 |
+//! | [`migrate`] | 1B.1 | `api::migrate` and the contract-migration guard, with `migrations/` |
 //!
 //! `test_support` (built for this crate's tests and, through the
 //! off-by-default `test-support` feature, for the tests of crates that
 //! dev-depend on it) holds the shared DB-test fixtures.
 //!
-//! Later phases add `migrate` (1B.1: `api::migrate`, with the migrations
-//! directory moving into this crate) and `reads` (phase 4: the internal
-//! readers behind narrow views).
+//! A later phase adds `reads` (phase 4: the internal readers behind narrow
+//! views).
 
 pub mod backlog;
 pub mod corpus;
 pub mod freshness;
 pub mod incidents;
+pub mod migrate;
 pub mod pool;
 pub mod reference;
 pub mod samples;
