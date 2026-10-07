@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 
-use crate::data::eta_blend::london_to_utc;
-use crate::data::schedule_matching;
+use super::schedule_matching;
+use crate::trains::london_to_utc;
 
 /// Stall 1's fix: a `train_subscriptions` row can stay `'pending'` forever
 /// even after `train_movement_events` proves the train it points at was
@@ -92,10 +92,15 @@ async fn list_trains_needing_schedule_enrichment(
     Ok(rows)
 }
 
-/// The ids [`list_trains_needing_schedule_enrichment`] selects, for
-/// `train_tracking`'s sweep-exclusion test.
-#[cfg(test)]
-pub(crate) async fn enrichment_candidate_ids_for_tests(pool: &PgPool) -> Vec<i64> {
+/// The ids [`list_trains_needing_schedule_enrichment`] selects, for the
+/// api `train_tracking`'s sweep-exclusion test (built only for tests: the
+/// api's dev-dependency turns on the `test-helpers` feature).
+#[cfg(any(test, feature = "test-helpers"))]
+#[expect(
+    clippy::expect_used,
+    reason = "a test helper: a failed query should fail the calling test"
+)]
+pub async fn enrichment_candidate_ids_for_tests(pool: &PgPool) -> Vec<i64> {
     list_trains_needing_schedule_enrichment(pool)
         .await
         .expect("list enrichment candidates")
@@ -110,12 +115,12 @@ pub(crate) async fn enrichment_candidate_ids_for_tests(pool: &PgPool) -> Vec<i64
 /// several this train may have (one per departure-bearing calling point).
 /// See the design doc §3 Decision 2.
 ///
-/// `pub(crate)`, not private: `routes::train::enrich_public_train_schedule`
+/// `pub`, not private: the api's `routes::train::enrich_public_train_schedule`
 /// reuses this exact lookup for the untracked-train counterpart of
 /// [`retry_schedule_enrichment_for_nr_primary_trains`] below -- see that
 /// function's own doc comment for why a `trains` row with zero subscribers
 /// needs a schedule-enrichment path of its own too.
-pub(crate) async fn true_origin_departure(
+pub async fn true_origin_departure(
     pool: &PgPool,
     train_uid: &str,
     service_date: NaiveDate,
@@ -518,7 +523,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 reconcile_stuck_resolution_status_flips_a_pending_row_with_movement_events_to_resolved \
                 -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_flips_a_pending_row_with_movement_events_to_resolved()
@@ -548,7 +553,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 reconcile_stuck_resolution_status_leaves_a_pending_row_with_no_movement_events_untouched \
                 -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_leaves_a_pending_row_with_no_movement_events_untouched()
@@ -580,7 +585,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 reconcile_stuck_resolution_status_never_touches_a_row_that_isnt_pending \
                 -- --ignored --test-threads=1`"]
     async fn reconcile_stuck_resolution_status_never_touches_a_row_that_isnt_pending() {
@@ -616,7 +621,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 retry_schedule_enrichment_matches_a_subscribed_trains_row_past_the_grace_period \
                 -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_matches_a_subscribed_trains_row_past_the_grace_period() {
@@ -666,7 +671,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 retry_schedule_enrichment_skips_a_row_still_inside_the_grace_period \
                 -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_row_still_inside_the_grace_period() {
@@ -716,7 +721,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 retry_schedule_enrichment_skips_a_trains_row_with_no_subscriber \
                 -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_trains_row_with_no_subscriber() {
@@ -767,7 +772,7 @@ mod db_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 retry_schedule_enrichment_skips_a_trains_row_with_no_schedule_destination_departures_data \
                 -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_skips_a_trains_row_with_no_schedule_destination_departures_data()
@@ -807,7 +812,7 @@ mod db_tests {
     /// "Waiting to hear from Network Rail" forever even after the shared
     /// row is fully enriched.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p api \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 retry_schedule_enrichment_advances_the_subscribers_own_resolution_status \
                 -- --ignored --test-threads=1`"]
     async fn retry_schedule_enrichment_advances_the_subscribers_own_resolution_status() {

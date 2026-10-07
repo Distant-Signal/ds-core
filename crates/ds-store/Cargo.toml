@@ -38,6 +38,13 @@ tokio = { version = "1.52.3", features = ["sync", "time"] }
 tracing = "0.1.44"
 trust-schema = { path = "../trust-schema" }
 
+[features]
+# Test-only helpers for tests that stay in other crates (the api's
+# `train_tracking` sweep-exclusion test reads
+# `sweeps::reconciliation::enrichment_candidate_ids_for_tests`). Only the
+# api's dev-dependency turns it on; no binary is built with it.
+test-helpers = []
+
 [dev-dependencies]
 metrics-exporter-prometheus = { version = "0.18", default-features = false }
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
