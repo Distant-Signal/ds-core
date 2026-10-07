@@ -288,7 +288,10 @@ mod tests {
             Command::Run(_) => unreachable!(),
         };
         let url = "--database-url=postgres://unused";
-        assert_eq!(parse(&["ds-migrate", "wait", url, "--role", "writer"]), Some(Role::Writer));
+        assert_eq!(
+            parse(&["ds-migrate", "wait", url, "--role", "writer"]),
+            Some(Role::Writer)
+        );
         assert!(Cli::try_parse_from(["ds-migrate", "wait", url, "--role", "owner"]).is_err());
         let envs: Vec<String> = Cli::command()
             .find_subcommand("wait")
