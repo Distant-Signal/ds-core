@@ -10,9 +10,19 @@
 # Distances are between MSN grid references (100 m resolution), checked
 # against RJTTF980MSN.txt (2026-10-05).
 #
-# tiploc: the stop's TIPLOC; parent_crs: a CRS in `stations`; note: why.
-tiploc,parent_crs,note
-HTRBUS3,HXX,Heathrow Terminal 3 bus stops; Heathrow Terminals 2 & 3 station is 412 m away by MSN grid reference
-CRDFAIR,RIA,Cardiff Airport bus stop; the airport's station is Rhoose Cardiff International Airport (728 m)
-IVRNABS,IVA,Inverness Airport bus stance; Inverness Airport station (943 m)
-PNZQUAY,PNZ,Penzance Quay (Isles of Scilly ferry); Penzance station (539 m)
+# The planner also links each stop to its parent with a walk both ways
+# (crates/api/src/data/trip_planning.rs, `add_parent_walk_links`), timed
+# from the grid distance: ceil(metres / 80) + 2, clamped to 3-15 minutes
+# (`common::tiploc_parents::walk_minutes`). `walk_minutes` overrides that
+# for the stop when its published parent is this row's: give it when the
+# real walking route is longer than the straight line, or when the stop or
+# station has no grid reference. The values below are estimates from the
+# grid distance and the route's detours, not surveyed times.
+#
+# tiploc: the stop's TIPLOC; parent_crs: a CRS in `stations`; walk_minutes:
+# the walk in minutes (1-60), empty for the distance-based time; note: why.
+tiploc,parent_crs,walk_minutes,note
+HTRBUS3,HXX,8,Heathrow Terminal 3 bus stops; Heathrow Terminals 2 & 3 station is 412 m away by MSN grid reference
+CRDFAIR,RIA,20,Cardiff Airport bus stop; the airport's station is Rhoose Cardiff International Airport (728 m)
+IVRNABS,IVA,15,Inverness Airport bus stance; Inverness Airport station (943 m)
+PNZQUAY,PNZ,10,Penzance Quay (Isles of Scilly ferry); Penzance station (539 m)

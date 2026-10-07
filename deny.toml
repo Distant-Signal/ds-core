@@ -15,10 +15,6 @@ version = 2
 yanked = "deny"
 # Each ignore needs a reason and is revisited when the advisory changes.
 ignore = [
-    # dotenv is unmaintained (no fix). It only loads an optional local .env
-    # in development; deployments set real env vars. Follow-up: switch the
-    # crates to dotenvy.
-    { id = "RUSTSEC-2021-0141", reason = "dev-only .env loading; follow-up: move to dotenvy" },
     # rsa: Marvin timing attack on private-key operations; no fixed release.
     # api's openidconnect only verifies RS256 ID-token signatures with the
     # IdP's public keys, and notifier's web-push signs VAPID with ES256, so
