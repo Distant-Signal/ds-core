@@ -80,7 +80,7 @@ pub mod tiploc;
 
 pub use compact::SmallStr;
 pub use connections::{
-    CallingPointForConnections, Connection, PassIndex, build_connections,
+    CallingPointForConnections, Connection, PassIndex, PassRow, build_connections,
     build_connections_with_passes,
 };
 pub use interchange::{

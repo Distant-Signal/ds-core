@@ -208,14 +208,34 @@ pub fn build_connections<'a>(
 /// WITHOUT calling -- the untimed rows [`build_connections`] walks over. What
 /// `/Trips/plan`'s pass-through `avoid` needs: a connection alone only names
 /// its two calls.
+///
+/// Each entry also records where among the connection's skipped rows the
+/// TIPLOC lies (0 = the first row after the departure call), so the order in
+/// which a train passes two places between the same pair of calls is known
+/// (`/Trips/plan`'s ordered pass-through `via`).
 #[derive(Debug, Clone, Default)]
 pub struct PassIndex {
-    by_tiploc: HashMap<String, Vec<u32>>,
+    by_tiploc: HashMap<String, Vec<PassRow>>,
+}
+
+/// One entry of a [`PassIndex`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PassRow {
+    /// Index into the connections array.
+    pub connection: u32,
+    /// Position among the connection's skipped rows, from 0.
+    pub position: u16,
 }
 
 impl PassIndex {
-    /// Indices of the connections running past `tiploc` (normalized here).
-    pub fn connections_passing(&self, tiploc: &str) -> &[u32] {
+    /// Indices of the connections running past `tiploc` (normalized here),
+    /// ascending.
+    pub fn connections_passing(&self, tiploc: &str) -> impl Iterator<Item = u32> + '_ {
+        self.passes_at(tiploc).iter().map(|row| row.connection)
+    }
+
+    /// Every pass of `tiploc` (normalized here), by ascending connection.
+    pub fn passes_at(&self, tiploc: &str) -> &[PassRow] {
         self.by_tiploc
             .get(crate::normalize_tiploc(tiploc))
             .map_or(&[], Vec::as_slice)
@@ -318,10 +338,14 @@ fn build<'a>(
         .into_iter()
         .enumerate()
         .map(|(position, (connection, passes))| {
-            for tiploc in passes {
+            for (row, tiploc) in passes.into_iter().enumerate() {
                 let entry = index.by_tiploc.entry(tiploc.to_string()).or_default();
-                if entry.last() != Some(&(position as u32)) {
-                    entry.push(position as u32);
+                // A train passing the same place twice in one span: the first.
+                if entry.last().map(|last| last.connection) != Some(position as u32) {
+                    entry.push(PassRow {
+                        connection: position as u32,
+                        position: u16::try_from(row).unwrap_or(u16::MAX),
+                    });
                 }
             }
             connection
@@ -643,8 +667,7 @@ mod tests {
         assert_eq!(passes.len(), 2);
         let passing: Vec<&Connection> = passes
             .connections_passing("CMDNJN")
-            .iter()
-            .map(|&i| &connections[i as usize])
+            .map(|i| &connections[i as usize])
             .collect();
         assert_eq!(passing.len(), 1);
         assert_eq!(
@@ -655,9 +678,12 @@ mod tests {
             ("EUSTON", "MKC")
         );
         assert_eq!(
-            passes.connections_passing("WATFDJ"),
-            passes.connections_passing("CMDNJN")
+            passes.connections_passing("WATFDJ").collect::<Vec<_>>(),
+            passes.connections_passing("CMDNJN").collect::<Vec<_>>()
         );
-        assert!(passes.connections_passing("MKC").is_empty());
+        // The order the train runs past them in.
+        assert_eq!(passes.passes_at("CMDNJN")[0].position, 0);
+        assert_eq!(passes.passes_at("WATFDJ")[0].position, 1);
+        assert!(passes.passes_at("MKC").is_empty());
     }
 }

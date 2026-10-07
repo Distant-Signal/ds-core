@@ -26,6 +26,13 @@
 //! parsed, so a deployment without `REDIS_PASSWORD` behaves exactly as
 //! before.
 //!
+//! Per-client ACL users (chart `redis.acl`, ingest architecture phase 0c):
+//! a client given its own user gets `REDIS_USERNAME` (a plain value) next
+//! to its own `REDIS_PASSWORD`, combined by [`redis_url_with_credentials`]
+//! into `redis://<user>:<password>@host`. With `REDIS_USERNAME` unset or
+//! empty that function is exactly [`redis_url_with_password`], so nothing
+//! changes for a client that has not opted in.
+//!
 //! The combined URL is returned as a [`Secret`] so a `Debug` print cannot
 //! leak it. Error messages here never include the URL or the password.
 
@@ -74,6 +81,57 @@ pub fn redis_url_with_password(redis_url: &str, password: Option<&Secret>) -> Re
     // `Url::set_password` percent-encodes the userinfo; the redis crate
     // percent-decodes it when parsing, so any byte sequence round-trips.
     if url.set_password(Some(password.expose())).is_err() {
+        bail!("REDIS_URL cannot carry credentials (it has no host)");
+    }
+    Ok(Secret::new(String::from(url)))
+}
+
+/// `REDIS_USERNAME` from the environment: `None` when unset or empty. For a
+/// binary whose clap `Config` does not declare the variable (the api).
+pub fn username_from_env() -> Option<String> {
+    std::env::var("REDIS_USERNAME")
+        .ok()
+        .filter(|user| !user.is_empty())
+}
+
+/// `redis_url` with an ACL `username` and `password` applied as its
+/// userinfo (`REDIS_USERNAME` plus `REDIS_PASSWORD`).
+///
+/// - `username` `None` or empty: exactly [`redis_url_with_password`], so a
+///   client without `REDIS_USERNAME` behaves as before (the `default` user).
+/// - Otherwise a non-empty `password` is required (the chart's ACL users all
+///   have one), and `redis_url` must be a `redis://` or `rediss://` URL
+///   carrying no credentials of its own: two sources for one credential are
+///   refused rather than silently picking one.
+pub fn redis_url_with_credentials(
+    redis_url: &str,
+    username: Option<&str>,
+    password: Option<&Secret>,
+) -> Result<Secret> {
+    let Some(username) = username.filter(|u| !u.is_empty()) else {
+        return redis_url_with_password(redis_url, password);
+    };
+    let Some(password) = password.filter(|p| !p.is_empty()) else {
+        bail!("REDIS_USERNAME is set but REDIS_PASSWORD is not; an ACL user needs its password");
+    };
+    let Ok(mut url) = url::Url::parse(redis_url) else {
+        bail!("REDIS_URL is not a valid URL (value not shown)");
+    };
+    if !matches!(url.scheme(), "redis" | "rediss") {
+        bail!(
+            "REDIS_USERNAME is set, but REDIS_URL uses the `{}` scheme; it is only supported \
+             with redis:// or rediss:// URLs",
+            url.scheme()
+        );
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        bail!(
+            "REDIS_URL already contains credentials and REDIS_USERNAME is also set; \
+             set only one of them"
+        );
+    }
+    // Both are percent-encoded here and decoded again by the redis crate.
+    if url.set_username(username).is_err() || url.set_password(Some(password.expose())).is_err() {
         bail!("REDIS_URL cannot carry credentials (it has no host)");
     }
     Ok(Secret::new(String::from(url)))
@@ -170,6 +228,92 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(!err.contains("secret-ish"), "{err}");
+    }
+
+    #[test]
+    fn credentials_round_trip_through_the_redis_crate() {
+        let url = redis_url_with_credentials(
+            "redis://distant-signal-redis:6379",
+            Some("movement-relay"),
+            Some(&Secret::new("s3cr3t")),
+        )
+        .unwrap();
+        assert_eq!(
+            url.expose(),
+            "redis://movement-relay:s3cr3t@distant-signal-redis:6379"
+        );
+        let info = info(&url);
+        assert_eq!(info.redis.username.as_deref(), Some("movement-relay"));
+        assert_eq!(info.redis.password.as_deref(), Some("s3cr3t"));
+        match info.addr {
+            redis::ConnectionAddr::Tcp(host, port) => {
+                assert_eq!((host.as_str(), port), ("distant-signal-redis", 6379));
+            }
+            other => panic!("unexpected addr {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reserved_characters_in_user_and_password_round_trip() {
+        let user = "odd user@x:y";
+        let password = "p@ss:w/rd#1?x=y&z% é";
+        let url = redis_url_with_credentials(
+            "redis://cache.example:6380/2",
+            Some(user),
+            Some(&Secret::new(password)),
+        )
+        .unwrap();
+        let info = info(&url);
+        assert_eq!(info.redis.username.as_deref(), Some(user));
+        assert_eq!(info.redis.password.as_deref(), Some(password));
+        assert_eq!(info.redis.db, 2);
+    }
+
+    #[test]
+    fn an_absent_or_empty_username_is_the_password_only_path() {
+        for user in [None, Some("")] {
+            assert_eq!(
+                redis_url_with_credentials("redis://redis:6379", user, None)
+                    .unwrap()
+                    .expose(),
+                "redis://redis:6379",
+                "no user, no password: untouched"
+            );
+            let url =
+                redis_url_with_credentials("redis://redis:6379", user, Some(&Secret::new("pw")))
+                    .unwrap();
+            assert_eq!(url.expose(), "redis://default:pw@redis:6379");
+        }
+    }
+
+    #[test]
+    fn a_username_needs_a_password_and_a_credential_free_url() {
+        for password in [None, Some(Secret::default())] {
+            let err =
+                redis_url_with_credentials("redis://redis:6379", Some("api"), password.as_ref())
+                    .unwrap_err()
+                    .to_string();
+            assert!(err.contains("REDIS_PASSWORD is not"), "{err}");
+        }
+        for url in ["redis://someone@redis:6379", "redis://:inline@redis:6379"] {
+            let err = redis_url_with_credentials(url, Some("api"), Some(&Secret::new("pw")))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("set only one"), "{err}");
+            assert!(!err.contains("inline") && !err.contains("someone"), "{err}");
+        }
+        let err = redis_url_with_credentials(
+            "unix:///run/redis.sock",
+            Some("api"),
+            Some(&Secret::new("pw")),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("`unix` scheme"), "{err}");
+        let err = redis_url_with_credentials("::nope::", Some("api"), Some(&Secret::new("pw")))
+            .unwrap_err()
+            .to_string();
+        assert!(!err.contains("nope"), "{err}");
     }
 
     #[test]

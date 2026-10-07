@@ -23,6 +23,19 @@ Job). --mode existing is today's cluster being converted:
 the migrations run as the superuser first, then the setup script moves
 ownership to the owner role.
 
+--mode per-service is --mode new plus Stage 0b (postgresql.roles.perService):
+after each setup-script run, postgres-grants.sql (generated from
+db-grants.yaml by scripts/gen-db-grants.py) creates the group roles and the
+per-service roles, also uniquely named. COMMAND then also gets
+DATABASE_URL_<ROLE> (DATABASE_URL_API, DATABASE_URL_AGGREGATOR, ...) for
+every role db-grants.yaml creates, so it can run each crate's DB suite as
+its own service's role:
+
+  uv run scripts/test-postgres-roles.py --mode per-service -- sh -c \
+      'DATABASE_URL="$DATABASE_URL_API" cargo test -p api -- --ignored ...'
+
+That mode reads db-grants.yaml, so it needs PyYAML (`uv run`).
+
 Needs psql (15+, for \getenv) and sqlx-cli on PATH. Example, as CI runs it:
 
   scripts/test-postgres-roles.py -- cargo test -p api -- --ignored \
@@ -30,6 +43,7 @@ Needs psql (15+, for \getenv) and sqlx-cli on PATH. Example, as CI runs it:
 """
 
 import argparse
+import importlib.util
 import os
 import pathlib
 import secrets
@@ -41,7 +55,22 @@ from collections.abc import Mapping, Sequence
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SETUP_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-roles.sql"
 MIGRATIONS = ROOT / "crates" / "api" / "migrations"
+GRANTS_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-grants.sql"
+GEN_DB_GRANTS = ROOT / "scripts" / "gen-db-grants.py"
 KINDS = ("owner", "app", "exporter", "dump", "backup")
+
+
+def per_service_kinds() -> tuple[list[str], list[str]]:
+    """Return the group and created-role keys of db-grants.yaml (needs PyYAML)."""
+    spec = importlib.util.spec_from_file_location("gen_db_grants", GEN_DB_GRANTS)
+    if spec is None or spec.loader is None:
+        msg = f"cannot load {GEN_DB_GRANTS}"
+        raise RuntimeError(msg)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["gen_db_grants"] = module
+    spec.loader.exec_module(module)
+    model = module.load()
+    return list(model.groups), [role.key for role in model.created()]
 
 
 def with_credentials(url: str, user: str, password: str, database: str) -> str:
@@ -69,10 +98,12 @@ def psql(url: str, *args: str, env: Mapping[str, str] | None = None) -> None:
     run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", url, *args], env=env)
 
 
-def main() -> int:
+def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, teardown
     """Set up, run the command, tear down; return the command's exit code."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--mode", choices=("new", "existing"), default="new")
+    parser.add_argument(
+        "--mode", choices=("new", "existing", "per-service"), default="new"
+    )
     parser.add_argument(
         "--keep", action="store_true", help="keep the database and roles"
     )
@@ -97,6 +128,12 @@ def main() -> int:
     database = f"ds_role_split_{suffix}"
     names = {kind: f"ds_rs_{kind}_{suffix}" for kind in KINDS}
     passwords = {kind: secrets.token_hex(16) for kind in KINDS}
+    groups: list[str] = []
+    services: list[str] = []
+    if args.mode == "per-service":
+        groups, services = per_service_kinds()
+    service_names = {kind: f"ds_rs_{kind}_{suffix}" for kind in [*groups, *services]}
+    service_passwords = {kind: secrets.token_hex(16) for kind in services}
     owner_url = with_credentials(
         superuser_url, names["owner"], passwords["owner"], database
     )
@@ -109,7 +146,7 @@ def main() -> int:
     )
 
     setup_env = dict(os.environ)
-    for kind, password in passwords.items():
+    for kind, password in [*passwords.items(), *service_passwords.items()]:
         setup_env[f"DS_PG_{kind.upper()}_PASSWORD"] = password
     setup_args = [
         f"--variable=old_owner={superuser}",
@@ -120,19 +157,30 @@ def main() -> int:
         f"--variable=backup_database={database}",
         f"--file={SETUP_SQL}",
     ]
+    grants_args = [
+        f"--variable=app={names['app']}",
+        *(f"--variable={kind}={name}" for kind, name in service_names.items()),
+        f"--file={GRANTS_SQL}",
+    ]
     migrate = ["sqlx", "migrate", "run", "--source", str(MIGRATIONS), "--database-url"]
+
+    def setup() -> None:
+        psql(admin_url, *setup_args, env=setup_env)
+        if args.mode == "per-service":
+            psql(admin_url, *grants_args, env=setup_env)
 
     psql(superuser_url, "-c", f'CREATE DATABASE "{database}"')
     status = 1
     try:
-        if args.mode == "new":
-            psql(admin_url, *setup_args, env=setup_env)
+        if args.mode in {"new", "per-service"}:
+            setup()
             run([*migrate, owner_url])
             # The chart's setup Job runs again after the migrations (a
             # post-install/post-upgrade hook); it takes back the app role's
             # write access to _sqlx_migrations, which the owner's default
-            # privileges granted when the migrator created it.
-            psql(admin_url, *setup_args, env=setup_env)
+            # privileges granted when the migrator created it, and (per
+            # service) grants the groups on the tables that now exist.
+            setup()
         else:
             run([*migrate, admin_url])
             psql(admin_url, *setup_args, env=setup_env)
@@ -148,6 +196,12 @@ def main() -> int:
         test_env = dict(os.environ)
         test_env["DATABASE_URL"] = app_url
         test_env["MIGRATION_DATABASE_URL"] = owner_url
+        for kind in services:
+            test_env[f"DATABASE_URL_{kind.upper()}"] = with_credentials(
+                superuser_url, service_names[kind], service_passwords[kind], database
+            )
+        if services:
+            print(f"== DATABASE_URL_<ROLE> for {', '.join(services)}", flush=True)
         print(
             f"== DATABASE_URL={names['app']}, MIGRATION_DATABASE_URL={names['owner']}",
             flush=True,
@@ -156,14 +210,21 @@ def main() -> int:
         print(f"== command exited {status}")
     finally:
         if args.keep:
-            print(f"kept database {database} and roles {', '.join(names.values())}")
+            kept = ", ".join([*names.values(), *service_names.values()])
+            print(f"kept database {database} and roles {kept}")
         else:
             psql(
                 superuser_url,
                 "-c",
                 f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)',
             )
-            for name in names.values():
+            # The service roles before the groups and the app role they
+            # belong to.
+            for name in [
+                *(service_names[k] for k in services),
+                *(service_names[k] for k in groups),
+                *names.values(),
+            ]:
                 psql(superuser_url, "-c", f'DROP ROLE IF EXISTS "{name}"')
     return status
 
