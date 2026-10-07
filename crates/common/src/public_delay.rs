@@ -13,13 +13,14 @@
 //!    and went through the same timestamp correction, so the two are on one
 //!    time base (see `trust_timestamp`'s module doc for why that matters).
 //! 2. [`DelayBasis::PublicSchedule`]: the public time from the CIF schedule
-//!    at that call. TRUST's `gbtt_timestamp` is empty for a movement matched
-//!    out of the TRUST backlog (which does not keep it) and for anything
-//!    stored before phase 1. The CIF public time is NOT diffed against the
-//!    TRUST actual directly, which would mix two time bases again; instead
-//!    TRUST's own `planned_timestamp` (the working time) is moved by the
-//!    schedule's `public - working` gap at that call. Both halves of that
-//!    gap come from the same CIF record.
+//!    at that call. TRUST's `gbtt_timestamp` is empty for a stop with no
+//!    public time and for every row stored before 2026-10-07: until then
+//!    trust-backlog-consumer, which writes almost every movement, dropped
+//!    it (see migration 20261007210000). The CIF public time is NOT diffed
+//!    against the TRUST actual directly, which would mix two time bases
+//!    again; instead TRUST's own `planned_timestamp` (the working time) is
+//!    moved by the schedule's `public - working` gap at that call. Both
+//!    halves of that gap come from the same CIF record.
 //! 3. [`DelayBasis::Working`]: the working timetable, `actual - planned`, when
 //!    the call has no public time in that direction (a pass, or the
 //!    departure of a set-down-only stop) or there is no schedule row.

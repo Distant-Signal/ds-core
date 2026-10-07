@@ -96,7 +96,8 @@ pub struct Activation {
 // `reporting_stanox`/`toc_id` are part of `0003`'s confirmed shape but
 // have no consumer yet -- see the Activation comment above for why they're
 // kept rather than deleted. `gbtt_timestamp` (the public-timetable time)
-// is stored by trust-consumer on `train_movement_events`.
+// is stored on `train_movement_events` by trust-consumer and, through
+// `trust_event_backlog`, by trust-backlog-consumer.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Movement {
     pub train_id: String,

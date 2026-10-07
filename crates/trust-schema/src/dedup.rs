@@ -138,6 +138,25 @@ mod tests {
         raw.parse().unwrap()
     }
 
+    /// A pinned vector: `scripts/backfill-gbtt-from-movement-stream.py`
+    /// recomputes this key in Python to match stream entries to stored rows,
+    /// and its test pins the same value. Changing the key's derivation
+    /// breaks both, on purpose.
+    #[test]
+    fn the_key_matches_the_pinned_vector() {
+        assert_eq!(
+            dedup_key(
+                "221832406",
+                "0003",
+                Some("DEPARTURE"),
+                Some("87212"),
+                Some("1787945520000"),
+                date("2026-08-28"),
+            ),
+            "d4a64ed43d9d200e6956cd39f6c1a9390f92b77a5cc2c721b6459992b1b79735"
+        );
+    }
+
     #[test]
     fn identical_inputs_hash_identically() {
         assert_eq!(

@@ -1508,9 +1508,9 @@ pub struct TrainMovementEventMessage {
     /// TRUST's public-timetable (GBTT) time for this movement
     /// (`gbtt_timestamp`), where `planned_timestamp` is the working-timetable
     /// one. `None` for a pass or another non-public event (TRUST sends it
-    /// empty), and on a message from an older trust-consumer. Stored as
-    /// `train_movement_events.gbtt_timestamp`; nothing reads it yet -- it is
-    /// the baseline the public-time delay work will measure against.
+    /// empty), and on a message from an older consumer. Stored as
+    /// `train_movement_events.gbtt_timestamp`, the baseline the public delay
+    /// (`common::public_delay`, `delayBasis: "public"`) is measured against.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbtt_timestamp: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1571,6 +1571,14 @@ pub struct TrustBacklogEventMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delay_minutes: Option<i32>,
     pub dedup_key: String,
+    /// TRUST's public-timetable time (`gbtt_timestamp`) for a Movement,
+    /// under the same timestamp correction as `planned_timestamp`. `None`
+    /// for a pass, an empty GBTT time, and every non-Movement row. Carried
+    /// through to `train_movement_events.gbtt_timestamp`, which the public
+    /// delay (`delayBasis: "public"`) is measured against. Optional on the
+    /// wire both ways, so an older consumer or `api` interoperates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gbtt_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Response body of `POST /private/trust-event-backlog`, shared by `api`
@@ -1612,6 +1620,40 @@ pub struct RejectedTrustBacklogRow {
     pub constraint: Option<String>,
     /// Postgres's own error message.
     pub message: String,
+}
+
+#[cfg(test)]
+mod trust_backlog_event_message_tests {
+    use super::*;
+
+    /// `gbtt_timestamp` travels on the `/private/trust-event-backlog` wire,
+    /// and a body from a consumer that predates the field still parses
+    /// (as `None`), so the two services can deploy in either order.
+    #[test]
+    fn gbtt_timestamp_round_trips_and_is_optional_on_the_wire() {
+        let body = serde_json::json!({
+            "crs": "WAT",
+            "train_id": "221832406",
+            "service_date": "2026-08-28",
+            "msg_type": "0003",
+            "event_type": "DEPARTURE",
+            "planned_timestamp": "2026-08-28T18:32:00Z",
+            "actual_timestamp": "2026-08-28T18:33:00Z",
+            "gbtt_timestamp": "2026-08-28T18:31:00Z",
+            "dedup_key": "k",
+        });
+        let event: TrustBacklogEventMessage = serde_json::from_value(body.clone()).unwrap();
+        assert_eq!(
+            event.gbtt_timestamp,
+            Some("2026-08-28T18:31:00Z".parse().unwrap())
+        );
+        assert_eq!(serde_json::to_value(&event).unwrap(), body);
+
+        let mut older = body;
+        older.as_object_mut().unwrap().remove("gbtt_timestamp");
+        let event: TrustBacklogEventMessage = serde_json::from_value(older).unwrap();
+        assert_eq!(event.gbtt_timestamp, None);
+    }
 }
 
 /// One TRUST reason code, the wire shape `trust-backlog-consumer` POSTs in

@@ -135,6 +135,10 @@ struct BacklogRow {
     planned_timestamp: Option<DateTime<Utc>>,
     actual_timestamp: Option<DateTime<Utc>>,
     variation_status: Option<String>,
+    // TRUST's public-timetable time for a Movement row (NULL otherwise).
+    // Replayed onto `train_movement_events.gbtt_timestamp` so a backfilled
+    // pin gets a public delay too, not just a live one.
+    gbtt_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Decision 3 step 2: does any backlog row at `pin_origin_crs`, within
@@ -482,7 +486,7 @@ async fn fetch_backlog_history(
 ) -> anyhow::Result<Vec<BacklogRow>> {
     let rows = sqlx::query_as::<_, BacklogRow>(
         "SELECT train_id, service_date, msg_type, event_type, crs, planned_timestamp, \
-                actual_timestamp, variation_status \
+                actual_timestamp, variation_status, gbtt_timestamp \
          FROM trust_event_backlog \
          WHERE train_id = $1 AND service_date = ANY($2) \
          ORDER BY received_at",
@@ -536,7 +540,7 @@ async fn replay_backlog_history(
                 let movement = Movement {
                     train_id: row.train_id.clone(),
                     event_type: row.event_type.clone().unwrap_or_default(),
-                    gbtt_timestamp: None,
+                    gbtt_timestamp: row.gbtt_timestamp.map(|t| t.timestamp_millis().to_string()),
                     planned_timestamp: row
                         .planned_timestamp
                         .map(|t| t.timestamp_millis().to_string()),
@@ -679,7 +683,7 @@ async fn replay_backlog_history(
             loc_stanox: None, // never persisted by trust_event_backlog -- see the dedup_key note above
             loc_crs: row.crs.clone(),
             planned_timestamp: planned,
-            gbtt_timestamp: None,
+            gbtt_timestamp: row.gbtt_timestamp,
             actual_timestamp: actual,
             variation_status,
             raw_body: serde_json::json!({}),
@@ -1238,6 +1242,9 @@ mod db_tests {
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
+        // The public time, a minute before the working one: the replay must
+        // carry it onto train_movement_events (2026-10-07).
+        let gbtt: DateTime<Utc> = "2026-09-05T18:14:00Z".parse().unwrap();
 
         // Faithful to Task 9's real producer behavior, NOT a shortcut:
         // the Activation row (msg_type '0001') is the ONLY row that ever
@@ -1254,9 +1261,9 @@ mod db_tests {
         sqlx::query(
             "INSERT INTO trust_event_backlog \
                 (crs, train_uid, train_id, service_date, msg_type, event_type, \
-                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
-             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4), \
-                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'ON TIME', $7)",
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key, gbtt_timestamp) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4, NULL), \
+                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'ON TIME', $7, $8)",
         )
         .bind("C99999")
         .bind("TEST-BACKLOG-TRAIN-ID")
@@ -1265,6 +1272,7 @@ mod db_tests {
         .bind("EUS")
         .bind(scheduled)
         .bind("test-backlog-dedup-movement")
+        .bind(gbtt)
         .execute(&pool)
         .await
         .expect("seed backlog rows");
@@ -1300,6 +1308,16 @@ mod db_tests {
         .expect("read back tracked_trains joined to its resolved trains row");
         assert_eq!(resolution_status, "resolved");
         assert_eq!(train_uid, Some("C99999".to_string()));
+        let replayed_gbtt: Vec<Option<DateTime<Utc>>> = sqlx::query_scalar(
+            "SELECT m.gbtt_timestamp FROM train_movement_events m \
+             JOIN train_subscriptions tt ON tt.trains_id = m.trains_id \
+             WHERE tt.id = $1 AND m.msg_type = '0003'",
+        )
+        .bind(tracked_train_id)
+        .fetch_all(&pool)
+        .await
+        .expect("read back the replayed movement");
+        assert_eq!(replayed_gbtt, vec![Some(gbtt)]);
 
         // Real bug caught while running this plan's own end-to-end
         // verification (Task 13): this test's own fixture cleanup, as
