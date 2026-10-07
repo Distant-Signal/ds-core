@@ -102,8 +102,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@688313b0823df1393bcebb1b4add0438a6d36884 # 1.88.0
 
+      # Saved from main only, like every rust-cache step in ci.yml (see
+      # its rust-test job): a dispatch on another branch restores, never
+      # writes.
       - name: Cache cargo registry/target
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # No rdkafka/sasl2 system packages installed here (unlike ci.yml's
       # `rust-test` job): `cargo run -p line-catalogue-validator` only
