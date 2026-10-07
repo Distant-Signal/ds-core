@@ -29,6 +29,7 @@ members = [
     "crates/movement-feed",
     "crates/movement-relay",
     "crates/line-catalogue-validator",
+    "crates/ingest-writer",
 ]
 
 [workspace.package]

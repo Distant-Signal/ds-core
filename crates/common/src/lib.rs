@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_inline_default::serde_inline_default;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+pub mod advisory_locks;
 pub mod backoff;
 pub mod config;
 pub mod corpus_inference;

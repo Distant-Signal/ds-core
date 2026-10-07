@@ -2214,6 +2214,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ingest-writer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "common",
+ "health-http",
+ "metrics",
+ "sqlx",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
