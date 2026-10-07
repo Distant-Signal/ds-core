@@ -24,7 +24,9 @@ pub use markers::{
     last_schedule_feed_fetch, schedule_feed_ingest_problem,
 };
 pub use population::{
-    ConditionalPopulation, get_schedule_line_population, get_schedule_line_population_conditional,
+    ConditionalPopulation, get_overnight_schedule_line_population_entries,
+    get_schedule_line_population, get_schedule_line_population_conditional,
+    get_schedule_line_population_entries, list_line_ids_with_uid_in_population,
     upsert_schedule_line_population,
 };
 pub use publish::{
