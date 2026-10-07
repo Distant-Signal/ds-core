@@ -42,6 +42,10 @@
 //! | [`pool`] | 1A.11 | `common::pg::PoolSettings` wrapped with `db_pool_*` metrics, the DB health probe |
 //! | [`schema`] | 1A.12 | `REQUIRED_MIGRATION`; `wait_for_schema` in 1B.2 |
 //!
+//! `test_support` (built for this crate's tests and, through the
+//! off-by-default `test-support` feature, for the tests of crates that
+//! dev-depend on it) holds the shared DB-test fixtures.
+//!
 //! Later phases add `migrate` (1B.1: `api::migrate`, with the migrations
 //! directory moving into this crate) and `reads` (phase 4: the internal
 //! readers behind narrow views).
@@ -56,6 +60,10 @@ pub mod samples;
 pub mod schedule;
 pub mod schema;
 pub mod sweeps;
+// Shared DB-test fixtures: this crate's tests, and other crates' tests
+// through the `test-support` feature (dev-dependencies only).
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 pub mod tracking;
 pub mod trains;
 pub mod validate;

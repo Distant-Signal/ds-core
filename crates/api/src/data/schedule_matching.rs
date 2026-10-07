@@ -1,7 +1,8 @@
 //! Moved to `ds_store::sweeps::schedule_matching` (ingest architecture plan
 //! 1A.10). The re-exports keep every `data::schedule_matching::…` call site
 //! unchanged; the DB tests below read the pin back through the api's user
-//! read model and stay here until unit F.
+//! read model (`train_tracking::get_by_tracking_id`), so they stay here, on
+//! `ds_store::test_support`'s shared fixtures.
 
 // Moved to ds_store::sweeps::schedule_matching (ingest architecture plan 1A.10).
 pub use ds_store::sweeps::schedule_matching::{
@@ -19,50 +20,10 @@ mod db_tests {
 
     use chrono::{DateTime, NaiveDate, Utc};
     use common::LineDefinition;
-    use sqlx::PgPool;
 
     use super::*;
     use crate::data::train_tracking;
-    use sqlx::postgres::PgPoolOptions;
-
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
-
-    fn population_json(uid: &str, tiploc: &str, departure: &str) -> serde_json::Value {
-        population_json_multi(&[(uid, tiploc, departure)])
-    }
-
-    /// [`population_json`]'s many-schedule sibling: ONE line's population
-    /// carrying several schedules, in the given order. Needed because the
-    /// real `Y80908` bug lives entirely INSIDE one line's population (two
-    /// services departing the same station in the same minute), not across
-    /// two lines -- see `find_schedule_match`'s own doc comment.
-    fn population_json_multi(entries: &[(&str, &str, &str)]) -> serde_json::Value {
-        serde_json::Value::Array(
-            entries
-                .iter()
-                .map(|(uid, tiploc, departure)| {
-                    serde_json::json!({
-                        "uid": uid,
-                        "calling_points": [{
-                            "tiploc": tiploc,
-                            "kind": "Origin",
-                            "booked_arrival": null,
-                            "booked_departure": departure,
-                            "is_half_minute_arrival": false,
-                            "is_half_minute_departure": false
-                        }]
-                    })
-                })
-                .collect(),
-        )
-    }
+    use ds_store::test_support::{connect, population_json};
 
     #[tokio::test]
     #[ignore = "requires a live database; see this plan's Global Constraints for the \

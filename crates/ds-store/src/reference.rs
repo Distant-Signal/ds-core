@@ -912,3 +912,745 @@ pub async fn crs_for_tiplocs_batch_with(
 pub fn is_bookable_crs(crs: &str) -> bool {
     !crs.starts_with('X')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `is_bookable_crs`'s own tests -- real TIPLOC/CRS pairs reused from
+    // that function's own doc comment (the `Y80908`/Hanslope Junction
+    // incident this filter exists for).
+    #[test]
+    fn is_bookable_crs_rejects_only_the_x_prefixed_convention() {
+        assert!(is_bookable_crs("WAT"));
+        assert!(is_bookable_crs("EUS"));
+        assert!(!is_bookable_crs("XHN"));
+        assert!(!is_bookable_crs("XOZ"));
+        assert!(!is_bookable_crs("XVR"));
+        // A real CRS that merely happens to CONTAIN an 'X' is unaffected --
+        // only a LEADING 'X' is Network Rail's pseudo-code convention.
+        assert!(is_bookable_crs("BOX"));
+    }
+}
+
+/// DB-gated tests for `list_stanox_crs_for_crs`/`crs_for_tiploc` (Task 5 of
+/// docs/superpowers/plans/2026-09-05-schedule-first-train-tracking-plan.md),
+/// the `stanox_crs`/`tiploc_crs` writers and the prunes. The fixed-links
+/// tests stay in the api: they read back through its
+/// `list_fixed_links_from_crs`.
+#[cfg(test)]
+mod stanox_crs_lookup_query_tests {
+    use super::*;
+    use crate::test_support::connect as test_pool;
+
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p ds-store \
+                list_stanox_crs_for_crs -- --ignored --test-threads=1`"]
+    async fn list_stanox_crs_for_crs_returns_only_matching_rows_case_insensitively() {
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[
+                common::StanoxCrsRecord {
+                    stanox: "TEST-EUS".to_string(),
+                    crs: "EUS".to_string(),
+                    tiploc: "EUSTON".to_string(),
+                    station_name: "LONDON EUSTON".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::StanoxCrsRecord {
+                    stanox: "TEST-WAT".to_string(),
+                    crs: "WAT".to_string(),
+                    tiploc: "WATRLMN".to_string(),
+                    station_name: "LONDON WATERLOO".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed stanox_crs");
+
+        let rows = list_stanox_crs_for_crs(&pool, "eus").await.expect("query");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].tiploc, "EUSTON");
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox IN ('TEST-EUS', 'TEST-WAT')")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p ds-store \
+                crs_for_tiploc -- --ignored --test-threads=1`"]
+    async fn crs_for_tiploc_resolves_a_known_tiploc_and_none_for_an_unknown_one() {
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[common::StanoxCrsRecord {
+                stanox: "TEST-CRE".to_string(),
+                crs: "CRE".to_string(),
+                tiploc: "CREWE".to_string(),
+                station_name: "CREWE".to_string(),
+                source_sequence: 1,
+                change_time_minutes: None,
+            }],
+        )
+        .await
+        .expect("seed stanox_crs");
+
+        assert_eq!(
+            crs_for_tiploc(&pool, "crewe").await.unwrap(),
+            Some("CRE".to_string())
+        );
+        assert_eq!(crs_for_tiploc(&pool, "NOWHERE").await.unwrap(), None);
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-CRE'")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                crs_for_tiploc_uppercases_a_lower_case_stored_crs_matching_the_batch_sibling \
+                -- --ignored --test-threads=1`"]
+    async fn crs_for_tiploc_uppercases_a_lower_case_stored_crs_matching_the_batch_sibling() {
+        // Neither `upsert_stanox_crs` nor `upsert_tiploc_crs` case-normalizes
+        // `crs` on write (see `crs_for_tiploc`'s own doc comment) -- this
+        // seeds a lower-case `crs` directly to prove `crs_for_tiploc` itself
+        // uppercases on read, the same defense `crs_for_tiplocs_batch`
+        // already applies via its own `UPPER(crs)` projection. Before this
+        // fix, `crs_for_tiploc` returned the bare `"xvr"` here, which would
+        // silently defeat `is_bookable_crs`'s case-sensitive
+        // `starts_with('X')` check at this function's real
+        // `find_schedule_match` call site.
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[common::StanoxCrsRecord {
+                stanox: "TEST-LOWER-XVR".to_string(),
+                crs: "xvr".to_string(),
+                tiploc: "TEST-LOWER-VICTRCR".to_string(),
+                station_name: "VICTORIA CARRIAGE ROAD".to_string(),
+                source_sequence: 1,
+                change_time_minutes: None,
+            }],
+        )
+        .await
+        .expect("seed stanox_crs");
+
+        assert_eq!(
+            crs_for_tiploc(&pool, "test-lower-victrcr").await.unwrap(),
+            Some("XVR".to_string()),
+            "crs_for_tiploc must uppercase a lower-case-stored crs, matching \
+             crs_for_tiplocs_batch's own UPPER(crs) projection"
+        );
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-LOWER-XVR'")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                crs_for_tiplocs_batch_resolves_every_known_tiploc_and_omits_unknown_ones \
+                -- --ignored --test-threads=1`"]
+    async fn crs_for_tiplocs_batch_resolves_every_known_tiploc_and_omits_unknown_ones() {
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[
+                common::StanoxCrsRecord {
+                    stanox: "TEST-JS-CRE".to_string(),
+                    crs: "CRE".to_string(),
+                    tiploc: "TEST-JS-CREWE".to_string(),
+                    station_name: "CREWE".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::StanoxCrsRecord {
+                    stanox: "TEST-JS-EUS".to_string(),
+                    crs: "EUS".to_string(),
+                    tiploc: "TEST-JS-EUSTON".to_string(),
+                    station_name: "EUSTON".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed stanox_crs");
+
+        let result = crs_for_tiplocs_batch(
+            &pool,
+            &[
+                "test-js-crewe".to_string(),
+                "TEST-JS-EUSTON".to_string(),
+                "TEST-JS-UNKNOWN".to_string(),
+            ],
+        )
+        .await
+        .expect("crs_for_tiplocs_batch");
+
+        assert_eq!(result.get("TEST-JS-CREWE"), Some(&"CRE".to_string()));
+        assert_eq!(result.get("TEST-JS-EUSTON"), Some(&"EUS".to_string()));
+        assert_eq!(result.get("TEST-JS-UNKNOWN"), None);
+        assert_eq!(result.len(), 2);
+
+        sqlx::query("DELETE FROM stanox_crs WHERE tiploc LIKE 'TEST-JS-%'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                prune_stanox_crs_not_in -- --ignored --test-threads=1`"]
+    async fn prune_stanox_crs_not_in_deletes_only_rows_absent_from_the_keep_set() {
+        // The Signal Box Audit Low finding this closes: `upsert_stanox_crs`
+        // alone never removed a STANOX a later delivery simply stopped
+        // mentioning, so a stale mapping accumulated forever. This proves
+        // the cleanup half on its own, independent of the ingest route.
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[
+                common::StanoxCrsRecord {
+                    stanox: "TEST-PRUNE-KEEP".to_string(),
+                    crs: "EUS".to_string(),
+                    tiploc: "TEST-PRUNE-EUSTON".to_string(),
+                    station_name: "EUSTON".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::StanoxCrsRecord {
+                    stanox: "TEST-PRUNE-STALE".to_string(),
+                    crs: "CRE".to_string(),
+                    tiploc: "TEST-PRUNE-CREWE".to_string(),
+                    station_name: "CREWE".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed two rows");
+
+        let deleted = prune_stanox_crs_not_in(&pool, &["TEST-PRUNE-KEEP".to_string()])
+            .await
+            .expect("prune");
+        assert_eq!(deleted, 1);
+
+        let remaining = list_stanox_crs_for_crs(&pool, "EUS")
+            .await
+            .expect("read back kept row");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].stanox, "TEST-PRUNE-KEEP");
+
+        let gone = list_stanox_crs_for_crs(&pool, "CRE")
+            .await
+            .expect("read back stale row");
+        assert!(
+            gone.is_empty(),
+            "the STANOX absent from the keep set must be gone"
+        );
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox LIKE 'TEST-PRUNE-%'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                prune_stanox_crs_not_in -- --ignored --test-threads=1`"]
+    async fn prune_stanox_crs_not_in_with_an_empty_keep_set_is_a_no_op() {
+        // Mirrors `upsert_fixed_links`'s own empty-batch guard: an empty
+        // keep set must never be read as "delete everything" -- that would
+        // just move the exact hazard this fix closes into the prune step
+        // itself.
+        let pool = test_pool().await;
+        upsert_stanox_crs(
+            &pool,
+            &[common::StanoxCrsRecord {
+                stanox: "TEST-PRUNE-EMPTY".to_string(),
+                crs: "EUS".to_string(),
+                tiploc: "TEST-PRUNE-EMPTY-TPL".to_string(),
+                station_name: "EUSTON".to_string(),
+                source_sequence: 1,
+                change_time_minutes: None,
+            }],
+        )
+        .await
+        .expect("seed a row");
+
+        let deleted = prune_stanox_crs_not_in(&pool, &[]).await.expect("prune");
+        assert_eq!(deleted, 0);
+
+        let remaining = list_stanox_crs_for_crs(&pool, "EUS")
+            .await
+            .expect("read back");
+        assert!(
+            remaining.iter().any(|r| r.stanox == "TEST-PRUNE-EMPTY"),
+            "an empty keep set must not delete the real row"
+        );
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox LIKE 'TEST-PRUNE-%'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                prune_tiploc_crs_not_in -- --ignored --test-threads=1`"]
+    async fn prune_tiploc_crs_not_in_deletes_only_rows_absent_from_the_keep_set() {
+        let pool = test_pool().await;
+        upsert_tiploc_crs(
+            &pool,
+            &[
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-PRUNE-TPL-KEEP".to_string(),
+                    crs: "EUS".to_string(),
+                    station_name: "EUSTON".to_string(),
+                    stanox: "TEST-PRUNE-TPL-KEEP-STX".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-PRUNE-TPL-STALE".to_string(),
+                    crs: "CRE".to_string(),
+                    station_name: "CREWE".to_string(),
+                    stanox: "TEST-PRUNE-TPL-STALE-STX".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed two rows");
+
+        let deleted = prune_tiploc_crs_not_in(&pool, &["TEST-PRUNE-TPL-KEEP".to_string()])
+            .await
+            .expect("prune");
+        assert_eq!(deleted, 1);
+
+        let remaining = list_tiploc_crs(&pool).await.expect("read back");
+        assert!(
+            remaining.iter().any(|r| r.tiploc == "TEST-PRUNE-TPL-KEEP"),
+            "the kept TIPLOC must remain"
+        );
+        assert!(
+            !remaining.iter().any(|r| r.tiploc == "TEST-PRUNE-TPL-STALE"),
+            "the TIPLOC absent from the keep set must be gone"
+        );
+
+        sqlx::query("DELETE FROM tiploc_crs WHERE tiploc LIKE 'TEST-PRUNE-TPL-%'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                upsert_stanox_crs_change_time -- --ignored --test-threads=1`"]
+    async fn upsert_stanox_crs_change_time_minutes_round_trips_including_none() {
+        let pool = test_pool().await;
+        let records = vec![
+            common::StanoxCrsRecord {
+                stanox: "TEST-STANOX-WITH-CHANGE-TIME".to_string(),
+                crs: "ZZZ".to_string(),
+                tiploc: "ZZZTPL".to_string(),
+                station_name: "TEST STATION".to_string(),
+                source_sequence: 1,
+                change_time_minutes: Some(5),
+            },
+            common::StanoxCrsRecord {
+                stanox: "TEST-STANOX-NO-CHANGE-TIME".to_string(),
+                crs: "YYY".to_string(),
+                tiploc: "YYYTPL".to_string(),
+                station_name: "TEST STATION 2".to_string(),
+                source_sequence: 1,
+                change_time_minutes: None,
+            },
+        ];
+        upsert_stanox_crs(&pool, &records).await.expect("upsert");
+
+        let all = list_stanox_crs(&pool).await.expect("read back");
+        let with_time = all
+            .iter()
+            .find(|r| r.stanox == "TEST-STANOX-WITH-CHANGE-TIME")
+            .expect("row present");
+        assert_eq!(with_time.change_time_minutes, Some(5));
+        let without_time = all
+            .iter()
+            .find(|r| r.stanox == "TEST-STANOX-NO-CHANGE-TIME")
+            .expect("row present");
+        assert_eq!(without_time.change_time_minutes, None);
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox LIKE 'TEST-STANOX-%'")
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// The actual end-to-end proof of Task 3 of
+    /// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md's
+    /// union-read fix: seeds ONLY `tiploc_crs` (via `upsert_tiploc_crs`,
+    /// never touching `stanox_crs` at all) with Vauxhall's two real
+    /// TIPLOCs, both sharing one STANOX and CRS -- exactly the shape
+    /// `stanox_crs`'s `PRIMARY KEY (stanox)` could never have represented
+    /// simultaneously. Both `crs_for_tiplocs_batch` and
+    /// `list_stanox_crs_for_crs` must resolve BOTH TIPLOCs even though
+    /// neither ever queries `tiploc_crs` alone in this codebase -- proving
+    /// the union SQL actually reads the new table, not just the old one.
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p ds-store \
+                both_of_vauxhalls_tiplocs_resolve_through_the_union_when_seeded_only_in_tiploc_crs \
+                -- --ignored --test-threads=1`"]
+    async fn both_of_vauxhalls_tiplocs_resolve_through_the_union_when_seeded_only_in_tiploc_crs() {
+        let pool = test_pool().await;
+        upsert_tiploc_crs(
+            &pool,
+            &[
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-VAUXHLM".to_string(),
+                    crs: "VXH".to_string(),
+                    station_name: "VAUXHALL".to_string(),
+                    stanox: "TEST-VXH-STANOX".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-VAUXHLW".to_string(),
+                    crs: "VXH".to_string(),
+                    station_name: "VAUXHALL".to_string(),
+                    stanox: "TEST-VXH-STANOX".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed tiploc_crs (stanox_crs is deliberately left untouched)");
+
+        let batch = crs_for_tiplocs_batch(
+            &pool,
+            &["TEST-VAUXHLM".to_string(), "TEST-VAUXHLW".to_string()],
+        )
+        .await
+        .expect("crs_for_tiplocs_batch");
+        assert_eq!(
+            batch.get("TEST-VAUXHLM"),
+            Some(&"VXH".to_string()),
+            "TEST-VAUXHLM exists only in tiploc_crs -- must still resolve via the union"
+        );
+        assert_eq!(
+            batch.get("TEST-VAUXHLW"),
+            Some(&"VXH".to_string()),
+            "TEST-VAUXHLW exists only in tiploc_crs -- must still resolve via the union"
+        );
+
+        let for_crs = list_stanox_crs_for_crs(&pool, "VXH")
+            .await
+            .expect("list_stanox_crs_for_crs");
+        assert!(
+            for_crs.iter().any(|r| r.tiploc == "TEST-VAUXHLM"),
+            "TEST-VAUXHLM must be present in list_stanox_crs_for_crs('VXH')"
+        );
+        assert!(
+            for_crs.iter().any(|r| r.tiploc == "TEST-VAUXHLW"),
+            "TEST-VAUXHLW must be present in list_stanox_crs_for_crs('VXH')"
+        );
+
+        sqlx::query("DELETE FROM tiploc_crs WHERE tiploc IN ('TEST-VAUXHLM', 'TEST-VAUXHLW')")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                a_re_post_with_a_changed_crs_overwrites_the_existing_row -- --ignored --test-threads=1`"]
+    async fn a_re_post_with_a_changed_crs_overwrites_the_existing_row() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let pool = PgPoolOptions::new()
+            .connect(&database_url)
+            .await
+            .expect("connect to postgres");
+
+        let first = common::StanoxCrsRecord {
+            stanox: "99999".to_string(),
+            crs: "TST".to_string(),
+            tiploc: "TESTLOC".to_string(),
+            station_name: "TEST STATION".to_string(),
+            source_sequence: 942,
+            change_time_minutes: None,
+        };
+        upsert_stanox_crs(&pool, &[first])
+            .await
+            .expect("first upsert");
+
+        let second = common::StanoxCrsRecord {
+            stanox: "99999".to_string(),
+            crs: "TS2".to_string(),
+            tiploc: "TESTLOC".to_string(),
+            station_name: "TEST STATION".to_string(),
+            source_sequence: 943,
+            change_time_minutes: None,
+        };
+        upsert_stanox_crs(&pool, &[second])
+            .await
+            .expect("re-upsert with changed crs");
+
+        let rows = list_stanox_crs(&pool).await.expect("list_stanox_crs");
+        let row = rows
+            .iter()
+            .find(|r| r.stanox == "99999")
+            .expect("row present");
+        assert_eq!(row.crs, "TS2", "the re-POST must overwrite, not duplicate");
+        assert_eq!(row.source_sequence, 943);
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = '99999'")
+            .execute(&pool)
+            .await
+            .expect("cleanup fixture row");
+    }
+}
+
+/// DB-gated tests for `upsert_tiploc_crs`/`list_tiploc_crs` (Task 2 of
+/// docs/superpowers/plans/2026-09-24-tiploc-crs-crosswalk-plan.md). Same
+/// shape/doc-comment convention as `stanox_crs_lookup_query_tests` above.
+#[cfg(test)]
+#[expect(
+    clippy::similar_names,
+    reason = "test code: paired test values share names"
+)]
+mod tiploc_crs_query_tests {
+    use super::*;
+    use crate::test_support::connect as test_pool;
+
+    #[tokio::test]
+    #[ignore = "requires a live database; see this plan's Global Constraints for the \
+                DATABASE_URL incantation, then run with `cargo test -p ds-store \
+                two_tiplocs_sharing_a_stanox_both_persist_and_both_come_back -- --ignored --test-threads=1`"]
+    async fn two_tiplocs_sharing_a_stanox_both_persist_and_both_come_back() {
+        // The direct DB-level proof this plan's whole point (two TIPLOCs,
+        // one STANOX, both persisted) actually works against a real
+        // schema -- independent of the `stanox_crs` table entirely, which
+        // would only ever keep one of these two rows under its own
+        // STANOX-keyed disambiguation. See `common::TiplocCrsRecord`'s own
+        // doc comment.
+        let pool = test_pool().await;
+
+        upsert_tiploc_crs(
+            &pool,
+            &[
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-VAUXHLM".to_string(),
+                    crs: "VXH".to_string(),
+                    station_name: "VAUXHALL".to_string(),
+                    stanox: "TEST-87214".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+                common::TiplocCrsRecord {
+                    tiploc: "TEST-VAUXHLW".to_string(),
+                    crs: "VXH".to_string(),
+                    station_name: "VAUXHALL".to_string(),
+                    stanox: "TEST-87214".to_string(),
+                    source_sequence: 1,
+                    change_time_minutes: None,
+                },
+            ],
+        )
+        .await
+        .expect("seed tiploc_crs");
+
+        let rows = list_tiploc_crs(&pool).await.expect("list_tiploc_crs");
+        let vauxhlm = rows.iter().find(|r| r.tiploc == "TEST-VAUXHLM");
+        let vauxhlw = rows.iter().find(|r| r.tiploc == "TEST-VAUXHLW");
+        assert!(
+            vauxhlm.is_some(),
+            "TEST-VAUXHLM should be present alongside TEST-VAUXHLW, both sharing STANOX TEST-87214"
+        );
+        assert!(
+            vauxhlw.is_some(),
+            "TEST-VAUXHLW should be present alongside TEST-VAUXHLM, both sharing STANOX TEST-87214"
+        );
+        assert_eq!(vauxhlm.unwrap().crs, "VXH");
+        assert_eq!(vauxhlm.unwrap().stanox, "TEST-87214");
+        assert_eq!(vauxhlw.unwrap().crs, "VXH");
+        assert_eq!(vauxhlw.unwrap().stanox, "TEST-87214");
+
+        sqlx::query("DELETE FROM tiploc_crs WHERE tiploc IN ('TEST-VAUXHLM', 'TEST-VAUXHLW')")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+}
+
+/// DB review 2026-09-27 (F1/F2/F10): the reference upserts' no-op guards
+/// leave an unchanged row physically untouched (same `xmin`) and the
+/// lookups normalise their input. The rest of the module (the readers'
+/// side) stays in the api's `queries`.
+#[cfg(test)]
+mod db_review_guard_and_normalisation_tests {
+    use super::*;
+    use crate::freshness::{data_freshness, last_stations_fetch, last_tocs_fetch};
+    use crate::test_support::{connect as test_pool, station_reference as station, xmin};
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                db_review_guard_and_normalisation_tests -- --ignored --test-threads=1`"]
+    async fn stations_and_tocs_upserts_skip_unchanged_rows_and_record_freshness() {
+        let pool = test_pool().await;
+        let before = last_stations_fetch(&pool).await.unwrap();
+
+        upsert_stations(&pool, &[station(" zqa ", "Test Guard A")])
+            .await
+            .unwrap();
+        let first = xmin(&pool, "SELECT xmin::text FROM stations WHERE crs = 'ZQA'").await;
+        let fresh = last_stations_fetch(&pool).await.unwrap();
+        assert!(fresh.is_some() && fresh >= before);
+
+        upsert_stations(&pool, &[station("ZQA", "Test Guard A")])
+            .await
+            .unwrap();
+        assert_eq!(
+            xmin(&pool, "SELECT xmin::text FROM stations WHERE crs = 'ZQA'").await,
+            first,
+            "an identical station must not be rewritten"
+        );
+        assert!(last_stations_fetch(&pool).await.unwrap() >= fresh);
+
+        upsert_stations(&pool, &[station("ZQA", "Test Guard A (renamed)")])
+            .await
+            .unwrap();
+        assert_ne!(
+            xmin(&pool, "SELECT xmin::text FROM stations WHERE crs = 'ZQA'").await,
+            first,
+            "a changed station must be written"
+        );
+
+        let toc = |name: &str| TocReference {
+            atoc_code: "Z9".to_string(),
+            name: name.to_string(),
+            legal_name: "Test Guard Rail Ltd".to_string(),
+            atoc_member: Some(true),
+            station_operator: None,
+        };
+        upsert_tocs(&pool, &[toc("Test Guard Rail")]).await.unwrap();
+        let first = xmin(&pool, "SELECT xmin::text FROM tocs WHERE atoc_code = 'Z9'").await;
+        upsert_tocs(&pool, &[toc("Test Guard Rail")]).await.unwrap();
+        assert_eq!(
+            xmin(&pool, "SELECT xmin::text FROM tocs WHERE atoc_code = 'Z9'").await,
+            first
+        );
+        upsert_tocs(&pool, &[toc("Test Guard Rail 2")])
+            .await
+            .unwrap();
+        assert_ne!(
+            xmin(&pool, "SELECT xmin::text FROM tocs WHERE atoc_code = 'Z9'").await,
+            first
+        );
+        assert!(last_tocs_fetch(&pool).await.unwrap().is_some());
+
+        let [stations, tocs, ..] = data_freshness(&pool).await.unwrap();
+        assert_eq!(stations, last_stations_fetch(&pool).await.unwrap());
+        assert_eq!(tocs, last_tocs_fetch(&pool).await.unwrap());
+
+        sqlx::query("DELETE FROM stations WHERE crs = 'ZQA'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM tocs WHERE atoc_code = 'Z9'")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                db_review_guard_and_normalisation_tests -- --ignored --test-threads=1`"]
+    async fn crosswalk_upserts_skip_unchanged_rows_and_lookups_normalise_input() {
+        let pool = test_pool().await;
+        let stanox = |name: &str| common::StanoxCrsRecord {
+            stanox: "TEST-GUARD-STANOX".to_string(),
+            crs: "zqc".to_string(),
+            tiploc: " zqctest".to_string(),
+            station_name: name.to_string(),
+            source_sequence: 1,
+            change_time_minutes: None,
+        };
+        upsert_stanox_crs(&pool, &[stanox("GUARD C")])
+            .await
+            .unwrap();
+        let sql = "SELECT xmin::text FROM stanox_crs WHERE stanox = 'TEST-GUARD-STANOX'";
+        let first = xmin(&pool, sql).await;
+        upsert_stanox_crs(&pool, &[stanox("GUARD C")])
+            .await
+            .unwrap();
+        assert_eq!(xmin(&pool, sql).await, first);
+        upsert_stanox_crs(&pool, &[stanox("GUARD C2")])
+            .await
+            .unwrap();
+        assert_ne!(xmin(&pool, sql).await, first);
+
+        let tiploc = |name: &str| common::TiplocCrsRecord {
+            tiploc: "zqdtest ".to_string(),
+            crs: " zqd".to_string(),
+            station_name: name.to_string(),
+            stanox: "TEST-GUARD-STANOX-D".to_string(),
+            source_sequence: 1,
+            change_time_minutes: Some(5),
+        };
+        upsert_tiploc_crs(&pool, &[tiploc("GUARD D")])
+            .await
+            .unwrap();
+        let sql = "SELECT xmin::text FROM tiploc_crs WHERE tiploc = 'ZQDTEST'";
+        let first = xmin(&pool, sql).await;
+        upsert_tiploc_crs(&pool, &[tiploc("GUARD D")])
+            .await
+            .unwrap();
+        assert_eq!(xmin(&pool, sql).await, first);
+
+        // Stored normalised; lowercase/padded input still resolves.
+        assert_eq!(
+            crs_for_tiploc(&pool, " zqctest ").await.unwrap().as_deref(),
+            Some("ZQC")
+        );
+        assert_eq!(
+            crs_for_tiploc(&pool, "ZQDtest").await.unwrap().as_deref(),
+            Some("ZQD")
+        );
+        let batch = crs_for_tiplocs_batch(&pool, &["zqctest ".to_string(), " zqdtest".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(batch.get("ZQCTEST").map(String::as_str), Some("ZQC"));
+        assert_eq!(batch.get("ZQDTEST").map(String::as_str), Some("ZQD"));
+        let rows = list_stanox_crs_for_crs(&pool, " zqc ").await.unwrap();
+        assert!(rows.iter().any(|r| r.tiploc == "ZQCTEST"), "{rows:?}");
+        let rows = list_stanox_crs_for_crs(&pool, "zqd").await.unwrap();
+        assert!(rows.iter().any(|r| r.tiploc == "ZQDTEST"), "{rows:?}");
+
+        sqlx::query("DELETE FROM stanox_crs WHERE stanox = 'TEST-GUARD-STANOX'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM tiploc_crs WHERE tiploc = 'ZQDTEST'")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+}

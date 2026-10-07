@@ -514,3 +514,82 @@ mod schedule_feed_provenance_tests {
         assert!(schedule_feed_ingest_problem(&bad_file).is_some());
     }
 }
+
+/// DB-gated coverage for the 2026-09-25 schedule-pipeline fixes (the legacy
+/// chunk-contract tests that also lived here went with that path, F-LEGACY):
+///
+/// * [`insert_schedule_reference_publish`] /
+///   [`last_completed_schedule_reference_publish`], the completion marker that
+///   replaced "seed the restart dedup from `schedule-ingest`'s extraction
+///   record".
+///
+/// Far-future fixture dates (2099) and a `TEST-`-prefixed delivery name, so
+/// nothing here can be answered by, or damage, real data. Same posture as this
+/// file's other `*_query_tests` modules.
+#[cfg(test)]
+mod schedule_pipeline_integrity_tests {
+    use super::*;
+    use crate::test_support::connect as test_pool;
+
+    /// The completion marker `schedule-reference` seeds its restart dedup from
+    /// -- round-tripped, and confirmed to report the most recently COMPLETED
+    /// delivery rather than whatever happens to sort last.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_pipeline_integrity -- --ignored --test-threads=1`"]
+    async fn the_completion_marker_round_trips_and_reports_the_most_recent_completion() {
+        let pool = test_pool().await;
+        let _cleanup = crate::test_support::FixtureCleanup::new(
+            &pool,
+            ["DELETE FROM schedule_reference_publishes WHERE delivery LIKE 'TEST-%'"],
+        )
+        .await;
+
+        // The empty-table (first-run) case, emptied only inside a
+        // transaction that is rolled back, so real markers are never
+        // deleted (DB review 2026-09-27 B3).
+        let mut tx = pool.begin().await.expect("begin");
+        sqlx::query("DELETE FROM schedule_reference_publishes")
+            .execute(&mut *tx)
+            .await
+            .expect("empty the marker table inside the rolled-back transaction");
+        let empty = last_completed_schedule_reference_publish(&mut *tx)
+            .await
+            .expect("read empty");
+        tx.rollback().await.expect("rollback");
+        assert_eq!(
+            empty, None,
+            "an empty marker table must read as None -- the first-run case \
+             schedule-reference falls back on"
+        );
+
+        insert_schedule_reference_publish(&pool, "TEST-20990601T180000Z")
+            .await
+            .expect("first marker");
+        insert_schedule_reference_publish(&pool, "TEST-20990602T180000Z")
+            .await
+            .expect("second marker");
+
+        assert_eq!(
+            last_completed_schedule_reference_publish(&pool)
+                .await
+                .expect("read back"),
+            Some("TEST-20990602T180000Z".to_string()),
+            "must report the most recently completed delivery"
+        );
+
+        // Re-recording an earlier delivery (its publish cycle ran again, e.g.
+        // after a retry) must move it to the front -- `completed_at` is what
+        // is ordered on, and it is refreshed by the upsert.
+        insert_schedule_reference_publish(&pool, "TEST-20990601T180000Z")
+            .await
+            .expect("re-record");
+        assert_eq!(
+            last_completed_schedule_reference_publish(&pool)
+                .await
+                .expect("read back"),
+            Some("TEST-20990601T180000Z".to_string()),
+            "ON CONFLICT DO UPDATE must refresh completed_at, not silently do nothing"
+        );
+    }
+}

@@ -708,3 +708,150 @@ mod db_tests {
         reset(&pool).await;
     }
 }
+
+/// `incident_changed` and `text_changed`, the history and text-changed
+/// guards of [`upsert_incidents`] (moved from the api's `queries` tests).
+#[cfg(test)]
+mod change_detection_tests {
+    use super::*;
+
+    fn existing(summary: &str, description: &str, validity: serde_json::Value) -> ExistingIncident {
+        ExistingIncident {
+            incident_id: "TEST123".to_string(),
+            summary: summary.to_string(),
+            description: description.to_string(),
+            validity_periods: validity,
+            is_cleared: false,
+        }
+    }
+
+    #[test]
+    fn new_incident_is_always_changed() {
+        assert!(incident_changed(
+            None,
+            "summary",
+            "description",
+            &serde_json::json!([]),
+            false
+        ));
+    }
+
+    #[test]
+    fn identical_incident_is_not_changed() {
+        let row = existing("summary", "description", serde_json::json!([]));
+        assert!(!incident_changed(
+            Some(&row),
+            "summary",
+            "description",
+            &serde_json::json!([]),
+            false
+        ));
+    }
+
+    #[test]
+    fn changed_summary_is_detected() {
+        let row = existing("old summary", "description", serde_json::json!([]));
+        assert!(incident_changed(
+            Some(&row),
+            "new summary",
+            "description",
+            &serde_json::json!([]),
+            false
+        ));
+    }
+
+    #[test]
+    fn changed_description_is_detected() {
+        let row = existing("summary", "old description", serde_json::json!([]));
+        assert!(incident_changed(
+            Some(&row),
+            "summary",
+            "new description",
+            &serde_json::json!([]),
+            false
+        ));
+    }
+
+    #[test]
+    fn changed_validity_periods_is_detected() {
+        let row = existing("summary", "description", serde_json::json!([]));
+        let new_validity = serde_json::json!([{"from_date": "2026-01-01T00:00:00Z", "to_date": null, "is_now": true}]);
+        assert!(incident_changed(
+            Some(&row),
+            "summary",
+            "description",
+            &new_validity,
+            false
+        ));
+    }
+
+    /// 2026-10-06: a flag-only clear used to write no history row, so the
+    /// detail page's history could never show when RDM cleared an incident.
+    #[test]
+    fn a_flag_only_clear_is_a_change() {
+        let row = existing("summary", "description", serde_json::json!([]));
+        assert!(incident_changed(
+            Some(&row),
+            "summary",
+            "description",
+            &serde_json::json!([]),
+            true
+        ));
+    }
+
+    #[test]
+    fn unrelated_operators_or_stations_changes_are_not_this_functions_concern() {
+        // operators/affected_stations/priority/is_planned changes still get
+        // written to `incidents` (the upsert always overwrites), they just
+        // don't independently trigger a history row per the brief's spec
+        // (only summary/description/validity_periods/is_cleared do).
+        let row = existing("summary", "description", serde_json::json!([]));
+        assert!(!incident_changed(
+            Some(&row),
+            "summary",
+            "description",
+            &serde_json::json!([]),
+            false
+        ));
+    }
+
+    #[test]
+    fn text_changed_true_for_a_new_incident() {
+        assert!(text_changed(None, "Signal failure", "Delays expected"));
+    }
+
+    #[test]
+    fn text_changed_true_when_summary_differs() {
+        let row = existing("Signal failure", "Delays expected", serde_json::json!([]));
+        assert!(text_changed(
+            Some(&row),
+            "Points failure",
+            "Delays expected"
+        ));
+    }
+
+    #[test]
+    fn text_changed_true_when_description_differs() {
+        let row = existing("Signal failure", "Delays expected", serde_json::json!([]));
+        assert!(text_changed(
+            Some(&row),
+            "Signal failure",
+            "Disruption has now ended"
+        ));
+    }
+
+    #[test]
+    fn text_changed_false_when_only_validity_periods_would_differ() {
+        // text_changed only compares summary/description -- validity is
+        // deliberately excluded, since it doesn't require re-extraction of
+        // prose that hasn't moved. This test simulates that by reusing the
+        // same summary/description text_changed actually looks at; there's
+        // no validity parameter to vary because text_changed never takes one.
+        let row = existing("Signal failure", "Delays expected", serde_json::json!([]));
+        assert!(!text_changed(
+            Some(&row),
+            "Signal failure",
+            "Delays expected"
+        ));
+    }
+}

@@ -157,3 +157,30 @@ pub async fn last_full_coverage_window_stats_fetch(pool: &PgPool) -> Result<Opti
             .await?;
     Ok(fetched_at)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::full_coverage_window_row as row;
+
+    #[test]
+    fn buckets_are_15_minutes_and_computed_from_computed_at() {
+        let at = |s: &str| s.parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(
+            bucket_start(at("2026-09-27T12:14:59Z")),
+            at("2026-09-27T12:00:00Z")
+        );
+        assert_eq!(
+            bucket_start(at("2026-09-27T12:15:00Z")),
+            at("2026-09-27T12:15:00Z")
+        );
+    }
+
+    #[test]
+    fn validation_rejects_an_unknown_relevance() {
+        assert!(validate(&[row("line-a", "2026-09-27T12:00:00Z", 1)]).is_ok());
+        let mut bad = row("line-a", "2026-09-27T12:00:00Z", 1);
+        bad.relevance = "everything".to_string();
+        assert!(validate(&[bad]).is_err());
+    }
+}

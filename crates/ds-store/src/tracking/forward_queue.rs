@@ -34,16 +34,7 @@ pub async fn insert_forward_signals(
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
+    use crate::test_support::connect;
 
     /// A real `trains` row to satisfy `notifier_forward_queue.trains_id`'s
     /// `REFERENCES trains(id) ON DELETE CASCADE` foreign key -- deleting it

@@ -496,3 +496,385 @@ pub async fn upsert_full_coverage_line_stats(
     .await?;
     Ok(result.rows_affected())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_line_with_no_stored_row_is_always_changed() {
+        assert!(tfl_statuses_changed(None, &serde_json::json!([])));
+    }
+
+    #[test]
+    fn identical_statuses_are_not_changed() {
+        let stored = serde_json::json!([{ "severity": 10, "reason": "Good Service" }]);
+        let incoming = serde_json::json!([{ "severity": 10, "reason": "Good Service" }]);
+        assert!(!tfl_statuses_changed(Some(&stored), &incoming));
+    }
+
+    #[test]
+    fn a_new_severity_is_changed() {
+        let stored = serde_json::json!([{ "severity": 10, "reason": "Good Service" }]);
+        let incoming =
+            serde_json::json!([{ "severity": 6, "reason": "Signal failure at Oxford Circus" }]);
+        assert!(tfl_statuses_changed(Some(&stored), &incoming));
+    }
+
+    #[test]
+    fn a_second_simultaneous_status_is_changed() {
+        // TfL routinely reports several statuses on one line at once — a
+        // planned closure alongside a live disruption. Gaining or losing
+        // one is a change even if the first entry is untouched.
+        let stored = serde_json::json!([{ "severity": 4, "reason": "Planned engineering work" }]);
+        let incoming = serde_json::json!([
+            { "severity": 4, "reason": "Planned engineering work" },
+            { "severity": 6, "reason": "Signal failure at Oxford Circus" },
+        ]);
+        assert!(tfl_statuses_changed(Some(&stored), &incoming));
+    }
+
+    #[test]
+    fn tfl_statuses_changed_ignores_sample_stats_only_differences() {
+        let existing = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_stats": { "total": 40, "delayed": 3, "cancelled": 0, "skipped": 0, "avg_delay_minutes": 1.2 }
+        }]);
+        let incoming = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_stats": { "total": 41, "delayed": 5, "cancelled": 1, "skipped": 0, "avg_delay_minutes": 2.4 }
+        }]);
+        assert!(!tfl_statuses_changed(Some(&existing), &incoming));
+    }
+
+    #[test]
+    fn tfl_statuses_changed_ignores_sample_availability_only_differences() {
+        let existing = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_availability": { "state": "no-coverage" }
+        }]);
+        let incoming = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_availability": { "state": "below-threshold", "observed": 0, "required": 1 }
+        }]);
+        assert!(!tfl_statuses_changed(Some(&existing), &incoming));
+    }
+
+    #[test]
+    fn tfl_statuses_changed_ignores_full_coverage_field_only_differences() {
+        let existing = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "full_coverage_stats": { "total": 40, "delayed": 3, "cancelled": 0, "skipped": 0, "avg_delay_minutes": 1.2 },
+            "full_coverage_availability": { "state": "available" }
+        }]);
+        let incoming = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "full_coverage_stats": { "total": 41, "delayed": 5, "cancelled": 1, "skipped": 0, "avg_delay_minutes": 2.4 },
+            "full_coverage_availability": { "state": "pending" }
+        }]);
+        assert!(!tfl_statuses_changed(Some(&existing), &incoming));
+    }
+
+    #[test]
+    fn tfl_statuses_changed_still_true_when_severity_changes_alongside_sample_stats() {
+        let existing = serde_json::json!([{
+            "severity": "GoodService",
+            "reason": "Good Service",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_stats": { "total": 40, "delayed": 3, "cancelled": 0, "skipped": 0, "avg_delay_minutes": 1.2 }
+        }]);
+        let incoming = serde_json::json!([{
+            "severity": "MinorDelays",
+            "reason": "Minor Delays",
+            "validity": { "from_date": "2026-08-22T02:00:00Z", "to_date": null, "is_now": true },
+            "data_quality": "tfl",
+            "sample_stats": { "total": 41, "delayed": 5, "cancelled": 1, "skipped": 0, "avg_delay_minutes": 2.4 }
+        }]);
+        assert!(tfl_statuses_changed(Some(&existing), &incoming));
+    }
+}
+
+/// DB-gated: the `TfL` ownership guard, and (DB review 2026-09-27 F2)
+/// the batched `TfL` and full-coverage upserts' no-op guards.
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use crate::freshness::last_tfl_line_status_fetch;
+    use crate::test_support::connect as test_pool;
+
+    /// Regression test for the Signal Box Audit Low finding on
+    /// `upsert_tfl_line_status`: `line_id` is only `TEXT PRIMARY KEY`, so
+    /// nothing at the schema level stops a `TfL` line id from colliding with
+    /// an `aggregator`-owned one. Before the ownership guard, a colliding
+    /// `TfL` post would silently `ON CONFLICT (line_id) DO UPDATE SET ...
+    /// source = 'tfl'`, stealing the aggregator's row -- this proves it
+    /// now fails loudly (`Err`, whole batch rolled back by the caller
+    /// never committing) and leaves the aggregator's row untouched.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                upsert_tfl_line_status_refuses_to_steal_a_non_tfl_owned_row_with_the_same_line_id \
+                -- --ignored --test-threads=1`"]
+    async fn upsert_tfl_line_status_refuses_to_steal_a_non_tfl_owned_row_with_the_same_line_id() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let pool = PgPoolOptions::new()
+            .connect(&database_url)
+            .await
+            .expect("connect to postgres");
+
+        sqlx::query(
+            "INSERT INTO line_status (line_id, name, mode_name, operators, statuses, source) \
+             VALUES ('TEST-COLLIDE', 'aggregator owns this', 'national-rail', '{NT}', '[]', \
+                     'aggregator') \
+             ON CONFLICT (line_id) DO UPDATE SET source = EXCLUDED.source, \
+                                                  name = EXCLUDED.name",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed a non-TfL-owned row under the colliding line_id");
+
+        let colliding_report = LineStatusReport {
+            id: "TEST-COLLIDE".to_string(),
+            name: "a TfL line that happens to share this id".to_string(),
+            mode_name: "tube".to_string(),
+            operators: vec!["TfL".to_string()],
+            statuses: vec![],
+        };
+
+        let result = upsert_tfl_line_status(&pool, std::slice::from_ref(&colliding_report)).await;
+        assert!(
+            result.is_err(),
+            "an id collision with a non-TfL-owned row must fail loudly, not silently overwrite"
+        );
+
+        let (source, name): (String, String) =
+            sqlx::query_as("SELECT source, name FROM line_status WHERE line_id = 'TEST-COLLIDE'")
+                .fetch_one(&pool)
+                .await
+                .expect("the aggregator's row must still exist, untouched");
+        assert_eq!(
+            source, "aggregator",
+            "ownership must not have been stolen by the refused TfL write"
+        );
+        assert_eq!(
+            name, "aggregator owns this",
+            "the aggregator's own data must not have been overwritten by the refused TfL write"
+        );
+
+        sqlx::query("DELETE FROM line_status WHERE line_id = 'TEST-COLLIDE'")
+            .execute(&pool)
+            .await
+            .expect("cleanup fixture row");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                samples::db_tests -- --ignored --test-threads=1`"]
+    async fn tfl_line_status_keeps_computed_at_advancing_without_duplicate_history() {
+        let pool = test_pool().await;
+        let report = LineStatusReport {
+            id: "TEST-GUARD-TFL".to_string(),
+            name: "Guard line".to_string(),
+            mode_name: "tube".to_string(),
+            operators: vec!["TfL".to_string()],
+            statuses: vec![],
+        };
+        upsert_tfl_line_status(&pool, std::slice::from_ref(&report))
+            .await
+            .unwrap();
+        let read = |pool: PgPool| async move {
+            sqlx::query_as::<_, (chrono::DateTime<chrono::Utc>, i64)>(
+                "SELECT computed_at, (SELECT COUNT(*) FROM line_status_history \
+                                      WHERE line_id = 'TEST-GUARD-TFL') \
+                 FROM line_status WHERE line_id = 'TEST-GUARD-TFL'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let (computed_1, history_1) = read(pool.clone()).await;
+        upsert_tfl_line_status(&pool, std::slice::from_ref(&report))
+            .await
+            .unwrap();
+        let (computed_2, history_2) = read(pool.clone()).await;
+        assert!(computed_2 > computed_1);
+        assert_eq!(history_1, history_2);
+        assert_eq!(
+            last_tfl_line_status_fetch(&pool).await.unwrap(),
+            Some(computed_2)
+        );
+        sqlx::query("DELETE FROM line_status_history WHERE line_id = 'TEST-GUARD-TFL'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM line_status WHERE line_id = 'TEST-GUARD-TFL'")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    /// F2: the batched full-coverage stats upsert writes several keys in one
+    /// statement, counts only changed rows, and keeps the LAST row of a key
+    /// repeated in one batch.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                full_coverage_line_stats_batch -- --ignored --test-threads=1`"]
+    async fn full_coverage_line_stats_batch_keeps_the_last_row_per_key() {
+        let pool = test_pool().await;
+        let cleanup = |pool: PgPool| async move {
+            sqlx::query("DELETE FROM full_coverage_line_stats WHERE line_id LIKE 'test-f2-fc-%'")
+                .execute(&pool)
+                .await
+                .unwrap();
+        };
+        cleanup(pool.clone()).await;
+        let row = |line_id: &str, date: &str, total: usize| common::FullCoverageLineStatsRow {
+            line_id: line_id.to_string(),
+            service_date: date.parse().unwrap(),
+            availability: "available".to_string(),
+            stats: common::SampleStats {
+                total,
+                delayed: 1,
+                cancelled: 0,
+                skipped: 0,
+                avg_delay_minutes: 2.5,
+            },
+            partial: false,
+            breakdown: None,
+            stats_version: None,
+        };
+        let batch = vec![
+            row("test-f2-fc-a", "2026-09-26", 5),
+            row("test-f2-fc-a", "2026-09-27", 6),
+            row("test-f2-fc-b", "2026-09-27", 7),
+            row("test-f2-fc-b", "2026-09-27", 8),
+        ];
+        assert_eq!(
+            upsert_full_coverage_line_stats(&pool, &batch)
+                .await
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            upsert_full_coverage_line_stats(&pool, &batch)
+                .await
+                .unwrap(),
+            0
+        );
+        let totals: Vec<(String, i32)> = sqlx::query_as(
+            "SELECT line_id || '/' || service_date, total FROM full_coverage_line_stats \
+             WHERE line_id LIKE 'test-f2-fc-%' ORDER BY 1",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            totals,
+            vec![
+                ("test-f2-fc-a/2026-09-26".to_string(), 5),
+                ("test-f2-fc-a/2026-09-27".to_string(), 6),
+                ("test-f2-fc-b/2026-09-27".to_string(), 8),
+            ]
+        );
+        cleanup(pool.clone()).await;
+    }
+
+    /// F2: the batched `TfL` upsert writes every line in one statement, keeps
+    /// each line's operators, appends history only for new or changed lines,
+    /// and keeps the LAST report of a `line_id` repeated in one batch.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                tfl_line_status_batch -- --ignored --test-threads=1`"]
+    async fn tfl_line_status_batch_writes_each_line_and_history_only_for_changes() {
+        let pool = test_pool().await;
+        let cleanup = |pool: PgPool| async move {
+            sqlx::query("DELETE FROM line_status_history WHERE line_id LIKE 'TEST-F2-TFL-%'")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("DELETE FROM line_status WHERE line_id LIKE 'TEST-F2-TFL-%'")
+                .execute(&pool)
+                .await
+                .unwrap();
+        };
+        cleanup(pool.clone()).await;
+        let status = |severity: u8| -> Vec<common::LineStatus> {
+            serde_json::from_value(serde_json::json!([{
+                "severity": severity,
+                "reason": format!("severity {severity}"),
+                "validity": { "from_date": "2026-09-27T02:00:00Z", "to_date": null, "is_now": true },
+                "data_quality": "tfl"
+            }]))
+            .unwrap()
+        };
+        let report = |id: &str, severity: u8, operators: &[&str]| LineStatusReport {
+            id: id.to_string(),
+            name: format!("{id} name"),
+            mode_name: "tube".to_string(),
+            operators: operators.iter().map(ToString::to_string).collect(),
+            statuses: status(severity),
+        };
+        let history = |pool: PgPool, id: &'static str| async move {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM line_status_history WHERE line_id = $1",
+            )
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+
+        let first = vec![
+            report("TEST-F2-TFL-A", 10, &["TfL"]),
+            report("TEST-F2-TFL-B", 10, &[]),
+        ];
+        assert_eq!(upsert_tfl_line_status(&pool, &first).await.unwrap(), 2);
+        assert_eq!(history(pool.clone(), "TEST-F2-TFL-A").await, 1);
+        assert_eq!(history(pool.clone(), "TEST-F2-TFL-B").await, 1);
+
+        let second = vec![
+            report("TEST-F2-TFL-A", 10, &["TfL"]),
+            report("TEST-F2-TFL-B", 10, &[]),
+            report("TEST-F2-TFL-B", 9, &["TfL", "LO"]),
+        ];
+        assert_eq!(upsert_tfl_line_status(&pool, &second).await.unwrap(), 2);
+        assert_eq!(history(pool.clone(), "TEST-F2-TFL-A").await, 1, "unchanged");
+        assert_eq!(
+            history(pool.clone(), "TEST-F2-TFL-B").await,
+            2,
+            "changed once"
+        );
+        let (operators, severity): (Vec<String>, String) = sqlx::query_as(
+            "SELECT operators, statuses->0->>'severity' FROM line_status \
+             WHERE line_id = 'TEST-F2-TFL-B'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(operators, vec!["TfL", "LO"]);
+        assert_eq!(severity, "9");
+
+        cleanup(pool.clone()).await;
+    }
+}

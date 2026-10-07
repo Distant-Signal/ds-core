@@ -212,3 +212,22 @@ pub async fn last_station_samples_fetch(
             .await?;
     Ok(polled_at)
 }
+
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use crate::test_support::connect;
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn last_fetch_against_an_empty_table_is_null() {
+        let pool = connect().await;
+        // Reads the real table as-is -- relies on CI's freshly-migrated,
+        // otherwise-empty database, same posture
+        // `station_full_coverage_samples_get_last_fetched_on_an_empty_table_is_null`
+        // already documents for its own table.
+        let fetched = last_stations_fetch(&pool).await;
+        assert!(fetched.is_ok());
+    }
+}

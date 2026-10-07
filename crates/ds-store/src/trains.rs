@@ -417,16 +417,7 @@ pub fn london_to_utc(naive: chrono::NaiveDateTime) -> Option<DateTime<Utc>> {
 )]
 mod db_tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
+    use crate::test_support::{connect, xmin};
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
@@ -850,5 +841,62 @@ mod db_tests {
         );
 
         cleanup().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                trains_identity_writes_leave_an_unchanged_row_alone -- --ignored --test-threads=1`"]
+    async fn trains_identity_writes_leave_an_unchanged_row_alone() {
+        let pool = connect().await;
+        let date = NaiveDate::from_ymd_opt(2099, 3, 2).unwrap();
+        sqlx::query("DELETE FROM trains WHERE train_uid LIKE 'TEST-GUARD-T%'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let id = find_or_create_train(&pool, "TEST-GUARD-T1", date)
+            .await
+            .unwrap();
+        let sql = format!("SELECT xmin::text FROM trains WHERE id = {id}");
+        let first = xmin(&pool, &sql).await;
+        assert_eq!(
+            find_or_create_train(&pool, "TEST-GUARD-T1", date)
+                .await
+                .unwrap(),
+            id
+        );
+        assert_eq!(
+            xmin(&pool, &sql).await,
+            first,
+            "a known train is not rewritten"
+        );
+
+        let pairs = vec![
+            ("TEST-GUARD-T1".to_string(), date),
+            ("TEST-GUARD-T2".to_string(), date),
+        ];
+        let ids = find_or_create_trains_batch(&pool, &pairs).await.unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(ids[&pairs[0]], id);
+        assert_eq!(xmin(&pool, &sql).await, first);
+        let again = find_or_create_trains_batch(&pool, &pairs).await.unwrap();
+        assert_eq!(again, ids);
+
+        mark_train_resolved(&pool, id, "9Z99").await.unwrap();
+        let resolved = xmin(&pool, &sql).await;
+        assert_ne!(resolved, first);
+        mark_train_resolved(&pool, id, "9Z99").await.unwrap();
+        mark_trains_resolved_batch(&pool, &[(id, "9Z99".to_string())])
+            .await
+            .unwrap();
+        assert_eq!(
+            xmin(&pool, &sql).await,
+            resolved,
+            "re-resolving to the same train_id is a no-op"
+        );
+
+        sqlx::query("DELETE FROM trains WHERE train_uid LIKE 'TEST-GUARD-T%'")
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 }

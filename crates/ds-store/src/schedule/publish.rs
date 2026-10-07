@@ -2587,3 +2587,282 @@ mod schedule_publish_part_tests {
         );
     }
 }
+
+/// `upsert_schedule_destination_departures`'s whole-day replace, moved
+/// from the api's `schedule_destination_departures_query_tests` (whose
+/// search tests stay there, on the same shared fixtures). Each test owns
+/// a distinct `service_date` in January 2099.
+#[cfg(test)]
+mod schedule_destination_departures_upsert_tests {
+    use super::*;
+    use crate::test_support::connect as test_pool;
+    use crate::test_support::destination_departures::{delete_day, fixture_date, row, seed, time};
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_destination_departures -- --ignored --test-threads=1`"]
+    async fn upsert_wholesale_replaces_the_whole_service_date() {
+        // The flat-shape successor to the bucket table's
+        // "wholesale-replaces an existing row for the same key" test. The
+        // unit of replacement is now the DAY, not one (destination_crs,
+        // service_date) key -- a fresh delivery's grouping supersedes the
+        // prior one entirely, including destinations that vanished from it.
+        let pool = test_pool().await;
+        let date = fixture_date(1);
+        delete_day(&pool, date).await;
+
+        let first = vec![
+            row(date, "ZRB", time(8, 0), "OLD1", "EUS", None, None),
+            row(date, "ZRC", time(9, 0), "OLD2", "CRE", None, None),
+        ];
+        let inserted = upsert_schedule_destination_departures(&pool, &first)
+            .await
+            .expect("first upsert");
+        assert_eq!(inserted, 2);
+
+        // The second publish drops ZRC entirely and changes ZRB's row.
+        let second = vec![row(date, "ZRB", time(9, 30), "NEW1", "CRE", None, None)];
+        upsert_schedule_destination_departures(&pool, &second)
+            .await
+            .expect("second upsert");
+
+        let stored: Vec<(String, chrono::NaiveTime, String)> = sqlx::query_as(
+            "SELECT destination_crs, scheduled, train_uid \
+             FROM schedule_destination_departures WHERE service_date = $1 \
+             ORDER BY destination_crs",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back");
+
+        assert_eq!(
+            stored.len(),
+            1,
+            "a fresh publish wholesale-replaces the whole service_date, never merges into it"
+        );
+        assert_eq!(stored[0].0, "ZRB");
+        assert_eq!(stored[0].1, time(9, 30));
+        assert_eq!(stored[0].2, "NEW1");
+
+        delete_day(&pool, date).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_destination_departures -- --ignored --test-threads=1`"]
+    async fn upsert_with_an_empty_batch_does_not_wipe_the_day() {
+        // Guards the one way a DELETE-then-INSERT upsert can destroy real
+        // data that a per-row ON CONFLICT loop never could: a publish that
+        // produced no rows (a parse failure upstream, an empty grouping)
+        // must be a no-op, NOT "delete today's timetable".
+        let pool = test_pool().await;
+        let date = fixture_date(2);
+        seed(&pool, date).await;
+
+        let affected = upsert_schedule_destination_departures(&pool, &[])
+            .await
+            .expect("empty upsert");
+        assert_eq!(affected, 0);
+
+        let (remaining,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM schedule_destination_departures WHERE service_date = $1",
+        )
+        .bind(date)
+        .fetch_one(&pool)
+        .await
+        .expect("count");
+        assert_eq!(
+            remaining, 3,
+            "an empty batch must leave the day untouched, never clear it"
+        );
+
+        delete_day(&pool, date).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_destination_departures -- --ignored --test-threads=1`"]
+    async fn upsert_round_trips_true_origin_crs_including_a_null_value() {
+        let pool = test_pool().await;
+        let date = fixture_date(20);
+        delete_day(&pool, date).await;
+
+        upsert_schedule_destination_departures(
+            &pool,
+            &[
+                row(date, "ZRD", time(8, 0), "C30001", "EUS", Some("PAD"), None),
+                row(date, "ZRD", time(9, 0), "C30002", "CRE", None, None),
+            ],
+        )
+        .await
+        .expect("seed rows");
+
+        let stored: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT train_uid, true_origin_crs FROM schedule_destination_departures \
+             WHERE service_date = $1 ORDER BY train_uid",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back");
+
+        assert_eq!(stored.len(), 2);
+        assert_eq!(stored[0], ("C30001".to_string(), Some("PAD".to_string())));
+        assert_eq!(
+            stored[1],
+            ("C30002".to_string(), None),
+            "an absent true_origin_crs must round-trip as SQL NULL, not an empty string"
+        );
+
+        delete_day(&pool, date).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_destination_departures -- --ignored --test-threads=1`"]
+    async fn upsert_round_trips_destination_arrival_including_a_null_value() {
+        let pool = test_pool().await;
+        let date = fixture_date(31);
+        delete_day(&pool, date).await;
+
+        upsert_schedule_destination_departures(
+            &pool,
+            &[
+                row(
+                    date,
+                    "ZRD",
+                    time(8, 0),
+                    "C70001",
+                    "EUS",
+                    Some("EUS"),
+                    Some(time(11, 30)),
+                ),
+                row(date, "ZRD", time(9, 0), "C70002", "CRE", None, None),
+            ],
+        )
+        .await
+        .expect("seed rows");
+
+        let stored: Vec<(String, Option<chrono::NaiveTime>)> = sqlx::query_as(
+            "SELECT train_uid, destination_arrival FROM schedule_destination_departures \
+             WHERE service_date = $1 ORDER BY train_uid",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back");
+
+        assert_eq!(stored.len(), 2);
+        assert_eq!(stored[0], ("C70001".to_string(), Some(time(11, 30))));
+        assert_eq!(
+            stored[1],
+            ("C70002".to_string(), None),
+            "an absent destination_arrival must round-trip as SQL NULL, not a fabricated time"
+        );
+
+        delete_day(&pool, date).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_destination_departures -- --ignored --test-threads=1`"]
+    async fn upsert_round_trips_operator_atoc_including_a_null_value() {
+        let pool = test_pool().await;
+        let date = fixture_date(25);
+        delete_day(&pool, date).await;
+
+        upsert_schedule_destination_departures(
+            &pool,
+            &[
+                ScheduleDestinationDeparturesRow {
+                    service_date: date,
+                    destination_crs: "ZRD".to_string(),
+                    scheduled: time(8, 0),
+                    day_offset: 0,
+                    train_uid: "C80001".to_string(),
+                    origin_crs: "EUS".to_string(),
+                    true_origin_crs: Some("EUS".to_string()),
+                    calling_point_arrival: None,
+                    destination_arrival: None,
+                    destination_arrival_day_offset: 0,
+                    operator_atoc: Some("SR".to_string()),
+                    headcode: Some("1S00".to_string()),
+                    rsid: Some("SR408800".to_string()),
+                    ..Default::default()
+                },
+                ScheduleDestinationDeparturesRow {
+                    service_date: date,
+                    destination_crs: "ZRD".to_string(),
+                    scheduled: time(9, 0),
+                    day_offset: 0,
+                    train_uid: "C80002".to_string(),
+                    origin_crs: "CRE".to_string(),
+                    true_origin_crs: None,
+                    calling_point_arrival: None,
+                    destination_arrival: None,
+                    destination_arrival_day_offset: 0,
+                    operator_atoc: None,
+                    headcode: None,
+                    rsid: None,
+                    ..Default::default()
+                },
+            ],
+        )
+        .await
+        .expect("seed rows");
+
+        let stored: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT train_uid, operator_atoc FROM schedule_destination_departures \
+             WHERE service_date = $1 ORDER BY train_uid",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back");
+
+        assert_eq!(stored.len(), 2);
+        assert_eq!(stored[0], ("C80001".to_string(), Some("SR".to_string())));
+        assert_eq!(
+            stored[1],
+            ("C80002".to_string(), None),
+            "an absent operator_atoc must round-trip as SQL NULL, not an empty string"
+        );
+
+        let headcodes: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT train_uid, headcode FROM schedule_destination_departures \
+             WHERE service_date = $1 ORDER BY train_uid",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back headcodes");
+        assert_eq!(
+            headcodes,
+            vec![
+                ("C80001".to_string(), Some("1S00".to_string())),
+                ("C80002".to_string(), None),
+            ],
+            "a blank CIF Train Identity must round-trip as SQL NULL"
+        );
+
+        let rsids: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT train_uid, rsid FROM schedule_destination_departures \
+             WHERE service_date = $1 ORDER BY train_uid",
+        )
+        .bind(date)
+        .fetch_all(&pool)
+        .await
+        .expect("read back rsids");
+        assert_eq!(
+            rsids,
+            vec![
+                ("C80001".to_string(), Some("SR408800".to_string())),
+                ("C80002".to_string(), None),
+            ],
+            "a blank CIF Retail Service ID must round-trip as SQL NULL"
+        );
+
+        delete_day(&pool, date).await;
+    }
+}

@@ -265,3 +265,94 @@ mod tests {
         assert_eq!(reason_fields(None, None), ReasonFields::default());
     }
 }
+
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use crate::test_support::{connect, train_reason_message as message};
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                reasons_upsert_newest_wins_and_resolve_by_uid_or_train_id -- --ignored --test-threads=1`"]
+    async fn reasons_upsert_newest_wins_and_resolve_by_uid_or_train_id() {
+        let pool = connect().await;
+        let date: chrono::NaiveDate = "2031-05-06".parse().unwrap();
+        sqlx::query("DELETE FROM trains WHERE train_uid IN ('TRSN01', 'TRSN02')")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // By uid: the trains row is created on demand.
+        let written = upsert_reasons(
+            &pool,
+            &[
+                message(Some("TRSN01"), "0002", "TG", "2031-05-06T08:00:00Z"),
+                // Older message for the same train and type: ignored.
+                message(Some("TRSN01"), "0002", "IB", "2031-05-06T07:00:00Z"),
+                message(Some("TRSN01"), "0006", "YI", "2031-05-06T07:30:00Z"),
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(written, 2);
+        let trains_id = crate::trains::find_or_create_train(&pool, "TRSN01", date)
+            .await
+            .unwrap();
+        let stored = reasons_for_trains(&pool, &[trains_id]).await.unwrap();
+        assert_eq!(
+            stored.get(&trains_id),
+            Some(&StoredReasons {
+                cancel_code: Some("TG".to_string()),
+                change_of_origin_code: Some("YI".to_string()),
+            })
+        );
+
+        // A newer message replaces it (a re-cancellation after a reinstatement).
+        upsert_reasons(
+            &pool,
+            &[message(
+                Some("TRSN01"),
+                "0002",
+                "M8",
+                "2031-05-06T09:00:00Z",
+            )],
+        )
+        .await
+        .unwrap();
+        let stored = reasons_for_trains(&pool, &[trains_id]).await.unwrap();
+        assert_eq!(stored[&trains_id].cancel_code.as_deref(), Some("M8"));
+
+        // Without a uid: found by TRUST train_id once the row carries it;
+        // dropped (not an error) before then.
+        let second = crate::trains::find_or_create_train(&pool, "TRSN02", date)
+            .await
+            .unwrap();
+        let mut no_uid = message(None, "0002", "XA", "2031-05-06T10:00:00Z");
+        no_uid.train_id = "9TR0002Q26".to_string();
+        assert_eq!(
+            upsert_reasons(&pool, std::slice::from_ref(&no_uid))
+                .await
+                .unwrap(),
+            0
+        );
+        crate::trains::mark_train_resolved(&pool, second, "9TR0002Q26")
+            .await
+            .unwrap();
+        assert_eq!(upsert_reasons(&pool, &[no_uid]).await.unwrap(), 1);
+        let stored = reasons_for_trains(&pool, &[second]).await.unwrap();
+        assert_eq!(stored[&second].cancel_code.as_deref(), Some("XA"));
+
+        // Retention follows `trains`.
+        sqlx::query("DELETE FROM trains WHERE train_uid IN ('TRSN01', 'TRSN02')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (left,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM train_reasons WHERE trains_id = ANY($1)")
+                .bind(vec![trains_id, second])
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(left, 0);
+    }
+}

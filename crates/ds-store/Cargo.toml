@@ -39,11 +39,14 @@ tracing = "0.1.44"
 trust-schema = { path = "../trust-schema" }
 
 [features]
-# Test-only helpers for tests that stay in other crates (the api's
-# `train_tracking` sweep-exclusion test reads
-# `sweeps::reconciliation::enrichment_candidate_ids_for_tests`). Only the
-# api's dev-dependency turns it on; no binary is built with it.
-test-helpers = []
+# Test-only, off by default: `test_support` (the shared DB-test fixtures,
+# such as `FixtureCleanup`) and
+# `sweeps::reconciliation::enrichment_candidate_ids_for_tests`, for the
+# tests of crates that use this one. Only dev-dependencies turn it on (the
+# api's); no binary is built with it. This crate's own tests get both
+# through `cfg(test)`. `tokio/rt`: `FixtureCleanup`'s drop runs its deletes
+# on a runtime of its own.
+test-support = ["tokio/rt"]
 
 [dev-dependencies]
 metrics-exporter-prometheus = { version = "0.18", default-features = false }

@@ -94,8 +94,8 @@ async fn list_trains_needing_schedule_enrichment(
 
 /// The ids [`list_trains_needing_schedule_enrichment`] selects, for the
 /// api `train_tracking`'s sweep-exclusion test (built only for tests: the
-/// api's dev-dependency turns on the `test-helpers` feature).
-#[cfg(any(test, feature = "test-helpers"))]
+/// api's dev-dependency turns on the `test-support` feature).
+#[cfg(any(test, feature = "test-support"))]
 #[expect(
     clippy::expect_used,
     reason = "a test helper: a failed query should fail the calling test"
@@ -285,28 +285,7 @@ pub async fn run_reconciliation_sweep(
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
-
-    async fn seed_user(pool: &PgPool, user_id: &str) {
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .expect("seed fixture user");
-    }
+    use crate::test_support::{connect, population_json, seed_user};
 
     async fn seed_train(pool: &PgPool, train_uid: &str, service_date: NaiveDate) -> i64 {
         let (id,): (i64,) = sqlx::query_as(
@@ -403,20 +382,6 @@ mod db_tests {
                 .expect("valid local time"),
         )
         .expect("a real London local time")
-    }
-
-    fn population_json(uid: &str, tiploc: &str, departure: &str) -> serde_json::Value {
-        serde_json::json!([{
-            "uid": uid,
-            "calling_points": [{
-                "tiploc": tiploc,
-                "kind": "Origin",
-                "booked_arrival": null,
-                "booked_departure": departure,
-                "is_half_minute_arrival": false,
-                "is_half_minute_departure": false
-            }]
-        }])
     }
 
     /// Fixture for Stall 2's tests: a subscribed, unmatched `trains` row,

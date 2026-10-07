@@ -1223,52 +1223,17 @@ mod tests {
 )]
 mod db_tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
+    use crate::test_support::{
+        cleanup_user, connect, db_today, population_json, population_json_multi,
+        seed_backlog_candidate_pin, seed_user,
+    };
 
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
-
-    // Left in the api until ingest architecture plan unit F: attempt_schedule_match_reproduces_the_eus_bug_and_now_resolves_it,
+    // These stay in the api (they read the pin back through its user read model,
+    // `train_tracking::get_by_tracking_id`, which does not move): attempt_schedule_match_reproduces_the_eus_bug_and_now_resolves_it,
     // attempt_schedule_match_matches_a_post_midnight_calling_point_via_its_day_offset,
     // attempt_schedule_match_matches_a_station_with_no_toml_tiploc_via_real_stanox_crs_data and
-    // attempt_schedule_match_with_no_candidate_line_leaves_the_row_pending read the pin back
-    // through the api's user read model (`train_tracking::get_by_tracking_id`).
-
-    fn population_json(uid: &str, tiploc: &str, departure: &str) -> serde_json::Value {
-        population_json_multi(&[(uid, tiploc, departure)])
-    }
-
-    /// [`population_json`]'s many-schedule sibling: ONE line's population
-    /// carrying several schedules, in the given order. Needed because the
-    /// real `Y80908` bug lives entirely INSIDE one line's population (two
-    /// services departing the same station in the same minute), not across
-    /// two lines -- see `find_schedule_match`'s own doc comment.
-    fn population_json_multi(entries: &[(&str, &str, &str)]) -> serde_json::Value {
-        serde_json::Value::Array(
-            entries
-                .iter()
-                .map(|(uid, tiploc, departure)| {
-                    serde_json::json!({
-                        "uid": uid,
-                        "calling_points": [{
-                            "tiploc": tiploc,
-                            "kind": "Origin",
-                            "booked_arrival": null,
-                            "booked_departure": departure,
-                            "is_half_minute_arrival": false,
-                            "is_half_minute_departure": false
-                        }]
-                    })
-                })
-                .collect(),
-        )
-    }
+    // attempt_schedule_match_with_no_candidate_line_leaves_the_row_pending
+    // (they share `ds_store::test_support`'s fixtures with this module).
 
     /// Repeater Signal M7 residual (2026-09-27), schedule-match half. A pin
     /// is dated by its OWN departure's calendar date; a schedule by its
@@ -2889,5 +2854,118 @@ mod db_tests {
         assert_eq!(pin_origin_crs.as_deref(), Some("ZMA"));
 
         cleanup().await;
+    }
+
+    /// DB2-39: `schedule_matching::run_schedule_match_sweep` (only called
+    /// from `main.rs`'s sweep loop) matches a pending pin whose schedule is
+    /// published, leaves one that has no match pending, and reports the
+    /// count. Synthetic CRS, TIPLOC, line and UID so it touches no real
+    /// fixture rows.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                run_schedule_match_sweep_matches_a_pending_pin -- --ignored --test-threads=1`"]
+    async fn run_schedule_match_sweep_matches_a_pending_pin() {
+        let pool = connect().await;
+        let user_id = "TEST-DB2-39-SWEEP";
+        let line_id = "test-db2-39-line";
+        let uid = "Z39001";
+        cleanup_user(&pool, user_id).await;
+        seed_user(&pool, user_id).await;
+        let service_date = db_today(&pool).await + Duration::days(3);
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ('TEST-DB2-39-STANOX', 'ZZQ', 'ZZQTEST', 'TEST DB2-39', 1) \
+             ON CONFLICT (stanox) DO NOTHING",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ($1, $2, $3) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(line_id)
+        .bind(service_date)
+        .bind(serde_json::json!([{
+            "uid": uid,
+            "calling_points": [{
+                "tiploc": "ZZQTEST",
+                "kind": "Origin",
+                "booked_arrival": null,
+                "booked_departure": "08:15",
+                "is_half_minute_arrival": false,
+                "is_half_minute_departure": false
+            }]
+        }]))
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+
+        let departure = london_to_utc(service_date.and_hms_opt(8, 15, 0).unwrap()).unwrap();
+        let matching = seed_backlog_candidate_pin(
+            &pool,
+            user_id,
+            service_date,
+            Some("ZZQ"),
+            Some(departure),
+            "pending",
+            None,
+        )
+        .await;
+        let unmatched = seed_backlog_candidate_pin(
+            &pool,
+            user_id,
+            service_date,
+            Some("ZZQ"),
+            Some(departure + Duration::hours(5)),
+            "pending",
+            None,
+        )
+        .await;
+
+        let index = HashMap::from([("ZZQ".to_string(), vec![line_id.to_string()])]);
+        let matched = run_schedule_match_sweep(&pool, &index)
+            .await
+            .expect("sweep");
+        assert_eq!(matched, 1);
+
+        let state = |id: i64| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_as::<_, (String, Option<String>)>(
+                    "SELECT ts.resolution_status, tr.train_uid FROM train_subscriptions ts \
+                     LEFT JOIN trains tr ON tr.id = ts.trains_id WHERE ts.id = $1",
+                )
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+            }
+        };
+        assert_eq!(
+            state(matching).await,
+            ("schedule_matched".to_string(), Some(uid.to_string()))
+        );
+        assert_eq!(state(unmatched).await, ("pending".to_string(), None));
+
+        cleanup_user(&pool, user_id).await;
+        for (sql, bind) in [
+            ("DELETE FROM trains WHERE train_uid = $1", uid),
+            (
+                "DELETE FROM schedule_line_population WHERE line_id = $1",
+                line_id,
+            ),
+            (
+                "DELETE FROM stanox_crs WHERE stanox = $1",
+                "TEST-DB2-39-STANOX",
+            ),
+        ] {
+            sqlx::query(sql)
+                .bind(bind)
+                .execute(&pool)
+                .await
+                .expect("cleanup");
+        }
     }
 }

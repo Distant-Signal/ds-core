@@ -1086,102 +1086,11 @@ pub async fn list_pending_pins_for_backlog_match(
 )]
 mod db_tests {
     use super::*;
+    use crate::test_support::{
+        cleanup_user, connect, db_today, fixture_event, seed_backlog_candidate_pin,
+        seed_tracked_train, seed_user,
+    };
     use chrono::NaiveDate;
-    use sqlx::postgres::PgPoolOptions;
-
-    async fn connect() -> PgPool {
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
-        PgPoolOptions::new()
-            .connect(&database_url)
-            .await
-            .expect("connect to postgres")
-    }
-
-    /// The database's own `CURRENT_DATE`, which is what every query under
-    /// test compares `service_date` against. Seeding from
-    /// `Utc::now().date_naive()` instead only agreed with it because the
-    /// server happened to run in UTC (DB review 2026-09-27 B4); this holds
-    /// whatever the server's or the session's `TimeZone` is.
-    async fn db_today(pool: &PgPool) -> NaiveDate {
-        sqlx::query_scalar("SELECT CURRENT_DATE")
-            .fetch_one(pool)
-            .await
-            .expect("read CURRENT_DATE")
-    }
-
-    async fn seed_user(pool: &PgPool, user_id: &str) {
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .expect("seed fixture user");
-    }
-
-    async fn cleanup_user(pool: &PgPool, user_id: &str) {
-        sqlx::query("DELETE FROM tracked_train_tickets WHERE user_id = $1")
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .expect("cleanup fixture tickets");
-        sqlx::query("DELETE FROM train_subscriptions WHERE user_id = $1")
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .expect("cleanup fixture tracked_trains");
-        sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .expect("cleanup fixture user");
-    }
-
-    /// Minimal fixture row -- only the `NOT NULL` columns
-    /// (`crates/api/migrations/20260828120000_train_tracking.sql:40-76`).
-    async fn seed_tracked_train(pool: &PgPool, user_id: &str) -> i64 {
-        let (id,): (i64,) = sqlx::query_as(
-            "INSERT INTO train_subscriptions (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
-             VALUES ($1, $2, $3, $4) RETURNING id",
-        )
-        .bind(user_id)
-        .bind("2026-09-02".parse::<NaiveDate>().unwrap())
-        .bind("KGX")
-        .bind("2026-09-02T09:00:00Z".parse::<DateTime<Utc>>().unwrap())
-        .fetch_one(pool)
-        .await
-        .expect("insert fixture tracked_trains row");
-        id
-    }
-
-    fn fixture_event(tracked_train_id: i64, dedup_key: &str) -> TrainMovementEventMessage {
-        TrainMovementEventMessage {
-            tracked_train_id,
-            resolved_train_uid: None,
-            resolved_train_id: None,
-            identity_date: None,
-            dedup_key: dedup_key.to_string(),
-            msg_type: "0003".to_string(),
-            event_type: Some("DEPARTURE".to_string()),
-            loc_stanox: Some("72410".to_string()),
-            loc_crs: Some("EUS".to_string()),
-            planned_timestamp: Some("2026-09-05T18:15:00Z".parse().unwrap()),
-            gbtt_timestamp: None,
-            actual_timestamp: Some("2026-09-05T18:15:00Z".parse().unwrap()),
-            variation_status: Some("ON TIME".to_string()),
-            raw_body: serde_json::json!({}),
-            status: "en_route".to_string(),
-            last_reported_location: Some("EUS".to_string()),
-            last_event_type: Some("DEPARTURE".to_string()),
-            delay_minutes: Some(0),
-            next_calling_point: Some("CRE".to_string()),
-            eta_next: None,
-            eta_source: None,
-        }
-    }
 
     // --- H4 residual (2026-10-01): a Reinstatement reopens what a Cancellation closed ---
 
@@ -2783,37 +2692,6 @@ mod db_tests {
         cleanup_user(&pool, second_user_id).await;
     }
 
-    /// Fixture for `list_pending_pins_for_backlog_match`'s own tests below:
-    /// a `train_subscriptions` row with every column that predicate cares
-    /// about under direct caller control, rather than only what
-    /// `seed_tracked_train`'s fixed-value insert offers.
-    async fn seed_backlog_candidate_pin(
-        pool: &PgPool,
-        user_id: &str,
-        service_date: NaiveDate,
-        pin_origin_crs: Option<&str>,
-        pin_scheduled_departure: Option<DateTime<Utc>>,
-        resolution_status: &str,
-        trains_id: Option<i64>,
-    ) -> i64 {
-        let (id,): (i64,) = sqlx::query_as(
-            "INSERT INTO train_subscriptions \
-                (user_id, service_date, pin_origin_crs, pin_scheduled_departure, \
-                 resolution_status, trains_id) \
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-        )
-        .bind(user_id)
-        .bind(service_date)
-        .bind(pin_origin_crs)
-        .bind(pin_scheduled_departure)
-        .bind(resolution_status)
-        .bind(trains_id)
-        .fetch_one(pool)
-        .await
-        .expect("insert fixture backlog-candidate row");
-        id
-    }
-
     /// The sweep's headline case: a still-`pending`, never-schedule-matched
     /// pin with real origin/departure data and a recent `service_date` must
     /// be surfaced as a retry candidate. This is exactly the row shape the
@@ -3564,5 +3442,163 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// 2026-09-26 review, Medium finding 6: reproduces the cross-match
+    /// residual this task's transaction fix closes. Two DIFFERENT physical
+    /// trains (different `train_uid`s) end up reported under the SAME
+    /// TRUST `train_id` for the SAME `service_date` -- a real-world
+    /// cross-matching incident, not a contrived input (see
+    /// `20260925221500_close_out_trains_train_id_service_date_collisions.sql`'s
+    /// own header for the 2026-09-25 incident this exact shape came from).
+    /// The second subscriber's own resolution hits
+    /// `trains_train_id_service_date`'s unique index the moment
+    /// `mark_train_resolved` tries to write the SAME `train_id` onto a
+    /// SECOND `trains` row for that date.
+    ///
+    /// Before this task's fix, `flip_legacy_resolution` first committed
+    /// `resolution_status = 'resolved'` on the second subscriber's row as
+    /// its own independent statement, then attempted the colliding write
+    /// separately -- so the second subscriber's row was left reading
+    /// `'resolved'` forever, with `trains_id` still `NULL`: "resolved" but
+    /// never actually claimed, and invisible to every sweep that only
+    /// re-checks still-`'pending'` rows. This proves that can no longer
+    /// happen: the second call must fail outright (surfacing the
+    /// collision instead of burying it), and the second subscriber's row
+    /// must come back completely unchanged -- still `'pending'`, still no
+    /// `trains_id` -- so a later, correct resolution can still claim it.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_cross_matched_second_resolution_does_not_strand_the_subscription_as_resolved_with_no_trains_id \
+                -- --ignored --test-threads=1`"]
+    async fn a_cross_matched_second_resolution_does_not_strand_the_subscription_as_resolved_with_no_trains_id()
+     {
+        let pool = connect().await;
+        let first_user_id = "TEST-M6-COLLISION-USER-1";
+        let second_user_id = "TEST-M6-COLLISION-USER-2";
+        seed_user(&pool, first_user_id).await;
+        seed_user(&pool, second_user_id).await;
+
+        let first_tracking_id = seed_tracked_train(&pool, first_user_id).await;
+        let second_tracking_id = seed_tracked_train(&pool, second_user_id).await;
+
+        // First subscriber resolves cleanly to its own physical train.
+        let mut first_event = fixture_event(first_tracking_id, "dedup-m6-collision-1");
+        first_event.resolved_train_uid = Some("TEST-M6-UID-A".to_string());
+        first_event.resolved_train_id = Some("TEST-M6-SHARED-TRAIN-ID".to_string());
+        upsert_train_event(&pool, &first_event)
+            .await
+            .expect("the first subscriber's live-TRUST resolution must succeed");
+
+        // Second subscriber resolves to a DIFFERENT physical train (a
+        // different `train_uid`) but the SAME `train_id` and the same
+        // `service_date` (both fixtures share `seed_tracked_train`'s
+        // hardcoded "2026-09-02") -- the cross-match collision. This must
+        // fail: `find_or_create_train` mints a fresh, distinct `trains` row
+        // for `TEST-M6-UID-B` (a different `train_uid` never collides on
+        // its own upsert), but the subsequent `mark_train_resolved` write
+        // that stamps `TEST-M6-SHARED-TRAIN-ID` onto THAT row collides with
+        // the first subscriber's row for the same `(train_id, service_date)`.
+        let mut second_event = fixture_event(second_tracking_id, "dedup-m6-collision-2");
+        second_event.resolved_train_uid = Some("TEST-M6-UID-B".to_string());
+        second_event.resolved_train_id = Some("TEST-M6-SHARED-TRAIN-ID".to_string());
+        let second_result = upsert_train_event(&pool, &second_event).await;
+        assert!(
+            second_result.is_err(),
+            "a genuine cross-match collision must surface as an error, not be silently \
+             swallowed"
+        );
+
+        // The heart of this fix: the second subscriber's OWN row must be
+        // completely unaffected by its own failed resolution attempt --
+        // never left reading 'resolved' with no trains_id to back it up.
+        let (second_status, second_trains_id): (String, Option<i64>) = sqlx::query_as(
+            "SELECT resolution_status, trains_id FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(second_tracking_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back second subscriber's row");
+        assert_eq!(
+            second_status, "pending",
+            "a failed resolution must not leave the subscription stuck reading 'resolved'"
+        );
+        assert!(
+            second_trains_id.is_none(),
+            "a failed resolution must not leave a dangling trains_id link either"
+        );
+
+        // The doomed candidate `trains` row itself must not have survived
+        // the rollback -- proving the INSERT inside the same failed
+        // transaction was undone, not merely orphaned.
+        let (uid_b_count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM trains WHERE train_uid = 'TEST-M6-UID-B'")
+                .fetch_one(&pool)
+                .await
+                .expect("count TEST-M6-UID-B rows");
+        assert_eq!(
+            uid_b_count, 0,
+            "the rolled-back transaction must not leave behind the candidate trains row either"
+        );
+
+        // The FIRST subscriber, unrelated to the second's failed attempt,
+        // must remain completely unaffected.
+        let (first_status, first_trains_id): (String, Option<i64>) = sqlx::query_as(
+            "SELECT resolution_status, trains_id FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(first_tracking_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read back first subscriber's row");
+        assert_eq!(first_status, "resolved");
+        let trains_id = first_trains_id.expect("first subscriber must have a linked trains_id");
+
+        sqlx::query("DELETE FROM trains WHERE id = $1")
+            .bind(trains_id)
+            .execute(&pool)
+            .await
+            .ok();
+        cleanup_user(&pool, first_user_id).await;
+        cleanup_user(&pool, second_user_id).await;
+    }
+
+    /// A row that already advanced past `'pending'` (schedule-matched,
+    /// resolved live, or given up on) has nothing left for a backlog match
+    /// to do -- must never be re-selected.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                list_pending_pins_for_backlog_match_excludes_a_non_pending_row \
+                -- --ignored --test-threads=1`"]
+    async fn list_pending_pins_for_backlog_match_excludes_a_non_pending_row() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-SWEEP-NON-PENDING";
+        seed_user(&pool, user_id).await;
+
+        let service_date = db_today(&pool).await;
+        let id = seed_backlog_candidate_pin(
+            &pool,
+            user_id,
+            service_date,
+            Some("EUS"),
+            Some("2026-09-09T18:15:00Z".parse().unwrap()),
+            "schedule_matched",
+            None,
+        )
+        .await;
+
+        let pending = list_pending_pins_for_backlog_match(&pool)
+            .await
+            .expect("list_pending_pins_for_backlog_match");
+        assert!(
+            !pending.iter().any(|row| row.id == id),
+            "a row already past 'pending' must not be re-selected for a backlog match retry"
+        );
+
+        sqlx::query("DELETE FROM train_subscriptions WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .ok();
+        cleanup_user(&pool, user_id).await;
     }
 }
