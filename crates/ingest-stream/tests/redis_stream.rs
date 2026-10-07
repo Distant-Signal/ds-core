@@ -1,5 +1,5 @@
 //! The stream runtime against a real Redis or valkey (ignored; CI's
-//! rust-test job runs them against its Redis service):
+//! rust-db-test job runs them against its Redis service):
 //!
 //! ```text
 //! cargo test -p ingest-stream --test redis_stream -- --ignored --test-threads=1
