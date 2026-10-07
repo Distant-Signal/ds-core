@@ -1,0 +1,15 @@
+{
+  "_comment": "envelope-v1.json on the wire (enc json, under the 8 KiB gzip threshold), field by field in XADD order. Never edit: producers must keep writing exactly this, and writers keep reading it.",
+  "fields": [
+    ["v", "1"],
+    ["schema", "tfl-line-status/1"],
+    ["producer", "poller-tfl/distant-signal-poller-tfl-7c4b-xyz12"],
+    ["key", "tfl-line-status:2026-10-06T20:20:00Z:1/1"],
+    ["produced_at", "2026-10-06T20:20:00.250Z"],
+    ["enc", "json"],
+    ["batch", "2026-10-06T20:20:00Z"],
+    ["part", "1"],
+    ["parts", "1"],
+    ["body", "{\"lines\":[{\"id\":\"elizabeth\",\"severity\":10,\"reason\":null}]}"]
+  ]
+}

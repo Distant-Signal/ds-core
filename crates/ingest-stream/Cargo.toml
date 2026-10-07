@@ -1,0 +1,35 @@
+[package]
+name = "ingest-stream"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The Redis Streams ingest runtime (ingest architecture spec §7, plan 3a):
+# the envelope, the producer, the writer's consumer runtime and the memory
+# budget. No sqlx: the stream producers (pollers) stay DB-free. Every
+# dependency below is already in Cargo.lock.
+[dependencies]
+chrono = { version = "0.4.44", features = ["serde"] }
+# The shared backoff (`common::backoff`) and the bounded Redis connection
+# (`common::redis_conn`, feature `redis`).
+common = { path = "../common", features = ["redis"] }
+# gzip above 8 KiB (spec §7.2). Already in the tree through api and
+# schedule-ingest; the default (miniz_oxide, pure Rust) backend.
+flate2 = "1"
+metrics = "0.24"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+serde = { version = "1.0.228", features = ["derive"] }
+# `raw_value`: the payload is carried as validated JSON text, not re-parsed
+# into a `Value` (a station-samples snapshot is about 500 KB).
+serde_json = { version = "1.0.149", features = ["raw_value"] }
+thiserror = "2"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+metrics-exporter-prometheus = { version = "0.18", default-features = false }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "sync", "time", "test-util", "net", "io-util"] }
+
+[lints]
+workspace = true

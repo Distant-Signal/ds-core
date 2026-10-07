@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "schema": "tfl-line-status/1",
+  "producer": "poller-tfl/distant-signal-poller-tfl-7c4b-xyz12",
+  "key": "tfl-line-status:2026-10-06T20:20:00Z:1/1",
+  "produced_at": "2026-10-06T20:20:00.250Z",
+  "batch": {
+    "batch": "2026-10-06T20:20:00Z",
+    "part": 1,
+    "parts": 1
+  },
+  "payload": {"lines":[{"id":"elizabeth","severity":10,"reason":null}]}
+}

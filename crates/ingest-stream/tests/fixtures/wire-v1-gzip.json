@@ -1,0 +1,42 @@
+{
+  "_comment": "A v1 station-samples part with a gzipped body (enc json+gzip), as XRANGE shows it; body_hex is the body in hex. The payload is {stations: 200 rows {crs: S000..S199, delayed: i % 5, polled_at}}. Never edit: a writer must keep decoding what a v1 producer wrote.",
+  "fields": [
+    [
+      "v",
+      "1"
+    ],
+    [
+      "schema",
+      "station-samples/1"
+    ],
+    [
+      "producer",
+      "poller-ldbws/distant-signal-poller-ldbws-6d9f-abcde"
+    ],
+    [
+      "key",
+      "station-samples:2026-10-06T20:21:00Z:3/6"
+    ],
+    [
+      "produced_at",
+      "2026-10-06T20:21:00.123Z"
+    ],
+    [
+      "enc",
+      "json+gzip"
+    ],
+    [
+      "batch",
+      "2026-10-06T20:21:00Z"
+    ],
+    [
+      "part",
+      "3"
+    ],
+    [
+      "parts",
+      "6"
+    ]
+  ],
+  "body_hex": "1f8b08000000000002ffa5d9bd6a15511886d17b993a8179e67f721b5a2922c1a4108211934642eedd94a73dae6a179bb7f978baf536bcbcdebffe7cfef532dc7d7d1b7efcf978874fe3380e37c3c3e3d3fddfc787e16ebc197e3f3f3d3d3e7cbf7ffdf89ec669bb6dbc1db7cfd3783775378e5f86f79b8b7597ebae5d4f97ebe9daf57cb99eaf5d2f97ebe5daf54a57dbe86a3b5deda0ab9d72b5a8b5a8b5a8b5a8b5a8b5a8b5a8b5a8b5a8b5a8b5895a9ba8b5895a9ba8b5895a9ba8b5895a9ba8b5895a9ba8b5995a9ba9b5995a9ba9b5995a9ba9b5995a9ba9b5995a9ba9b5855a5ba8b5855a5ba8b5855a5ba8b5855a5ba8b5855a5ba8b5955a5ba9b5955a5ba9b5955a5ba9b5955a5ba9b5955a5ba9b58d5adba8b58d5adba8b58d5adba8b58d5adba8b58d5adba8b59d5adba9b59d5adba9b59d5adba9b59d5adba9b59d5adba9b5835a3ba8b5835a3ba8b5835a3ba8b5835a3ba8b5835a3ba8b5935a3ba9b5935a3ba9b5935a3ba9b5935a3ba9b5935a3ba5b5c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dc207283c80d223788dca0ff70836fefff0093dec3437e300000"
+}

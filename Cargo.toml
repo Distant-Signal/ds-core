@@ -30,6 +30,7 @@ members = [
     "crates/movement-relay",
     "crates/line-catalogue-validator",
     "crates/ingest-writer",
+    "crates/ingest-stream",
 ]
 
 [workspace.package]
