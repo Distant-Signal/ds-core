@@ -5,4 +5,34 @@
 //! reference-publish markers, and `schedule_feed_ingest_problem`
 //! (spec §5.2).
 //!
-//! Empty until plan task 1A.7 moves it in.
+//! Filled by plan task 1A.7. The submodules live under `schedule/`; every
+//! item is re-exported here, so callers name `ds_store::schedule::…`.
+//!
+//! - `markers`: the feed-ingest and reference-publish markers, and the
+//!   feed-ingest record's validation.
+//! - `population`: the per-line schedule population.
+//! - `publish`: the network, destination and calling-point products and
+//!   the chunked diff-publish protocol.
+
+mod markers;
+mod population;
+mod publish;
+
+pub use markers::{
+    ScheduleFeedFile, ScheduleFeedIngestRequest, ScheduleFeedSource, insert_schedule_feed_ingest,
+    insert_schedule_reference_publish, last_completed_schedule_reference_publish,
+    last_schedule_feed_fetch, schedule_feed_ingest_problem,
+};
+pub use population::{
+    ConditionalPopulation, get_schedule_line_population, get_schedule_line_population_conditional,
+    upsert_schedule_line_population,
+};
+pub use publish::{
+    MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, ScheduleCallingPointsFullRow,
+    ScheduleDestinationDeparturesRow, ScheduleNetworkDeparturesRow, SchedulePublishBusy,
+    SchedulePublishPart, finish_schedule_calling_points_full_publish_without_rows,
+    finish_schedule_destination_departures_publish_without_rows, is_statement_timeout,
+    register_schedule_publish_metrics, upsert_schedule_calling_points_full,
+    upsert_schedule_calling_points_full_publish_part, upsert_schedule_destination_departures,
+    upsert_schedule_destination_departures_publish_part, upsert_schedule_network_departures,
+};
