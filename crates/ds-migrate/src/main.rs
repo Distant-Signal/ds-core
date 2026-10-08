@@ -16,7 +16,9 @@
 //!   INVALID-index heal, every pending migration). It connects with
 //!   `MIGRATION_DATABASE_URL` when set and not blank, else `DATABASE_URL`,
 //!   as the api does. Two connections at most: the contract check's pool
-//!   (one) and the migration connection (spec §5.3).
+//!   (one) and the migration connection (spec §5.3). The first connection
+//!   is retried (`common::startup`) for up to
+//!   `MIGRATION_CONNECT_DEADLINE_SECS` (default 120), then exits 1.
 //! - `wait` blocks until the database has this build's schema: the schema
 //!   gate the DB services run in-process (`ds_store::schema`, spec §12.2,
 //!   plan 1B.2), from outside a service, for a script, an init container
@@ -24,11 +26,15 @@
 //!   for the grants `db-grants.yaml` gives that service's role, checked as
 //!   the `DATABASE_URL` user, exactly as that service's own gate does;
 //!   without it, only for the migration. It polls every 5 s and fails
-//!   after 15 minutes (`ds_store::schema::DEADLINE`). One connection. The
+//!   after 15 minutes (`ds_store::schema::DEADLINE`); a connection that
+//!   fails is one more failed poll, so it needs no connect deadline of its
+//!   own. One connection. The
 //!   chart does not run it: the migrate Job runs `run`, and each service
 //!   gates itself.
 //!
 //! Exit status 0 on success, 1 on any error (logged as one line).
+
+use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
@@ -63,6 +69,10 @@ struct RunArgs {
     /// The schema owner (the chart's migrate Job sets only this).
     #[arg(long, env, hide_env_values = true)]
     migration_database_url: Option<Secret>,
+    /// How long to keep retrying the first connection (a saturated node, a
+    /// late `NetworkPolicy`) before exiting non-zero. Seconds, at least 1.
+    #[arg(long, env, default_value_t = 120, value_parser = clap::value_parser!(u64).range(1..))]
+    migration_connect_deadline_secs: u64,
 }
 
 impl RunArgs {
@@ -139,7 +149,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             let options: PgConnectOptions = url
                 .parse()
                 .with_context(|| format!("could not parse {var}"))?;
-            run(options, MigrationSettings::from_env()?).await?;
+            let deadline = Duration::from_secs(args.migration_connect_deadline_secs);
+            run(options, MigrationSettings::from_env()?, deadline).await?;
             tracing::info!("migrations finished");
             Ok(())
         }
@@ -158,19 +169,33 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
 
 /// The api's startup migration (`crates/api/src/main.rs`), on `options`:
 /// the contract-migration guard (it MUST run before the migrations, see
-/// `ds_store::migrate::contract`), then [`migrate::run`].
-async fn run(options: PgConnectOptions, settings: MigrationSettings) -> anyhow::Result<()> {
+/// `ds_store::migrate::contract`), then [`migrate::run`]. The guard's
+/// connection, the first, is retried for up to `connect_deadline`
+/// (`MIGRATION_CONNECT_DEADLINE_SECS`): the Job's `pg_isready` wait only
+/// shows the server answers, and the connect itself can still be slow on a
+/// saturated node.
+async fn run(
+    options: PgConnectOptions,
+    settings: MigrationSettings,
+    connect_deadline: Duration,
+) -> anyhow::Result<()> {
     // Dead-client detection, as the api's migration connection has.
     let options = options.options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS);
-    let check = PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with(
-            options
-                .clone()
-                .application_name(migrate::MIGRATION_APPLICATION_NAME),
-        )
-        .await
-        .context("could not connect for the contract-migration check")?;
+    let check_options = options
+        .clone()
+        .application_name(migrate::MIGRATION_APPLICATION_NAME);
+    let check = common::startup::retry_until_ready_within(
+        "postgres",
+        common::startup::CONNECT_BACKOFF,
+        connect_deadline,
+        || {
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with(check_options.clone())
+        },
+    )
+    .await
+    .context("could not connect for the contract-migration check")?;
     let ready = migrate::ensure_ready_for_contract_migration(&check).await;
     check.close().await;
     ready?;
@@ -222,6 +247,7 @@ mod tests {
         RunArgs {
             database_url: database_url.map(Secret::from),
             migration_database_url: migration_database_url.map(Secret::from),
+            migration_connect_deadline_secs: 120,
         }
     }
 
@@ -258,7 +284,30 @@ mod tests {
             .get_arguments()
             .filter_map(|arg| arg.get_env().map(|env| env.to_string_lossy().into_owned()))
             .collect();
-        assert_eq!(envs, ["DATABASE_URL", "MIGRATION_DATABASE_URL"]);
+        assert_eq!(
+            envs,
+            [
+                "DATABASE_URL",
+                "MIGRATION_DATABASE_URL",
+                "MIGRATION_CONNECT_DEADLINE_SECS"
+            ]
+        );
+    }
+
+    /// The chart sets `MIGRATION_CONNECT_DEADLINE_SECS`
+    /// (`migrate.job.connectDeadlineSecs`, default 120); 0 is refused.
+    #[test]
+    fn run_takes_a_positive_connect_deadline() {
+        let deadline = |args: &[&str]| -> Result<u64, clap::Error> {
+            match Cli::try_parse_from(args)?.command {
+                Command::Run(args) => Ok(args.migration_connect_deadline_secs),
+                Command::Wait(_) => unreachable!(),
+            }
+        };
+        assert_eq!(deadline(&["ds-migrate", "run"]).unwrap(), 120);
+        let flag = "--migration-connect-deadline-secs";
+        assert_eq!(deadline(&["ds-migrate", "run", flag, "30"]).unwrap(), 30);
+        assert!(deadline(&["ds-migrate", "run", flag, "0"]).is_err());
     }
 
     /// The whole `run` path against an already-migrated database: the
@@ -274,11 +323,16 @@ mod tests {
             migration_database_url: std::env::var(migrate::MIGRATION_DATABASE_URL_ENV)
                 .ok()
                 .map(Secret::from),
+            migration_connect_deadline_secs: 10,
         };
         let options: PgConnectOptions = args.url().unwrap().0.parse().unwrap();
-        run(options, MigrationSettings::default())
-            .await
-            .expect("an up-to-date database migrates cleanly");
+        run(
+            options,
+            MigrationSettings::default(),
+            Duration::from_secs(args.migration_connect_deadline_secs),
+        )
+        .await
+        .expect("an up-to-date database migrates cleanly");
     }
 
     #[test]
@@ -342,7 +396,7 @@ mod tests {
         let roles = std::iter::once(None).chain(Role::value_variants().iter().copied().map(Some));
         for role in roles {
             let gate = SchemaGate {
-                deadline: std::time::Duration::ZERO,
+                deadline: Duration::ZERO,
                 ..gate(role)
             };
             let applied = wait(database_options(), &gate)
@@ -360,7 +414,7 @@ mod tests {
     async fn wait_fails_at_the_deadline_on_an_older_schema() {
         let gate = SchemaGate {
             required_migration: i64::MAX,
-            deadline: std::time::Duration::ZERO,
+            deadline: Duration::ZERO,
             ..gate(None)
         };
         let err = wait(database_options(), &gate).await.unwrap_err();
