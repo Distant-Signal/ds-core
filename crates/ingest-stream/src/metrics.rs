@@ -53,6 +53,11 @@ pub const DLQ_OLDEST_AGE_SECONDS: &str = "ingest_stream_dlq_oldest_age_seconds";
 pub const STREAM_BYTES: &str = "ingest_stream_bytes";
 /// Gauge `{stream}`: Unix time of the last applied entry.
 pub const LAST_APPLIED_TIMESTAMP_SECONDS: &str = "ingest_stream_last_applied_timestamp_seconds";
+/// Counter `{stream, schema}`: observed times the writer's guard helpers
+/// clamped to its `now() + 2 min` (spec §7.8, D13). Emitted by the
+/// ingest-writer (`ingest_writer::observed`), not by this crate's runtime;
+/// named here with the rest of the family the alerts use.
+pub const OBSERVED_AT_CLAMPED_TOTAL: &str = "ingest_stream_observed_at_clamped_total";
 
 /// - `applied`, `duplicate` (the handler saw the key already applied),
 ///   `skipped` (shadow mode), `rejected` (applied, with some rows
@@ -125,6 +130,17 @@ pub(crate) fn consumed(stream: &str, schema: &str, outcome: &'static str) {
         "outcome" => outcome
     )
     .increment(1);
+}
+
+/// Counts `count` observed times clamped for `stream`/`schema`
+/// ([`OBSERVED_AT_CLAMPED_TOTAL`]); `count` 0 registers the series.
+pub fn observed_at_clamped(stream: &str, schema: &str, count: u64) {
+    metrics::counter!(
+        metric_name(OBSERVED_AT_CLAMPED_TOTAL),
+        "stream" => stream.to_owned(),
+        "schema" => schema.to_owned()
+    )
+    .increment(count);
 }
 
 pub(crate) fn handler_seconds(stream: &str, schema: &str, seconds: f64) {

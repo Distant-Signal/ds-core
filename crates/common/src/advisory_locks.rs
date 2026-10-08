@@ -71,13 +71,21 @@ pub const WRITER_CANARY: LoopLock = LoopLock {
     key: ascii_key(*b"dslpcnry"),
 };
 
+/// The ingest-writer's hourly prune of `ingest_dedup` (plan 3a.3, spec
+/// §7.4). Runs whenever a writer stream is on `apply`.
+pub const INGEST_DEDUP_PRUNE: LoopLock = LoopLock {
+    name: "ingest_dedup_prune",
+    key: ascii_key(*b"dslpddup"),
+};
+
 /// Every loop lock, for uniqueness checks.
-pub const ALL: [LoopLock; 5] = [
+pub const ALL: [LoopLock; 6] = [
     SCHEDULE_MATCH_SWEEP,
     RECONCILIATION_SWEEP,
     BACKLOG_MATCH_SWEEP,
     CORPUS_CROSSWALK,
     WRITER_CANARY,
+    INGEST_DEDUP_PRUNE,
 ];
 
 #[cfg(test)]
