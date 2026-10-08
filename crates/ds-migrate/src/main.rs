@@ -39,7 +39,8 @@
 //!   `backfill_line_train_summaries` (ingest phase 5 prep, Q2 of
 //!   docs/ingest-phase5-runbook.md: they must never run with the api's
 //!   credentials). They connect like `run` (`MIGRATION_DATABASE_URL`, the
-//!   schema owner, else `DATABASE_URL`) and refuse the api's role. The
+//!   schema owner, else `DATABASE_URL`, the first connection retried for
+//!   up to `MIGRATION_CONNECT_DEADLINE_SECS`) and refuse the api's role. The
 //!   logic is `ds_store::migrate::legacy_backfill::run_backfill` and
 //!   `ds_store::schedule::summaries::backfill_all`; both are idempotent.
 //!   The old api binaries still work, deprecated, until step 5.4b.
@@ -206,20 +207,31 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
 const BACKFILL_APPLICATION_NAME: &str = "ds-migrate-backfill";
 
 /// A small pool for a backfill on [`RunArgs::url`], refusing the api role.
+/// The first connection is retried for up to
+/// `MIGRATION_CONNECT_DEADLINE_SECS` (`--migration-connect-deadline-secs`).
 async fn backfill_pool(args: &RunArgs, tool: &str) -> anyhow::Result<sqlx::PgPool> {
     let (url, var) = args.url()?;
     let options: PgConnectOptions = url
         .parse()
         .with_context(|| format!("could not parse {var}"))?;
-    let pool = PgPoolOptions::new()
-        .max_connections(2)
-        .connect_with(
-            options
-                .options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS)
-                .application_name(BACKFILL_APPLICATION_NAME),
-        )
-        .await
-        .with_context(|| format!("could not connect with {var}"))?;
+    let options = options
+        .options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS)
+        .application_name(BACKFILL_APPLICATION_NAME);
+    // The first connection is retried like `run`'s, for up to
+    // `MIGRATION_CONNECT_DEADLINE_SECS`: these run as Jobs or one-off pods
+    // on the same saturated node, through the same NetworkPolicy.
+    let pool = common::startup::retry_until_ready_within(
+        "postgres",
+        common::startup::CONNECT_BACKOFF,
+        Duration::from_secs(args.migration_connect_deadline_secs),
+        || {
+            PgPoolOptions::new()
+                .max_connections(2)
+                .connect_with(options.clone())
+        },
+    )
+    .await
+    .with_context(|| format!("could not connect with {var}"))?;
     let user = ds_store::maintenance::refuse_api_role(
         &pool,
         tool,
