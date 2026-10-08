@@ -263,34 +263,4 @@ mod tests {
         assert_eq!(comparing.lock, advisory_locks::CORPUS_CROSSWALK);
         assert_eq!(comparing.interval, Duration::from_secs(600));
     }
-
-    /// The comparing body runs on a database with no CORPUS yet (nothing
-    /// to compare) and, after a load, compares and keeps succeeding.
-    /// `#[sqlx::test]`: a CORPUS load replaces the whole table.
-    #[sqlx::test(migrations = "./migrations")]
-    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
-    async fn the_comparing_loop_ticks_before_and_after_a_load(pool: sqlx::PgPool) {
-        let spec = corpus_crosswalk_comparing(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
-        spec.run_body(pool.clone()).await.unwrap();
-        let at = "2026-09-01T03:00:00Z".parse().unwrap();
-        let location = crate::corpus::CorpusLocation {
-            nlc: "559500".to_string(),
-            stanox: Some("87219".to_string()),
-            tiploc: Some("CLPHMJN".to_string()),
-            crs: Some("CLJ".to_string()),
-            uic: None,
-            nlc_desc: Some("CLAPHAM JUNCTION LONDON".to_string()),
-            nlc_desc16: None,
-        };
-        crate::corpus::replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &[location])
-            .await
-            .unwrap();
-        for _ in 0..2 {
-            spec.run_body(pool.clone()).await.unwrap();
-        }
-        assert_eq!(
-            crate::corpus::last_corpus_delivery(&pool).await.unwrap(),
-            Some(at)
-        );
-    }
 }

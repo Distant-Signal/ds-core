@@ -567,4 +567,35 @@ mod db_tests {
             .unwrap();
         assert_eq!(read().await, (None, None));
     }
+
+    /// The comparing body runs on a database with no CORPUS yet (nothing
+    /// to compare) and, after a load, compares and keeps succeeding.
+    /// `#[sqlx::test]`: a CORPUS load replaces the whole table. Lives here,
+    /// not in `loops`, so the non-superuser CI steps skip it with the other
+    /// `corpus::db_tests` (they cannot create a database).
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn the_comparing_loop_ticks_before_and_after_a_load(pool: PgPool) {
+        let spec = crate::loops::corpus_crosswalk_comparing(
+            crate::loops::CORPUS_CROSSWALK_DEFAULT_INTERVAL,
+        );
+        spec.run_body(pool.clone()).await.unwrap();
+        let at = "2026-09-01T03:00:00Z".parse().unwrap();
+        let location = CorpusLocation {
+            nlc: "559500".to_string(),
+            stanox: Some("87219".to_string()),
+            tiploc: Some("CLPHMJN".to_string()),
+            crs: Some("CLJ".to_string()),
+            uic: None,
+            nlc_desc: Some("CLAPHAM JUNCTION LONDON".to_string()),
+            nlc_desc16: None,
+        };
+        replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &[location])
+            .await
+            .unwrap();
+        for _ in 0..2 {
+            spec.run_body(pool.clone()).await.unwrap();
+        }
+        assert_eq!(last_corpus_delivery(&pool).await.unwrap(), Some(at));
+    }
 }
