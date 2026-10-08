@@ -258,7 +258,7 @@ where
 }
 
 /// [`run_poll_loop`] for a poller that writes Postgres itself instead of
-/// POSTing to `api` (ingest architecture phase 2, `INGEST_SINK=db`): the
+/// sending its POSTs to `api` (ingest architecture phase 2, `INGEST_SINK=db`): the
 /// first poll waits out what is left of `poll_interval` since
 /// `last_fetched` (the poller's own freshness marker, read from the
 /// database where the HTTP loop asks `api`), and a retry after a failed

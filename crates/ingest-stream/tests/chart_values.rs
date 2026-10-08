@@ -10,11 +10,6 @@
 //! maps rather than a YAML parser: the workspace has no YAML crate, and
 //! both maps are flat `"stream": number` lines.
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "test code: a panic is the right failure"
-)]
-
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -43,8 +38,10 @@ fn number_map(yaml: &str, parent: &str, child: &str) -> BTreeMap<String, u64> {
         .iter()
         .take_while(|l| l.trim().is_empty() || indent(l) > parent_indent)
         .position(|l| l.trim_start() == format!("{child}:"))
-        .map(|i| parent_at + 1 + i)
-        .unwrap_or_else(|| panic!("values.yaml has no `{parent}.{child}:`"));
+        .map_or_else(
+            || panic!("values.yaml has no `{parent}.{child}:`"),
+            |i| parent_at + 1 + i,
+        );
     let child_indent = indent(lines[child_at]);
     let mut out = BTreeMap::new();
     for line in &lines[child_at + 1..] {

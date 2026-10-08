@@ -39,6 +39,7 @@
 //! (`aggregator::queries::prune_line_train_summaries`).
 
 use std::collections::{HashMap, HashSet};
+use std::hash::BuildHasher;
 
 use anyhow::Result;
 use chrono::{NaiveTime, Timelike};
@@ -152,7 +153,10 @@ pub fn derivation_fingerprint(line: &LineStations) -> String {
         })
 }
 
-fn tiploc_crs<'a>(tiploc_to_crs: &'a HashMap<String, String>, tiploc: &str) -> Option<&'a str> {
+fn tiploc_crs<'a, S: BuildHasher>(
+    tiploc_to_crs: &'a HashMap<String, String, S>,
+    tiploc: &str,
+) -> Option<&'a str> {
     tiploc_to_crs
         .get(&tiploc.trim().to_uppercase())
         .map(String::as_str)
@@ -160,9 +164,9 @@ fn tiploc_crs<'a>(tiploc_to_crs: &'a HashMap<String, String>, tiploc: &str) -> O
 
 /// A train's public calls at the line's stations, in order, consecutive
 /// calls at one station (several TIPLOCs, e.g. platform groups) merged.
-pub fn on_line_stops(
+pub fn on_line_stops<S: BuildHasher>(
     calling_points: &[schedule_query::CallingPoint],
-    tiploc_to_crs: &HashMap<String, String>,
+    tiploc_to_crs: &HashMap<String, String, S>,
     line: &LineStations,
 ) -> Vec<OnLineStop> {
     let mut stops: Vec<OnLineStop> = Vec::new();
@@ -195,9 +199,9 @@ pub fn on_line_stops(
 /// point (from the given end) whose TIPLOC resolves to a real station CRS.
 /// Walks past depots, junctions and pseudo-CRS (`X..`) ends, which is what
 /// left 379 South West Main Line rows without a destination.
-pub fn endpoint_crs<'a>(
+pub fn endpoint_crs<'a, S: BuildHasher>(
     mut calling_points: impl Iterator<Item = &'a schedule_query::CallingPoint>,
-    tiploc_to_crs: &HashMap<String, String>,
+    tiploc_to_crs: &HashMap<String, String, S>,
 ) -> Option<String> {
     calling_points.find_map(|cp| {
         let calls = cp.public_arrival.is_some()
@@ -262,11 +266,11 @@ impl SummaryRow {
 /// Works one population entry out. `has_scope` is whether the population
 /// carries train membership; without it the due time is the first on-line
 /// public call (a population from before `line_due` existed).
-pub fn derive_row(
+pub fn derive_row<S: BuildHasher>(
     fields: EntryFields,
     calling_points: &[schedule_query::CallingPoint],
     has_scope: bool,
-    tiploc_to_crs: &HashMap<String, String>,
+    tiploc_to_crs: &HashMap<String, String, S>,
     line: &LineStations,
 ) -> SummaryRow {
     let stops = on_line_stops(calling_points, tiploc_to_crs, line);
@@ -374,9 +378,9 @@ fn population_tiplocs(population: &DecodedPopulation) -> Vec<String> {
 /// Every row of a decoded population, or `None` when a uid appears twice
 /// (the table cannot hold it; readers fall back to the JSONB, which lists
 /// both).
-pub fn derive_rows(
+pub fn derive_rows<S: BuildHasher>(
     population: DecodedPopulation,
-    tiploc_to_crs: &HashMap<String, String>,
+    tiploc_to_crs: &HashMap<String, String, S>,
     line: &LineStations,
 ) -> Option<Vec<SummaryRow>> {
     let mut seen = HashSet::new();

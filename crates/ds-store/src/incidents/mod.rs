@@ -813,8 +813,10 @@ mod db_tests {
         windows
             .iter()
             .position(|(start, end)| *start <= at && at <= *end)
-            .map(|index| index + 1)
-            .unwrap_or_else(|| panic!("{at} is in no snapshot's window: {windows:?}"))
+            .map_or_else(
+                || panic!("{at} is in no snapshot's window: {windows:?}"),
+                |index| index + 1,
+            )
     }
 
     /// Per incident suffix: (the snapshot its display time names, the
@@ -824,6 +826,8 @@ mod db_tests {
     /// Runs the 6-snapshot sequence with `modes[k]` for snapshot k and
     /// returns what the readers show after each snapshot.
     async fn run_sequence(pool: &PgPool, modes: [RowHeartbeat; 6]) -> Vec<DisplayTimes> {
+        // (incident_id, display time, fetched_at, source_removed_at)
+        type Row = (String, DateTime<Utc>, DateTime<Utc>, Option<DateTime<Utc>>);
         reset(pool).await;
         let (a, b, c, d) = (incident("A"), incident("B"), incident("C"), cleared("D"));
         let mut a_edited = a.clone();
@@ -855,14 +859,13 @@ mod db_tests {
                 .expect("clock");
             windows.push((start, end));
 
-            let rows: Vec<(String, DateTime<Utc>, DateTime<Utc>, Option<DateTime<Utc>>)> =
-                sqlx::query_as(&format!(
-                    "SELECT incident_id, {FETCHED_AT_SQL}, fetched_at, source_removed_at \
+            let rows: Vec<Row> = sqlx::query_as(&format!(
+                "SELECT incident_id, {FETCHED_AT_SQL}, fetched_at, source_removed_at \
                        FROM incidents WHERE incident_id LIKE 'TEST-HEARTBEAT-%'"
-                ))
-                .fetch_all(pool)
-                .await
-                .expect("display times");
+            ))
+            .fetch_all(pool)
+            .await
+            .expect("display times");
             let mut times = DisplayTimes::new();
             for (id, display, fetched_at, removed_at) in rows {
                 if heartbeat == RowHeartbeat::On {

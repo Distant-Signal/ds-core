@@ -66,7 +66,7 @@ impl WriteFailure {
 pub fn classify(err: &anyhow::Error) -> WriteFailure {
     if err
         .chain()
-        .any(|cause| cause.is::<crate::schedule::SchedulePublishBusy>())
+        .any(<dyn std::error::Error>::is::<crate::schedule::SchedulePublishBusy>)
     {
         return WriteFailure::Busy;
     }
