@@ -18,6 +18,16 @@ pub const PRODUCE_BUFFERED: &str = "ingest_stream_produce_buffered";
 /// [`PRODUCE_DROP_REASONS`].
 pub const PRODUCE_DROPPED_TOTAL: &str = "ingest_stream_produce_dropped_total";
 
+/// Counter `{stream, schema, sink}`: snapshot rows a producer delivered,
+/// by sink: `http` (the api accepted the POST) or `stream` (every part of
+/// the snapshot was XADDed). Under `INGEST_SINK=http+shadow` both count the
+/// same snapshots, so the two series agree while both paths work; the
+/// rollout's compare step (plan 3a, `docs/ingest-stream-runtime.md`) checks
+/// them against the writer's [`ROWS_TOTAL`].
+pub const SINK_ROWS_TOTAL: &str = "ingest_stream_sink_rows_total";
+/// `sink` label values of [`SINK_ROWS_TOTAL`].
+pub const SINKS: [&str; 2] = ["http", "stream"];
+
 /// `ok`, or why an XADD failed. `down` covers refused, reset and timed-out
 /// connections and `LOADING`; `error` anything unrecognised.
 pub const PRODUCE_OUTCOMES: [&str; 7] =
@@ -58,6 +68,12 @@ pub const LAST_APPLIED_TIMESTAMP_SECONDS: &str = "ingest_stream_last_applied_tim
 /// ingest-writer (`ingest_writer::observed`), not by this crate's runtime;
 /// named here with the rest of the family the alerts use.
 pub const OBSERVED_AT_CLAMPED_TOTAL: &str = "ingest_stream_observed_at_clamped_total";
+/// Counter `{stream, schema, mode}`: rows the writer's snapshot handlers
+/// decoded and validated (`mode="shadow"`) or wrote (`mode="apply"`, rows
+/// refused for a data error excluded). Emitted by the ingest-writer's
+/// handlers (plan 3a.6). In shadow it should match the producer's
+/// `SINK_ROWS_TOTAL{sink="http"}` for the same schema.
+pub const ROWS_TOTAL: &str = "ingest_stream_rows_total";
 
 /// - `applied`, `duplicate` (the handler saw the key already applied),
 ///   `skipped` (shadow mode), `rejected` (applied, with some rows
@@ -141,6 +157,30 @@ pub fn observed_at_clamped(stream: &str, schema: &str, count: u64) {
         "schema" => schema.to_owned()
     )
     .increment(count);
+}
+
+/// Counts `count` rows a producer delivered through `sink` (`http` or
+/// `stream`; [`SINK_ROWS_TOTAL`]). `count` 0 registers the series.
+pub fn sink_rows(stream: &str, schema: &str, sink: &'static str, count: usize) {
+    metrics::counter!(
+        metric_name(SINK_ROWS_TOTAL),
+        "stream" => stream.to_owned(),
+        "schema" => schema.to_owned(),
+        "sink" => sink
+    )
+    .increment(u64::try_from(count).unwrap_or(u64::MAX));
+}
+
+/// Counts `count` rows the writer handled for `stream`/`schema` in `mode`
+/// (`shadow` or `apply`; [`ROWS_TOTAL`]).
+pub fn rows(stream: &str, schema: &str, mode: &'static str, count: usize) {
+    metrics::counter!(
+        metric_name(ROWS_TOTAL),
+        "stream" => stream.to_owned(),
+        "schema" => schema.to_owned(),
+        "mode" => mode
+    )
+    .increment(u64::try_from(count).unwrap_or(u64::MAX));
 }
 
 pub(crate) fn handler_seconds(stream: &str, schema: &str, seconds: f64) {

@@ -9,7 +9,7 @@
 use anyhow::Result;
 use chrono::{DateTime, DurationRound, Utc};
 use common::FullCoverageWindowStatsRow;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 /// Width of one history bucket: each line keeps one row per window kind per
 /// 15 minutes (the latest write in the bucket wins).
@@ -74,20 +74,39 @@ fn int(value: u32) -> i32 {
 /// `computed_at` is OLDER than the one already stored for its bucket is
 /// ignored, so a replayed or late POST can never move a bucket backwards.
 /// Returns the number of rows written.
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "stats_version is a small constant"
-)]
 pub async fn upsert_full_coverage_window_stats(
     pool: &PgPool,
     rows: &[FullCoverageWindowStatsRow],
 ) -> Result<u64> {
     let mut tx = pool.begin().await?;
-    let mut count = 0u64;
-    for row in rows {
-        let c = &row.counts;
-        let result = sqlx::query(
-            r"
+    let count = upsert_full_coverage_window_stats_on(&mut tx, rows, None).await?;
+    tx.commit().await?;
+    Ok(count)
+}
+
+/// The api route's ordering: a row older than its bucket's stored one is
+/// ignored.
+const COMPUTED_AT_ORDER: &str =
+    "EXCLUDED.computed_at >= full_coverage_line_window_stats.computed_at";
+
+/// [`upsert_full_coverage_window_stats`] on `conn` (the ingest-writer's
+/// transaction, plan 3a.6). `guard` replaces the upsert's `WHERE`: the
+/// writer passes its observed-time guard on
+/// `full_coverage_line_window_stats.computed_at` (the same ordering plus the
+/// D13 healing arm for a row stamped in the future); `None` is the api
+/// route's `EXCLUDED.computed_at >= … .computed_at`. `guard` is a trusted SQL
+/// fragment, never data.
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "stats_version is a small constant"
+)]
+pub async fn upsert_full_coverage_window_stats_on(
+    conn: &mut PgConnection,
+    rows: &[FullCoverageWindowStatsRow],
+    guard: Option<&str>,
+) -> sqlx::Result<u64> {
+    let sql = format!(
+        r"
             INSERT INTO full_coverage_line_window_stats
                 (line_id, window_kind, bucket_start, service_date, window_start, window_end,
                  computed_at, total, on_time, delayed, cancelled_explicit, cancelled_presumed,
@@ -116,36 +135,40 @@ pub async fn upsert_full_coverage_window_stats(
                 stats_version      = EXCLUDED.stats_version,
                 cancelled_in_advance = EXCLUDED.cancelled_in_advance,
                 updated_at         = EXCLUDED.updated_at
-            WHERE EXCLUDED.computed_at >= full_coverage_line_window_stats.computed_at
+            WHERE {}
             ",
-        )
-        .bind(&row.line_id)
-        .bind(row.window_kind.as_str())
-        .bind(bucket_start(row.computed_at))
-        .bind(row.service_date)
-        .bind(row.window_start)
-        .bind(row.window_end)
-        .bind(row.computed_at)
-        .bind(int(c.total))
-        .bind(int(c.on_time))
-        .bind(int(c.delayed))
-        .bind(int(c.cancelled_explicit))
-        .bind(int(c.cancelled_presumed))
-        .bind(int(c.skipped))
-        .bind(int(c.pending))
-        .bind(int(c.unobserved))
-        .bind(c.avg_delay_minutes)
-        .bind(&row.relevance)
-        .bind(row.presumed_enabled)
-        .bind(row.partial)
-        .bind(row.feed_stale)
-        .bind(row.stats_version as i16)
-        .bind(int(c.cancelled_in_advance))
-        .execute(&mut *tx)
-        .await?;
+        guard.unwrap_or(COMPUTED_AT_ORDER)
+    );
+    let mut count = 0u64;
+    for row in rows {
+        let c = &row.counts;
+        let result = sqlx::query(&sql)
+            .bind(&row.line_id)
+            .bind(row.window_kind.as_str())
+            .bind(bucket_start(row.computed_at))
+            .bind(row.service_date)
+            .bind(row.window_start)
+            .bind(row.window_end)
+            .bind(row.computed_at)
+            .bind(int(c.total))
+            .bind(int(c.on_time))
+            .bind(int(c.delayed))
+            .bind(int(c.cancelled_explicit))
+            .bind(int(c.cancelled_presumed))
+            .bind(int(c.skipped))
+            .bind(int(c.pending))
+            .bind(int(c.unobserved))
+            .bind(c.avg_delay_minutes)
+            .bind(&row.relevance)
+            .bind(row.presumed_enabled)
+            .bind(row.partial)
+            .bind(row.feed_stale)
+            .bind(row.stats_version as i16)
+            .bind(int(c.cancelled_in_advance))
+            .execute(&mut *conn)
+            .await?;
         count += result.rows_affected();
     }
-    tx.commit().await?;
     Ok(count)
 }
 

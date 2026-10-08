@@ -10,28 +10,69 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use common::{LineStatusReport, StationFullCoverageSample, StationSample};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 use crate::freshness::{last_per_key, normalize_code, record_ingest};
 
 pub mod full_coverage_window;
 pub mod island_of_ireland;
 
+/// The `ingest_freshness` sources the ingest-writer records for the four
+/// snapshot schemas it applies (plan 3a.6, D13), at the entry's
+/// `produced_at`: "data as of". The api's routes do not record them (their
+/// freshness reads use the rows' own times), so these rows exist only once
+/// a stream is on `apply`; plan 3a.9's readers use them.
+pub mod sources {
+    pub const STATION_SAMPLES: &str = "station-samples";
+    pub const FULL_COVERAGE_STATS: &str = "full-coverage-stats";
+    pub const FULL_COVERAGE_WINDOW_STATS: &str = "full-coverage-window-stats";
+    pub const STATION_FULL_COVERAGE_SAMPLES: &str = "station-full-coverage-samples";
+}
+
+/// `AND <guard>`, or nothing. `guard` is a trusted SQL fragment (the
+/// ingest-writer's observed-time guard, `ingest_writer::observed::guard`),
+/// never data.
+pub(crate) fn and_guard(guard: Option<&str>) -> String {
+    guard.map_or_else(String::new, |guard| format!(" AND {guard}"))
+}
+
+/// A JSON encoding failure as a `sqlx` error, so the `_on` writers keep one
+/// error type (it cannot happen for these plain structs).
+fn encode_error(err: serde_json::Error) -> sqlx::Error {
+    sqlx::Error::Encode(Box::new(err))
+}
+
 /// Upserts a batch of station samples (LDBWS departure-board snapshots).
 /// No history — this is a point-in-time sample, wholesale-replaced per
 /// poll, same rationale as `upsert_stations`/`upsert_tocs`.
 pub async fn upsert_station_samples(pool: &PgPool, samples: &[StationSample]) -> Result<u64> {
+    let mut conn = pool.acquire().await?;
+    Ok(upsert_station_samples_on(&mut conn, samples, None).await?)
+}
+
+/// [`upsert_station_samples`] on `conn` (the ingest-writer's transaction,
+/// plan 3a.6), with `guard` ANDed into the upsert's `WHERE`: the writer
+/// passes its observed-time guard on `station_samples.polled_at` (spec
+/// §7.4), so an older snapshot never overwrites a newer one. `None` is the
+/// api route's upsert, unchanged.
+pub async fn upsert_station_samples_on(
+    conn: &mut PgConnection,
+    samples: &[StationSample],
+    guard: Option<&str>,
+) -> sqlx::Result<u64> {
     if samples.is_empty() {
         return Ok(0);
     }
     let batch = last_per_key(samples, |sample| normalize_code(&sample.crs));
     let crs: Vec<String> = batch.iter().map(|s| normalize_code(&s.crs)).collect();
-    let polled_at: Vec<chrono::DateTime<chrono::Utc>> = batch.iter().map(|s| s.polled_at).collect();
+    let polled_at: Vec<DateTime<Utc>> = batch.iter().map(|s| s.polled_at).collect();
     let departures: Vec<serde_json::Value> = batch
         .iter()
         .map(|s| serde_json::to_value(&s.departures))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<_, _>>()
+        .map_err(encode_error)?;
     // One Postgres array literal per row (UNNEST cannot take a
     // two-dimensional array of ragged rows). See `board_tiplocs`.
     let tiplocs: Vec<String> = batch
@@ -47,7 +88,7 @@ pub async fn upsert_station_samples(pool: &PgPool, samples: &[StationSample]) ->
     // one -- Postgres then reuses the existing TOAST chunks instead of
     // writing new ones and leaving the old ones dead, and the update stays
     // HOT (no indexed column changes).
-    sqlx::query(
+    let sql = format!(
         r"
         INSERT INTO station_samples (crs, polled_at, departures, tiplocs)
         SELECT crs, polled_at, departures, tiplocs::text[]
@@ -62,15 +103,17 @@ pub async fn upsert_station_samples(pool: &PgPool, samples: &[StationSample]) ->
             END,
             tiplocs    = EXCLUDED.tiplocs
         WHERE (station_samples.polled_at, station_samples.departures, station_samples.tiplocs)
-              IS DISTINCT FROM (EXCLUDED.polled_at, EXCLUDED.departures, EXCLUDED.tiplocs)
+              IS DISTINCT FROM (EXCLUDED.polled_at, EXCLUDED.departures, EXCLUDED.tiplocs){}
         ",
-    )
-    .bind(&crs)
-    .bind(&polled_at)
-    .bind(&departures)
-    .bind(&tiplocs)
-    .execute(pool)
-    .await?;
+        and_guard(guard)
+    );
+    sqlx::query(&sql)
+        .bind(&crs)
+        .bind(&polled_at)
+        .bind(&departures)
+        .bind(&tiplocs)
+        .execute(conn)
+        .await?;
     Ok(samples.len() as u64)
 }
 
@@ -108,6 +151,19 @@ pub async fn upsert_station_full_coverage_samples(
     pool: &PgPool,
     samples: &[StationFullCoverageSample],
 ) -> Result<u64> {
+    let mut conn = pool.acquire().await?;
+    Ok(upsert_station_full_coverage_samples_on(&mut conn, samples, None).await?)
+}
+
+/// [`upsert_station_full_coverage_samples`] on `conn`, with `guard` ANDed
+/// into the upsert's `WHERE` (the writer's observed-time guard on
+/// `station_full_coverage_samples.resolved_at`); `None` is the api route's
+/// upsert. See [`upsert_station_samples_on`].
+pub async fn upsert_station_full_coverage_samples_on(
+    conn: &mut PgConnection,
+    samples: &[StationFullCoverageSample],
+    guard: Option<&str>,
+) -> sqlx::Result<u64> {
     if samples.is_empty() {
         return Ok(0);
     }
@@ -116,17 +172,17 @@ pub async fn upsert_station_full_coverage_samples(
     });
     let crs: Vec<String> = batch.iter().map(|s| normalize_code(&s.crs)).collect();
     let operators: Vec<&str> = batch.iter().map(|s| s.operator.as_str()).collect();
-    let resolved_at: Vec<chrono::DateTime<chrono::Utc>> =
-        batch.iter().map(|s| s.resolved_at).collect();
+    let resolved_at: Vec<DateTime<Utc>> = batch.iter().map(|s| s.resolved_at).collect();
     let stats: Vec<serde_json::Value> = batch
         .iter()
         .map(|s| serde_json::to_value(&s.stats))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<_, _>>()
+        .map_err(encode_error)?;
 
     // Same shape as `upsert_station_samples`: `resolved_at` is the row's
     // own age and must advance each cycle; an identical row is skipped and
     // an unchanged `stats` value is carried over, not rewritten.
-    sqlx::query(
+    let sql = format!(
         r"
         INSERT INTO station_full_coverage_samples (crs, operator, resolved_at, stats)
         SELECT * FROM UNNEST($1::text[], $2::text[], $3::timestamptz[], $4::jsonb[])
@@ -138,15 +194,17 @@ pub async fn upsert_station_full_coverage_samples(
                 ELSE station_full_coverage_samples.stats
             END
         WHERE (station_full_coverage_samples.resolved_at, station_full_coverage_samples.stats)
-              IS DISTINCT FROM (EXCLUDED.resolved_at, EXCLUDED.stats)
+              IS DISTINCT FROM (EXCLUDED.resolved_at, EXCLUDED.stats){}
         ",
-    )
-    .bind(&crs)
-    .bind(&operators)
-    .bind(&resolved_at)
-    .bind(&stats)
-    .execute(pool)
-    .await?;
+        and_guard(guard)
+    );
+    sqlx::query(&sql)
+        .bind(&crs)
+        .bind(&operators)
+        .bind(&resolved_at)
+        .bind(&stats)
+        .execute(conn)
+        .await?;
     Ok(samples.len() as u64)
 }
 
@@ -350,7 +408,7 @@ pub async fn upsert_tfl_line_status(pool: &PgPool, reports: &[LineStatusReport])
     }
     let count = batch.len() as u64;
 
-    record_ingest(&mut tx, "tfl").await?;
+    record_ingest(&mut tx, "tfl", None).await?;
 
     // A TfL line that leaves the feed (a renamed id, a withdrawn service)
     // has no other way of disappearing — `/public/lines` derives its TfL
@@ -395,6 +453,48 @@ pub async fn upsert_full_coverage_line_stats(
     pool: &PgPool,
     rows: &[common::FullCoverageLineStatsRow],
 ) -> Result<u64> {
+    let mut conn = pool.acquire().await?;
+    Ok(upsert_full_coverage_line_stats_on(&mut conn, rows, None).await?)
+}
+
+/// The ingest-writer's ordering for [`upsert_full_coverage_line_stats_on`]
+/// (plan 3a.5/3a.6, D13): the `/1` body carries no time, so each row gets
+/// `source_updated_at` (the entry's clamped `produced_at`), and `guard`
+/// (the writer's observed-time guard on
+/// `full_coverage_line_stats.source_updated_at`) is ANDed into the `WHERE`.
+#[derive(Clone, Copy, Debug)]
+pub struct SourceOrdering<'a> {
+    pub source_updated_at: DateTime<Utc>,
+    pub guard: &'a str,
+}
+
+/// The stats columns differ: the F3 skip-if-unchanged test, and what makes
+/// `updated_at` mean "last changed".
+const LINE_STATS_CHANGED: &str =
+    "(full_coverage_line_stats.availability, full_coverage_line_stats.total,
+               full_coverage_line_stats.delayed, full_coverage_line_stats.cancelled,
+               full_coverage_line_stats.skipped, full_coverage_line_stats.avg_delay_minutes,
+               full_coverage_line_stats.partial, full_coverage_line_stats.cancelled_explicit,
+               full_coverage_line_stats.cancelled_presumed, full_coverage_line_stats.pending,
+               full_coverage_line_stats.unobserved, full_coverage_line_stats.stats_version)
+            IS DISTINCT FROM
+              (EXCLUDED.availability, EXCLUDED.total, EXCLUDED.delayed, EXCLUDED.cancelled,
+               EXCLUDED.skipped, EXCLUDED.avg_delay_minutes, EXCLUDED.partial,
+               EXCLUDED.cancelled_explicit, EXCLUDED.cancelled_presumed, EXCLUDED.pending,
+               EXCLUDED.unobserved, EXCLUDED.stats_version)";
+
+/// [`upsert_full_coverage_line_stats`] on `conn`. With `ordering` (the
+/// ingest-writer), each row's `source_updated_at` is set and advances on
+/// every snapshot even when the stats are unchanged (that column alone, a
+/// HOT update), so the guard always compares against the newest snapshot
+/// applied; `updated_at` still moves only when the stats change. `None` is
+/// the api route's upsert, unchanged: it leaves `source_updated_at` alone
+/// (`NULL` on a new row, which the guard counts as older).
+pub async fn upsert_full_coverage_line_stats_on(
+    conn: &mut PgConnection,
+    rows: &[common::FullCoverageLineStatsRow],
+    ordering: Option<SourceOrdering<'_>>,
+) -> sqlx::Result<u64> {
     if rows.is_empty() {
         return Ok(0);
     }
@@ -441,13 +541,16 @@ pub async fn upsert_full_coverage_line_stats(
         unobserved.push(breakdown.unobserved as i32);
         stats_versions.push(stats_version);
     }
-    let result = sqlx::query(
+    // `source_updated_at` is `$15` (NULL for the api route): it advances a
+    // row whose stats are unchanged only when given, and then only itself.
+    // `updated_at` keeps meaning "the stats last changed".
+    let sql = format!(
         r"
         INSERT INTO full_coverage_line_stats
             (line_id, service_date, availability, total, delayed, cancelled, skipped,
              avg_delay_minutes, partial, cancelled_explicit, cancelled_presumed, pending,
-             unobserved, stats_version, updated_at)
-        SELECT *, now()
+             unobserved, stats_version, updated_at, source_updated_at)
+        SELECT *, now(), $15::timestamptz
           FROM UNNEST($1::text[], $2::date[], $3::text[], $4::int4[], $5::int4[], $6::int4[],
                       $7::int4[], $8::float8[], $9::bool[], $10::int4[], $11::int4[],
                       $12::int4[], $13::int4[], $14::int2[])
@@ -464,36 +567,37 @@ pub async fn upsert_full_coverage_line_stats(
             pending            = EXCLUDED.pending,
             unobserved         = EXCLUDED.unobserved,
             stats_version      = EXCLUDED.stats_version,
-            updated_at         = EXCLUDED.updated_at
-        WHERE (full_coverage_line_stats.availability, full_coverage_line_stats.total,
-               full_coverage_line_stats.delayed, full_coverage_line_stats.cancelled,
-               full_coverage_line_stats.skipped, full_coverage_line_stats.avg_delay_minutes,
-               full_coverage_line_stats.partial, full_coverage_line_stats.cancelled_explicit,
-               full_coverage_line_stats.cancelled_presumed, full_coverage_line_stats.pending,
-               full_coverage_line_stats.unobserved, full_coverage_line_stats.stats_version)
-            IS DISTINCT FROM
-              (EXCLUDED.availability, EXCLUDED.total, EXCLUDED.delayed, EXCLUDED.cancelled,
-               EXCLUDED.skipped, EXCLUDED.avg_delay_minutes, EXCLUDED.partial,
-               EXCLUDED.cancelled_explicit, EXCLUDED.cancelled_presumed, EXCLUDED.pending,
-               EXCLUDED.unobserved, EXCLUDED.stats_version)
+            updated_at         = CASE WHEN {changed}
+                                      THEN EXCLUDED.updated_at
+                                      ELSE full_coverage_line_stats.updated_at END,
+            source_updated_at  = COALESCE(EXCLUDED.source_updated_at,
+                                          full_coverage_line_stats.source_updated_at)
+        WHERE ({changed}
+               OR (EXCLUDED.source_updated_at IS NOT NULL
+                   AND full_coverage_line_stats.source_updated_at
+                       IS DISTINCT FROM EXCLUDED.source_updated_at)){guard}
         ",
-    )
-    .bind(&line_ids)
-    .bind(&service_dates)
-    .bind(&availability)
-    .bind(&total)
-    .bind(&delayed)
-    .bind(&cancelled)
-    .bind(&skipped)
-    .bind(&avg_delay)
-    .bind(&partial)
-    .bind(&cancelled_explicit)
-    .bind(&cancelled_presumed)
-    .bind(&pending)
-    .bind(&unobserved)
-    .bind(&stats_versions)
-    .execute(pool)
-    .await?;
+        changed = LINE_STATS_CHANGED,
+        guard = and_guard(ordering.map(|ordering| ordering.guard)),
+    );
+    let result = sqlx::query(&sql)
+        .bind(&line_ids)
+        .bind(&service_dates)
+        .bind(&availability)
+        .bind(&total)
+        .bind(&delayed)
+        .bind(&cancelled)
+        .bind(&skipped)
+        .bind(&avg_delay)
+        .bind(&partial)
+        .bind(&cancelled_explicit)
+        .bind(&cancelled_presumed)
+        .bind(&pending)
+        .bind(&unobserved)
+        .bind(&stats_versions)
+        .bind(ordering.map(|ordering| ordering.source_updated_at))
+        .execute(conn)
+        .await?;
     Ok(result.rows_affected())
 }
 
@@ -704,7 +808,7 @@ mod db_tests {
             .await
             .unwrap();
         let read = |pool: PgPool| async move {
-            sqlx::query_as::<_, (chrono::DateTime<chrono::Utc>, i64)>(
+            sqlx::query_as::<_, (DateTime<Utc>, i64)>(
                 "SELECT computed_at, (SELECT COUNT(*) FROM line_status_history \
                                       WHERE line_id = 'TEST-GUARD-TFL') \
                  FROM line_status WHERE line_id = 'TEST-GUARD-TFL'",

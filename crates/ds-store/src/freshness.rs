@@ -36,19 +36,34 @@ pub fn last_per_key<T, K: Eq + std::hash::Hash>(items: &[T], key: impl Fn(&T) ->
         .collect()
 }
 
-/// Records that `source`'s poller delivered a (non-empty) batch just now.
+/// Records that `source`'s feed delivered a (non-empty) batch whose data
+/// is as of `observed_at`, or as of the transaction's `NOW()` when `None`.
 /// `ingest_freshness` is what the `last_*_fetch` freshness reads use for
 /// these sources: the upserts leave an unchanged row completely
 /// untouched (no-op guards, DB review 2026-09-27 F3), so the per-row
 /// `fetched_at`/`computed_at` columns can no longer answer "when did this
 /// feed last land" by `MAX()` -- and one row per source is also what lets
 /// `/public/freshness` be a single cheap query.
-pub async fn record_ingest(conn: &mut sqlx::PgConnection, source: &str) -> Result<()> {
+///
+/// **"Data as of", never backwards** (ingest architecture D13, spec §7.8,
+/// plan 3a.6): the stored time is `GREATEST(stored, observed_at)`. The
+/// ingest-writer passes the stream entry's `produced_at`, so a snapshot
+/// applied late (after a writer outage, or reordered by `XAUTOCLAIM`)
+/// records when its data was true, and an older one applied after a newer
+/// one does not move the marker back. The api and the direct writers pass
+/// `None` (their fetch time is now), so their behaviour is unchanged.
+pub async fn record_ingest(
+    conn: &mut sqlx::PgConnection,
+    source: &str,
+    observed_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<()> {
     sqlx::query(
-        "INSERT INTO ingest_freshness (source, fetched_at) VALUES ($1, NOW()) \
-         ON CONFLICT (source) DO UPDATE SET fetched_at = EXCLUDED.fetched_at",
+        "INSERT INTO ingest_freshness (source, fetched_at) VALUES ($1, COALESCE($2, NOW())) \
+         ON CONFLICT (source) DO UPDATE \
+         SET fetched_at = GREATEST(ingest_freshness.fetched_at, EXCLUDED.fetched_at)",
     )
     .bind(source)
+    .bind(observed_at)
     .execute(conn)
     .await?;
     Ok(())

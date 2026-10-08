@@ -87,7 +87,7 @@ pub async fn upsert_stations<S: StationRow + Sync>(pool: &PgPool, stations: &[S]
     for chunk in batch.chunks(UPSERT_STATIONS_CHUNK) {
         upsert_station_chunk(&mut tx, chunk).await?;
     }
-    record_ingest(&mut tx, "stations").await?;
+    record_ingest(&mut tx, "stations", None).await?;
     tx.commit().await?;
     Ok(stations.len() as u64)
 }
@@ -179,7 +179,7 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
     .bind(&station_operators)
     .execute(&mut *tx)
     .await?;
-    record_ingest(&mut tx, "tocs").await?;
+    record_ingest(&mut tx, "tocs", None).await?;
     tx.commit().await?;
     Ok(tocs.len() as u64)
 }

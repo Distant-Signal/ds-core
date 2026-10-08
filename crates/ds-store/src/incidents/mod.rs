@@ -515,7 +515,7 @@ pub async fn apply_snapshot(
         };
         sqlx::query(bump).bind(&chunk_ids).execute(&mut *tx).await?;
         if !chunk.is_empty() {
-            record_ingest(&mut tx, "incidents").await?;
+            record_ingest(&mut tx, "incidents", None).await?;
         }
 
         tx.commit().await?;

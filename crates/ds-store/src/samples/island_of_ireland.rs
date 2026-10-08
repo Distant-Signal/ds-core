@@ -68,7 +68,7 @@ pub async fn upsert_stations(pool: &PgPool, stations: &[IslandOfIrelandStation])
     .bind(&longitudes)
     .execute(&mut *tx)
     .await?;
-    crate::freshness::record_ingest(&mut tx, STATIONS_SOURCE).await?;
+    crate::freshness::record_ingest(&mut tx, STATIONS_SOURCE, None).await?;
     tx.commit().await?;
     Ok(stations.len() as u64)
 }
@@ -112,7 +112,7 @@ pub async fn upsert_lines(pool: &PgPool, lines: &[IslandOfIrelandLineDefinition]
     .bind(&stations)
     .execute(&mut *tx)
     .await?;
-    crate::freshness::record_ingest(&mut tx, LINES_SOURCE).await?;
+    crate::freshness::record_ingest(&mut tx, LINES_SOURCE, None).await?;
     tx.commit().await?;
     Ok(lines.len() as u64)
 }
