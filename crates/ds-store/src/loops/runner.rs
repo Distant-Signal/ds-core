@@ -505,6 +505,30 @@ impl RunningLoops {
         }
     }
 
+    /// [`Self::run_until_all_end`] until `stop` resolves, then
+    /// [`Self::shutdown`]: for a process that keeps no liveness wiring of
+    /// its own but still wants its locks released on SIGTERM (the api).
+    pub async fn run_until(mut self, stop: impl Future<Output = ()>) {
+        tokio::pin!(stop);
+        loop {
+            tokio::select! {
+                () = &mut stop => break,
+                result = self.tasks.join_next() => match result {
+                    Some(result) => {
+                        tracing::error!(error = ?result.err(), "a background loop task ended");
+                    }
+                    None => {
+                        // Every loop has ended; keep the session until told
+                        // to stop, then close it.
+                        (&mut stop).await;
+                        break;
+                    }
+                },
+            }
+        }
+        self.shutdown().await;
+    }
+
     /// Stops every loop (a body in flight is dropped mid-await; each is
     /// idempotent and transactional) and closes the lock session, so a
     /// standby can take the locks on its next tick.

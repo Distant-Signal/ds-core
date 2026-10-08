@@ -175,6 +175,42 @@ async fn spawned_loops_tick_on_their_interval_and_only_one_runner_sweeps() {
     );
 }
 
+/// The api's graceful shutdown (2026-10-08): `run_until` keeps the loops
+/// (and the lock) until told to stop, then releases the lock at once, so
+/// another process takes it on its next tick.
+#[tokio::test]
+#[ignore = "requires a live database (DATABASE_URL)"]
+async fn run_until_releases_the_lock_when_stopped() {
+    let lock = test_lock("run_until", *b"dststrun");
+    let (holder, holder_runs) =
+        counting_runner(lock, Duration::from_millis(100), "api-test-run-until").await;
+    let (other, other_runs) = counting_runner(
+        lock,
+        Duration::from_secs(60),
+        "ingest-writer-test-run-until",
+    )
+    .await;
+
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let running = tokio::spawn(holder.spawn(Duration::from_secs(60)).run_until(async {
+        let _ = stop_rx.await;
+    }));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(holder_runs.load(Ordering::SeqCst) >= 1);
+    assert_eq!(other.tick(0).await, TickOutcome::Skipped);
+
+    stop_tx.send(()).expect("stop");
+    tokio::time::timeout(Duration::from_secs(5), running)
+        .await
+        .expect("run_until returns once stopped")
+        .expect("task");
+    // Released synchronously (pg_advisory_unlock_all), not when Postgres
+    // eventually notices a closed socket.
+    assert_eq!(other.tick(0).await, TickOutcome::Ran);
+    assert_eq!(other_runs.load(Ordering::SeqCst), 1);
+    other.session().close().await;
+}
+
 #[tokio::test]
 #[ignore = "requires a live database (DATABASE_URL)"]
 async fn a_lost_lock_connection_is_reopened_and_the_lock_retaken() {
