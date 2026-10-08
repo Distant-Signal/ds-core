@@ -21,8 +21,8 @@ use std::path::PathBuf;
 use ingest_stream::budget::INGEST_STREAMS;
 
 fn values_yaml() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../charts/distant-signal/values.yaml");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../charts/distant-signal/values.yaml");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
