@@ -2,10 +2,10 @@
 //! `schedule-reference` publishes one line's day of trains as one JSONB
 //! row, and the readers fetch it whole or conditionally.
 //!
-//! The api's publish route writes through
-//! `data::line_train_summaries::upsert_population_with_summaries`, which
+//! The publish (the api's route and schedule-reference's `DbSink`) writes
+//! through [`super::summaries::upsert_population_with_summaries`], which
 //! runs the same statement as [`upsert_schedule_line_population`] and also
-//! derives the line's train summaries; that writer has not moved yet.
+//! derives the line's train summaries (moved here in plan 2a.2).
 //!
 //! Moved unchanged from the api's `data::queries` (ingest architecture
 //! plan 1A.7; the schedule-match sweep's three readers,

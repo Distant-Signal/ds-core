@@ -49,13 +49,23 @@ class RepoFilesTest(unittest.TestCase):
         self.assertEqual(status, 0, out.getvalue())
 
     def test_phase_0b_creates_only_observed_members_of_app(self) -> None:
-        """Phase 0b/1B: the four DB services and the writer, nothing narrowed."""
+        """Phase 0b/1B: the DB services and the writer; 2a's role is narrow."""
         model = gen.load()
         self.assertEqual(
             sorted(r.key for r in model.created()),
-            ["aggregator", "api", "enricher", "notifier", "writer"],
+            [
+                "aggregator",
+                "api",
+                "enricher",
+                "notifier",
+                "schedule_reference",
+                "writer",
+            ],
         )
-        self.assertTrue(all(r.status == "observed" for r in model.created()))
+        self.assertEqual(
+            {r.key: r.status for r in model.created() if r.status != "observed"},
+            {"schedule_reference": "narrow"},
+        )
 
 
 class ParseTest(unittest.TestCase):
@@ -182,10 +192,13 @@ class RenderTest(unittest.TestCase):
             self.assertIn("is stale", out.getvalue())
 
     def test_observed_roles_get_no_table_grants(self) -> None:
-        """Phase 0b: no per-role GRANT rows, only memberships."""
+        """Observed roles get memberships only; narrow ones (2a) their grants."""
         sql = gen.render(gen.load())
         self.assertIn("('api', 'observed')", sql)
-        self.assertNotIn("'SELECT', ''", sql)
+        for observed in ("api", "aggregator", "enricher", "notifier", "writer"):
+            self.assertNotIn(f"'{observed}', 'SELECT', ''", sql)
+        self.assertIn("('stanox_crs', 'schedule_reference', 'DELETE', '')", sql)
+        self.assertIn("('schedule_reference', 'narrow')", sql)
         self.assertIn("\\getenv api_password DS_PG_API_PASSWORD", sql)
 
     def test_a_narrow_role_gets_its_grants_and_sequences(self) -> None:

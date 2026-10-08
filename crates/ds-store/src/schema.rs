@@ -88,6 +88,8 @@ pub enum DbRole {
     Writer,
     /// `schedule-ingest` under `INGEST_SINK=db` (plan 2d.1).
     ScheduleIngest,
+    /// schedule-reference with `INGEST_SINK=db` (plan 2a.3).
+    ScheduleReference,
 }
 
 impl DbRole {
@@ -100,6 +102,7 @@ impl DbRole {
             Self::Notifier => "notifier",
             Self::Writer => "writer",
             Self::ScheduleIngest => "schedule_ingest",
+            Self::ScheduleReference => "schedule_reference",
         }
     }
 
@@ -323,6 +326,7 @@ mod tests {
             DbRole::Notifier,
             DbRole::Writer,
             DbRole::ScheduleIngest,
+            DbRole::ScheduleReference,
         ] {
             assert!(privileges_for(role.key()).is_some(), "{role:?}");
             assert!(!role.required_privileges().is_empty(), "{role:?}");

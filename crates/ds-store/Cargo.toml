@@ -26,6 +26,9 @@ metrics = "0.24"
 rand = "0.8"
 schedule-query = { path = "../schedule-query" }
 serde = { version = "1.0.228", features = ["derive"] }
+# `schedule::summaries::derivation_fingerprint` (moved from the api, plan
+# 2a.2); the api's version.
+sha2 = "0.10"
 # `raw_value`: the schedule line population is carried as raw JSON (see the
 # api's `upsert_schedule_line_population`).
 serde_json = { version = "1.0.149", features = ["raw_value"] }

@@ -13,10 +13,15 @@
 //! - `population`: the per-line schedule population.
 //! - `publish`: the network, destination and calling-point products and
 //!   the chunked diff-publish protocol.
+//! - [`services`]: the per-date `schedule_services` publish (plan 2a.2).
+//! - [`summaries`]: `line_train_summaries`' derivation and the population
+//!   upsert that writes them in its transaction (plan 2a.2).
 
 mod markers;
 mod population;
 mod publish;
+pub mod services;
+pub mod summaries;
 
 pub use markers::{
     ScheduleFeedFile, ScheduleFeedIngestRequest, ScheduleFeedSource, insert_schedule_feed_ingest,
@@ -30,11 +35,13 @@ pub use population::{
     upsert_schedule_line_population,
 };
 pub use publish::{
-    MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, ScheduleCallingPointsFullRow,
+    MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
+    STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, ScheduleCallingPointsFullRow,
     ScheduleDestinationDeparturesRow, ScheduleNetworkDeparturesRow, SchedulePublishBusy,
     SchedulePublishPart, finish_schedule_calling_points_full_publish_without_rows,
     finish_schedule_destination_departures_publish_without_rows, is_statement_timeout,
     register_schedule_publish_metrics, upsert_schedule_calling_points_full,
     upsert_schedule_calling_points_full_publish_part, upsert_schedule_destination_departures,
     upsert_schedule_destination_departures_publish_part, upsert_schedule_network_departures,
+    use_store_metric_names,
 };

@@ -44,6 +44,7 @@
 //! | [`schema`] | 1A.12 | `REQUIRED_MIGRATION`; `wait_for_schema` in 1B.2 |
 //! | [`migrate`] | 1B.1 | `api::migrate` and the contract-migration guard, with `migrations/` |
 //! | [`loops`] | 1B.6, 1B.7 | the advisory-locked loop runner and the train-domain loops the api and the ingest-writer both run |
+//! | [`writes`] | 2a.5 | `db_writes_total`/`db_write_seconds` and the direct writers' failure classes |
 //!
 //! `test_support` (built for this crate's tests and, through the
 //! off-by-default `test-support` feature, for the tests of crates that
@@ -71,3 +72,4 @@ pub mod test_support;
 pub mod tracking;
 pub mod trains;
 pub mod validate;
+pub mod writes;

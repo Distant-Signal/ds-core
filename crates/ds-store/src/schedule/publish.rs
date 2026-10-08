@@ -650,7 +650,7 @@ async fn finish_publish_part_declaring(
              until the next complete publish)"
         );
         metrics::counter!(
-            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
+            common::metrics::metric_name(staged_mismatch_metric()),
             "product" => sql.product
         )
         .increment(1);
@@ -731,9 +731,44 @@ pub async fn finish_schedule_calling_points_full_publish_without_rows(
 /// `api_schedule_publish_staged_mismatch_total{product}`: a final publish
 /// chunk whose staged key count did not match the publisher's total, so the
 /// rows missing from that publish were NOT deleted (SCHED-2). The chart's
-/// `DistantSignalSchedulePublishStagedMismatch` alert reads it.
+/// `DistantSignalSchedulePublishStagedMismatch` alert reads it. The api's
+/// name; a direct writer counts [`STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`]
+/// instead (see [`use_store_metric_names`]).
 pub const SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC: &str =
     "api_schedule_publish_staged_mismatch_total";
+
+/// [`SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`] under its `store_` name (spec
+/// §14.1), counted by a process other than the api that publishes directly
+/// (schedule-reference with `INGEST_SINK=db`, plan 2a.5). The alert takes
+/// `or` of both names until phase 5 drops the api's.
+pub const STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC: &str =
+    "store_schedule_publish_staged_mismatch_total";
+
+/// Whether this process counts the `store_` names; see
+/// [`use_store_metric_names`].
+static STORE_METRIC_NAMES: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Makes this process count the publish metrics under their `store_` names
+/// (spec §14.1): call once at startup, before
+/// [`register_schedule_publish_metrics`], in a direct writer. The api never
+/// calls it, so its metric names are unchanged.
+pub fn use_store_metric_names() {
+    STORE_METRIC_NAMES.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The staged-mismatch counter's name in this process.
+fn staged_mismatch_metric() -> &'static str {
+    staged_mismatch_metric_for(STORE_METRIC_NAMES.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+const fn staged_mismatch_metric_for(store_names: bool) -> &'static str {
+    if store_names {
+        STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
+    } else {
+        SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
+    }
+}
 
 /// Registers [`SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`] at 0 for both
 /// products at startup, so the alert's `increase()` sees the first mismatch.
@@ -743,7 +778,7 @@ pub fn register_schedule_publish_metrics() {
         &CALLING_POINTS_FULL_PUBLISH_KEYS_SQL,
     ] {
         metrics::counter!(
-            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
+            common::metrics::metric_name(staged_mismatch_metric()),
             "product" => sql.product
         )
         .increment(0);
@@ -2864,5 +2899,31 @@ mod schedule_destination_departures_upsert_tests {
         );
 
         delete_day(&pool, date).await;
+    }
+}
+
+/// The staged-mismatch counter's two names (plan 2a.5): the api keeps its
+/// `api_` name; a direct writer counts the `store_` one.
+#[cfg(test)]
+mod staged_mismatch_metric_name_tests {
+    use super::{
+        SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
+        staged_mismatch_metric_for,
+    };
+
+    #[test]
+    fn the_api_name_is_the_default_and_the_store_name_is_opt_in() {
+        assert_eq!(
+            staged_mismatch_metric_for(false),
+            SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
+        );
+        assert_eq!(
+            staged_mismatch_metric_for(true),
+            STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
+        );
+        assert_eq!(
+            STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("store_"),
+            SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("api_"),
+        );
     }
 }

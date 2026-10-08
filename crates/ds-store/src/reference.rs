@@ -1,7 +1,8 @@
 //! Reference data: `upsert_stations`, `upsert_tocs`, the STANOX/TIPLOC to
 //! CRS crosswalks (upsert, prune, list, lookup) and `upsert_fixed_links`,
 //! from `queries.rs` (spec §5.2). The read-only `list_fixed_links_from_crs`
-//! stays in the api.
+//! stays in the api. `replace_tiploc_locations` (the `tiploc_locations`
+//! publish) followed in 2a.2, for schedule-reference's `DbSink`.
 //!
 //! Moved in plan task 1A.6; `is_bookable_crs` followed in 1A.10, with the
 //! schedule-match sweep that uses it.
@@ -911,6 +912,136 @@ pub async fn crs_for_tiplocs_batch_with(
 /// consistently.
 pub fn is_bookable_crs(crs: &str) -> bool {
     !crs.starts_with('X')
+}
+
+/// `tiploc_locations`' publish (moved from the api's
+/// `data::tiploc_locations`, ingest architecture plan 2a.2).
+///
+/// Replaces the whole table with `records` in one transaction: upsert by
+/// TIPLOC (rows that did not change keep their `updated_at`), then delete
+/// every TIPLOC `records` does not list. An empty `records` is refused by
+/// the route before this is reached; here it is a no-op, never a wipe.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one 20-column upsert, its binds and the prune; splitting would scatter the column list"
+)]
+pub async fn replace_tiploc_locations(
+    pool: &PgPool,
+    records: &[common::TiplocLocationRecord],
+) -> Result<u64> {
+    if records.is_empty() {
+        return Ok(0);
+    }
+    let batch = last_per_key(records, |r| normalize_code(&r.tiploc));
+    let col = |f: fn(&common::TiplocLocationRecord) -> Option<String>| -> Vec<Option<String>> {
+        batch.iter().map(|r| f(r)).collect()
+    };
+    let int = |f: fn(&common::TiplocLocationRecord) -> Option<i32>| -> Vec<Option<i32>> {
+        batch.iter().map(|r| f(r)).collect()
+    };
+    let tiploc: Vec<String> = batch.iter().map(|r| normalize_code(&r.tiploc)).collect();
+    let location_type: Vec<&str> = batch.iter().map(|r| r.location_type.as_str()).collect();
+    let name: Vec<&str> = batch.iter().map(|r| r.name.as_str()).collect();
+    let display_name: Vec<&str> = batch.iter().map(|r| r.display_name.as_str()).collect();
+    let parent_crs: Vec<Option<String>> = batch
+        .iter()
+        .map(|r| r.parent_crs.as_deref().map(normalize_code))
+        .collect();
+    let parent_source: Vec<Option<&str>> = batch
+        .iter()
+        .map(|r| r.parent_source.map(common::ParentSource::as_str))
+        .collect();
+    let counts = |f: fn(&common::TiplocLocationRecord) -> i32| -> Vec<i32> {
+        batch.iter().map(|r| f(r)).collect()
+    };
+
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        r"
+        INSERT INTO tiploc_locations (
+            tiploc, location_type, name, display_name, ti_name, ti_crs, stanox,
+            msn_name, msn_code, msn_easting, msn_northing, msn_interchange,
+            parent_crs, parent_source, parent_distance_m,
+            rail_calls, rail_passes, bus_calls, ship_calls, source_sequence, updated_at)
+        SELECT tiploc, location_type, name, display_name, ti_name, ti_crs, stanox,
+               msn_name, msn_code, msn_easting, msn_northing, msn_interchange,
+               parent_crs, parent_source, parent_distance_m,
+               rail_calls, rail_passes, bus_calls, ship_calls, source_sequence, NOW()
+        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[],
+                    $7::text[], $8::text[], $9::text[], $10::int4[], $11::int4[], $12::int4[],
+                    $13::text[], $14::text[], $15::int4[], $16::int4[], $17::int4[],
+                    $18::int4[], $19::int4[], $20::int4[])
+            AS i(tiploc, location_type, name, display_name, ti_name, ti_crs, stanox,
+                 msn_name, msn_code, msn_easting, msn_northing, msn_interchange,
+                 parent_crs, parent_source, parent_distance_m,
+                 rail_calls, rail_passes, bus_calls, ship_calls, source_sequence)
+        ON CONFLICT (tiploc) DO UPDATE SET
+            location_type = EXCLUDED.location_type,
+            name = EXCLUDED.name,
+            display_name = EXCLUDED.display_name,
+            ti_name = EXCLUDED.ti_name,
+            ti_crs = EXCLUDED.ti_crs,
+            stanox = EXCLUDED.stanox,
+            msn_name = EXCLUDED.msn_name,
+            msn_code = EXCLUDED.msn_code,
+            msn_easting = EXCLUDED.msn_easting,
+            msn_northing = EXCLUDED.msn_northing,
+            msn_interchange = EXCLUDED.msn_interchange,
+            parent_crs = EXCLUDED.parent_crs,
+            parent_source = EXCLUDED.parent_source,
+            parent_distance_m = EXCLUDED.parent_distance_m,
+            rail_calls = EXCLUDED.rail_calls,
+            rail_passes = EXCLUDED.rail_passes,
+            bus_calls = EXCLUDED.bus_calls,
+            ship_calls = EXCLUDED.ship_calls,
+            source_sequence = EXCLUDED.source_sequence,
+            updated_at = NOW()
+        WHERE (tiploc_locations.location_type, tiploc_locations.name,
+               tiploc_locations.display_name, tiploc_locations.ti_name,
+               tiploc_locations.ti_crs, tiploc_locations.stanox, tiploc_locations.msn_name,
+               tiploc_locations.msn_code, tiploc_locations.msn_easting,
+               tiploc_locations.msn_northing, tiploc_locations.msn_interchange,
+               tiploc_locations.parent_crs, tiploc_locations.parent_source,
+               tiploc_locations.parent_distance_m, tiploc_locations.rail_calls,
+               tiploc_locations.rail_passes, tiploc_locations.bus_calls,
+               tiploc_locations.ship_calls, tiploc_locations.source_sequence)
+              IS DISTINCT FROM
+              (EXCLUDED.location_type, EXCLUDED.name, EXCLUDED.display_name,
+               EXCLUDED.ti_name, EXCLUDED.ti_crs, EXCLUDED.stanox, EXCLUDED.msn_name,
+               EXCLUDED.msn_code, EXCLUDED.msn_easting, EXCLUDED.msn_northing,
+               EXCLUDED.msn_interchange, EXCLUDED.parent_crs, EXCLUDED.parent_source,
+               EXCLUDED.parent_distance_m, EXCLUDED.rail_calls, EXCLUDED.rail_passes,
+               EXCLUDED.bus_calls, EXCLUDED.ship_calls, EXCLUDED.source_sequence)
+        ",
+    )
+    .bind(&tiploc)
+    .bind(&location_type)
+    .bind(&name)
+    .bind(&display_name)
+    .bind(col(|r| r.ti_name.clone()))
+    .bind(col(|r| r.ti_crs.clone()))
+    .bind(col(|r| r.stanox.clone()))
+    .bind(col(|r| r.msn_name.clone()))
+    .bind(col(|r| r.msn_code.clone()))
+    .bind(int(|r| r.msn_easting))
+    .bind(int(|r| r.msn_northing))
+    .bind(int(|r| r.msn_interchange))
+    .bind(&parent_crs)
+    .bind(&parent_source)
+    .bind(int(|r| r.parent_distance_m))
+    .bind(counts(|r| r.rail_calls))
+    .bind(counts(|r| r.rail_passes))
+    .bind(counts(|r| r.bus_calls))
+    .bind(counts(|r| r.ship_calls))
+    .bind(counts(|r| r.source_sequence))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM tiploc_locations WHERE NOT (tiploc = ANY($1))")
+        .bind(&tiploc)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(batch.len() as u64)
 }
 
 #[cfg(test)]
