@@ -1030,8 +1030,24 @@ pub async fn run_schedule_match_sweep(
     crs_line_index: &HashMap<String, Vec<String>>,
 ) -> anyhow::Result<u64> {
     let rows = tracking::list_pending_pins_for_schedule_match(pool).await?;
+    // Pins may be up to `PIN_MAX_DAYS_AHEAD` (28) days ahead, but
+    // populations are published for today and tomorrow only. Without a
+    // population for its date or the day before (the overnight search in
+    // `find_schedule_match`), every candidate-line read comes back empty and
+    // the attempt is `Ok(false)`. So skip such a pin here, before its
+    // per-pin queries (a CRS lookup, then two primary-key misses per
+    // candidate line, every 300 s for up to four weeks).
+    let population_dates = schedule::list_schedule_line_population_dates(pool).await?;
     let mut matched = 0u64;
     for row in rows {
+        let has_population = population_dates.contains(&row.service_date)
+            || row
+                .service_date
+                .pred_opt()
+                .is_some_and(|previous| population_dates.contains(&previous));
+        if !has_population {
+            continue;
+        }
         let (Some(pin_origin_crs), Some(pin_scheduled_departure)) =
             (row.pin_origin_crs.as_deref(), row.pin_scheduled_departure)
         else {
@@ -2967,5 +2983,129 @@ mod db_tests {
                 .await
                 .expect("cleanup");
         }
+    }
+
+    /// A pin 20 days ahead (inside the 28-day `PIN_MAX_DAYS_AHEAD`) is
+    /// swept: while its date has no `schedule_line_population` it stays
+    /// `pending` (skipped before any per-pin query), and the first sweep
+    /// after that date's population is published matches it.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                run_schedule_match_sweep_matches_a_pin_20_days_ahead_once_published \
+                -- --ignored --test-threads=1`"]
+    async fn run_schedule_match_sweep_matches_a_pin_20_days_ahead_once_published() {
+        let pool = connect().await;
+        let user_id = "TEST-PIN28-SWEEP";
+        let line_id = "test-pin28-line";
+        let uid = "Z28001";
+        let stanox = "TEST-PIN28-STANOX";
+        let cleanup = || {
+            let pool = pool.clone();
+            async move {
+                cleanup_user(&pool, user_id).await;
+                for (sql, bind) in [
+                    ("DELETE FROM trains WHERE train_uid = $1", uid),
+                    (
+                        "DELETE FROM schedule_line_population WHERE line_id = $1",
+                        line_id,
+                    ),
+                    ("DELETE FROM stanox_crs WHERE stanox = $1", stanox),
+                ] {
+                    sqlx::query(sql)
+                        .bind(bind)
+                        .execute(&pool)
+                        .await
+                        .expect("cleanup");
+                }
+            }
+        };
+        cleanup().await;
+        seed_user(&pool, user_id).await;
+        let service_date = db_today(&pool).await + Duration::days(20);
+        // The fixture must sit inside the pin horizon.
+        const _: () = assert!(20 < tracking::PIN_MAX_DAYS_AHEAD);
+        sqlx::query(
+            "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
+             VALUES ($1, 'ZZW', 'ZZWTEST', 'TEST PIN28', 1) \
+             ON CONFLICT (stanox) DO NOTHING",
+        )
+        .bind(stanox)
+        .execute(&pool)
+        .await
+        .expect("seed stanox_crs");
+        let departure = london_to_utc(service_date.and_hms_opt(8, 15, 0).unwrap()).unwrap();
+        let pin = seed_backlog_candidate_pin(
+            &pool,
+            user_id,
+            service_date,
+            Some("ZZW"),
+            Some(departure),
+            "pending",
+            None,
+        )
+        .await;
+        let index = HashMap::from([("ZZW".to_string(), vec![line_id.to_string()])]);
+        let state = || {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_as::<_, (String, Option<String>)>(
+                    "SELECT ts.resolution_status, tr.train_uid FROM train_subscriptions ts \
+                     LEFT JOIN trains tr ON tr.id = ts.trains_id WHERE ts.id = $1",
+                )
+                .bind(pin)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+            }
+        };
+
+        assert!(
+            tracking::list_pending_pins_for_schedule_match(&pool)
+                .await
+                .expect("list")
+                .iter()
+                .any(|row| row.id == pin),
+            "a pin 20 days ahead is inside the sweep window"
+        );
+        run_schedule_match_sweep(&pool, &index)
+            .await
+            .expect("sweep before publish");
+        assert_eq!(
+            state().await,
+            ("pending".to_string(), None),
+            "no population for its date yet: still pending"
+        );
+
+        sqlx::query(
+            "INSERT INTO schedule_line_population (line_id, service_date, population) \
+             VALUES ($1, $2, $3) \
+             ON CONFLICT (line_id, service_date) DO UPDATE SET population = EXCLUDED.population",
+        )
+        .bind(line_id)
+        .bind(service_date)
+        .bind(serde_json::json!([{
+            "uid": uid,
+            "calling_points": [{
+                "tiploc": "ZZWTEST",
+                "kind": "Origin",
+                "booked_arrival": null,
+                "booked_departure": "08:15",
+                "is_half_minute_arrival": false,
+                "is_half_minute_departure": false
+            }]
+        }]))
+        .execute(&pool)
+        .await
+        .expect("seed schedule_line_population");
+        let matched = run_schedule_match_sweep(&pool, &index)
+            .await
+            .expect("sweep after publish");
+        assert!(matched >= 1);
+        assert_eq!(
+            state().await,
+            ("schedule_matched".to_string(), Some(uid.to_string()))
+        );
+
+        cleanup().await;
     }
 }

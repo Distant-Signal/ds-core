@@ -236,6 +236,24 @@ pub async fn get_overnight_schedule_line_population_entries(
         .transpose()
 }
 
+/// Every `service_date` some line has a population row for -- the
+/// schedule-match sweep's per-tick pre-filter
+/// (`schedule_matching::run_schedule_match_sweep`). `schedule-reference`
+/// publishes populations for today and tomorrow and the aggregator prunes
+/// the past, so this is a handful of dates read off the primary key; a
+/// pin whose date (and the day before, for an overnight schedule) is not
+/// among them cannot match, so the sweep skips it without its per-line
+/// reads.
+pub async fn list_schedule_line_population_dates(
+    pool: &PgPool,
+) -> Result<std::collections::HashSet<chrono::NaiveDate>> {
+    let dates: Vec<chrono::NaiveDate> =
+        sqlx::query_scalar("SELECT DISTINCT service_date FROM schedule_line_population")
+            .fetch_all(pool)
+            .await?;
+    Ok(dates.into_iter().collect())
+}
+
 /// Every published line whose `service_date` population contains a schedule
 /// with this `train_uid` -- the identity-first inverse of
 /// [`get_schedule_line_population`], which can only answer "what is on THIS

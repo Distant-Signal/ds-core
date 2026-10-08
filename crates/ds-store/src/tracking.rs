@@ -16,11 +16,22 @@ use chrono::{DateTime, Utc};
 use common::{TrackedTrainRef, TrainMovementEventMessage};
 use sqlx::{Connection, PgConnection, PgPool};
 
-/// How far ahead a pin's `service_date` may be (API-6): `schedule-reference`
-/// publishes today plus 7 days (`DESTINATION_DEPARTURES_FORWARD_DAYS`),
-/// so nothing later can schedule-match. The departure instant gets one
-/// more day for a service that runs past midnight.
-pub const PIN_MAX_DAYS_AHEAD: i64 = 7;
+/// How far ahead a pin's or a track-by-uid's `service_date` may be (API-6):
+/// four weeks, raised from 7 on 2026-10-08 to match the timetable's publish
+/// window. `schedule-reference` publishes its per-date products at least
+/// this many days ahead -- its `SCHEDULE_FORWARD_PUBLISH_DAYS` takes this
+/// constant as its lower bound -- so a tracked train inside this bound always
+/// has its stops (`schedule_calling_points_full`) and its true origin
+/// (`schedule_destination_departures`) published. The departure instant
+/// gets one more day for a service that runs past midnight.
+///
+/// A pin's schedule MATCH is a different product:
+/// `sweeps::schedule_matching` reads `schedule_line_population`, which is
+/// published for today and tomorrow only. A far pin is accepted, stays
+/// `pending`, and matches on the first sweep after its date's (or the day
+/// before's) population lands -- `run_schedule_match_sweep` skips it until
+/// then without querying per pin.
+pub const PIN_MAX_DAYS_AHEAD: i64 = 28;
 
 /// Row shape for `list_active_tracked_trains`'s query -- identical fields
 /// to `common::TrackedTrainRef`, but with `sqlx::FromRow` derived, since
@@ -986,11 +997,13 @@ pub struct PendingSchedulePin {
 /// `schedule-reference` only publishes a rolling window of upcoming dates.
 ///
 /// **Upper bound, API-6.** Both sweeps also skip a pin dated more than
-/// [`SWEEP_MAX_DAYS_AHEAD`] days ahead: nothing is published that far out,
-/// so every attempt was futile, and a pin dated 2090 (possible before
-/// `validate_pin` bounded the future) was swept every 300 s for ever. With
-/// the 2-day floor this gives every pin a sweep life of at most about ten
-/// days, whatever its date.
+/// [`SWEEP_MAX_DAYS_AHEAD`] days ahead: no pin that far out can be created,
+/// and a pin dated 2090 (possible before `validate_pin` bounded the future)
+/// was swept every 300 s for ever. With the 2-day floor this gives every pin
+/// a sweep life of at most about a month, whatever its date. Inside the
+/// bound, `schedule_matching::run_schedule_match_sweep` skips a pin whose
+/// date has no `schedule_line_population` yet before any per-pin query,
+/// so a far pin costs this list query's row and nothing else.
 pub async fn list_pending_pins_for_schedule_match(
     pool: &PgPool,
 ) -> anyhow::Result<Vec<PendingSchedulePin>> {
@@ -3011,6 +3024,9 @@ mod db_tests {
             today + chrono::Duration::days(1),
             today + chrono::Duration::days(i64::from(SWEEP_MAX_DAYS_AHEAD) + 1),
             "2090-01-01".parse().unwrap(),
+            // 2026-10-08: the horizon is four weeks, so a pin 20 days out
+            // is swept (it matches once its date's population lands).
+            today + chrono::Duration::days(20),
         ] {
             ids.push(
                 seed_backlog_candidate_pin(
@@ -3047,6 +3063,7 @@ mod db_tests {
                 "a pin past the horizon must not be swept yet"
             );
             assert!(!swept.contains(&ids[2]), "a 2090 pin must not be swept");
+            assert!(swept.contains(&ids[3]), "a pin 20 days ahead must be swept");
         }
 
         cleanup_user(&pool, user_id).await;

@@ -67,6 +67,16 @@ struct EnrichmentCandidate {
 /// guaranteed-futile repeated work. Found by this plan's own final
 /// whole-branch review.
 ///
+/// And bounded above at `CURRENT_DATE + 1` (2026-10-08, when tracking by
+/// uid went from 7 to 28 days ahead): [`retry_schedule_enrichment_for_nr_primary_trains`]
+/// skips a train until its origin departure has passed, and a train dated
+/// two or more UTC days ahead cannot have departed (its date starts at
+/// London midnight, at most an hour before UTC midnight). The `+ 1`, not
+/// `+ 0`, covers London's date running ahead of the database's UTC
+/// `CURRENT_DATE` between midnight and 01:00 BST. Without it each far
+/// tracked train cost a `true_origin_departure` read every tick for up to
+/// four weeks, only to be skipped.
+///
 /// Buses and ferries (`schedule_services.mode <> 'train'`) are excluded
 /// (2026-10-06): they are timetable-only, enriched once at track time
 /// (`routes::train::enrich_shared_train`) with no grace period to wait out,
@@ -82,6 +92,7 @@ async fn list_trains_needing_schedule_enrichment(
          JOIN train_subscriptions ts ON ts.trains_id = tr.id \
          WHERE tr.schedule_matched_at IS NULL \
            AND tr.service_date >= CURRENT_DATE - INTERVAL '2 days' \
+           AND tr.service_date <= CURRENT_DATE + 1 \
            AND NOT EXISTS ( \
                SELECT 1 FROM schedule_services ss \
                WHERE ss.service_date = tr.service_date AND ss.uid = tr.train_uid \
@@ -734,6 +745,45 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// Tracking by uid reaches 28 days ahead: a far tracked train is not an
+    /// enrichment candidate (it cannot have departed), tomorrow's still is.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_enrichment_candidates_stop_at_tomorrow \
+                -- --ignored --test-threads=1`"]
+    async fn schedule_enrichment_candidates_stop_at_tomorrow() {
+        let pool = connect().await;
+        let user_id = "TEST-RECON-FAR";
+        let near_uid = "TEST-RECON-FAR-NEAR";
+        let far_uid = "TEST-RECON-FAR-FAR";
+        cleanup(&pool, user_id, near_uid).await;
+        cleanup(&pool, user_id, far_uid).await;
+        seed_user(&pool, user_id).await;
+        let today: NaiveDate = sqlx::query_scalar("SELECT CURRENT_DATE")
+            .fetch_one(&pool)
+            .await
+            .expect("CURRENT_DATE");
+        let near_date = today + chrono::Duration::days(1);
+        let far_date = today + chrono::Duration::days(20);
+        let near = seed_train(&pool, near_uid, near_date).await;
+        let far = seed_train(&pool, far_uid, far_date).await;
+        seed_pending_subscription(&pool, user_id, near_date, near).await;
+        seed_pending_subscription(&pool, user_id, far_date, far).await;
+
+        let candidates = enrichment_candidate_ids_for_tests(&pool).await;
+        assert!(
+            candidates.contains(&near),
+            "tomorrow's train is a candidate"
+        );
+        assert!(
+            !candidates.contains(&far),
+            "a train 20 days ahead cannot have departed, so it is not re-read every tick"
+        );
+
+        cleanup(&pool, user_id, near_uid).await;
+        cleanup(&pool, user_id, far_uid).await;
     }
 
     #[tokio::test]

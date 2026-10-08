@@ -32,7 +32,7 @@ pub use population::{
     ConditionalPopulation, get_overnight_schedule_line_population_entries,
     get_schedule_line_population, get_schedule_line_population_conditional,
     get_schedule_line_population_entries, list_line_ids_with_uid_in_population,
-    upsert_schedule_line_population,
+    list_schedule_line_population_dates, upsert_schedule_line_population,
 };
 pub use publish::{
     MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
