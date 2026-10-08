@@ -74,6 +74,103 @@ pub async fn upsert_trust_event_backlog_batch(
     }
 }
 
+/// The whole write of one `trust-backlog-consumer` batch, as
+/// `POST /private/trust-event-backlog` does it and as the consumer's
+/// direct DB sink does it (ingest architecture plan 3b.1; moved here from
+/// the api's handler so both are this one function):
+///
+/// 1. [`upsert_trust_event_backlog_batch`]. Each row it refuses for a data
+///    error is logged with its event and counted in
+///    `api_trust_event_backlog_rejected_rows_total{reason}`.
+/// 2. [`ingest_shared_movements_batch`] for the rows step 1 accepted only
+///    (API-4): a refused row must not go on to create `trains` rows or
+///    movements.
+/// 3. PL-7: a data error on one event there is reported in `rejected` too
+///    (its message prefixed `shared movement write: `), while a transient
+///    error fails the whole call, so the caller retries the batch. The
+///    retry is safe: committed backlog rows conflict harmlessly on
+///    `dedup_key`, and every shared write is idempotent too. Both count in
+///    `api_trust_event_backlog_shared_movement_errors_total{class}`.
+///
+/// `rejected` is sorted by index. `inserted` is step 1's insert count.
+pub async fn ingest_trust_event_backlog(
+    pool: &PgPool,
+    events: &[TrustBacklogEventMessage],
+) -> anyhow::Result<BacklogBatchOutcome> {
+    let outcome = upsert_trust_event_backlog_batch(pool, events).await?;
+    for rejected in &outcome.rejected {
+        tracing::warn!(
+            index = rejected.index,
+            dedup_key = %rejected.dedup_key,
+            sqlstate = %rejected.sqlstate,
+            reason = %rejected.reason,
+            constraint = ?rejected.constraint,
+            message = %rejected.message,
+            event = ?events.get(rejected.index),
+            "rejected trust-event-backlog row; inserted the rest of its batch"
+        );
+        metrics::counter!(
+            common::metrics::metric_name("api_trust_event_backlog_rejected_rows_total"),
+            "reason" => rejected.reason.clone()
+        )
+        .increment(1);
+    }
+
+    let already_rejected: HashSet<usize> = outcome.rejected.iter().map(|r| r.index).collect();
+    let accepted: Vec<usize> = (0..events.len())
+        .filter(|index| !already_rejected.contains(index))
+        .collect();
+    let accepted_events: Vec<TrustBacklogEventMessage> = accepted
+        .iter()
+        .map(|&index| events[index].clone())
+        .collect();
+    let shared_movement_results = ingest_shared_movements_batch(pool, &accepted_events).await;
+    let mut rejected = outcome.rejected;
+    let mut transient: Option<anyhow::Error> = None;
+    for (&index, result) in accepted.iter().zip(shared_movement_results) {
+        let Err(err) = result else { continue };
+        let event = &events[index];
+        if let Some(data_error) = classify_anyhow_data_error(&err) {
+            tracing::warn!(
+                index,
+                error = ?err,
+                train_id = %event.train_id,
+                event = ?event,
+                "shared movement write rejected this backlog event for a data error"
+            );
+            metrics::counter!(
+                common::metrics::metric_name("api_trust_event_backlog_shared_movement_errors_total"),
+                "class" => "data"
+            )
+            .increment(1);
+            let mut row = data_error.into_rejected_row(index, &event.dedup_key);
+            row.message = format!("shared movement write: {}", row.message);
+            rejected.push(row);
+        } else {
+            tracing::error!(
+                index,
+                error = ?err,
+                train_id = %event.train_id,
+                "shared movement write failed transiently; failing the batch so it is retried"
+            );
+            metrics::counter!(
+                common::metrics::metric_name("api_trust_event_backlog_shared_movement_errors_total"),
+                "class" => "transient"
+            )
+            .increment(1);
+            transient.get_or_insert(err);
+        }
+    }
+    if let Some(err) = transient {
+        return Err(err);
+    }
+    rejected.sort_by_key(|row| row.index);
+    Ok(BacklogBatchOutcome {
+        inserted: outcome.inserted,
+        rejected,
+    })
+}
+
 fn insert_backlog_row(
     event: &TrustBacklogEventMessage,
 ) -> sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> {

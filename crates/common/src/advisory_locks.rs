@@ -64,6 +64,13 @@ pub const CORPUS_CROSSWALK: LoopLock = LoopLock {
     key: ascii_key(*b"dslpcorp"),
 };
 
+/// `ds_store::tracking::outbox::apply_train_event_outbox` (ingest plan
+/// 3b.3): the train events trust-consumer's DB sink defers.
+pub const TRAIN_EVENT_OUTBOX: LoopLock = LoopLock {
+    name: "train_event_outbox",
+    key: ascii_key(*b"dslptevo"),
+};
+
 /// The writer's no-op canary loop (`SELECT 1`): proves the runner, its lock
 /// and its metrics work in production before the real sweeps move over.
 pub const WRITER_CANARY: LoopLock = LoopLock {
@@ -79,13 +86,14 @@ pub const INGEST_DEDUP_PRUNE: LoopLock = LoopLock {
 };
 
 /// Every loop lock, for uniqueness checks.
-pub const ALL: [LoopLock; 6] = [
+pub const ALL: [LoopLock; 7] = [
     SCHEDULE_MATCH_SWEEP,
     RECONCILIATION_SWEEP,
     BACKLOG_MATCH_SWEEP,
     CORPUS_CROSSWALK,
     WRITER_CANARY,
     INGEST_DEDUP_PRUNE,
+    TRAIN_EVENT_OUTBOX,
 ];
 
 #[cfg(test)]

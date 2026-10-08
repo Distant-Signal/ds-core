@@ -1755,6 +1755,13 @@ pub struct TrackedTrainRef {
 pub struct TrainForwardSignalMessage {
     pub trains_id: i64,
     pub event_summary: String,
+    /// Makes the signal idempotent (ingest architecture plan 3b.3): a
+    /// signal whose key is already queued is skipped, so a redelivered
+    /// `movement-events` entry raises one signal, not two. trust-consumer
+    /// sends `<trains_id>:<dedup_key of the movement that raised it>`.
+    /// `None` (an older trust-consumer, which omits it) appends as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dedup_key: Option<String>,
 }
 
 /// Reference data for a station, as published by the station-reference feed.

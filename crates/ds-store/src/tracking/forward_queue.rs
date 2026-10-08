@@ -9,24 +9,44 @@ use sqlx::PgPool;
 /// so the consumer's retry re-inserted the committed prefix. Rows get their
 /// `id`s in input order (`WITH ORDINALITY ... ORDER BY`), which is the order
 /// the notifier polls them in.
+///
+/// A signal with a [`TrainForwardSignalMessage::dedup_key`] already queued
+/// is skipped (plan 3b.3: a redelivered movement raises one signal); one
+/// without a key is always appended. Returns the rows inserted.
 pub async fn insert_forward_signals(
     pool: &PgPool,
     signals: &[TrainForwardSignalMessage],
 ) -> anyhow::Result<u64> {
+    insert_forward_signals_on(pool, signals).await
+}
+
+/// [`insert_forward_signals`] on any executor: trust-consumer's DB sink
+/// runs it in the transaction that writes the train events (plan 3b.3).
+pub async fn insert_forward_signals_on<'e, E>(
+    executor: E,
+    signals: &[TrainForwardSignalMessage],
+) -> anyhow::Result<u64>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     if signals.is_empty() {
         return Ok(0);
     }
     let trains_ids: Vec<i64> = signals.iter().map(|s| s.trains_id).collect();
     let summaries: Vec<&str> = signals.iter().map(|s| s.event_summary.as_str()).collect();
+    let dedup_keys: Vec<Option<&str>> = signals.iter().map(|s| s.dedup_key.as_deref()).collect();
     let result = sqlx::query(
-        "INSERT INTO notifier_forward_queue (trains_id, event_summary) \
-         SELECT trains_id, event_summary \
-           FROM UNNEST($1::bigint[], $2::text[]) WITH ORDINALITY AS s(trains_id, event_summary, ord) \
-          ORDER BY ord",
+        "INSERT INTO notifier_forward_queue (trains_id, event_summary, dedup_key) \
+         SELECT trains_id, event_summary, dedup_key \
+           FROM UNNEST($1::bigint[], $2::text[], $3::text[]) \
+                WITH ORDINALITY AS s(trains_id, event_summary, dedup_key, ord) \
+          ORDER BY ord \
+         ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING",
     )
     .bind(&trains_ids)
     .bind(&summaries)
-    .execute(pool)
+    .bind(&dedup_keys)
+    .execute(executor)
     .await?;
     Ok(result.rows_affected())
 }
@@ -58,10 +78,12 @@ mod db_tests {
             TrainForwardSignalMessage {
                 trains_id,
                 event_summary: "en_route at WAT".to_string(),
+                dedup_key: None,
             },
             TrainForwardSignalMessage {
                 trains_id,
                 event_summary: "en_route at CLJ".to_string(),
+                dedup_key: None,
             },
         ];
 
@@ -103,16 +125,18 @@ mod db_tests {
                 -- --ignored --test-threads=1`"]
     async fn insert_forward_signals_called_twice_inserts_a_row_each_time_no_dedup() {
         // Same real function called twice against non-reset state (not a
-        // duplicated inline copy, no reset in between): this table has no
+        // duplicated inline copy, no reset in between): a signal with no
         // dedup_key -- it's a forwarding signal, not an at-least-once ingest
         // log -- so, unlike train_movement_events/trust_event_backlog, two
         // calls MUST produce two rows, not one. Proves insert_forward_signals
-        // is a plain append, never accidentally deduped.
+        // is a plain append for a signal without a key (an older
+        // trust-consumer's), never accidentally deduped.
         let pool = connect().await;
         let trains_id = fixture_train(&pool, "TEST-FORWARD-QUEUE-UID-2").await;
         let signals = vec![TrainForwardSignalMessage {
             trains_id,
             event_summary: "en_route at WAT".to_string(),
+            dedup_key: None,
         }];
 
         insert_forward_signals(&pool, &signals)
@@ -130,7 +154,7 @@ mod db_tests {
                 .expect("count");
         assert_eq!(
             count, 2,
-            "no dedup_key on this table -- two calls append two rows"
+            "a signal without a dedup_key is a plain append -- two calls append two rows"
         );
 
         sqlx::query("DELETE FROM trains WHERE id = $1")
@@ -156,6 +180,7 @@ mod db_tests {
         let signal = |trains_id: i64, summary: &str| TrainForwardSignalMessage {
             trains_id,
             event_summary: summary.to_string(),
+            dedup_key: None,
         };
 
         let bad = vec![signal(trains_id, "first"), signal(-1, "no such train")];
@@ -182,6 +207,52 @@ mod db_tests {
         .await
         .expect("order");
         assert_eq!(order, vec!["a", "b", "c"]);
+
+        sqlx::query("DELETE FROM trains WHERE id = $1")
+            .bind(trains_id)
+            .execute(&pool)
+            .await
+            .ok();
+    }
+
+    /// Plan 3b.3: a signal whose `dedup_key` is already queued is skipped,
+    /// also within one batch, while a keyless one still appends.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                insert_forward_signals_skips_a_known_dedup_key -- --ignored --test-threads=1`"]
+    async fn insert_forward_signals_skips_a_known_dedup_key() {
+        let pool = connect().await;
+        let trains_id = fixture_train(&pool, "TEST-FORWARD-QUEUE-UID-4").await;
+        // A fresh key per run: the narrow trust_consumer role cannot DELETE.
+        let key = format!(
+            "{trains_id}:fq-dedup-{}",
+            chrono::Utc::now().timestamp_micros()
+        );
+        let signal = |dedup_key: Option<&str>| TrainForwardSignalMessage {
+            trains_id,
+            event_summary: "en_route at WAT".to_string(),
+            dedup_key: dedup_key.map(str::to_string),
+        };
+        let count = async || -> i64 {
+            sqlx::query_scalar("SELECT count(*) FROM notifier_forward_queue WHERE dedup_key = $1")
+                .bind(&key)
+                .fetch_one(&pool)
+                .await
+                .expect("count")
+        };
+
+        let first = insert_forward_signals(&pool, &[signal(Some(&key)), signal(Some(&key))])
+            .await
+            .unwrap();
+        assert_eq!(first, 1, "a key repeated within one batch inserts once");
+        let again = insert_forward_signals(&pool, &[signal(Some(&key)), signal(None)])
+            .await
+            .unwrap();
+        assert_eq!(
+            again, 1,
+            "the known key is skipped, the keyless signal appended"
+        );
+        assert_eq!(count().await, 1);
 
         sqlx::query("DELETE FROM trains WHERE id = $1")
             .bind(trains_id)

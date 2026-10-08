@@ -8,8 +8,9 @@
 //! re-exports these.
 
 pub mod forward_queue;
+pub mod outbox;
 
-pub use forward_queue::insert_forward_signals;
+pub use forward_queue::{insert_forward_signals, insert_forward_signals_on};
 
 use chrono::{DateTime, Utc};
 use common::{TrackedTrainRef, TrainMovementEventMessage};
@@ -682,11 +683,25 @@ pub async fn upsert_train_events_batch(
     pool: &PgPool,
     events: &[TrainMovementEventMessage],
 ) -> anyhow::Result<TrainEventsBatchOutcome> {
-    let mut outcome = TrainEventsBatchOutcome::default();
     if events.is_empty() {
-        return Ok(outcome);
+        return Ok(TrainEventsBatchOutcome::default());
     }
     let mut tx = pool.begin().await?;
+    let outcome = upsert_train_events_batch_in(&mut tx, events).await?;
+    tx.commit().await?;
+    Ok(outcome)
+}
+
+/// [`upsert_train_events_batch`] inside the caller's open transaction
+/// `tx`, which the caller commits: trust-consumer's DB sink (plan 3b.3)
+/// writes the batch's forward signals in the same transaction. Each event
+/// runs behind its own savepoint exactly as there; an `Err` leaves `tx` to
+/// be rolled back.
+pub async fn upsert_train_events_batch_in(
+    tx: &mut PgConnection,
+    events: &[TrainMovementEventMessage],
+) -> anyhow::Result<TrainEventsBatchOutcome> {
+    let mut outcome = TrainEventsBatchOutcome::default();
     for (index, event) in events.iter().enumerate() {
         // A nested `begin` on a connection already in a transaction is a
         // `SAVEPOINT`; its `commit`/`rollback` are `RELEASE`/`ROLLBACK TO`.
@@ -707,7 +722,6 @@ pub async fn upsert_train_events_batch(
             }
         }
     }
-    tx.commit().await?;
     Ok(outcome)
 }
 

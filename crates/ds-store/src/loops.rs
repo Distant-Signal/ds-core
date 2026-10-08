@@ -16,12 +16,14 @@
 //! | [`backlog_match`] | `BACKLOG_MATCH_SWEEP` | [`run_backlog_match_sweep`] | `BACKLOG_MATCH_SWEEP_INTERVAL_SECS`, 300 |
 //! | [`corpus_crosswalk`] | `CORPUS_CROSSWALK` | [`rebuild_if_stale`], then [`refresh_last_delivery_metric`] | writer: `INGEST_WRITER_CORPUS_CROSSWALK_INTERVAL_SECS`, 600; api: once at startup ([`LoopRunner::run_once`]) |
 //! | [`corpus_crosswalk_comparing`] | `CORPUS_CROSSWALK` | as [`corpus_crosswalk`], then the CORPUS comparison after each new delivery | the writer's, in place of [`corpus_crosswalk`] (plan 2d.1) |
+//! | [`train_event_outbox`] | `TRAIN_EVENT_OUTBOX` | [`apply_train_event_outbox`] | writer only: `INGEST_WRITER_TRAIN_EVENT_OUTBOX_INTERVAL_SECS`, 5 |
 //!
 //! [`run_schedule_match_sweep`]: crate::sweeps::schedule_matching::run_schedule_match_sweep
 //! [`run_reconciliation_sweep`]: crate::sweeps::reconciliation::run_reconciliation_sweep
 //! [`run_backlog_match_sweep`]: crate::backlog::matching::run_backlog_match_sweep
 //! [`rebuild_if_stale`]: crate::corpus::crosswalk::rebuild_if_stale
 //! [`refresh_last_delivery_metric`]: crate::corpus::refresh_last_delivery_metric
+//! [`apply_train_event_outbox`]: crate::tracking::outbox::apply_train_event_outbox
 
 pub mod runner;
 
@@ -203,6 +205,43 @@ async fn corpus_crosswalk_tick(
     gauge
 }
 
+/// The train-event outbox loop's interval in the ingest-writer (plan
+/// 3b.3). It bounds how late a deferred resolution, cancellation or
+/// reinstatement lands (and the resolving departure's movement and push):
+/// 5 s keeps that well inside trust-consumer's own 60 s reference reload
+/// and the notifier's polls, and an idle tick is one index-only read of an
+/// almost always empty table.
+pub const TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Applies the train events trust-consumer's DB sink deferred (plan 3b.3,
+/// [`crate::tracking::outbox`]). Writer only: the outbox fills only under
+/// `trustConsumer.ingest.sink: db`, which the chart allows only with the
+/// writer's loops on.
+pub fn train_event_outbox(interval: Duration) -> LoopSpec {
+    LoopSpec::new(
+        advisory_locks::TRAIN_EVENT_OUTBOX,
+        interval,
+        |pool| async move {
+            match crate::tracking::outbox::apply_train_event_outbox(&pool).await {
+                Ok(tick) => {
+                    if tick.applied > 0 || !tick.rejected.is_empty() {
+                        tracing::info!(
+                            applied = tick.applied,
+                            rejected = tick.rejected.len(),
+                            "applied deferred train events"
+                        );
+                    }
+                    Ok(())
+                }
+                Err(err) => {
+                    tracing::error!(error = ?err, "train-event outbox apply failed; will retry next interval");
+                    Err(err)
+                }
+            }
+        },
+    )
+}
+
 /// The train-domain loop intervals, as the api's and the writer's settings
 /// give them.
 #[derive(Debug, Clone, Copy)]
@@ -262,5 +301,8 @@ mod tests {
         let comparing = corpus_crosswalk_comparing(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
         assert_eq!(comparing.lock, advisory_locks::CORPUS_CROSSWALK);
         assert_eq!(comparing.interval, Duration::from_secs(600));
+        let outbox = train_event_outbox(TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL);
+        assert_eq!(outbox.lock, advisory_locks::TRAIN_EVENT_OUTBOX);
+        assert_eq!(outbox.interval, Duration::from_secs(5));
     }
 }

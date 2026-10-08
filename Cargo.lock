@@ -5523,15 +5523,18 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-store",
  "health-http",
  "metrics",
  "movement-feed",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tracing",
  "trust-schema",
+ "wiremock",
 ]
 
 [[package]]
@@ -5544,6 +5547,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-store",
  "health-http",
  "metrics",
  "metrics-exporter-prometheus",
@@ -5551,9 +5555,11 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tracing",
  "trust-schema",
+ "wiremock",
 ]
 
 [[package]]

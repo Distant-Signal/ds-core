@@ -1,0 +1,14 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- The arbiter for insert_forward_signals' ON CONFLICT (dedup_key) WHERE
+-- dedup_key IS NOT NULL DO NOTHING (ingest architecture plan 3b.3; see
+-- 20261009120000_notifier_forward_queue_dedup_key.sql). Partial: every
+-- existing row has a NULL key, so the build cannot fail on a duplicate.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index that IF NOT EXISTS would then skip; recovery
+-- is `DROP INDEX CONCURRENTLY notifier_forward_queue_dedup_key;` and a
+-- restart.
+-- -------------------------------------------------------------------------
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS notifier_forward_queue_dedup_key ON notifier_forward_queue (dedup_key) WHERE dedup_key IS NOT NULL;

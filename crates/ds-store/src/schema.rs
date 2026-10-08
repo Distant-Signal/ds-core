@@ -94,6 +94,10 @@ pub enum DbRole {
     Stations,
     /// poller-incidents' DB sink (plan 2c.3).
     Incidents,
+    /// trust-backlog-consumer under `INGEST_SINK=db` (plan 3b.1).
+    TrustBacklog,
+    /// trust-consumer under `INGEST_SINK=db` (plan 3b.3, D1).
+    TrustConsumer,
 }
 
 impl DbRole {
@@ -109,6 +113,8 @@ impl DbRole {
             Self::ScheduleReference => "schedule_reference",
             Self::Stations => "stations",
             Self::Incidents => "incidents",
+            Self::TrustBacklog => "trust_backlog",
+            Self::TrustConsumer => "trust_consumer",
         }
     }
 
@@ -335,6 +341,8 @@ mod tests {
             DbRole::ScheduleReference,
             DbRole::Stations,
             DbRole::Incidents,
+            DbRole::TrustBacklog,
+            DbRole::TrustConsumer,
         ] {
             assert!(privileges_for(role.key()).is_some(), "{role:?}");
             assert!(!role.required_privileges().is_empty(), "{role:?}");
@@ -392,6 +400,22 @@ mod tests {
         assert!(has(DbRole::Incidents, "stations", "SELECT"));
         assert!(!has(DbRole::Incidents, "stations", "UPDATE"));
         assert!(!has(DbRole::Incidents, "tocs", "SELECT"));
+        // Plan 3b (decided 2026-10-08): trust-consumer reads subscriptions
+        // and queues the events that change them; the writer applies them.
+        assert!(has(DbRole::TrustConsumer, "train_subscriptions", "SELECT"));
+        assert!(!has(DbRole::TrustConsumer, "train_subscriptions", "UPDATE"));
+        assert!(has(DbRole::TrustConsumer, "trains", "SELECT"));
+        assert!(!has(DbRole::TrustConsumer, "trains", "INSERT"));
+        assert!(!has(DbRole::TrustConsumer, "trains", "UPDATE"));
+        assert!(has(DbRole::TrustConsumer, "train_event_outbox", "INSERT"));
+        assert!(!has(DbRole::TrustConsumer, "train_event_outbox", "DELETE"));
+        for privilege in ["SELECT", "UPDATE", "DELETE"] {
+            assert!(
+                has(DbRole::Writer, "train_event_outbox", privilege),
+                "{privilege}"
+            );
+        }
+        assert!(has(DbRole::Writer, "train_subscriptions", "UPDATE"));
         // No role is required to hold anything on the migrations table
         // beyond what the version query itself needs.
         assert!(
