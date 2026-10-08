@@ -30,6 +30,7 @@ use common::backoff::Backoff;
 use common::redis_auth::{redis_url_with_credentials, redis_url_with_password};
 use common::redis_conn::RedisConn;
 use common::secret::Secret;
+use ingest_stream::consumer::UNSUPPORTED_EXPIRED;
 use ingest_stream::{
     ConsumerConfig, EncodedEntry, Envelope, Handled, Handler, HandlerError, NotWritten,
     ProducePolicy, Producer, ProducerConfig, RetryReason, SchemaId, Step, StreamConsumer,
@@ -629,6 +630,94 @@ async fn unsupported_schemas_and_envelopes_stay_pending() {
             "distant_signal_ingest_stream_consumed_total{{stream=\"{stream}\",schema=\"test-rows/1\",outcome=\"unsupported_schema\"}}"
         )) >= 3
     );
+}
+
+/// Security review L6: an unsupported entry past the consumer's
+/// `unsupported_deadline` is dead-lettered (`unsupported_expired`) and
+/// acked, so the stream moves on. Its age is the longer of its id's age and
+/// how long this consumer has retried it.
+#[tokio::test]
+#[ignore = "needs Redis (REDIS_URL)"]
+async fn unsupported_entries_past_the_deadline_are_dead_lettered() {
+    let mut scope = Scope::new();
+    let stream = scope.stream("unsupported-deadline");
+    let dlq = ingest_stream::dead_letter_stream(&stream);
+    let mut conn = connect(&admin_url()).await;
+    let mut config = consumer_config(&stream, "pod-a");
+    config.unsupported_deadline = Some(Duration::from_millis(300));
+    let mut consumer = StreamConsumer::new(connect(&admin_url()).await, config);
+    consumer.ensure_group().await.unwrap();
+    let unsupported = Step::Retry {
+        processed: 0,
+        reason: RetryReason::Unsupported,
+    };
+
+    // By retry time: a schema version the handler does not know is left
+    // pending at first, then dead-lettered once retried past the deadline;
+    // the entry behind it applies.
+    for key in ["future-schema", "behind"] {
+        ingest_stream::xadd_entry(&mut conn, &stream, 100, &entry(key))
+            .await
+            .unwrap();
+    }
+    let handler = Scripted::default();
+    handler.answer(
+        "future-schema",
+        (0..100)
+            .map(|_| Err(HandlerError::UnsupportedSchema("test-rows/2".into())))
+            .collect(),
+    );
+    drain_until(&mut consumer, &handler, &unsupported).await;
+    assert_eq!(scope.pending(&stream), 2);
+    assert_eq!(scope.xlen(&dlq), 0);
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    drain(&mut consumer, &handler, 10).await;
+    assert_eq!(scope.pending(&stream), 0);
+    assert_eq!(handler.seen().last().map(String::as_str), Some("behind"));
+    let dead = scope.range(&dlq);
+    assert_eq!(dead.len(), 1, "{dead:?}");
+    assert_eq!(dead[0].1["key"], "future-schema");
+    assert_eq!(dead[0].1["reason"], UNSUPPORTED_EXPIRED);
+    assert_eq!(dead[0].1["error"], "test-rows/2");
+
+    // By id time: an envelope v2 entry whose id is decades old is
+    // dead-lettered on its first read under the default hour, and stays
+    // pending with no deadline.
+    for (deadline, expired) in [(Some(Duration::from_secs(3600)), true), (None, false)] {
+        let old_stream = scope.stream(&format!("unsupported-old-id-{expired}"));
+        let old_dlq = ingest_stream::dead_letter_stream(&old_stream);
+        let mut v2 = entry("v2");
+        v2.fields[0].1 = b"2".to_vec();
+        let mut args: Vec<String> = vec!["XADD".into(), old_stream.clone(), "1000-0".into()];
+        for (name, value) in &v2.fields {
+            args.push((*name).to_owned());
+            args.push(String::from_utf8(value.clone()).unwrap());
+        }
+        let _: String = scope.cmd(&args.iter().map(String::as_str).collect::<Vec<_>>());
+        let mut config = consumer_config(&old_stream, "pod-b");
+        config.unsupported_deadline = deadline;
+        let mut old = StreamConsumer::new(connect(&admin_url()).await, config);
+        old.ensure_group().await.unwrap();
+        if expired {
+            drain(&mut old, &handler, 10).await;
+            assert_eq!(scope.pending(&old_stream), 0);
+            let dead = scope.range(&old_dlq);
+            assert_eq!(dead.len(), 1, "{dead:?}");
+            assert_eq!(dead[0].1["reason"], UNSUPPORTED_EXPIRED);
+            assert_eq!(dead[0].1["key"], "v2");
+            assert_eq!(
+                metric(&format!(
+                    "distant_signal_ingest_stream_dead_lettered_total{{stream=\"{old_stream}\",reason=\"{UNSUPPORTED_EXPIRED}\"}}"
+                )),
+                1
+            );
+        } else {
+            drain_until(&mut old, &handler, &unsupported).await;
+            drain_until(&mut old, &handler, &unsupported).await;
+            assert_eq!(scope.pending(&old_stream), 1);
+            assert_eq!(scope.xlen(&old_dlq), 0);
+        }
+    }
 }
 
 /// Steps until `want` comes back (at most 10 steps).

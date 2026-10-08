@@ -337,24 +337,66 @@ class RenderTest(unittest.TestCase):
     def test_row_policies_render_for_created_roles_only(self) -> None:
         """Plan 3c.3: the writer's line_status policy; none for a planned role."""
         sql = gen.render(gen.load())
-        self.assertIn("('line_status', 'writer', 'source = ''tfl''')", sql)
-        self.assertIn("AS RESTRICTIVE FOR ALL TO %I", sql)
+        self.assertIn("('line_status', 'writer', 'ALL', 'source = ''tfl''')", sql)
+        self.assertIn("AS RESTRICTIVE FOR %s TO %I", sql)
         raw = _raw()
         # Planned here explicitly: every shipped role may be created.
         raw["roles"]["trust_backlog"]["status"] = "planned"
         raw["row_policies"]["line_status"]["trust_backlog"] = "false"
         sql = gen.render(gen.parse(raw))
-        self.assertNotIn("'trust_backlog', 'false'", sql)
+        self.assertNotIn("'trust_backlog', 'ALL', 'false'", sql)
+
+    def test_a_writes_only_policy_renders_one_row_per_write_command(self) -> None:
+        """L4: `{writes: ...}` restricts INSERT, UPDATE and DELETE, not SELECT."""
+        sql = gen.render(gen.load())
+        for command in ("INSERT", "UPDATE", "DELETE"):
+            self.assertIn(
+                f"('ingest_freshness', 'stations', '{command}', "
+                "'source = ''stations''')",
+                sql,
+            )
+        self.assertNotIn("('ingest_freshness', 'stations', 'ALL'", sql)
 
 
 class RowPolicyParseTest(unittest.TestCase):
     """`row_policies` must name listed tables and known roles."""
 
     def test_the_writer_is_pinned_to_tfl_rows(self) -> None:
-        """D10: the shipped YAML's one policy."""
+        """D10: the writer's line_status policy, on every command."""
         self.assertEqual(
-            gen.load().row_policies, {"line_status": {"writer": "source = 'tfl'"}}
+            gen.load().row_policies["line_status"],
+            {"writer": gen.RowPolicy("source = 'tfl'")},
         )
+
+    def test_each_freshness_producer_writes_only_its_own_rows(self) -> None:
+        """L4: writes-only policies for every role that writes ingest_freshness."""
+        model = gen.load()
+        policies = model.row_policies["ingest_freshness"]
+        self.assertEqual(
+            policies["stations"],
+            gen.RowPolicy("source = 'stations'", writes_only=True),
+        )
+        self.assertEqual(
+            policies["incidents"],
+            gen.RowPolicy("source = 'incidents'", writes_only=True),
+        )
+        self.assertTrue(policies["writer"].writes_only)
+        self.assertIn("'tfl'", policies["writer"].condition)
+        # Every role with a write grant on the table has a policy.
+        writers = {
+            g.role
+            for g in model.tables["ingest_freshness"].grants
+            if set(g.privileges) - {"S"}
+        }
+        self.assertEqual(writers, set(policies))
+
+    def test_a_writes_entry_must_hold_only_writes(self) -> None:
+        """Any other key in the mapping is refused."""
+        raw = _raw()
+        raw["row_policies"]["line_status"]["writer"] = {"reads": "true"}
+        with self.assertRaises(gen.GrantsError) as ctx:
+            gen.parse(raw)
+        self.assertIn("row_policies.line_status.writer", str(ctx.exception))
 
     def test_unlisted_table_and_unknown_role_are_refused(self) -> None:
         """Either mistake names the key."""

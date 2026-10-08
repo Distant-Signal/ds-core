@@ -89,7 +89,9 @@ pub const ROW_WRITES_TOTAL: &str = "ingest_stream_row_writes_total";
 /// - `trimmed`: a pending entry `MAXLEN` removed before it was handled,
 ///   acked;
 /// - `transient_error` and `unsupported_schema` stay pending and are
-///   retried.
+///   retried (an unsupported entry past the consumer's
+///   `unsupported_deadline` is then `dead_lettered`, reason
+///   `unsupported_expired`).
 pub const CONSUME_OUTCOMES: [&str; 8] = [
     "applied",
     "duplicate",
@@ -240,7 +242,13 @@ pub fn register_consumer(stream: &str) {
     ] {
         gauge(name, stream, 0.0);
     }
-    for reason in ["poison", "undecodable", "oversize", "rejected_rows"] {
+    for reason in [
+        "poison",
+        "undecodable",
+        "oversize",
+        "rejected_rows",
+        crate::consumer::UNSUPPORTED_EXPIRED,
+    ] {
         metrics::counter!(
             metric_name(DEAD_LETTERED_TOTAL),
             "stream" => stream.to_owned(),

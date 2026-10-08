@@ -21,6 +21,12 @@
 //!     (and an unknown envelope version): not acked; the batch stops, the
 //!     task backs off (1 s doubling to 60 s, jittered) and re-reads its PEL.
 //!     An outage never empties a stream into its dead-letter stream;
+//!   - except that an unsupported entry older than
+//!     [`ConsumerConfig::unsupported_deadline`] (by its id's time, or by
+//!     how long this consumer has been retrying it, whichever is longer) is
+//!     dead-lettered with reason [`UNSUPPORTED_EXPIRED`] and acked, so one
+//!     entry from a producer newer than the writer cannot block its stream
+//!     forever (security review L6);
 //! - exports the [`crate::metrics`] consumer series, sampling lag, pending,
 //!   oldest pending age, dead-letter length and oldest age, and memory every
 //!   `gauge_interval`;
@@ -75,7 +81,21 @@ pub struct ConsumerConfig {
     /// How often to sample the gauges (30 s).
     pub gauge_interval: Duration,
     pub backoff: Backoff,
+    /// An entry left pending as unsupported (a newer schema version or
+    /// envelope) for this long is dead-lettered ([`UNSUPPORTED_EXPIRED`])
+    /// instead of blocking its stream for good. `None`: never (1 h by
+    /// default, [`DEFAULT_UNSUPPORTED_DEADLINE`]).
+    pub unsupported_deadline: Option<Duration>,
 }
+
+/// [`ConsumerConfig::unsupported_deadline`]'s default: long enough to roll
+/// the writer forward after a producer, short enough that a stream is not
+/// held for a day.
+pub const DEFAULT_UNSUPPORTED_DEADLINE: Duration = Duration::from_secs(3600);
+
+/// The dead-letter `reason` of an entry dropped by
+/// [`ConsumerConfig::unsupported_deadline`].
+pub const UNSUPPORTED_EXPIRED: &str = "unsupported_expired";
 
 impl ConsumerConfig {
     /// The spec's defaults for `stream` read by `consumer` in group
@@ -100,6 +120,7 @@ impl ConsumerConfig {
             delete_idle_consumers_after: Duration::from_secs(3600),
             gauge_interval: Duration::from_secs(30),
             backoff: CONSUMER_BACKOFF,
+            unsupported_deadline: Some(DEFAULT_UNSUPPORTED_DEADLINE),
         }
     }
 }
@@ -205,6 +226,9 @@ pub struct StreamConsumer {
     next_claim: Instant,
     next_gauges: Instant,
     streak: FailureStreak,
+    /// The unsupported entry this consumer is stuck on and when it first
+    /// saw it (the batch stops there, so there is at most one).
+    unsupported_since: Option<(String, Instant)>,
 }
 
 impl StreamConsumer {
@@ -222,6 +246,7 @@ impl StreamConsumer {
             next_claim: now,
             next_gauges: now,
             streak,
+            unsupported_since: None,
         }
     }
 
@@ -419,9 +444,14 @@ impl StreamConsumer {
                 return Ok(Some(RetryReason::Transient));
             }
             Err(HandlerError::UnsupportedSchema(reason)) => {
-                metrics::consumed(&stream, &schema, "unsupported_schema");
-                tracing::error!(%stream, id = %entry.id, %schema, %reason, "unsupported ingest schema version; left pending (roll the writer forward)");
-                return Ok(Some(RetryReason::Unsupported));
+                if !self.unsupported_expired(&entry.id) {
+                    metrics::consumed(&stream, &schema, "unsupported_schema");
+                    tracing::error!(%stream, id = %entry.id, %schema, %reason, "unsupported ingest schema version; left pending (roll the writer forward)");
+                    return Ok(Some(RetryReason::Unsupported));
+                }
+                self.dead_letter(&entry.id, fields, UNSUPPORTED_EXPIRED, &reason)
+                    .await?;
+                "dead_lettered"
             }
         };
         self.ack(&entry.id).await?;
@@ -447,16 +477,48 @@ impl StreamConsumer {
             .and_then(|(_, v)| std::str::from_utf8(v).ok())
             .and_then(|s| s.parse::<crate::envelope::SchemaId>().ok())
             .map_or_else(|| "unknown".to_owned(), |s| s.to_string());
-        if !err.is_poison() {
+        let reason = if err.is_poison() {
+            err.reason()
+        } else if self.unsupported_expired(id) {
+            UNSUPPORTED_EXPIRED
+        } else {
             metrics::consumed(&stream, &schema, "unsupported_schema");
             tracing::error!(%stream, %id, error = %err, "unsupported ingest envelope; left pending (roll the writer forward)");
             return Ok(Some(RetryReason::Unsupported));
-        }
-        self.dead_letter(id, fields.to_vec(), err.reason(), &err.to_string())
+        };
+        self.dead_letter(id, fields.to_vec(), reason, &err.to_string())
             .await?;
         self.ack(id).await?;
         metrics::consumed(&stream, &schema, "dead_lettered");
         Ok(None)
+    }
+
+    /// Whether the unsupported entry `id` has waited past
+    /// [`ConsumerConfig::unsupported_deadline`]: by its id's time (when it
+    /// was added; survives a restart) or by how long this consumer has been
+    /// retrying it (a producer-chosen id in the future cannot extend it),
+    /// whichever is longer. Remembers `id` as the entry it is stuck on.
+    fn unsupported_expired(&mut self, id: &str) -> bool {
+        let first_seen = match &self.unsupported_since {
+            Some((stuck, since)) if stuck == id => *since,
+            _ => {
+                let now = Instant::now();
+                self.unsupported_since = Some((id.to_owned(), now));
+                now
+            }
+        };
+        let Some(deadline) = self.config.unsupported_deadline else {
+            return false;
+        };
+        let now_ms = u64::try_from(Utc::now().timestamp_millis()).unwrap_or(0);
+        let by_id = id_millis(id).map_or(Duration::ZERO, |ms| {
+            Duration::from_millis(now_ms.saturating_sub(ms))
+        });
+        let expired = by_id.max(first_seen.elapsed()) >= deadline;
+        if expired {
+            self.unsupported_since = None;
+        }
+        expired
     }
 
     /// `XADD <dead-letter stream> MAXLEN ~ n *` the entry's fields plus

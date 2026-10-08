@@ -14,7 +14,9 @@ DS_PG_<ROLE>_PASSWORD; makes each `observed` role a member of the app role
 with no grants of its own (phase 0b); gives each `narrow` role exactly the
 grants in the YAML; gives the groups their grants; and creates the
 `row_policies` (a RESTRICTIVE policy `ds_grants_<role>` per table and
-created role, dropping stale `ds_grants_*` ones). Tables that do not exist
+created role, or for a `{writes: ...}` entry one per write command,
+`ds_grants_<role>_insert`, `_update` and `_delete`; stale `ds_grants_*`
+ones are dropped). Tables that do not exist
 yet (a new cluster's initdb run) are skipped.
 
 `check` fails (exit 1, one line per problem) when:
@@ -96,6 +98,24 @@ class Table:
 
 
 @dataclasses.dataclass(frozen=True)
+class RowPolicy:
+    """One role's RESTRICTIVE row policy on one table.
+
+    `writes_only` False: one policy FOR ALL, `condition` as both USING and
+    WITH CHECK (the role sees and writes only those rows). True: one policy
+    each FOR INSERT (WITH CHECK), UPDATE (USING and WITH CHECK) and DELETE
+    (USING), so the role still reads every row but writes only those.
+    """
+
+    condition: str
+    writes_only: bool = False
+
+    def commands(self) -> tuple[str, ...]:
+        """Return the commands this entry's policies cover."""
+        return ("INSERT", "UPDATE", "DELETE") if self.writes_only else ("ALL",)
+
+
+@dataclasses.dataclass(frozen=True)
 class Role:
     """A login role of one service."""
 
@@ -119,8 +139,8 @@ class Model:
     views: Mapping[str, Table]
     sequences: Mapping[str, str]  # sequence -> owning table
     functions: Mapping[str, tuple[str, ...]]  # signature -> roles
-    # table -> role -> the SQL condition of its RESTRICTIVE policy
-    row_policies: Mapping[str, Mapping[str, str]] = dataclasses.field(
+    # table -> role -> its RESTRICTIVE policy
+    row_policies: Mapping[str, Mapping[str, RowPolicy]] = dataclasses.field(
         default_factory=dict
     )
 
@@ -265,21 +285,32 @@ def _tables(raw: object, section: str, roles: Mapping[str, Role]) -> dict[str, T
     return tables
 
 
+def _row_policy(raw: object, where: str) -> RowPolicy:
+    """Parse one entry: a SQL condition, or `{writes: <SQL condition>}`."""
+    if isinstance(raw, dict):
+        body = _mapping(raw, where)
+        if set(body) != {"writes"}:
+            msg = f"{where}: expected a condition or {{writes: <condition>}}"
+            raise GrantsError(msg)
+        return RowPolicy(_str(body["writes"], f"{where}.writes"), writes_only=True)
+    return RowPolicy(_str(raw, where))
+
+
 def _row_policies(
     raw: object, tables: Mapping[str, Table], roles: Mapping[str, Role]
-) -> dict[str, dict[str, str]]:
-    """Parse `row_policies`: table -> role -> SQL condition."""
-    policies: dict[str, dict[str, str]] = {}
+) -> dict[str, dict[str, RowPolicy]]:
+    """Parse `row_policies`: table -> role -> policy."""
+    policies: dict[str, dict[str, RowPolicy]] = {}
     for table, spec in _mapping(raw, "row_policies").items():
         if table not in tables:
             msg = f"row_policies.{table}: not a listed table"
             raise GrantsError(msg)
-        by_role: dict[str, str] = {}
-        for role, condition in _mapping(spec, f"row_policies.{table}").items():
+        by_role: dict[str, RowPolicy] = {}
+        for role, entry in _mapping(spec, f"row_policies.{table}").items():
             if role not in roles:
                 msg = f"row_policies.{table}: unknown role {role!r}"
                 raise GrantsError(msg)
-            by_role[role] = _str(condition, f"row_policies.{table}.{role}")
+            by_role[role] = _row_policy(entry, f"row_policies.{table}.{role}")
         policies[table] = by_role
     return policies
 
@@ -441,10 +472,11 @@ def render(model: Model) -> str:
     table_rows, sequence_rows, function_rows = _narrow_rows(model)
     created_keys = {r.key for r in created}
     policy_rows = [
-        (table, role, condition)
+        (table, role, command, policy.condition)
         for table, by_role in model.row_policies.items()
-        for role, condition in by_role.items()
+        for role, policy in by_role.items()
         if role in created_keys
+        for command in policy.commands()
     ]
     password_env = ", ".join(f"DS_PG_{r.key.upper()}_PASSWORD" for r in created)
     parts = {
@@ -464,7 +496,7 @@ def render(model: Model) -> str:
         "TABLE_ROWS": _values(table_rows, "tbl, kind, priv, cols"),
         "SEQUENCE_ROWS": _values(sequence_rows, "seq, kind"),
         "FUNCTION_ROWS": _values(function_rows, "sig, kind"),
-        "POLICY_ROWS": _values(policy_rows, "tbl, kind, cond"),
+        "POLICY_ROWS": _values(policy_rows, "tbl, kind, cmd, cond"),
     }
     text = SQL_TEMPLATE.read_text(encoding="utf-8")
     for name, value in parts.items():

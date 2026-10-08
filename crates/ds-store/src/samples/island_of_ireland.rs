@@ -20,12 +20,62 @@ pub fn network_wire(network: IslandOfIrelandNetwork) -> &'static str {
     }
 }
 
-/// `ingest_freshness` sources for the two Tier A feeds. The upserts skip an
-/// unchanged row (R-016 class, Train Register N1), so a row's `fetched_at`
-/// now means "last changed" and the feed-level "last fetched" is recorded
-/// here instead, as for the GB reference tables (`queries::record_ingest`).
-const STATIONS_SOURCE: &str = "island_of_ireland_stations";
-const LINES_SOURCE: &str = "island_of_ireland_lines";
+/// `ingest_freshness` sources for the Tier A catalogues, one per table and
+/// network. The upserts skip an unchanged row (R-016 class, Train Register
+/// N1), so a row's `fetched_at` now means "last changed" and the feed-level
+/// "last fetched" is recorded here instead, as for the GB reference tables
+/// (`queries::record_ingest`).
+///
+/// Per network (2026-10-08): each network's catalogue comes from its own
+/// poller and stream (`republic-of-ireland`: poller-irish-rail-gtfs,
+/// `ds:ingest:ioi-gtfs`; `northern-ireland`: poller-nir-stations,
+/// `ds:ingest:ioi-nir`), so each needs its own marker for
+/// `DistantSignalIngestSourceStale` to see one of them stop. They are named
+/// after the feed.
+pub mod sources {
+    pub const STATIONS_GTFS: &str = "island_of_ireland_stations_gtfs";
+    pub const STATIONS_NIR: &str = "island_of_ireland_stations_nir";
+    pub const LINES_GTFS: &str = "island_of_ireland_lines_gtfs";
+    pub const LINES_NIR: &str = "island_of_ireland_lines_nir";
+    /// What every writer recorded before the per-network split, for both
+    /// networks. Still read (as the newest of the three), never written.
+    pub const LEGACY_STATIONS: &str = "island_of_ireland_stations";
+    pub const LEGACY_LINES: &str = "island_of_ireland_lines";
+}
+
+/// `network`'s `island_of_ireland_stations` freshness source.
+pub fn stations_source(network: IslandOfIrelandNetwork) -> &'static str {
+    match network {
+        IslandOfIrelandNetwork::RepublicOfIreland => sources::STATIONS_GTFS,
+        IslandOfIrelandNetwork::NorthernIreland => sources::STATIONS_NIR,
+    }
+}
+
+/// `network`'s `island_of_ireland_lines` freshness source.
+pub fn lines_source(network: IslandOfIrelandNetwork) -> &'static str {
+    match network {
+        IslandOfIrelandNetwork::RepublicOfIreland => sources::LINES_GTFS,
+        IslandOfIrelandNetwork::NorthernIreland => sources::LINES_NIR,
+    }
+}
+
+/// Records `source(network)` for each network with a row in the batch
+/// (the writer pins a stream to one network, so there it is one).
+async fn record_networks(
+    conn: &mut PgConnection,
+    networks: Vec<IslandOfIrelandNetwork>,
+    source: fn(IslandOfIrelandNetwork) -> &'static str,
+    observed_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<()> {
+    let mut seen: Vec<IslandOfIrelandNetwork> = Vec::with_capacity(2);
+    for network in networks {
+        if !seen.contains(&network) {
+            seen.push(network);
+            crate::freshness::record_ingest(conn, source(network), observed_at).await?;
+        }
+    }
+    Ok(())
+}
 
 /// One `INSERT ... SELECT FROM UNNEST ... ON CONFLICT` for the whole batch,
 /// leaving a row whose values are unchanged untouched (no new tuple, no
@@ -37,7 +87,13 @@ pub async fn upsert_stations(pool: &PgPool, stations: &[IslandOfIrelandStation])
     }
     let mut tx = pool.begin().await?;
     write_stations(&mut tx, stations, None).await?;
-    crate::freshness::record_ingest(&mut tx, STATIONS_SOURCE, None).await?;
+    record_networks(
+        &mut tx,
+        stations.iter().map(|s| s.network).collect(),
+        stations_source,
+        None,
+    )
+    .await?;
     tx.commit().await?;
     Ok(stations.len() as u64)
 }
@@ -59,12 +115,22 @@ pub async fn upsert_stations_observed(
         return Ok(0);
     }
     let written = write_stations(conn, stations, Some(observed_at)).await?;
-    crate::freshness::record_ingest(conn, STATIONS_SOURCE, Some(observed_at)).await?;
+    record_networks(
+        conn,
+        stations.iter().map(|s| s.network).collect(),
+        stations_source,
+        Some(observed_at),
+    )
+    .await?;
     Ok(written)
 }
 
 /// The shared upsert: `observed_at` `None` stamps `NOW()` with no guard
-/// (the api's route), `Some` stamps it and guards on `fetched_at`.
+/// (the api's route), `Some` stamps it and guards on `fetched_at`, and
+/// never moves an existing row to another network: the ingest-writer pins
+/// each catalogue stream to one network (security review, Irish network
+/// pinning), so one network's poller cannot take over the other's row by
+/// sending its id. Such a row is skipped (not counted as written).
 async fn write_stations(
     conn: &mut PgConnection,
     stations: &[IslandOfIrelandStation],
@@ -96,6 +162,8 @@ async fn write_stations(
           AND ($6::timestamptz IS NULL
                OR EXCLUDED.fetched_at >= island_of_ireland_stations.fetched_at
                OR island_of_ireland_stations.fetched_at > now() + interval '2 min')
+          AND ($6::timestamptz IS NULL
+               OR island_of_ireland_stations.network = EXCLUDED.network)
         ",
     )
     .bind(&ids)
@@ -117,7 +185,13 @@ pub async fn upsert_lines(pool: &PgPool, lines: &[IslandOfIrelandLineDefinition]
     }
     let mut tx = pool.begin().await?;
     write_lines(&mut tx, lines, None).await?;
-    crate::freshness::record_ingest(&mut tx, LINES_SOURCE, None).await?;
+    record_networks(
+        &mut tx,
+        lines.iter().map(|l| l.network).collect(),
+        lines_source,
+        None,
+    )
+    .await?;
     tx.commit().await?;
     Ok(lines.len() as u64)
 }
@@ -132,7 +206,13 @@ pub async fn upsert_lines_observed(
         return Ok(0);
     }
     let written = write_lines(conn, lines, Some(observed_at)).await?;
-    crate::freshness::record_ingest(conn, LINES_SOURCE, Some(observed_at)).await?;
+    record_networks(
+        conn,
+        lines.iter().map(|l| l.network).collect(),
+        lines_source,
+        Some(observed_at),
+    )
+    .await?;
     Ok(written)
 }
 
@@ -169,6 +249,8 @@ async fn write_lines(
           AND ($5::timestamptz IS NULL
                OR EXCLUDED.fetched_at >= island_of_ireland_lines.fetched_at
                OR island_of_ireland_lines.fetched_at > now() + interval '2 min')
+          AND ($5::timestamptz IS NULL
+               OR island_of_ireland_lines.network = EXCLUDED.network)
         ",
     )
     .bind(&ids)
@@ -181,26 +263,33 @@ async fn write_lines(
     Ok(done.rows_affected())
 }
 
-/// When `source`'s feed last landed: its `ingest_freshness` row, or, for
-/// data written before that row existed, the table's newest `fetched_at`
-/// (`GREATEST` ignores a NULL). `max_fetched_at_sql` is a constant.
+/// When any network's feed last landed: the newest of `sources`'
+/// `ingest_freshness` rows (both networks' and the legacy shared one), or,
+/// for data written before those rows existed, the table's newest
+/// `fetched_at` (`GREATEST` ignores a NULL). `max_fetched_at_sql` is a
+/// constant.
 async fn last_fetch(
     pool: &PgPool,
-    source: &str,
+    sources: &[&str],
     max_fetched_at_sql: &str,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     let sql = format!(
-        "SELECT GREATEST((SELECT fetched_at FROM ingest_freshness WHERE source = $1), ({max_fetched_at_sql}))"
+        "SELECT GREATEST((SELECT MAX(fetched_at) FROM ingest_freshness WHERE source = ANY($1)), \
+         ({max_fetched_at_sql}))"
     );
     let (fetched_at,): (Option<chrono::DateTime<chrono::Utc>>,) =
-        sqlx::query_as(&sql).bind(source).fetch_one(pool).await?;
+        sqlx::query_as(&sql).bind(sources).fetch_one(pool).await?;
     Ok(fetched_at)
 }
 
 pub async fn last_stations_fetch(pool: &PgPool) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     last_fetch(
         pool,
-        STATIONS_SOURCE,
+        &[
+            sources::STATIONS_GTFS,
+            sources::STATIONS_NIR,
+            sources::LEGACY_STATIONS,
+        ],
         "SELECT MAX(fetched_at) FROM island_of_ireland_stations",
     )
     .await
@@ -209,7 +298,11 @@ pub async fn last_stations_fetch(pool: &PgPool) -> Result<Option<chrono::DateTim
 pub async fn last_lines_fetch(pool: &PgPool) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     last_fetch(
         pool,
-        LINES_SOURCE,
+        &[
+            sources::LINES_GTFS,
+            sources::LINES_NIR,
+            sources::LEGACY_LINES,
+        ],
         "SELECT MAX(fetched_at) FROM island_of_ireland_lines",
     )
     .await

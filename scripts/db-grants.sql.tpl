@@ -26,7 +26,8 @@
 --      exist yet are skipped (a new cluster's initdb run);
 --   5. the row policies (db-grants.yaml `row_policies`): every policy named
 --      ds_grants_* is dropped, then each listed one is created again as a
---      RESTRICTIVE policy for its role.
+--      RESTRICTIVE policy for its role (FOR ALL, or one per write command
+--      for a `{writes: ...}` entry).
 
 \set ON_ERROR_STOP on
 
@@ -242,14 +243,23 @@ BEGIN
         EXECUTE format('DROP POLICY %I ON public.%I', r.policyname, r.tablename);
     END LOOP;
     FOR r IN
-        SELECT v.tbl, v.kind, current_setting('ds_grants.' || v.kind) AS grantee,
+        SELECT v.tbl, v.kind, v.cmd, current_setting('ds_grants.' || v.kind) AS grantee,
                v.cond
         FROM @@POLICY_ROWS@@
         WHERE to_regclass(format('public.%I', v.tbl)) IS NOT NULL
     LOOP
-        EXECUTE format('CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO %I '
-                       'USING (%s) WITH CHECK (%s)',
-                       'ds_grants_' || r.kind, r.tbl, r.grantee, r.cond, r.cond);
+        -- FOR ALL: ds_grants_<role>, USING and WITH CHECK. A writes-only
+        -- entry: ds_grants_<role>_<command> for INSERT (WITH CHECK), UPDATE
+        -- (both) and DELETE (USING); the role's reads stay unrestricted.
+        EXECUTE format('CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR %s TO %I %s',
+                       'ds_grants_' || r.kind
+                           || CASE WHEN r.cmd = 'ALL' THEN '' ELSE '_' || lower(r.cmd) END,
+                       r.tbl, r.cmd, r.grantee,
+                       CASE r.cmd
+                           WHEN 'INSERT' THEN format('WITH CHECK (%s)', r.cond)
+                           WHEN 'DELETE' THEN format('USING (%s)', r.cond)
+                           ELSE format('USING (%s) WITH CHECK (%s)', r.cond, r.cond)
+                       END);
     END LOOP;
 END
 $policies$;
