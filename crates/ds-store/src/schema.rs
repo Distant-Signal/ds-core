@@ -380,8 +380,29 @@ mod tests {
         assert!(has(DbRole::Notifier, "journey_templates", "UPDATE"));
         assert!(!has(DbRole::Notifier, "journey_templates", "DELETE"));
         assert!(!has(DbRole::Notifier, "users", "SELECT"));
-        // The enricher is not in read_shared: only its own tables.
-        assert!(has(DbRole::Enricher, "incidents", "UPDATE"));
+        // The enricher is not in read_shared: only its own tables. On
+        // incidents (Q3 of docs/ingest-phase5-runbook.md): table SELECT,
+        // UPDATE on its extraction columns only.
+        assert!(has(DbRole::Enricher, "incidents", "SELECT"));
+        assert!(!has(DbRole::Enricher, "incidents", "UPDATE"));
+        for column in [
+            "source_text_hash",
+            "extracted_category",
+            "extracted_periods",
+            "extraction_model_version",
+            "extracted_at",
+        ] {
+            assert!(
+                has_column(DbRole::Enricher, "incidents", "UPDATE", column),
+                "{column}"
+            );
+        }
+        assert!(!has_column(
+            DbRole::Enricher,
+            "incidents",
+            "UPDATE",
+            "summary"
+        ));
         assert!(!has(DbRole::Enricher, "stations", "SELECT"));
         // The aggregator is: SELECT on a reference table it lists nowhere.
         assert!(has(DbRole::Aggregator, "tocs", "SELECT"));

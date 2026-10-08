@@ -6,6 +6,9 @@
 //! ```text
 //!   MIGRATION_DATABASE_URL=postgres://owner@... ds-migrate run
 //!   DATABASE_URL=postgres://...                 ds-migrate wait [--role writer]
+//!   MIGRATION_DATABASE_URL=postgres://owner@... ds-migrate backfill-trains
+//!   MIGRATION_DATABASE_URL=postgres://owner@... \
+//!     ds-migrate backfill-line-train-summaries [--force] [--lines-dir DIR]
 //! ```
 //!
 //! - `run` does exactly what the api does at startup while
@@ -31,6 +34,15 @@
 //!   own. One connection. The
 //!   chart does not run it: the migrate Job runs `run`, and each service
 //!   gates itself.
+//! - `backfill-trains` and `backfill-line-train-summaries` are the one-off
+//!   data backfills that used to be the api binaries `backfill_trains` and
+//!   `backfill_line_train_summaries` (ingest phase 5 prep, Q2 of
+//!   docs/ingest-phase5-runbook.md: they must never run with the api's
+//!   credentials). They connect like `run` (`MIGRATION_DATABASE_URL`, the
+//!   schema owner, else `DATABASE_URL`) and refuse the api's role. The
+//!   logic is `ds_store::migrate::legacy_backfill::run_backfill` and
+//!   `ds_store::schedule::summaries::backfill_all`; both are idempotent.
+//!   The old api binaries still work, deprecated, until step 5.4b.
 //!
 //! Exit status 0 on success, 1 on any error (logged as one line).
 
@@ -58,6 +70,27 @@ enum Command {
     /// Wait until the database has this build's schema and, with `--role`,
     /// that role's grants (the schema gate, plan 1B.2).
     Wait(WaitArgs),
+    /// The shared-train-identity backfill (formerly the api's
+    /// `backfill_trains`), as the schema owner. Idempotent; a no-op on a
+    /// contracted database.
+    BackfillTrains(RunArgs),
+    /// Derive `line_train_summaries` for every stored population whose rows
+    /// are missing or stale (formerly the api's
+    /// `backfill_line_train_summaries`), as the schema owner. Idempotent.
+    BackfillLineTrainSummaries(SummariesArgs),
+}
+
+#[derive(Debug, Args)]
+struct SummariesArgs {
+    #[command(flatten)]
+    connection: RunArgs,
+    /// Rewrite every population's rows, current or not.
+    #[arg(long)]
+    force: bool,
+    /// The line catalogue that decides what "current" means: the deployed
+    /// image's, as the api uses.
+    #[arg(long, env = "LINES_DIR", default_value = "/app/lines")]
+    lines_dir: String,
 }
 
 /// The connection `run` migrates with. See [`RunArgs::url`].
@@ -154,6 +187,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             tracing::info!("migrations finished");
             Ok(())
         }
+        Command::BackfillTrains(args) => backfill_trains(&args).await,
+        Command::BackfillLineTrainSummaries(args) => backfill_line_train_summaries(&args).await,
         Command::Wait(args) => {
             let options: PgConnectOptions = args
                 .database_url
@@ -165,6 +200,87 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+/// The application name the backfills report in `pg_stat_activity`.
+const BACKFILL_APPLICATION_NAME: &str = "ds-migrate-backfill";
+
+/// A small pool for a backfill on [`RunArgs::url`], refusing the api role.
+async fn backfill_pool(args: &RunArgs, tool: &str) -> anyhow::Result<sqlx::PgPool> {
+    let (url, var) = args.url()?;
+    let options: PgConnectOptions = url
+        .parse()
+        .with_context(|| format!("could not parse {var}"))?;
+    let pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect_with(
+            options
+                .options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS)
+                .application_name(BACKFILL_APPLICATION_NAME),
+        )
+        .await
+        .with_context(|| format!("could not connect with {var}"))?;
+    let user = ds_store::maintenance::refuse_api_role(
+        &pool,
+        tool,
+        "the schema owner (MIGRATION_DATABASE_URL)",
+    )
+    .await?;
+    tracing::info!(user, "{tool}: connected");
+    Ok(pool)
+}
+
+/// `ds-migrate backfill-trains`.
+async fn backfill_trains(args: &RunArgs) -> anyhow::Result<()> {
+    let pool = backfill_pool(args, "ds-migrate backfill-trains").await?;
+    let report = migrate::legacy_backfill::run_backfill(&pool).await?;
+    pool.close().await;
+    tracing::info!(
+        subscriptions_linked = report.subscriptions_linked,
+        movement_events_linked = report.movement_events_linked,
+        current_state_linked = report.current_state_linked,
+        remaining_gaps = report.accepted_gaps,
+        "backfill complete; remaining gaps carry no legacy identity, so the contract migration \
+         loses nothing"
+    );
+    Ok(())
+}
+
+/// `ds-migrate backfill-line-train-summaries`.
+async fn backfill_line_train_summaries(args: &SummariesArgs) -> anyhow::Result<()> {
+    let lines = common::config::parse_lines(&args.lines_dir)?;
+    anyhow::ensure!(
+        !lines.is_empty(),
+        "no line definitions found in {}: rows derived without the catalogue would carry no \
+         on-line stops. Set LINES_DIR (or --lines-dir) to the repository's lines/ directory.",
+        args.lines_dir
+    );
+    tracing::info!(count = lines.len(), lines_dir = %args.lines_dir, "loaded line catalogue");
+    let pool = backfill_pool(&args.connection, "ds-migrate backfill-line-train-summaries").await?;
+    let summary = ds_store::schedule::summaries::backfill_all(
+        &pool,
+        &lines,
+        args.force,
+        |line_id, service_date, rows, took| {
+            tracing::info!(
+                line_id,
+                %service_date,
+                rows,
+                ms = took.as_millis(),
+                "rewrote line_train_summaries"
+            );
+        },
+    )
+    .await?;
+    pool.close().await;
+    tracing::info!(
+        populations = summary.populations,
+        rewritten = summary.rewritten,
+        rows = summary.rows,
+        already_current = summary.current,
+        "backfill complete"
+    );
+    Ok(())
 }
 
 /// The api's startup migration (`crates/api/src/main.rs`), on `options`:
@@ -243,6 +359,38 @@ mod tests {
         Cli::command().debug_assert();
     }
 
+    /// The backfills moved here from the api image (phase 5 prep, Q2).
+    #[test]
+    fn the_backfill_subcommands_parse() {
+        let cli = Cli::try_parse_from([
+            "ds-migrate",
+            "backfill-trains",
+            "--migration-database-url",
+            "postgres://owner@h/d",
+        ])
+        .unwrap();
+        let Command::BackfillTrains(args) = cli.command else {
+            panic!("expected backfill-trains");
+        };
+        assert_eq!(args.url().unwrap().0, "postgres://owner@h/d");
+
+        let cli = Cli::try_parse_from([
+            "ds-migrate",
+            "backfill-line-train-summaries",
+            "--force",
+            "--lines-dir",
+            "/x",
+            "--database-url",
+            "postgres://h/d",
+        ])
+        .unwrap();
+        let Command::BackfillLineTrainSummaries(args) = cli.command else {
+            panic!("expected backfill-line-train-summaries");
+        };
+        assert!(args.force);
+        assert_eq!(args.lines_dir, "/x");
+    }
+
     fn run_args(database_url: Option<&str>, migration_database_url: Option<&str>) -> RunArgs {
         RunArgs {
             database_url: database_url.map(Secret::from),
@@ -301,7 +449,7 @@ mod tests {
         let deadline = |args: &[&str]| -> Result<u64, clap::Error> {
             match Cli::try_parse_from(args)?.command {
                 Command::Run(args) => Ok(args.migration_connect_deadline_secs),
-                Command::Wait(_) => unreachable!(),
+                _ => unreachable!(),
             }
         };
         assert_eq!(deadline(&["ds-migrate", "run"]).unwrap(), 120);
@@ -339,7 +487,7 @@ mod tests {
     fn wait_takes_a_role_from_the_flag_or_the_environment() {
         let parse = |args: &[&str]| match Cli::try_parse_from(args).unwrap().command {
             Command::Wait(args) => args.role,
-            Command::Run(_) => unreachable!(),
+            _ => unreachable!(),
         };
         let url = "--database-url=postgres://unused";
         assert_eq!(

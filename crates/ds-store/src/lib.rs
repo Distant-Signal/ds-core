@@ -56,6 +56,7 @@ pub mod corpus;
 pub mod freshness;
 pub mod incidents;
 pub mod loops;
+pub mod maintenance;
 pub mod migrate;
 pub mod pool;
 pub mod reads;

@@ -515,6 +515,57 @@ pub async fn rebuild_summaries(
     Ok(Some(Some(written)))
 }
 
+/// What one [`backfill_all`] pass did.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct BackfillSummary {
+    /// Stored populations walked.
+    pub populations: usize,
+    /// Populations whose rows were rewritten.
+    pub rewritten: usize,
+    /// Rows written across those populations.
+    pub rows: usize,
+    /// Populations whose rows were already current.
+    pub current: usize,
+}
+
+/// The `line_train_summaries` backfill (`ds-migrate
+/// backfill-line-train-summaries`, formerly the api's
+/// `backfill_line_train_summaries`): [`rebuild_summaries`] for every stored
+/// population, one `(line, date)` at a time, each in its own transaction.
+/// `on_rewritten` sees each rewritten population, its row count and how long
+/// it took.
+pub async fn backfill_all(
+    pool: &PgPool,
+    lines: &[common::LineDefinition],
+    force: bool,
+    mut on_rewritten: impl FnMut(&str, chrono::NaiveDate, usize, std::time::Duration),
+) -> Result<BackfillSummary> {
+    let keys: Vec<(String, chrono::NaiveDate)> = sqlx::query_as(
+        "SELECT line_id, service_date FROM schedule_line_population ORDER BY service_date, line_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut summary = BackfillSummary {
+        populations: keys.len(),
+        ..BackfillSummary::default()
+    };
+    for (line_id, service_date) in &keys {
+        let line = lines.iter().find(|l| &l.id == line_id);
+        let started = std::time::Instant::now();
+        match rebuild_summaries(pool, line, line_id, *service_date, force).await? {
+            // Pruned since the key list was read.
+            None => {}
+            Some(None) => summary.current += 1,
+            Some(Some(n)) => {
+                summary.rewritten += 1;
+                summary.rows += n;
+                on_rewritten(line_id, *service_date, n, started.elapsed());
+            }
+        }
+    }
+    Ok(summary)
+}
+
 /// The fingerprint the stored rows were derived with, if there are any.
 async fn stored_fingerprint(
     tx: &mut Transaction<'_, Postgres>,

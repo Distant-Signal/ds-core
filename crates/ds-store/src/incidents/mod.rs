@@ -32,6 +32,7 @@
 //! 2026-10-07) to the latest poll. The feed lists a few dozen cleared rows
 //! at a time (33 then), until its nightly purge.
 
+pub mod line_backfill;
 pub mod removal;
 
 use std::collections::HashMap;

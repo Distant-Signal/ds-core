@@ -334,6 +334,46 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("('users', 'notifier'", sql)
         self.assertIn("('notifier', 'narrow')", sql)
 
+    def test_the_enricher_targets_column_update_on_incidents(self) -> None:
+        """Q3 prep: table SELECT plus UPDATE on the extraction columns only.
+
+        While the enricher is observed nothing renders for it; narrowed (5.5)
+        the same YAML gives exactly those rows and no table-wide UPDATE.
+        """
+        extraction = [
+            "extracted_at",
+            "extracted_category",
+            "extracted_periods",
+            "extraction_model_version",
+            "source_text_hash",
+        ]
+        model = gen.load()
+        grants = [
+            (g.privileges, tuple(sorted(g.columns)))
+            for g in model.tables["incidents"].grants
+            if g.role == "enricher"
+        ]
+        self.assertEqual(grants, [("S", ()), ("U", tuple(extraction))])
+        self.assertNotIn("'enricher', 'UPDATE'", gen.render(model))
+
+        raw = _raw()
+        raw["roles"]["enricher"]["status"] = "narrow"
+        sql = gen.render(gen.parse(raw))
+        self.assertIn("('incidents', 'enricher', 'SELECT', '')", sql)
+        self.assertNotIn("('incidents', 'enricher', 'UPDATE', '')", sql)
+        updates = sorted(
+            line.strip().rstrip(",")
+            for line in sql.splitlines()
+            if "('incidents', 'enricher', 'UPDATE'," in line
+        )
+        self.assertEqual(len(updates), 1, updates)
+        # The YAML's own column order.
+        self.assertIn(
+            "'source_text_hash,extracted_category,extracted_periods,"
+            "extraction_model_version,extracted_at'",
+            updates[0],
+        )
+
     def test_row_policies_render_for_created_roles_only(self) -> None:
         """Plan 3c.3: the writer's line_status policy; none for a planned role."""
         sql = gen.render(gen.load())

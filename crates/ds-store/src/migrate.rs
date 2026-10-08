@@ -66,6 +66,7 @@
 //! human's in-flight build would look abandoned.
 
 pub mod contract;
+pub mod legacy_backfill;
 
 use std::time::Duration;
 

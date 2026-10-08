@@ -1,9 +1,10 @@
 //! The startup precondition for the shared-train-identity contract
 //! migration (`20260906140000_drop_legacy_columns.sql`): moved from
-//! `api::data::legacy_backfill` (plan task 1B.1), which keeps the backfill
-//! itself (`run_backfill`, the `backfill_trains` binary) and re-exports
-//! [`ensure_ready_for_contract_migration`]. See that module's doc for the
-//! required deploy sequence.
+//! `api::data::legacy_backfill` (plan task 1B.1). The backfill itself
+//! (`run_backfill`, run by `ds-migrate backfill-trains`) is
+//! [`super::legacy_backfill`] since the phase 5 prep (Q2), which also
+//! re-exports [`ensure_ready_for_contract_migration`]. See that module's doc
+//! for the required deploy sequence.
 //!
 //! [`table_exists`], [`column_exists`] and [`subscriptions_table`] are
 //! public because the backfill asks the same catalog questions.
@@ -168,10 +169,10 @@ pub async fn ensure_ready_for_contract_migration(pool: &PgPool) -> anyhow::Resul
         "refusing to start: migration {CONTRACT_MIGRATION_VERSION} \
          (drop_legacy_columns) has not been applied yet, and it would IRREVERSIBLY drop the \
          only columns that can still recover the shared-train identity of these rows -- {}. \
-         Run the backfill first:  DATABASE_URL=... cargo run -p api --bin backfill_trains  \
+         Run the backfill first:  MIGRATION_DATABASE_URL=... ds-migrate backfill-trains  \
          (idempotent, safe to re-run), confirm it reports no remaining gaps, then start this \
-         binary again. See crates/api/src/data/legacy_backfill.rs's module doc for the full \
-         deploy sequence.",
+         binary again. See crates/ds-store/src/migrate/legacy_backfill.rs's module doc for \
+         the full deploy sequence.",
         blockers.join("; ")
     );
 }
