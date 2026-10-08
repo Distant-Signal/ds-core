@@ -1,5 +1,7 @@
-# cargo-deny: licences, advisories, bans and sources. CI runs
-# `cargo deny --locked check` in the `cargo-deny` job (ci.yml).
+# cargo-deny: licences, advisories, bans and sources. CI's `cargo-deny` job
+# (ci.yml) runs `cargo deny --locked check bans licenses sources` as a
+# blocking check, `cargo deny --locked fetch` as a blocking step, and
+# `check advisories` as a non-blocking check that only warns.
 # Baseline: the "Strict Config Starting Points" guide's deny.toml.
 
 [graph]
@@ -7,9 +9,10 @@ all-features = true
 
 [advisories]
 # Overlap, kept on purpose: dependency-scan.yml's OSV scan already reports
-# RustSec advisories for Cargo.lock (and npm, and images). This section adds
-# a hard CI gate on the same database, plus yanked crates, which OSV doesn't
-# check. It clones the advisory DB from github.com, which GitHub-hosted CI
+# RustSec advisories for Cargo.lock (and npm, and images), and blocks on
+# critical + fixable ones. This section reports the same database, plus
+# yanked crates, which OSV doesn't check, as a CI warning (not a gate):
+# cargo-deny's advisories v2 has no severity threshold to block on. It clones the advisory DB from github.com, which GitHub-hosted CI
 # can reach.
 version = 2
 yanked = "deny"
