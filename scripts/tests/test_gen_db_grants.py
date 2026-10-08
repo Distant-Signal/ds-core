@@ -60,6 +60,7 @@ class RepoFilesTest(unittest.TestCase):
                 "enricher": "observed",
                 "notifier": "observed",
                 "writer": "observed",
+                "incidents": "narrow",
                 "schedule_ingest": "narrow",
                 "schedule_reference": "narrow",
                 "stations": "narrow",

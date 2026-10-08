@@ -218,7 +218,7 @@ async fn run_cursor_loop_with<C, CFut, F, Fut>(
     mut last_fetched: C,
     poll_interval: Duration,
     progress: &Progress,
-    mut cycle: F,
+    cycle: F,
 ) -> anyhow::Result<()>
 where
     C: FnMut() -> CFut,
@@ -234,6 +234,117 @@ where
         Some(progress),
     )
     .await;
+    run_cycles(
+        policy,
+        poller_label,
+        poll_interval,
+        progress,
+        delay,
+        // An async closure: the retry wait borrows `last_fetched` mutably.
+        async || {
+            // A retry after a failure: don't spend an upstream fetch until
+            // the last-fetch source (api, or the database for a direct
+            // writer) answers again (bounded, so a GET-only breakage can't
+            // stop polling).
+            if let Err(err) =
+                ingest::wait_for_cursor(&mut last_fetched, &policy.api_wait, Some(progress)).await
+            {
+                tracing::warn!(error = ?err, "last-fetch source still unreachable; retrying the poll anyway");
+            }
+        },
+        cycle,
+    )
+    .await
+}
+
+/// [`run_poll_loop`] for a poller that writes Postgres itself instead of
+/// POSTing to `api` (ingest architecture phase 2, `INGEST_SINK=db`): the
+/// first poll waits out what is left of `poll_interval` since
+/// `last_fetched` (the poller's own freshness marker, read from the
+/// database where the HTTP loop asks `api`), and a retry after a failed
+/// cycle waits only on the failed-cycle backoff, with no `api` to wait for.
+/// A `last_fetched` error is logged and means "poll now", as the HTTP
+/// loop's does after its wait.
+///
+/// Unlike [`run_poll_loop`] it does not install the metrics recorder: the
+/// caller does, before it registers its own metrics.
+pub async fn run_poll_loop_from_cursor<C, CFut, F, Fut>(
+    poller_label: &'static str,
+    poll_interval: Duration,
+    progress: &Progress,
+    last_fetched: C,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    C: FnOnce() -> CFut,
+    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    run_poll_loop_from_cursor_with(
+        &DEFAULT_RETRY_POLICY,
+        poller_label,
+        poll_interval,
+        progress,
+        last_fetched,
+        cycle,
+    )
+    .await
+}
+
+async fn run_poll_loop_from_cursor_with<C, CFut, F, Fut>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    poll_interval: Duration,
+    progress: &Progress,
+    last_fetched: C,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    C: FnOnce() -> CFut,
+    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    register_cycle_metrics(poller_label);
+    let delay = match last_fetched().await {
+        Ok(fetched_at) => {
+            ingest::duration_until_next_poll(fetched_at, chrono::Utc::now(), poll_interval)
+        }
+        Err(err) => {
+            tracing::warn!(error = ?err, "could not determine last-fetch time; polling immediately");
+            Duration::ZERO
+        }
+    };
+    run_cycles(
+        policy,
+        poller_label,
+        poll_interval,
+        progress,
+        delay,
+        || async {},
+        cycle,
+    )
+    .await
+}
+
+/// The loop both entry points share: the first tick after `delay`, then
+/// every `poll_interval`; `before_retry` runs before a cycle that follows a
+/// failed one.
+async fn run_cycles<F, Fut, R>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    poll_interval: Duration,
+    progress: &Progress,
+    delay: Duration,
+    mut before_retry: R,
+    mut cycle: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+    R: AsyncFnMut(),
+{
     if !delay.is_zero() {
         tracing::info!(
             delay_secs = delay.as_secs(),
@@ -248,15 +359,7 @@ where
         progress.idle(interval.tick()).await;
 
         if consecutive_failures > 0 {
-            // A retry after a failure: don't spend an upstream fetch until
-            // the last-fetch source (api, or the database for a direct
-            // writer) answers again (bounded, so a GET-only breakage can't
-            // stop polling).
-            if let Err(err) =
-                ingest::wait_for_cursor(&mut last_fetched, &policy.api_wait, Some(progress)).await
-            {
-                tracing::warn!(error = ?err, "last-fetch source still unreachable; retrying the poll anyway");
-            }
+            before_retry().await;
         }
 
         let cycle_start = std::time::Instant::now();
@@ -426,6 +529,58 @@ mod tests {
             retry_after: None,
         }
         .into()
+    }
+
+    /// The DB-sink loop: a fresh cursor delays the first poll, a stale one
+    /// polls at once, and a failed cycle retries on the failed-cycle backoff
+    /// (no api to wait for).
+    #[tokio::test]
+    async fn the_cursor_loop_waits_out_a_fresh_cursor_and_retries_a_failed_cycle() {
+        let progress = Progress::new(Duration::from_secs(60));
+
+        // Fetched just now with a daily interval: no poll within the test.
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_cycle = Arc::clone(&calls);
+        let loop_future = run_poll_loop_from_cursor_with(
+            &FAST_POLICY,
+            "test",
+            Duration::from_secs(86_400),
+            &progress,
+            || async { Ok(Some(chrono::Utc::now())) },
+            || {
+                calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                async { Ok(()) }
+            },
+        );
+        let _ = tokio::time::timeout(Duration::from_millis(200), loop_future).await;
+        assert_eq!(calls.load(Ordering::Relaxed), 0, "still fresh");
+
+        // Never fetched: polls at once; the failure is retried soon.
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_cycle = Arc::clone(&calls);
+        let loop_future = run_poll_loop_from_cursor_with(
+            &FAST_POLICY,
+            "test",
+            Duration::from_secs(86_400),
+            &progress,
+            || async { Ok(None) },
+            || {
+                let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                async move {
+                    if n == 0 {
+                        Err(anyhow::anyhow!("database unavailable"))
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
+        );
+        let _ = tokio::time::timeout(Duration::from_secs(2), loop_future).await;
+        assert_eq!(
+            calls.load(Ordering::Relaxed),
+            2,
+            "first poll at once, one retry after the failure, then the daily interval"
+        );
     }
 
     /// SVC-09: a daily poller whose POST failed (api not up yet after a

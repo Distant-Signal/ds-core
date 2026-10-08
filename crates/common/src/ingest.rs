@@ -134,12 +134,33 @@ pub enum FailureClass {
     Rejected,
 }
 
+/// A write that refused the data itself, from a sink that is not an `api`
+/// POST (ingest architecture phase 2's DB sinks: a class 22 or 23
+/// SQLSTATE). [`classify_failure`] reads it as [`FailureClass::Rejected`],
+/// as it does a 400, 413 or 422: the same data will fail the same way.
+#[derive(Debug)]
+pub struct DataRejected(pub String);
+
+impl std::fmt::Display for DataRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "data rejected: {}", self.0)
+    }
+}
+
+impl std::error::Error for DataRejected {}
+
 /// Classifies an error from this module's helpers. Only a response status
 /// that means "this request body is bad" counts as [`FailureClass::Rejected`];
 /// everything else -- including any error this function does not recognise
 /// -- is [`FailureClass::Transient`], because wrongly treating an outage as
 /// a rejection dead-letters healthy data, while the reverse only delays it.
 pub fn classify_failure(err: &anyhow::Error) -> FailureClass {
+    if err
+        .chain()
+        .any(|cause| cause.downcast_ref::<DataRejected>().is_some())
+    {
+        return FailureClass::Rejected;
+    }
     let status = err.chain().find_map(|cause| {
         cause
             .downcast_ref::<HttpStatusError>()
@@ -650,7 +671,7 @@ pub(crate) async fn fetch_last_fetched(
 /// future) *and* the process were crash-looping, every restart would
 /// re-arm a full-interval delay before ever reaching a real poll. Two
 /// simultaneous faults, not a risk from this function in isolation.
-fn duration_until_next_poll(
+pub(crate) fn duration_until_next_poll(
     fetched_at: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
     poll_interval: Duration,
@@ -946,6 +967,14 @@ mod tests {
             classify_failure(&status_error(422).context("posting train events")),
             FailureClass::Rejected,
             "a context layer must not hide the status"
+        );
+        assert_eq!(
+            classify_failure(
+                &anyhow::Error::from(DataRejected("23505 duplicate key".to_string()))
+                    .context("writing incidents")
+            ),
+            FailureClass::Rejected,
+            "a DB sink's data rejection is a rejection too"
         );
     }
 

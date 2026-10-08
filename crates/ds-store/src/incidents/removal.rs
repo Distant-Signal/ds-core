@@ -11,8 +11,8 @@
 //! # The guard
 //!
 //! Absence is evidence only when the snapshot is the whole feed, so
-//! inference runs once per POST, after every chunk of
-//! [`super::upsert_incident_snapshot`] has committed, and only when ALL of:
+//! inference runs once per snapshot, after every chunk of
+//! [`super::apply_snapshot`] has committed, and only when ALL of:
 //!
 //! 1. the poller says the snapshot is complete (`IncidentSnapshot::complete`:
 //!    no malformed `<PtIncident>` skipped, document not truncated). An older
@@ -43,9 +43,29 @@
 //! miss happened to be confirmed, and it is what the one-off backfill
 //! (scripts/backfill-2026-10-06-incident-source-removed.sql) writes too, so
 //! old and new removals read the same.
+//!
+//! # With the row heartbeat off (plan 2c.6)
+//!
+//! A listed row's `fetched_at` no longer advances every poll (see
+//! [`super::RowHeartbeat`]), so the first miss (counter 0 to 1) stamps it:
+//! `fetched_at = GREATEST(fetched_at, incident_feed_state.previous_snapshot_at)`,
+//! the snapshot before this one, which is the last one that listed it. The
+//! second miss then copies it into `source_removed_at` exactly as before.
+//! `GREATEST` keeps the row's own time when it is later, so a stamp never
+//! moves `fetched_at` backwards.
+//!
+//! The statement is the same in both modes. With the heartbeat on,
+//! `previous_snapshot_at` is NULL (`GREATEST` ignores it: today's write,
+//! value for value), except on the first snapshot after the heartbeat is
+//! turned back on, where it is the last heartbeat-off snapshot: exactly the
+//! stamp that rollback needs. A heartbeat-off snapshot right after a
+//! heartbeat-on one has a NULL `previous_snapshot_at` too, and the rows its
+//! predecessor bumped keep their own (correct) time.
 
 use anyhow::Result;
 use sqlx::PgPool;
+
+use super::RowHeartbeat;
 
 /// Consecutive complete snapshots an incident must be missing from before
 /// it is marked removed (user decision 2026-10-06: 2).
@@ -160,6 +180,8 @@ pub(crate) fn judge(current: i64, previous: Option<(i64, f64)>) -> (Inference, b
 /// Runs the guard and, if it passes, advances the miss counters, all in one
 /// transaction. `present_ids` is every incident id the snapshot listed;
 /// the caller has already committed their upserts (and so their resets).
+/// `heartbeat` is the one [`super::apply_snapshot`] ran with: with it off,
+/// creating the feed-state row also sets `last_snapshot_at`.
 ///
 /// The baseline row is read `FOR UPDATE`, so two overlapping POSTs (a slow
 /// request and its retry) run their inference one after the other, and the
@@ -173,6 +195,7 @@ pub async fn infer_removals(
     pool: &PgPool,
     present_ids: &[&str],
     complete: bool,
+    heartbeat: RowHeartbeat,
 ) -> Result<Inference> {
     if !complete {
         return Ok(record(Inference::Incomplete));
@@ -194,36 +217,52 @@ pub async fn infer_removals(
         judge(current, previous.map(|(size, age)| (i64::from(size), age)));
 
     if new_baseline {
+        // A new row (the first complete snapshot) also takes this
+        // snapshot's time when the heartbeat is off: `apply_snapshot`'s
+        // UPDATE of the snapshot times found no row to update.
         sqlx::query(
-            "INSERT INTO incident_feed_state (singleton, last_complete_at, last_complete_size) \
-             VALUES (TRUE, now(), $1) \
+            "INSERT INTO incident_feed_state \
+                 (singleton, last_complete_at, last_complete_size, last_snapshot_at) \
+             VALUES (TRUE, now(), $1, CASE WHEN $2 THEN NULL ELSE now() END) \
              ON CONFLICT (singleton) DO UPDATE SET \
                  last_complete_at = EXCLUDED.last_complete_at, \
                  last_complete_size = EXCLUDED.last_complete_size",
         )
         .bind(i32::try_from(current).unwrap_or(i32::MAX))
+        .bind(heartbeat.is_on())
         .execute(&mut *tx)
         .await?;
     }
 
     let verdict = if let Inference::Applied { .. } = verdict {
-        let (missing, removed): (i64, i64) = sqlx::query_as(
-            "WITH missed AS ( \
+        // A first miss stamps `fetched_at` (module docs), and
+        // `source_removed_at` takes the stamped value (the right-hand sides
+        // all read the old row). With the heartbeat on, `previous_snapshot_at`
+        // is NULL, so this writes exactly what today's statement did.
+        let sql = "WITH missed AS ( \
                  UPDATE incidents SET \
                      source_missing_polls = source_missing_polls + 1, \
+                     fetched_at = CASE WHEN source_missing_polls = 0 \
+                                       THEN GREATEST(fetched_at, feed.previous_snapshot_at) \
+                                       ELSE fetched_at END, \
                      source_removed_at = CASE WHEN source_missing_polls + 1 >= $2 \
-                                              THEN fetched_at END \
+                         THEN CASE WHEN source_missing_polls = 0 \
+                                   THEN GREATEST(fetched_at, feed.previous_snapshot_at) \
+                                   ELSE fetched_at END \
+                     END \
+                   FROM (SELECT (SELECT previous_snapshot_at FROM incident_feed_state \
+                                  WHERE singleton) AS previous_snapshot_at) feed \
                   WHERE NOT is_cleared \
                     AND source_removed_at IS NULL \
                     AND NOT (incident_id = ANY($1)) \
                  RETURNING source_removed_at \
              ) \
-             SELECT count(*), count(source_removed_at) FROM missed",
-        )
-        .bind(&distinct)
-        .bind(MISSES_TO_REMOVE)
-        .fetch_one(&mut *tx)
-        .await?;
+             SELECT count(*), count(source_removed_at) FROM missed";
+        let (missing, removed): (i64, i64) = sqlx::query_as(sql)
+            .bind(&distinct)
+            .bind(MISSES_TO_REMOVE)
+            .fetch_one(&mut *tx)
+            .await?;
         Inference::Applied {
             missing: missing as u64,
             removed: removed as u64,

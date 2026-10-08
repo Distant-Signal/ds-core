@@ -1,14 +1,40 @@
-//! The incident snapshot: `upsert_incident_snapshot` and its helpers,
+//! The incident snapshot: [`apply_snapshot`] and its helpers,
 //! `incident_removal.rs` (whole, as [`removal`]) and `parse_snapshot`
-//! (today's `incident_snapshot_from_body`). Redis stays out: the upsert
-//! takes a publish callback, and the api passes `publish_text_changed`.
+//! (today's `incident_snapshot_from_body`).
 //!
-//! Moved here from `api/src/data/queries.rs` by plan task 1A.8.
+//! Moved here from `api/src/data/queries.rs` by plan task 1A.8, and split
+//! by plan task 2c.1 so Redis stays out of this crate. A snapshot is
+//! written in three steps, in this order, by both of its writers (the api's
+//! `POST /private/incidents` and poller-incidents' `DbSink`):
+//!
+//! 1. [`apply_snapshot`]: the content upserts, in committed chunks; returns
+//!    the ids whose text changed;
+//! 2. the caller XADDs those ids to `incident-text-changed`, best effort,
+//!    after every chunk has committed;
+//! 3. [`removal::infer_removals`]: "Ended (no longer listed)".
+//!
+//! # The row heartbeat (plan 2c.6, spec §9.4)
+//!
+//! [`RowHeartbeat::On`] (`INCIDENTS_ROW_HEARTBEAT=true`, the default) is
+//! today's behaviour: every listed row gets `fetched_at = NOW()` on every
+//! poll, about 600k row updates a day. [`RowHeartbeat::Off`] writes only
+//! what changed: the content upsert, the rows coming back
+//! (`source_missing_polls`/`source_removed_at` reset), the cleared rows the
+//! feed still lists (see below), and one `incident_feed_state` row per
+//! snapshot (`last_snapshot_at`, `previous_snapshot_at`). Readers derive the
+//! display time with [`FETCHED_AT_SQL`], which returns the same value in
+//! both modes (up to the snapshot it names).
+//!
+//! **Cleared rows keep their per-row bump in both modes.** The removal
+//! inference never counts a cleared row's misses (it is RDM's own fact), so
+//! nothing records whether the feed still lists one; a feed time would
+//! date every cleared row that left the feed (727 of them in production on
+//! 2026-10-07) to the latest poll. The feed lists a few dozen cleared rows
+//! at a time (33 then), until its nightly purge.
 
 pub mod removal;
 
 use std::collections::HashMap;
-use std::future::Future;
 
 use anyhow::Result;
 use common::IncidentMessage;
@@ -18,7 +44,7 @@ use crate::freshness::{last_per_key, record_ingest};
 
 /// Incidents are upserted in chunks of this size, each as its own
 /// transaction, rather than one transaction for the whole poll batch --
-/// see the `upsert_incidents` doc comment for why.
+/// see [`apply_snapshot`]'s doc comment for why.
 pub const UPSERT_CHUNK_SIZE: usize = 50;
 
 /// The subset of an existing `incidents` row needed to decide whether an
@@ -33,7 +59,7 @@ pub struct ExistingIncident {
     pub is_cleared: bool,
 }
 
-/// Pure diff check, factored out of `upsert_incidents` so it's testable
+/// Pure diff check, factored out of [`apply_snapshot`] so it's testable
 /// without a database: an incident is "changed" if it's new, or if its
 /// summary, description, validity periods or `is_cleared` differ from
 /// what's stored.
@@ -64,60 +90,12 @@ pub fn incident_changed(
 /// Narrower than `incident_changed`: true only if summary or description
 /// differ from what's stored. Validity-only changes don't need
 /// re-extraction -- the prose an LLM would read hasn't moved. Drives
-/// whether `upsert_incidents` publishes a `text-changed` event.
+/// whether [`apply_snapshot`] reports the id in `text_changed_ids`.
 pub fn text_changed(existing: Option<&ExistingIncident>, summary: &str, description: &str) -> bool {
     match existing {
         None => true,
         Some(row) => row.summary != summary || row.description != description,
     }
-}
-
-/// Upserts a batch of Knowledgebase incidents. Each incident is inserted or
-/// updated in `incidents`; if the stored `summary/description/validity_periods`
-/// differ from what's incoming (or the incident is new), a snapshot is also
-/// appended to `incident_history`.
-///
-/// Runs as a series of `UPSERT_CHUNK_SIZE`-sized transactions rather than one
-/// transaction for the whole batch -- a full poll cycle can carry hundreds of
-/// incidents, and holding row locks on all of them for the duration of one
-/// giant transaction blocks unrelated single-row writers (e.g. the enricher
-/// persisting extraction results) for as long as the whole batch takes.
-/// Chunking bounds that lock-hold window to one chunk's worth of work. Each
-/// chunk is still atomic with respect to its own `incidents`/`incident_history`
-/// writes, but a failure partway through the batch no longer rolls back
-/// chunks that already committed -- acceptable here because the poller
-/// resends the full current feed state every cycle (see `poller-incidents`),
-/// so anything not persisted this round is retried wholesale next round.
-///
-/// `line_matcher` is run over each incoming incident to fill
-/// `incidents.affected_lines` -- see that column's migration
-/// (`20260917090000_incidents_affected_lines.sql`) and `common::matcher`'s
-/// module doc. It is a pure function of the incident's own text + operator
-/// list against the line catalogue, so recomputing it on every poll cycle
-/// is both cheap and the mechanism by which a catalogue edit (a new
-/// `match_keywords` entry, say) reaches still-live incidents: they are
-/// re-sent every cycle. Incidents that have dropped out of the feed keep
-/// whatever was computed when they were last seen, which is why the
-/// backfill binary exists.
-///
-/// Treats the batch as an INCOMPLETE snapshot: it resets the "no longer
-/// listed" state of every incident it names, but never infers that an
-/// absent one has left the feed. See [`upsert_incident_snapshot`], which
-/// also documents `publish_text_changed`.
-pub async fn upsert_incidents<F, Fut>(
-    pool: &PgPool,
-    line_matcher: &common::matcher::LineMatcher,
-    incidents: &[IncidentMessage],
-    publish_text_changed: F,
-) -> Result<u64>
-where
-    F: FnOnce(Vec<String>) -> Fut,
-    Fut: Future<Output = ()>,
-{
-    let outcome =
-        upsert_incident_snapshot(pool, line_matcher, incidents, false, publish_text_changed)
-            .await?;
-    Ok(outcome.upserted)
 }
 
 /// Every station's name (the `stations` reference table), for resolving
@@ -132,12 +110,68 @@ pub async fn load_station_gazetteer(
     Ok(common::station_resolver::StationGazetteer::new(rows))
 }
 
-/// What [`upsert_incident_snapshot`] did.
+/// What one snapshot's write did: [`apply_snapshot`]'s count, then
+/// [`removal::infer_removals`]'s verdict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IncidentSnapshotOutcome {
     pub upserted: u64,
     pub inference: removal::Inference,
 }
+
+/// What [`apply_snapshot`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedSnapshot {
+    /// Incidents in the snapshot (every chunk committed).
+    pub upserted: u64,
+    /// The ids whose summary or description changed, or that are new: what
+    /// the caller XADDs to `incident-text-changed`.
+    pub text_changed_ids: Vec<String>,
+}
+
+/// How a snapshot keeps the incidents' display time current
+/// (`INCIDENTS_ROW_HEARTBEAT`, plan 2c.6). See the module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RowHeartbeat {
+    /// `fetched_at = NOW()` on every listed row, every snapshot (today's
+    /// behaviour, the default). Keeps `incident_feed_state`'s
+    /// `last_snapshot_at` NULL.
+    #[default]
+    On,
+    /// Touch a row only when its content or listing state changes, and
+    /// stamp the feed's snapshot times once per snapshot.
+    Off,
+}
+
+impl RowHeartbeat {
+    /// `INCIDENTS_ROW_HEARTBEAT`'s value: `true` is [`Self::On`].
+    pub const fn from_flag(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
+
+    /// The value as the flag.
+    pub const fn is_on(self) -> bool {
+        matches!(self, Self::On)
+    }
+}
+
+/// An incident's display time ("Last updated from National Rail",
+/// `fetchedAt`), for every reader of `incidents.fetched_at` (plan 2c.4,
+/// spec §9.4): the row's own time, or, for an uncleared incident the latest
+/// snapshot listed (`source_missing_polls = 0`, not ended), the feed's
+/// `last_snapshot_at` if later. Use it as `{FETCHED_AT_SQL} AS fetched_at`
+/// in a query over `incidents` that does not alias the table.
+///
+/// While [`RowHeartbeat::On`] runs, `last_snapshot_at` is NULL and
+/// `GREATEST` ignores a NULL, so this is exactly `incidents.fetched_at`:
+/// the readers can ship before the writer change and the writer change can
+/// be reverted on its own. Cleared rows always use their own time (module
+/// docs).
+pub const FETCHED_AT_SQL: &str = "GREATEST(incidents.fetched_at, \
+     CASE WHEN NOT incidents.is_cleared \
+               AND incidents.source_missing_polls = 0 \
+               AND incidents.source_removed_at IS NULL \
+          THEN (SELECT s.last_snapshot_at FROM incident_feed_state s WHERE s.singleton) \
+     END)";
 
 /// Gauge: how many of the live incidents in the latest Knowledgebase poll
 /// name no place the matcher resolves (and are not network-wide), so fall
@@ -173,39 +207,57 @@ fn record_unresolved_places(
         .set(unresolved as f64);
 }
 
-/// [`upsert_incidents`], then -- once every chunk has committed -- the
-/// "Ended (no longer listed)" inference over the incidents this snapshot
-/// did NOT name, when `complete` (the poller vouches that it is the whole
-/// feed) and the rest of the guard in [`removal`]
-/// passes. A chunk failure returns before inference runs, so a partly
-/// written snapshot never marks anything removed.
+/// Upserts a snapshot of Knowledgebase incidents (step 1 of the module
+/// docs). Each incident is inserted or updated in `incidents`; if the
+/// stored `summary/description/validity_periods/is_cleared` differ from
+/// what's incoming (or the incident is new), a snapshot is also appended to
+/// `incident_history`.
+///
+/// Runs as a series of `UPSERT_CHUNK_SIZE`-sized transactions rather than one
+/// transaction for the whole batch -- a full poll cycle can carry hundreds of
+/// incidents, and holding row locks on all of them for the duration of one
+/// giant transaction blocks unrelated single-row writers (e.g. the enricher
+/// persisting extraction results) for as long as the whole batch takes.
+/// Chunking bounds that lock-hold window to one chunk's worth of work. Each
+/// chunk is still atomic with respect to its own `incidents`/`incident_history`
+/// writes, but a failure partway through the batch no longer rolls back
+/// chunks that already committed -- acceptable here because the poller
+/// resends the full current feed state every cycle (see `poller-incidents`),
+/// so anything not persisted this round is retried wholesale next round.
+/// A chunk failure returns an error, so the caller never runs the
+/// inference over a partly written snapshot.
+///
+/// `line_matcher` is run over each incoming incident to fill
+/// `incidents.affected_lines` -- see that column's migration
+/// (`20260917090000_incidents_affected_lines.sql`) and `common::matcher`'s
+/// module doc. It is a pure function of the incident's own text + operator
+/// list against the line catalogue, so recomputing it on every poll cycle
+/// is both cheap and the mechanism by which a catalogue edit (a new
+/// `match_keywords` entry, say) reaches still-live incidents: they are
+/// re-sent every cycle. Incidents that have dropped out of the feed keep
+/// whatever was computed when they were last seen, which is why the
+/// backfill binary exists.
 ///
 /// Every incident the batch names gets `source_missing_polls = 0` and
 /// `source_removed_at = NULL`, complete snapshot or not: being listed is
 /// positive evidence on its own, so a reappearing incident is un-ended at
-/// once.
+/// once. Whether every listed row also gets `fetched_at = NOW()` is
+/// `heartbeat` (module docs).
 ///
-/// `publish_text_changed` gets the ids whose summary or description changed
-/// (or that are new), once, only if there are any, after every chunk has
-/// committed and before the inference runs. The api passes its Redis
-/// `XADD incident-text-changed` publisher; it must be best effort (log, do
-/// not fail), because a publish failure must not fail the ingest. Redis
-/// stays out of this crate (spec §5.1).
+/// The returned `text_changed_ids` are for the caller to publish, once
+/// every chunk has committed (which is when this returns) and before the
+/// inference: best effort (log, do not fail), because a publish failure
+/// must not fail the ingest. Redis stays out of this crate (spec §5.1).
 #[expect(
     clippy::too_many_lines,
     reason = "long but linear; splitting it would scatter its shared state across helpers"
 )]
-pub async fn upsert_incident_snapshot<F, Fut>(
+pub async fn apply_snapshot(
     pool: &PgPool,
     line_matcher: &common::matcher::LineMatcher,
     incidents: &[IncidentMessage],
-    complete: bool,
-    publish_text_changed: F,
-) -> Result<IncidentSnapshotOutcome>
-where
-    F: FnOnce(Vec<String>) -> Fut,
-    Fut: Future<Output = ()>,
-{
+    heartbeat: RowHeartbeat,
+) -> Result<AppliedSnapshot> {
     let mut count = 0u64;
     let mut text_changed_ids = Vec::new();
 
@@ -435,22 +487,33 @@ where
         // `fetched_at` is shown per incident ("Last updated from National
         // Rail") so it must still advance for every incident in the feed,
         // changed or not. The upsert above skips an unchanged row entirely;
-        // this bumps ONLY `fetched_at` on those, in one statement. Updating
-        // just that unindexed column is a HOT update that reuses the row's
-        // TOASTed text/array values and touches none of the GIN indexes,
-        // instead of the full-row rewrite every incident got every cycle.
-        // Rows the upsert just wrote already hold this transaction's NOW().
-        // Being listed also un-ends an incident (`source_missing_polls`,
-        // `source_removed_at`, see `removal`); two more
-        // unindexed columns keep this a HOT update.
-        sqlx::query(
-            "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
-                    source_removed_at = NULL \
-             WHERE incident_id = ANY($1) AND fetched_at <> NOW()",
-        )
-        .bind(&chunk_ids)
-        .execute(&mut *tx)
-        .await?;
+        // with the heartbeat on, this bumps ONLY `fetched_at` on those, in
+        // one statement. Updating just that unindexed column is a HOT update
+        // that reuses the row's TOASTed text/array values and touches none
+        // of the GIN indexes, instead of the full-row rewrite every incident
+        // got every cycle. Rows the upsert just wrote already hold this
+        // transaction's NOW(). Being listed also un-ends an incident
+        // (`source_missing_polls`, `source_removed_at`, see `removal`); two
+        // more unindexed columns keep this a HOT update.
+        //
+        // With the heartbeat off, only the rows coming back (or cleared:
+        // module docs) are touched; the others take the feed's time
+        // (`record_snapshot_times` below, read through `FETCHED_AT_SQL`).
+        let bump = match heartbeat {
+            RowHeartbeat::On => {
+                "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
+                        source_removed_at = NULL \
+                 WHERE incident_id = ANY($1) AND fetched_at <> NOW()"
+            }
+            RowHeartbeat::Off => {
+                "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
+                        source_removed_at = NULL \
+                 WHERE incident_id = ANY($1) AND fetched_at <> NOW() \
+                   AND (is_cleared OR source_missing_polls <> 0 \
+                        OR source_removed_at IS NOT NULL)"
+            }
+        };
+        sqlx::query(bump).bind(&chunk_ids).execute(&mut *tx).await?;
         if !chunk.is_empty() {
             record_ingest(&mut tx, "incidents").await?;
         }
@@ -458,25 +521,45 @@ where
         tx.commit().await?;
     }
 
-    // Publish only after commit: a publish before commit could announce an
-    // incident that a later failure in this same batch rolls back. Publish
-    // failure is logged, not propagated -- the hourly sweep (Task 5) is the
-    // backstop for a missed publish, so ingestion must not fail because
-    // Redis is briefly unavailable. Before the inference below, so an
-    // inference failure (a 500, and a retried POST that finds no text
-    // change left to publish) cannot drop these.
-    if !text_changed_ids.is_empty() {
-        publish_text_changed(text_changed_ids).await;
+    // Every chunk committed: the snapshot is written, so its time becomes
+    // the feed's. An empty snapshot lists nothing, so it dates nothing.
+    if !incidents.is_empty() {
+        record_snapshot_times(pool, heartbeat).await?;
     }
 
-    // Every chunk committed: only now is the snapshot fully written, and
-    // only a fully written snapshot may say what is absent from it.
-    let present_ids: Vec<&str> = incidents.iter().map(|i| i.incident_id.as_str()).collect();
-    let inference = removal::infer_removals(pool, &present_ids, complete).await?;
-    Ok(IncidentSnapshotOutcome {
+    Ok(AppliedSnapshot {
         upserted: count,
-        inference,
+        text_changed_ids,
     })
+}
+
+/// `incident_feed_state`'s snapshot times, once per applied non-empty
+/// snapshot (plan 2c.6). Heartbeat off: `previous := last; last := now()`.
+/// Heartbeat on: `previous := last; last := NULL`, so [`FETCHED_AT_SQL`] is
+/// exactly the per-row time, and from the second heartbeat-on snapshot on
+/// both are NULL (and this writes nothing). The one-snapshot `previous`
+/// lets the first heartbeat-on snapshot after a heartbeat-off one stamp a
+/// first miss correctly (see [`removal`]'s module docs).
+///
+/// An UPDATE only: the row is created by the first complete snapshot's
+/// inference ([`removal::infer_removals`], which sets `last_snapshot_at`
+/// itself when it creates the row with the heartbeat off).
+async fn record_snapshot_times(pool: &PgPool, heartbeat: RowHeartbeat) -> Result<()> {
+    let sql = match heartbeat {
+        RowHeartbeat::Off => {
+            "UPDATE incident_feed_state \
+                SET previous_snapshot_at = last_snapshot_at, last_snapshot_at = now() \
+              WHERE singleton"
+        }
+        RowHeartbeat::On => {
+            "UPDATE incident_feed_state \
+                SET previous_snapshot_at = last_snapshot_at, last_snapshot_at = NULL \
+              WHERE singleton \
+                AND (previous_snapshot_at IS NOT NULL OR last_snapshot_at IS NOT NULL)"
+        }
+    };
+    sqlx::query(sql).execute(pool).await?;
+    Ok(())
 }
 
 /// Reads either body shape `poller-incidents` has sent as a snapshot:
@@ -567,21 +650,21 @@ mod parse_snapshot_tests {
     }
 }
 
-/// The publish-order contract of [`upsert_incident_snapshot`] (plan task
-/// 1A.8), against a real database: the callback runs once, after every
-/// chunk has committed (another connection already sees the rows) and
-/// before the removal inference (no feed-state baseline yet), and is not
-/// called when no text changed. Resets `incident_feed_state`, like the
-/// api's `incident_removal` DB tests, so needs `--test-threads=1`.
+/// The row heartbeat switch (plan 2c.6) against a real database:
+/// [`apply_snapshot`] then [`removal::infer_removals`], as both writers run
+/// them. Resets `incident_feed_state`, like the api's `incident_removal` DB
+/// tests, so needs `--test-threads=1`. (The publish-order test moved to the
+/// api's `queries`, where the order now lives, by plan task 2c.1.)
 #[cfg(test)]
 mod db_tests {
-    use std::sync::Mutex;
+    use std::collections::BTreeMap;
 
+    use chrono::{DateTime, Utc};
     use sqlx::postgres::PgPoolOptions;
 
     use super::*;
 
-    const PREFIX: &str = "TEST-PUBLISH-ORDER-";
+    const PREFIX: &str = "TEST-HEARTBEAT-";
 
     async fn test_pool() -> PgPool {
         let database_url =
@@ -594,18 +677,18 @@ mod db_tests {
 
     async fn reset(pool: &PgPool) {
         for sql in [
-            "DELETE FROM incident_history WHERE incident_id LIKE 'TEST-PUBLISH-ORDER-%'",
-            "DELETE FROM incidents WHERE incident_id LIKE 'TEST-PUBLISH-ORDER-%'",
+            "DELETE FROM incident_history WHERE incident_id LIKE 'TEST-HEARTBEAT-%'",
+            "DELETE FROM incidents WHERE incident_id LIKE 'TEST-HEARTBEAT-%'",
             "DELETE FROM incident_feed_state",
         ] {
             sqlx::query(sql).execute(pool).await.expect(sql);
         }
     }
 
-    fn incident(suffix: &str, summary: &str) -> IncidentMessage {
+    fn incident(suffix: &str) -> IncidentMessage {
         IncidentMessage {
             incident_id: format!("{PREFIX}{suffix}"),
-            summary: summary.to_string(),
+            summary: format!("{suffix} summary"),
             description: format!("{suffix} description"),
             operators: vec!["ZZ".to_string()],
             affected_stations: vec![],
@@ -616,101 +699,226 @@ mod db_tests {
         }
     }
 
-    /// What the callback saw when it ran.
-    #[derive(Debug, PartialEq, Eq)]
-    struct AtPublish {
-        ids: Vec<String>,
-        /// This test's rows visible to ANOTHER connection: committed ones.
-        committed_rows: i64,
-        /// `incident_feed_state` rows: 0 until the inference has run.
-        feed_state_rows: i64,
+    fn cleared(suffix: &str) -> IncidentMessage {
+        IncidentMessage {
+            is_cleared: true,
+            ..incident(suffix)
+        }
     }
 
-    async fn feed_state_rows(pool: &PgPool) -> i64 {
-        sqlx::query_scalar("SELECT count(*) FROM incident_feed_state")
-            .fetch_one(pool)
-            .await
-            .expect("count feed state")
-    }
-
-    /// One complete snapshot; returns what the callback saw, if it ran.
+    /// One complete snapshot as both writers run it, as if
+    /// `MIN_INFERENCE_GAP_SECS` had passed since the previous one (the
+    /// stored baseline is backdated first; the snapshot times are not
+    /// touched).
     async fn snapshot(
         pool: &PgPool,
         batch: &[IncidentMessage],
-    ) -> (Option<AtPublish>, IncidentSnapshotOutcome) {
-        let seen: Mutex<Vec<AtPublish>> = Mutex::new(Vec::new());
-        let matcher = common::matcher::LineMatcher::new(&[]);
-        let outcome = upsert_incident_snapshot(pool, &matcher, batch, true, |ids| async {
-            let committed_rows: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM incidents WHERE incident_id LIKE 'TEST-PUBLISH-ORDER-%'",
-            )
-            .fetch_one(pool)
-            .await
-            .expect("count committed rows");
-            let feed_state_rows = feed_state_rows(pool).await;
-            seen.lock().expect("not poisoned").push(AtPublish {
-                ids,
-                committed_rows,
-                feed_state_rows,
-            });
-        })
+        heartbeat: RowHeartbeat,
+    ) -> removal::Inference {
+        sqlx::query(
+            "UPDATE incident_feed_state SET last_complete_at = now() - interval '10 minutes'",
+        )
+        .execute(pool)
         .await
-        .expect("upsert snapshot");
-        let mut seen = seen.into_inner().expect("not poisoned");
-        assert!(
-            seen.len() <= 1,
-            "published at most once per snapshot: {seen:?}"
-        );
-        (seen.pop(), outcome)
+        .expect("backdate the baseline");
+        let matcher = common::matcher::LineMatcher::new(&[]);
+        apply_snapshot(pool, &matcher, batch, heartbeat)
+            .await
+            .expect("apply snapshot");
+        let present: Vec<&str> = batch.iter().map(|i| i.incident_id.as_str()).collect();
+        removal::infer_removals(pool, &present, true, heartbeat)
+            .await
+            .expect("infer removals")
+    }
+
+    /// `incident_id -> xmin` for this test's rows: an UPDATE (HOT or not)
+    /// always writes a new row version with a new `xmin`, so an unchanged
+    /// `xmin` proves the row was not updated. (Exact, unlike
+    /// `pg_stat_*_tables.n_tup_upd`, which the writes' own pooled
+    /// transactions report with a delay.)
+    async fn row_versions(pool: &PgPool) -> BTreeMap<String, String> {
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT incident_id, xmin::text FROM incidents \
+              WHERE incident_id LIKE 'TEST-HEARTBEAT-%'",
+        )
+        .fetch_all(pool)
+        .await
+        .expect("row versions")
+        .into_iter()
+        .collect()
+    }
+
+    async fn feed_times(pool: &PgPool) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        sqlx::query_as(
+            "SELECT last_snapshot_at, previous_snapshot_at FROM incident_feed_state \
+              WHERE singleton",
+        )
+        .fetch_one(pool)
+        .await
+        .expect("feed state")
     }
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 incidents::db_tests -- --ignored --test-threads=1`"]
-    async fn text_changes_are_published_after_commit_and_before_inference() {
+    async fn an_identical_repeated_snapshot_updates_no_incident_with_the_heartbeat_off() {
         let pool = test_pool().await;
         reset(&pool).await;
-
-        // More than one chunk, so "after commit" means after the LAST chunk.
         let batch: Vec<IncidentMessage> = (0..=UPSERT_CHUNK_SIZE)
-            .map(|n| incident(&format!("{n:03}"), "Signal failure"))
+            .map(|n| incident(&format!("{n:03}")))
             .collect();
-        let (published, outcome) = snapshot(&pool, &batch).await;
-        let expected_ids: Vec<String> = batch.iter().map(|i| i.incident_id.clone()).collect();
-        assert_eq!(
-            published,
-            Some(AtPublish {
-                ids: expected_ids,
-                committed_rows: i64::try_from(batch.len()).expect("small"),
-                feed_state_rows: 0,
-            }),
-            "every chunk committed, inference not yet run"
-        );
-        assert_eq!(outcome.inference, removal::Inference::NoBaseline);
-        assert_eq!(
-            feed_state_rows(&pool).await,
-            1,
-            "the inference ran after the publish"
-        );
 
-        // Unchanged text: no publish at all.
-        let (published, _) = snapshot(&pool, &batch).await;
-        assert_eq!(published, None);
-
-        // One summary edited: only that id.
-        let mut edited = batch.clone();
-        edited[1].summary = "Signal failure (updated)".to_string();
-        let (published, _) = snapshot(&pool, &edited).await;
+        // Off: a baseline, then the same snapshot again.
+        snapshot(&pool, &batch, RowHeartbeat::Off).await;
+        let (first_feed_time, _) = feed_times(&pool).await;
+        let before = row_versions(&pool).await;
+        assert_eq!(before.len(), batch.len());
+        let verdict = snapshot(&pool, &batch, RowHeartbeat::Off).await;
         assert_eq!(
-            published.map(|at| at.ids),
-            Some(vec![edited[1].incident_id.clone()])
+            verdict,
+            removal::Inference::Applied {
+                missing: 0,
+                removed: 0
+            }
         );
+        assert_eq!(
+            row_versions(&pool).await,
+            before,
+            "no incidents row updated by an identical snapshot"
+        );
+        let (last, previous) = feed_times(&pool).await;
+        assert!(last > first_feed_time, "the feed time moved on instead");
+        assert_eq!(previous, first_feed_time);
+
+        // On (today's behaviour): every row is bumped, and the feed time is
+        // cleared so the readers see exactly the per-row time; the previous
+        // one lasts one more snapshot (the rollback stamp, `removal`).
+        snapshot(&pool, &batch, RowHeartbeat::On).await;
+        let after_on = row_versions(&pool).await;
+        assert!(
+            before
+                .iter()
+                .all(|(id, xmin)| after_on.get(id) != Some(xmin)),
+            "the heartbeat updates every listed row"
+        );
+        assert_eq!(feed_times(&pool).await, (None, last));
+        snapshot(&pool, &batch, RowHeartbeat::On).await;
+        assert_eq!(feed_times(&pool).await, (None, None));
         reset(&pool).await;
+    }
+
+    /// Which snapshot (1-based) a time falls in, from the
+    /// `clock_timestamp()` windows measured around each one.
+    fn snapshot_index(windows: &[(DateTime<Utc>, DateTime<Utc>)], at: DateTime<Utc>) -> usize {
+        windows
+            .iter()
+            .position(|(start, end)| *start <= at && at <= *end)
+            .map(|index| index + 1)
+            .unwrap_or_else(|| panic!("{at} is in no snapshot's window: {windows:?}"))
+    }
+
+    /// Per incident suffix: (the snapshot its display time names, the
+    /// snapshot its `source_removed_at` names).
+    type DisplayTimes = BTreeMap<String, (usize, Option<usize>)>;
+
+    /// Runs the 6-snapshot sequence with `modes[k]` for snapshot k and
+    /// returns what the readers show after each snapshot.
+    async fn run_sequence(pool: &PgPool, modes: [RowHeartbeat; 6]) -> Vec<DisplayTimes> {
+        reset(pool).await;
+        let (a, b, c, d) = (incident("A"), incident("B"), incident("C"), cleared("D"));
+        let mut a_edited = a.clone();
+        a_edited.description = "A description, updated".to_string();
+        let sequence: [Vec<IncidentMessage>; 6] = [
+            vec![a.clone(), b.clone(), c.clone(), d.clone()],
+            // A's text changes; everything still listed.
+            vec![a_edited.clone(), b.clone(), c.clone(), d.clone()],
+            // C and the cleared D disappear (C: first miss).
+            vec![a_edited.clone(), b.clone()],
+            // C's second miss: ended.
+            vec![a_edited.clone(), b.clone()],
+            // C reappears.
+            vec![a_edited.clone(), b.clone(), c.clone()],
+            // B disappears (first miss).
+            vec![a_edited.clone(), c.clone()],
+        ];
+        let mut windows = Vec::new();
+        let mut shown = Vec::new();
+        for (batch, heartbeat) in sequence.iter().zip(modes) {
+            let start: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
+                .fetch_one(pool)
+                .await
+                .expect("clock");
+            snapshot(pool, batch, heartbeat).await;
+            let end: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
+                .fetch_one(pool)
+                .await
+                .expect("clock");
+            windows.push((start, end));
+
+            let rows: Vec<(String, DateTime<Utc>, DateTime<Utc>, Option<DateTime<Utc>>)> =
+                sqlx::query_as(&format!(
+                    "SELECT incident_id, {FETCHED_AT_SQL}, fetched_at, source_removed_at \
+                       FROM incidents WHERE incident_id LIKE 'TEST-HEARTBEAT-%'"
+                ))
+                .fetch_all(pool)
+                .await
+                .expect("display times");
+            let mut times = DisplayTimes::new();
+            for (id, display, fetched_at, removed_at) in rows {
+                if heartbeat == RowHeartbeat::On {
+                    assert_eq!(
+                        display, fetched_at,
+                        "{id}: with the heartbeat on, FETCHED_AT_SQL is exactly fetched_at"
+                    );
+                }
+                times.insert(
+                    id.trim_start_matches(PREFIX).to_string(),
+                    (
+                        snapshot_index(&windows, display),
+                        removed_at.map(|at| snapshot_index(&windows, at)),
+                    ),
+                );
+            }
+            shown.push(times);
+        }
+        reset(pool).await;
+        shown
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                incidents::db_tests -- --ignored --test-threads=1`"]
+    async fn the_display_time_is_the_same_with_the_heartbeat_on_or_off() {
+        use RowHeartbeat::{Off, On};
+        let pool = test_pool().await;
+
+        let today = run_sequence(&pool, [On; 6]).await;
+        // Spot-check the baseline itself: after the last snapshot.
+        let last = today.last().expect("six snapshots");
+        assert_eq!(last["A"], (6, None), "listed: the latest snapshot");
+        assert_eq!(last["B"], (5, None), "first miss: the last one listing it");
+        assert_eq!(last["C"], (6, None), "reappeared and listed");
+        assert_eq!(last["D"], (2, None), "cleared, gone after snapshot 2");
+        assert_eq!(today[3]["C"], (2, Some(2)), "ended: last listed in 2");
+
+        for modes in [
+            [Off; 6],
+            // Turning the heartbeat off, then (rollback) back on.
+            [On, On, On, Off, Off, Off],
+            [Off, Off, Off, On, On, On],
+            [On, Off, On, Off, On, Off],
+        ] {
+            assert_eq!(
+                run_sequence(&pool, modes).await,
+                today,
+                "modes {modes:?} show the same snapshot for every incident after every snapshot"
+            );
+        }
     }
 }
 
 /// `incident_changed` and `text_changed`, the history and text-changed
-/// guards of [`upsert_incidents`] (moved from the api's `queries` tests).
+/// guards of [`apply_snapshot`] (moved from the api's `queries` tests).
 #[cfg(test)]
 mod change_detection_tests {
     use super::*;

@@ -92,6 +92,8 @@ pub enum DbRole {
     ScheduleReference,
     /// poller-stations under `INGEST_SINK=db` (plan 2b).
     Stations,
+    /// poller-incidents' DB sink (plan 2c.3).
+    Incidents,
 }
 
 impl DbRole {
@@ -106,6 +108,7 @@ impl DbRole {
             Self::ScheduleIngest => "schedule_ingest",
             Self::ScheduleReference => "schedule_reference",
             Self::Stations => "stations",
+            Self::Incidents => "incidents",
         }
     }
 
@@ -331,6 +334,7 @@ mod tests {
             DbRole::ScheduleIngest,
             DbRole::ScheduleReference,
             DbRole::Stations,
+            DbRole::Incidents,
         ] {
             assert!(privileges_for(role.key()).is_some(), "{role:?}");
             assert!(!role.required_privileges().is_empty(), "{role:?}");
@@ -382,6 +386,12 @@ mod tests {
         }
         assert!(!has(DbRole::Stations, "stations", "DELETE"));
         assert!(!has(DbRole::Stations, "tocs", "SELECT"));
+        // poller-incidents (narrow, plan 2c.3): its own tables and the
+        // gazetteer, nothing else.
+        assert!(has(DbRole::Incidents, "incident_feed_state", "UPDATE"));
+        assert!(has(DbRole::Incidents, "stations", "SELECT"));
+        assert!(!has(DbRole::Incidents, "stations", "UPDATE"));
+        assert!(!has(DbRole::Incidents, "tocs", "SELECT"));
         // No role is required to hold anything on the migrations table
         // beyond what the version query itself needs.
         assert!(

@@ -15,6 +15,8 @@ pub mod corpus_inference;
 pub mod full_coverage_window;
 #[cfg(feature = "http")]
 pub mod gcp_external_account;
+#[cfg(feature = "redis")]
+pub mod incident_text_changed;
 #[cfg(feature = "http")]
 pub mod ingest;
 pub mod island_of_ireland;
