@@ -7,8 +7,9 @@
 //!   policies while Redis is unavailable, backoff and metrics.
 //! - [`consumer`]: the writer's consumer-group runtime: PEL first,
 //!   `XAUTOCLAIM`, dead letters, graceful shutdown and metrics.
-//! - [`snapshot`]: the producers' snapshot sink helpers (one item per
-//!   snapshot, row counts, the stream cursor).
+//! - [`snapshot`]: every snapshot producer's sink: `INGEST_SINK`, Redis
+//!   settings, one item per snapshot, row counts, the stream cursor
+//!   (plans 3a.7, 3a.8, 3c.2).
 //! - [`budget`]: per-stream `MAXLEN` from rates, sizes and the 2-hour
 //!   outage target, checked against the 512 MB budget.
 //!

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use common::{StationReference, TocReference};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 use crate::freshness::{last_per_key, normalize_code, record_ingest};
 
@@ -145,6 +145,40 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
     if tocs.is_empty() {
         return Ok(0);
     }
+    let mut tx = pool.begin().await?;
+    write_tocs(&mut tx, tocs, None).await?;
+    record_ingest(&mut tx, "tocs", None).await?;
+    tx.commit().await?;
+    Ok(tocs.len() as u64)
+}
+
+/// [`upsert_tocs`] for the ingest-writer's `tocs/1` handler (ingest plan
+/// 3c.1), inside the caller's transaction `conn` (which also holds the
+/// entry's `ingest_dedup` row: tocs have no ordering guard, spec §7.4).
+/// A changed row's `fetched_at` and the feed's freshness are `observed_at`
+/// (the entry's `produced_at`, decision D13); freshness never moves
+/// backwards ([`crate::freshness::record_ingest`]). Returns the number
+/// of TOCs received, as [`upsert_tocs`] does.
+pub async fn upsert_tocs_observed(
+    conn: &mut PgConnection,
+    tocs: &[TocReference],
+    observed_at: chrono::DateTime<chrono::Utc>,
+) -> Result<u64> {
+    if tocs.is_empty() {
+        return Ok(0);
+    }
+    write_tocs(conn, tocs, Some(observed_at)).await?;
+    record_ingest(conn, "tocs", Some(observed_at)).await?;
+    Ok(tocs.len() as u64)
+}
+
+/// The shared upsert of [`upsert_tocs`] and [`upsert_tocs_observed`]: a
+/// changed row's `fetched_at` is `observed_at`, or `NOW()` when `None`.
+async fn write_tocs(
+    conn: &mut PgConnection,
+    tocs: &[TocReference],
+    observed_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<()> {
     let batch = last_per_key(tocs, |toc| toc.atoc_code.clone());
     let codes: Vec<&str> = batch.iter().map(|t| t.atoc_code.as_str()).collect();
     let names: Vec<&str> = batch.iter().map(|t| t.name.as_str()).collect();
@@ -152,13 +186,13 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
     let members: Vec<Option<bool>> = batch.iter().map(|t| t.atoc_member).collect();
     let station_operators: Vec<Option<bool>> = batch.iter().map(|t| t.station_operator).collect();
 
-    let mut tx = pool.begin().await?;
     // `fetched_at` now means "when this row last CHANGED"; the feed-level
     // "last fetched" lives in `ingest_freshness` (see `record_ingest`).
     sqlx::query(
         r"
         INSERT INTO tocs (atoc_code, name, legal_name, atoc_member, station_operator, fetched_at)
-        SELECT atoc_code, name, legal_name, atoc_member, station_operator, NOW()
+        SELECT atoc_code, name, legal_name, atoc_member, station_operator,
+               COALESCE($6::timestamptz, NOW())
         FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::bool[])
             AS i(atoc_code, name, legal_name, atoc_member, station_operator)
         ON CONFLICT (atoc_code) DO UPDATE SET
@@ -166,7 +200,7 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
             legal_name       = EXCLUDED.legal_name,
             atoc_member      = EXCLUDED.atoc_member,
             station_operator = EXCLUDED.station_operator,
-            fetched_at       = NOW()
+            fetched_at       = EXCLUDED.fetched_at
         WHERE (tocs.name, tocs.legal_name, tocs.atoc_member, tocs.station_operator)
               IS DISTINCT FROM
               (EXCLUDED.name, EXCLUDED.legal_name, EXCLUDED.atoc_member, EXCLUDED.station_operator)
@@ -177,11 +211,10 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
     .bind(&legal_names)
     .bind(&members)
     .bind(&station_operators)
-    .execute(&mut *tx)
+    .bind(observed_at)
+    .execute(&mut *conn)
     .await?;
-    record_ingest(&mut tx, "tocs", None).await?;
-    tx.commit().await?;
-    Ok(tocs.len() as u64)
+    Ok(())
 }
 
 /// Upserts a batch of resolved STANOX/CRS rows. Every daily delivery is a

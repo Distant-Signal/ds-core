@@ -1054,3 +1054,80 @@ async fn run_stops_on_shutdown_between_entries() {
     );
     assert!(started.elapsed() < Duration::from_secs(3));
 }
+
+/// Plan 3c.2: a poller's `SnapshotStream`, under its own ACL user (here
+/// `poller-tfl` and `poller-tocs`), writes one snapshot as one entry whose
+/// body is the rows (today's HTTP body), and reads its `produced_at` back
+/// as the startup cursor.
+#[tokio::test]
+#[ignore = "needs Redis 7+ (REDIS_URL) whose default user may run ACL SETUSER"]
+async fn snapshot_streams_publish_under_the_pollers_acl_users() {
+    use ingest_stream::snapshot::SnapshotStream;
+
+    let mut scope = Scope::new();
+    for (user, domain, schema) in [
+        ("poller-tfl", "tfl", "tfl-line-status"),
+        ("poller-tocs", "reference", "tocs"),
+        ("poller-nir-stations", "island-of-ireland", "ioi-stations"),
+    ] {
+        let stream = scope.stream(domain);
+        let url = scope.acl_user(user);
+        let sink = SnapshotStream::spawn(
+            redis::Client::open(url.as_str()).unwrap(),
+            &stream,
+            SchemaId::new(schema, 1).unwrap(),
+            user,
+            100,
+        );
+        assert_eq!(sink.last_produced_at().await.unwrap(), None);
+        let at = chrono::DateTime::from_timestamp_millis(Utc::now().timestamp_millis()).unwrap();
+        let rows = vec![serde_json::json!({ "id": "x" })];
+        sink.publish(&rows, at).await.unwrap();
+        wait_until("the snapshot", || scope.xlen(&stream) == 1).await;
+        let entries = scope.range(&stream);
+        let fields = &entries[0].1;
+        assert_eq!(fields["schema"], format!("{schema}/1"));
+        assert_eq!(fields["body"], r#"[{"id":"x"}]"#);
+        assert!(fields["producer"].starts_with(&format!("{user}/")));
+        assert_eq!(sink.last_produced_at().await.unwrap(), Some(at), "{user}");
+        assert!(sink.is_available());
+        assert!(sink.shutdown(Duration::from_secs(2)).await);
+    }
+
+    // The shared island-of-Ireland stream: another poller's newer entries
+    // (more than a page of them) do not count as this schema's cursor.
+    let mut scope = Scope::new();
+    let stream = scope.stream("island-of-ireland");
+    let stations_at = chrono::DateTime::from_timestamp_millis(
+        (Utc::now() - chrono::TimeDelta::hours(1)).timestamp_millis(),
+    )
+    .unwrap();
+    let url = scope.acl_user("poller-irish-rail-live");
+    let samples = SnapshotStream::spawn(
+        redis::Client::open(url.as_str()).unwrap(),
+        &stream,
+        SchemaId::new("ioi-station-samples", 1).unwrap(),
+        "poller-irish-rail-live",
+        100,
+    );
+    let stations = SnapshotStream::spawn(
+        redis::Client::open(url.as_str()).unwrap(),
+        &stream,
+        SchemaId::new("ioi-stations", 1).unwrap(),
+        "poller-irish-rail-gtfs",
+        100,
+    );
+    stations.publish(&["station"], stations_at).await.unwrap();
+    wait_until("the stations snapshot", || scope.xlen(&stream) == 1).await;
+    for i in 0..120_u64 {
+        samples.publish(&[i], Utc::now()).await.unwrap();
+        wait_until("a sample", || scope.xlen(&stream) == i + 2).await;
+    }
+    assert_eq!(
+        stations.last_produced_at().await.unwrap(),
+        Some(stations_at)
+    );
+    assert!(samples.last_produced_at().await.unwrap() > Some(stations_at));
+    assert!(samples.shutdown(Duration::from_secs(2)).await);
+    assert!(stations.shutdown(Duration::from_secs(2)).await);
+}

@@ -12,11 +12,14 @@ creates the group roles (`read_shared`, `schema_gate`) and every role whose
 status is not `planned`, with LOGIN, a CONNECTION LIMIT and a password from
 DS_PG_<ROLE>_PASSWORD; makes each `observed` role a member of the app role
 with no grants of its own (phase 0b); gives each `narrow` role exactly the
-grants in the YAML; and gives the groups their grants. Tables that do not
-exist yet (a new cluster's initdb run) are skipped.
+grants in the YAML; gives the groups their grants; and creates the
+`row_policies` (a RESTRICTIVE policy `ds_grants_<role>` per table and
+created role, dropping stale `ds_grants_*` ones). Tables that do not exist
+yet (a new cluster's initdb run) are skipped.
 
 `check` fails (exit 1, one line per problem) when:
-  - the YAML is malformed: an unknown class, role, group or privilege;
+  - the YAML is malformed: an unknown class, role, group or privilege, or
+    a row policy on an unlisted table;
   - the connection limits of every role in the YAML (planned ones too) plus
     `other_roles` exceed max_connections minus superuser_reserved_connections;
   - postgres-grants.sql is not exactly what `render` writes;
@@ -116,6 +119,10 @@ class Model:
     views: Mapping[str, Table]
     sequences: Mapping[str, str]  # sequence -> owning table
     functions: Mapping[str, tuple[str, ...]]  # signature -> roles
+    # table -> role -> the SQL condition of its RESTRICTIVE policy
+    row_policies: Mapping[str, Mapping[str, str]] = dataclasses.field(
+        default_factory=dict
+    )
 
     def budget(self) -> int:
         """Return the connections available to non-superusers."""
@@ -242,6 +249,25 @@ def _tables(raw: object, section: str, roles: Mapping[str, Role]) -> dict[str, T
     return tables
 
 
+def _row_policies(
+    raw: object, tables: Mapping[str, Table], roles: Mapping[str, Role]
+) -> dict[str, dict[str, str]]:
+    """Parse `row_policies`: table -> role -> SQL condition."""
+    policies: dict[str, dict[str, str]] = {}
+    for table, spec in _mapping(raw, "row_policies").items():
+        if table not in tables:
+            msg = f"row_policies.{table}: not a listed table"
+            raise GrantsError(msg)
+        by_role: dict[str, str] = {}
+        for role, condition in _mapping(spec, f"row_policies.{table}").items():
+            if role not in roles:
+                msg = f"row_policies.{table}: unknown role {role!r}"
+                raise GrantsError(msg)
+            by_role[role] = _str(condition, f"row_policies.{table}.{role}")
+        policies[table] = by_role
+    return policies
+
+
 def parse(raw_obj: object) -> Model:
     """Validate and parse a loaded db-grants.yaml."""
     raw = _mapping(raw_obj, "db-grants.yaml")
@@ -288,6 +314,7 @@ def parse(raw_obj: object) -> Model:
             msg = f"functions.{signature}.grants: unknown role(s) {unknown}"
             raise GrantsError(msg)
         functions[signature] = names
+    row_policies = _row_policies(raw.get("row_policies"), tables, roles)
     clash = set(tables) & set(views)
     if clash:
         msg = f"listed as both a table and a view: {sorted(clash)}"
@@ -305,6 +332,7 @@ def parse(raw_obj: object) -> Model:
         views=views,
         sequences=sequences,
         functions=functions,
+        row_policies=row_policies,
     )
 
 
@@ -395,6 +423,13 @@ def render(model: Model) -> str:
     role_rows = [(r.key, r.status) for r in created]
     group_rows = [(g,) for g in model.groups]
     table_rows, sequence_rows, function_rows = _narrow_rows(model)
+    created_keys = {r.key for r in created}
+    policy_rows = [
+        (table, role, condition)
+        for table, by_role in model.row_policies.items()
+        for role, condition in by_role.items()
+        if role in created_keys
+    ]
     password_env = ", ".join(f"DS_PG_{r.key.upper()}_PASSWORD" for r in created)
     parts = {
         "PASSWORD_ENV": password_env or "none (every role is planned)",
@@ -413,6 +448,7 @@ def render(model: Model) -> str:
         "TABLE_ROWS": _values(table_rows, "tbl, kind, priv, cols"),
         "SEQUENCE_ROWS": _values(sequence_rows, "seq, kind"),
         "FUNCTION_ROWS": _values(function_rows, "sig, kind"),
+        "POLICY_ROWS": _values(policy_rows, "tbl, kind, cond"),
     }
     text = SQL_TEMPLATE.read_text(encoding="utf-8")
     for name, value in parts.items():

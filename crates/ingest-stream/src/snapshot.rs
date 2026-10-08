@@ -1,13 +1,29 @@
-//! Producer-side helpers for the snapshot sinks (`INGEST_SINK=http+shadow`
-//! or `stream`; spec §13.1, plan 3a.7 and 3a.8): encode a snapshot's rows
-//! into parts, submit them to a [`Producer`] as ONE item, count the rows
-//! once they are written, and read the stream cursor.
+//! The producer side of every snapshot sink (`INGEST_SINK=http+shadow` or
+//! `stream`; spec §9.1, §11.3, §13.1; plans 3a.7, 3a.8 and 3c.2): the
+//! [`SinkMode`], a producer's Redis settings ([`RedisArgs`]), encoding a
+//! snapshot's rows into parts ([`Snapshot`]), submitting them to a
+//! latest-snapshot [`Producer`] as ONE item ([`SnapshotProducer`]), counting
+//! the rows once they are written, and reading the stream cursor.
+//! [`SnapshotStream`] is the one-schema form the `TfL`, tocs and
+//! island-of-Ireland pollers use; poller-ldbws and full-coverage-consumer
+//! drive [`SnapshotProducer`] directly.
+//!
+//! | `INGEST_SINK` | The api's `POST` | The stream | Startup cursor |
+//! |---|---|---|---|
+//! | `http` (default) | authoritative | – | the api's `GET` |
+//! | `http+shadow` | authoritative | a copy of every snapshot, best effort (the writer's `shadow` mode checks it) | the api's `GET` |
+//! | `stream` | – | authoritative | the stream's newest `produced_at` |
+//!
+//! The island-of-Ireland pollers (decision D8) have only `stream`.
 //!
 //! **One item per snapshot.** Under [`crate::ProducePolicy::LatestSnapshot`]
 //! a newer item replaces an unsent older one, so everything one snapshot
 //! carries goes in one item: every part of every schema (full-coverage's
 //! three outputs share `ds:ingest:full-coverage` and one item per stats
-//! write). Two items would supersede each other.
+//! write). Two items would supersede each other. While Redis is
+//! unavailable the newest unsent snapshot is kept and retried with backoff
+//! (`ingest_stream_produce_dropped_total{reason="superseded"}` counts the
+//! replaced ones).
 //!
 //! **`produced_at` is fixed at encode time.** The parts are encoded once,
 //! with the snapshot's fetch time, and the producer re-sends the same bytes
@@ -18,13 +34,22 @@
 //! its rows, so `/1` is byte for byte the body of the api route (spec
 //! §7.2), just split into parts of [`ROWS_PER_PART`].
 
+use std::fmt;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
+use common::secret::Secret;
 use serde::Serialize;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
-use crate::envelope::{EncodedEntry, EnvelopeError, SchemaId, format_produced_at, split_snapshot};
-use crate::metrics;
+use crate::envelope::{
+    EncodedEntry, EnvelopeError, SchemaId, field, format_produced_at, parse_produced_at,
+    split_snapshot,
+};
 use crate::producer::{NotWritten, Producer, last_produced_at};
+use crate::{budget, metrics};
 
 /// A stream producer's `INGEST_SINK` (spec §13.1): where its snapshots go.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -66,8 +91,8 @@ impl std::str::FromStr for SinkMode {
     }
 }
 
-impl std::fmt::Display for SinkMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SinkMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Http => "http",
             Self::HttpShadow => "http+shadow",
@@ -129,6 +154,21 @@ impl Snapshot {
         if rows.is_empty() {
             return Ok(());
         }
+        self.add_parts(stream, schema, producer, produced_at, rows, rows_per_part)
+    }
+
+    /// [`Snapshot::add`] without its empty-rows shortcut: an empty `rows`
+    /// is one part with the body `[]` (a whole, empty snapshot, which a
+    /// writer handler may act on), as [`SnapshotStream::publish`] sends.
+    fn add_parts<T: Serialize>(
+        &mut self,
+        stream: &str,
+        schema: &SchemaId,
+        producer: &str,
+        produced_at: DateTime<Utc>,
+        rows: &[T],
+        rows_per_part: usize,
+    ) -> Result<(), EnvelopeError> {
         let batch = format_produced_at(produced_at);
         let parts = split_snapshot(
             schema,
@@ -211,40 +251,44 @@ pub async fn submit(
 /// One snapshot stream's producer, for a poller or consumer that XADDs
 /// (`INGEST_SINK=http+shadow` or `stream`): a
 /// [`crate::ProducePolicy::LatestSnapshot`] [`Producer`] with the stream's
-/// `MAXLEN` from [`crate::budget`], spawned on first use, so after the
-/// caller's metrics recorder is installed (its series registered at 0 are
-/// then exported) and inside its runtime. The task is detached: an unsent
-/// snapshot at exit is lost, as a POST in flight is, and the next process
-/// sends a fresh one.
+/// `MAXLEN` from [`crate::budget`], spawned on first use (or by
+/// [`SnapshotProducer::start`]), so after the caller's metrics recorder is
+/// installed (its series registered at 0 are then exported) and inside its
+/// runtime. Without a [`SnapshotProducer::shutdown`] an unsent snapshot at
+/// exit is lost, as a POST in flight is, and the next process sends a
+/// fresh one.
 pub struct SnapshotProducer {
     client: redis::Client,
-    stream: &'static str,
+    stream: String,
     schemas: Vec<SchemaId>,
     producer_id: String,
-    producer: std::sync::OnceLock<Producer>,
+    producer: OnceLock<Producer>,
+    task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl SnapshotProducer {
-    /// For `stream` (one of [`crate::streams`]) carrying `schemas`, as
-    /// `component` (the envelope's `producer` is `<component>/<pod>`),
-    /// over `client` (the component's own ACL user, D6).
+    /// For `stream` (one of [`crate::streams`], or a test's prefixed key)
+    /// carrying `schemas`, as `component` (the envelope's `producer` is
+    /// `<component>/<pod>`), over `client` (the component's own ACL user,
+    /// D6).
     pub fn new(
         client: redis::Client,
-        stream: &'static str,
+        stream: impl Into<String>,
         component: &str,
         schemas: Vec<SchemaId>,
     ) -> Self {
         Self {
             client,
-            stream,
+            stream: stream.into(),
             schemas,
             producer_id: producer_id(component),
-            producer: std::sync::OnceLock::new(),
+            producer: OnceLock::new(),
+            task: Mutex::new(None),
         }
     }
 
-    pub fn stream(&self) -> &'static str {
-        self.stream
+    pub fn stream(&self) -> &str {
+        &self.stream
     }
 
     /// The envelope's `producer` field.
@@ -257,18 +301,26 @@ impl SnapshotProducer {
         self.producer.get_or_init(|| {
             // Every stream is declared (`budget`'s own tests); the fallback
             // is the station-samples cap, the largest.
-            let maxlen = crate::budget::decl(self.stream).map_or(720, |decl| decl.maxlen());
-            let (producer, _task) = Producer::spawn(
+            let maxlen = stream_decl(&self.stream).map_or(720, budget::StreamDecl::maxlen);
+            let (producer, task) = Producer::spawn(
                 self.client.clone(),
                 crate::ProducerConfig::new(
-                    self.stream,
+                    &self.stream,
                     maxlen,
                     crate::ProducePolicy::LatestSnapshot,
                 ),
             );
-            register_sink(self.stream, &self.schemas.iter().collect::<Vec<_>>());
+            if let Ok(mut slot) = self.task.lock() {
+                *slot = Some(task);
+            }
+            register_sink(&self.stream, &self.schemas.iter().collect::<Vec<_>>());
             producer
         })
+    }
+
+    /// Spawns the producer now rather than on the first snapshot.
+    pub fn start(&self) {
+        self.producer();
     }
 
     /// Whether the last XADD succeeded (readiness `stream_unavailable`
@@ -286,13 +338,23 @@ impl SnapshotProducer {
         submit(self.producer(), snapshot).await
     }
 
-    /// [`cursor`] of this stream.
+    /// [`cursor`] of this stream: its newest entry's `produced_at`.
     ///
     /// # Errors
     ///
     /// The Redis error when it cannot connect or read.
     pub async fn cursor(&self) -> redis::RedisResult<Option<DateTime<Utc>>> {
-        cursor(&self.client, self.stream).await
+        cursor(&self.client, &self.stream).await
+    }
+
+    /// Closes the producer and waits up to `grace` for what is queued.
+    /// True when nothing was left (or it never started).
+    pub async fn shutdown(&self, grace: Duration) -> bool {
+        let task = self.task.lock().ok().and_then(|mut slot| slot.take());
+        match (self.producer.get(), task) {
+            (Some(producer), Some(task)) => producer.shutdown(task, grace).await,
+            _ => true,
+        }
     }
 }
 
@@ -319,6 +381,224 @@ pub async fn cursor(
 ) -> redis::RedisResult<Option<DateTime<Utc>>> {
     let mut conn = common::redis_conn::connect(client).await?;
     last_produced_at(&mut conn, stream).await
+}
+
+/// The declaration of `stream`, matched by suffix so a test's key prefix
+/// (`<prefix>ds:ingest:tfl`) finds its stream's.
+fn stream_decl(stream: &str) -> Option<&'static budget::StreamDecl> {
+    budget::INGEST_STREAMS
+        .iter()
+        .find(|decl| stream.ends_with(decl.stream))
+}
+
+/// A stream producer's Redis connection settings (`REDIS_URL`,
+/// `REDIS_USERNAME`, `REDIS_PASSWORD`; chart `redis.acl.clients.<poller>`
+/// for the producer's own ACL user, decision D6).
+#[derive(Clone, clap::Args)]
+pub struct RedisArgs {
+    /// Redis, for the ingest stream. Needed by `INGEST_SINK=http+shadow`
+    /// and `stream`. May carry a password (`redis://:pw@host`).
+    #[arg(long, env, hide_env_values = true)]
+    pub redis_url: Option<Secret>,
+
+    /// Redis AUTH password (chart `redis.auth`, or the producer's ACL
+    /// user's own). Applied by `common::redis_auth::redis_url_with_credentials`,
+    /// never logged.
+    #[arg(long, env, hide_env_values = true)]
+    pub redis_password: Option<Secret>,
+
+    /// Redis ACL user (`poller-tfl`, `poller-tocs`, …). Unset or empty: the
+    /// `default` user.
+    #[arg(long, env)]
+    pub redis_username: Option<String>,
+}
+
+impl fmt::Debug for RedisArgs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RedisArgs")
+            .field("redis_url", &self.redis_url)
+            .field("redis_password", &self.redis_password)
+            .field("redis_username", &self.redis_username)
+            .finish()
+    }
+}
+
+impl RedisArgs {
+    /// The client for `REDIS_URL` with the ACL user's credentials applied.
+    /// `Err` (a message) when `REDIS_URL` is unset or the credentials do
+    /// not combine; `why` names what needs it (`"INGEST_SINK=stream"`).
+    ///
+    /// # Errors
+    ///
+    /// As above.
+    pub fn client(&self, why: &str) -> Result<redis::Client, String> {
+        let Some(url) = &self.redis_url else {
+            return Err(format!("{why} needs REDIS_URL"));
+        };
+        let url = common::redis_auth::redis_url_with_credentials(
+            url.expose(),
+            self.redis_username.as_deref(),
+            self.redis_password.as_ref(),
+        )
+        .map_err(|err| format!("{err:#}"))?;
+        redis::Client::open(url.expose()).map_err(|err| format!("REDIS_URL: {err}"))
+    }
+}
+
+/// Why a snapshot was not queued.
+#[derive(Debug, thiserror::Error)]
+pub enum PublishError {
+    /// It could not be encoded (a single row over the part limit, counted
+    /// as `reason="oversize"`, or a row that does not serialize).
+    #[error("encoding the snapshot: {0}")]
+    Encode(#[from] EnvelopeError),
+    /// The producer was shut down.
+    #[error(transparent)]
+    Closed(#[from] NotWritten),
+}
+
+/// One poller's latest-snapshot producer on one stream and ONE schema
+/// (plan 3c.2: `TfL`, tocs and the island-of-Ireland pollers): a
+/// [`SnapshotProducer`] that [`SnapshotStream::publish`]es a whole snapshot
+/// without waiting for Redis, and whose cursor is the newest entry of its
+/// own schema.
+pub struct SnapshotStream {
+    inner: SnapshotProducer,
+    schema: SchemaId,
+    max_rows_per_part: usize,
+}
+
+impl SnapshotStream {
+    /// Starts the producer task for `stream` (its `MAXLEN` from
+    /// [`budget::INGEST_STREAMS`]), writing `schema` entries as
+    /// `component/<pod>`, at most `max_rows_per_part` rows per part. A
+    /// `TfL` or tocs snapshot fits one part; a part is also halved until it
+    /// fits 512 KiB ([`split_snapshot`]).
+    pub fn spawn(
+        client: redis::Client,
+        stream: &str,
+        schema: SchemaId,
+        component: &str,
+        max_rows_per_part: usize,
+    ) -> Self {
+        let inner = SnapshotProducer::new(client, stream, component, vec![schema.clone()]);
+        inner.start();
+        Self {
+            inner,
+            schema,
+            max_rows_per_part: max_rows_per_part.max(1),
+        }
+    }
+
+    pub fn stream(&self) -> &str {
+        self.inner.stream()
+    }
+
+    /// Queues `rows`, fetched at `produced_at`, as one snapshot: its parts
+    /// share the batch `produced_at` and keep their keys across retries;
+    /// an empty `rows` is one empty part (a whole, empty snapshot). Never
+    /// waits for Redis. The rows are counted in
+    /// `ingest_stream_sink_rows_total{sink="stream"}` once written, and the
+    /// write's outcome is logged when known (a newer snapshot superseding
+    /// this one is normal while Redis is down).
+    ///
+    /// # Errors
+    ///
+    /// [`PublishError`]; nothing is queued then.
+    pub async fn publish<T: Serialize>(
+        &self,
+        rows: &[T],
+        produced_at: DateTime<Utc>,
+    ) -> Result<(), PublishError> {
+        let mut snapshot = Snapshot::new();
+        snapshot.add_parts(
+            self.stream(),
+            &self.schema,
+            self.inner.producer_id(),
+            produced_at,
+            rows,
+            self.max_rows_per_part,
+        )?;
+        let count = snapshot.parts().len();
+        let receipt = self.inner.submit(snapshot).await?;
+        let stream = self.stream().to_owned();
+        let schema = self.schema.to_string();
+        let batch = format_produced_at(produced_at);
+        tokio::spawn(async move {
+            match receipt.written().await {
+                Ok(ids) => {
+                    tracing::debug!(%stream, %schema, %batch, parts = count, ?ids, "snapshot written to the ingest stream");
+                }
+                Err(NotWritten::Superseded) => {
+                    tracing::info!(%stream, %schema, %batch, "snapshot superseded by a newer one before Redis took it");
+                }
+                Err(NotWritten::Closed) => {
+                    tracing::warn!(%stream, %schema, %batch, "producer closed before the snapshot was written");
+                }
+            }
+        });
+        Ok(())
+    }
+
+    /// Whether the last XADD succeeded (readiness `stream_unavailable` when
+    /// false).
+    pub fn is_available(&self) -> bool {
+        self.inner.is_available()
+    }
+
+    /// The `produced_at` of the newest entry of this producer's schema: the
+    /// poller's "last fetched" cursor under `INGEST_SINK=stream` (spec
+    /// §11.3). The stream is read backwards (`XREVRANGE`) a page at a time
+    /// until an entry of this schema turns up, bounded by the stream's
+    /// `MAXLEN`. On a one-schema stream (`tfl`, `reference`) that is the
+    /// newest entry; the island-of-Ireland stream is shared by three
+    /// pollers and five schemas, and a daily poller must not take the
+    /// five-minute live poller's entries for its own.
+    ///
+    /// # Errors
+    ///
+    /// A Redis error (unreachable, NOPERM).
+    pub async fn last_produced_at(&self) -> redis::RedisResult<Option<DateTime<Utc>>> {
+        const PAGE: usize = 50;
+        let mut conn = common::redis_conn::connect(&self.inner.client).await?;
+        let stream = self.stream();
+        let wanted = self.schema.to_string();
+        let limit = stream_decl(stream)
+            .map_or(2000, budget::StreamDecl::maxlen)
+            .saturating_add(100);
+        let mut end = "+".to_owned();
+        let mut seen: u64 = 0;
+        loop {
+            let reply: redis::streams::StreamRangeReply = redis::cmd("XREVRANGE")
+                .arg(stream)
+                .arg(&end)
+                .arg("-")
+                .arg("COUNT")
+                .arg(PAGE)
+                .query_async(&mut conn)
+                .await?;
+            for entry in &reply.ids {
+                if entry.get::<String>(field::SCHEMA).as_deref() == Some(wanted.as_str()) {
+                    return Ok(entry
+                        .get::<String>(field::PRODUCED_AT)
+                        .and_then(|text| parse_produced_at(&text)));
+                }
+            }
+            seen = seen.saturating_add(u64::try_from(reply.ids.len()).unwrap_or(u64::MAX));
+            match reply.ids.last() {
+                // Exclusive start (Redis 6.2+): the page before this one.
+                Some(last) if reply.ids.len() == PAGE && seen < limit => {
+                    end = format!("({}", last.id);
+                }
+                _ => return Ok(None),
+            }
+        }
+    }
+
+    /// Closes the producer and waits up to `grace` for what is queued.
+    pub async fn shutdown(self, grace: Duration) -> bool {
+        self.inner.shutdown(grace).await
+    }
 }
 
 #[cfg(test)]
@@ -404,5 +684,40 @@ mod tests {
     #[test]
     fn the_producer_id_names_the_component() {
         assert!(producer_id("poller-ldbws").starts_with("poller-ldbws/"));
+    }
+
+    #[test]
+    fn redis_args_need_a_url_and_apply_the_acl_user() {
+        let none = RedisArgs {
+            redis_url: None,
+            redis_password: None,
+            redis_username: None,
+        };
+        let err = none.client("INGEST_SINK=stream").unwrap_err();
+        assert!(err.contains("INGEST_SINK=stream needs REDIS_URL"), "{err}");
+        let user = RedisArgs {
+            redis_url: Some("redis://redis:6379".into()),
+            redis_password: Some("pw".into()),
+            redis_username: Some("poller-tfl".into()),
+        };
+        let client = user.client("x").unwrap();
+        let info = client.get_connection_info();
+        assert_eq!(info.redis.username.as_deref(), Some("poller-tfl"));
+        assert!(
+            !format!("{user:?}").contains("pw\""),
+            "the password is redacted"
+        );
+    }
+
+    #[test]
+    fn an_empty_stream_snapshot_is_one_empty_part() {
+        let schema = SchemaId::new("tocs", 1).unwrap();
+        let produced_at = "2026-10-08T12:00:00Z".parse().unwrap();
+        let mut snapshot = Snapshot::new();
+        snapshot
+            .add_parts::<u32>("s", &schema, "p/pod", produced_at, &[], ROWS_PER_PART)
+            .unwrap();
+        assert_eq!(snapshot.parts().len(), 1);
+        assert_eq!(decode(&snapshot.parts()[0]).payload.get(), "[]");
     }
 }

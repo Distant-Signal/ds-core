@@ -2256,6 +2256,7 @@ name = "ingest-stream"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clap",
  "common",
  "flate2",
  "metrics",
@@ -2928,6 +2929,7 @@ dependencies = [
  "health-http",
  "http 0.2.12",
  "metrics",
+ "metrics-exporter-prometheus",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -3406,11 +3408,13 @@ name = "poller-irish-rail-gtfs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "common",
  "dotenvy",
  "gtfs-structures",
  "health-http",
+ "ingest-stream",
  "metrics",
  "reqwest 0.13.4",
  "serde",
@@ -3430,6 +3434,7 @@ dependencies = [
  "common",
  "dotenvy",
  "health-http",
+ "ingest-stream",
  "metrics",
  "quick-xml",
  "reqwest 0.13.4",
@@ -3466,11 +3471,13 @@ name = "poller-nir-stations"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "common",
  "csv",
  "dotenvy",
  "health-http",
+ "ingest-stream",
  "metrics",
  "reqwest 0.13.4",
  "serde",
@@ -3511,6 +3518,7 @@ dependencies = [
  "common",
  "dotenvy",
  "health-http",
+ "ingest-stream",
  "metrics",
  "reqwest 0.13.4",
  "serde",
@@ -3524,10 +3532,12 @@ name = "poller-tocs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "common",
  "dotenvy",
  "health-http",
+ "ingest-stream",
  "metrics",
  "quick-xml",
  "reqwest 0.13.4",

@@ -270,6 +270,41 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("('users', 'notifier'", sql)
         self.assertIn("('notifier', 'narrow')", sql)
 
+    def test_row_policies_render_for_created_roles_only(self) -> None:
+        """Plan 3c.3: the writer's line_status policy; none for a planned role."""
+        sql = gen.render(gen.load())
+        self.assertIn("('line_status', 'writer', 'source = ''tfl''')", sql)
+        self.assertIn("AS RESTRICTIVE FOR ALL TO %I", sql)
+        raw = _raw()
+        # Planned here explicitly: every shipped role may be created.
+        raw["roles"]["trust_backlog"]["status"] = "planned"
+        raw["row_policies"]["line_status"]["trust_backlog"] = "false"
+        sql = gen.render(gen.parse(raw))
+        self.assertNotIn("'trust_backlog', 'false'", sql)
+
+
+class RowPolicyParseTest(unittest.TestCase):
+    """`row_policies` must name listed tables and known roles."""
+
+    def test_the_writer_is_pinned_to_tfl_rows(self) -> None:
+        """D10: the shipped YAML's one policy."""
+        self.assertEqual(
+            gen.load().row_policies, {"line_status": {"writer": "source = 'tfl'"}}
+        )
+
+    def test_unlisted_table_and_unknown_role_are_refused(self) -> None:
+        """Either mistake names the key."""
+        raw = _raw()
+        raw["row_policies"]["nope"] = {"writer": "true"}
+        with self.assertRaises(gen.GrantsError) as ctx:
+            gen.parse(raw)
+        self.assertIn("row_policies.nope", str(ctx.exception))
+        raw = _raw()
+        raw["row_policies"]["line_status"]["nobody"] = "true"
+        with self.assertRaises(gen.GrantsError) as ctx:
+            gen.parse(raw)
+        self.assertIn("unknown role 'nobody'", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

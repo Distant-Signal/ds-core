@@ -363,15 +363,124 @@ fn normalize_for_diff(statuses: &serde_json::Value) -> serde_json::Value {
 /// resulting zero-rows-affected write (only reachable via that race, since
 /// the pre-write read already ruled out the non-racy case) is itself
 /// treated as the same loud failure, not silently ignored.
-#[expect(
-    clippy::too_many_lines,
-    reason = "long but linear; splitting it would scatter its shared state across helpers"
-)]
 pub async fn upsert_tfl_line_status(pool: &PgPool, reports: &[LineStatusReport]) -> Result<u64> {
     if reports.is_empty() {
         return Ok(0);
     }
+    let mut tx = pool.begin().await?;
+    let applied = write_tfl_line_status(&mut tx, reports, None, true).await?;
+    record_ingest(&mut tx, "tfl", None).await?;
+    tx.commit().await?;
+    Ok(applied.written)
+}
 
+/// A `TfL` report whose `line_id` is already owned by another source
+/// (`line_status.source`): see [`upsert_tfl_line_status`]'s ownership
+/// guard. Aborts the whole batch. Typed, so the ingest-writer can tell this
+/// data fault from a database failure.
+#[derive(Debug)]
+pub struct TflLineOwnedElsewhere {
+    pub line_id: String,
+    /// The other owner, when the pre-write read saw it; `None` when the row
+    /// appeared concurrently (the write affected no row).
+    pub owner: Option<String>,
+}
+
+impl std::fmt::Display for TflLineOwnedElsewhere {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.owner {
+            Some(owner) => write!(
+                f,
+                "refusing to upsert TfL line status for line_id {:?}: that line_id is \
+                 already owned by source {owner:?}, not 'tfl' -- this is a naming collision \
+                 between two independent line-id schemes (see upsert_tfl_line_status's \
+                 doc comment), not a legitimate TfL update",
+                self.line_id
+            ),
+            None => write!(
+                f,
+                "refusing to upsert TfL line status for line_id {:?}: the write affected no \
+                 rows, which only happens when a same-line_id row owned by a different source \
+                 was created concurrently after this function's own ownership check -- \
+                 aborting rather than silently no-op'ing what should have been an insert or \
+                 update",
+                self.line_id
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TflLineOwnedElsewhere {}
+
+/// What [`upsert_tfl_line_status_observed`] did.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct TflLineStatusApplied {
+    /// Lines written (inserted or updated).
+    pub written: u64,
+    /// Lines the ordering guard refused: the stored row is from a newer
+    /// snapshot. Skipped, with no history row.
+    pub skipped_older: Vec<String>,
+    /// `line_status_history` rows appended.
+    pub history: u64,
+    /// `TfL` lines deleted because they left the feed.
+    pub pruned: u64,
+}
+
+/// [`upsert_tfl_line_status`] for the ingest-writer's `tfl-line-status/1`
+/// handler (ingest plan 3c.1, decision D13), inside the caller's
+/// transaction `conn` (which also holds the entry's `ingest_dedup` row).
+///
+/// The differences, all from `observed_at` (the envelope's `produced_at`,
+/// already clamped to the writer's `now() + 2 min`):
+///
+/// - `line_status.computed_at`, `line_status.source_updated_at` and the
+///   new `line_status_history.computed_at` are `observed_at`, not `NOW()`,
+///   so a snapshot applied an hour late is stamped with the time it was
+///   true.
+/// - **The ordering guard** on `source_updated_at`: a line whose stored row
+///   is from a newer snapshot is left alone (`EXCLUDED.source_updated_at >=
+///   source_updated_at`; a `NULL`, from the api's route or before the
+///   column, counts as older; a row stamped more than 2 minutes in the
+///   future is overwritten, see `ingest_writer::observed::guard`). Such a
+///   line is reported in [`TflLineStatusApplied::skipped_older`] and writes
+///   no history row. It is not mistaken for the other-source refusal,
+///   which still aborts with [`TflLineOwnedElsewhere`].
+/// - The prune of lines that left the feed runs only when `prune` (the
+///   snapshot is whole, not one part of a split one) and spares rows from a
+///   newer snapshot, so an older snapshot after a newer one changes
+///   neither table.
+/// - Freshness (`ingest_freshness('tfl')`) is `observed_at`, never moving
+///   backwards ([`record_ingest`]).
+///
+/// An empty batch writes nothing, as in [`upsert_tfl_line_status`].
+pub async fn upsert_tfl_line_status_observed(
+    conn: &mut PgConnection,
+    reports: &[LineStatusReport],
+    observed_at: DateTime<Utc>,
+    prune: bool,
+) -> Result<TflLineStatusApplied> {
+    if reports.is_empty() {
+        return Ok(TflLineStatusApplied::default());
+    }
+    let applied = write_tfl_line_status(conn, reports, Some(observed_at), prune).await?;
+    record_ingest(conn, "tfl", Some(observed_at)).await?;
+    Ok(applied)
+}
+
+/// The shared body of the two `TfL` upserts. `observed_at` `None` is the
+/// api route's behaviour (stamped `NOW()`, no ordering guard, always
+/// pruned); `Some` is the stream writer's (see
+/// [`upsert_tfl_line_status_observed`]).
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear; splitting it would scatter its shared state across helpers"
+)]
+async fn write_tfl_line_status(
+    conn: &mut PgConnection,
+    reports: &[LineStatusReport],
+    observed_at: Option<DateTime<Utc>>,
+    prune: bool,
+) -> Result<TflLineStatusApplied> {
     // F2: three statements per batch (read owners, upsert, append history)
     // instead of a SELECT and an INSERT per line. A repeated line_id keeps
     // its LAST report, as the old sequential loop's final write did (one
@@ -391,33 +500,37 @@ pub async fn upsert_tfl_line_status(pool: &PgPool, reports: &[LineStatusReport])
         .map(|r| serde_json::Value::from(r.operators.clone()))
         .collect();
 
-    let mut tx = pool.begin().await?;
-
     let existing_rows: Vec<(String, String, Option<serde_json::Value>)> = sqlx::query_as(
         "SELECT line_id, source, CASE WHEN source = 'tfl' THEN statuses ELSE NULL END \
          FROM line_status WHERE line_id = ANY($1)",
     )
     .bind(&ids)
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await?;
     if let Some((line_id, owner, _)) = existing_rows.iter().find(|(_, owner, _)| owner != "tfl") {
-        anyhow::bail!(
-            "refusing to upsert TfL line status for line_id {line_id:?}: that line_id is \
-             already owned by source {owner:?}, not 'tfl' -- this is a naming collision \
-             between two independent line-id schemes (see upsert_tfl_line_status's \
-             doc comment), not a legitimate TfL update"
-        );
+        return Err(TflLineOwnedElsewhere {
+            line_id: line_id.clone(),
+            owner: Some(owner.clone()),
+        }
+        .into());
     }
     let existing: HashMap<&str, &serde_json::Value> = existing_rows
         .iter()
         .filter_map(|(line_id, _, statuses)| statuses.as_ref().map(|s| (line_id.as_str(), s)))
         .collect();
 
+    // `$6` is the observed time (NULL on the api's route): it stamps
+    // `computed_at` instead of NOW(), fills `source_updated_at`, and turns
+    // on the ordering guard (`ingest_writer::observed::guard`'s fragment on
+    // `source_updated_at`). The api's route leaves `source_updated_at` as
+    // it is.
     let written: Vec<String> = sqlx::query_scalar(
         r"
-        INSERT INTO line_status (line_id, name, mode_name, operators, statuses, computed_at, source)
+        INSERT INTO line_status
+            (line_id, name, mode_name, operators, statuses, computed_at, source, source_updated_at)
         SELECT i.line_id, i.name, i.mode_name,
-               ARRAY(SELECT jsonb_array_elements_text(i.operators)), i.statuses, NOW(), 'tfl'
+               ARRAY(SELECT jsonb_array_elements_text(i.operators)), i.statuses,
+               COALESCE($6::timestamptz, NOW()), 'tfl', $6::timestamptz
           FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[], $5::jsonb[])
                AS i(line_id, name, mode_name, operators, statuses)
         -- `computed_at` is served per line as the status's own
@@ -435,9 +548,14 @@ pub async fn upsert_tfl_line_status(pool: &PgPool, reports: &[LineStatusReport])
                 THEN EXCLUDED.statuses
                 ELSE line_status.statuses
             END,
-            computed_at = NOW(),
-            source      = 'tfl'
+            computed_at = EXCLUDED.computed_at,
+            source      = 'tfl',
+            source_updated_at = COALESCE(EXCLUDED.source_updated_at, line_status.source_updated_at)
         WHERE line_status.source = 'tfl'
+          AND ($6::timestamptz IS NULL
+               OR line_status.source_updated_at IS NULL
+               OR EXCLUDED.source_updated_at >= line_status.source_updated_at
+               OR line_status.source_updated_at > now() + interval '2 min')
         RETURNING line_id
         ",
     )
@@ -446,61 +564,104 @@ pub async fn upsert_tfl_line_status(pool: &PgPool, reports: &[LineStatusReport])
     .bind(&mode_names)
     .bind(&operators)
     .bind(&statuses)
-    .fetch_all(&mut *tx)
+    .bind(observed_at)
+    .fetch_all(&mut *conn)
     .await?;
 
+    let written: std::collections::HashSet<&str> = written.iter().map(String::as_str).collect();
+    let mut skipped_older = Vec::new();
     if written.len() != batch.len() {
-        let written: std::collections::HashSet<&str> = written.iter().map(String::as_str).collect();
-        let refused = ids.iter().find(|id| !written.contains(*id));
-        anyhow::bail!(
-            "refusing to upsert TfL line status for line_id {refused:?}: the write affected no \
-             rows, which only happens when a same-line_id row owned by a different source \
-             was created concurrently after this function's own ownership check -- \
-             aborting rather than silently no-op'ing what should have been an insert or \
-             update"
+        let missing: Vec<&str> = ids
+            .iter()
+            .copied()
+            .filter(|id| !written.contains(id))
+            .collect();
+        // A TfL-owned row the upsert left alone was refused by the ordering
+        // guard (only on the stream path); anything else is the concurrent
+        // other-source race the ownership read could not see.
+        let tfl_owned: Vec<String> = if observed_at.is_some() {
+            sqlx::query_scalar(
+                "SELECT line_id FROM line_status WHERE line_id = ANY($1) AND source = 'tfl'",
+            )
+            .bind(&missing)
+            .fetch_all(&mut *conn)
+            .await?
+        } else {
+            Vec::new()
+        };
+        if let Some(refused) = missing
+            .iter()
+            .find(|id| !tfl_owned.iter().any(|owned| owned == **id))
+        {
+            return Err(TflLineOwnedElsewhere {
+                line_id: (*refused).to_owned(),
+                owner: None,
+            }
+            .into());
+        }
+        skipped_older = missing.iter().map(|id| (*id).to_owned()).collect();
+        tracing::info!(
+            skipped = skipped_older.len(),
+            lines = ?skipped_older,
+            "TfL lines left alone: their stored status is from a newer snapshot"
         );
     }
 
     let (changed_ids, changed_statuses): (Vec<&str>, Vec<&serde_json::Value>) = ids
         .iter()
         .zip(&statuses)
+        .filter(|(id, _)| written.contains(**id))
         .filter(|(id, incoming)| tfl_statuses_changed(existing.get(**id).copied(), incoming))
         .map(|(id, incoming)| (*id, incoming))
         .unzip();
+    let mut history = 0;
     if !changed_ids.is_empty() {
-        sqlx::query(
+        history = sqlx::query(
             "INSERT INTO line_status_history (line_id, statuses, computed_at) \
-             SELECT line_id, statuses, NOW() \
+             SELECT line_id, statuses, COALESCE($3::timestamptz, NOW()) \
                FROM UNNEST($1::text[], $2::jsonb[]) WITH ORDINALITY AS h(line_id, statuses, ord) \
               ORDER BY ord",
         )
         .bind(&changed_ids)
         .bind(&changed_statuses)
-        .execute(&mut *tx)
-        .await?;
+        .bind(observed_at)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
     }
-    let count = batch.len() as u64;
-
-    record_ingest(&mut tx, "tfl", None).await?;
 
     // A TfL line that leaves the feed (a renamed id, a withdrawn service)
     // has no other way of disappearing — `/public/lines` derives its TfL
     // entries from exactly these rows. The aggregator's
     // `prune_removed_lines` is the same idea from the other side of the
-    // fence; each writer prunes only what it owns.
-    let ids: Vec<&str> = reports.iter().map(|r| r.id.as_str()).collect();
-    let pruned =
-        sqlx::query("DELETE FROM line_status WHERE source = 'tfl' AND NOT (line_id = ANY($1))")
-            .bind(&ids)
-            .execute(&mut *tx)
-            .await?
-            .rows_affected();
-    if pruned > 0 {
-        tracing::info!(pruned, "removed TfL lines no longer present in the feed");
+    // fence; each writer prunes only what it owns. On the stream path a
+    // row from a newer snapshot is spared, like the upsert above.
+    let mut pruned = 0;
+    if prune {
+        let ids: Vec<&str> = reports.iter().map(|r| r.id.as_str()).collect();
+        pruned = sqlx::query(
+            "DELETE FROM line_status WHERE source = 'tfl' AND NOT (line_id = ANY($1)) \
+               AND ($2::timestamptz IS NULL \
+                    OR source_updated_at IS NULL \
+                    OR source_updated_at <= $2::timestamptz \
+                    OR source_updated_at > now() + interval '2 min')",
+        )
+        .bind(&ids)
+        .bind(observed_at)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
+        if pruned > 0 {
+            tracing::info!(pruned, "removed TfL lines no longer present in the feed");
+        }
     }
 
-    tx.commit().await?;
-    Ok(count)
+    Ok(TflLineStatusApplied {
+        written: written.len() as u64,
+        skipped_older,
+        history,
+        pruned,
+    })
 }
 
 /// Upserts full-coverage stats rows, one per `(line_id, service_date)`.
