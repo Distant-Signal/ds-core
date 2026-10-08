@@ -31,6 +31,39 @@ pub mod sources {
     pub const STATION_FULL_COVERAGE_SAMPLES: &str = "station-full-coverage-samples";
 }
 
+/// `GREATEST(<row_time>, <the feed's observed time>)`: a row's age when the
+/// writer may skip an unchanged row (plan 3a.9, D13, spec §7.8). The feed's
+/// observed time is `ingest_freshness.fetched_at` for `source` (one of
+/// [`sources`]), which the ingest-writer records at each applied entry's
+/// `produced_at`; `GREATEST` ignores its `NULL` (no writer has applied the
+/// feed yet), so without it this is `row_time` unchanged.
+///
+/// Valid only for a table whose every snapshot carries every live key
+/// (plan 3a.9's check): there an unchanged row the writer skipped was in
+/// the newest snapshot, so it is as fresh as the feed. `row_time` is a
+/// trusted SQL expression (a column), never data.
+///
+/// # Panics
+///
+/// If `source` is not lowercase letters and hyphens: a programming error
+/// (it is spliced into the SQL as a literal).
+pub fn feed_observed_at_sql(row_time: &str, source: &str) -> String {
+    assert!(
+        !source.is_empty() && source.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
+        "feed_observed_at_sql: bad source {source:?}"
+    );
+    format!(
+        "GREATEST({row_time}, (SELECT fetched_at FROM ingest_freshness WHERE source = '{source}'))"
+    )
+}
+
+/// The derived `station_full_coverage_samples.resolved_at` every reader uses
+/// (plan 3a.9): [`feed_observed_at_sql`] of the row's `resolved_at` and the
+/// `station-full-coverage-samples` feed. With `INGEST_WRITER_CHANGED_ROWS_ONLY`
+/// the writer no longer advances an unchanged row's `resolved_at`.
+pub const STATION_FULL_COVERAGE_RESOLVED_AT_SQL: &str = "GREATEST(station_full_coverage_samples.resolved_at, \
+     (SELECT fetched_at FROM ingest_freshness WHERE source = 'station-full-coverage-samples'))";
+
 /// `AND <guard>`, or nothing. `guard` is a trusted SQL fragment (the
 /// ingest-writer's observed-time guard, `ingest_writer::observed::guard`),
 /// never data.
@@ -49,14 +82,21 @@ fn encode_error(err: serde_json::Error) -> sqlx::Error {
 /// poll, same rationale as `upsert_stations`/`upsert_tocs`.
 pub async fn upsert_station_samples(pool: &PgPool, samples: &[StationSample]) -> Result<u64> {
     let mut conn = pool.acquire().await?;
-    Ok(upsert_station_samples_on(&mut conn, samples, None).await?)
+    upsert_station_samples_on(&mut conn, samples, None).await?;
+    Ok(samples.len() as u64)
 }
 
 /// [`upsert_station_samples`] on `conn` (the ingest-writer's transaction,
 /// plan 3a.6), with `guard` ANDed into the upsert's `WHERE`: the writer
 /// passes its observed-time guard on `station_samples.polled_at` (spec
 /// §7.4), so an older snapshot never overwrites a newer one. `None` is the
-/// api route's upsert, unchanged.
+/// api route's upsert, unchanged. Returns the rows written (inserted or
+/// updated; an identical or refused row is not); the api route reports the
+/// rows posted instead.
+///
+/// No changed-rows-only form (plan 3a.9): LDBWS visits about 255 of 560
+/// stations a cycle, so a feed time would mark unvisited stations fresh;
+/// `polled_at` keeps advancing per row.
 pub async fn upsert_station_samples_on(
     conn: &mut PgConnection,
     samples: &[StationSample],
@@ -107,14 +147,14 @@ pub async fn upsert_station_samples_on(
         ",
         and_guard(guard)
     );
-    sqlx::query(&sql)
+    Ok(sqlx::query(&sql)
         .bind(&crs)
         .bind(&polled_at)
         .bind(&departures)
         .bind(&tiplocs)
         .execute(conn)
-        .await?;
-    Ok(samples.len() as u64)
+        .await?
+        .rows_affected())
 }
 
 /// The distinct TIPLOCs a board's rows are for, from their serviceIDs
@@ -152,17 +192,36 @@ pub async fn upsert_station_full_coverage_samples(
     samples: &[StationFullCoverageSample],
 ) -> Result<u64> {
     let mut conn = pool.acquire().await?;
-    Ok(upsert_station_full_coverage_samples_on(&mut conn, samples, None).await?)
+    upsert_station_full_coverage_samples_on(&mut conn, samples, RowWrites::EveryRow(None)).await?;
+    Ok(samples.len() as u64)
 }
 
-/// [`upsert_station_full_coverage_samples`] on `conn`, with `guard` ANDed
-/// into the upsert's `WHERE` (the writer's observed-time guard on
-/// `station_full_coverage_samples.resolved_at`); `None` is the api route's
-/// upsert. See [`upsert_station_samples_on`].
+/// How an `_on` snapshot writer treats a row whose content is unchanged
+/// (plan 3a.9, `INGEST_WRITER_CHANGED_ROWS_ONLY`).
+#[derive(Clone, Copy, Debug)]
+pub enum RowWrites<'a> {
+    /// Today's write: the row's own time advances on every snapshot (only
+    /// that column when the content is unchanged), with the guard (the
+    /// writer's observed-time guard on the row's time; `None` for the api
+    /// route) ANDed into the `WHERE`.
+    EveryRow(Option<&'a str>),
+    /// Changed rows only: a row whose content is unchanged is not written,
+    /// so its own time stays at the snapshot that last changed it, and
+    /// readers derive its age with [`feed_observed_at_sql`]. The guard must
+    /// compare against that same derivation (the writer's
+    /// `observed::derived_guard`), since a skipped newer snapshot no longer
+    /// advances the row's own time.
+    ChangedOnly(&'a str),
+}
+
+/// [`upsert_station_full_coverage_samples`] on `conn`; `writes` chooses
+/// today's per-row `resolved_at` advance (the api route is
+/// `EveryRow(None)`) or changed rows only (plan 3a.9). See
+/// [`upsert_station_samples_on`]. Returns the rows written.
 pub async fn upsert_station_full_coverage_samples_on(
     conn: &mut PgConnection,
     samples: &[StationFullCoverageSample],
-    guard: Option<&str>,
+    writes: RowWrites<'_>,
 ) -> sqlx::Result<u64> {
     if samples.is_empty() {
         return Ok(0);
@@ -179,11 +238,13 @@ pub async fn upsert_station_full_coverage_samples_on(
         .collect::<Result<_, _>>()
         .map_err(encode_error)?;
 
-    // Same shape as `upsert_station_samples`: `resolved_at` is the row's
-    // own age and must advance each cycle; an identical row is skipped and
-    // an unchanged `stats` value is carried over, not rewritten.
-    let sql = format!(
-        r"
+    // EveryRow, the same shape as `upsert_station_samples`: `resolved_at` is
+    // the row's own age and must advance each cycle; an identical row is
+    // skipped and an unchanged `stats` value is carried over, not
+    // rewritten. ChangedOnly: an unchanged `stats` skips the row.
+    let sql = match writes {
+        RowWrites::EveryRow(guard) => format!(
+            r"
         INSERT INTO station_full_coverage_samples (crs, operator, resolved_at, stats)
         SELECT * FROM UNNEST($1::text[], $2::text[], $3::timestamptz[], $4::jsonb[])
         ON CONFLICT (crs, operator) DO UPDATE SET
@@ -196,16 +257,28 @@ pub async fn upsert_station_full_coverage_samples_on(
         WHERE (station_full_coverage_samples.resolved_at, station_full_coverage_samples.stats)
               IS DISTINCT FROM (EXCLUDED.resolved_at, EXCLUDED.stats){}
         ",
-        and_guard(guard)
-    );
-    sqlx::query(&sql)
+            and_guard(guard)
+        ),
+        RowWrites::ChangedOnly(guard) => format!(
+            r"
+        INSERT INTO station_full_coverage_samples (crs, operator, resolved_at, stats)
+        SELECT * FROM UNNEST($1::text[], $2::text[], $3::timestamptz[], $4::jsonb[])
+        ON CONFLICT (crs, operator) DO UPDATE SET
+            resolved_at = EXCLUDED.resolved_at,
+            stats       = EXCLUDED.stats
+        WHERE station_full_coverage_samples.stats IS DISTINCT FROM EXCLUDED.stats
+          AND {guard}
+        "
+        ),
+    };
+    Ok(sqlx::query(&sql)
         .bind(&crs)
         .bind(&operators)
         .bind(&resolved_at)
         .bind(&stats)
         .execute(conn)
-        .await?;
-    Ok(samples.len() as u64)
+        .await?
+        .rows_affected())
 }
 
 /// Pure diff check, factored out of `upsert_tfl_line_status` so it's
@@ -604,6 +677,23 @@ pub async fn upsert_full_coverage_line_stats_on(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_derived_resolved_at_is_the_feed_observed_at_fragment() {
+        assert_eq!(
+            STATION_FULL_COVERAGE_RESOLVED_AT_SQL,
+            feed_observed_at_sql(
+                "station_full_coverage_samples.resolved_at",
+                sources::STATION_FULL_COVERAGE_SAMPLES
+            )
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "bad source")]
+    fn a_source_that_could_break_out_of_the_literal_is_refused() {
+        let _ = feed_observed_at_sql("t.c", "x' OR '1");
+    }
 
     #[test]
     fn a_line_with_no_stored_row_is_always_changed() {

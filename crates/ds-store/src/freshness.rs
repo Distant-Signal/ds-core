@@ -143,13 +143,24 @@ pub async fn last_station_samples_fetch(
     Ok(polled_at)
 }
 
+/// `MAX(resolved_at)` over `station_full_coverage_samples`, as derived for
+/// changed-rows-only writes (plan 3a.9): no later than the feed's observed
+/// time (`crate::samples::feed_observed_at_sql`), since the writer may leave
+/// every unchanged row's `resolved_at` behind. `NULL` while the table is
+/// empty, as before.
 pub async fn last_station_full_coverage_samples_fetch(
     pool: &PgPool,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let sql = format!(
+        "SELECT CASE WHEN MAX(resolved_at) IS NOT NULL THEN {} END \
+         FROM station_full_coverage_samples",
+        crate::samples::feed_observed_at_sql(
+            "MAX(resolved_at)",
+            crate::samples::sources::STATION_FULL_COVERAGE_SAMPLES
+        )
+    );
     let (fetched_at,): (Option<chrono::DateTime<chrono::Utc>>,) =
-        sqlx::query_as("SELECT MAX(resolved_at) FROM station_full_coverage_samples")
-            .fetch_one(pool)
-            .await?;
+        sqlx::query_as(&sql).fetch_one(pool).await?;
     Ok(fetched_at)
 }
 

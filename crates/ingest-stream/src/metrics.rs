@@ -74,6 +74,13 @@ pub const OBSERVED_AT_CLAMPED_TOTAL: &str = "ingest_stream_observed_at_clamped_t
 /// handlers (plan 3a.6). In shadow it should match the producer's
 /// `SINK_ROWS_TOTAL{sink="http"}` for the same schema.
 pub const ROWS_TOTAL: &str = "ingest_stream_rows_total";
+/// Counter `{stream, schema, outcome}`: of the rows counted in
+/// `ROWS_TOTAL{mode="apply"}`, those whose upsert `written` a row (inserted
+/// or updated) or `skipped` it (unchanged, a duplicate key in the batch, or
+/// refused by the ordering guard as older). Emitted by the ingest-writer's
+/// snapshot handlers; `INGEST_WRITER_CHANGED_ROWS_ONLY` (plan 3a.9) moves
+/// unchanged rows from `written` to `skipped`.
+pub const ROW_WRITES_TOTAL: &str = "ingest_stream_row_writes_total";
 
 /// - `applied`, `duplicate` (the handler saw the key already applied),
 ///   `skipped` (shadow mode), `rejected` (applied, with some rows
@@ -181,6 +188,20 @@ pub fn rows(stream: &str, schema: &str, mode: &'static str, count: usize) {
         "mode" => mode
     )
     .increment(u64::try_from(count).unwrap_or(u64::MAX));
+}
+
+/// Counts the rows the writer `written` and `skipped` for `stream`/`schema`
+/// ([`ROW_WRITES_TOTAL`]).
+pub fn row_writes(stream: &str, schema: &str, written: u64, skipped: u64) {
+    for (outcome, count) in [("written", written), ("skipped", skipped)] {
+        metrics::counter!(
+            metric_name(ROW_WRITES_TOTAL),
+            "stream" => stream.to_owned(),
+            "schema" => schema.to_owned(),
+            "outcome" => outcome
+        )
+        .increment(count);
+    }
 }
 
 pub(crate) fn handler_seconds(stream: &str, schema: &str, seconds: f64) {
