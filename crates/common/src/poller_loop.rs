@@ -135,6 +135,40 @@ where
     .await
 }
 
+/// [`run_poll_loop`] with the last-fetch time read by `last_fetched`
+/// instead of the api's GET on `api_ingest_url`: a direct writer (ingest
+/// architecture phase 2, `INGEST_SINK=db`) reads its own
+/// `ingest_freshness` row. The startup wait and the wait before a retry
+/// use it the same way, with the same [`DEFAULT_RETRY_POLICY`].
+pub async fn run_poll_loop_with_cursor<C, CFut, F, Fut>(
+    poller_label: &'static str,
+    last_fetched: C,
+    poll_interval: Duration,
+    metrics_enabled: bool,
+    metrics_port: u16,
+    progress: &Progress,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    C: FnMut() -> CFut,
+    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    if metrics_enabled {
+        crate::metrics::install(metrics_port)?;
+    }
+    run_cursor_loop_with(
+        &DEFAULT_RETRY_POLICY,
+        poller_label,
+        last_fetched,
+        poll_interval,
+        progress,
+        cycle,
+    )
+    .await
+}
+
 /// Registers both `result` series of `poller_cycle_total` at 0 for
 /// `poller_label`, so an alert's `increase()` sees the first failure (or
 /// success) after a pod start rather than the series merely appearing.
@@ -161,17 +195,40 @@ async fn run_poll_loop_with<F, Fut>(
     internal_oauth: &OAuthTokenCache,
     poll_interval: Duration,
     progress: &Progress,
-    mut cycle: F,
+    cycle: F,
 ) -> anyhow::Result<()>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
+    run_cursor_loop_with(
+        policy,
+        poller_label,
+        || ingest::fetch_last_fetched(client, api_ingest_url, internal_oauth),
+        poll_interval,
+        progress,
+        cycle,
+    )
+    .await
+}
+
+async fn run_cursor_loop_with<C, CFut, F, Fut>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    mut last_fetched: C,
+    poll_interval: Duration,
+    progress: &Progress,
+    mut cycle: F,
+) -> anyhow::Result<()>
+where
+    C: FnMut() -> CFut,
+    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
     register_cycle_metrics(poller_label);
-    let delay = ingest::time_until_next_poll_waiting(
-        client,
-        api_ingest_url,
-        internal_oauth,
+    let delay = ingest::time_until_next_poll_from(
+        &mut last_fetched,
         poll_interval,
         &policy.api_wait,
         Some(progress),
@@ -192,18 +249,13 @@ where
 
         if consecutive_failures > 0 {
             // A retry after a failure: don't spend an upstream fetch until
-            // api answers again (bounded, so a GET-only breakage can't stop
-            // polling).
-            if let Err(err) = ingest::wait_for_last_fetched(
-                client,
-                api_ingest_url,
-                internal_oauth,
-                &policy.api_wait,
-                Some(progress),
-            )
-            .await
+            // the last-fetch source (api, or the database for a direct
+            // writer) answers again (bounded, so a GET-only breakage can't
+            // stop polling).
+            if let Err(err) =
+                ingest::wait_for_cursor(&mut last_fetched, &policy.api_wait, Some(progress)).await
             {
-                tracing::warn!(error = ?err, "api still unreachable; retrying the poll anyway");
+                tracing::warn!(error = ?err, "last-fetch source still unreachable; retrying the poll anyway");
             }
         }
 
@@ -462,6 +514,44 @@ mod tests {
         );
         let _ = tokio::time::timeout(Duration::from_millis(500), loop_future).await;
         assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    /// A direct writer's cursor (plan 2b.1): a last fetch from just now
+    /// delays the first poll by the interval; none polls at once, and the
+    /// cursor is read again before the retry of a failed cycle.
+    #[tokio::test]
+    async fn the_cursor_loop_reads_the_last_fetch_from_its_closure() {
+        async fn run(fetched_at: Option<chrono::DateTime<chrono::Utc>>) -> (usize, usize) {
+            let reads = AtomicUsize::new(0);
+            let calls = AtomicUsize::new(0);
+            let progress = Progress::new(Duration::from_secs(60));
+            let loop_future = run_cursor_loop_with(
+                &FAST_POLICY,
+                "test",
+                || {
+                    reads.fetch_add(1, Ordering::Relaxed);
+                    async move { Ok(fetched_at) }
+                },
+                Duration::from_secs(86_400),
+                &progress,
+                || {
+                    let n = calls.fetch_add(1, Ordering::Relaxed);
+                    async move {
+                        if n == 0 {
+                            Err(transient_post_failure())
+                        } else {
+                            Ok(())
+                        }
+                    }
+                },
+            );
+            let _ = tokio::time::timeout(Duration::from_millis(500), loop_future).await;
+            (reads.load(Ordering::Relaxed), calls.load(Ordering::Relaxed))
+        }
+
+        assert_eq!(run(Some(chrono::Utc::now())).await, (1, 0));
+        // Never fetched: polls at once, fails, reads the cursor again, retries.
+        assert_eq!(run(None).await, (2, 2));
     }
 
     #[test]

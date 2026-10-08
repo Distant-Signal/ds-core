@@ -260,7 +260,11 @@ type BuildKey = (DateTime<Utc>, i32, Option<String>);
 ///
 /// Called at startup and after every `stations` refresh
 /// (`POST /private/stations`), so a newly published Knowledgebase station
-/// gets its CORPUS fills without waiting for the next CORPUS delivery. An
+/// gets its CORPUS fills without waiting for the next CORPUS delivery.
+/// A refresh poller-stations writes directly (`INGEST_SINK=db`, plan 2b)
+/// makes no POST: the ingest-writer's `CORPUS_CROSSWALK` loop
+/// ([`crate::loops::corpus_crosswalk`], every 10 minutes) picks it up
+/// instead. An
 /// up-to-date check is three single-row reads (the `stations` fingerprint
 /// aggregates ~2,600 CRS codes); a rebuild -- once per changed station set
 /// -- re-derives from `corpus_locations` in one transaction.
@@ -666,6 +670,41 @@ mod db_tests {
             .unwrap();
         assert_eq!(rebuild_if_stale(&pool).await.unwrap(), Some(at()));
         assert!(!stored_tiplocs(&pool).await.contains(&"LULSTOP".to_owned()));
+    }
+
+    /// Plan 2b.2: with poller-stations on `INGEST_SINK=db` nothing calls
+    /// `rebuild_if_stale` after a stations refresh (the api's
+    /// `POST /private/stations` did). The ingest-writer's `CORPUS_CROSSWALK`
+    /// loop does: a station written the direct-writer way
+    /// (`reference::upsert_stations`) gets its CORPUS fills on the loop's
+    /// next tick.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_new_station_gets_its_fills_on_the_next_crosswalk_loop_tick(pool: PgPool) {
+        use crate::loops::{LockSession, LoopRunner, TickOutcome};
+
+        seed_stations(&pool, &STATIONS).await;
+        replace_corpus_locations(&pool, at(), "CORPUSExtract.json.gz", &corpus())
+            .await
+            .unwrap();
+        let lookup = || queries::crs_for_tiploc_with(&pool, "LULSTOP", true);
+        assert_eq!(lookup().await.unwrap(), None);
+
+        // The daily refresh: the Knowledgebase now lists LUA.
+        queries::upsert_stations(
+            &pool,
+            &[crate::test_support::station_reference("LUA", "Somewhere")],
+        )
+        .await
+        .unwrap();
+        assert_eq!(lookup().await.unwrap(), None, "no fill before the tick");
+
+        let runner = LoopRunner::new(pool.clone(), LockSession::from_pool(pool.clone()));
+        let spec = crate::loops::corpus_crosswalk(crate::loops::CORPUS_CROSSWALK_DEFAULT_INTERVAL);
+        assert_eq!(runner.run_once(&spec).await, TickOutcome::Ran);
+        assert_eq!(lookup().await.unwrap().as_deref(), Some("LUA"));
+        // The tick after that has nothing to do.
+        assert_eq!(rebuild_if_stale(&pool).await.unwrap(), None);
     }
 
     /// Flag off: every lookup returns exactly what it returned before

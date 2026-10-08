@@ -399,15 +399,31 @@ pub async fn wait_for_last_fetched(
     wait: &ApiWait,
     progress: Option<&Progress>,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
+    wait_for_cursor(|| fetch_last_fetched(client, url, tokens), wait, progress).await
+}
+
+/// [`wait_for_last_fetched`] for any source of the last-fetch time: the
+/// api's GET, or (a direct writer, ingest architecture phase 2) the
+/// database's `ingest_freshness` row. `fetch` is retried on any failure
+/// with `wait.backoff` for up to `wait.max_wait`.
+pub async fn wait_for_cursor<F, Fut>(
+    mut fetch: F,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> anyhow::Result<Option<DateTime<Utc>>>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>>,
+{
     let started = tokio::time::Instant::now();
     let mut failures: u32 = 0;
     loop {
-        let err = match fetch_last_fetched(client, url, tokens).await {
+        let err = match fetch().await {
             Ok(fetched_at) => {
                 if failures > 0 {
                     tracing::info!(
                         waited_secs = started.elapsed().as_secs(),
-                        "api is reachable again"
+                        "the last-fetch source is reachable again"
                     );
                 }
                 return Ok(fetched_at);
@@ -422,7 +438,7 @@ pub async fn wait_for_last_fetched(
             error = ?err,
             attempt = failures + 1,
             retry_in_secs = delay.as_secs(),
-            "api not reachable yet; waiting for it before fetching upstream"
+            "the last-fetch source (api or database) is not reachable yet; waiting for it before fetching upstream"
         );
         if let Some(progress) = progress {
             progress.beat();
@@ -463,7 +479,28 @@ pub async fn time_until_next_poll_waiting(
     wait: &ApiWait,
     progress: Option<&Progress>,
 ) -> Duration {
-    let fetched_at = match wait_for_last_fetched(client, url, tokens, wait, progress).await {
+    time_until_next_poll_from(
+        || fetch_last_fetched(client, url, tokens),
+        poll_interval,
+        wait,
+        progress,
+    )
+    .await
+}
+
+/// [`time_until_next_poll_waiting`] for any source of the last-fetch time
+/// (see [`wait_for_cursor`]).
+pub async fn time_until_next_poll_from<F, Fut>(
+    fetch: F,
+    poll_interval: Duration,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> Duration
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>>,
+{
+    let fetched_at = match wait_for_cursor(fetch, wait, progress).await {
         Ok(fetched_at) => fetched_at,
         Err(err) => {
             tracing::warn!(
@@ -591,7 +628,7 @@ async fn post_counted_retrying_with<B: Serialize + ?Sized>(
     }
 }
 
-async fn fetch_last_fetched(
+pub(crate) async fn fetch_last_fetched(
     client: &reqwest::Client,
     url: &str,
     tokens: &OAuthTokenCache,

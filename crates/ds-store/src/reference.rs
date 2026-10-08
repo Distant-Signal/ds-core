@@ -15,25 +15,97 @@ use sqlx::PgPool;
 
 use crate::freshness::{last_per_key, normalize_code, record_ingest};
 
+/// One station for [`upsert_stations`]: the columns of a `stations` row.
+///
+/// `common::StationReference` (the api's `POST /private/stations` body)
+/// implements it. poller-stations' direct writer (plan 2b.1) implements it
+/// for its own borrowed record, whose passthrough `accessibility` is a map
+/// of `&RawValue` slices of the fetched feed: a `serde_json::Value` per
+/// station would cost several copies of the 38 MB feed (the 2026-09-27
+/// `OOMKilled`). The bind encodes [`Self::Accessibility`] straight into the
+/// statement's buffer.
+pub trait StationRow {
+    /// The passthrough JSON object, stored as `jsonb`.
+    type Accessibility: serde::Serialize + ?Sized;
+
+    fn crs(&self) -> &str;
+    fn name(&self) -> &str;
+    fn latitude(&self) -> Option<f64>;
+    fn longitude(&self) -> Option<f64>;
+    fn station_operator(&self) -> Option<&str>;
+    fn accessibility(&self) -> &Self::Accessibility;
+}
+
+impl StationRow for StationReference {
+    type Accessibility = serde_json::Value;
+
+    fn crs(&self) -> &str {
+        &self.crs
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn latitude(&self) -> Option<f64> {
+        self.latitude
+    }
+    fn longitude(&self) -> Option<f64> {
+        self.longitude
+    }
+    fn station_operator(&self) -> Option<&str> {
+        self.station_operator.as_deref()
+    }
+    fn accessibility(&self) -> &serde_json::Value {
+        &self.accessibility
+    }
+}
+
+/// Rows per `INSERT` statement in [`upsert_stations`]. One statement's bind
+/// parameters are encoded into one buffer and then copied into the
+/// connection's write buffer (each growing by doubling), so a statement
+/// costs about four times its parameters. 100 rows x 14 KB (the live
+/// feed's facilities JSON per station) is 1.4 MB, so about 6 MB per
+/// statement, against about 29 MB measured for 500 rows and four times the
+/// whole 38 MB feed for one statement. A daily refresh is 27 statements in
+/// one transaction.
+pub const UPSERT_STATIONS_CHUNK: usize = 100;
+
 /// Upserts a batch of station reference records. No history — this is
 /// reference data, not an event stream (see the reference-data migration's
 /// comment).
-pub async fn upsert_stations(pool: &PgPool, stations: &[StationReference]) -> Result<u64> {
+///
+/// One transaction: the batch is deduplicated by CRS (the last one wins),
+/// written [`UPSERT_STATIONS_CHUNK`] rows per statement, then
+/// `ingest_freshness('stations')` is recorded. Readers see all of it or
+/// none of it, as with the single statement it was until plan 2b.1.
+pub async fn upsert_stations<S: StationRow + Sync>(pool: &PgPool, stations: &[S]) -> Result<u64> {
     if stations.is_empty() {
         return Ok(0);
     }
-    let batch = last_per_key(stations, |station| normalize_code(&station.crs));
-    let crs: Vec<String> = batch.iter().map(|s| normalize_code(&s.crs)).collect();
-    let names: Vec<&str> = batch.iter().map(|s| s.name.as_str()).collect();
-    let latitudes: Vec<Option<f64>> = batch.iter().map(|s| s.latitude).collect();
-    let longitudes: Vec<Option<f64>> = batch.iter().map(|s| s.longitude).collect();
-    let operators: Vec<Option<&str>> = batch
-        .iter()
-        .map(|s| s.station_operator.as_deref())
-        .collect();
-    let accessibility: Vec<&serde_json::Value> = batch.iter().map(|s| &s.accessibility).collect();
+    let batch = last_per_key(stations, |station| normalize_code(station.crs()));
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::pool::begin(pool).await?;
+    for chunk in batch.chunks(UPSERT_STATIONS_CHUNK) {
+        upsert_station_chunk(&mut tx, chunk).await?;
+    }
+    record_ingest(&mut tx, "stations").await?;
+    tx.commit().await?;
+    Ok(stations.len() as u64)
+}
+
+async fn upsert_station_chunk<S: StationRow + Sync>(
+    tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    chunk: &[&S],
+) -> Result<()> {
+    let crs: Vec<String> = chunk.iter().map(|s| normalize_code(s.crs())).collect();
+    let names: Vec<&str> = chunk.iter().map(|s| s.name()).collect();
+    let latitudes: Vec<Option<f64>> = chunk.iter().map(|s| s.latitude()).collect();
+    let longitudes: Vec<Option<f64>> = chunk.iter().map(|s| s.longitude()).collect();
+    let operators: Vec<Option<&str>> = chunk.iter().map(|s| s.station_operator()).collect();
+    let accessibility: Vec<sqlx::types::Json<&S::Accessibility>> = chunk
+        .iter()
+        .map(|s| sqlx::types::Json(s.accessibility()))
+        .collect();
+
     // `fetched_at` now means "when this row last CHANGED"; the feed-level
     // "last fetched" lives in `ingest_freshness` (see `record_ingest`).
     sqlx::query(
@@ -62,11 +134,9 @@ pub async fn upsert_stations(pool: &PgPool, stations: &[StationReference]) -> Re
     .bind(&longitudes)
     .bind(&operators)
     .bind(&accessibility)
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    record_ingest(&mut tx, "stations").await?;
-    tx.commit().await?;
-    Ok(stations.len() as u64)
+    Ok(())
 }
 
 /// Upserts a batch of TOC reference records. No history, same rationale as
@@ -1640,6 +1710,51 @@ mod db_review_guard_and_normalisation_tests {
     use super::*;
     use crate::freshness::{data_freshness, last_stations_fetch, last_tocs_fetch};
     use crate::test_support::{connect as test_pool, station_reference as station, xmin};
+
+    /// Plan 2b.1: a batch larger than [`UPSERT_STATIONS_CHUNK`] is written
+    /// in several statements but deduplicated across all of them (a code
+    /// repeated in a later chunk wins, and no statement touches a row
+    /// twice), in one transaction.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                db_review_guard_and_normalisation_tests -- --ignored --test-threads=1`"]
+    async fn a_batch_over_one_chunk_is_deduplicated_across_chunks() {
+        let pool = test_pool().await;
+        let letter = |i: usize| char::from(b'A' + u8::try_from(i % 26).unwrap());
+        let codes: Vec<String> = (0..UPSERT_STATIONS_CHUNK + 20)
+            .map(|i| format!("Y{}{}", letter(i / 26), letter(i)))
+            .collect();
+        sqlx::query("DELETE FROM stations WHERE crs = ANY($1)")
+            .bind(&codes)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut batch: Vec<StationReference> =
+            codes.iter().map(|crs| station(crs, "Chunk Test")).collect();
+        // The first code again, in the last chunk, renamed and lower-case.
+        batch.push(station(&codes[0].to_lowercase(), "Chunk Test (last)"));
+
+        assert_eq!(
+            upsert_stations(&pool, &batch).await.unwrap(),
+            batch.len() as u64
+        );
+        let (rows, last_name): (i64, String) = sqlx::query_as(
+            "SELECT count(*), max(name) FILTER (WHERE crs = $2) FROM stations WHERE crs = ANY($1)",
+        )
+        .bind(&codes)
+        .bind(&codes[0])
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows, i64::try_from(codes.len()).unwrap());
+        assert_eq!(last_name, "Chunk Test (last)");
+
+        sqlx::query("DELETE FROM stations WHERE crs = ANY($1)")
+            .bind(&codes)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
 
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \

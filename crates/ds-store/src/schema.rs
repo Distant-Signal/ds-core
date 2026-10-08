@@ -90,6 +90,8 @@ pub enum DbRole {
     ScheduleIngest,
     /// schedule-reference with `INGEST_SINK=db` (plan 2a.3).
     ScheduleReference,
+    /// poller-stations under `INGEST_SINK=db` (plan 2b).
+    Stations,
 }
 
 impl DbRole {
@@ -103,6 +105,7 @@ impl DbRole {
             Self::Writer => "writer",
             Self::ScheduleIngest => "schedule_ingest",
             Self::ScheduleReference => "schedule_reference",
+            Self::Stations => "stations",
         }
     }
 
@@ -327,6 +330,7 @@ mod tests {
             DbRole::Writer,
             DbRole::ScheduleIngest,
             DbRole::ScheduleReference,
+            DbRole::Stations,
         ] {
             assert!(privileges_for(role.key()).is_some(), "{role:?}");
             assert!(!role.required_privileges().is_empty(), "{role:?}");
@@ -368,6 +372,16 @@ mod tests {
             "DELETE"
         ));
         assert!(!has(DbRole::ScheduleIngest, "tocs", "SELECT"));
+        // poller-stations' narrow role (plan 2b.3): its two tables only.
+        for privilege in ["SELECT", "INSERT", "UPDATE"] {
+            assert!(has(DbRole::Stations, "stations", privilege), "{privilege}");
+            assert!(
+                has(DbRole::Stations, "ingest_freshness", privilege),
+                "{privilege}"
+            );
+        }
+        assert!(!has(DbRole::Stations, "stations", "DELETE"));
+        assert!(!has(DbRole::Stations, "tocs", "SELECT"));
         // No role is required to hold anything on the migrations table
         // beyond what the version query itself needs.
         assert!(
