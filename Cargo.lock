@@ -89,6 +89,7 @@ dependencies = [
  "health-http",
  "md-5 0.10.6",
  "metrics",
+ "metrics-exporter-prometheus",
  "object_store",
  "serde",
  "serde_json",
