@@ -20,7 +20,7 @@ pub const PRODUCE_DROPPED_TOTAL: &str = "ingest_stream_produce_dropped_total";
 
 /// Counter `{stream, schema, sink}`: snapshot rows a producer delivered,
 /// by sink: `http` (the api accepted the POST) or `stream` (every part of
-/// the snapshot was XADDed). Under `INGEST_SINK=http+shadow` both count the
+/// the snapshot was `XADD`ed). Under `INGEST_SINK=http+shadow` both count the
 /// same snapshots, so the two series agree while both paths work; the
 /// rollout's compare step (plan 3a, `docs/ingest-stream-runtime.md`) checks
 /// them against the writer's [`ROWS_TOTAL`].

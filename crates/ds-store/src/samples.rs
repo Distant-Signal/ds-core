@@ -87,7 +87,7 @@ pub async fn upsert_station_samples(pool: &PgPool, samples: &[StationSample]) ->
 }
 
 /// [`upsert_station_samples`] on `conn` (the ingest-writer's transaction,
-/// plan 3a.6), with `guard` ANDed into the upsert's `WHERE`: the writer
+/// plan 3a.6), with `guard` `AND`ed into the upsert's `WHERE`: the writer
 /// passes its observed-time guard on `station_samples.polled_at` (spec
 /// §7.4), so an older snapshot never overwrites a newer one. `None` is the
 /// api route's upsert, unchanged. Returns the rows written (inserted or
@@ -203,7 +203,7 @@ pub enum RowWrites<'a> {
     /// Today's write: the row's own time advances on every snapshot (only
     /// that column when the content is unchanged), with the guard (the
     /// writer's observed-time guard on the row's time; `None` for the api
-    /// route) ANDed into the `WHERE`.
+    /// route) `AND`ed into the `WHERE`.
     EveryRow(Option<&'a str>),
     /// Changed rows only: a row whose content is unchanged is not written,
     /// so its own time stays at the snapshot that last changed it, and
@@ -678,11 +678,6 @@ async fn write_tfl_line_status(
 /// rows in 20 minutes). The `WHERE ... IS DISTINCT FROM` leaves an
 /// identical row alone, so `updated_at` now means "last changed", not
 /// "last posted". Returns the number of rows actually written.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    reason = "per-day train counts and the stats version are small"
-)]
 pub async fn upsert_full_coverage_line_stats(
     pool: &PgPool,
     rows: &[common::FullCoverageLineStatsRow],
@@ -695,7 +690,7 @@ pub async fn upsert_full_coverage_line_stats(
 /// (plan 3a.5/3a.6, D13): the `/1` body carries no time, so each row gets
 /// `source_updated_at` (the entry's clamped `produced_at`), and `guard`
 /// (the writer's observed-time guard on
-/// `full_coverage_line_stats.source_updated_at`) is ANDed into the `WHERE`.
+/// `full_coverage_line_stats.source_updated_at`) is `AND`ed into the `WHERE`.
 #[derive(Clone, Copy, Debug)]
 pub struct SourceOrdering<'a> {
     pub source_updated_at: DateTime<Utc>,
@@ -724,6 +719,11 @@ const LINE_STATS_CHANGED: &str =
 /// applied; `updated_at` still moves only when the stats change. `None` is
 /// the api route's upsert, unchanged: it leaves `source_updated_at` alone
 /// (`NULL` on a new row, which the guard counts as older).
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "per-day train counts and the stats version are small"
+)]
 pub async fn upsert_full_coverage_line_stats_on(
     conn: &mut PgConnection,
     rows: &[common::FullCoverageLineStatsRow],

@@ -368,7 +368,10 @@ mod db_tests {
             .await
             .unwrap_err();
         assert_eq!(
-            denied.as_database_error().and_then(|e| e.code()).as_deref(),
+            denied
+                .as_database_error()
+                .and_then(sqlx::error::DatabaseError::code)
+                .as_deref(),
             Some("42501"),
             "the reader role must not read pinned_lines itself"
         );

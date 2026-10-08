@@ -58,19 +58,19 @@ pub enum SinkMode {
     #[default]
     Http,
     /// POST to the api (authoritative: its result is the cycle's), plus a
-    /// copy XADDed to the stream for the writer's `shadow` mode to check.
+    /// copy `XADD`ed to the stream for the writer's `shadow` mode to check.
     HttpShadow,
     /// XADD only; the api is no longer written.
     Stream,
 }
 
 impl SinkMode {
-    /// Whether the api is POSTed.
+    /// Whether the api gets a `POST`.
     pub fn posts_http(self) -> bool {
         matches!(self, Self::Http | Self::HttpShadow)
     }
 
-    /// Whether snapshots are XADDed (so Redis is needed).
+    /// Whether snapshots are `XADD`ed (so Redis is needed).
     pub fn produces(self) -> bool {
         matches!(self, Self::HttpShadow | Self::Stream)
     }

@@ -49,7 +49,7 @@ class RepoFilesTest(unittest.TestCase):
         self.assertEqual(status, 0, out.getvalue())
 
     def test_phase_0b_creates_observed_members_of_app_and_the_narrow_ones(self) -> None:
-        """Phase 0b/1B: the four DB services and the writer; phases 2 and 3b: narrow roles."""
+        """Phase 0b/1B: the DB services and the writer; phases 2-4: narrow roles."""
         model = gen.load()
         status = {r.key: r.status for r in model.created()}
         self.assertEqual(
