@@ -157,8 +157,9 @@ pub async fn upsert_tocs(pool: &PgPool, tocs: &[TocReference]) -> Result<u64> {
 /// entry's `ingest_dedup` row: tocs have no ordering guard, spec §7.4).
 /// A changed row's `fetched_at` and the feed's freshness are `observed_at`
 /// (the entry's `produced_at`, decision D13); freshness never moves
-/// backwards ([`crate::freshness::record_ingest`]). Returns the number
-/// of TOCs received, as [`upsert_tocs`] does.
+/// backwards ([`crate::freshness::record_ingest`]). Returns the TOCs
+/// written (inserted or changed; an unchanged row is not), for the
+/// writer's `ingest_stream_row_writes_total`.
 pub async fn upsert_tocs_observed(
     conn: &mut PgConnection,
     tocs: &[TocReference],
@@ -167,18 +168,19 @@ pub async fn upsert_tocs_observed(
     if tocs.is_empty() {
         return Ok(0);
     }
-    write_tocs(conn, tocs, Some(observed_at)).await?;
+    let written = write_tocs(conn, tocs, Some(observed_at)).await?;
     record_ingest(conn, "tocs", Some(observed_at)).await?;
-    Ok(tocs.len() as u64)
+    Ok(written)
 }
 
 /// The shared upsert of [`upsert_tocs`] and [`upsert_tocs_observed`]: a
 /// changed row's `fetched_at` is `observed_at`, or `NOW()` when `None`.
+/// Returns the rows written.
 async fn write_tocs(
     conn: &mut PgConnection,
     tocs: &[TocReference],
     observed_at: Option<chrono::DateTime<chrono::Utc>>,
-) -> Result<()> {
+) -> Result<u64> {
     let batch = last_per_key(tocs, |toc| toc.atoc_code.clone());
     let codes: Vec<&str> = batch.iter().map(|t| t.atoc_code.as_str()).collect();
     let names: Vec<&str> = batch.iter().map(|t| t.name.as_str()).collect();
@@ -188,7 +190,7 @@ async fn write_tocs(
 
     // `fetched_at` now means "when this row last CHANGED"; the feed-level
     // "last fetched" lives in `ingest_freshness` (see `record_ingest`).
-    sqlx::query(
+    let done = sqlx::query(
         r"
         INSERT INTO tocs (atoc_code, name, legal_name, atoc_member, station_operator, fetched_at)
         SELECT atoc_code, name, legal_name, atoc_member, station_operator,
@@ -214,7 +216,7 @@ async fn write_tocs(
     .bind(observed_at)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(done.rows_affected())
 }
 
 /// Upserts a batch of resolved STANOX/CRS rows. Every daily delivery is a

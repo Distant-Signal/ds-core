@@ -48,6 +48,8 @@ pub async fn upsert_stations(pool: &PgPool, stations: &[IslandOfIrelandStation])
 /// ordering guard refuses a change older than the stored row's last change
 /// (`fetched_at`, "last changed"), so a redelivered older snapshot cannot
 /// undo a newer one. Freshness is `observed_at`, never moving backwards.
+/// Returns the rows written (inserted or changed; an unchanged or older row
+/// is not), for the writer's `ingest_stream_row_writes_total`.
 pub async fn upsert_stations_observed(
     conn: &mut PgConnection,
     stations: &[IslandOfIrelandStation],
@@ -56,9 +58,9 @@ pub async fn upsert_stations_observed(
     if stations.is_empty() {
         return Ok(0);
     }
-    write_stations(conn, stations, Some(observed_at)).await?;
+    let written = write_stations(conn, stations, Some(observed_at)).await?;
     crate::freshness::record_ingest(conn, STATIONS_SOURCE, Some(observed_at)).await?;
-    Ok(stations.len() as u64)
+    Ok(written)
 }
 
 /// The shared upsert: `observed_at` `None` stamps `NOW()` with no guard
@@ -67,7 +69,7 @@ async fn write_stations(
     conn: &mut PgConnection,
     stations: &[IslandOfIrelandStation],
     observed_at: Option<chrono::DateTime<chrono::Utc>>,
-) -> Result<()> {
+) -> Result<u64> {
     let batch = crate::freshness::last_per_key(stations, |station| station.id.clone());
     let ids: Vec<&str> = batch.iter().map(|s| s.id.as_str()).collect();
     let names: Vec<&str> = batch.iter().map(|s| s.name.as_str()).collect();
@@ -75,7 +77,7 @@ async fn write_stations(
     let latitudes: Vec<Option<f64>> = batch.iter().map(|s| s.latitude).collect();
     let longitudes: Vec<Option<f64>> = batch.iter().map(|s| s.longitude).collect();
 
-    sqlx::query(
+    let done = sqlx::query(
         r"
         INSERT INTO island_of_ireland_stations (id, name, network, latitude, longitude, fetched_at)
         SELECT id, name, network, latitude, longitude, COALESCE($6::timestamptz, NOW())
@@ -104,7 +106,7 @@ async fn write_stations(
     .bind(observed_at)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(done.rows_affected())
 }
 
 /// [`upsert_stations`] for lines: one batched statement, unchanged rows
@@ -129,9 +131,9 @@ pub async fn upsert_lines_observed(
     if lines.is_empty() {
         return Ok(0);
     }
-    write_lines(conn, lines, Some(observed_at)).await?;
+    let written = write_lines(conn, lines, Some(observed_at)).await?;
     crate::freshness::record_ingest(conn, LINES_SOURCE, Some(observed_at)).await?;
-    Ok(lines.len() as u64)
+    Ok(written)
 }
 
 /// As [`write_stations`], for lines.
@@ -139,7 +141,7 @@ async fn write_lines(
     conn: &mut PgConnection,
     lines: &[IslandOfIrelandLineDefinition],
     observed_at: Option<chrono::DateTime<chrono::Utc>>,
-) -> Result<()> {
+) -> Result<u64> {
     let batch = crate::freshness::last_per_key(lines, |line| line.id.clone());
     let ids: Vec<&str> = batch.iter().map(|l| l.id.as_str()).collect();
     let names: Vec<&str> = batch.iter().map(|l| l.name.as_str()).collect();
@@ -149,7 +151,7 @@ async fn write_lines(
         .map(|l| serde_json::to_value(&l.stations))
         .collect::<Result<_, _>>()?;
 
-    sqlx::query(
+    let done = sqlx::query(
         r"
         INSERT INTO island_of_ireland_lines (id, name, network, stations, fetched_at)
         SELECT id, name, network, stations, COALESCE($5::timestamptz, NOW())
@@ -176,7 +178,7 @@ async fn write_lines(
     .bind(observed_at)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(done.rows_affected())
 }
 
 /// When `source`'s feed last landed: its `ingest_freshness` row, or, for
@@ -236,6 +238,7 @@ pub async fn upsert_station_samples(
 /// row's own `polled_at` (decision D13: its observed time; the handler
 /// clamps it to the writer's `now() + 2 min` first): an older sample never
 /// overwrites a newer one. No freshness marker, as on the api's route.
+/// Returns the rows written, as [`upsert_stations_observed`] does.
 pub async fn upsert_station_samples_observed(
     conn: &mut PgConnection,
     samples: &[IslandOfIrelandStationSample],
@@ -243,15 +246,14 @@ pub async fn upsert_station_samples_observed(
     if samples.is_empty() {
         return Ok(0);
     }
-    write_station_samples(conn, samples, true).await?;
-    Ok(samples.len() as u64)
+    write_station_samples(conn, samples, true).await
 }
 
 async fn write_station_samples(
     conn: &mut PgConnection,
     samples: &[IslandOfIrelandStationSample],
     guard: bool,
-) -> Result<()> {
+) -> Result<u64> {
     let batch = crate::freshness::last_per_key(samples, |sample| sample.station_id.clone());
     let ids: Vec<&str> = batch.iter().map(|s| s.station_id.as_str()).collect();
     let networks: Vec<&str> = batch.iter().map(|s| network_wire(s.network)).collect();
@@ -261,7 +263,7 @@ async fn write_station_samples(
         .map(|s| serde_json::to_value(&s.departures))
         .collect::<Result<_, _>>()?;
 
-    sqlx::query(
+    let done = sqlx::query(
         r"
         INSERT INTO island_of_ireland_station_samples (station_id, network, polled_at, departures)
         SELECT station_id, network, polled_at, departures
@@ -292,7 +294,7 @@ async fn write_station_samples(
     .bind(guard)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(done.rows_affected())
 }
 
 pub async fn last_station_samples_fetch(

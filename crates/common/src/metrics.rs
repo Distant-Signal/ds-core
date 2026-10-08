@@ -88,6 +88,64 @@ pub fn record_cycle(service: &str, cycle: &'static str, succeeded: bool) {
     }
 }
 
+/// An info gauge set to 1: its full name and label set (see [`set_info`]).
+type Info = (String, Vec<(&'static str, String)>);
+
+/// Every [`set_info`] so far, so a recorder installed later (a poller's,
+/// inside `common::poller_loop`) still exports them.
+static INFO: std::sync::Mutex<Vec<Info>> = std::sync::Mutex::new(Vec::new());
+
+/// Sets the info gauge `<metric_name(suffix)>{labels} 1` now, and again
+/// when [`install`] installs a recorder later, so it can be called before
+/// or after the recorder exists. For settings an alert or a dashboard
+/// should be able to read (the ingest sink, the read source).
+pub fn set_info(suffix: &str, labels: &[(&'static str, &str)]) {
+    let info: Info = (
+        metric_name(suffix),
+        labels
+            .iter()
+            .map(|(key, value)| (*key, (*value).to_owned()))
+            .collect(),
+    );
+    emit_info(&info);
+    if let Ok(mut held) = INFO.lock() {
+        held.retain(|held| held != &info);
+        held.push(info);
+    }
+}
+
+fn emit_info((name, labels): &Info) {
+    let labels: Vec<metrics::Label> = labels
+        .iter()
+        .map(|(key, value)| metrics::Label::new(*key, value.clone()))
+        .collect();
+    metrics::gauge!(name.clone(), labels).set(1.0);
+}
+
+/// `distant_signal_ingest_sink_info{sink}`: where a producer delivers
+/// (`INGEST_SINK`: `http`, `http+shadow`, `stream` or `db`).
+pub fn ingest_sink_info(sink: &str) {
+    set_info("ingest_sink_info", &[("sink", sink)]);
+}
+
+/// The command-line name of a `clap::ValueEnum` value (`http+shadow` for
+/// `SinkMode::HttpShadow`), for an info gauge's label.
+pub fn value_enum_name<T: clap::ValueEnum>(value: &T) -> String {
+    value
+        .to_possible_value()
+        .map_or_else(String::new, |value| value.get_name().to_owned())
+}
+
+/// `distant_signal_internal_reads_source_info{read, source}`: where an
+/// internal reader reads `read` from (`http` or `db`; the `*_SOURCE`
+/// variables of ingest plan phase 4).
+pub fn internal_reads_source_info(read: &str, source: &str) {
+    set_info(
+        "internal_reads_source_info",
+        &[("read", read), ("source", source)],
+    );
+}
+
 fn unix_now() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -170,6 +228,9 @@ pub fn install_with_buckets(port: u16, bucket_overrides: &[(&str, &[f64])]) -> R
         .with_http_listener(addr)
         .install()
         .context("failed to install the Prometheus metrics exporter")?;
+    if let Ok(held) = INFO.lock() {
+        held.iter().for_each(emit_info);
+    }
     Ok(())
 }
 
@@ -233,6 +294,34 @@ mod tests {
             "{rendered}"
         );
         assert!(!rendered.contains("quantile"), "{rendered}");
+    }
+
+    #[test]
+    fn info_gauges_are_set_to_one_and_kept_once() {
+        let recorder = PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        metrics::with_local_recorder(&recorder, || {
+            ingest_sink_info("http+shadow");
+            internal_reads_source_info("population", "db");
+        });
+        let rendered = handle.render();
+        for series in [
+            r#"distant_signal_ingest_sink_info{sink="http+shadow"} 1"#,
+            r#"distant_signal_internal_reads_source_info{read="population",source="db"} 1"#,
+        ] {
+            assert!(
+                rendered.contains(series),
+                "{series} missing from {rendered}"
+            );
+        }
+        // Kept once, for the recorder `install` sets up later.
+        ingest_sink_info("http+shadow");
+        let held = INFO.lock().unwrap();
+        let sinks = held
+            .iter()
+            .filter(|(name, _)| name == "distant_signal_ingest_sink_info")
+            .count();
+        assert_eq!(sinks, 1);
     }
 
     #[test]

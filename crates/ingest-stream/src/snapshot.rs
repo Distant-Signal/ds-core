@@ -540,6 +540,14 @@ impl SnapshotStream {
         Ok(())
     }
 
+    /// Counts `rows` the api accepted for this producer's schema
+    /// (`ingest_stream_sink_rows_total{sink="http"}`): call it after a
+    /// successful `POST` under `INGEST_SINK=http+shadow`, so the rollout's
+    /// compare step has the api's side.
+    pub fn record_http(&self, rows: usize) {
+        metrics::sink_rows(self.stream(), self.schema.name(), "http", rows);
+    }
+
     /// Whether the last XADD succeeded (readiness `stream_unavailable` when
     /// false).
     pub fn is_available(&self) -> bool {
