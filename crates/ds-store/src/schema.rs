@@ -336,6 +336,12 @@ mod tests {
             .any(|p| p.table == table && p.privilege == privilege && p.column.is_none())
     }
 
+    fn has_column(role: DbRole, table: &str, privilege: &str, column: &str) -> bool {
+        role.required_privileges()
+            .iter()
+            .any(|p| p.table == table && p.privilege == privilege && p.column == Some(column))
+    }
+
     #[test]
     fn every_role_is_in_db_grants() {
         for role in [
@@ -361,6 +367,10 @@ mod tests {
     /// Spot checks against db-grants.yaml: own grants, each letter, and the
     /// `read_shared` group's SELECT.
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one spot check per role and grant, in a row"
+    )]
     fn privileges_follow_db_grants() {
         // `users: {class: personal, grants: {api: SIUD}}`
         for privilege in ["SELECT", "INSERT", "UPDATE", "DELETE"] {
@@ -411,11 +421,30 @@ mod tests {
         assert!(!has(DbRole::Incidents, "tocs", "SELECT"));
         // Plan 3b (decided 2026-10-08): trust-consumer reads subscriptions
         // and queues the events that change them; the writer applies them.
-        assert!(has(DbRole::TrustConsumer, "train_subscriptions", "SELECT"));
+        // Security review M2/L3 (2026-10-08): column SELECTs only, on the
+        // subscription lookup (id, trains_id); nothing on trains.
+        assert!(!has(DbRole::TrustConsumer, "train_subscriptions", "SELECT"));
+        assert!(has_column(
+            DbRole::TrustConsumer,
+            "train_subscriptions",
+            "SELECT",
+            "trains_id"
+        ));
+        assert!(!has_column(
+            DbRole::TrustConsumer,
+            "train_subscriptions",
+            "SELECT",
+            "user_id"
+        ));
         assert!(!has(DbRole::TrustConsumer, "train_subscriptions", "UPDATE"));
-        assert!(has(DbRole::TrustConsumer, "trains", "SELECT"));
+        assert!(!has(DbRole::TrustConsumer, "trains", "SELECT"));
         assert!(!has(DbRole::TrustConsumer, "trains", "INSERT"));
         assert!(!has(DbRole::TrustConsumer, "trains", "UPDATE"));
+        assert!(!has(
+            DbRole::TrustConsumer,
+            "train_movement_events",
+            "UPDATE"
+        ));
         assert!(has(DbRole::TrustConsumer, "train_event_outbox", "INSERT"));
         assert!(!has(DbRole::TrustConsumer, "train_event_outbox", "DELETE"));
         for privilege in ["SELECT", "UPDATE", "DELETE"] {
@@ -424,7 +453,27 @@ mod tests {
                 "{privilege}"
             );
         }
-        assert!(has(DbRole::Writer, "train_subscriptions", "UPDATE"));
+        // The writer (narrow since M1): only the subscription columns its
+        // loops write; train_subscriptions left read_shared (personal).
+        assert!(!has(DbRole::Writer, "train_subscriptions", "UPDATE"));
+        assert!(!has(DbRole::Writer, "train_subscriptions", "SELECT"));
+        assert!(has_column(
+            DbRole::Writer,
+            "train_subscriptions",
+            "UPDATE",
+            "trains_id"
+        ));
+        assert!(!has_column(
+            DbRole::Writer,
+            "train_subscriptions",
+            "SELECT",
+            "user_id"
+        ));
+        assert!(!has(DbRole::Writer, "train_movement_events", "UPDATE"));
+        assert!(!has(DbRole::Writer, "corpus_crosswalk_build", "DELETE"));
+        // The schedule products its sweeps read, through read_shared.
+        assert!(has(DbRole::Writer, "schedule_line_population", "SELECT"));
+        assert!(has(DbRole::Writer, "schedule_services", "SELECT"));
         // The phase 4 readers (plan 4.7): SELECT on what they read, the
         // views rather than the personal tables behind them.
         assert!(has(

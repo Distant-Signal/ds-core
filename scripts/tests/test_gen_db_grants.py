@@ -49,7 +49,7 @@ class RepoFilesTest(unittest.TestCase):
         self.assertEqual(status, 0, out.getvalue())
 
     def test_phase_0b_creates_observed_members_of_app_and_the_narrow_ones(self) -> None:
-        """Phase 0b/1B: the DB services and the writer; phases 2-4: narrow roles."""
+        """Phase 0b: the DB services; the writer and phases 2-4: narrow roles."""
         model = gen.load()
         status = {r.key: r.status for r in model.created()}
         self.assertEqual(
@@ -59,7 +59,8 @@ class RepoFilesTest(unittest.TestCase):
                 "api": "observed",
                 "enricher": "observed",
                 "notifier": "observed",
-                "writer": "observed",
+                # Security review M1 (2026-10-08): narrow, not an app member.
+                "writer": "narrow",
                 "incidents": "narrow",
                 "schedule_ingest": "narrow",
                 "schedule_reference": "narrow",
@@ -118,6 +119,34 @@ class ParseTest(unittest.TestCase):
             g for g in model.tables["incidents"].grants if g.role == "enricher"
         )
         self.assertEqual(grant.columns, ("extraction", "extracted_at"))
+
+    def test_a_list_gives_different_columns_per_privilege(self) -> None:
+        """`[I, {privileges: S, columns: [...]}]` is two grants."""
+        raw = _raw()
+        raw["tables"]["incidents"]["grants"]["enricher"] = [
+            "I",
+            {"privileges": "S", "columns": ["id"]},
+        ]
+        model = gen.parse(raw)
+        grants = [g for g in model.tables["incidents"].grants if g.role == "enricher"]
+        self.assertEqual(
+            [(g.privileges, g.columns) for g in grants], [("I", ()), ("S", ("id",))]
+        )
+
+    def test_a_privilege_twice_or_a_column_delete_is_refused(self) -> None:
+        """A letter in two entries, or DELETE on columns, is malformed."""
+        raw = _raw()
+        raw["tables"]["incidents"]["grants"]["enricher"] = [
+            "SI",
+            {"privileges": "S", "columns": ["id"]},
+        ]
+        self.assert_refused(raw, "S given twice")
+        raw = _raw()
+        raw["tables"]["incidents"]["grants"]["enricher"] = {
+            "privileges": "D",
+            "columns": ["id"],
+        }
+        self.assert_refused(raw, "DELETE is table-wide")
 
 
 class BudgetTest(unittest.TestCase):
@@ -204,7 +233,10 @@ class RenderTest(unittest.TestCase):
         """
         sql = gen.render(gen.load())
         self.assertIn("('api', 'observed')", sql)
-        for kind in ("api", "aggregator", "enricher", "notifier", "writer"):
+        # Security review M1: no member may SET ROLE to app or a group.
+        self.assertEqual(sql.count("'GRANT %I TO %I WITH INHERIT TRUE, SET FALSE'"), 2)
+        self.assertNotIn("'GRANT %I TO %I'", sql)
+        for kind in ("api", "aggregator", "enricher", "notifier"):
             self.assertNotIn(f"'{kind}', 'SELECT', ''", sql)
         self.assertIn("('stanox_crs', 'schedule_reference', 'DELETE', '')", sql)
         self.assertIn("('schedule_reference', 'narrow')", sql)
@@ -240,10 +272,39 @@ class RenderTest(unittest.TestCase):
                 "train_movement_events",
             ],
         )
-        self.assertEqual(
-            tables("trust_consumer", "UPDATE"),
-            ["train_current_state", "train_movement_events"],
-        )
+        self.assertEqual(tables("trust_consumer", "UPDATE"), ["train_current_state"])
+        # Security review L3/M2: no table-wide SELECT on trains, the
+        # movements or the forward queue; column SELECTs on the conflict
+        # targets and the subscription lookup only.
+        for table in ("trains", "train_movement_events", "notifier_forward_queue"):
+            self.assertNotIn(table, tables("trust_consumer", "SELECT"))
+        for table, kind, privilege, columns in (
+            (
+                "train_movement_events",
+                "trust_consumer",
+                "SELECT",
+                "trains_id,dedup_key",
+            ),
+            ("notifier_forward_queue", "trust_consumer", "SELECT", "dedup_key"),
+            ("train_subscriptions", "trust_consumer", "SELECT", "id,trains_id"),
+            (
+                "train_subscriptions",
+                "trust_backlog",
+                "UPDATE",
+                "resolution_status,unresolved_from",
+            ),
+            ("schedule_feed_ingests", "schedule_ingest", "SELECT", "delivered_at"),
+        ):
+            self.assertIn(f"('{table}', '{kind}', '{privilege}', '{columns}')", sql)
+        self.assertNotIn("train_movement_events", tables("trust_backlog", "UPDATE"))
+        self.assertNotIn("train_subscriptions", tables("trust_backlog", "UPDATE"))
+        # The writer (M1, L3): narrow, without the unused grants.
+        self.assertIn("('writer', 'narrow')", sql)
+        for table in ("train_movement_events", "trust_event_backlog"):
+            self.assertNotIn(table, tables("writer", "UPDATE"))
+        self.assertNotIn("corpus_crosswalk_build", tables("writer", "DELETE"))
+        # train_subscriptions is personal: no longer in read_shared.
+        self.assertNotIn("('train_subscriptions')", sql)
         self.assertEqual(
             tables("trust_backlog", "INSERT"),
             [

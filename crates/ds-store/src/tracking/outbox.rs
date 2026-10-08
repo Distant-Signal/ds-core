@@ -161,6 +161,29 @@ where
     Ok(outcome)
 }
 
+/// How [`apply_train_event_outbox_with`] treats rows it cannot apply
+/// (security review L1, 2026-10-08).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutboxPolicy {
+    /// A row whose apply fails with an error that is not a data error (a
+    /// lock or statement timeout, a serialization failure, ...) on this
+    /// many ticks is marked rejected, so it cannot hold up the rows behind
+    /// it forever (`INGEST_WRITER_OUTBOX_MAX_ATTEMPTS`). At least 1.
+    pub max_attempts: u32,
+    /// Rejected rows are deleted this long after they were rejected
+    /// (`INGEST_WRITER_OUTBOX_REJECTED_RETENTION_DAYS`).
+    pub rejected_retention: std::time::Duration,
+}
+
+impl Default for OutboxPolicy {
+    fn default() -> Self {
+        Self {
+            max_attempts: 5,
+            rejected_retention: std::time::Duration::from_secs(14 * 24 * 3600),
+        }
+    }
+}
+
 /// What one [`apply_train_event_outbox`] call did.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct OutboxTick {
@@ -169,35 +192,176 @@ pub struct OutboxTick {
     /// Rows refused for a data error, left in the table with
     /// `rejected_at` and `rejection`.
     pub rejected: Vec<RejectedTrustBacklogRow>,
+    /// Rows rejected without being applied: their `tracked_train_id`
+    /// column is not their event's (the `trust_consumer` role wrote a row
+    /// for another subscription), or they failed `max_attempts` times.
+    pub rejected_other: u64,
+    /// Rejected rows deleted after `rejected_retention`.
+    pub pruned: u64,
+}
+
+impl OutboxTick {
+    /// Every row this tick rejected.
+    pub fn rejected_count(&self) -> u64 {
+        u64::try_from(self.rejected.len())
+            .unwrap_or(u64::MAX)
+            .saturating_add(self.rejected_other)
+    }
+}
+
+/// Registers `store_train_event_outbox_total` for both outcomes at 0, so
+/// `increase()` sees the first rejection (the writer calls it at startup).
+pub fn register_metrics() {
+    for outcome in ["applied", "rejected"] {
+        metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => outcome)
+            .increment(0);
+    }
 }
 
 #[derive(sqlx::FromRow)]
 struct OutboxRow {
     id: i64,
+    tracked_train_id: i64,
+    attempts: i32,
     event: sqlx::types::Json<TrainMovementEventMessage>,
     forward_signal: Option<sqlx::types::Json<TrainForwardSignalMessage>>,
+}
+
+/// Marks outbox row `id` rejected with `rejection`.
+async fn reject_row(conn: &mut PgConnection, id: i64, rejection: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE train_event_outbox SET rejected_at = now(), rejection = $2 WHERE id = $1")
+        .bind(id)
+        .bind(rejection)
+        .execute(conn)
+        .await
+        .map(|_| ())
+}
+
+/// What [`row_failed`] did with a row whose apply failed.
+enum RowFailure {
+    /// A data error: rejected.
+    DataError(RejectedTrustBacklogRow),
+    /// Another error, on the row's last allowed attempt: rejected.
+    GaveUp,
+    /// Another error, attempt counted: the tick stops here.
+    Retry(anyhow::Error),
+}
+
+/// Handles outbox row `id`'s failed apply (its savepoint already rolled
+/// back): a data error rejects it; any other error counts an attempt and,
+/// at `policy.max_attempts`, rejects it too.
+async fn row_failed(
+    tx: &mut PgConnection,
+    id: i64,
+    attempts: i32,
+    event: &TrainMovementEventMessage,
+    err: anyhow::Error,
+    policy: &OutboxPolicy,
+) -> anyhow::Result<RowFailure> {
+    if let Some(data_error) = crate::backlog::classify_anyhow_data_error(&err) {
+        let rejected = data_error
+            .into_rejected_row(usize::try_from(id).unwrap_or(usize::MAX), &event.dedup_key);
+        tracing::error!(
+            outbox_id = id,
+            tracked_train_id = event.tracked_train_id,
+            dedup_key = %event.dedup_key,
+            sqlstate = %rejected.sqlstate,
+            message = %rejected.message,
+            event = ?event,
+            "train-event outbox row refused for a data error; left in the table"
+        );
+        let rejection = format!(
+            "{} {} (constraint {}): {}",
+            rejected.sqlstate,
+            rejected.reason,
+            rejected.constraint.as_deref().unwrap_or("-"),
+            rejected.message
+        );
+        reject_row(tx, id, &rejection).await?;
+        return Ok(RowFailure::DataError(rejected));
+    }
+    let attempts = attempts.saturating_add(1);
+    sqlx::query("UPDATE train_event_outbox SET attempts = $2 WHERE id = $1")
+        .bind(id)
+        .bind(attempts)
+        .execute(&mut *tx)
+        .await?;
+    if u32::try_from(attempts).unwrap_or(u32::MAX) >= policy.max_attempts.max(1) {
+        tracing::error!(
+            outbox_id = id,
+            tracked_train_id = event.tracked_train_id,
+            dedup_key = %event.dedup_key,
+            attempts,
+            error = ?err,
+            "train-event outbox row failed on every attempt; rejected"
+        );
+        reject_row(tx, id, &format!("failed {attempts} times: {err:#}")).await?;
+        return Ok(RowFailure::GaveUp);
+    }
+    Ok(RowFailure::Retry(err.context(format!(
+        "train-event outbox row {id} failed (attempt {attempts} of {})",
+        policy.max_attempts
+    ))))
+}
+
+/// [`apply_train_event_outbox_with`] with the default [`OutboxPolicy`].
+pub async fn apply_train_event_outbox(pool: &PgPool) -> anyhow::Result<OutboxTick> {
+    apply_train_event_outbox_with(pool, &OutboxPolicy::default()).await
 }
 
 /// The ingest-writer's `train_event_outbox` loop body: up to [`APPLY_BATCH`]
 /// pending rows, oldest first, in one transaction. Each row runs
 /// [`upsert_train_event_on`] (and queues its forward signal) behind its own
-/// savepoint, then is deleted. A data error (SQLSTATE class 22/23) rolls
-/// back exactly that row's writes and marks it rejected; any other error
-/// rolls the whole call back, to be retried next tick. Re-applying an event
-/// is harmless (every write is idempotent), so a redelivered entry that
-/// lands here again after its first row was applied changes nothing.
-pub async fn apply_train_event_outbox(pool: &PgPool) -> anyhow::Result<OutboxTick> {
+/// savepoint, then is deleted. Re-applying an event is harmless (every write
+/// is idempotent), so a redelivered entry that lands here again after its
+/// first row was applied changes nothing.
+///
+/// A row is marked rejected (`rejected_at`, `rejection`; left in the
+/// table, `store_train_event_outbox_total{outcome="rejected"}`) when:
+///
+/// - its `tracked_train_id` column differs from its event's: the row would
+///   apply to a subscription other than the one it is filed under (and
+///   ordered behind), so it is refused unapplied;
+/// - its apply fails with a data error (SQLSTATE class 22/23): exactly that
+///   row's writes roll back;
+/// - its apply fails with any other error for the `max_attempts`-th time.
+///   Before that, the failure is counted on the row (`attempts`), the rows
+///   applied before it commit, and the call returns the error: the rest
+///   wait for the next tick.
+///
+/// Rejected rows older than `rejected_retention` are then deleted.
+pub async fn apply_train_event_outbox_with(
+    pool: &PgPool,
+    policy: &OutboxPolicy,
+) -> anyhow::Result<OutboxTick> {
     let mut tick = OutboxTick::default();
     let mut tx = pool.begin().await?;
     let rows: Vec<OutboxRow> = sqlx::query_as(
-        "SELECT id, event, forward_signal FROM train_event_outbox \
+        "SELECT id, tracked_train_id, attempts, event, forward_signal FROM train_event_outbox \
          WHERE rejected_at IS NULL ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED",
     )
     .bind(APPLY_BATCH)
     .fetch_all(&mut *tx)
     .await?;
+    let mut failed = None;
     for row in rows {
         let event = row.event.0;
+        if row.tracked_train_id != event.tracked_train_id {
+            let rejection = format!(
+                "tracked_train_id mismatch: the row's {} but its event's {}",
+                row.tracked_train_id, event.tracked_train_id
+            );
+            tracing::error!(
+                outbox_id = row.id,
+                row_tracked_train_id = row.tracked_train_id,
+                event_tracked_train_id = event.tracked_train_id,
+                dedup_key = %event.dedup_key,
+                "train-event outbox row's subscription is not its event's; rejected unapplied"
+            );
+            reject_row(&mut tx, row.id, &rejection).await?;
+            tick.rejected_other += 1;
+            continue;
+        }
         let mut savepoint = Connection::begin(&mut *tx).await?;
         let applied = async {
             upsert_train_event_on(&mut savepoint, &event).await?;
@@ -218,37 +382,17 @@ pub async fn apply_train_event_outbox(pool: &PgPool) -> anyhow::Result<OutboxTic
                 tick.applied += 1;
             }
             Err(err) => {
-                let Some(data_error) = crate::backlog::classify_anyhow_data_error(&err) else {
-                    return Err(err);
-                };
+                // If the savepoint cannot even roll back, the connection is
+                // gone: nothing row-specific, so the whole tick is retried.
                 savepoint.rollback().await?;
-                let rejected = data_error.into_rejected_row(
-                    usize::try_from(row.id).unwrap_or(usize::MAX),
-                    &event.dedup_key,
-                );
-                tracing::error!(
-                    outbox_id = row.id,
-                    tracked_train_id = event.tracked_train_id,
-                    dedup_key = %event.dedup_key,
-                    sqlstate = %rejected.sqlstate,
-                    message = %rejected.message,
-                    event = ?event,
-                    "train-event outbox row refused for a data error; left in the table"
-                );
-                sqlx::query(
-                    "UPDATE train_event_outbox SET rejected_at = now(), rejection = $2 WHERE id = $1",
-                )
-                .bind(row.id)
-                .bind(format!(
-                    "{} {} (constraint {}): {}",
-                    rejected.sqlstate,
-                    rejected.reason,
-                    rejected.constraint.as_deref().unwrap_or("-"),
-                    rejected.message
-                ))
-                .execute(&mut *tx)
-                .await?;
-                tick.rejected.push(rejected);
+                match row_failed(&mut tx, row.id, row.attempts, &event, err, policy).await? {
+                    RowFailure::DataError(rejected) => tick.rejected.push(rejected),
+                    RowFailure::GaveUp => tick.rejected_other += 1,
+                    RowFailure::Retry(err) => {
+                        failed = Some(err);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -256,7 +400,19 @@ pub async fn apply_train_event_outbox(pool: &PgPool) -> anyhow::Result<OutboxTic
     metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => "applied")
         .increment(tick.applied);
     metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => "rejected")
-        .increment(tick.rejected.len() as u64);
+        .increment(tick.rejected_count());
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    let retention_secs = policy.rejected_retention.as_secs_f64();
+    tick.pruned = sqlx::query(
+        "DELETE FROM train_event_outbox \
+         WHERE rejected_at < now() - make_interval(secs => $1)",
+    )
+    .bind(retention_secs)
+    .execute(pool)
+    .await?
+    .rows_affected();
     let oldest: Option<f64> = sqlx::query_scalar(
         "SELECT EXTRACT(EPOCH FROM min(created_at))::float8 FROM train_event_outbox \
          WHERE rejected_at IS NULL",
@@ -287,5 +443,200 @@ mod tests {
             msg_type: "0005".to_string(),
             ..event
         }));
+    }
+
+    /// Security review L1: both outcomes exist at 0 from startup.
+    #[test]
+    fn register_metrics_exports_both_outcomes_at_zero() {
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        metrics::with_local_recorder(&recorder, register_metrics);
+        let text = handle.render();
+        for outcome in ["applied", "rejected"] {
+            let line = format!(
+                "{}{{outcome=\"{outcome}\"}} 0",
+                common::metrics::metric_name(OUTBOX_METRIC)
+            );
+            assert!(text.contains(&line), "{line} not in {text}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod db_tests {
+    //! Security review L1 (2026-10-08), against a live database
+    //! (`DATABASE_URL`, `--ignored`). Each test files rows under its own
+    //! fixture user's subscriptions and deletes them.
+    use super::*;
+    use crate::test_support::{
+        cleanup_user, connect, fixture_event, seed_tracked_train, seed_user,
+    };
+
+    fn user() -> String {
+        format!("outbox-l1-{}", uuid_like())
+    }
+
+    fn uuid_like() -> String {
+        use std::hash::{BuildHasher, Hasher};
+        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+        hasher.write_u128(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        );
+        format!("{:012x}", hasher.finish() & 0xffff_ffff_ffff)
+    }
+
+    async fn file(
+        pool: &PgPool,
+        row_tracked_train_id: i64,
+        event: &TrainMovementEventMessage,
+    ) -> i64 {
+        sqlx::query_scalar(
+            "INSERT INTO train_event_outbox (tracked_train_id, dedup_key, event) \
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(row_tracked_train_id)
+        .bind(&event.dedup_key)
+        .bind(sqlx::types::Json(event))
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn state(pool: &PgPool, id: i64) -> Option<(i32, Option<String>)> {
+        sqlx::query_as("SELECT attempts, rejection FROM train_event_outbox WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn delete_rows(pool: &PgPool, ids: &[i64]) {
+        sqlx::query("DELETE FROM train_event_outbox WHERE id = ANY($1)")
+            .bind(ids)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    /// A row filed under one subscription whose event names another is
+    /// rejected unapplied; the rows behind it still apply.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn a_row_whose_event_names_another_subscription_is_rejected() {
+        let pool = connect().await;
+        let user = user();
+        seed_user(&pool, &user).await;
+        let mine = seed_tracked_train(&pool, &user).await;
+        let other = seed_tracked_train(&pool, &user).await;
+        let forged = file(&pool, mine, &fixture_event(other, &format!("{user}-a"))).await;
+        let honest = file(&pool, mine, &fixture_event(mine, &format!("{user}-b"))).await;
+
+        let tick = apply_train_event_outbox(&pool).await.unwrap();
+        assert!(tick.rejected_other >= 1, "{tick:?}");
+        let (_, rejection) = state(&pool, forged).await.expect("left in the table");
+        assert!(
+            rejection
+                .as_deref()
+                .is_some_and(|r| r.contains("tracked_train_id mismatch")),
+            "{rejection:?}"
+        );
+        assert_eq!(state(&pool, honest).await, None, "applied and deleted");
+
+        delete_rows(&pool, &[forged]).await;
+        cleanup_user(&pool, &user).await;
+    }
+
+    /// A row that fails with an error that is not a data error (here a lock
+    /// timeout on its subscription) counts an attempt and holds the rows
+    /// behind it for that tick only; at `max_attempts` it is rejected and
+    /// they apply. Rejected rows past the retention are pruned.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn a_row_failing_every_tick_is_rejected_after_max_attempts() {
+        let pool = connect().await;
+        let user = user();
+        seed_user(&pool, &user).await;
+        let stuck_sub = seed_tracked_train(&pool, &user).await;
+        let next_sub = seed_tracked_train(&pool, &user).await;
+        let resolution = TrainMovementEventMessage {
+            resolved_train_id: Some("1A23".to_string()),
+            ..fixture_event(stuck_sub, &format!("{user}-stuck"))
+        };
+        let stuck = file(&pool, stuck_sub, &resolution).await;
+        let next = file(
+            &pool,
+            next_sub,
+            &fixture_event(next_sub, &format!("{user}-next")),
+        )
+        .await;
+
+        // Hold the subscription's row lock; the applier gives up after 200 ms.
+        let mut holder = pool.begin().await.unwrap();
+        sqlx::query("SELECT 1 FROM train_subscriptions WHERE id = $1 FOR UPDATE")
+            .bind(stuck_sub)
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+        let impatient = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .after_connect(|conn, _| {
+                Box::pin(async move {
+                    sqlx::query("SET lock_timeout = '200ms'")
+                        .execute(conn)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect(&std::env::var("DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+        let policy = OutboxPolicy {
+            max_attempts: 2,
+            ..OutboxPolicy::default()
+        };
+
+        let first = apply_train_event_outbox_with(&impatient, &policy).await;
+        assert!(first.is_err(), "{first:?}");
+        assert_eq!(state(&pool, stuck).await, Some((1, None)));
+        assert!(
+            state(&pool, next).await.is_some(),
+            "held behind it this tick"
+        );
+
+        let second = apply_train_event_outbox_with(&impatient, &policy)
+            .await
+            .unwrap();
+        assert!(second.rejected_other >= 1, "{second:?}");
+        let (attempts, rejection) = state(&pool, stuck).await.expect("left in the table");
+        assert_eq!(attempts, 2);
+        assert!(
+            rejection
+                .as_deref()
+                .is_some_and(|r| r.starts_with("failed 2 times")),
+            "{rejection:?}"
+        );
+        assert_eq!(
+            state(&pool, next).await,
+            None,
+            "applied once the stuck row was rejected"
+        );
+        holder.rollback().await.unwrap();
+
+        // Pruned once older than the retention.
+        sqlx::query(
+            "UPDATE train_event_outbox SET rejected_at = now() - interval '15 days' WHERE id = $1",
+        )
+        .bind(stuck)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let third = apply_train_event_outbox(&pool).await.unwrap();
+        assert!(third.pruned >= 1, "{third:?}");
+        assert_eq!(state(&pool, stuck).await, None);
+
+        cleanup_user(&pool, &user).await;
     }
 }

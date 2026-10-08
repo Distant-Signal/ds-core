@@ -173,29 +173,45 @@ def _privileges(value: str, where: str) -> str:
     return "".join(c for c in "SIUD" if c in value)
 
 
+def _grant(role: str, spec: object, where: str) -> Grant:
+    """One grant: "SIUD" letters, or {privileges: ..., columns: [...]}."""
+    if isinstance(spec, str):
+        return Grant(role, _privileges(spec, where))
+    body = _mapping(spec, where)
+    privileges = _privileges(_str(body.get("privileges"), f"{where}.privileges"), where)
+    columns_raw = body.get("columns", [])
+    if not isinstance(columns_raw, list) or not columns_raw:
+        msg = f"{where}.columns: expected a non-empty list"
+        raise GrantsError(msg)
+    columns = tuple(
+        _str(c, f"{where}.columns") for c in cast("list[object]", columns_raw)
+    )
+    if "D" in privileges:
+        msg = f"{where}: DELETE is table-wide; give it in its own entry without columns"
+        raise GrantsError(msg)
+    return Grant(role, privileges, columns)
+
+
 def _grants(value: object, where: str, roles: Mapping[str, Role]) -> tuple[Grant, ...]:
+    """Each role's grants: one spec, or a list of them (different columns)."""
     grants: list[Grant] = []
     for role, spec in _mapping(value, where).items():
         if role not in roles:
             msg = f"{where}: unknown role {role!r}"
             raise GrantsError(msg)
-        if isinstance(spec, str):
-            grants.append(Grant(role, _privileges(spec, f"{where}.{role}")))
-            continue
-        body = _mapping(spec, f"{where}.{role}")
-        privileges = _privileges(
-            _str(body.get("privileges"), f"{where}.{role}.privileges"),
-            f"{where}.{role}",
-        )
-        columns_raw = body.get("columns", [])
-        if not isinstance(columns_raw, list) or not columns_raw:
-            msg = f"{where}.{role}.columns: expected a non-empty list"
+        specs = cast("list[object]", spec) if isinstance(spec, list) else [spec]
+        if not specs:
+            msg = f"{where}.{role}: expected privileges"
             raise GrantsError(msg)
-        columns = tuple(
-            _str(c, f"{where}.{role}.columns")
-            for c in cast("list[object]", columns_raw)
-        )
-        grants.append(Grant(role, privileges, columns))
+        seen = ""
+        for index, item in enumerate(specs):
+            grant = _grant(role, item, f"{where}.{role}[{index}]")
+            twice = set(seen) & set(grant.privileges)
+            if twice:
+                msg = f"{where}.{role}: {''.join(sorted(twice))} given twice"
+                raise GrantsError(msg)
+            seen += grant.privileges
+            grants.append(grant)
     return tuple(grants)
 
 

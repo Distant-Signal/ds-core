@@ -890,7 +890,9 @@ async fn shutdown_while_down_gives_up_after_the_grace_period() {
 
 const TEMPLATE: &str = "../../charts/distant-signal/files/redis-users.acl.tpl";
 
-/// The template's rules for `user`, with `prefix` before every key pattern.
+/// The template's rules for `user`, with `prefix` before every key pattern,
+/// as ACL SETUSER arguments (a parenthesised selector is one argument, as
+/// in `crates/common/tests/redis_acl.rs`).
 fn acl_rules(user: &str, prefix: &str) -> Vec<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEMPLATE);
     let text = std::fs::read_to_string(&path).unwrap();
@@ -898,18 +900,26 @@ fn acl_rules(user: &str, prefix: &str) -> Vec<String> {
         .lines()
         .find(|l| l.split_whitespace().next() == Some(user))
         .unwrap_or_else(|| panic!("{user} not in {}", path.display()));
-    let mut parts = line.split_whitespace().skip(2);
     let mut rules = Vec::new();
-    for token in parts.by_ref() {
-        assert!(
-            !token.starts_with('('),
-            "selectors are not handled here: {line}"
-        );
-        rules.push(match token.find('~') {
+    let mut selector: Option<String> = None;
+    for token in line.split_whitespace().skip(2) {
+        let token = match token.find('~') {
             Some(at) => format!("{}{prefix}{}", &token[..=at], &token[at + 1..]),
             None => token.to_owned(),
-        });
+        };
+        match selector.as_mut() {
+            Some(open) => {
+                open.push(' ');
+                open.push_str(&token);
+                if token.ends_with(')') {
+                    rules.push(selector.take().unwrap());
+                }
+            }
+            None if token.starts_with('(') && !token.ends_with(')') => selector = Some(token),
+            None => rules.push(token),
+        }
     }
+    assert!(selector.is_none(), "unclosed selector in {line}");
     rules
 }
 
@@ -1077,7 +1087,7 @@ async fn snapshot_streams_publish_under_the_pollers_acl_users() {
     for (user, domain, schema) in [
         ("poller-tfl", "tfl", "tfl-line-status"),
         ("poller-tocs", "reference", "tocs"),
-        ("poller-nir-stations", "island-of-ireland", "ioi-stations"),
+        ("poller-nir-stations", "ioi-nir", "ioi-stations"),
     ] {
         let stream = scope.stream(domain);
         let url = scope.acl_user(user);
@@ -1103,20 +1113,21 @@ async fn snapshot_streams_publish_under_the_pollers_acl_users() {
         assert!(sink.shutdown(Duration::from_secs(2)).await);
     }
 
-    // The shared island-of-Ireland stream: another poller's newer entries
-    // (more than a page of them) do not count as this schema's cursor.
+    // A stream carrying two schemas (poller-irish-rail-gtfs' stations and
+    // lines): the other schema's newer entries (more than a page of them)
+    // do not count as this schema's cursor.
     let mut scope = Scope::new();
-    let stream = scope.stream("island-of-ireland");
+    let stream = scope.stream("ioi-gtfs");
     let stations_at = chrono::DateTime::from_timestamp_millis(
         (Utc::now() - chrono::TimeDelta::hours(1)).timestamp_millis(),
     )
     .unwrap();
-    let url = scope.acl_user("poller-irish-rail-live");
+    let url = scope.acl_user("poller-irish-rail-gtfs");
     let samples = SnapshotStream::spawn(
         redis::Client::open(url.as_str()).unwrap(),
         &stream,
-        SchemaId::new("ioi-station-samples", 1).unwrap(),
-        "poller-irish-rail-live",
+        SchemaId::new("ioi-lines", 1).unwrap(),
+        "poller-irish-rail-gtfs",
         100,
     );
     let stations = SnapshotStream::spawn(

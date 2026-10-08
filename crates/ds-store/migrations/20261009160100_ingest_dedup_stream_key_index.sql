@@ -1,0 +1,22 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- ingest_dedup keyed by (stream, key) (security review L2, 2026-10-08): the
+-- ingest-writer's claim (`ingest_writer::dedup::claim`) becomes
+-- `ON CONFLICT (stream, key) DO NOTHING`, so an idempotency key is scoped
+-- to the stream it arrived on, and one stream's producer cannot claim (and
+-- so suppress) another stream's entry by sending the same key.
+--
+-- Expand-only: the old primary key on (key) stays until a contract step
+-- (drop it and make this the primary key). Until then a key already
+-- claimed on another stream still raises a unique violation on the old key,
+-- which the writer dead-letters as a data error rather than acking it as a
+-- duplicate; every producer's key starts with its schema name and a
+-- millisecond timestamp, so only a forged entry collides.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index that IF NOT EXISTS would then skip; recovery
+-- is `DROP INDEX CONCURRENTLY ingest_dedup_stream_key;` and a restart.
+-- -------------------------------------------------------------------------
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS ingest_dedup_stream_key
+    ON ingest_dedup (stream, key);

@@ -193,6 +193,20 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             "-c",
             f'GRANT CREATE ON DATABASE "{database}" TO "{names["owner"]}"',
         )
+        # Test-only, likewise: two DB tests build TEMP tables (ds-store's
+        # schema gate test, as the app or api role; ingest-writer's
+        # stream_apply, as the app or writer role). postgres-roles.sql
+        # revokes TEMPORARY from PUBLIC (security review L5); no service
+        # uses temporary tables at runtime.
+        temp_roles = [names["app"]] + [
+            service_names[k] for k in ("api", "writer") if k in service_names
+        ]
+        psql(
+            admin_url,
+            "-c",
+            f'GRANT TEMPORARY ON DATABASE "{database}" TO '
+            + ", ".join(f'"{role}"' for role in temp_roles),
+        )
         test_env = dict(os.environ)
         test_env["DATABASE_URL"] = app_url
         test_env["MIGRATION_DATABASE_URL"] = owner_url

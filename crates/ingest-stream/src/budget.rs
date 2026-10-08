@@ -105,7 +105,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 5] = [
+pub const INGEST_STREAMS: [StreamDecl; 7] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -136,13 +136,27 @@ pub const INGEST_STREAMS: [StreamDecl; 5] = [
         entry_bytes: 3 * KIB,
         bound: Bound::Covers(Duration::from_secs(30 * 24 * 3600)),
     },
-    // The three island-of-Ireland pollers (disabled): live every 5 minutes
-    // plus the slower GTFS and NIR stations pollers; sized when enabled.
+    // The three island-of-Ireland pollers (disabled), one stream each:
+    // live every 5 minutes, the GTFS and NIR stations pollers two snapshots
+    // (stations, lines) a cycle, daily by default (sized for hourly).
+    // Together the 2,000 entries the shared stream had.
     StreamDecl {
-        stream: crate::streams::ISLAND_OF_IRELAND,
-        entries_per_day: 12 * 24 + 2 * 24,
+        stream: crate::streams::IOI_GTFS,
+        entries_per_day: 2 * 24,
         entry_bytes: 16 * KIB,
-        bound: Bound::Fixed(2000),
+        bound: Bound::Fixed(500),
+    },
+    StreamDecl {
+        stream: crate::streams::IOI_NIR,
+        entries_per_day: 2 * 24,
+        entry_bytes: 16 * KIB,
+        bound: Bound::Fixed(500),
+    },
+    StreamDecl {
+        stream: crate::streams::IOI_LIVE,
+        entries_per_day: 12 * 24,
+        entry_bytes: 16 * KIB,
+        bound: Bound::Fixed(1000),
     },
 ];
 
@@ -261,7 +275,9 @@ mod tests {
                 ("ds:ingest:full-coverage", 360),
                 ("ds:ingest:tfl", 288),
                 ("ds:ingest:reference", 30),
-                ("ds:ingest:island-of-ireland", 2000),
+                ("ds:ingest:ioi-gtfs", 500),
+                ("ds:ingest:ioi-nir", 500),
+                ("ds:ingest:ioi-live", 1000),
             ]
         );
         let station = &report.streams[0];
@@ -270,7 +286,7 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 285 MB in all: under the 75% alert line (384 MiB), let alone 512.
+        // About 292 MB in all: under the 75% alert line (384 MiB), let alone 512.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
         assert_eq!(report.alert_bytes, 384 * 1024 * 1024);
         assert!(report.total_bytes > 250_000_000, "{report:#?}");

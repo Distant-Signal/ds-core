@@ -45,8 +45,15 @@ pub mod streams {
     pub const TFL: &str = "ds:ingest:tfl";
     /// tocs (`tocs/1`).
     pub const REFERENCE: &str = "ds:ingest:reference";
-    /// The three island-of-Ireland pollers (disabled).
-    pub const ISLAND_OF_IRELAND: &str = "ds:ingest:island-of-ireland";
+    /// The island-of-Ireland pollers (disabled), one stream each, so each
+    /// poller's ACL user can produce only its own schemas (2026-10-08
+    /// security review, H1; they shared `ds:ingest:island-of-ireland`).
+    /// poller-irish-rail-gtfs: `ioi-stations/1`, `ioi-lines/1`.
+    pub const IOI_GTFS: &str = "ds:ingest:ioi-gtfs";
+    /// poller-nir-stations: `ioi-stations/1`, `ioi-lines/1`.
+    pub const IOI_NIR: &str = "ds:ingest:ioi-nir";
+    /// poller-irish-rail-live: `ioi-station-samples/1`.
+    pub const IOI_LIVE: &str = "ds:ingest:ioi-live";
 }
 
 /// The dead-letter stream of `stream`: `ds:ingest:<domain>` →

@@ -217,17 +217,21 @@ pub const TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL: Duration = Duration::from_secs(5)
 /// [`crate::tracking::outbox`]). Writer only: the outbox fills only under
 /// `trustConsumer.ingest.sink: db`, which the chart allows only with the
 /// writer's loops on.
-pub fn train_event_outbox(interval: Duration) -> LoopSpec {
+pub fn train_event_outbox(
+    interval: Duration,
+    policy: crate::tracking::outbox::OutboxPolicy,
+) -> LoopSpec {
     LoopSpec::new(
         advisory_locks::TRAIN_EVENT_OUTBOX,
         interval,
-        |pool| async move {
-            match crate::tracking::outbox::apply_train_event_outbox(&pool).await {
+        move |pool| async move {
+            match crate::tracking::outbox::apply_train_event_outbox_with(&pool, &policy).await {
                 Ok(tick) => {
-                    if tick.applied > 0 || !tick.rejected.is_empty() {
+                    if tick.applied > 0 || tick.rejected_count() > 0 || tick.pruned > 0 {
                         tracing::info!(
                             applied = tick.applied,
-                            rejected = tick.rejected.len(),
+                            rejected = tick.rejected_count(),
+                            pruned = tick.pruned,
                             "applied deferred train events"
                         );
                     }
@@ -301,7 +305,10 @@ mod tests {
         let comparing = corpus_crosswalk_comparing(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
         assert_eq!(comparing.lock, advisory_locks::CORPUS_CROSSWALK);
         assert_eq!(comparing.interval, Duration::from_secs(600));
-        let outbox = train_event_outbox(TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL);
+        let outbox = train_event_outbox(
+            TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL,
+            crate::tracking::outbox::OutboxPolicy::default(),
+        );
         assert_eq!(outbox.lock, advisory_locks::TRAIN_EVENT_OUTBOX);
         assert_eq!(outbox.interval, Duration::from_secs(5));
     }

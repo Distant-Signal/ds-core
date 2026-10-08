@@ -203,49 +203,73 @@ fn table_privileges(
         None => return Ok(class),
     };
     for (role, spec) in grants {
-        let (letters, columns) = match spec {
-            Flow::Scalar(letters) => (letters.clone(), Vec::new()),
-            Flow::Map(body) => {
-                let letters = match body.iter().find(|(k, _)| k == "privileges") {
-                    Some((_, Flow::Scalar(letters))) => letters.clone(),
-                    _ => return Err(format!("{role}: expected `privileges: <letters>`")),
-                };
-                let columns = match body.iter().find(|(k, _)| k == "columns") {
-                    Some((_, Flow::List(columns))) => columns
-                        .iter()
-                        .map(|c| match c {
-                            Flow::Scalar(c) => Ok(c.clone()),
-                            _ => Err(format!("{role}.columns: expected names")),
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                    _ => return Err(format!("{role}: expected `columns: [...]`")),
-                };
-                (letters, columns)
-            }
-            Flow::List(_) => return Err(format!("{role}: expected privileges")),
+        // One spec, or a list of them (each with its own columns).
+        let specs: Vec<&Flow> = match spec {
+            Flow::List(items) => items.iter().collect(),
+            other => vec![other],
         };
-        let entry = roles
-            .get_mut(role)
-            .ok_or_else(|| format!("unknown role {role}"))?;
-        for letter in letters.chars() {
-            let privilege = match letter {
-                'S' => "SELECT",
-                'I' => "INSERT",
-                'U' => "UPDATE",
-                'D' => "DELETE",
-                _ => return Err(format!("{role}: unknown privilege {letter:?}")),
-            };
-            // DELETE is table-level only; Postgres has no column DELETE.
-            if columns.is_empty() || privilege == "DELETE" {
-                entry.insert((table.to_owned(), privilege, None));
-            } else {
-                for column in &columns {
-                    entry.insert((table.to_owned(), privilege, Some(column.clone())));
-                }
-            }
+        for spec in specs {
+            let (letters, columns) = grant_spec(role, spec)?;
+            add_privileges(roles, role, table, &letters, &columns)?;
         }
     }
     Ok(class)
+}
+
+/// One grant spec: `SIUD` letters, or `{privileges: ..., columns: [...]}`.
+fn grant_spec(role: &str, spec: &Flow) -> Result<(String, Vec<String>), String> {
+    match spec {
+        Flow::Scalar(letters) => Ok((letters.clone(), Vec::new())),
+        Flow::Map(body) => {
+            let letters = match body.iter().find(|(k, _)| k == "privileges") {
+                Some((_, Flow::Scalar(letters))) => letters.clone(),
+                _ => return Err(format!("{role}: expected `privileges: <letters>`")),
+            };
+            let columns = match body.iter().find(|(k, _)| k == "columns") {
+                Some((_, Flow::List(columns))) => columns
+                    .iter()
+                    .map(|c| match c {
+                        Flow::Scalar(c) => Ok(c.clone()),
+                        _ => Err(format!("{role}.columns: expected names")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                _ => return Err(format!("{role}: expected `columns: [...]`")),
+            };
+            Ok((letters, columns))
+        }
+        Flow::List(_) => Err(format!("{role}: expected privileges")),
+    }
+}
+
+/// Adds `role`'s `letters` on `table` (on each of `columns`, if any).
+fn add_privileges(
+    roles: &mut BTreeMap<String, BTreeSet<Privilege>>,
+    role: &str,
+    table: &str,
+    letters: &str,
+    columns: &[String],
+) -> Result<(), String> {
+    let entry = roles
+        .get_mut(role)
+        .ok_or_else(|| format!("unknown role {role}"))?;
+    for letter in letters.chars() {
+        let privilege = match letter {
+            'S' => "SELECT",
+            'I' => "INSERT",
+            'U' => "UPDATE",
+            'D' => "DELETE",
+            _ => return Err(format!("{role}: unknown privilege {letter:?}")),
+        };
+        // DELETE is table-level only; Postgres has no column DELETE.
+        if columns.is_empty() || privilege == "DELETE" {
+            entry.insert((table.to_owned(), privilege, None));
+        } else {
+            for column in columns {
+                entry.insert((table.to_owned(), privilege, Some(column.clone())));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Drops a trailing ` # comment` (the file's scalars never contain `#`).

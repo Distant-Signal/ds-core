@@ -17,8 +17,9 @@
 --   1. the group roles (NOLOGIN) and every role whose status is not
 --      `planned` (LOGIN, NOSUPERUSER, ..., CONNECTION LIMIT, password);
 --   2. memberships: `observed` roles join the app role (they inherit all of
---      its privileges and have none of their own); `narrow` roles leave it;
---      each role joins its groups;
+--      its privileges and have none of their own, but may not SET ROLE to
+--      it: WITH INHERIT TRUE, SET FALSE, Postgres 16+); `narrow` roles leave it;
+--      each role joins its groups (also SET FALSE);
 --   3. CONNECT and USAGE on schema public for every created role;
 --   4. the groups' grants and each narrow role's grants, after revoking
 --      everything else they hold in schema public. Objects that do not
@@ -28,6 +29,15 @@
 --      RESTRICTIVE policy for its role.
 
 \set ON_ERROR_STOP on
+
+-- No statement logging in this session (security review L8): the
+-- passwords are literals in the set_config call below, so a failing
+-- statement (log_min_error_statement), a slow one
+-- (log_min_duration_statement) or log_statement = all would otherwise
+-- write them to the server log.
+SET log_min_error_statement = panic;
+SET log_min_duration_statement = -1;
+SET log_statement = none;
 
 @@PSQL_DEFAULTS@@
 
@@ -121,10 +131,14 @@ BEGIN
         FROM @@ROLE_ROWS@@
     LOOP
         member_oid := (SELECT oid FROM pg_roles WHERE rolname = r.name);
-        IF r.status = 'observed' AND NOT EXISTS (
-            SELECT 1 FROM pg_auth_members
-            WHERE roleid = app_oid AND member = member_oid) THEN
-            EXECUTE format('GRANT %I TO %I', app, r.name);
+        IF r.status = 'observed' THEN
+            -- INHERIT TRUE: it uses the app role's privileges. SET FALSE
+            -- (Postgres 16+): it cannot SET ROLE to the app role, which
+            -- would shed the RESTRICTIVE row policies written for it
+            -- (security review M1). Re-granting updates an existing
+            -- membership's options.
+            EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET FALSE',
+                           app, r.name);
         ELSIF r.status = 'narrow' AND EXISTS (
             SELECT 1 FROM pg_auth_members
             WHERE roleid = app_oid AND member = member_oid) THEN
@@ -139,12 +153,9 @@ BEGIN
                current_setting('ds_grants.' || v.grp) AS grp
         FROM @@MEMBER_ROWS@@
     LOOP
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_auth_members
-            WHERE roleid = (SELECT oid FROM pg_roles WHERE rolname = r.grp)
-              AND member = (SELECT oid FROM pg_roles WHERE rolname = r.member)) THEN
-            EXECUTE format('GRANT %I TO %I', r.grp, r.member);
-        END IF;
+        -- SET FALSE here too: a group's grants are only ever inherited.
+        EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET FALSE',
+                       r.grp, r.member);
     END LOOP;
 END
 $members$;
