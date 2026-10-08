@@ -135,6 +135,47 @@ where
     .await
 }
 
+/// [`run_poll_loop`] with the caller's own [`RetryPolicy`] instead of
+/// [`DEFAULT_RETRY_POLICY`]. `poller-ldbws` passes one whose `api_wait`
+/// gives up after a single attempt: it keeps sampling upstream through an
+/// api outage and holds the unsent samples itself, so waiting for api
+/// before each cycle would only lose samples.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
+)]
+pub async fn run_poll_loop_with_policy<F, Fut>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    client: &reqwest::Client,
+    api_ingest_url: &str,
+    internal_oauth: &OAuthTokenCache,
+    poll_interval: Duration,
+    metrics_enabled: bool,
+    metrics_port: u16,
+    progress: &Progress,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    if metrics_enabled {
+        crate::metrics::install(metrics_port)?;
+    }
+    run_poll_loop_with(
+        policy,
+        poller_label,
+        client,
+        api_ingest_url,
+        internal_oauth,
+        poll_interval,
+        progress,
+        cycle,
+    )
+    .await
+}
+
 /// [`run_poll_loop`] with the last-fetch time read by `last_fetched`
 /// instead of the api's GET on `api_ingest_url`: a direct writer (ingest
 /// architecture phase 2, `INGEST_SINK=db`) reads its own
@@ -155,11 +196,47 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
+    run_poll_loop_with_policy_and_cursor(
+        &DEFAULT_RETRY_POLICY,
+        poller_label,
+        last_fetched,
+        poll_interval,
+        metrics_enabled,
+        metrics_port,
+        progress,
+        cycle,
+    )
+    .await
+}
+
+/// [`run_poll_loop_with_cursor`] with the caller's own [`RetryPolicy`]:
+/// the combination of [`run_poll_loop_with_policy`] (a held-sample poller
+/// such as `poller-ldbws`) and a direct writer's own last-fetch cursor.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
+)]
+pub async fn run_poll_loop_with_policy_and_cursor<C, CFut, F, Fut>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    last_fetched: C,
+    poll_interval: Duration,
+    metrics_enabled: bool,
+    metrics_port: u16,
+    progress: &Progress,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    C: FnMut() -> CFut,
+    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
     if metrics_enabled {
         crate::metrics::install(metrics_port)?;
     }
     run_cursor_loop_with(
-        &DEFAULT_RETRY_POLICY,
+        policy,
         poller_label,
         last_fetched,
         poll_interval,
@@ -169,10 +246,21 @@ where
     .await
 }
 
+/// The `<service>` of [`crate::metrics::register_cycle`]'s metric names for
+/// every poller: `distant_signal_poller_last_success_timestamp_seconds` and
+/// `distant_signal_poller_cycles_total`, with the poller's label as
+/// `cycle`. The latter repeats `poller_cycle_total{poller}` (which the
+/// existing alerts read) under the shared helper's name; the gauge is the
+/// new signal.
+pub const LAST_SUCCESS_SERVICE: &str = "poller";
+
 /// Registers both `result` series of `poller_cycle_total` at 0 for
 /// `poller_label`, so an alert's `increase()` sees the first failure (or
 /// success) after a pod start rather than the series merely appearing.
 fn register_cycle_metrics(poller_label: &'static str) {
+    // `poller_last_success_timestamp_seconds{cycle=<poller>}`: the chart's
+    // DistantSignalPollerStale reads it (see `common::metrics::register_cycle`).
+    crate::metrics::register_cycle(LAST_SUCCESS_SERVICE, poller_label);
     for result in ["success", "failure"] {
         metrics::counter!(
             crate::metrics::metric_name("poller_cycle_total"),
@@ -376,6 +464,7 @@ where
             "result" => if result.is_ok() { "success" } else { "failure" }
         )
         .increment(1);
+        crate::metrics::record_cycle(LAST_SUCCESS_SERVICE, poller_label, result.is_ok());
 
         match result {
             Ok(()) => consecutive_failures = 0,
@@ -626,6 +715,109 @@ mod tests {
             calls.load(Ordering::Relaxed),
             2,
             "one failed cycle, one prompt retry, then back to the 24h interval"
+        );
+    }
+
+    /// Every poller exports its last successful cycle through the shared
+    /// helper: registered at start, left alone by a failure, and counted.
+    #[tokio::test]
+    async fn the_loop_exports_the_last_successful_cycle() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "fetchedAt": null
+            })))
+            .mount(&server)
+            .await;
+        let tokens = token_cache(&server).await;
+        let client = reqwest::Client::new();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_cycle = Arc::clone(&calls);
+        let ingest_url = format!("{}/ingest", server.uri());
+        let progress = Progress::new(Duration::from_secs(60));
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _guard = metrics::set_default_local_recorder(&recorder);
+
+        let loop_future = run_poll_loop_with(
+            &FAST_POLICY,
+            "test-poller",
+            &client,
+            &ingest_url,
+            &tokens,
+            Duration::from_secs(86_400),
+            &progress,
+            || {
+                let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                async move {
+                    if n == 0 {
+                        Err(transient_post_failure())
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
+        );
+        let _ = tokio::time::timeout(Duration::from_secs(2), loop_future).await;
+
+        let rendered = handle.render();
+        for series in [
+            r#"distant_signal_poller_cycles_total{cycle="test-poller",result="failure"} 1"#,
+            r#"distant_signal_poller_cycles_total{cycle="test-poller",result="success"} 1"#,
+            r#"distant_signal_poller_last_success_timestamp_seconds{cycle="test-poller"}"#,
+        ] {
+            assert!(
+                rendered.contains(series),
+                "{series} missing from {rendered}"
+            );
+        }
+    }
+
+    /// A policy whose `api_wait` gives up at once (`poller-ldbws`'s) runs
+    /// its cycles on schedule through an api outage instead of waiting for
+    /// api first: here api never answers, and the cycle still runs at once,
+    /// then again after the failed-cycle backoff.
+    #[tokio::test]
+    async fn a_zero_api_wait_policy_polls_through_an_api_outage() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/ingest"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        let tokens = token_cache(&server).await;
+        let client = reqwest::Client::new();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_in_cycle = Arc::clone(&calls);
+        let ingest_url = format!("{}/ingest", server.uri());
+        let progress = Progress::new(Duration::from_secs(60));
+        let policy = RetryPolicy {
+            api_wait: ingest::ApiWait {
+                backoff: Backoff::new(Duration::from_secs(30), Duration::from_secs(30)),
+                max_wait: Duration::ZERO,
+            },
+            failed_cycle: Backoff::new(Duration::from_millis(50), Duration::from_millis(50)),
+        };
+
+        let loop_future = run_poll_loop_with(
+            &policy,
+            "test",
+            &client,
+            &ingest_url,
+            &tokens,
+            Duration::from_millis(100),
+            &progress,
+            || {
+                calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                async { Err(transient_post_failure()) }
+            },
+        );
+        // With the default 10-minute wait, no cycle would run in this time.
+        let _ = tokio::time::timeout(Duration::from_millis(500), loop_future).await;
+        assert!(
+            calls.load(Ordering::Relaxed) >= 3,
+            "cycles kept running while api was down: {}",
+            calls.load(Ordering::Relaxed)
         );
     }
 
