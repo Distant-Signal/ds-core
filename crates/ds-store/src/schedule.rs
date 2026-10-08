@@ -35,10 +35,11 @@ pub use population::{
     list_schedule_line_population_dates, upsert_schedule_line_population,
 };
 pub use publish::{
-    MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
-    STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, ScheduleCallingPointsFullRow,
-    ScheduleDestinationDeparturesRow, ScheduleNetworkDeparturesRow, SchedulePublishBusy,
-    SchedulePublishPart, finish_schedule_calling_points_full_publish_without_rows,
+    MAX_PUBLISH_ID_LEN, SCHEDULE_PUBLISH_ROWS_METRIC, SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
+    STORE_SCHEDULE_PUBLISH_ROWS_METRIC, STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
+    ScheduleCallingPointsFullRow, ScheduleDestinationDeparturesRow, ScheduleNetworkDeparturesRow,
+    SchedulePublishBusy, SchedulePublishPart,
+    finish_schedule_calling_points_full_publish_without_rows,
     finish_schedule_destination_departures_publish_without_rows, is_statement_timeout,
     register_schedule_publish_metrics, upsert_schedule_calling_points_full,
     upsert_schedule_calling_points_full_publish_part, upsert_schedule_destination_departures,

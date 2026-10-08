@@ -203,6 +203,19 @@ pub struct ScheduleDestinationDeparturesRow {
 ///    that is usually a HOT update), a new row is inserted; then
 /// 2. `DELETE` every row of the touched dates whose key is not in `rows`.
 ///
+/// **Unchanged rows are skipped before the upsert, not just by its guard
+/// (WAL cut, 2026-10-08).** `ON CONFLICT DO UPDATE ... WHERE false` still
+/// LOCKS the conflicting tuple: it sets `xmax`, writes a heap-lock WAL
+/// record and dirties the page (a full-page image after each checkpoint).
+/// Measured locally (PG 18, 4 dates of 266k departures + 490k calling
+/// points, 50k-row chunks), republishing identical data wrote ~572 MB of
+/// WAL -- ~190 bytes per row, every daily cycle, for every date of the
+/// window. The upsert's `SELECT` now LEFT JOINs each incoming row to its
+/// stored copy (a `LATERAL ... OFFSET 0` per-row primary-key probe, an
+/// MVCC read that takes no row lock) and keeps only rows that are new or
+/// differ, so the same republish writes ~50 kB. No schema change. Rows
+/// written vs skipped are counted in [`SCHEDULE_PUBLISH_ROWS_METRIC`].
+///
 /// The observable result is identical to the old wholesale replace: after
 /// the call, each touched date holds exactly `rows`. `UNNEST` follows this
 /// crate's own established batch pattern -- see
@@ -770,8 +783,51 @@ const fn staged_mismatch_metric_for(store_names: bool) -> &'static str {
     }
 }
 
+/// `api_schedule_publish_rows_total{product, outcome}`: incoming rows of a
+/// per-date schedule publish, by what the upsert did with them --
+/// `outcome="written"` (inserted, or updated because a value changed) or
+/// `outcome="unchanged"` (identical to the stored row, so skipped without
+/// being written or locked; a same-key duplicate within one chunk also
+/// counts here). `product` is `schedule_destination_departures`,
+/// `schedule_calling_points_full` or `schedule_services`. A direct writer
+/// counts [`STORE_SCHEDULE_PUBLISH_ROWS_METRIC`] instead (see
+/// [`use_store_metric_names`]).
+pub const SCHEDULE_PUBLISH_ROWS_METRIC: &str = "api_schedule_publish_rows_total";
+
+/// [`SCHEDULE_PUBLISH_ROWS_METRIC`] under its `store_` name (spec §14.1).
+pub const STORE_SCHEDULE_PUBLISH_ROWS_METRIC: &str = "store_schedule_publish_rows_total";
+
+/// Every `product` label [`SCHEDULE_PUBLISH_ROWS_METRIC`] carries.
+const PUBLISH_ROWS_PRODUCTS: [&str; 3] = [
+    "schedule_destination_departures",
+    "schedule_calling_points_full",
+    crate::schedule::services::PRODUCT,
+];
+
+/// The publish-rows counter's name in this process.
+fn publish_rows_metric() -> &'static str {
+    if STORE_METRIC_NAMES.load(std::sync::atomic::Ordering::Relaxed) {
+        STORE_SCHEDULE_PUBLISH_ROWS_METRIC
+    } else {
+        SCHEDULE_PUBLISH_ROWS_METRIC
+    }
+}
+
+/// Counts one committed publish statement's rows in
+/// [`SCHEDULE_PUBLISH_ROWS_METRIC`]: `written` of the `incoming` rows were
+/// inserted or updated, the rest were unchanged.
+pub(crate) fn count_publish_rows(product: &'static str, incoming: usize, written: u64) {
+    let incoming = incoming as u64;
+    let name = common::metrics::metric_name(publish_rows_metric());
+    metrics::counter!(name.clone(), "product" => product, "outcome" => "written")
+        .increment(written);
+    metrics::counter!(name, "product" => product, "outcome" => "unchanged")
+        .increment(incoming.saturating_sub(written));
+}
+
 /// Registers [`SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`] at 0 for both
-/// products at startup, so the alert's `increase()` sees the first mismatch.
+/// products at startup, so the alert's `increase()` sees the first mismatch,
+/// and every [`SCHEDULE_PUBLISH_ROWS_METRIC`] series at 0.
 pub fn register_schedule_publish_metrics() {
     for sql in [
         &DESTINATION_DEPARTURES_PUBLISH_KEYS_SQL,
@@ -782,6 +838,9 @@ pub fn register_schedule_publish_metrics() {
             "product" => sql.product
         )
         .increment(0);
+    }
+    for product in PUBLISH_ROWS_PRODUCTS {
+        count_publish_rows(product, 0, 0);
     }
 }
 
@@ -863,20 +922,44 @@ pub async fn upsert_schedule_destination_departures_publish_part(
 
     // DISTINCT ON ... ORDER BY key, ordinality keeps the FIRST of any
     // same-key rows in the batch (`ON CONFLICT DO UPDATE` cannot affect one
-    // row twice). The `WHERE ... IS DISTINCT FROM` guard is what keeps an
-    // unchanged row from being rewritten: it is read, not written.
+    // row twice). The LATERAL probe then drops every row whose stored copy
+    // is identical, so an unchanged row never reaches `ON CONFLICT` and is
+    // never even locked -- see "Unchanged rows are skipped" on
+    // [`upsert_schedule_destination_departures`]. It filters AFTER the
+    // dedup: filtering first could let a later same-key duplicate win.
+    // `OFFSET 0` keeps the probe a per-row index lookup (a plain anti-join
+    // is planned as a hash join over a seq scan of the WHOLE table, every
+    // chunk). The `ON CONFLICT ... WHERE ... IS DISTINCT FROM` guard stays
+    // for a row a concurrent writer changed after this statement's snapshot.
     let result = sqlx::query(
         "INSERT INTO schedule_destination_departures AS d \
             (service_date, destination_crs, scheduled, day_offset, train_uid, origin_crs, true_origin_crs, calling_point_arrival, destination_arrival, destination_arrival_day_offset, operator_atoc, headcode, rsid, \
              public_departure, public_calling_point_arrival, public_destination_arrival, can_board, can_alight) \
-         SELECT DISTINCT ON (service_date, destination_crs, scheduled, train_uid, origin_crs) \
-                service_date, destination_crs, scheduled, day_offset, train_uid, origin_crs, true_origin_crs, calling_point_arrival, destination_arrival, destination_arrival_day_offset, operator_atoc, headcode, rsid, \
-                public_departure, public_calling_point_arrival, public_destination_arrival, can_board, can_alight \
-         FROM UNNEST($1::date[], $2::text[], $3::time[], $4::smallint[], $5::text[], $6::text[], $7::text[], $8::time[], $9::time[], $10::smallint[], $11::text[], $12::text[], $13::text[], \
-                     $14::time[], $15::time[], $16::time[], $17::boolean[], $18::boolean[]) \
-              WITH ORDINALITY AS t(service_date, destination_crs, scheduled, day_offset, train_uid, origin_crs, true_origin_crs, calling_point_arrival, destination_arrival, destination_arrival_day_offset, operator_atoc, headcode, rsid, \
-                                   public_departure, public_calling_point_arrival, public_destination_arrival, can_board, can_alight, ord) \
-         ORDER BY service_date, destination_crs, scheduled, train_uid, origin_crs, ord \
+         SELECT n.service_date, n.destination_crs, n.scheduled, n.day_offset, n.train_uid, n.origin_crs, n.true_origin_crs, n.calling_point_arrival, n.destination_arrival, n.destination_arrival_day_offset, n.operator_atoc, n.headcode, n.rsid, \
+                n.public_departure, n.public_calling_point_arrival, n.public_destination_arrival, n.can_board, n.can_alight \
+         FROM ( \
+             SELECT DISTINCT ON (service_date, destination_crs, scheduled, train_uid, origin_crs) \
+                    service_date, destination_crs, scheduled, day_offset, train_uid, origin_crs, true_origin_crs, calling_point_arrival, destination_arrival, destination_arrival_day_offset, operator_atoc, headcode, rsid, \
+                    public_departure, public_calling_point_arrival, public_destination_arrival, can_board, can_alight \
+             FROM UNNEST($1::date[], $2::text[], $3::time[], $4::smallint[], $5::text[], $6::text[], $7::text[], $8::time[], $9::time[], $10::smallint[], $11::text[], $12::text[], $13::text[], \
+                         $14::time[], $15::time[], $16::time[], $17::boolean[], $18::boolean[]) \
+                  WITH ORDINALITY AS t(service_date, destination_crs, scheduled, day_offset, train_uid, origin_crs, true_origin_crs, calling_point_arrival, destination_arrival, destination_arrival_day_offset, operator_atoc, headcode, rsid, \
+                                       public_departure, public_calling_point_arrival, public_destination_arrival, can_board, can_alight, ord) \
+             ORDER BY service_date, destination_crs, scheduled, train_uid, origin_crs, ord \
+         ) n \
+         LEFT JOIN LATERAL ( \
+             SELECT true AS found, e.day_offset, e.true_origin_crs, e.calling_point_arrival, e.destination_arrival, e.destination_arrival_day_offset, e.operator_atoc, e.headcode, e.rsid, \
+                    e.public_departure, e.public_calling_point_arrival, e.public_destination_arrival, e.can_board, e.can_alight \
+             FROM schedule_destination_departures e \
+             WHERE (e.service_date, e.destination_crs, e.scheduled, e.train_uid, e.origin_crs) = (n.service_date, n.destination_crs, n.scheduled, n.train_uid, n.origin_crs) \
+             OFFSET 0 \
+         ) e ON true \
+         WHERE e.found IS NULL \
+            OR (e.day_offset, e.true_origin_crs, e.calling_point_arrival, e.destination_arrival, e.destination_arrival_day_offset, e.operator_atoc, e.headcode, e.rsid, \
+                e.public_departure, e.public_calling_point_arrival, e.public_destination_arrival, e.can_board, e.can_alight) \
+               IS DISTINCT FROM \
+               (n.day_offset, n.true_origin_crs, n.calling_point_arrival, n.destination_arrival, n.destination_arrival_day_offset, n.operator_atoc, n.headcode, n.rsid, \
+                n.public_departure, n.public_calling_point_arrival, n.public_destination_arrival, n.can_board, n.can_alight) \
          ON CONFLICT (service_date, destination_crs, scheduled, train_uid, origin_crs) DO UPDATE SET \
             day_offset = EXCLUDED.day_offset, \
             true_origin_crs = EXCLUDED.true_origin_crs, \
@@ -921,6 +1004,7 @@ pub async fn upsert_schedule_destination_departures_publish_part(
     let deleted = finish_publish_part(&mut tx, sql, part, PUBLISH_DELETE_STATEMENT_TIMEOUT).await?;
 
     tx.commit().await?;
+    count_publish_rows(sql.product, rows.len(), result.rows_affected());
     if part.final_total_rows.is_some() {
         tracing::debug!(
             publish_id = part.publish_id,
@@ -1099,22 +1183,44 @@ pub async fn upsert_schedule_calling_points_full_publish_part(
     .await?;
 
     // See `upsert_schedule_destination_departures_publish_part` for the
-    // DISTINCT ON / IS DISTINCT FROM reasoning -- identical here.
+    // DISTINCT ON / LATERAL unchanged-row skip / IS DISTINCT FROM
+    // reasoning -- identical here.
     let result = sqlx::query(
         "INSERT INTO schedule_calling_points_full AS c \
             (service_date, uid, seq, tiploc, kind, booked_arrival, booked_departure, day_offset, platform, \
              public_arrival, public_departure, working_arrival, working_departure, working_pass, \
              can_board, can_alight, request_stop) \
-         SELECT DISTINCT ON (service_date, uid, seq) \
-                service_date, uid, seq, tiploc, kind, booked_arrival, booked_departure, day_offset, platform, \
-                public_arrival, public_departure, working_arrival, working_departure, working_pass, \
-                can_board, can_alight, request_stop \
-         FROM UNNEST($1::date[], $2::text[], $3::smallint[], $4::text[], $5::text[], $6::time[], $7::time[], $8::smallint[], $9::text[], \
-                     $10::time[], $11::time[], $12::time[], $13::time[], $14::time[], $15::bool[], $16::bool[], $17::bool[]) \
-              WITH ORDINALITY AS t(service_date, uid, seq, tiploc, kind, booked_arrival, booked_departure, day_offset, platform, \
-                                   public_arrival, public_departure, working_arrival, working_departure, working_pass, \
-                                   can_board, can_alight, request_stop, ord) \
-         ORDER BY service_date, uid, seq, ord \
+         SELECT n.service_date, n.uid, n.seq, n.tiploc, n.kind, n.booked_arrival, n.booked_departure, n.day_offset, n.platform, \
+                n.public_arrival, n.public_departure, n.working_arrival, n.working_departure, n.working_pass, \
+                n.can_board, n.can_alight, n.request_stop \
+         FROM ( \
+             SELECT DISTINCT ON (service_date, uid, seq) \
+                    service_date, uid, seq, tiploc, kind, booked_arrival, booked_departure, day_offset, platform, \
+                    public_arrival, public_departure, working_arrival, working_departure, working_pass, \
+                    can_board, can_alight, request_stop \
+             FROM UNNEST($1::date[], $2::text[], $3::smallint[], $4::text[], $5::text[], $6::time[], $7::time[], $8::smallint[], $9::text[], \
+                         $10::time[], $11::time[], $12::time[], $13::time[], $14::time[], $15::bool[], $16::bool[], $17::bool[]) \
+                  WITH ORDINALITY AS t(service_date, uid, seq, tiploc, kind, booked_arrival, booked_departure, day_offset, platform, \
+                                       public_arrival, public_departure, working_arrival, working_departure, working_pass, \
+                                       can_board, can_alight, request_stop, ord) \
+             ORDER BY service_date, uid, seq, ord \
+         ) n \
+         LEFT JOIN LATERAL ( \
+             SELECT true AS found, e.tiploc, e.kind, e.booked_arrival, e.booked_departure, e.day_offset, e.platform, \
+                    e.public_arrival, e.public_departure, e.working_arrival, e.working_departure, e.working_pass, \
+                    e.can_board, e.can_alight, e.request_stop \
+             FROM schedule_calling_points_full e \
+             WHERE (e.service_date, e.uid, e.seq) = (n.service_date, n.uid, n.seq) \
+             OFFSET 0 \
+         ) e ON true \
+         WHERE e.found IS NULL \
+            OR (e.tiploc, e.kind, e.booked_arrival, e.booked_departure, e.day_offset, e.platform, \
+                e.public_arrival, e.public_departure, e.working_arrival, e.working_departure, e.working_pass, \
+                e.can_board, e.can_alight, e.request_stop) \
+               IS DISTINCT FROM \
+               (n.tiploc, n.kind, n.booked_arrival, n.booked_departure, n.day_offset, n.platform, \
+                n.public_arrival, n.public_departure, n.working_arrival, n.working_departure, n.working_pass, \
+                n.can_board, n.can_alight, n.request_stop) \
          ON CONFLICT (service_date, uid, seq) DO UPDATE SET \
             tiploc = EXCLUDED.tiploc, \
             kind = EXCLUDED.kind, \
@@ -1161,6 +1267,7 @@ pub async fn upsert_schedule_calling_points_full_publish_part(
     let deleted = finish_publish_part(&mut tx, sql, part, PUBLISH_DELETE_STATEMENT_TIMEOUT).await?;
 
     tx.commit().await?;
+    count_publish_rows(sql.product, rows.len(), result.rows_affected());
     if part.final_total_rows.is_some() {
         tracing::debug!(
             publish_id = part.publish_id,
@@ -1357,6 +1464,11 @@ mod schedule_publish_diff_tests {
             after, before,
             "an identical republish must not write a single tuple (xmin/ctid unchanged)"
         );
+        assert_eq!(
+            locked_rows(&pool, "schedule_destination_departures", date).await,
+            0,
+            "an identical republish must not lock a single row (no heap-lock WAL)"
+        );
 
         clear_dates(&pool, &[date]).await;
     }
@@ -1386,6 +1498,154 @@ mod schedule_publish_diff_tests {
 
         assert_eq!(upserted, 0);
         assert_eq!(calling_point_tuples(&pool, date).await, before);
+        assert_eq!(
+            locked_rows(&pool, "schedule_calling_points_full", date).await,
+            0,
+            "an identical republish must not lock a single row"
+        );
+
+        clear_dates(&pool, &[date]).await;
+    }
+
+    /// Rows of `table` on `date` with a non-zero `xmax`: rows some
+    /// transaction updated, deleted or LOCKED since they were written. `ON
+    /// CONFLICT DO UPDATE ... WHERE false` locks the conflicting row (and
+    /// so writes WAL) without changing `xmin`/`ctid`; this is how the
+    /// unchanged-row skip is observed.
+    async fn locked_rows(pool: &PgPool, table: &str, date: chrono::NaiveDate) -> i64 {
+        sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM {table} WHERE service_date = $1 AND xmax::text <> '0'"
+        ))
+        .bind(date)
+        .fetch_one(pool)
+        .await
+        .expect("count locked rows")
+    }
+
+    /// The WAL cut (2026-10-08) end to end over the multi-chunk protocol: a
+    /// two-chunk republish carrying one unchanged, one changed and one new
+    /// row writes exactly the changed and new rows, never touches (not
+    /// even locks) the unchanged one, still deletes the row it dropped, and
+    /// counts written vs unchanged rows. A second, all-unchanged republish
+    /// whose final count does not match still takes the staged-mismatch
+    /// path: the skip does not affect key staging.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_publish_diff -- --ignored --test-threads=1`"]
+    async fn a_republish_skips_unchanged_rows_without_locking_them() {
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _guard = metrics::set_default_local_recorder(&recorder);
+        let pool = test_pool().await;
+        let date = fixture_date(14);
+        clear_dates(&pool, &[date]).await;
+
+        upsert_schedule_destination_departures(
+            &pool,
+            &[
+                departure(date, "KEEP", time(8, 0), Some("VT")),
+                departure(date, "CHANGE", time(9, 0), Some("VT")),
+                departure(date, "DROP", time(10, 0), Some("VT")),
+            ],
+        )
+        .await
+        .expect("seed");
+        let before = departure_tuples(&pool, date).await;
+        let keep_before = before.iter().find(|t| t.0 == "KEEP").unwrap().clone();
+        let change_before = before.iter().find(|t| t.0 == "CHANGE").unwrap().clone();
+
+        let publish_id = "test-wal-cut";
+        let first = upsert_schedule_destination_departures_publish_part(
+            &pool,
+            &[
+                departure(date, "KEEP", time(8, 0), Some("VT")),
+                departure(date, "CHANGE", time(9, 0), Some("LM")),
+            ],
+            SchedulePublishPart {
+                publish_id,
+                first_chunk: true,
+                final_total_rows: None,
+            },
+        )
+        .await
+        .expect("first chunk");
+        assert_eq!(first, 1, "only the changed row is written");
+        let last = upsert_schedule_destination_departures_publish_part(
+            &pool,
+            &[departure(date, "NEW", time(11, 0), None)],
+            SchedulePublishPart {
+                publish_id,
+                first_chunk: false,
+                final_total_rows: Some(3),
+            },
+        )
+        .await
+        .expect("final chunk");
+        assert_eq!(last, 1, "the new row is inserted");
+
+        let after = departure_tuples(&pool, date).await;
+        assert_eq!(uids(&after), vec!["CHANGE", "KEEP", "NEW"], "DROP deleted");
+        let change = after.iter().find(|t| t.0 == "CHANGE").unwrap();
+        assert_eq!(
+            change.2.as_deref(),
+            Some("LM"),
+            "the changed row is written"
+        );
+        assert_ne!(change.3, change_before.3);
+        let keep = after.iter().find(|t| t.0 == "KEEP").unwrap();
+        assert_eq!(keep, &keep_before, "the unchanged row is not rewritten");
+        let keep_xmax = || async {
+            sqlx::query_scalar::<_, String>(
+                "SELECT xmax::text FROM schedule_destination_departures \
+                 WHERE service_date = $1 AND train_uid = 'KEEP'",
+            )
+            .bind(date)
+            .fetch_one(&pool)
+            .await
+            .expect("read KEEP xmax")
+        };
+        assert_eq!(
+            keep_xmax().await,
+            "0",
+            "the unchanged row is not even locked"
+        );
+
+        // Written: the seed's 3 rows, then CHANGE and NEW. Unchanged: KEEP.
+        let rendered = handle.render();
+        for line in [
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="written"} 5"#,
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 1"#,
+        ] {
+            assert!(rendered.contains(line), "{line}\n{rendered}");
+        }
+
+        // All-unchanged final chunk claiming more rows than were staged.
+        let settled = departure_tuples(&pool, date).await;
+        upsert_schedule_destination_departures_publish_part(
+            &pool,
+            &[departure(date, "KEEP", time(8, 0), Some("VT"))],
+            SchedulePublishPart {
+                publish_id: "test-wal-cut-mismatch",
+                first_chunk: true,
+                final_total_rows: Some(2),
+            },
+        )
+        .await
+        .expect("mismatched final chunk");
+        assert_eq!(
+            departure_tuples(&pool, date).await,
+            settled,
+            "a mismatched publish deletes nothing and rewrites nothing"
+        );
+        // (Only KEEP: the row CHANGE was updated through `ON CONFLICT`, whose
+        // new version carries the updater's lock-only xmax.)
+        assert_eq!(keep_xmax().await, "0", "KEEP is still never locked");
+        assert!(
+            handle.render().contains(
+                r#"distant_signal_api_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
+            ),
+            "the staged-mismatch path still triggers"
+        );
 
         clear_dates(&pool, &[date]).await;
     }
@@ -2924,6 +3184,38 @@ mod staged_mismatch_metric_name_tests {
         assert_eq!(
             STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("store_"),
             SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("api_"),
+        );
+    }
+}
+
+#[cfg(test)]
+mod publish_rows_metric_tests {
+    use super::{
+        SCHEDULE_PUBLISH_ROWS_METRIC, STORE_SCHEDULE_PUBLISH_ROWS_METRIC, count_publish_rows,
+        register_schedule_publish_metrics,
+    };
+    use metrics_exporter_prometheus::PrometheusBuilder;
+
+    #[test]
+    fn rows_are_counted_as_written_or_unchanged_and_registered_at_zero() {
+        let recorder = PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        metrics::with_local_recorder(&recorder, || {
+            register_schedule_publish_metrics();
+            count_publish_rows("schedule_calling_points_full", 50_000, 12);
+        });
+        let rendered = handle.render();
+        for line in [
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="written"} 12"#,
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="unchanged"} 49988"#,
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 0"#,
+            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_services",outcome="written"} 0"#,
+        ] {
+            assert!(rendered.contains(line), "{line}\n{rendered}");
+        }
+        assert_eq!(
+            STORE_SCHEDULE_PUBLISH_ROWS_METRIC.strip_prefix("store_"),
+            SCHEDULE_PUBLISH_ROWS_METRIC.strip_prefix("api_"),
         );
     }
 }

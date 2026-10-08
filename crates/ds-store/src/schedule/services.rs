@@ -27,6 +27,10 @@ pub struct ScheduleServiceRow {
     pub stp: String,
 }
 
+/// This product's `product` label in
+/// [`SCHEDULE_PUBLISH_ROWS_METRIC`](super::publish::SCHEDULE_PUBLISH_ROWS_METRIC).
+pub(crate) const PRODUCT: &str = "schedule_services";
+
 /// Why a publish was refused before touching the table: the caller's data
 /// is wrong (a 400), not the database.
 #[derive(Debug)]
@@ -93,7 +97,8 @@ const PUBLISH_STATEMENT_TIMEOUT: std::time::Duration = std::time::Duration::from
 
 /// Replaces `service_date`'s rows with `rows`, in one transaction: upserts
 /// every row (an unchanged row is not rewritten), then deletes the date's
-/// rows whose uid the publish did not carry. A reader sees the old day or
+/// rows whose uid the publish did not carry. A row identical to the stored
+/// one is skipped without being written or locked. A reader sees the old day or
 /// the new one, never a mix. An empty `rows` clears the date -- the
 /// publisher only sends one when the rest of its window has schedules (the
 /// same PL-14 guard as the other per-date products). Returns rows inserted
@@ -122,18 +127,39 @@ pub async fn replace_for_date(
     common::pg::set_local_statement_timeout(&mut tx, PUBLISH_STATEMENT_TIMEOUT).await?;
 
     // DISTINCT ON keeps the LAST row per uid (`ORDER BY ... ord DESC`) so a
-    // duplicated uid cannot make ON CONFLICT touch one row twice.
+    // duplicated uid cannot make ON CONFLICT touch one row twice. The
+    // LATERAL probe then drops rows identical to the stored copy so they are
+    // never locked (an `ON CONFLICT DO UPDATE ... WHERE false` still locks
+    // the tuple, writing WAL every cycle) -- the same skip, and the same
+    // `OFFSET 0` reason, as `upsert_schedule_destination_departures`.
     let upserted = sqlx::query(
         "INSERT INTO schedule_services AS s \
             (service_date, uid, mode, train_status, train_category, headcode, rsid, \
              operator_atoc, stp) \
-         SELECT DISTINCT ON (uid) $1, uid, mode, train_status, train_category, headcode, rsid, \
-                operator_atoc, stp \
-         FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], \
-                     $8::text[], $9::text[]) \
-              WITH ORDINALITY AS t(uid, mode, train_status, train_category, headcode, rsid, \
-                                   operator_atoc, stp, ord) \
-         ORDER BY uid, ord DESC \
+         SELECT n.service_date, n.uid, n.mode, n.train_status, n.train_category, n.headcode, \
+                n.rsid, n.operator_atoc, n.stp \
+         FROM ( \
+             SELECT DISTINCT ON (uid) $1::date AS service_date, uid, mode, train_status, \
+                    train_category, headcode, rsid, operator_atoc, stp \
+             FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], \
+                         $8::text[], $9::text[]) \
+                  WITH ORDINALITY AS t(uid, mode, train_status, train_category, headcode, rsid, \
+                                       operator_atoc, stp, ord) \
+             ORDER BY uid, ord DESC \
+         ) n \
+         LEFT JOIN LATERAL ( \
+             SELECT true AS found, e.mode, e.train_status, e.train_category, e.headcode, e.rsid, \
+                    e.operator_atoc, e.stp \
+             FROM schedule_services e \
+             WHERE e.service_date = n.service_date AND e.uid = n.uid \
+             OFFSET 0 \
+         ) e ON true \
+         WHERE e.found IS NULL \
+            OR (e.mode, e.train_status, e.train_category, e.headcode, e.rsid, e.operator_atoc, \
+                e.stp) \
+               IS DISTINCT FROM \
+               (n.mode, n.train_status, n.train_category, n.headcode, n.rsid, n.operator_atoc, \
+                n.stp) \
          ON CONFLICT (service_date, uid) DO UPDATE SET \
             mode = EXCLUDED.mode, \
             train_status = EXCLUDED.train_status, \
@@ -172,6 +198,7 @@ pub async fn replace_for_date(
     .rows_affected();
 
     tx.commit().await?;
+    super::publish::count_publish_rows(PRODUCT, rows.len(), upserted);
     tracing::debug!(%service_date, upserted, deleted, "published schedule_services");
     Ok(upserted)
 }
