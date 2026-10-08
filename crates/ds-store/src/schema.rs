@@ -86,6 +86,8 @@ pub enum DbRole {
     Enricher,
     Notifier,
     Writer,
+    /// `schedule-ingest` under `INGEST_SINK=db` (plan 2d.1).
+    ScheduleIngest,
 }
 
 impl DbRole {
@@ -97,6 +99,7 @@ impl DbRole {
             Self::Enricher => "enricher",
             Self::Notifier => "notifier",
             Self::Writer => "writer",
+            Self::ScheduleIngest => "schedule_ingest",
         }
     }
 
@@ -319,6 +322,7 @@ mod tests {
             DbRole::Enricher,
             DbRole::Notifier,
             DbRole::Writer,
+            DbRole::ScheduleIngest,
         ] {
             assert!(privileges_for(role.key()).is_some(), "{role:?}");
             assert!(!role.required_privileges().is_empty(), "{role:?}");
@@ -344,6 +348,22 @@ mod tests {
         assert!(has(DbRole::Aggregator, "tocs", "SELECT"));
         // ...but not on a personal one.
         assert!(!has(DbRole::Aggregator, "users", "SELECT"));
+        // schedule-ingest (plan 2d): the CORPUS load and its crosswalk,
+        // the feed marker insert-only, and nothing else.
+        assert!(has(DbRole::ScheduleIngest, "corpus_locations", "DELETE"));
+        assert!(has(DbRole::ScheduleIngest, "corpus_tiploc_crs", "INSERT"));
+        assert!(has(DbRole::ScheduleIngest, "stations", "SELECT"));
+        assert!(has(
+            DbRole::ScheduleIngest,
+            "schedule_feed_ingests",
+            "INSERT"
+        ));
+        assert!(!has(
+            DbRole::ScheduleIngest,
+            "schedule_feed_ingests",
+            "DELETE"
+        ));
+        assert!(!has(DbRole::ScheduleIngest, "tocs", "SELECT"));
         // No role is required to hold anything on the migrations table
         // beyond what the version query itself needs.
         assert!(

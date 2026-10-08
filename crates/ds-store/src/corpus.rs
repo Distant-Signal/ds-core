@@ -272,17 +272,38 @@ pub struct CorpusLoadRequest {
     pub sha256: Option<String>,
 }
 
+/// Why a CORPUS load must be refused (the api's 400), or `None`: an empty
+/// delivery, a blank `source_file` or a blank NLC. See
+/// [`corpus_delivery_problem`].
 pub fn corpus_load_problem(req: &CorpusLoadRequest) -> Option<String> {
-    if req.locations.is_empty() {
+    corpus_delivery_problem(&req.source_file, &req.locations)
+}
+
+/// [`corpus_load_problem`] on the parts of a load, for a caller holding
+/// them borrowed (`schedule-ingest`'s direct sink, plan 2d.1).
+pub fn corpus_delivery_problem(source_file: &str, locations: &[CorpusLocation]) -> Option<String> {
+    if locations.is_empty() {
         return Some("a CORPUS delivery must carry at least one location".to_string());
     }
-    if req.source_file.trim().is_empty() {
+    if source_file.trim().is_empty() {
         return Some("source_file must not be blank".to_string());
     }
-    req.locations
+    locations
         .iter()
         .position(|l| l.nlc.trim().is_empty())
         .map(|i| format!("location {i} has a blank nlc"))
+}
+
+/// Why a CORPUS load's provenance must be refused (the api's 422), or
+/// `None`: a `sha256` that is not 64 lowercase hex digits, or a
+/// `source_bytes` too large for the `bigint` column.
+pub fn corpus_provenance_problem(
+    sha256: Option<&str>,
+    source_bytes: Option<u64>,
+) -> Option<String> {
+    (sha256.is_some_and(|s| !is_sha256_hex(s))
+        || source_bytes.is_some_and(|b| i64::try_from(b).is_err()))
+    .then(|| "sha256 must be 64 lowercase hex digits and source_bytes in range".to_string())
 }
 
 #[cfg(test)]
@@ -365,6 +386,22 @@ mod corpus_load_validation_tests {
         }));
         assert_eq!(req.source_bytes, Some(295_957));
         assert!(req.sha256.as_deref().is_some_and(is_sha256_hex));
+    }
+
+    #[test]
+    fn malformed_provenance_is_refused_and_absent_provenance_is_not() {
+        let sha = "0f".repeat(32);
+        assert_eq!(corpus_provenance_problem(None, None), None);
+        assert_eq!(corpus_provenance_problem(Some(&sha), Some(295_957)), None);
+        let problem = Some("sha256 must be 64 lowercase hex digits and source_bytes in range");
+        assert_eq!(
+            corpus_provenance_problem(Some(&sha.to_uppercase()), None).as_deref(),
+            problem
+        );
+        assert_eq!(
+            corpus_provenance_problem(None, Some(u64::MAX)).as_deref(),
+            problem
+        );
     }
 }
 

@@ -15,6 +15,7 @@
 //! | [`reconciliation`] | `RECONCILIATION_SWEEP` | [`run_reconciliation_sweep`] | `RECONCILIATION_SWEEP_INTERVAL_SECS`, 300 (grace `SCHEDULE_ENRICHMENT_GRACE_MINUTES`, 30) |
 //! | [`backlog_match`] | `BACKLOG_MATCH_SWEEP` | [`run_backlog_match_sweep`] | `BACKLOG_MATCH_SWEEP_INTERVAL_SECS`, 300 |
 //! | [`corpus_crosswalk`] | `CORPUS_CROSSWALK` | [`rebuild_if_stale`], then [`refresh_last_delivery_metric`] | writer: `INGEST_WRITER_CORPUS_CROSSWALK_INTERVAL_SECS`, 600; api: once at startup ([`LoopRunner::run_once`]) |
+//! | [`corpus_crosswalk_comparing`] | `CORPUS_CROSSWALK` | as [`corpus_crosswalk`], then the CORPUS comparison after each new delivery | the writer's, in place of [`corpus_crosswalk`] (plan 2d.1) |
 //!
 //! [`run_schedule_match_sweep`]: crate::sweeps::schedule_matching::run_schedule_match_sweep
 //! [`run_reconciliation_sweep`]: crate::sweeps::reconciliation::run_reconciliation_sweep
@@ -144,20 +145,62 @@ pub fn corpus_crosswalk(interval: Duration) -> LoopSpec {
     LoopSpec::new(
         advisory_locks::CORPUS_CROSSWALK,
         interval,
-        |pool| async move {
-            let rebuild = crate::corpus::crosswalk::rebuild_if_stale(&pool).await;
-            if let Err(err) = &rebuild {
-                tracing::error!(error = ?err, "CORPUS crosswalk rebuild failed");
-            }
-            let gauge = crate::corpus::refresh_last_delivery_metric(&pool).await;
-            if let Err(err) = &gauge {
-                tracing::error!(error = ?err, "CORPUS freshness gauge read failed");
-            }
-            rebuild?;
-            gauge?;
-            Ok(())
-        },
+        |pool| async move { corpus_crosswalk_tick(&pool).await.map(|_| ()) },
     )
+}
+
+/// [`corpus_crosswalk`], plus the CORPUS-vs-timetable comparison
+/// ([`log_after_load`]) whenever the newest delivery differs from the one
+/// this loop last compared, including on its first tick: the ingest-writer's
+/// CORPUS loop (plan 2d.1). With schedule-ingest writing CORPUS directly
+/// (`INGEST_SINK=db`) no api route runs the comparison after a load, so it
+/// runs here, at most one tick (10 minutes) after the load. A comparison
+/// that cannot read `corpus_locations` is retried next tick; one that fails
+/// on the timetable side is logged by [`log_after_load`] and not retried.
+///
+/// [`log_after_load`]: crate::corpus::comparison::log_after_load
+pub fn corpus_crosswalk_comparing(interval: Duration) -> LoopSpec {
+    let compared: Arc<std::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>> = Arc::default();
+    LoopSpec::new(advisory_locks::CORPUS_CROSSWALK, interval, move |pool| {
+        let compared = Arc::clone(&compared);
+        async move {
+            let latest = corpus_crosswalk_tick(&pool).await?;
+            let last = *compared
+                .lock()
+                .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))?;
+            if let Some(latest) = latest.filter(|latest| last != Some(*latest)) {
+                let locations = crate::corpus::crosswalk::load_corpus_locations(&pool)
+                        .await
+                        .inspect_err(|err| {
+                            tracing::error!(error = ?err, "CORPUS comparison could not read corpus_locations; will retry next interval");
+                        })?;
+                crate::corpus::comparison::log_after_load(&pool, &locations).await;
+                *compared
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))? =
+                    Some(latest);
+            }
+            Ok(())
+        }
+    })
+}
+
+/// One CORPUS crosswalk tick: the rebuild check, then the freshness gauge.
+/// Both steps always run; either failing fails the tick. Returns the newest
+/// delivery the gauge read.
+async fn corpus_crosswalk_tick(
+    pool: &sqlx::PgPool,
+) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let rebuild = crate::corpus::crosswalk::rebuild_if_stale(pool).await;
+    if let Err(err) = &rebuild {
+        tracing::error!(error = ?err, "CORPUS crosswalk rebuild failed");
+    }
+    let gauge = crate::corpus::refresh_last_delivery_metric(pool).await;
+    if let Err(err) = &gauge {
+        tracing::error!(error = ?err, "CORPUS freshness gauge read failed");
+    }
+    rebuild?;
+    gauge
 }
 
 /// The train-domain loop intervals, as the api's and the writer's settings
@@ -214,5 +257,40 @@ mod tests {
         let corpus = corpus_crosswalk(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
         assert_eq!(corpus.lock, advisory_locks::CORPUS_CROSSWALK);
         assert_eq!(corpus.interval, Duration::from_secs(600));
+        // The writer's variant shares the lock, so it never runs beside the
+        // api's one-shot.
+        let comparing = corpus_crosswalk_comparing(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
+        assert_eq!(comparing.lock, advisory_locks::CORPUS_CROSSWALK);
+        assert_eq!(comparing.interval, Duration::from_secs(600));
+    }
+
+    /// The comparing body runs on a database with no CORPUS yet (nothing
+    /// to compare) and, after a load, compares and keeps succeeding.
+    /// `#[sqlx::test]`: a CORPUS load replaces the whole table.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn the_comparing_loop_ticks_before_and_after_a_load(pool: sqlx::PgPool) {
+        let spec = corpus_crosswalk_comparing(CORPUS_CROSSWALK_DEFAULT_INTERVAL);
+        spec.run_body(pool.clone()).await.unwrap();
+        let at = "2026-09-01T03:00:00Z".parse().unwrap();
+        let location = crate::corpus::CorpusLocation {
+            nlc: "559500".to_string(),
+            stanox: Some("87219".to_string()),
+            tiploc: Some("CLPHMJN".to_string()),
+            crs: Some("CLJ".to_string()),
+            uic: None,
+            nlc_desc: Some("CLAPHAM JUNCTION LONDON".to_string()),
+            nlc_desc16: None,
+        };
+        crate::corpus::replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &[location])
+            .await
+            .unwrap();
+        for _ in 0..2 {
+            spec.run_body(pool.clone()).await.unwrap();
+        }
+        assert_eq!(
+            crate::corpus::last_corpus_delivery(&pool).await.unwrap(),
+            Some(at)
+        );
     }
 }
