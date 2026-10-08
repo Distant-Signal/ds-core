@@ -513,17 +513,16 @@ impl RunningLoops {
         loop {
             tokio::select! {
                 () = &mut stop => break,
-                result = self.tasks.join_next() => match result {
-                    Some(result) => {
+                result = self.tasks.join_next() => {
+                    if let Some(result) = result {
                         tracing::error!(error = ?result.err(), "a background loop task ended");
-                    }
-                    None => {
+                    } else {
                         // Every loop has ended; keep the session until told
                         // to stop, then close it.
                         (&mut stop).await;
                         break;
                     }
-                },
+                }
             }
         }
         self.shutdown().await;
