@@ -45,13 +45,11 @@
 //! | [`migrate`] | 1B.1 | `api::migrate` and the contract-migration guard, with `migrations/` |
 //! | [`loops`] | 1B.6, 1B.7 | the advisory-locked loop runner and the train-domain loops the api and the ingest-writer both run |
 //! | [`writes`] | 2a.5 | `db_writes_total`/`db_write_seconds` and the direct writers' failure classes |
+//! | [`reads`] | 4.2 | the internal readers behind the narrow views, `list_population_versions`, the sample-station selection |
 //!
 //! `test_support` (built for this crate's tests and, through the
 //! off-by-default `test-support` feature, for the tests of crates that
 //! dev-depend on it) holds the shared DB-test fixtures.
-//!
-//! A later phase adds `reads` (phase 4: the internal readers behind narrow
-//! views).
 
 pub mod backlog;
 pub mod corpus;
@@ -60,6 +58,7 @@ pub mod incidents;
 pub mod loops;
 pub mod migrate;
 pub mod pool;
+pub mod reads;
 pub mod reference;
 pub mod samples;
 pub mod schedule;

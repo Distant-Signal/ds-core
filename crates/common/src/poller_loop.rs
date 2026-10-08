@@ -177,11 +177,13 @@ where
 }
 
 /// [`run_poll_loop`] with the last-fetch time read by `last_fetched`
-/// instead of the api's GET on `api_ingest_url`: a direct writer (ingest
-/// architecture phase 2, `INGEST_SINK=db`) reads its own
-/// `ingest_freshness` row. The startup wait and the wait before a retry
-/// use it the same way, with the same [`DEFAULT_RETRY_POLICY`].
-pub async fn run_poll_loop_with_cursor<C, CFut, F, Fut>(
+/// instead of the api's GET on `api_ingest_url`: any
+/// [`ingest::LastFetched`], a closure or an [`ingest::CursorSource`]. A
+/// direct writer (ingest architecture phase 2, `INGEST_SINK=db`) reads its
+/// own `ingest_freshness` row, a stream producer (phase 3) its stream's
+/// newest entry. The startup wait and the wait before a retry use it the
+/// same way, with the same [`DEFAULT_RETRY_POLICY`].
+pub async fn run_poll_loop_with_cursor<C, F, Fut>(
     poller_label: &'static str,
     last_fetched: C,
     poll_interval: Duration,
@@ -191,8 +193,7 @@ pub async fn run_poll_loop_with_cursor<C, CFut, F, Fut>(
     cycle: F,
 ) -> anyhow::Result<()>
 where
-    C: FnMut() -> CFut,
-    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    C: ingest::LastFetched,
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
@@ -216,7 +217,7 @@ where
     clippy::too_many_arguments,
     reason = "each argument is an independent input from the single caller; a struct would only wrap them"
 )]
-pub async fn run_poll_loop_with_policy_and_cursor<C, CFut, F, Fut>(
+pub async fn run_poll_loop_with_policy_and_cursor<C, F, Fut>(
     policy: &RetryPolicy,
     poller_label: &'static str,
     last_fetched: C,
@@ -227,8 +228,7 @@ pub async fn run_poll_loop_with_policy_and_cursor<C, CFut, F, Fut>(
     cycle: F,
 ) -> anyhow::Result<()>
 where
-    C: FnMut() -> CFut,
-    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    C: ingest::LastFetched,
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
@@ -240,6 +240,45 @@ where
         poller_label,
         last_fetched,
         poll_interval,
+        progress,
+        cycle,
+    )
+    .await
+}
+
+/// [`run_poll_loop`] with the startup cursor read from `source` (ingest
+/// architecture plan 4.6): the api's GET ([`ingest::CursorSource::Http`],
+/// what [`run_poll_loop`] itself uses), the poller's own freshness row
+/// (`Db`, a direct writer) or its own stream's newest entry (`Stream`, a
+/// stream producer). Whichever it is, the first poll waits out what is
+/// left of `poll_interval`, an unreachable source is waited for (bounded,
+/// [`DEFAULT_RETRY_POLICY`]) at startup and before a retry after a failed
+/// cycle, and a source that never answers means "poll now". The same loop
+/// as [`run_poll_loop_with_cursor`], which it calls after logging the
+/// source's kind.
+pub async fn run_poll_loop_with_source<F, Fut>(
+    poller_label: &'static str,
+    source: ingest::CursorSource<'_>,
+    poll_interval: Duration,
+    metrics_enabled: bool,
+    metrics_port: u16,
+    progress: &Progress,
+    cycle: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    tracing::info!(
+        cursor_source = source.kind(),
+        "reading the last-fetch cursor"
+    );
+    run_poll_loop_with_cursor(
+        poller_label,
+        source,
+        poll_interval,
+        metrics_enabled,
+        metrics_port,
         progress,
         cycle,
     )
@@ -292,7 +331,7 @@ where
     run_cursor_loop_with(
         policy,
         poller_label,
-        || ingest::fetch_last_fetched(client, api_ingest_url, internal_oauth),
+        ingest::CursorSource::http(client, api_ingest_url, internal_oauth),
         poll_interval,
         progress,
         cycle,
@@ -300,7 +339,9 @@ where
     .await
 }
 
-async fn run_cursor_loop_with<C, CFut, F, Fut>(
+/// The loop every entry point shares, over any [`ingest::LastFetched`]: a
+/// [`ingest::CursorSource`], or a closure.
+async fn run_cursor_loop_with<C, F, Fut>(
     policy: &RetryPolicy,
     poller_label: &'static str,
     mut last_fetched: C,
@@ -309,13 +350,12 @@ async fn run_cursor_loop_with<C, CFut, F, Fut>(
     cycle: F,
 ) -> anyhow::Result<()>
 where
-    C: FnMut() -> CFut,
-    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
+    C: ingest::LastFetched,
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
     register_cycle_metrics(poller_label);
-    let delay = ingest::time_until_next_poll_from(
+    let delay = ingest::time_until_next_poll_for(
         &mut last_fetched,
         poll_interval,
         &policy.api_wait,
@@ -335,82 +375,11 @@ where
             // writer) answers again (bounded, so a GET-only breakage can't
             // stop polling).
             if let Err(err) =
-                ingest::wait_for_cursor(&mut last_fetched, &policy.api_wait, Some(progress)).await
+                ingest::wait_for_source(&mut last_fetched, &policy.api_wait, Some(progress)).await
             {
                 tracing::warn!(error = ?err, "last-fetch source still unreachable; retrying the poll anyway");
             }
         },
-        cycle,
-    )
-    .await
-}
-
-/// [`run_poll_loop`] for a poller that writes Postgres itself instead of
-/// sending its POSTs to `api` (ingest architecture phase 2, `INGEST_SINK=db`): the
-/// first poll waits out what is left of `poll_interval` since
-/// `last_fetched` (the poller's own freshness marker, read from the
-/// database where the HTTP loop asks `api`), and a retry after a failed
-/// cycle waits only on the failed-cycle backoff, with no `api` to wait for.
-/// A `last_fetched` error is logged and means "poll now", as the HTTP
-/// loop's does after its wait.
-///
-/// Unlike [`run_poll_loop`] it does not install the metrics recorder: the
-/// caller does, before it registers its own metrics.
-pub async fn run_poll_loop_from_cursor<C, CFut, F, Fut>(
-    poller_label: &'static str,
-    poll_interval: Duration,
-    progress: &Progress,
-    last_fetched: C,
-    cycle: F,
-) -> anyhow::Result<()>
-where
-    C: FnOnce() -> CFut,
-    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
-    F: FnMut() -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    run_poll_loop_from_cursor_with(
-        &DEFAULT_RETRY_POLICY,
-        poller_label,
-        poll_interval,
-        progress,
-        last_fetched,
-        cycle,
-    )
-    .await
-}
-
-async fn run_poll_loop_from_cursor_with<C, CFut, F, Fut>(
-    policy: &RetryPolicy,
-    poller_label: &'static str,
-    poll_interval: Duration,
-    progress: &Progress,
-    last_fetched: C,
-    cycle: F,
-) -> anyhow::Result<()>
-where
-    C: FnOnce() -> CFut,
-    CFut: Future<Output = anyhow::Result<Option<chrono::DateTime<chrono::Utc>>>>,
-    F: FnMut() -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    register_cycle_metrics(poller_label);
-    let delay = match last_fetched().await {
-        Ok(fetched_at) => {
-            ingest::duration_until_next_poll(fetched_at, chrono::Utc::now(), poll_interval)
-        }
-        Err(err) => {
-            tracing::warn!(error = ?err, "could not determine last-fetch time; polling immediately");
-            Duration::ZERO
-        }
-    };
-    run_cycles(
-        policy,
-        poller_label,
-        poll_interval,
-        progress,
-        delay,
-        || async {},
         cycle,
     )
     .await
@@ -620,56 +589,67 @@ mod tests {
         .into()
     }
 
-    /// The DB-sink loop: a fresh cursor delays the first poll, a stale one
-    /// polls at once, and a failed cycle retries on the failed-cycle backoff
-    /// (no api to wait for).
+    /// Plan 4.6, the direct-writer (`Db`) and stream-producer (`Stream`)
+    /// cursors: a fresh cursor delays the first poll, a stale one polls at
+    /// once, and a failed cycle retries on the failed-cycle backoff after
+    /// the cursor answers again.
     #[tokio::test]
-    async fn the_cursor_loop_waits_out_a_fresh_cursor_and_retries_a_failed_cycle() {
+    async fn the_loop_waits_out_a_fresh_cursor_from_any_source() {
+        type Kind = fn(ingest::CursorFn<'static>) -> ingest::CursorSource<'static>;
+        let kinds: [(&str, Kind); 2] = [
+            ("db", ingest::CursorSource::Db),
+            ("stream", ingest::CursorSource::Stream),
+        ];
         let progress = Progress::new(Duration::from_secs(60));
+        for (kind, make) in kinds {
+            // Fetched just now with a daily interval: no poll within the test.
+            let calls = Arc::new(AtomicUsize::new(0));
+            let calls_in_cycle = Arc::clone(&calls);
+            let fresh = make(Box::new(|| {
+                Box::pin(async { Ok(Some(chrono::Utc::now())) })
+            }));
+            let loop_future = run_cursor_loop_with(
+                &FAST_POLICY,
+                "test",
+                fresh,
+                Duration::from_secs(86_400),
+                &progress,
+                || {
+                    calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                    async { Ok(()) }
+                },
+            );
+            let _ = tokio::time::timeout(Duration::from_millis(200), loop_future).await;
+            assert_eq!(calls.load(Ordering::Relaxed), 0, "{kind}: still fresh");
 
-        // Fetched just now with a daily interval: no poll within the test.
-        let calls = Arc::new(AtomicUsize::new(0));
-        let calls_in_cycle = Arc::clone(&calls);
-        let loop_future = run_poll_loop_from_cursor_with(
-            &FAST_POLICY,
-            "test",
-            Duration::from_secs(86_400),
-            &progress,
-            || async { Ok(Some(chrono::Utc::now())) },
-            || {
-                calls_in_cycle.fetch_add(1, Ordering::Relaxed);
-                async { Ok(()) }
-            },
-        );
-        let _ = tokio::time::timeout(Duration::from_millis(200), loop_future).await;
-        assert_eq!(calls.load(Ordering::Relaxed), 0, "still fresh");
-
-        // Never fetched: polls at once; the failure is retried soon.
-        let calls = Arc::new(AtomicUsize::new(0));
-        let calls_in_cycle = Arc::clone(&calls);
-        let loop_future = run_poll_loop_from_cursor_with(
-            &FAST_POLICY,
-            "test",
-            Duration::from_secs(86_400),
-            &progress,
-            || async { Ok(None) },
-            || {
-                let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
-                async move {
-                    if n == 0 {
-                        Err(anyhow::anyhow!("database unavailable"))
-                    } else {
-                        Ok(())
+            // Never fetched: polls at once; the failure is retried soon.
+            let calls = Arc::new(AtomicUsize::new(0));
+            let calls_in_cycle = Arc::clone(&calls);
+            let never = make(Box::new(|| Box::pin(async { Ok(None) })));
+            let loop_future = run_cursor_loop_with(
+                &FAST_POLICY,
+                "test",
+                never,
+                Duration::from_secs(86_400),
+                &progress,
+                || {
+                    let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
+                    async move {
+                        if n == 0 {
+                            Err(anyhow::anyhow!("database unavailable"))
+                        } else {
+                            Ok(())
+                        }
                     }
-                }
-            },
-        );
-        let _ = tokio::time::timeout(Duration::from_secs(2), loop_future).await;
-        assert_eq!(
-            calls.load(Ordering::Relaxed),
-            2,
-            "first poll at once, one retry after the failure, then the daily interval"
-        );
+                },
+            );
+            let _ = tokio::time::timeout(Duration::from_secs(2), loop_future).await;
+            assert_eq!(
+                calls.load(Ordering::Relaxed),
+                2,
+                "{kind}: first poll at once, one retry after the failure, then the daily interval"
+            );
+        }
     }
 
     /// SVC-09: a daily poller whose POST failed (api not up yet after a

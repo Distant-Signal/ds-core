@@ -369,6 +369,23 @@ pub async fn last_produced_at<C: redis::aio::ConnectionLike + Send>(
     }))
 }
 
+/// A stream producer's startup cursor as a `common::ingest::CursorSource`
+/// (`Stream`, plan 4.6): [`last_produced_at`] of `stream`, read on a clone
+/// of `conn` (a `ConnectionManager` clone shares its connection). Pass it
+/// to `common::poller_loop::run_poll_loop_with_source`. The producer's ACL
+/// user needs `+xrevrange` on its own stream (spec §8.2).
+pub fn stream_cursor<C>(conn: C, stream: impl Into<String>) -> common::ingest::CursorSource<'static>
+where
+    C: redis::aio::ConnectionLike + Clone + Send + Sync + 'static,
+{
+    let stream: String = stream.into();
+    common::ingest::CursorSource::stream(move || {
+        let mut conn = conn.clone();
+        let stream = stream.clone();
+        async move { Ok(last_produced_at(&mut conn, &stream).await?) }
+    })
+}
+
 /// The `outcome` label of a failed command: see
 /// [`crate::metrics::PRODUCE_OUTCOMES`].
 pub fn classify(err: &RedisError) -> &'static str {

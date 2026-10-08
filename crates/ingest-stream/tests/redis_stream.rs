@@ -377,6 +377,15 @@ async fn produce_and_consume_round_trip_in_order() {
             .unwrap()
             .is_none()
     );
+    // Plan 4.6: the same cursor as the poller loop's `CursorSource::Stream`.
+    {
+        use common::ingest::LastFetched as _;
+        let mut source = ingest_stream::stream_cursor(conn.clone(), stream.clone());
+        assert_eq!(source.kind(), "stream");
+        assert_eq!(source.last_fetched().await.unwrap(), Some(cursor));
+        let mut missing = ingest_stream::stream_cursor(conn.clone(), scope.stream("missing"));
+        assert_eq!(missing.last_fetched().await.unwrap(), None);
+    }
 
     let label = format!("stream=\"{stream}\"");
     assert_eq!(

@@ -409,6 +409,133 @@ pub const API_STARTUP_WAIT: ApiWait = ApiWait {
     max_wait: Duration::from_secs(600),
 };
 
+/// A future that yields a poller's last-fetch time (see [`CursorSource`]).
+pub type CursorFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<DateTime<Utc>>>> + Send + 'a>>;
+
+/// A reader of a poller's last-fetch time, called once per read (see
+/// [`CursorSource`]).
+pub type CursorFn<'a> = Box<dyn FnMut() -> CursorFuture<'a> + Send + 'a>;
+
+/// Where a poller reads its startup cursor, "when did my data last land"
+/// (ingest architecture spec §11.3, plan 4.6). [`time_until_next_poll_for`]
+/// and `common::poller_loop` run the same logic, waits and tests whichever
+/// it is:
+///
+/// - [`CursorSource::Http`]: the api's `GET` on the poller's own ingest URL
+///   ([`LastFetchedResponse`]), today's behaviour and every poller's
+///   default (`INGEST_SINK=http`).
+/// - [`CursorSource::Db`]: a direct writer (`INGEST_SINK=db`, phase 2)
+///   reads its own freshness or marker row with its own role.
+/// - [`CursorSource::Stream`]: a stream producer (`INGEST_SINK=stream`,
+///   phase 3) reads the `produced_at` of its own stream's newest entry
+///   (`ingest_stream::last_produced_at`; `ingest_stream::stream_cursor`
+///   builds this variant). An empty or missing stream is `None`: poll now.
+///
+/// `common` depends on neither sqlx nor the stream runtime, so the `Db` and
+/// `Stream` readers are closures the poller builds ([`CursorSource::db`],
+/// [`CursorSource::stream`]).
+pub enum CursorSource<'a> {
+    Http {
+        client: &'a reqwest::Client,
+        url: &'a str,
+        tokens: &'a OAuthTokenCache,
+    },
+    Stream(CursorFn<'a>),
+    Db(CursorFn<'a>),
+}
+
+impl<'a> CursorSource<'a> {
+    /// The api's `GET` on `url` (the poller's ingest URL).
+    pub fn http(client: &'a reqwest::Client, url: &'a str, tokens: &'a OAuthTokenCache) -> Self {
+        Self::Http {
+            client,
+            url,
+            tokens,
+        }
+    }
+
+    /// The poller's own freshness row, read by `read` (e.g.
+    /// `ds_store::freshness::last_stations_fetch`).
+    pub fn db<F, Fut>(mut read: F) -> Self
+    where
+        F: FnMut() -> Fut + Send + 'a,
+        Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>> + Send + 'a,
+    {
+        Self::Db(Box::new(move || Box::pin(read())))
+    }
+
+    /// The poller's own stream's newest `produced_at`, read by `read`.
+    pub fn stream<F, Fut>(mut read: F) -> Self
+    where
+        F: FnMut() -> Fut + Send + 'a,
+        Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>> + Send + 'a,
+    {
+        Self::Stream(Box::new(move || Box::pin(read())))
+    }
+
+    /// `http`, `stream` or `db`, for logs.
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            Self::Http { .. } => "http",
+            Self::Stream(_) => "stream",
+            Self::Db(_) => "db",
+        }
+    }
+}
+
+impl std::fmt::Debug for CursorSource<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Http { url, .. } => f.debug_struct("Http").field("url", url).finish(),
+            Self::Stream(_) | Self::Db(_) => f.write_str(self.kind()),
+        }
+    }
+}
+
+/// Where an internal reader reads its reference data (ingest architecture
+/// spec §11, plan phase 4): `POPULATION_SOURCE`, `STANOX_CRS_SOURCE`,
+/// `TRACKED_TRAINS_SOURCE`, `SAMPLE_STATIONS_SOURCE`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum ReadSource {
+    /// The api's `GET /private/*` route (today's behaviour).
+    #[default]
+    Http,
+    /// Postgres directly, as the reader's own read-only role.
+    Db,
+}
+
+/// Reads a poller's last-fetch time: a [`CursorSource`], or any closure
+/// returning the same future (what the older closure-taking helpers here
+/// and in `poller_loop` accept).
+pub trait LastFetched {
+    /// The last-fetch time, `None` if the data never landed.
+    fn last_fetched(&mut self) -> impl Future<Output = anyhow::Result<Option<DateTime<Utc>>>>;
+}
+
+impl<F, Fut> LastFetched for F
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>>,
+{
+    fn last_fetched(&mut self) -> impl Future<Output = anyhow::Result<Option<DateTime<Utc>>>> {
+        self()
+    }
+}
+
+impl LastFetched for CursorSource<'_> {
+    async fn last_fetched(&mut self) -> anyhow::Result<Option<DateTime<Utc>>> {
+        match self {
+            Self::Http {
+                client,
+                url,
+                tokens,
+            } => fetch_last_fetched(client, url, tokens).await,
+            Self::Stream(read) | Self::Db(read) => read().await,
+        }
+    }
+}
+
 /// GETs the last-fetch time from `url` (see [`time_until_next_poll`]),
 /// retrying any failure with `wait.backoff` for up to `wait.max_wait`.
 /// `progress`, when given, is beaten on every failed attempt -- waiting for
@@ -420,7 +547,7 @@ pub async fn wait_for_last_fetched(
     wait: &ApiWait,
     progress: Option<&Progress>,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
-    wait_for_cursor(|| fetch_last_fetched(client, url, tokens), wait, progress).await
+    wait_for_source(&mut CursorSource::http(client, url, tokens), wait, progress).await
 }
 
 /// [`wait_for_last_fetched`] for any source of the last-fetch time: the
@@ -436,10 +563,21 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>>,
 {
+    wait_for_source(&mut fetch, wait, progress).await
+}
+
+/// [`wait_for_last_fetched`] for any [`LastFetched`], a [`CursorSource`]
+/// above all: retried on any failure with `wait.backoff` for up to
+/// `wait.max_wait`, beating `progress` meanwhile.
+pub async fn wait_for_source<C: LastFetched + ?Sized>(
+    source: &mut C,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> anyhow::Result<Option<DateTime<Utc>>> {
     let started = tokio::time::Instant::now();
     let mut failures: u32 = 0;
     loop {
-        let err = match fetch().await {
+        let err = match source.last_fetched().await {
             Ok(fetched_at) => {
                 if failures > 0 {
                     tracing::info!(
@@ -500,8 +638,8 @@ pub async fn time_until_next_poll_waiting(
     wait: &ApiWait,
     progress: Option<&Progress>,
 ) -> Duration {
-    time_until_next_poll_from(
-        || fetch_last_fetched(client, url, tokens),
+    time_until_next_poll_for(
+        &mut CursorSource::http(client, url, tokens),
         poll_interval,
         wait,
         progress,
@@ -512,7 +650,7 @@ pub async fn time_until_next_poll_waiting(
 /// [`time_until_next_poll_waiting`] for any source of the last-fetch time
 /// (see [`wait_for_cursor`]).
 pub async fn time_until_next_poll_from<F, Fut>(
-    fetch: F,
+    mut fetch: F,
     poll_interval: Duration,
     wait: &ApiWait,
     progress: Option<&Progress>,
@@ -521,7 +659,20 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<Option<DateTime<Utc>>>>,
 {
-    let fetched_at = match wait_for_cursor(fetch, wait, progress).await {
+    time_until_next_poll_for(&mut fetch, poll_interval, wait, progress).await
+}
+
+/// [`time_until_next_poll_waiting`] for any [`LastFetched`], a
+/// [`CursorSource`] above all: the same wait, the same "poll now" fallback
+/// and the same arithmetic ([`duration_until_next_poll`]) whichever source
+/// the cursor comes from (plan 4.6).
+pub async fn time_until_next_poll_for<C: LastFetched + ?Sized>(
+    source: &mut C,
+    poll_interval: Duration,
+    wait: &ApiWait,
+    progress: Option<&Progress>,
+) -> Duration {
+    let fetched_at = match wait_for_source(source, wait, progress).await {
         Ok(fetched_at) => fetched_at,
         Err(err) => {
             tracing::warn!(
@@ -1085,6 +1236,87 @@ mod tests {
         .await;
         // Fetched an hour ago on a 24h interval: ~23h to go, NOT "poll now".
         assert!(delay > Duration::from_secs(22 * 3600), "{delay:?}");
+    }
+
+    /// Plan 4.6: the same `time_until_next_poll` behaviour whichever
+    /// [`CursorSource`] the cursor comes from -- a fresh cursor delays the
+    /// first poll, a failing source is waited for, `None` and a source that
+    /// never answers mean "poll now".
+    #[tokio::test]
+    async fn every_cursor_source_gives_the_same_first_poll_delay() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let day = Duration::from_secs(86_400);
+        let hour_ago = Utc::now() - chrono::Duration::hours(1);
+        let (server, tokens) = svc09_server_and_tokens().await;
+        Mock::given(method("GET"))
+            .and(path("/private/tocs"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(2)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/private/tocs"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "fetchedAt": hour_ago })),
+            )
+            .with_priority(2)
+            .mount(&server)
+            .await;
+        let client = reqwest::Client::new();
+        let url = format!("{}/private/tocs", server.uri());
+
+        // Fails twice (the database or Redis still starting), then answers.
+        let flaky = |answer: Option<DateTime<Utc>>| {
+            let calls = Arc::new(AtomicU32::new(0));
+            move || {
+                let calls = Arc::clone(&calls);
+                async move {
+                    if calls.fetch_add(1, Ordering::Relaxed) < 2 {
+                        Err(anyhow::anyhow!("not reachable yet"))
+                    } else {
+                        Ok(answer)
+                    }
+                }
+            }
+        };
+        let sources = [
+            CursorSource::http(&client, &url, &tokens),
+            CursorSource::db(flaky(Some(hour_ago))),
+            CursorSource::stream(flaky(Some(hour_ago))),
+        ];
+        for mut source in sources {
+            let kind = source.kind();
+            let delay = time_until_next_poll_for(&mut source, day, &FAST_WAIT, None).await;
+            assert!(delay > Duration::from_secs(22 * 3600), "{kind}: {delay:?}");
+        }
+
+        // Never landed (an empty stream, no freshness row): poll now.
+        for mut source in [
+            CursorSource::db(flaky(None)),
+            CursorSource::stream(flaky(None)),
+        ] {
+            let delay = time_until_next_poll_for(&mut source, day, &FAST_WAIT, None).await;
+            assert_eq!(delay, Duration::ZERO, "{}", source.kind());
+        }
+
+        // A source that never answers: poll now once `max_wait` runs out.
+        let wait = ApiWait {
+            max_wait: Duration::from_millis(100),
+            ..FAST_WAIT
+        };
+        let mut down = CursorSource::db(|| async { Err(anyhow::anyhow!("database down")) });
+        assert_eq!(
+            time_until_next_poll_for(&mut down, day, &wait, None).await,
+            Duration::ZERO
+        );
+        assert_eq!(format!("{down:?}"), "db");
     }
 
     /// The fallback is unchanged: once `max_wait` runs out, poll now.

@@ -25,11 +25,11 @@ pub const PIN_MAX_DAYS_AHEAD: i64 = 7;
 /// Row shape for `list_active_tracked_trains`'s query -- identical fields
 /// to `common::TrackedTrainRef`, but with `sqlx::FromRow` derived, since
 /// that derive can't live on `TrackedTrainRef` itself (`crates/common` has
-/// no `sqlx` dependency at all). Private: nothing outside this function
-/// needs it. See `crates/api/src/data/queries.rs`'s `TflLineSummaryRow`/
+/// no `sqlx` dependency at all). Crate-private: `reads` decodes the
+/// `ingest_active_tracked_trains` view (the same SELECT) into it. See `crates/api/src/data/queries.rs`'s `TflLineSummaryRow`/
 /// `row_to_report` for the precedent this mirrors.
 #[derive(Debug, Clone, sqlx::FromRow)]
-struct TrackedTrainRow {
+pub(crate) struct TrackedTrainRow {
     id: i64,
     service_date: chrono::NaiveDate,
     /// `Option`, not `String` -- as of Task 20's `create_subscription_for_train`

@@ -31,7 +31,8 @@ pub use envelope::{
     split_snapshot,
 };
 pub use producer::{
-    NotWritten, ProducePolicy, Producer, ProducerConfig, Receipt, last_produced_at, xadd_entry,
+    NotWritten, ProducePolicy, Producer, ProducerConfig, Receipt, last_produced_at, stream_cursor,
+    xadd_entry,
 };
 
 /// The writer's consumer group on every ingest stream.
