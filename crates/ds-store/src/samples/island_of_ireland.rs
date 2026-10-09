@@ -31,16 +31,14 @@ pub fn network_wire(network: IslandOfIrelandNetwork) -> &'static str {
 /// `ds:ingest:ioi-gtfs`; `northern-ireland`: poller-nir-stations,
 /// `ds:ingest:ioi-nir`), so each needs its own marker for
 /// `DistantSignalIngestSourceStale` to see one of them stop. They are named
-/// after the feed.
+/// after the feed. The shared, unsuffixed names written before the split
+/// (`island_of_ireland_stations`/`_lines`) were dropped a release later
+/// (migration 20261010100100 deletes their rows).
 pub mod sources {
     pub const STATIONS_GTFS: &str = "island_of_ireland_stations_gtfs";
     pub const STATIONS_NIR: &str = "island_of_ireland_stations_nir";
     pub const LINES_GTFS: &str = "island_of_ireland_lines_gtfs";
     pub const LINES_NIR: &str = "island_of_ireland_lines_nir";
-    /// What every writer recorded before the per-network split, for both
-    /// networks. Still read (as the newest of the three), never written.
-    pub const LEGACY_STATIONS: &str = "island_of_ireland_stations";
-    pub const LEGACY_LINES: &str = "island_of_ireland_lines";
 }
 
 /// `network`'s `island_of_ireland_stations` freshness source.
@@ -264,7 +262,7 @@ async fn write_lines(
 }
 
 /// When any network's feed last landed: the newest of `sources`'
-/// `ingest_freshness` rows (both networks' and the legacy shared one), or,
+/// `ingest_freshness` rows (both networks'), or,
 /// for data written before those rows existed, the table's newest
 /// `fetched_at` (`GREATEST` ignores a NULL). `max_fetched_at_sql` is a
 /// constant.
@@ -285,11 +283,7 @@ async fn last_fetch(
 pub async fn last_stations_fetch(pool: &PgPool) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     last_fetch(
         pool,
-        &[
-            sources::STATIONS_GTFS,
-            sources::STATIONS_NIR,
-            sources::LEGACY_STATIONS,
-        ],
+        &[sources::STATIONS_GTFS, sources::STATIONS_NIR],
         "SELECT MAX(fetched_at) FROM island_of_ireland_stations",
     )
     .await
@@ -298,11 +292,7 @@ pub async fn last_stations_fetch(pool: &PgPool) -> Result<Option<chrono::DateTim
 pub async fn last_lines_fetch(pool: &PgPool) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
     last_fetch(
         pool,
-        &[
-            sources::LINES_GTFS,
-            sources::LINES_NIR,
-            sources::LEGACY_LINES,
-        ],
+        &[sources::LINES_GTFS, sources::LINES_NIR],
         "SELECT MAX(fetched_at) FROM island_of_ireland_lines",
     )
     .await
