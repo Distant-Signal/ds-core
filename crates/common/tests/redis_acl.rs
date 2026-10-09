@@ -546,6 +546,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             vec!["SCAN", "0", "MATCH", &pattern, "COUNT", "10"],
             vec!["TYPE", &stream],
             vec!["MEMORY", "USAGE", &stream],
+            vec!["COMMAND", "INFO", "get"],
         ] {
             allowed(user, &mut c, &args);
         }
@@ -553,6 +554,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             vec!["XADD", stream.as_str(), "*", "a", "b"],
             vec!["CONFIG", "SET", "maxmemory", "1"],
             vec!["DEL", stream.as_str()],
+            vec!["COMMAND", "DOCS"],
             vec!["FLUSHALL"],
         ] {
             h.forbidden(user, &args);
