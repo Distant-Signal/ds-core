@@ -2009,11 +2009,10 @@ impl SampleAvailability {
 /// there is no "too few observed, raise the threshold" state once every
 /// scheduled service is structurally in view. See
 /// docs/superpowers/specs/2026-09-03-full-coverage-metrics-transition-design.md
-/// Decision 1 for the full reasoning (this repo already forced one
-/// structurally different producer -- the DLR pilot's per-trip resolution
-/// warm-up -- into `SampleAvailability::BelowThreshold` once; this type
-/// exists so a second, wider-blast-radius producer doesn't repeat that
-/// compromise).
+/// Decision 1 for the full reasoning (a since-deleted producer, the DLR
+/// pilot's per-trip resolution warm-up, was once forced into
+/// `SampleAvailability::BelowThreshold`; this type exists so a
+/// wider-blast-radius producer doesn't repeat that compromise).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum FullCoverageAvailability {
