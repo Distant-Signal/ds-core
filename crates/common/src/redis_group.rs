@@ -217,6 +217,10 @@ mod tests {
     use super::fake::FakeConn;
     use super::*;
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "FakeConn::new takes RedisResult replies; the helper builds one"
+    )]
     fn groups(entries: Vec<Value>) -> redis::RedisResult<Value> {
         Ok(Value::Array(entries))
     }

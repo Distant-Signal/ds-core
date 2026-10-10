@@ -811,16 +811,15 @@ pub async fn upsert_train_event_on(
     // closed (2026-10-09 redelivery review). With no `trains_id` there is
     // no row to deduplicate on, so the changes run as before; a full,
     // in-order replay still ends in the right state.
-    let fresh = match trains_id {
-        Some(trains_id) => upsert_train_movement_on(&mut *conn, trains_id, event).await?,
-        None => {
-            tracing::warn!(
-                tracked_train_id = event.tracked_train_id,
-                "no trains_id known yet for this subscription; movement event dropped \
-                 from the shared store until its identity is resolved"
-            );
-            true
-        }
+    let fresh = if let Some(trains_id) = trains_id {
+        upsert_train_movement_on(&mut *conn, trains_id, event).await?
+    } else {
+        tracing::warn!(
+            tracked_train_id = event.tracked_train_id,
+            "no trains_id known yet for this subscription; movement event dropped \
+             from the shared store until its identity is resolved"
+        );
+        true
     };
     if !fresh {
         return Ok(());
