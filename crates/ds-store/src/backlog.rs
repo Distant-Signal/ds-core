@@ -836,35 +836,63 @@ pub async fn ingest_shared_movements_batch(
             eta_next: None,
             eta_source: None,
         };
-        if let Err(err) =
-            crate::tracking::upsert_train_movement(pool, trains_id, &movement_event).await
-        {
+        if let Err(err) = write_movement_and_subscriptions(pool, trains_id, &movement_event).await {
             results[i] = Err(err);
-            continue;
-        }
-        // This path sees every Reinstatement, unlike trust-consumer, which
-        // forwards one only for a train it still holds in memory -- so this
-        // is what reopens a cancelled subscription after a trust-consumer
-        // restart.
-        if event.msg_type == "0005" {
-            let reopened = match pool.acquire().await {
-                Ok(mut conn) => {
-                    crate::tracking::reopen_subscriptions_after_reinstatement(
-                        &mut conn,
-                        None,
-                        Some(trains_id),
-                    )
-                    .await
-                }
-                Err(err) => Err(err.into()),
-            };
-            if let Err(err) = reopened {
-                results[i] = Err(err);
-            }
         }
     }
 
     results
+}
+
+/// One backlog event's shared-table write and the subscription changes it
+/// implies, in one transaction.
+///
+/// This path sees every Cancellation and Reinstatement, unlike
+/// trust-consumer, which forwards one only for a train it still holds in
+/// memory -- so this is what reopens a cancelled subscription after a
+/// trust-consumer restart, and what closes the subscriptions of a train
+/// whose Cancellation it stored first (trust-consumer's copy of that event
+/// carries the same `dedup_key`, finds the row already stored and leaves
+/// the subscriptions to this write; see `tracking::upsert_train_event_on`).
+///
+/// Both changes run only when the movement row is new. A replayed range
+/// (a consumer-group rewind, a redelivered batch) re-sends events already
+/// stored; re-running a replayed Reinstatement would reopen a subscription
+/// that a later Cancellation of the same train had closed (2026-10-09
+/// redelivery review). The movement row and the subscription changes
+/// commit together, so a failure after the insert cannot leave the row
+/// stored with its one-shot change skipped for good on the retry.
+async fn write_movement_and_subscriptions(
+    pool: &PgPool,
+    trains_id: i64,
+    movement_event: &common::TrainMovementEventMessage,
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    let fresh =
+        crate::tracking::upsert_train_movement_on(&mut tx, trains_id, movement_event).await?;
+    if fresh {
+        match movement_event.msg_type.as_str() {
+            "0002" => {
+                crate::tracking::mark_subscriptions_unresolved_on_cancellation(
+                    &mut tx,
+                    None,
+                    Some(trains_id),
+                )
+                .await?;
+            }
+            "0005" => {
+                crate::tracking::reopen_subscriptions_after_reinstatement(
+                    &mut tx,
+                    None,
+                    Some(trains_id),
+                )
+                .await?;
+            }
+            _ => {}
+        }
+    }
+    tx.commit().await?;
+    Ok(())
 }
 
 /// A uid-less event the shared tables can only take once its train's

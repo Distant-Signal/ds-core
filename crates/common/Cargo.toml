@@ -53,6 +53,9 @@ postgres = ["dep:sqlx"]
 # `common::redis_conn` (bounded Redis connection settings). Enabled by
 # movement-relay, movement-feed, enricher and api.
 redis = ["dep:redis"]
+# `common::redis_group::fake::FakeConn`, a scripted Redis connection for
+# other crates' unit tests (movement-feed, enricher). Test-only.
+redis-test-util = ["redis"]
 
 [dev-dependencies]
 # `logging`'s test of `log`-crate events (both already in the workspace via

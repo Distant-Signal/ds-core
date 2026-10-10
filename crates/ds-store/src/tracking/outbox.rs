@@ -9,8 +9,13 @@
 //! | Event | Statement | Condition |
 //! |---|---|---|
 //! | a resolution (`resolved_train_id` set) | `flip_legacy_resolution`: `SET resolution_status = 'resolved', unresolved_from = NULL`, and `SET trains_id` when none was linked (with `find_or_create_train`/`mark_train_resolved` on `trains`) | the subscription exists |
-//! | a cancellation (`status = 'cancelled'`) | `mark_subscription_unresolved_on_cancellation`: `SET resolution_status = 'unresolved', unresolved_from = resolution_status` | it is `pending` or `schedule_matched` |
+//! | a cancellation (`status = 'cancelled'`) | `mark_subscriptions_unresolved_on_cancellation`: `SET resolution_status = 'unresolved', unresolved_from = resolution_status` | it, or another subscription of the same train, is `pending` or `schedule_matched` |
 //! | a reinstatement (`msg_type = '0005'`) | `reopen_subscriptions_after_reinstatement`: `SET resolution_status = unresolved_from` | it, or another subscription of the same train, was moved to `unresolved` by a cancellation |
+//!
+//! The cancellation and reinstatement changes run only when the event's
+//! `train_movement_events` row is newly stored (or the subscription has no
+//! `trains_id` to store one against), so a redelivered or replayed event
+//! does not repeat them.
 //!
 //! Every other event only reads the subscription's `trains_id` and writes
 //! the shared movement and current state.

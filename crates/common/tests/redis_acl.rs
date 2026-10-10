@@ -286,6 +286,8 @@ fn movement_consumer(h: &mut Harness, user: &str) {
             "0",
         ],
         vec!["XACK", &stream, user, "0-1"],
+        // common::redis_group::restore_group_position, after a failed read.
+        vec!["XGROUP", "SETID", &stream, user, "0-1"],
         vec![
             "XAUTOCLAIM",
             &stream,
@@ -410,6 +412,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             vec!["XADD", itc.as_str(), "*", "a", "b"],
             vec!["DEL", stream.as_str()],
             vec!["XGROUP", "DESTROY", stream.as_str(), "trust-consumer"],
+            vec!["XGROUP", "SETID", stream.as_str(), "trust-consumer", "0"],
             vec!["FLUSHALL"],
         ] {
             h.forbidden(user, &args);
@@ -469,6 +472,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
                 ">",
             ],
             vec!["XACK", &itc, "enricher", "0-1"],
+            vec!["XGROUP", "SETID", &itc, "enricher", "0-1"],
             vec![
                 "XAUTOCLAIM",
                 &itc,

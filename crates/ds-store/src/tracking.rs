@@ -109,7 +109,7 @@ impl From<TrackedTrainRow> for TrackedTrainRef {
 ///   anywhere ever wrote, so this clause had never excluded a single row in
 ///   production. Kept anyway at the time ("a future writer of it would mean
 ///   exactly this"), and as of that same review's Low finding #2,
-///   [`mark_subscription_unresolved_on_cancellation`] is now that writer: a
+///   [`mark_subscriptions_unresolved_on_cancellation`] is now that writer: a
 ///   subscription cancelled before ever resolving flips here, precisely the
 ///   "nothing further to do with it" case this exclusion always anticipated.
 /// * the `train_current_state` status check -- which stops applying the
@@ -255,7 +255,7 @@ pub async fn upsert_train_movement(
     pool: &PgPool,
     trains_id: i64,
     event: &TrainMovementEventMessage,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let mut conn = pool.acquire().await?;
     upsert_train_movement_on(&mut conn, trains_id, event).await
 }
@@ -268,15 +268,21 @@ pub async fn upsert_train_movement(
 /// own -- a redelivery of that event would otherwise hit `ON CONFLICT DO
 /// NOTHING` for the movement and never repair the stale current state
 /// (DB2-2).
+///
+/// Returns whether the `train_movement_events` row was newly inserted:
+/// `false` means this `(trains_id, dedup_key)` was already stored, so the
+/// event is a redelivery or a replay. Callers gate their one-shot side
+/// effects (reopening or closing subscriptions) on it; see
+/// [`upsert_train_event_on`].
 pub async fn upsert_train_movement_on(
     conn: &mut PgConnection,
     trains_id: i64,
     event: &TrainMovementEventMessage,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let event_time = event.actual_timestamp.or(event.planned_timestamp);
     let mut tx = conn.begin().await?;
 
-    sqlx::query(
+    let inserted = sqlx::query(
         "INSERT INTO train_movement_events \
             (trains_id, dedup_key, msg_type, event_type, loc_stanox, loc_crs, \
              planned_timestamp, actual_timestamp, variation_status, raw_body, gbtt_timestamp) \
@@ -295,7 +301,9 @@ pub async fn upsert_train_movement_on(
     .bind(&event.raw_body)
     .bind(event.gbtt_timestamp)
     .execute(&mut *tx)
-    .await?;
+    .await?
+    .rows_affected()
+        > 0;
 
     sqlx::query(
         "INSERT INTO train_current_state \
@@ -338,7 +346,7 @@ pub async fn upsert_train_movement_on(
     .await?;
 
     tx.commit().await?;
-    Ok(())
+    Ok(inserted)
 }
 
 /// Legacy per-subscription resolution flip only -- as of this task, it no
@@ -591,25 +599,40 @@ enum LegacyResolution {
 /// isn't in either sweep's `WHERE resolution_status = 'pending'` anyway, and
 /// downgrading it would be exactly finding #1's "regress an already-advanced
 /// status" mistake played out one layer up.
-async fn mark_subscription_unresolved_on_cancellation(
+///
+/// Closes the subscription `tracked_train_id` names and every subscription
+/// linked to `trains_id`, mirroring [`reopen_subscriptions_after_reinstatement`].
+/// The train-wide half matters since the 2026-10-09 replay fix: callers run
+/// this only for a newly inserted movement row (see
+/// [`upsert_train_event_on`]), and trust-consumer's per-subscriber fan-out
+/// and trust-backlog-consumer's copy all share one `dedup_key`, so whichever
+/// write lands first has to close every linked subscription. Returns how
+/// many rows were closed.
+pub(crate) async fn mark_subscriptions_unresolved_on_cancellation(
     conn: &mut PgConnection,
-    tracked_train_id: i64,
-) -> anyhow::Result<()> {
+    tracked_train_id: Option<i64>,
+    trains_id: Option<i64>,
+) -> anyhow::Result<u64> {
+    if tracked_train_id.is_none() && trains_id.is_none() {
+        return Ok(0);
+    }
     // `unresolved_from` keeps the status this cancellation replaced (the
     // right-hand side of a `SET` reads the row's old values), so
     // [`reopen_subscriptions_after_reinstatement`] can restore it.
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE train_subscriptions \
          SET resolution_status = 'unresolved', unresolved_from = resolution_status \
-         WHERE id = $1 AND resolution_status IN ('pending', 'schedule_matched')",
+         WHERE resolution_status IN ('pending', 'schedule_matched') \
+           AND (id = $1 OR trains_id = $2)",
     )
     .bind(tracked_train_id)
+    .bind(trains_id)
     .execute(conn)
     .await?;
-    Ok(())
+    Ok(result.rows_affected())
 }
 
-/// The undo of [`mark_subscription_unresolved_on_cancellation`] (H4
+/// The undo of [`mark_subscriptions_unresolved_on_cancellation`] (H4
 /// residual, 2026-10-01 verification pass). A Reinstatement (`0005`) means
 /// the train runs after all, so every subscription a Cancellation of it
 /// moved to `'unresolved'` goes back to the status it had then
@@ -769,19 +792,6 @@ pub async fn upsert_train_event_on(
         return Ok(());
     }
 
-    // Low finding #2: a Cancellation carries `event.status == "cancelled"`
-    // (set by `trust_schema::journey::apply_cancellation`) but, per the
-    // above, never a `resolved_train_id` -- so this is the one place left to
-    // stop such a subscription being retried forever. Independent of the
-    // `trains_id`/movement write below: even when this subscription's
-    // identity was never established at all (so the movement itself is
-    // dropped, further down), the subscription-level bookkeeping must still
-    // advance -- there is nothing further any sweep can do for it either
-    // way.
-    if event.status == "cancelled" {
-        mark_subscription_unresolved_on_cancellation(&mut *conn, event.tracked_train_id).await?;
-    }
-
     let trains_id = match resolved {
         LegacyResolution::Applied(id) => Some(id),
         _ => sqlx::query_scalar::<_, Option<i64>>(
@@ -793,6 +803,46 @@ pub async fn upsert_train_event_on(
         .flatten(),
     };
 
+    // Whether this event is new to the shared store. A redelivered or
+    // replayed event (its `(trains_id, dedup_key)` row already stored) must
+    // not re-run the one-shot subscription changes below: replaying a
+    // cancel -> reinstate -> cancel range would otherwise reopen, at the
+    // replayed Reinstatement, a subscription the later Cancellation had
+    // closed (2026-10-09 redelivery review). With no `trains_id` there is
+    // no row to deduplicate on, so the changes run as before; a full,
+    // in-order replay still ends in the right state.
+    let fresh = match trains_id {
+        Some(trains_id) => upsert_train_movement_on(&mut *conn, trains_id, event).await?,
+        None => {
+            tracing::warn!(
+                tracked_train_id = event.tracked_train_id,
+                "no trains_id known yet for this subscription; movement event dropped \
+                 from the shared store until its identity is resolved"
+            );
+            true
+        }
+    };
+    if !fresh {
+        return Ok(());
+    }
+
+    // Low finding #2: a Cancellation carries `event.status == "cancelled"`
+    // (set by `trust_schema::journey::apply_cancellation`) but, per the
+    // above, never a `resolved_train_id` -- so this is the one place left to
+    // stop such a subscription being retried forever. Independent of the
+    // `trains_id`/movement write above: even when this subscription's
+    // identity was never established at all (so the movement itself is
+    // dropped), the subscription-level bookkeeping must still advance --
+    // there is nothing further any sweep can do for it either way.
+    if event.status == "cancelled" {
+        mark_subscriptions_unresolved_on_cancellation(
+            &mut *conn,
+            Some(event.tracked_train_id),
+            trains_id,
+        )
+        .await?;
+    }
+
     // The other half of the block above: a Reinstatement reopens what a
     // Cancellation of the same train closed.
     if event.msg_type == "0005" {
@@ -802,17 +852,6 @@ pub async fn upsert_train_event_on(
             trains_id,
         )
         .await?;
-    }
-
-    match trains_id {
-        Some(trains_id) => upsert_train_movement_on(&mut *conn, trains_id, event).await?,
-        None => {
-            tracing::warn!(
-                tracked_train_id = event.tracked_train_id,
-                "no trains_id known yet for this subscription; movement event dropped \
-                 from the shared store until its identity is resolved"
-            );
-        }
     }
 
     Ok(())
@@ -1329,6 +1368,278 @@ mod db_tests {
         );
 
         cleanup_user(&pool, user_id).await;
+    }
+
+    // --- 2026-10-09 redelivery review: a replay must not reopen what a later cancellation closed ---
+
+    /// A shared `trains` row with its `train_id`, and `count` subscriptions
+    /// linked to it in `'schedule_matched'`. Returns `(trains_id, ids)`.
+    async fn seed_linked_subscriptions(
+        pool: &PgPool,
+        user_id: &str,
+        train_uid: &str,
+        train_id: &str,
+        count: usize,
+    ) -> (i64, Vec<i64>) {
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(pool)
+            .await
+            .expect("pre-clean trains");
+        cleanup_user(pool, user_id).await;
+        seed_user(pool, user_id).await;
+        let today = db_today(pool).await;
+        let trains_id = crate::trains::find_or_create_train(pool, train_uid, today)
+            .await
+            .expect("seed the shared trains row");
+        crate::trains::mark_train_resolved(pool, trains_id, train_id)
+            .await
+            .expect("seed its train_id");
+        let mut ids = Vec::new();
+        for _ in 0..count {
+            let id: i64 = sqlx::query_scalar(
+                "INSERT INTO train_subscriptions \
+                    (user_id, service_date, pin_origin_crs, pin_scheduled_departure, trains_id, \
+                     resolution_status) \
+                 VALUES ($1, $2, 'EUS', $3, $4, 'schedule_matched') RETURNING id",
+            )
+            .bind(user_id)
+            .bind(today)
+            .bind(today.and_hms_opt(18, 15, 0).unwrap().and_utc())
+            .bind(trains_id)
+            .fetch_one(pool)
+            .await
+            .expect("seed a schedule-matched subscription");
+            ids.push(id);
+        }
+        (trains_id, ids)
+    }
+
+    async fn clean_linked_subscriptions(pool: &PgPool, user_id: &str, train_uid: &str) {
+        cleanup_user(pool, user_id).await;
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(train_uid)
+            .execute(pool)
+            .await
+            .expect("clean trains");
+    }
+
+    fn backlog_event(
+        train: (&str, &str),
+        service_date: NaiveDate,
+        msg_type: &str,
+        dedup_key: &str,
+        actual: &str,
+    ) -> common::TrustBacklogEventMessage {
+        common::TrustBacklogEventMessage {
+            crs: None,
+            train_uid: Some(train.0.to_string()),
+            train_id: train.1.to_string(),
+            service_date,
+            msg_type: msg_type.to_string(),
+            event_type: None,
+            planned_timestamp: None,
+            actual_timestamp: at(actual),
+            variation_status: None,
+            delay_minutes: None,
+            dedup_key: dedup_key.to_string(),
+            gbtt_timestamp: None,
+        }
+    }
+
+    async fn ingest_backlog(pool: &PgPool, events: &[common::TrustBacklogEventMessage]) {
+        let results = crate::backlog::ingest_shared_movements_batch(pool, events).await;
+        assert!(results.iter().all(Result::is_ok), "{results:?}");
+    }
+
+    /// trust-backlog-consumer's path: cancel -> reinstate -> cancel again,
+    /// then the range is replayed (a consumer-group rewind). The replayed
+    /// Reinstatement used to reopen the subscription the second
+    /// Cancellation had closed.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_replayed_backlog_range -- --ignored --test-threads=1`"]
+    async fn a_replayed_backlog_range_keeps_a_recancelled_subscription_closed() {
+        let pool = connect().await;
+        let (user_id, train) = ("TEST-REPLAY-BACKLOG", ("TRPB01", "TRPB01ID01"));
+        let (_, ids) = seed_linked_subscriptions(&pool, user_id, train.0, train.1, 1).await;
+        let tracked_train_id = ids[0];
+        let today = db_today(&pool).await;
+        let range = [
+            backlog_event(train, today, "0002", "replay-b-c1", "2026-09-05T18:05:00Z"),
+            backlog_event(train, today, "0005", "replay-b-r1", "2026-09-05T18:10:00Z"),
+            backlog_event(train, today, "0002", "replay-b-c2", "2026-09-05T18:20:00Z"),
+        ];
+
+        ingest_backlog(&pool, &range[..1]).await;
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved",
+            "the backlog path closes it on a newly stored cancellation"
+        );
+        ingest_backlog(&pool, &range[1..2]).await;
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "schedule_matched"
+        );
+        ingest_backlog(&pool, &range[2..]).await;
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved",
+            "the second cancellation closes it again"
+        );
+
+        // The rewind: each event on its own, then the range as one batch.
+        for event in &range {
+            ingest_backlog(&pool, std::slice::from_ref(event)).await;
+            assert_eq!(
+                resolution_status_of(&pool, tracked_train_id).await,
+                "unresolved",
+                "replaying {} must not reopen it",
+                event.dedup_key
+            );
+        }
+        ingest_backlog(&pool, &range).await;
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved"
+        );
+
+        clean_linked_subscriptions(&pool, user_id, train.0).await;
+    }
+
+    /// trust-consumer's path (`POST /private/train-events` and the outbox):
+    /// the same cancel -> reinstate -> cancel sequence, then a redelivery of
+    /// the Reinstatement alone (an un-ACKed batch) and of the whole range.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_replayed_live_range -- --ignored --test-threads=1`"]
+    async fn a_replayed_live_range_keeps_a_recancelled_subscription_closed() {
+        let pool = connect().await;
+        let (user_id, train_uid, train_id) = ("TEST-REPLAY-LIVE", "TRPL01", "TRPL01ID01");
+        let (_, ids) = seed_linked_subscriptions(&pool, user_id, train_uid, train_id, 1).await;
+        let tracked_train_id = ids[0];
+        let event = |msg_type: &str, status: &str, key: &str, actual: &str| {
+            let mut event = fixture_event(tracked_train_id, key);
+            event.msg_type = msg_type.to_string();
+            event.event_type = None;
+            event.planned_timestamp = None;
+            event.actual_timestamp = at(actual);
+            event.status = status.to_string();
+            event
+        };
+        let cancel = event("0002", "cancelled", "replay-l-c1", "2026-09-05T18:05:00Z");
+        let reinstate = event("0005", "en_route", "replay-l-r1", "2026-09-05T18:10:00Z");
+        let cancel_again = event("0002", "cancelled", "replay-l-c2", "2026-09-05T18:20:00Z");
+
+        upsert_train_event(&pool, &cancel).await.expect("cancel");
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved"
+        );
+        upsert_train_event(&pool, &reinstate)
+            .await
+            .expect("reinstate");
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "schedule_matched"
+        );
+        upsert_train_event(&pool, &cancel_again)
+            .await
+            .expect("cancel again");
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved"
+        );
+
+        upsert_train_event(&pool, &reinstate)
+            .await
+            .expect("redelivered reinstatement");
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved",
+            "a redelivered reinstatement must not reopen it"
+        );
+        let outcome = upsert_train_events_batch(
+            &pool,
+            &[cancel.clone(), reinstate.clone(), cancel_again.clone()],
+        )
+        .await
+        .expect("replayed batch");
+        assert!(outcome.rejected.is_empty(), "{outcome:?}");
+        assert_eq!(
+            resolution_status_of(&pool, tracked_train_id).await,
+            "unresolved"
+        );
+
+        clean_linked_subscriptions(&pool, user_id, train_uid).await;
+    }
+
+    /// trust-consumer fans one Cancellation out per subscriber with one
+    /// `dedup_key`, and trust-backlog-consumer stores the same key. Only the
+    /// first write of the row runs the subscription change, so it closes
+    /// (or reopens) every subscription of the train; a later copy changes
+    /// nothing.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_cancellation_stored_first -- --ignored --test-threads=1`"]
+    async fn a_cancellation_stored_first_by_either_path_closes_every_linked_subscription() {
+        let pool = connect().await;
+        let (user_id, train) = ("TEST-REPLAY-FANOUT", ("TRPF01", "TRPF01ID01"));
+        let (_, ids) = seed_linked_subscriptions(&pool, user_id, train.0, train.1, 2).await;
+        let today = db_today(&pool).await;
+
+        // The backlog copy lands first.
+        ingest_backlog(
+            &pool,
+            &[backlog_event(
+                train,
+                today,
+                "0002",
+                "fanout-c1",
+                "2026-09-05T18:05:00Z",
+            )],
+        )
+        .await;
+        for &id in &ids {
+            assert_eq!(resolution_status_of(&pool, id).await, "unresolved");
+        }
+
+        // Then trust-consumer's per-subscriber copies, and a live
+        // Reinstatement: its first copy reopens both.
+        for &id in &ids {
+            let mut cancel = fixture_event(id, "fanout-c1");
+            cancel.msg_type = "0002".to_string();
+            cancel.status = "cancelled".to_string();
+            upsert_train_event(&pool, &cancel)
+                .await
+                .expect("live cancel");
+        }
+        for &id in &ids {
+            let mut reinstate = fixture_event(id, "fanout-r1");
+            reinstate.msg_type = "0005".to_string();
+            reinstate.actual_timestamp = at("2026-09-05T18:10:00Z");
+            upsert_train_event(&pool, &reinstate)
+                .await
+                .expect("live reinstate");
+        }
+        for &id in &ids {
+            assert_eq!(resolution_status_of(&pool, id).await, "schedule_matched");
+        }
+
+        // A live cancellation stored first closes both too.
+        let mut cancel = fixture_event(ids[0], "fanout-c2");
+        cancel.msg_type = "0002".to_string();
+        cancel.status = "cancelled".to_string();
+        cancel.actual_timestamp = at("2026-09-05T18:20:00Z");
+        upsert_train_event(&pool, &cancel)
+            .await
+            .expect("live cancel again");
+        for &id in &ids {
+            assert_eq!(resolution_status_of(&pool, id).await, "unresolved");
+        }
+
+        clean_linked_subscriptions(&pool, user_id, train.0).await;
     }
 
     #[tokio::test]

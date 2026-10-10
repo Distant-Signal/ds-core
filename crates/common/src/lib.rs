@@ -40,6 +40,8 @@ pub mod rail_day;
 pub mod redis_auth;
 #[cfg(feature = "redis")]
 pub mod redis_conn;
+#[cfg(feature = "redis")]
+pub mod redis_group;
 pub mod schedule_delivery;
 pub mod secret;
 pub mod segments;
