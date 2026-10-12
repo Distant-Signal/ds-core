@@ -1387,6 +1387,7 @@ dependencies = [
  "common",
  "dotenvy",
  "ds-store",
+ "futures-util",
  "health-http",
  "metrics",
  "metrics-exporter-prometheus",
