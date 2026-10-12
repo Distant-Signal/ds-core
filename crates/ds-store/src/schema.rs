@@ -40,7 +40,8 @@ use std::time::Duration;
 use anyhow::{Result, bail};
 use common::metrics::metric_name;
 use common::progress::Progress;
-use sqlx::PgPool;
+use sqlx::pool::PoolConnection;
+use sqlx::{PgPool, Postgres};
 
 /// The version of the newest migration this build embeds: the largest
 /// `<version>` among `crates/ds-store/migrations/<version>_<description>.sql`
@@ -265,11 +266,40 @@ fn describe(status: &SchemaStatus, required_migration: i64) -> String {
 }
 
 /// One check: the applied version, then the privileges `current_user`
-/// lacks, in one query each.
+/// lacks, in one query each, both on ONE connection acquired from `pool`.
+///
+/// **One connection, not two** (rollout deadlock, 2026-10-10). Run straight
+/// on the pool, the second query opened a second backend: sqlx 0.8 hands a
+/// dropped connection back to the idle queue from a spawned task, after a
+/// ping round trip, so a query issued right after another finds the idle
+/// queue empty and, with the pool below `max_connections`, connects
+/// afresh. At startup the pool holds only the connection `connect` opened;
+/// with the role at its `CONNECTION LIMIT` (the old pod of a surge rollout
+/// holding the rest) that second connect failed with "too many
+/// connections for role", and the gate looped on `PoolTimedOut`. Holding
+/// one connection for both queries, and handing it back to the idle queue
+/// before returning (not from a spawned task), means the gate needs no
+/// backend beyond the one the pool already has, and neither does the
+/// service's first query after it. (`min_connections` is 0 and
+/// `test_before_acquire` only pings an idle connection, so neither opens
+/// one; see `docs/ingest-phase5-runbook.md`.)
 pub async fn check(pool: &PgPool, privileges: &[RequiredPrivilege]) -> Result<SchemaStatus> {
+    let mut conn = crate::pool::acquire(pool).await?;
+    let status = check_on(&mut conn, privileges).await;
+    // What dropping `conn` would do (ping, then back to the idle queue),
+    // awaited here instead of spawned. Public but `#[doc(hidden)]` in sqlx
+    // 0.8 (and 0.9); the drop handler is the fallback if it goes away.
+    conn.return_to_pool().await;
+    status
+}
+
+async fn check_on(
+    conn: &mut PoolConnection<Postgres>,
+    privileges: &[RequiredPrivilege],
+) -> Result<SchemaStatus> {
     let applied_migration: Option<i64> =
         sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations WHERE success")
-            .fetch_one(pool)
+            .fetch_one(&mut **conn)
             .await?;
     let tables: Vec<&str> = privileges.iter().map(|p| p.table).collect();
     let kinds: Vec<&str> = privileges.iter().map(|p| p.privilege).collect();
@@ -293,7 +323,7 @@ pub async fn check(pool: &PgPool, privileges: &[RequiredPrivilege]) -> Result<Sc
     .bind(&tables)
     .bind(&kinds)
     .bind(&columns)
-    .fetch_all(pool)
+    .fetch_all(&mut **conn)
     .await?;
     Ok(SchemaStatus {
         applied_migration,
@@ -743,6 +773,41 @@ mod db_tests {
             message.contains("missing SELECT on schema_gate_test_no_such_table"),
             "{message}"
         );
+    }
+
+    /// The rollout deadlock of 2026-10-10: the gate must not need more
+    /// backends than the one the pool opened at connect. Its two queries
+    /// used to run straight on the pool, back to back; sqlx 0.8 returns a
+    /// dropped connection to the idle queue from a spawned task (after a
+    /// ping), so the second query found no idle connection and, with the
+    /// pool below its maximum, opened a second backend. With the role at
+    /// its CONNECTION LIMIT that connect failed and the gate looped on
+    /// `PoolTimedOut`. Now both queries share one acquired connection,
+    /// handed back before `check` returns, so back-to-back checks (and the
+    /// service's first query after the gate) reuse it too.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn the_gate_uses_one_backend() {
+        let pool = PgPoolOptions::new()
+            .max_connections(3)
+            .connect(&database_url())
+            .await
+            .expect("connect");
+        assert_eq!(pool.size(), 1, "connect opens one connection");
+        let gate = SchemaGate {
+            deadline: Duration::ZERO,
+            ..SchemaGate::for_role(DbRole::Api)
+        };
+        for _ in 0..20 {
+            check(&pool, gate.privileges).await.unwrap();
+            assert_eq!(pool.size(), 1, "the check opened another connection");
+        }
+        wait_for_schema_with(&pool, &gate, None).await.unwrap();
+        assert_eq!(pool.size(), 1, "the gate opened another connection");
+        // The service's first query, straight after the gate, finds the
+        // gate's connection idle again rather than connecting.
+        sqlx::query("SELECT 1").execute(&pool).await.unwrap();
+        assert_eq!(pool.size(), 1, "the first query after the gate connected");
     }
 
     /// A database with no `_sqlx_migrations` at all (a fresh install
