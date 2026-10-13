@@ -1383,6 +1383,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "clap",
  "common",
  "dotenvy",
@@ -1392,6 +1393,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "redis",
+ "regex",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
