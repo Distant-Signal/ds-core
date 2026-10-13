@@ -8,7 +8,7 @@
 //! `POST /private/incidents` and poller-incidents' `DbSink`):
 //!
 //! 1. [`apply_snapshot`]: the content upserts, in committed chunks; returns
-//!    the ids whose text changed;
+//!    the ids whose text changed or that were reopened;
 //! 2. the caller XADDs those ids to `incident-text-changed`, best effort,
 //!    after every chunk has committed;
 //! 3. [`removal::infer_removals`]: "Ended (no longer listed)".
@@ -99,6 +99,17 @@ pub fn text_changed(existing: Option<&ExistingIncident>, summary: &str, descript
     }
 }
 
+/// True when a stored cleared incident comes back uncleared (a reopen).
+///
+/// [`apply_snapshot`] reports a reopen in `text_changed_ids` even when the
+/// text did not move (2026-10-12): RDM sometimes publishes the live text
+/// while the incident is still flagged cleared, then flips the flag one poll
+/// later with no text change. The enricher skips cleared incidents, so
+/// without this the reopened incident waited for the hourly sweep.
+pub fn reopened(existing: Option<&ExistingIncident>, is_cleared: bool) -> bool {
+    existing.is_some_and(|row| row.is_cleared && !is_cleared)
+}
+
 /// Every station's name (the `stations` reference table), for resolving
 /// the places an incident names (`common::station_resolver`). The same
 /// query as the aggregator's `load_station_names`.
@@ -124,8 +135,9 @@ pub struct IncidentSnapshotOutcome {
 pub struct AppliedSnapshot {
     /// Incidents in the snapshot (every chunk committed).
     pub upserted: u64,
-    /// The ids whose summary or description changed, or that are new: what
-    /// the caller XADDs to `incident-text-changed`.
+    /// The ids whose summary or description changed, that are new, or that
+    /// were reopened (cleared to uncleared, [`reopened`]): what the caller
+    /// XADDs to `incident-text-changed`.
     pub text_changed_ids: Vec<String>,
 }
 
@@ -245,9 +257,9 @@ fn record_unresolved_places(
 /// once. Whether every listed row also gets `fetched_at = NOW()` is
 /// `heartbeat` (module docs).
 ///
-/// The returned `text_changed_ids` are for the caller to publish, once
-/// every chunk has committed (which is when this returns) and before the
-/// inference: best effort (log, do not fail), because a publish failure
+/// The returned `text_changed_ids` (text changes and reopens) are for the
+/// caller to publish, once every chunk has committed (which is when this
+/// returns) and before the inference: best effort (log, do not fail), because a publish failure
 /// must not fail the ingest. Redis stays out of this crate (spec §5.1).
 #[expect(
     clippy::too_many_lines,
@@ -333,7 +345,9 @@ pub async fn apply_snapshot(
             ) {
                 changed_rows.push((*incident, validity_json));
             }
-            if text_changed(existing, &incident.summary, &incident.description) {
+            if text_changed(existing, &incident.summary, &incident.description)
+                || reopened(existing, incident.is_cleared)
+            {
                 text_changed_ids.push(incident.incident_id.clone());
             }
         }
@@ -1050,6 +1064,18 @@ mod change_detection_tests {
             "Signal failure",
             "Disruption has now ended"
         ));
+    }
+
+    #[test]
+    fn a_reopen_is_reported_and_nothing_else_is() {
+        let mut row = existing("Signal failure", "Delays expected", serde_json::json!([]));
+        row.is_cleared = true;
+        assert!(reopened(Some(&row), false), "cleared to uncleared");
+        assert!(!reopened(Some(&row), true), "still cleared");
+        row.is_cleared = false;
+        assert!(!reopened(Some(&row), false), "still live");
+        assert!(!reopened(Some(&row), true), "a clear is not a reopen");
+        assert!(!reopened(None, false), "new: text_changed covers it");
     }
 
     #[test]
