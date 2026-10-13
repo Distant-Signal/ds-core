@@ -1,20 +1,16 @@
-//! The producer side of every snapshot sink (`INGEST_SINK=http+shadow` or
-//! `stream`; spec §9.1, §11.3, §13.1; plans 3a.7, 3a.8 and 3c.2): the
-//! [`SinkMode`], a producer's Redis settings ([`RedisArgs`]), encoding a
-//! snapshot's rows into parts ([`Snapshot`]), submitting them to a
-//! latest-snapshot [`Producer`] as ONE item ([`SnapshotProducer`]), counting
-//! the rows once they are written, and reading the stream cursor.
+//! The producer side of every snapshot stream (`INGEST_SINK=stream`; spec
+//! §9.1, §11.3, §13.1; plans 3a.7, 3a.8 and 3c.2): a producer's Redis
+//! settings ([`RedisArgs`]), encoding a snapshot's rows into parts
+//! ([`Snapshot`]), submitting them to a latest-snapshot [`Producer`] as ONE
+//! item ([`SnapshotProducer`]), and reading the stream cursor.
 //! [`SnapshotStream`] is the one-schema form the `TfL`, tocs and
 //! island-of-Ireland pollers use; poller-ldbws and full-coverage-consumer
 //! drive [`SnapshotProducer`] directly.
 //!
-//! | `INGEST_SINK` | The api's `POST` | The stream | Startup cursor |
-//! |---|---|---|---|
-//! | `http` (default) | authoritative | – | the api's `GET` |
-//! | `http+shadow` | authoritative | a copy of every snapshot, best effort (the writer's `shadow` mode checks it) | the api's `GET` |
-//! | `stream` | – | authoritative | the stream's newest `produced_at` |
-//!
-//! The island-of-Ireland pollers (decision D8) have only `stream`.
+//! The stream is authoritative, and the startup cursor is the stream's
+//! newest `produced_at`. Release B (ingest phase 5) removed the
+//! `http` and `http+shadow` sinks (the api's `/private` routes), so every
+//! producer here only XADDs.
 //!
 //! **One item per snapshot.** Under [`crate::ProducePolicy::LatestSnapshot`]
 //! a newer item replaces an unsent older one, so everything one snapshot
@@ -30,9 +26,9 @@
 //! on every retry (same keys, same `produced_at`, spec §7.8): nothing here
 //! re-stamps at XADD.
 //!
-//! **The payload is today's HTTP body.** A part's body is the JSON array of
-//! its rows, so `/1` is byte for byte the body of the api route (spec
-//! §7.2), just split into parts of [`ROWS_PER_PART`].
+//! **The payload is the old HTTP body.** A part's body is the JSON array of
+//! its rows, as the retired api route's body was (spec §7.2), split into
+//! parts of [`ROWS_PER_PART`].
 
 use std::fmt;
 use std::sync::{Mutex, OnceLock};
@@ -51,56 +47,6 @@ use crate::envelope::{
 use crate::producer::{NotWritten, Producer, last_produced_at};
 use crate::{budget, metrics};
 
-/// A stream producer's `INGEST_SINK` (spec §13.1): where its snapshots go.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SinkMode {
-    /// POST to the api only (today; the default).
-    #[default]
-    Http,
-    /// POST to the api (authoritative: its result is the cycle's), plus a
-    /// copy `XADD`ed to the stream for the writer's `shadow` mode to check.
-    HttpShadow,
-    /// XADD only; the api is no longer written.
-    Stream,
-}
-
-impl SinkMode {
-    /// Whether the api gets a `POST`.
-    pub fn posts_http(self) -> bool {
-        matches!(self, Self::Http | Self::HttpShadow)
-    }
-
-    /// Whether snapshots are `XADD`ed (so Redis is needed).
-    pub fn produces(self) -> bool {
-        matches!(self, Self::HttpShadow | Self::Stream)
-    }
-}
-
-impl std::str::FromStr for SinkMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "http" => Ok(Self::Http),
-            "http+shadow" => Ok(Self::HttpShadow),
-            "stream" => Ok(Self::Stream),
-            other => Err(format!(
-                "unknown INGEST_SINK {other:?} (http, http+shadow or stream)"
-            )),
-        }
-    }
-}
-
-impl fmt::Display for SinkMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Http => "http",
-            Self::HttpShadow => "http+shadow",
-            Self::Stream => "stream",
-        })
-    }
-}
-
 /// Rows per part (spec §7.1: station samples in chunks of 100 stations);
 /// [`split_snapshot`] halves it for a part that would exceed 512 KiB.
 pub const ROWS_PER_PART: usize = 100;
@@ -117,7 +63,7 @@ pub fn producer_id(component: &str) -> String {
 }
 
 /// One snapshot's encoded parts, possibly of several schemas, and the rows
-/// each schema carries (for [`metrics::SINK_ROWS_TOTAL`]).
+/// each schema carries.
 #[derive(Debug, Default)]
 pub struct Snapshot {
     parts: Vec<EncodedEntry>,
@@ -221,9 +167,8 @@ impl SnapshotReceipt {
 }
 
 /// Submits `snapshot` to `producer` as one item (never waits under
-/// [`crate::ProducePolicy::LatestSnapshot`]), and counts its rows in
-/// `ingest_stream_sink_rows_total{sink="stream"}` once it is written. An
-/// empty snapshot resolves at once and counts nothing.
+/// [`crate::ProducePolicy::LatestSnapshot`]). An empty snapshot resolves
+/// at once.
 ///
 /// # Errors
 ///
@@ -232,55 +177,40 @@ pub async fn submit(
     producer: &Producer,
     snapshot: Snapshot,
 ) -> Result<SnapshotReceipt, NotWritten> {
-    let Snapshot { parts, rows } = snapshot;
+    let Snapshot { parts, .. } = snapshot;
     let receipt = producer.submit(parts).await?;
     let (done, rx) = oneshot::channel();
-    let stream = producer.stream().to_owned();
     tokio::spawn(async move {
-        let result = receipt.written().await;
-        if result.is_ok() {
-            for (schema, count) in &rows {
-                metrics::sink_rows(&stream, schema, "stream", *count);
-            }
-        }
-        let _ = done.send(result);
+        let _ = done.send(receipt.written().await);
     });
     Ok(SnapshotReceipt(rx))
 }
 
 /// One snapshot stream's producer, for a poller or consumer that XADDs
-/// (`INGEST_SINK=http+shadow` or `stream`): a
+/// (`INGEST_SINK=stream`): a
 /// [`crate::ProducePolicy::LatestSnapshot`] [`Producer`] with the stream's
 /// `MAXLEN` from [`crate::budget`], spawned on first use (or by
 /// [`SnapshotProducer::start`]), so after the caller's metrics recorder is
-/// installed (its series registered at 0 are then exported) and inside its
+/// installed and inside its
 /// runtime. Without a [`SnapshotProducer::shutdown`] an unsent snapshot at
-/// exit is lost, as a POST in flight is, and the next process sends a
-/// fresh one.
+/// exit is lost, and the next process sends a fresh one.
 pub struct SnapshotProducer {
     client: redis::Client,
     stream: String,
-    schemas: Vec<SchemaId>,
     producer_id: String,
     producer: OnceLock<Producer>,
     task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl SnapshotProducer {
-    /// For `stream` (one of [`crate::streams`], or a test's prefixed key)
-    /// carrying `schemas`, as `component` (the envelope's `producer` is
+    /// For `stream` (one of [`crate::streams`], or a test's prefixed key),
+    /// as `component` (the envelope's `producer` is
     /// `<component>/<pod>`), over `client` (the component's own ACL user,
     /// D6).
-    pub fn new(
-        client: redis::Client,
-        stream: impl Into<String>,
-        component: &str,
-        schemas: Vec<SchemaId>,
-    ) -> Self {
+    pub fn new(client: redis::Client, stream: impl Into<String>, component: &str) -> Self {
         Self {
             client,
             stream: stream.into(),
-            schemas,
             producer_id: producer_id(component),
             producer: OnceLock::new(),
             task: Mutex::new(None),
@@ -313,7 +243,6 @@ impl SnapshotProducer {
             if let Ok(mut slot) = self.task.lock() {
                 *slot = Some(task);
             }
-            register_sink(&self.stream, &self.schemas.iter().collect::<Vec<_>>());
             producer
         })
     }
@@ -358,16 +287,6 @@ impl SnapshotProducer {
     }
 }
 
-/// Registers `ingest_stream_sink_rows_total` at 0 for each of `schemas`
-/// and both sinks, so the compare step's `increase()` sees the first rows.
-pub fn register_sink(stream: &str, schemas: &[&SchemaId]) {
-    for schema in schemas {
-        for sink in metrics::SINKS {
-            metrics::sink_rows(stream, schema.name(), sink, 0);
-        }
-    }
-}
-
 /// The stream producer's "last fetched" cursor (spec §11.3): the newest
 /// entry's `produced_at` on `stream`, over one bounded connection. `None`
 /// for an empty or missing stream ("poll now").
@@ -396,8 +315,8 @@ fn stream_decl(stream: &str) -> Option<&'static budget::StreamDecl> {
 /// for the producer's own ACL user, decision D6).
 #[derive(Clone, clap::Args)]
 pub struct RedisArgs {
-    /// Redis, for the ingest stream. Needed by `INGEST_SINK=http+shadow`
-    /// and `stream`. May carry a password (`redis://:pw@host`).
+    /// Redis, for the ingest stream (required). May carry a password
+    /// (`redis://:pw@host`).
     #[arg(long, env, hide_env_values = true)]
     pub redis_url: Option<Secret>,
 
@@ -481,7 +400,7 @@ impl SnapshotStream {
         component: &str,
         max_rows_per_part: usize,
     ) -> Self {
-        let inner = SnapshotProducer::new(client, stream, component, vec![schema.clone()]);
+        let inner = SnapshotProducer::new(client, stream, component);
         inner.start();
         Self {
             inner,
@@ -497,9 +416,7 @@ impl SnapshotStream {
     /// Queues `rows`, fetched at `produced_at`, as one snapshot: its parts
     /// share the batch `produced_at` and keep their keys across retries;
     /// an empty `rows` is one empty part (a whole, empty snapshot). Never
-    /// waits for Redis. The rows are counted in
-    /// `ingest_stream_sink_rows_total{sink="stream"}` once written, and the
-    /// write's outcome is logged when known (a newer snapshot superseding
+    /// waits for Redis. The write's outcome is logged when known (a newer snapshot superseding
     /// this one is normal while Redis is down).
     ///
     /// # Errors
@@ -540,14 +457,6 @@ impl SnapshotStream {
         Ok(())
     }
 
-    /// Counts `rows` the api accepted for this producer's schema
-    /// (`ingest_stream_sink_rows_total{sink="http"}`): call it after a
-    /// successful `POST` under `INGEST_SINK=http+shadow`, so the rollout's
-    /// compare step has the api's side.
-    pub fn record_http(&self, rows: usize) {
-        metrics::sink_rows(self.stream(), self.schema.name(), "http", rows);
-    }
-
     /// Whether the last XADD succeeded (readiness `stream_unavailable` when
     /// false).
     pub fn is_available(&self) -> bool {
@@ -555,7 +464,7 @@ impl SnapshotStream {
     }
 
     /// The `produced_at` of the newest entry of this producer's schema: the
-    /// poller's "last fetched" cursor under `INGEST_SINK=stream` (spec
+    /// poller's "last fetched" cursor (spec
     /// §11.3). The stream is read backwards (`XREVRANGE`) a page at a time
     /// until an entry of this schema turns up, bounded by the stream's
     /// `MAXLEN`. On a one-schema stream (`tfl`, `reference`) that is the
@@ -671,22 +580,6 @@ mod tests {
                 .any(|(name, value)| *name == field::PRODUCED_AT
                     && value.as_slice() == b"2026-10-08T12:00:00.123Z")
         );
-    }
-
-    #[test]
-    fn sink_modes_round_trip_and_default_to_http() {
-        for (text, mode) in [
-            ("http", SinkMode::Http),
-            ("http+shadow", SinkMode::HttpShadow),
-            ("stream", SinkMode::Stream),
-        ] {
-            assert_eq!(text.parse::<SinkMode>().unwrap(), mode);
-            assert_eq!(mode.to_string(), text);
-        }
-        assert_eq!(SinkMode::default(), SinkMode::Http);
-        assert!("db".parse::<SinkMode>().is_err());
-        assert!(SinkMode::HttpShadow.posts_http() && SinkMode::HttpShadow.produces());
-        assert!(!SinkMode::Stream.posts_http() && !SinkMode::Http.produces());
     }
 
     #[test]

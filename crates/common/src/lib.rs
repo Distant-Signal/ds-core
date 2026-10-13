@@ -26,8 +26,6 @@ pub mod logging;
 pub mod matcher;
 pub mod metrics;
 #[cfg(feature = "http")]
-pub mod oauth_client;
-#[cfg(feature = "http")]
 pub mod outbound_endpoint_guard;
 pub mod pass_through;
 #[cfg(feature = "postgres")]

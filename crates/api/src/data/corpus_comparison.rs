@@ -15,21 +15,12 @@
 //! the two data sets, and the fallback never overrides the timetable
 //! either way.
 //!
-//! Two ways to run it, both read-only:
-//!
-//! - after every CORPUS load, `POST /private/corpus-locations` logs the
-//!   [`ReportDetail::Summary`] and sets the `distant_signal_api_corpus_comparison_*`
-//!   gauges ([`record_metrics`]);
-//! - on demand, `corpus_compare` (`crates/api/src/bin/corpus_compare.rs`,
-//!   shipped in the api image) prints the full report against
-//!   `DATABASE_URL`.
-//!
-//! With no CORPUS loaded neither does any work: the route never runs, and
-//! the binary stops after one `COUNT(*)`.
+//! The api runs it on demand only, read-only: `corpus_compare`
+//! (`crates/api/src/bin/corpus_compare.rs`, shipped in the api image)
+//! prints the full report against `DATABASE_URL`, stopping after one
+//! `COUNT(*)` with no CORPUS loaded. (The after-load summary came from
+//! `POST /private/corpus-locations` until release B, ingest phase 5.)
 
 // Moved to `ds_store::corpus::comparison` (ingest architecture plan 1A.6), with its
 // tests.
-pub use ds_store::corpus::comparison::{
-    Conflict, CorpusComparison, Fill, NameDiff, ReportDetail, Timetable, compare, load_timetable,
-    log_after_load, record_metrics, render,
-};
+pub use ds_store::corpus::comparison::{ReportDetail, compare, load_timetable, render};

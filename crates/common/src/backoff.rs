@@ -1,6 +1,5 @@
 //! Capped exponential backoff with jitter, shared by every retry loop that
-//! waits on a dependency that may simply not be ready yet (the OAuth token
-//! fetch in [`crate::oauth_client`], `schedule-reference`'s startup seed and
+//! waits on a dependency that may simply not be ready yet (`schedule-reference`'s startup seed and
 //! its per-product publish retries, full-coverage-consumer's population
 //! reload, and trust-consumer's tracked-trains reload through
 //! [`RetrySchedule`]).

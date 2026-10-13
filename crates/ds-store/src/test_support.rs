@@ -48,6 +48,25 @@ pub async fn connect() -> PgPool {
         .expect("connect to postgres")
 }
 
+/// The pool a test seeds schedule products through. The schedule publish
+/// path (`schedule::upsert_schedule_*`) stages keys in the `*_publish_keys`
+/// tables and calls `analyze_publish_keys`, which since release B only
+/// schedule-reference's role and the schema owner may touch (db-grants.yaml
+/// `app_revokes`). A suite running as another service's role (CI's
+/// per-service step, the api's as `distant_signal_api`) therefore seeds as
+/// the owner, `MIGRATION_DATABASE_URL`, when it is set; otherwise `pool`
+/// (a local superuser run).
+pub async fn schedule_fixture_pool(pool: &PgPool) -> PgPool {
+    match std::env::var("MIGRATION_DATABASE_URL") {
+        Ok(url) if !url.is_empty() => PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("connect to MIGRATION_DATABASE_URL for schedule fixtures"),
+        _ => pool.clone(),
+    }
+}
+
 /// The database's own `CURRENT_DATE`, which is what every query under
 /// test compares `service_date` against. Seeding from
 /// `Utc::now().date_naive()` instead only agreed with it because the
@@ -506,7 +525,8 @@ pub mod destination_departures {
 
     pub async fn seed(pool: &PgPool, service_date: chrono::NaiveDate) {
         delete_day(pool, service_date).await;
-        upsert_schedule_destination_departures(pool, &fixture_rows(service_date))
+        let fixtures = super::schedule_fixture_pool(pool).await;
+        upsert_schedule_destination_departures(&fixtures, &fixture_rows(service_date))
             .await
             .expect("seed fixture rows");
     }

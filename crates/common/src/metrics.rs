@@ -123,22 +123,15 @@ fn emit_info((name, labels): &Info) {
 }
 
 /// `distant_signal_ingest_sink_info{sink}`: where a producer delivers
-/// (`INGEST_SINK`: `http`, `http+shadow`, `stream` or `db`).
+/// (`INGEST_SINK`: `stream` or `db`; release B removed `http` and
+/// `http+shadow`).
 pub fn ingest_sink_info(sink: &str) {
     set_info("ingest_sink_info", &[("sink", sink)]);
 }
 
-/// The command-line name of a `clap::ValueEnum` value (`http+shadow` for
-/// `SinkMode::HttpShadow`), for an info gauge's label.
-pub fn value_enum_name<T: clap::ValueEnum>(value: &T) -> String {
-    value
-        .to_possible_value()
-        .map_or_else(String::new, |value| value.get_name().to_owned())
-}
-
 /// `distant_signal_internal_reads_source_info{read, source}`: where an
-/// internal reader reads `read` from (`http` or `db`; the `*_SOURCE`
-/// variables of ingest plan phase 4).
+/// internal reader reads `read` from (`db`, the only source since release
+/// B; the `*_SOURCE` variables of ingest plan phase 4).
 pub fn internal_reads_source_info(read: &str, source: &str) {
     set_info(
         "internal_reads_source_info",
@@ -301,12 +294,12 @@ mod tests {
         let recorder = PrometheusBuilder::new().build_recorder();
         let handle = recorder.handle();
         metrics::with_local_recorder(&recorder, || {
-            ingest_sink_info("http+shadow");
+            ingest_sink_info("stream");
             internal_reads_source_info("population", "db");
         });
         let rendered = handle.render();
         for series in [
-            r#"distant_signal_ingest_sink_info{sink="http+shadow"} 1"#,
+            r#"distant_signal_ingest_sink_info{sink="stream"} 1"#,
             r#"distant_signal_internal_reads_source_info{read="population",source="db"} 1"#,
         ] {
             assert!(
@@ -315,7 +308,7 @@ mod tests {
             );
         }
         // Kept once, for the recorder `install` sets up later.
-        ingest_sink_info("http+shadow");
+        ingest_sink_info("stream");
         let held = INFO.lock().unwrap();
         let sinks = held
             .iter()

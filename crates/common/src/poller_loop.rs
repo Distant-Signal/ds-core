@@ -1,5 +1,6 @@
 //! Shared poller `main()` loop scaffolding: install metrics (if enabled),
-//! compute the first-tick delay via `ingest::time_until_next_poll`, then
+//! compute the first-tick delay from the poller's last-fetch cursor (its
+//! `ingest_freshness` row or its stream's newest entry), then
 //! loop forever recording `poller_cycle_duration_seconds`/
 //! `poller_cycle_total` and logging cycle errors. Previously duplicated,
 //! byte-identical apart from one metric label string, across
@@ -20,7 +21,6 @@ use std::time::Duration;
 
 use crate::backoff::Backoff;
 use crate::ingest;
-use crate::oauth_client::OAuthTokenCache;
 use crate::progress::Progress;
 
 /// Builds the poll-cycle `tokio::time::Interval`, first ticking at `start`
@@ -33,7 +33,7 @@ use crate::progress::Progress;
 /// `time_until_next_poll` exists to protect (Finding #2). `Delay` instead
 /// waits a fresh `poll_interval` from whenever the overrun tick actually
 /// completes, so a slow cycle never causes a burst of immediate follow-up
-/// calls. Split out from `run_poll_loop` itself so this configuration is
+/// calls. Split out from the loop itself so this configuration is
 /// directly assertable in a unit test, since the missed-tick BEHAVIOR
 /// (skipping ticks under a real overrun) isn't practically observable
 /// without a slow, flaky, real-time test.
@@ -46,32 +46,33 @@ fn poll_interval_with_delay_on_overrun(
     interval
 }
 
-/// Retry timing for [`run_poll_loop`] (SVC-09). A parameter only so tests
+/// Retry timing for the poll loop (SVC-09). A parameter only so tests
 /// can use millisecond timings; production always uses
 /// [`DEFAULT_RETRY_POLICY`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetryPolicy {
-    /// Wait for `api` at startup, and again before a retry after a failed
-    /// cycle, so no upstream fetch is spent while `api` is unreachable.
+    /// Wait for the last-fetch cursor at startup, and again before a retry
+    /// after a failed cycle, so no upstream fetch is spent while it is
+    /// unreachable (the database, or Redis for a stream producer).
     pub api_wait: ingest::ApiWait,
     /// Delay before re-running a cycle that failed transiently, capped at
     /// the poll interval (so a frequent poller's schedule is unchanged).
     pub failed_cycle: Backoff,
 }
 
-/// 1 min doubling to 1 h between retries of a failed cycle: an api restart
-/// costs a daily poller minutes, not a day, while a persistent failure
+/// 1 min doubling to 1 h between retries of a failed cycle: a database or
+/// Redis restart costs a daily poller minutes, not a day, while a persistent failure
 /// still re-fetches upstream at most about once an hour.
 pub const DEFAULT_RETRY_POLICY: RetryPolicy = RetryPolicy {
     api_wait: ingest::API_STARTUP_WAIT,
     failed_cycle: Backoff::new(Duration::from_secs(60), Duration::from_secs(3600)),
 };
 
-/// How long a poller's ingest POST may retry a transient failure within one
-/// cycle (`ingest::post_batch_retrying`): a quarter of the poll interval,
-/// capped at 15 minutes. A 60s poller retries for 15s, so it never runs into
-/// its next fresh fetch; a 24h poller keeps its once-a-day upstream fetch
-/// alive through an api restart.
+/// How long a poller's write (a DB sink's retries, a stream producer's wait
+/// for its XADD) may retry a transient failure within one cycle: a quarter
+/// of the poll interval, capped at 15 minutes. A 60s poller retries for
+/// 15s, so it never runs into its next fresh fetch; a 24h poller keeps its
+/// once-a-day upstream fetch alive through a database or Redis restart.
 pub fn post_retry_budget(poll_interval: Duration) -> Duration {
     (poll_interval / 4).min(Duration::from_secs(15 * 60))
 }
@@ -95,90 +96,8 @@ fn delay_after_failed_cycle(
     }
 }
 
-// Every poller's own single-call-site scaffolding function, threading
-// every per-cycle config knob straight through -- same posture as
-// `aggregator`/`full-coverage-consumer`/`schedule-ingest`'s own
-// `#[allow(clippy::too_many_arguments)]` on their analogous top-level loop
-// functions.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
-)]
-pub async fn run_poll_loop<F, Fut>(
-    poller_label: &'static str,
-    client: &reqwest::Client,
-    api_ingest_url: &str,
-    internal_oauth: &OAuthTokenCache,
-    poll_interval: Duration,
-    metrics_enabled: bool,
-    metrics_port: u16,
-    progress: &Progress,
-    cycle: F,
-) -> anyhow::Result<()>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    if metrics_enabled {
-        crate::metrics::install(metrics_port)?;
-    }
-    run_poll_loop_with(
-        &DEFAULT_RETRY_POLICY,
-        poller_label,
-        client,
-        api_ingest_url,
-        internal_oauth,
-        poll_interval,
-        progress,
-        cycle,
-    )
-    .await
-}
-
-/// [`run_poll_loop`] with the caller's own [`RetryPolicy`] instead of
-/// [`DEFAULT_RETRY_POLICY`]. `poller-ldbws` passes one whose `api_wait`
-/// gives up after a single attempt: it keeps sampling upstream through an
-/// api outage and holds the unsent samples itself, so waiting for api
-/// before each cycle would only lose samples.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
-)]
-pub async fn run_poll_loop_with_policy<F, Fut>(
-    policy: &RetryPolicy,
-    poller_label: &'static str,
-    client: &reqwest::Client,
-    api_ingest_url: &str,
-    internal_oauth: &OAuthTokenCache,
-    poll_interval: Duration,
-    metrics_enabled: bool,
-    metrics_port: u16,
-    progress: &Progress,
-    cycle: F,
-) -> anyhow::Result<()>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    if metrics_enabled {
-        crate::metrics::install(metrics_port)?;
-    }
-    run_poll_loop_with(
-        policy,
-        poller_label,
-        client,
-        api_ingest_url,
-        internal_oauth,
-        poll_interval,
-        progress,
-        cycle,
-    )
-    .await
-}
-
-/// [`run_poll_loop`] with the last-fetch time read by `last_fetched`
-/// instead of the api's GET on `api_ingest_url`: any
-/// [`ingest::LastFetched`], a closure or an [`ingest::CursorSource`]. A
+/// Every poller's loop, with the last-fetch time read by `last_fetched`:
+/// any [`ingest::LastFetched`], a closure or an [`ingest::CursorSource`]. A
 /// direct writer (ingest architecture phase 2, `INGEST_SINK=db`) reads its
 /// own `ingest_freshness` row, a stream producer (phase 3) its stream's
 /// newest entry. The startup wait and the wait before a retry use it the
@@ -210,9 +129,11 @@ where
     .await
 }
 
-/// [`run_poll_loop_with_cursor`] with the caller's own [`RetryPolicy`]:
-/// the combination of [`run_poll_loop_with_policy`] (a held-sample poller
-/// such as `poller-ldbws`) and a direct writer's own last-fetch cursor.
+/// [`run_poll_loop_with_cursor`] with the caller's own [`RetryPolicy`]
+/// instead of [`DEFAULT_RETRY_POLICY`]. `poller-ldbws` passes one whose
+/// `api_wait` gives up after a single attempt: its stream producer holds
+/// the unsent snapshot itself, so waiting before each cycle would only
+/// delay sampling.
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is an independent input from the single caller; a struct would only wrap them"
@@ -246,16 +167,14 @@ where
     .await
 }
 
-/// [`run_poll_loop`] with the startup cursor read from `source` (ingest
-/// architecture plan 4.6): the api's GET ([`ingest::CursorSource::Http`],
-/// what [`run_poll_loop`] itself uses), the poller's own freshness row
-/// (`Db`, a direct writer) or its own stream's newest entry (`Stream`, a
-/// stream producer). Whichever it is, the first poll waits out what is
+/// [`run_poll_loop_with_cursor`] with the startup cursor read from `source`
+/// (ingest architecture plan 4.6): the poller's own freshness row (`Db`, a
+/// direct writer) or its own stream's newest entry (`Stream`, a stream
+/// producer). Whichever it is, the first poll waits out what is
 /// left of `poll_interval`, an unreachable source is waited for (bounded,
 /// [`DEFAULT_RETRY_POLICY`]) at startup and before a retry after a failed
-/// cycle, and a source that never answers means "poll now". The same loop
-/// as [`run_poll_loop_with_cursor`], which it calls after logging the
-/// source's kind.
+/// cycle, and a source that never answers means "poll now". It calls
+/// [`run_poll_loop_with_cursor`] after logging the source's kind.
 pub async fn run_poll_loop_with_source<F, Fut>(
     poller_label: &'static str,
     source: ingest::CursorSource<'_>,
@@ -310,35 +229,6 @@ fn register_cycle_metrics(poller_label: &'static str) {
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each argument is an independent input from the single caller; a struct would only wrap them"
-)]
-async fn run_poll_loop_with<F, Fut>(
-    policy: &RetryPolicy,
-    poller_label: &'static str,
-    client: &reqwest::Client,
-    api_ingest_url: &str,
-    internal_oauth: &OAuthTokenCache,
-    poll_interval: Duration,
-    progress: &Progress,
-    cycle: F,
-) -> anyhow::Result<()>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
-    run_cursor_loop_with(
-        policy,
-        poller_label,
-        ingest::CursorSource::http(client, api_ingest_url, internal_oauth),
-        poll_interval,
-        progress,
-        cycle,
-    )
-    .await
-}
-
 /// The loop every entry point shares, over any [`ingest::LastFetched`]: a
 /// [`ingest::CursorSource`], or a closure.
 async fn run_cursor_loop_with<C, F, Fut>(
@@ -371,8 +261,8 @@ where
         // An async closure: the retry wait borrows `last_fetched` mutably.
         async || {
             // A retry after a failure: don't spend an upstream fetch until
-            // the last-fetch source (api, or the database for a direct
-            // writer) answers again (bounded, so a GET-only breakage can't
+            // the last-fetch source (the database for a direct writer, the
+            // stream for a stream producer) answers again (bounded, so a GET-only breakage can't
             // stop polling).
             if let Err(err) =
                 ingest::wait_for_source(&mut last_fetched, &policy.api_wait, Some(progress)).await
@@ -385,7 +275,7 @@ where
     .await
 }
 
-/// The loop both entry points share: the first tick after `delay`, then
+/// The loop itself: the first tick after `delay`, then
 /// every `poll_interval`; `before_retry` runs before a cycle that follows a
 /// failed one.
 async fn run_cycles<F, Fut, R>(
@@ -465,29 +355,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
     use super::*;
-    use crate::oauth_client::{OAuthCredentials, OAuthTokenCache};
-
-    async fn token_cache(server: &MockServer) -> OAuthTokenCache {
-        Mock::given(method("POST"))
-            .and(path("/token/"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "access_token": "fake-jwt",
-                "expires_in": 300,
-            })))
-            .mount(server)
-            .await;
-        OAuthTokenCache::new(OAuthCredentials {
-            token_url: format!("{}/token/", server.uri()),
-            client_id: "test".to_string(),
-            scope: "groups".to_string(),
-            username: "test".to_string(),
-            password: "test".to_string(),
-        })
-    }
 
     /// Both `result` series exist at 0 before any cycle runs, so the
     /// first failure after a pod start is an `increase()` Prometheus sees.
@@ -506,7 +374,7 @@ mod tests {
         }
     }
 
-    /// Finding #2 regression: the interval `run_poll_loop` ticks on must be
+    /// Finding #2 regression: the interval the loop ticks on must be
     /// configured with `MissedTickBehavior::Delay`, not the default
     /// `Burst`, so an overrun cycle doesn't fire a burst of back-to-back
     /// catch-up ticks against a rate-limited upstream. The behavior itself
@@ -530,30 +398,16 @@ mod tests {
     /// Not a full loop run (this function never returns) -- confirms the
     /// cycle closure is actually invoked and its result recorded, by
     /// racing the loop against a timeout and asserting at least one
-    /// invocation happened. Mirrors this crate's existing
-    /// `time_until_next_poll` tests' preference for a real (mocked) HTTP
-    /// round trip over a fake clock abstraction.
+    /// invocation happened.
     #[tokio::test]
-    async fn run_poll_loop_invokes_the_cycle_closure_on_each_tick() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "fetchedAt": null
-            })))
-            .mount(&server)
-            .await;
-        let tokens = token_cache(&server).await;
-        let client = reqwest::Client::new();
+    async fn the_loop_invokes_the_cycle_closure_on_each_tick() {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_for_cycle = Arc::clone(&call_count);
-        let ingest_url = format!("{}/ingest", server.uri());
 
         let progress = Progress::new(Duration::from_secs(60));
-        let loop_future = run_poll_loop(
+        let loop_future = run_poll_loop_with_cursor(
             "test",
-            &client,
-            &ingest_url,
-            &tokens,
+            never_fetched,
             Duration::from_millis(10),
             false,
             0,
@@ -571,6 +425,11 @@ mod tests {
         );
     }
 
+    /// A cursor that never fetched: poll now.
+    async fn never_fetched() -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+        Ok(None)
+    }
+
     const FAST_POLICY: RetryPolicy = RetryPolicy {
         api_wait: ingest::ApiWait {
             backoff: Backoff::new(Duration::from_millis(10), Duration::from_millis(20)),
@@ -579,14 +438,8 @@ mod tests {
         failed_cycle: Backoff::new(Duration::from_millis(50), Duration::from_millis(100)),
     };
 
-    fn transient_post_failure() -> anyhow::Error {
-        ingest::HttpStatusError {
-            prefix: "ingestion POST failed",
-            status: reqwest::StatusCode::BAD_GATEWAY,
-            body: String::new(),
-            retry_after: None,
-        }
-        .into()
+    fn transient_failure() -> anyhow::Error {
+        anyhow::anyhow!("database unavailable")
     }
 
     /// Plan 4.6, the direct-writer (`Db`) and stream-producer (`Stream`)
@@ -652,38 +505,26 @@ mod tests {
         }
     }
 
-    /// SVC-09: a daily poller whose POST failed (api not up yet after a
-    /// reboot) retries within the failed-cycle backoff, not a whole
+    /// SVC-09: a daily poller whose write failed (the database not up yet
+    /// after a reboot) retries within the failed-cycle backoff, not a whole
     /// interval later.
     #[tokio::test]
     async fn a_failed_cycle_is_retried_soon_not_after_the_full_interval() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "fetchedAt": null
-            })))
-            .mount(&server)
-            .await;
-        let tokens = token_cache(&server).await;
-        let client = reqwest::Client::new();
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_in_cycle = Arc::clone(&calls);
-        let ingest_url = format!("{}/ingest", server.uri());
         let progress = Progress::new(Duration::from_secs(60));
 
-        let loop_future = run_poll_loop_with(
+        let loop_future = run_cursor_loop_with(
             &FAST_POLICY,
             "test",
-            &client,
-            &ingest_url,
-            &tokens,
+            never_fetched,
             Duration::from_secs(86_400),
             &progress,
             || {
                 let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
                 async move {
                     if n == 0 {
-                        Err(transient_post_failure())
+                        Err(transient_failure())
                     } else {
                         Ok(())
                     }
@@ -702,36 +543,24 @@ mod tests {
     /// helper: registered at start, left alone by a failure, and counted.
     #[tokio::test]
     async fn the_loop_exports_the_last_successful_cycle() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "fetchedAt": null
-            })))
-            .mount(&server)
-            .await;
-        let tokens = token_cache(&server).await;
-        let client = reqwest::Client::new();
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_in_cycle = Arc::clone(&calls);
-        let ingest_url = format!("{}/ingest", server.uri());
         let progress = Progress::new(Duration::from_secs(60));
         let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
         let handle = recorder.handle();
         let _guard = metrics::set_default_local_recorder(&recorder);
 
-        let loop_future = run_poll_loop_with(
+        let loop_future = run_cursor_loop_with(
             &FAST_POLICY,
             "test-poller",
-            &client,
-            &ingest_url,
-            &tokens,
+            never_fetched,
             Duration::from_secs(86_400),
             &progress,
             || {
                 let n = calls_in_cycle.fetch_add(1, Ordering::Relaxed);
                 async move {
                     if n == 0 {
-                        Err(transient_post_failure())
+                        Err(transient_failure())
                     } else {
                         Ok(())
                     }
@@ -753,23 +582,19 @@ mod tests {
         }
     }
 
+    /// A cursor that is never reachable.
+    async fn unreachable_cursor() -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+        Err(anyhow::anyhow!("Redis unavailable"))
+    }
+
     /// A policy whose `api_wait` gives up at once (`poller-ldbws`'s) runs
-    /// its cycles on schedule through an api outage instead of waiting for
-    /// api first: here api never answers, and the cycle still runs at once,
-    /// then again after the failed-cycle backoff.
+    /// its cycles on schedule through a cursor outage instead of waiting
+    /// for it first: here the cursor never answers, and the cycle still
+    /// runs at once, then again after the failed-cycle backoff.
     #[tokio::test]
-    async fn a_zero_api_wait_policy_polls_through_an_api_outage() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/ingest"))
-            .respond_with(ResponseTemplate::new(503))
-            .mount(&server)
-            .await;
-        let tokens = token_cache(&server).await;
-        let client = reqwest::Client::new();
+    async fn a_zero_api_wait_policy_polls_through_a_cursor_outage() {
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_in_cycle = Arc::clone(&calls);
-        let ingest_url = format!("{}/ingest", server.uri());
         let progress = Progress::new(Duration::from_secs(60));
         let policy = RetryPolicy {
             api_wait: ingest::ApiWait {
@@ -779,24 +604,22 @@ mod tests {
             failed_cycle: Backoff::new(Duration::from_millis(50), Duration::from_millis(50)),
         };
 
-        let loop_future = run_poll_loop_with(
+        let loop_future = run_cursor_loop_with(
             &policy,
             "test",
-            &client,
-            &ingest_url,
-            &tokens,
+            unreachable_cursor,
             Duration::from_millis(100),
             &progress,
             || {
                 calls_in_cycle.fetch_add(1, Ordering::Relaxed);
-                async { Err(transient_post_failure()) }
+                async { Err(transient_failure()) }
             },
         );
         // With the default 10-minute wait, no cycle would run in this time.
         let _ = tokio::time::timeout(Duration::from_millis(500), loop_future).await;
         assert!(
             calls.load(Ordering::Relaxed) >= 3,
-            "cycles kept running while api was down: {}",
+            "cycles kept running while the cursor was down: {}",
             calls.load(Ordering::Relaxed)
         );
     }
@@ -804,39 +627,19 @@ mod tests {
     /// A data rejection will be refused again: it waits the normal interval.
     #[tokio::test]
     async fn a_rejected_cycle_waits_the_full_interval() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "fetchedAt": null
-            })))
-            .mount(&server)
-            .await;
-        let tokens = token_cache(&server).await;
-        let client = reqwest::Client::new();
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_in_cycle = Arc::clone(&calls);
-        let ingest_url = format!("{}/ingest", server.uri());
         let progress = Progress::new(Duration::from_secs(60));
 
-        let loop_future = run_poll_loop_with(
+        let loop_future = run_cursor_loop_with(
             &FAST_POLICY,
             "test",
-            &client,
-            &ingest_url,
-            &tokens,
+            never_fetched,
             Duration::from_secs(86_400),
             &progress,
             || {
                 calls_in_cycle.fetch_add(1, Ordering::Relaxed);
-                async {
-                    Err(ingest::HttpStatusError {
-                        prefix: "ingestion POST failed",
-                        status: reqwest::StatusCode::UNPROCESSABLE_ENTITY,
-                        body: String::new(),
-                        retry_after: None,
-                    }
-                    .into())
-                }
+                async { Err(ingest::DataRejected("refused".to_owned()).into()) }
             },
         );
         let _ = tokio::time::timeout(Duration::from_millis(500), loop_future).await;
@@ -865,7 +668,7 @@ mod tests {
                     let n = calls.fetch_add(1, Ordering::Relaxed);
                     async move {
                         if n == 0 {
-                            Err(transient_post_failure())
+                            Err(transient_failure())
                         } else {
                             Ok(())
                         }

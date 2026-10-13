@@ -203,7 +203,8 @@ mod db_tests {
                 ..row(2, "MKC", "terminate")
             },
         ];
-        schedule::upsert_schedule_calling_points_full(&pool, &rows)
+        let fixtures = crate::test_support::schedule_fixture_pool(&pool).await;
+        schedule::upsert_schedule_calling_points_full(&fixtures, &rows)
             .await
             .expect("seed schedule_calling_points_full");
         // Departed Watford 4 late against TRUST's own public time.

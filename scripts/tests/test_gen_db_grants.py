@@ -452,5 +452,76 @@ class RowPolicyParseTest(unittest.TestCase):
         self.assertIn("unknown role 'nobody'", str(ctx.exception))
 
 
+class AppRevokesTest(unittest.TestCase):
+    """`app_revokes`: what the app role loses (ingest phase 5, release B)."""
+
+    def assert_refused(self, raw: dict[str, Any], needle: str) -> None:
+        """parse(raw) raises GrantsError mentioning needle."""
+        with self.assertRaises(gen.GrantsError) as ctx:
+            gen.parse(raw)
+        self.assertIn(needle, str(ctx.exception))
+
+    def test_release_b_takes_the_schedule_publish_staging_from_app(self) -> None:
+        """Only the api's /private publish routes used them through app."""
+        model = gen.load()
+        self.assertEqual(
+            set(model.app_revoke_tables),
+            {
+                "schedule_calling_points_full_publish_keys",
+                "schedule_destination_departures_publish_keys",
+            },
+        )
+        self.assertEqual(model.app_revoke_functions, ("analyze_publish_keys(text)",))
+        # schedule-reference keeps its own grants on them.
+        for table in model.app_revoke_tables:
+            grants = {g.role: g.privileges for g in model.tables[table].grants}
+            self.assertEqual(grants, {"schedule_reference": "SID"})
+        self.assertEqual(
+            model.functions["analyze_publish_keys(text)"], ("schedule_reference",)
+        )
+
+    def test_the_revokes_render_after_the_grants(self) -> None:
+        """Step 6 of the SQL, from app, for existing objects only."""
+        sql = gen.render(gen.load())
+        self.assertIn("('schedule_calling_points_full_publish_keys')", sql)
+        self.assertIn("('analyze_publish_keys(text)')", sql)
+        self.assertIn("REVOKE ALL ON public.%I FROM %I', r.tbl, app", sql)
+        self.assertIn("REVOKE EXECUTE ON FUNCTION %s FROM %I", sql)
+        self.assertLess(sql.index("$policies$;"), sql.index("$app_revokes$"))
+        self.assertLess(sql.index("$app_revokes$;"), sql.index("COMMIT;"))
+
+    def test_no_revokes_render_typed_empty_lists(self) -> None:
+        """Without the section nothing is revoked, and the SQL still parses."""
+        raw = _raw()
+        del raw["app_revokes"]
+        model = gen.parse(raw)
+        self.assertEqual(model.app_revoke_tables, ())
+        self.assertEqual(model.app_revoke_functions, ())
+        sql = gen.render(model)
+        self.assertIn("(SELECT NULL::text WHERE false) AS v(tbl)", sql)
+        self.assertIn("(SELECT NULL::text WHERE false) AS v(sig)", sql)
+
+    def test_an_unlisted_table_or_function_is_refused(self) -> None:
+        """Each entry must be classified in its own section."""
+        raw = _raw()
+        raw["app_revokes"]["tables"] = ["nope"]
+        self.assert_refused(raw, "app_revokes.tables: 'nope'")
+        raw = _raw()
+        raw["app_revokes"]["functions"] = ["nope(text)"]
+        self.assert_refused(raw, "app_revokes.functions: 'nope(text)'")
+        raw = _raw()
+        raw["app_revokes"]["views"] = []
+        self.assert_refused(raw, "app_revokes: unknown key(s) ['views']")
+
+    def test_what_an_observed_role_is_granted_cannot_be_revoked(self) -> None:
+        """An observed role has nothing of its own: it would lose the grant."""
+        raw = _raw()
+        raw["app_revokes"]["tables"] = ["users"]
+        self.assert_refused(raw, "granted to observed role(s) ['api']")
+        raw = _raw()
+        raw["functions"]["analyze_publish_keys(text)"]["grants"].append("notifier")
+        self.assert_refused(raw, "granted to observed role(s) ['notifier']")
+
+
 if __name__ == "__main__":
     unittest.main()

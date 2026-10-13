@@ -43,7 +43,7 @@ url = "2.5"
 # dependency closure must not contain hyper or reqwest
 # (scripts/check-crate-deps.py, ingest architecture spec §5.1).
 default = ["http"]
-# Outbound HTTP (reqwest: `ingest`, `poller_loop`, `oauth_client`,
+# Outbound HTTP (reqwest: `ingest`, `poller_loop`,
 # `gcp_external_account`, `outbound_endpoint_guard`) and the metrics HTTP
 # listener (`metrics::install`, hyper via `http-listener`).
 http = ["dep:reqwest", "metrics-exporter-prometheus/http-listener"]
