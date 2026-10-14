@@ -104,6 +104,11 @@ pub enum Severity {
     /// `TfL` code 19, and this crate's landing place for any future `TfL` code
     /// it has never heard of (see `severity_from_tfl_code`).
     Information = 26,
+    /// A transit line with no current line-scoped situation (transit spec
+    /// §10.2, open question Q1). Not "Good Service": DS cannot observe a
+    /// tram network's service, only that nothing was published. Grouped
+    /// "good" with `GoodService` and `NoIssues`.
+    NoReportedDisruption = 27,
 }
 
 impl Severity {
@@ -131,6 +136,7 @@ impl Severity {
             Self::IssuesReported => "Issues Reported",
             Self::NoIssues => "No Issues",
             Self::Information => "Information",
+            Self::NoReportedDisruption => "No Reported Disruption",
         }
     }
 }
@@ -153,7 +159,7 @@ impl Severity {
 /// silently acquire a default rank.
 pub fn severity_rank(severity: Severity) -> u8 {
     match severity {
-        Severity::GoodService | Severity::NoIssues => 0,
+        Severity::GoodService | Severity::NoIssues | Severity::NoReportedDisruption => 0,
         Severity::SpecialService
         | Severity::ExitOnly
         | Severity::NoStepFree
@@ -208,6 +214,7 @@ mod severity_rank_tests {
             (Severity::IssuesReported, 3),
             (Severity::NoIssues, 0),
             (Severity::Information, 1),
+            (Severity::NoReportedDisruption, 0),
         ] {
             assert_eq!(severity_rank(severity), expected, "{severity:?}");
         }
@@ -370,6 +377,9 @@ pub enum DataQuality {
     /// `Knowledgebase` — that name means the National Rail RDM
     /// Knowledgebase feed specifically.
     Tfl,
+    /// Derived from a transit network's published situations (SIRI-SX,
+    /// transit spec §10.3), so a reader can tell it from a sampled status.
+    Transit,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

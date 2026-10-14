@@ -28,6 +28,8 @@ use std::str::FromStr;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+pub mod status;
+
 /// The networks compiled into this build (spec §5: adding a network is a
 /// code change). The producer refuses any other `TRANSIT_NETWORK`, and the
 /// writer pins each `ds:ingest:transit-<network>` stream to its network.
