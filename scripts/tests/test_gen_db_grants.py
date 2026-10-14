@@ -377,7 +377,9 @@ class RenderTest(unittest.TestCase):
     def test_row_policies_render_for_created_roles_only(self) -> None:
         """Plan 3c.3: the writer's line_status policy; none for a planned role."""
         sql = gen.render(gen.load())
-        self.assertIn("('line_status', 'writer', 'ALL', 'source = ''tfl''')", sql)
+        self.assertIn(
+            "('line_status', 'writer', 'ALL', 'source IN (''tfl'', ''transit'')')", sql
+        )
         self.assertIn("AS RESTRICTIVE FOR %s TO %I", sql)
         raw = _raw()
         # Planned here explicitly: every shipped role may be created.
@@ -401,11 +403,11 @@ class RenderTest(unittest.TestCase):
 class RowPolicyParseTest(unittest.TestCase):
     """`row_policies` must name listed tables and known roles."""
 
-    def test_the_writer_is_pinned_to_tfl_rows(self) -> None:
-        """D10: the writer's line_status policy, on every command."""
+    def test_the_writer_is_pinned_to_tfl_and_transit_rows(self) -> None:
+        """D10 and transit spec §10.4: the writer's line_status policy."""
         self.assertEqual(
             gen.load().row_policies["line_status"],
-            {"writer": gen.RowPolicy("source = 'tfl'")},
+            {"writer": gen.RowPolicy("source IN ('tfl', 'transit')")},
         )
 
     def test_each_freshness_producer_writes_only_its_own_rows(self) -> None:
