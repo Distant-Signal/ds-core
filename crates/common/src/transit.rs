@@ -558,6 +558,26 @@ pub struct TimetableSource {
     /// The source's own version (`feed_info.txt`), if it has one.
     pub feed_version: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
+    /// The operator's refresh request this commit answers
+    /// (`TRANSIT_TIMETABLE_REFRESH`, chart
+    /// `pollerTransitSchedule.networks.<n>.timetableRefresh`), if it was
+    /// forced. The producer reads it back from the stream at start, so a
+    /// request is answered once. Absent from every other commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh: Option<String>,
+}
+
+/// The longest `TRANSIT_TIMETABLE_REFRESH` token.
+pub const MAX_REFRESH_TOKEN_LEN: usize = 64;
+
+/// Whether `token` is a valid refresh request: 1 to
+/// [`MAX_REFRESH_TOKEN_LEN`] of `[A-Za-z0-9._:-]` (a date, a counter).
+pub fn is_refresh_token(token: &str) -> bool {
+    !token.is_empty()
+        && token.len() <= MAX_REFRESH_TOKEN_LEN
+        && token
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b':' | b'-'))
 }
 
 // --- transit-situations/1 (batch 4) ----------------------------------------
@@ -710,6 +730,40 @@ mod tests {
                 serde_json::to_value(kind).unwrap(),
                 serde_json::Value::String(kind.as_str().to_owned())
             );
+        }
+    }
+
+    #[test]
+    fn a_commit_may_name_the_refresh_it_answers() {
+        // A commit from before the field (the fixture) reads as no refresh.
+        let mut commit: TimetableCommit = serde_json::from_str(include_str!(
+            "../tests/fixtures/transit/timetable-commit.json"
+        ))
+        .unwrap();
+        assert_eq!(commit.source.refresh, None);
+        assert!(
+            serde_json::to_value(&commit).unwrap()["source"]
+                .get("refresh")
+                .is_none()
+        );
+        commit.source.refresh = Some("2026-10-15".to_owned());
+        let json = serde_json::to_value(&commit).unwrap();
+        assert_eq!(json["source"]["refresh"], "2026-10-15");
+        assert_eq!(
+            serde_json::from_value::<TimetableCommit>(json).unwrap(),
+            commit
+        );
+        for ok in ["2026-10-15", "1", "a.b_c:d-e"] {
+            assert!(is_refresh_token(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "a b",
+            "x/y",
+            "é",
+            &"a".repeat(MAX_REFRESH_TOKEN_LEN + 1),
+        ] {
+            assert!(!is_refresh_token(bad), "{bad}");
         }
     }
 

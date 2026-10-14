@@ -714,6 +714,7 @@ pub mod transit {
                 url_kind: "test".to_owned(),
                 feed_version: None,
                 published_at: None,
+                refresh: None,
             },
         };
         (parts, commit_body)
