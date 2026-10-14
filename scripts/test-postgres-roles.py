@@ -176,7 +176,8 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             setup()
             run([*migrate, owner_url])
             # The chart's setup Job runs again after the migrations (a
-            # post-install/post-upgrade hook); it takes back the app role's
+            # post-install hook, and pre-upgrade after the migrate Job); it
+            # takes back the app role's
             # write access to _sqlx_migrations, which the owner's default
             # privileges granted when the migrator created it, and (per
             # service) grants the groups on the tables that now exist.
