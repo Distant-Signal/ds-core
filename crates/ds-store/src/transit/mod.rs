@@ -8,8 +8,9 @@
 //! - [`situations`]: the ingest-writer's side of a network's situations and
 //!   the line statuses derived from them: [`apply_situations`] for each
 //!   `transit-situations/1` snapshot (spec §9.3, §10.3).
-//! - [`read`]: the api's queries.
+//! - [`read`] and [`disruptions`]: the api's queries.
 
+pub mod disruptions;
 pub mod read;
 pub mod situations;
 pub mod write;

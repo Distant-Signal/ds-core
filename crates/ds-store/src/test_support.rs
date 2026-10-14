@@ -541,10 +541,11 @@ pub mod destination_departures {
 pub mod transit {
     use chrono::{Days, NaiveDate, Utc};
     use common::transit::{
-        Direction, Horizon, NetworkId, RailLinkKind, StopKind, TimetableCommit, TimetableCounts,
-        TimetablePart, TimetablePartKind, TimetableRows, TimetableSource, TransitAttribution,
-        TransitLine, TransitLineDirection, TransitNetworkRow, TransitPattern, TransitPatternStop,
-        TransitRailLink, TransitServiceDays, TransitStop, TransitTrip,
+        Direction, Horizon, NetworkId, Period, RailLinkKind, SituationScope, StopKind,
+        TimetableCommit, TimetableCounts, TimetablePart, TimetablePartKind, TimetableRows,
+        TimetableSource, TransitAttribution, TransitConsequence, TransitLine, TransitLineDirection,
+        TransitNetworkRow, TransitPattern, TransitPatternStop, TransitRailLink, TransitServiceDays,
+        TransitSituation, TransitSituations, TransitStop, TransitTrip,
     };
     use sqlx::PgPool;
 
@@ -726,6 +727,10 @@ pub mod transit {
             "DELETE FROM transit_networks WHERE network = $1",
             "DELETE FROM transit_rail_links WHERE network = $1",
             "DELETE FROM ingest_freshness WHERE source = 'transit-' || $1 || '-timetable'",
+            "DELETE FROM ingest_freshness WHERE source = 'transit-' || $1 || '-situations'",
+            "DELETE FROM transit_situations WHERE network = $1",
+            "DELETE FROM line_status_history WHERE starts_with(line_id, $1 || ':')",
+            "DELETE FROM line_status WHERE starts_with(line_id, $1 || ':')",
         ] {
             sqlx::query(sql)
                 .bind(network)
@@ -733,6 +738,87 @@ pub mod transit {
                 .await
                 .expect(sql);
         }
+    }
+
+    /// A current, line-scoped situation: `condition` on `line`, valid from
+    /// an hour before `at`, open-ended; with `stop`, it names that stop
+    /// too.
+    pub fn situation(
+        id: &str,
+        line: &str,
+        condition: &str,
+        stop: Option<&str>,
+        at: chrono::DateTime<Utc>,
+    ) -> TransitSituation {
+        TransitSituation {
+            situation_id: id.to_owned(),
+            version: None,
+            progress: "open".to_owned(),
+            planned: false,
+            reason: Some("miscellaneous:unknown".to_owned()),
+            summary: format!("Summary {id}"),
+            description: Some(format!("Description {id}")),
+            info_url: None,
+            validity: vec![Period {
+                start: at - chrono::TimeDelta::hours(1),
+                end: None,
+            }],
+            publication: Vec::new(),
+            consequences: vec![TransitConsequence {
+                condition: Some(condition.to_owned()),
+                severity: Some("slight".to_owned()),
+                all_lines: false,
+                line_ids: vec![line.to_owned()],
+                unmapped_line_refs: Vec::new(),
+                stop_ids: stop.map(str::to_owned).into_iter().collect(),
+                advice: Some("Allow extra time.".to_owned()),
+            }],
+            line_ids: vec![line.to_owned()],
+            stop_ids: stop.map(str::to_owned).into_iter().collect(),
+            scope: SituationScope::Line,
+        }
+    }
+
+    /// Applies `situations` as the network's snapshot produced at `at`, as
+    /// the writer does (situations, line statuses, freshness), as the
+    /// owner.
+    pub async fn apply_situations(
+        pool: &PgPool,
+        network: &str,
+        situations: Vec<TransitSituation>,
+        at: chrono::DateTime<Utc>,
+    ) {
+        let owner = super::schedule_fixture_pool(pool).await;
+        let mut tx = owner.begin().await.expect("begin");
+        let snapshot = TransitSituations {
+            network: NetworkId::parse(network).expect("network id"),
+            situations,
+        };
+        crate::transit::apply_situations(&mut tx, &snapshot, at)
+            .await
+            .expect("apply situations");
+        tx.commit().await.expect("commit");
+    }
+
+    /// Moves the network's situations marker to `at` (or deletes it).
+    pub async fn set_situations_as_of(
+        pool: &PgPool,
+        network: &str,
+        at: Option<chrono::DateTime<Utc>>,
+    ) {
+        let owner = super::schedule_fixture_pool(pool).await;
+        let source = format!("transit-{network}-situations");
+        let sql = if at.is_some() {
+            "UPDATE ingest_freshness SET fetched_at = $2 WHERE source = $1"
+        } else {
+            "DELETE FROM ingest_freshness WHERE source = $1 AND $2::timestamptz IS NULL"
+        };
+        sqlx::query(sql)
+            .bind(source)
+            .bind(at)
+            .execute(&owner)
+            .await
+            .expect("situations freshness");
     }
 
     /// Seeds the feed for `network`, active as of now, `today` its last

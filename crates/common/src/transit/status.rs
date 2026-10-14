@@ -142,9 +142,25 @@ fn current_period(situation: &TransitSituation, now: DateTime<Utc>) -> Option<Wi
     within(&situation.validity, now)
 }
 
+/// Whether `situation` is current at `now`: open, published and valid.
+pub fn is_current(situation: &TransitSituation, now: DateTime<Utc>) -> bool {
+    current_period(situation, now).is_some()
+}
+
+/// Whether `situation` concerns `line`: it changes the line's status (as
+/// [`derive`] would), or it is a stop notice for a station the line
+/// serves. A network-scope situation concerns no line.
+pub fn concerns_line(situation: &TransitSituation, line: &NetworkLine) -> bool {
+    if situation.scope == SituationScope::Network {
+        return false;
+    }
+    !line_effects(situation, std::slice::from_ref(line)).is_empty()
+        || situation.stop_ids.iter().any(|s| line.stations.contains(s))
+}
+
 /// The next validity period starting after now and within
 /// [`UPCOMING_WITHIN`], for a published situation that is not current.
-fn upcoming_period(situation: &TransitSituation, now: DateTime<Utc>) -> Option<&Period> {
+pub fn upcoming_period(situation: &TransitSituation, now: DateTime<Utc>) -> Option<&Period> {
     if !published(situation, now) {
         return None;
     }
@@ -691,6 +707,41 @@ mod tests {
             serde_json::to_value(&again[0].statuses).unwrap(),
             serde_json::to_value(&rows[0].statuses).unwrap()
         );
+    }
+
+    #[test]
+    fn a_situation_concerns_the_lines_it_changes_and_serves() {
+        let all = lines();
+        let (blue, green, pink) = (&all[0], &all[1], &all[2]);
+        let mapped = situation(
+            "m",
+            vec![consequence("delayed", "slight", &["blue"], &[], false)],
+        );
+        assert!(concerns_line(&mapped, blue));
+        assert!(!concerns_line(&mapped, green));
+        // A stop notice concerns the lines serving its stop.
+        let mut lift = situation(
+            "l",
+            vec![consequence("unknown", "slight", &[], &["D"], true)],
+        );
+        lift.reason = Some("equipment:liftFailure".to_owned());
+        assert!(concerns_line(&lift, green));
+        assert!(!concerns_line(&lift, blue));
+        // AllLines with stops: only the lines serving them.
+        let part = situation(
+            "p",
+            vec![consequence("suspended", "slight", &[], &["E"], true)],
+        );
+        assert!(concerns_line(&part, pink));
+        assert!(!concerns_line(&part, blue));
+        let mut network = situation(
+            "n",
+            vec![consequence("suspended", "slight", &[], &[], false)],
+        );
+        network.scope = SituationScope::Network;
+        assert!(!concerns_line(&network, blue));
+        assert!(is_current(&mapped, at(12)));
+        assert!(!is_current(&mapped, at(21)));
     }
 
     #[test]
