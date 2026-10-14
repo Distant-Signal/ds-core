@@ -70,7 +70,7 @@ pub enum CommitOutcome {
 }
 
 /// Serializes one network's stages and commits within their transactions.
-async fn lock_network(conn: &mut PgConnection, network: &NetworkId) -> Result<()> {
+pub(super) async fn lock_network(conn: &mut PgConnection, network: &NetworkId) -> Result<()> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('transit:' || $1, 0))")
         .bind(network.as_str())
         .execute(&mut *conn)
