@@ -35,6 +35,15 @@ type NetworkRow = (
     Option<DateTime<Utc>>,
     Option<DateTime<Utc>>,
 );
+/// A rail link row: stop, CRS, TIPLOC, kind, note, the station's name.
+type RailLinkRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+);
 /// `stations`' row: id, name, lat, lon, local line ids.
 type StationRow = (String, String, Option<f64>, Option<f64>, Vec<String>);
 /// `stop_departures`' row: seconds after midnight, trip, platform, indicator, line id, line
@@ -117,6 +126,60 @@ pub struct RailLink {
     /// `interchange` or `nearby`.
     pub kind: String,
     pub note: Option<String>,
+    /// The National Rail station's name (`Manchester Piccadilly`), when
+    /// the station list has the CRS.
+    pub station_name: Option<String>,
+}
+
+/// A transit stop linked to a National Rail station
+/// (`/public/transit/rail-links?crs=`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StationTransitLink {
+    pub network: String,
+    pub network_name: String,
+    /// The transit station's id and name.
+    pub stop_id: String,
+    pub stop_name: String,
+    /// `interchange` or `nearby`.
+    pub kind: String,
+    pub note: Option<String>,
+}
+
+/// The transit stops of `networks` linked to the National Rail station
+/// `crs` (spec §12.1), from each network's active timetable, by network
+/// in `networks` order then stop name.
+pub async fn rail_links_for_crs(
+    pool: &PgPool,
+    networks: &[String],
+    crs: &str,
+) -> Result<Vec<StationTransitLink>> {
+    let rows: Vec<(String, String, String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT l.network, n.name, l.stop_id, s.name, l.kind, l.note \
+         FROM transit_rail_links l \
+         JOIN transit_networks n ON n.network = l.network \
+         JOIN transit_stops s ON s.network = l.network AND s.feed_version = n.active_feed_version \
+              AND s.stop_id = l.stop_id \
+         WHERE l.crs = $1 AND l.network = ANY($2) \
+         ORDER BY array_position($2, l.network), s.name, l.stop_id",
+    )
+    .bind(crs)
+    .bind(networks)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(network, network_name, stop_id, stop_name, kind, note)| StationTransitLink {
+                network,
+                network_name,
+                stop_id,
+                stop_name,
+                kind,
+                note,
+            },
+        )
+        .collect())
 }
 
 /// A station with the lines calling there and its rail links.
@@ -387,21 +450,23 @@ async fn stations(pool: &PgPool, network: &str, only: Option<&str>) -> Result<Ve
         .enumerate()
         .map(|(i, l)| (l.line_id, i))
         .collect();
-    let links: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT stop_id, crs, tiploc, kind, note FROM transit_rail_links \
-         WHERE network = $1 AND ($2::text IS NULL OR stop_id = $2) ORDER BY crs",
+    let links: Vec<RailLinkRow> = sqlx::query_as(
+        "SELECT l.stop_id, l.crs, l.tiploc, l.kind, l.note, st.name::text \
+         FROM transit_rail_links l LEFT JOIN stations st ON st.crs = l.crs \
+         WHERE l.network = $1 AND ($2::text IS NULL OR l.stop_id = $2) ORDER BY l.crs",
     )
     .bind(network)
     .bind(only)
     .fetch_all(pool)
     .await?;
     let mut links_by: BTreeMap<String, Vec<RailLink>> = BTreeMap::new();
-    for (stop, crs, tiploc, kind, note) in links {
+    for (stop, crs, tiploc, kind, note, station_name) in links {
         links_by.entry(stop).or_default().push(RailLink {
             crs,
             tiploc,
             kind,
             note,
+            station_name,
         });
     }
     Ok(rows
