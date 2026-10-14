@@ -531,3 +531,228 @@ pub mod destination_departures {
             .expect("seed fixture rows");
     }
 }
+
+/// A small transit network for the read side's tests (here and the api's):
+/// one line `blue` from `9400ZZTTAAA` (platform `...1`) to `9400ZZTTBBB`
+/// (platform `...1`) and back, and a replacement bus; service yesterday and
+/// today. Seeded through `crate::transit::write` (stage, commit) on the
+/// owner's pool when `MIGRATION_DATABASE_URL` is set (the api role may only
+/// read), under a test-only network id.
+pub mod transit {
+    use chrono::{Days, NaiveDate, Utc};
+    use common::transit::{
+        Direction, Horizon, NetworkId, RailLinkKind, StopKind, TimetableCommit, TimetableCounts,
+        TimetablePart, TimetablePartKind, TimetableRows, TimetableSource, TransitAttribution,
+        TransitLine, TransitLineDirection, TransitNetworkRow, TransitPattern, TransitPatternStop,
+        TransitRailLink, TransitServiceDays, TransitStop, TransitTrip,
+    };
+    use sqlx::PgPool;
+
+    use crate::transit::{CommitOutcome, PartIndex, commit, stage_part};
+
+    pub const A: &str = "9400ZZTTAAA";
+    pub const B: &str = "9400ZZTTBBB";
+
+    fn stop(id: &str, kind: StopKind, parent: Option<&str>, name: &str) -> TransitStop {
+        TransitStop {
+            stop_id: id.to_owned(),
+            kind,
+            parent_stop_id: parent.map(str::to_owned),
+            name: name.to_owned(),
+            indicator: parent.map(|_| "To the city".to_owned()),
+            lat: Some(53.4),
+            lon: Some(-2.2),
+            wheelchair: None,
+        }
+    }
+
+    fn pattern(
+        id: &str,
+        line: Option<&str>,
+        direction: Direction,
+        from: &str,
+        to: &str,
+    ) -> TransitPattern {
+        let call = |stop: &str, at: i32, pickup: u8, drop_off: u8| TransitPatternStop {
+            stop_id: format!("{stop}1"),
+            arr_offset_s: at,
+            dep_offset_s: at,
+            pickup,
+            drop_off,
+        };
+        TransitPattern {
+            pattern_id: id.to_owned(),
+            line_id: line.map(str::to_owned),
+            direction,
+            headsign: None,
+            stops: vec![call(from, 0, 0, 1), call(to, 1800, 1, 0)],
+        }
+    }
+
+    fn trip(id: &str, pattern: &str, start_s: i32, bus: bool) -> TransitTrip {
+        TransitTrip {
+            trip_id: id.to_owned(),
+            line_id: (!bus).then(|| "blue".to_owned()),
+            pattern_id: pattern.to_owned(),
+            service_id: "s1".to_owned(),
+            start_s,
+            headsign: Some(if pattern == "in" { "Aaa" } else { "Bbb" }.to_owned()),
+            replacement_bus: bus,
+        }
+    }
+
+    /// The feed's parts and commit, `today` its last service day.
+    #[expect(clippy::too_many_lines, reason = "one literal feed, part by part")]
+    pub fn feed(
+        network: &str,
+        today: NaiveDate,
+    ) -> (Vec<(TimetablePart, PartIndex)>, TimetableCommit) {
+        let network_id = NetworkId::parse(network).expect("a test network id");
+        let one = PartIndex { part: 1, parts: 1 };
+        let part = |rows: TimetableRows| TimetablePart {
+            network: network_id.clone(),
+            feed_version: "test-v1".to_owned(),
+            rows,
+        };
+        let yesterday = today.checked_sub_days(Days::new(1)).expect("a date");
+        let trips = vec![
+            trip("T0600", "out", 6 * 3600, false),
+            trip("T0700", "out", 7 * 3600, false),
+            trip("T0730", "in", 7 * 3600 + 1800, false),
+            trip("T2350", "out", 23 * 3600 + 50 * 60, false),
+            trip("T2450", "out", 24 * 3600 + 10 * 60, false),
+            trip("B0800", "bus", 8 * 3600, true),
+        ];
+        let parts = vec![
+            (
+                part(TimetableRows::Network(vec![TransitNetworkRow {
+                    name: "Test Tram".to_owned(),
+                    mode: "tram".to_owned(),
+                    timezone: "Europe/London".to_owned(),
+                    attribution: TransitAttribution {
+                        licence: "OGL-UK-3.0".to_owned(),
+                        text: "Contains public sector information.".to_owned(),
+                    },
+                }])),
+                one,
+            ),
+            (
+                part(TimetableRows::Lines(vec![TransitLine {
+                    line_id: "blue".to_owned(),
+                    name: "Blue Line".to_owned(),
+                    colour: Some("#1f6fb5".to_owned()),
+                    sort_order: 1,
+                    directions: vec![
+                        TransitLineDirection {
+                            direction: Direction::Outbound,
+                            headsign: Some("Bbb".to_owned()),
+                            stations: vec![A.to_owned(), B.to_owned()],
+                        },
+                        TransitLineDirection {
+                            direction: Direction::Inbound,
+                            headsign: Some("Aaa".to_owned()),
+                            stations: vec![B.to_owned(), A.to_owned()],
+                        },
+                    ],
+                }])),
+                one,
+            ),
+            (
+                part(TimetableRows::Stops(vec![
+                    stop(A, StopKind::Station, None, "Aaa"),
+                    stop(&format!("{A}1"), StopKind::Platform, Some(A), "Aaa"),
+                    stop(B, StopKind::Station, None, "Bbb"),
+                    stop(&format!("{B}1"), StopKind::Platform, Some(B), "Bbb"),
+                ])),
+                one,
+            ),
+            (
+                part(TimetableRows::Patterns(vec![
+                    pattern("out", Some("blue"), Direction::Outbound, A, B),
+                    pattern("in", Some("blue"), Direction::Inbound, B, A),
+                    pattern("bus", None, Direction::Outbound, A, B),
+                ])),
+                one,
+            ),
+            (part(TimetableRows::Trips(trips)), one),
+            (
+                part(TimetableRows::ServiceDays(vec![TransitServiceDays {
+                    service_id: "s1".to_owned(),
+                    dates: vec![yesterday, today],
+                }])),
+                one,
+            ),
+            (
+                part(TimetableRows::RailLinks(vec![TransitRailLink {
+                    stop_id: A.to_owned(),
+                    crs: "ZZT".to_owned(),
+                    tiploc: "ZZTEST".to_owned(),
+                    kind: RailLinkKind::Interchange,
+                    note: None,
+                }])),
+                one,
+            ),
+        ];
+        let commit_body = TimetableCommit {
+            network: network_id,
+            feed_version: "test-v1".to_owned(),
+            content_sha256: "a".repeat(64),
+            parts: TimetablePartKind::ALL.iter().map(|k| (*k, 1)).collect(),
+            counts: TimetableCounts {
+                lines: 1,
+                stops: 4,
+                patterns: 3,
+                trips: 6,
+                service_days: 2,
+            },
+            horizon: Horizon {
+                from: yesterday,
+                to: today,
+            },
+            source: TimetableSource {
+                url_kind: "test".to_owned(),
+                feed_version: None,
+                published_at: None,
+            },
+        };
+        (parts, commit_body)
+    }
+
+    /// Deletes the network's rows (as the owner when set).
+    pub async fn cleanup(pool: &PgPool, network: &str) {
+        let owner = super::schedule_fixture_pool(pool).await;
+        for sql in [
+            "DELETE FROM transit_feed_versions WHERE network = $1",
+            "DELETE FROM transit_networks WHERE network = $1",
+            "DELETE FROM transit_rail_links WHERE network = $1",
+            "DELETE FROM ingest_freshness WHERE source = 'transit-' || $1 || '-timetable'",
+        ] {
+            sqlx::query(sql)
+                .bind(network)
+                .execute(&owner)
+                .await
+                .expect(sql);
+        }
+    }
+
+    /// Seeds the feed for `network`, active as of now, `today` its last
+    /// service day.
+    pub async fn seed(pool: &PgPool, network: &str, today: NaiveDate) {
+        cleanup(pool, network).await;
+        let owner = super::schedule_fixture_pool(pool).await;
+        let (parts, manifest) = feed(network, today);
+        let mut tx = owner.begin().await.expect("begin");
+        for (part, index) in &parts {
+            stage_part(&mut tx, part, *index, Utc::now())
+                .await
+                .expect("stage");
+        }
+        // Activated as of the last service day (the "service today" check).
+        let at = today.and_hms_opt(12, 0, 0).expect("noon").and_utc();
+        assert_eq!(
+            commit(&mut tx, &manifest, at).await.expect("commit"),
+            CommitOutcome::Activated
+        );
+        tx.commit().await.expect("commit");
+    }
+}

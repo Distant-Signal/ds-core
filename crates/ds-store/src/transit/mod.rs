@@ -8,6 +8,7 @@
 //!
 //! The read queries (the api's routes) come in batch 3.
 
+pub mod read;
 pub mod write;
 
 pub use write::{CommitOutcome, PartIndex, StageOutcome, commit, stage_part};
