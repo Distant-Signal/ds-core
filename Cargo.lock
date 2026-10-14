@@ -3563,6 +3563,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "poller-transit-schedule"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "common",
+ "csv",
+ "dotenvy",
+ "health-http",
+ "ingest-stream",
+ "metrics",
+ "redis",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "wiremock",
+ "zip",
+]
+
+[[package]]
 name = "polyval"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

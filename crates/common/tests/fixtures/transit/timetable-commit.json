@@ -1,0 +1,27 @@
+{
+  "network": "metrolink",
+  "feed_version": "20261009_025808-3fa1c2d4e5f6",
+  "content_sha256": "3fa1c2d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+  "parts": {
+    "network": 1,
+    "lines": 1,
+    "stops": 1,
+    "patterns": 1,
+    "trips": 1,
+    "service_days": 1,
+    "rail_links": 1
+  },
+  "counts": {
+    "lines": 1,
+    "stops": 2,
+    "patterns": 2,
+    "trips": 2,
+    "service_days": 2
+  },
+  "horizon": {"from": "2026-10-13", "to": "2026-12-13"},
+  "source": {
+    "url_kind": "bods-gtfs",
+    "feed_version": "20261009_025808",
+    "published_at": "2026-10-09T03:09:00Z"
+  }
+}

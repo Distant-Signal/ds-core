@@ -16,6 +16,7 @@ members = [
     "crates/poller-irish-rail-gtfs",
     "crates/poller-irish-rail-live",
     "crates/poller-nir-stations",
+    "crates/poller-transit-schedule",
     "crates/aggregator",
     "crates/enricher",
     "crates/trust-backlog-consumer",

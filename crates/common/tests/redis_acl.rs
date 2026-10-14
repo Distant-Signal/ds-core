@@ -135,7 +135,8 @@ impl Harness {
 
     fn create(&mut self, user: &User) {
         let rights = match user.kind.as_str() {
-            "client" | "final" => prefixed_rules(&user.rules, &self.prefix),
+            // `optional`: final rights, rendered only while its client is on.
+            "client" | "final" | "optional" => prefixed_rules(&user.rules, &self.prefix),
             "admin" => vec!["~*".into(), "&*".into(), "+@all".into()],
             other => panic!("user {} has unknown kind {other}", user.name),
         };
@@ -344,6 +345,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         "poller-irish-rail-gtfs",
         "poller-irish-rail-live",
         "poller-nir-stations",
+        "poller-transit-metrolink",
         "ingest-writer",
         "ds-admin",
     ] {
@@ -588,6 +590,12 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             "ds:ingest:ioi-nir",
             "ds:ingest:ioi-live",
         ),
+        // One user per transit network (transit spec §13.2).
+        (
+            "poller-transit-metrolink",
+            "ds:ingest:transit-metrolink",
+            "ds:ingest:tfl",
+        ),
     ] {
         let own = h.key(own);
         let other = h.key(other);
@@ -602,6 +610,17 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             vec!["XADD", other.as_str(), "*", "v", "1"],
             vec!["XTRIM", own.as_str(), "MAXLEN", "0"],
             vec!["XGROUP", "CREATE", own.as_str(), "g", "0"],
+            vec!["XDEL", own.as_str(), "0-1"],
+            vec![
+                "XREADGROUP",
+                "GROUP",
+                "g",
+                "c",
+                "STREAMS",
+                own.as_str(),
+                ">",
+            ],
+            vec!["GET", own.as_str()],
             vec!["XADD", stream.as_str(), "*", "v", "1"],
             vec!["FLUSHALL"],
         ] {
@@ -703,7 +722,7 @@ fn the_template_is_well_formed() {
             user.name
         );
         assert!(
-            ["client", "final", "admin"].contains(&user.kind.as_str()),
+            ["client", "final", "optional", "admin"].contains(&user.kind.as_str()),
             "{}: kind {}",
             user.name,
             user.kind

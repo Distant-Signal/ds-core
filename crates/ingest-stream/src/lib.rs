@@ -28,7 +28,7 @@ pub use consumer::{
 };
 pub use envelope::{
     BatchPart, DecodeError, EncodedEntry, Encoding, Envelope, EnvelopeError, SchemaId,
-    split_snapshot,
+    split_snapshot, split_snapshot_capped,
 };
 pub use producer::{
     NotWritten, ProducePolicy, Producer, ProducerConfig, Receipt, last_produced_at, stream_cursor,
@@ -54,6 +54,16 @@ pub mod streams {
     pub const IOI_NIR: &str = "ds:ingest:ioi-nir";
     /// poller-irish-rail-live: `ioi-station-samples/1`.
     pub const IOI_LIVE: &str = "ds:ingest:ioi-live";
+    /// poller-transit-schedule for network `metrolink` (disabled by
+    /// default): `transit-timetable/1`, `transit-timetable-commit/1` and
+    /// `transit-situations/1`. One stream per network, so the writer pins
+    /// each to its network (transit spec §5, §9.1).
+    pub const TRANSIT_METROLINK: &str = "ds:ingest:transit-metrolink";
+
+    /// The transit stream of `network` (`ds:ingest:transit-<network>`).
+    pub fn transit(network: &str) -> String {
+        format!("ds:ingest:transit-{network}")
+    }
 }
 
 /// The dead-letter stream of `stream`: `ds:ingest:<domain>` →
@@ -83,6 +93,19 @@ mod tests {
         );
         assert_eq!(dead_letter_stream("t1:ds:ingest:tfl"), "t1:ds:dlq:tfl");
         assert_eq!(dead_letter_stream("other"), "other:dlq");
+        assert_eq!(
+            dead_letter_stream(streams::TRANSIT_METROLINK),
+            "ds:dlq:transit-metrolink"
+        );
+    }
+
+    #[test]
+    fn every_compiled_in_transit_network_has_a_declared_stream() {
+        for network in common::transit::NETWORKS {
+            let stream = streams::transit(network);
+            assert!(budget::decl(&stream).is_some(), "{stream}");
+        }
+        assert_eq!(streams::transit("metrolink"), streams::TRANSIT_METROLINK);
     }
 
     #[test]

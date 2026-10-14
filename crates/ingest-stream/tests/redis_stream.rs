@@ -1240,3 +1240,122 @@ async fn snapshot_streams_publish_under_the_pollers_acl_users() {
     assert!(samples.shutdown(Duration::from_secs(2)).await);
     assert!(stations.shutdown(Duration::from_secs(2)).await);
 }
+
+/// Transit spec §6.1, §7.2: poller-transit-schedule's timetable item, under
+/// its network's own ACL user (`poller-transit-metrolink`, an `optional`
+/// user), is capped parts of several kinds plus the commit, added in order
+/// as one item with distinct keys; it reads its stream back with
+/// `XREVRANGE` (its cursor and the feed guard's baseline).
+#[tokio::test]
+#[ignore = "needs Redis 7+ (REDIS_URL) whose default user may run ACL SETUSER"]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one item written, then read back after a restart"
+)]
+async fn a_transit_timetable_item_is_written_under_its_networks_user() {
+    use ingest_stream::envelope::{Envelope, format_produced_at};
+    use ingest_stream::snapshot::{Snapshot, SnapshotProducer};
+
+    let mut scope = Scope::new();
+    let stream = scope.stream("transit-metrolink");
+    let url = scope.acl_user("poller-transit-metrolink");
+    let producer = SnapshotProducer::new(
+        redis::Client::open(url.as_str()).unwrap(),
+        &stream,
+        "poller-transit-schedule",
+    );
+    let at = chrono::DateTime::from_timestamp_millis(Utc::now().timestamp_millis()).unwrap();
+    let schema = SchemaId::new("transit-timetable", 1).unwrap();
+    let mut snapshot = Snapshot::new();
+    for (kind, count) in [("lines", 3_u32), ("trips", 250)] {
+        let rows: Vec<u32> = (0..count).collect();
+        snapshot
+            .add_capped(
+                &stream,
+                &schema,
+                producer.producer_id(),
+                at,
+                kind,
+                &rows,
+                100,
+                ingest_stream::budget::TRANSIT_PART_BYTES,
+                |chunk: &[u32]| {
+                    serde_json::value::to_raw_value(
+                        &serde_json::json!({"kind": kind, "rows": chunk}),
+                    )
+                },
+            )
+            .unwrap();
+    }
+    let commit = Envelope::new(
+        SchemaId::new("transit-timetable-commit", 1).unwrap(),
+        producer.producer_id(),
+        "transit-timetable-commit:x:1/1",
+        at,
+        &serde_json::json!({"parts": {"lines": 1, "trips": 3}}),
+    )
+    .unwrap()
+    .encode()
+    .unwrap();
+    snapshot.push(commit, 1);
+    assert_eq!(snapshot.parts().len(), 5);
+    producer
+        .submit(snapshot)
+        .await
+        .unwrap()
+        .written()
+        .await
+        .unwrap();
+    let entries = scope.range(&stream);
+    let keys: Vec<&str> = entries.iter().map(|(_, f)| f["key"].as_str()).collect();
+    let batch = format_produced_at(at);
+    assert_eq!(
+        keys,
+        [
+            format!("transit-timetable:{batch}/lines:1/1"),
+            format!("transit-timetable:{batch}/trips:1/3"),
+            format!("transit-timetable:{batch}/trips:2/3"),
+            format!("transit-timetable:{batch}/trips:3/3"),
+            "transit-timetable-commit:x:1/1".to_owned(),
+        ]
+    );
+    assert_eq!(producer.cursor().await.unwrap(), Some(at));
+
+    // After a restart the feed guard reads its baseline back: the newest
+    // commit, past newer entries of another schema (the situations).
+    let later = at + chrono::TimeDelta::seconds(1);
+    let mut situations = Snapshot::new();
+    situations
+        .add(
+            &stream,
+            &SchemaId::new("transit-situations", 1).unwrap(),
+            producer.producer_id(),
+            later,
+            &[serde_json::json!({"network": "metrolink"})],
+            100,
+        )
+        .unwrap();
+    producer
+        .submit(situations)
+        .await
+        .unwrap()
+        .written()
+        .await
+        .unwrap();
+    let client = redis::Client::open(url.as_str()).unwrap();
+    let commit =
+        ingest_stream::snapshot::newest_of_schema(&client, &stream, "transit-timetable-commit")
+            .await
+            .unwrap()
+            .expect("the commit");
+    assert_eq!(commit.produced_at, at);
+    let body: serde_json::Value = commit.payload_as().unwrap();
+    assert_eq!(body["parts"]["trips"], 3);
+    assert!(
+        ingest_stream::snapshot::newest_of_schema(&client, &stream, "tocs")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(producer.shutdown(Duration::from_secs(2)).await);
+}

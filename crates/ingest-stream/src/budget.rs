@@ -105,7 +105,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 7] = [
+pub const INGEST_STREAMS: [StreamDecl; 8] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -158,7 +158,23 @@ pub const INGEST_STREAMS: [StreamDecl; 7] = [
         entry_bytes: 16 * KIB,
         bound: Bound::Fixed(1000),
     },
+    // poller-transit-schedule (metrolink; disabled by default): situations
+    // every 5 min (288/day) plus a daily timetable of up to 32 entries,
+    // parts capped at TRANSIT_PART_BYTES. Covers a day, so one whole
+    // timetable item survives a day-long writer outage: a trimmed part
+    // would leave its commit incomplete (transit spec §7.3, §9.2).
+    StreamDecl {
+        stream: crate::streams::TRANSIT_METROLINK,
+        entries_per_day: 288 + 32,
+        entry_bytes: TRANSIT_PART_BYTES as u64,
+        bound: Bound::Covers(Duration::from_secs(24 * 3600)),
+    },
 ];
+
+/// The largest encoded body of a transit timetable part (transit spec
+/// §7.2): `Snapshot::add_capped`'s cap for the timetable, and the entry
+/// size every `ds:ingest:transit-*` stream is budgeted at.
+pub const TRANSIT_PART_BYTES: usize = 64 * 1024;
 
 /// The declaration of `stream`, if it is one of [`INGEST_STREAMS`].
 pub fn decl(stream: &str) -> Option<&'static StreamDecl> {
@@ -278,6 +294,7 @@ mod tests {
                 ("ds:ingest:ioi-gtfs", 500),
                 ("ds:ingest:ioi-nir", 500),
                 ("ds:ingest:ioi-live", 1000),
+                ("ds:ingest:transit-metrolink", 320),
             ]
         );
         let station = &report.streams[0];
@@ -286,8 +303,15 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 292 MB in all: under the 75% alert line (384 MiB), let alone 512.
+        // About 347 MB in all (292 before transit-metrolink's 55 MB): under
+        // the 75% alert line (384 MiB), let alone 512.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
+        let transit = report.streams.last().unwrap();
+        assert_eq!(transit.stream, "ds:ingest:transit-metrolink");
+        assert!(transit.covers >= Duration::from_secs(24 * 3600));
+        // (320 + 100) * (64 KiB + 512), twice: about 55 MB.
+        assert_eq!(transit.bytes, 420 * (64 * 1024 + 512));
+        assert!(report.total_bytes < 360_000_000, "{report:#?}");
         assert_eq!(report.alert_bytes, 384 * 1024 * 1024);
         assert!(report.total_bytes > 250_000_000, "{report:#?}");
     }

@@ -1,0 +1,138 @@
+[
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "network",
+    "rows": [
+      {
+        "name": "Manchester Metrolink",
+        "mode": "tram",
+        "timezone": "Europe/London",
+        "attribution": {
+          "licence": "OGL-UK-3.0",
+          "text": "Contains public sector information licensed under the Open Government Licence v3.0."
+        }
+      }
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "lines",
+    "rows": [
+      {
+        "line_id": "blue",
+        "name": "Blue Line",
+        "colour": "#0072bc",
+        "sort_order": 1,
+        "directions": [
+          {
+            "direction": "outbound",
+            "headsign": "Eccles",
+            "stations": ["9400ZZMAPIC", "9400ZZMAECC"]
+          },
+          {
+            "direction": "inbound",
+            "headsign": null,
+            "stations": ["9400ZZMAECC", "9400ZZMAPIC"]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "stops",
+    "rows": [
+      {
+        "stop_id": "9400ZZMAPIC",
+        "kind": "station",
+        "parent_stop_id": null,
+        "name": "Piccadilly",
+        "indicator": null,
+        "lat": 53.4774,
+        "lon": -2.2309,
+        "wheelchair": true
+      },
+      {
+        "stop_id": "9400ZZMAPIC1",
+        "kind": "platform",
+        "parent_stop_id": "9400ZZMAPIC",
+        "name": "Piccadilly",
+        "indicator": "To Ashton",
+        "lat": null,
+        "lon": null,
+        "wheelchair": null
+      }
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "patterns",
+    "rows": [
+      {
+        "pattern_id": "p1",
+        "line_id": "blue",
+        "direction": "outbound",
+        "headsign": "Eccles",
+        "stops": [
+          {"stop_id": "9400ZZMAPIC1", "arr_offset_s": 0, "dep_offset_s": 0, "pickup": 0, "drop_off": 1},
+          {"stop_id": "9400ZZMAECC1", "arr_offset_s": 1800, "dep_offset_s": 1800, "pickup": 1, "drop_off": 0}
+        ]
+      },
+      {
+        "pattern_id": "p2",
+        "line_id": null,
+        "direction": "outbound",
+        "headsign": "Eccles",
+        "stops": [
+          {"stop_id": "9400ZZMAPIC1", "arr_offset_s": 0, "dep_offset_s": 0, "pickup": 0, "drop_off": 1},
+          {"stop_id": "9400ZZMAECC1", "arr_offset_s": 2400, "dep_offset_s": 2400, "pickup": 1, "drop_off": 0}
+        ]
+      }
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "trips",
+    "rows": [
+      {
+        "trip_id": "VJ0001",
+        "line_id": "blue",
+        "pattern_id": "p1",
+        "service_id": "s1",
+        "start_s": 86100,
+        "headsign": "Eccles",
+        "replacement_bus": false
+      },
+      {
+        "trip_id": "VJ0002",
+        "line_id": null,
+        "pattern_id": "p2",
+        "service_id": "s1",
+        "start_s": 36000,
+        "headsign": null,
+        "replacement_bus": true
+      }
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "service_days",
+    "rows": [
+      {"service_id": "s1", "dates": ["2026-10-13", "2026-10-14"]}
+    ]
+  },
+  {
+    "network": "metrolink",
+    "feed_version": "20261009_025808-3fa1c2d4e5f6",
+    "kind": "rail_links",
+    "rows": [
+      {"stop_id": "9400ZZMAPIC", "crs": "MAN", "tiploc": "MNCRPIC", "kind": "interchange", "note": null}
+    ]
+  }
+]

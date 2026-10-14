@@ -411,6 +411,42 @@ pub fn split_snapshot<T, F>(
 where
     F: Fn(&[T]) -> Result<Box<RawValue>, serde_json::Error>,
 {
+    split_snapshot_capped(
+        schema,
+        producer,
+        produced_at,
+        batch,
+        rows,
+        max_rows_per_part,
+        MAX_ENCODED_BODY,
+        wrap,
+    )
+}
+
+/// [`split_snapshot`] with a smaller body cap: every part's encoded `body`
+/// is at most `max_body` bytes (itself capped at [`MAX_ENCODED_BODY`]).
+/// The rows per part are halved until every part fits; a single row over
+/// `max_body` is [`EnvelopeError::TooLarge`] with `limit: max_body`. The
+/// transit timetable caps its parts at 64 KiB (transit spec §7.2), so a
+/// day-long writer outage keeps a whole timetable item in its stream.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "split_snapshot's arguments plus the cap"
+)]
+pub fn split_snapshot_capped<T, F>(
+    schema: &SchemaId,
+    producer: &str,
+    produced_at: DateTime<Utc>,
+    batch: &str,
+    rows: &[T],
+    max_rows_per_part: usize,
+    max_body: usize,
+    wrap: F,
+) -> Result<Vec<EncodedEntry>, EnvelopeError>
+where
+    F: Fn(&[T]) -> Result<Box<RawValue>, serde_json::Error>,
+{
+    let max_body = max_body.min(MAX_ENCODED_BODY);
     let mut per_part = max_rows_per_part.max(1);
     loop {
         let chunks: Vec<&[T]> = if rows.is_empty() {
@@ -431,9 +467,19 @@ where
                     parts,
                 });
             match envelope.encode() {
+                Ok(entry) if entry.body_len > max_body => {
+                    too_large = Some(EnvelopeError::TooLarge {
+                        encoded: entry.body_len,
+                        limit: max_body,
+                    });
+                    break;
+                }
                 Ok(entry) => encoded.push(entry),
-                Err(err @ EnvelopeError::TooLarge { .. }) => {
-                    too_large = Some(err);
+                Err(EnvelopeError::TooLarge { encoded, .. }) => {
+                    too_large = Some(EnvelopeError::TooLarge {
+                        encoded,
+                        limit: max_body,
+                    });
                     break;
                 }
                 Err(other) => return Err(other),
