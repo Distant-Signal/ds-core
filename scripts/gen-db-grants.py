@@ -16,7 +16,9 @@ grants in the YAML; gives the groups their grants; and creates the
 `row_policies` (a RESTRICTIVE policy `ds_grants_<role>` per table and
 created role, or for a `{writes: ...}` entry one per write command,
 `ds_grants_<role>_insert`, `_update` and `_delete`; stale `ds_grants_*`
-ones are dropped); and takes from the app role the table and function
+ones are dropped, and a listed one is (re)created only when missing or
+different, so a run that changes no policy takes no ACCESS EXCLUSIVE lock);
+and takes from the app role the table and function
 privileges in `app_revokes` (ingest phase 5, release B: what app held only
 for the api's `/private` routes). Tables that do not exist yet (a new
 cluster's initdb run) are skipped.

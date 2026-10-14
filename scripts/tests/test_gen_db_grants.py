@@ -388,6 +388,25 @@ class RenderTest(unittest.TestCase):
         sql = gen.render(gen.parse(raw))
         self.assertNotIn("'trust_backlog', 'ALL', 'false'", sql)
 
+    def test_an_unchanged_row_policy_is_left_alone(self) -> None:
+        """2026-10-14: no DROP/CREATE POLICY (ACCESS EXCLUSIVE) when it is right.
+
+        The live policy is compared with the wanted one, deparsed on a TEMP
+        copy of the table, and only a missing or different one is created;
+        only an unlisted ds_grants_* one is dropped. The steady state is
+        proved against Postgres by scripts/test-postgres-roles.py
+        --check-setup-job.
+        """
+        sql = gen.render(gen.load())
+        policies = sql[sql.index("DO $policies$") : sql.index("$policies$;")]
+        self.assertIn(
+            "CREATE TEMP TABLE ds_grants_policy_probe (LIKE public.%I)", policies
+        )
+        self.assertIn("IS NOT DISTINCT FROM want_qual", policies)
+        self.assertIn("IS NOT DISTINCT FROM want_check", policies)
+        self.assertIn("<> ALL (wanted)", policies)
+        self.assertLess(policies.index("CONTINUE;"), policies.index("CREATE POLICY %I"))
+
     def test_a_writes_only_policy_renders_one_row_per_write_command(self) -> None:
         """L4: `{writes: ...}` restricts INSERT, UPDATE and DELETE, not SELECT."""
         sql = gen.render(gen.load())
