@@ -50,8 +50,9 @@ publish = false
 # local build. Opt out per item with `#[expect(lint, reason = "...")]`.
 [workspace.lints.rust]
 # Deviation: the guide says "forbid", but forbid can't be relaxed per item.
-# Two places need unsafe: api's ticket-parse child sets rlimits through libc
-# before exec, and poller-stations' test-only allocator meter. Each carries
+# Three places need unsafe: api's ticket-parse child sets rlimits through
+# libc before exec, the enricher's `malloc_trim` after a batch stage, and
+# the test-only allocator meters (poller-stations, enricher). Each carries
 # `#[expect(unsafe_code, reason = "...")]` and a SAFETY comment; any other
 # unsafe still fails CI.
 unsafe_code = "deny"

@@ -1382,6 +1382,7 @@ name = "enricher"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
  "chrono-tz",
  "clap",
@@ -1390,6 +1391,7 @@ dependencies = [
  "ds-store",
  "futures-util",
  "health-http",
+ "libc",
  "metrics",
  "metrics-exporter-prometheus",
  "redis",
