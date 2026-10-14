@@ -3575,6 +3575,7 @@ dependencies = [
  "health-http",
  "ingest-stream",
  "metrics",
+ "quick-xml",
  "redis",
  "reqwest 0.13.4",
  "serde",
