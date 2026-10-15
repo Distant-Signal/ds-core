@@ -1,0 +1,29 @@
+-- no-transaction
+-- -------------------------------------------------------------------------
+-- Supports GET /public/incidents' free-text `q` ("Find an incident" on
+-- /incidents): `queries::search_incidents` matches
+-- `to_tsvector('english'::regconfig, summary || ' ' || description)`
+-- against a prefix tsquery built from the visitor's words. The expression
+-- here must stay byte for byte the same as `INCIDENT_SEARCH_DOCUMENT_SQL`
+-- in crates/api/src/data/queries.rs, or the planner can't use it (a test
+-- there checks this file).
+--
+-- An expression index, not a stored generated column: adding one rewrites
+-- `incidents` under ACCESS EXCLUSIVE, while this builds beside it. The
+-- regconfig is spelled out because the one-argument `to_tsvector` depends
+-- on `default_text_search_config` and so can't be indexed. `description`
+-- is the feed's HTML; the default parser reads tags and entities as their
+-- own token types, which the english configuration doesn't index.
+--
+-- Size (production, 2026-10-14): 2,361 rows, 13 MB with indexes, about 30
+-- new incidents a day; summaries average 85 characters and descriptions
+-- about 1,100. Small enough that a sequential scan would also do, but the
+-- search runs as the visitor types (debounced), so it gets an index.
+--
+-- CONCURRENTLY and alone in its file: see
+-- crates/api/tests/migration_index_locking.rs. If the build is interrupted
+-- it leaves an INVALID index, which `ds_store::migrate` drops before the
+-- retry (crates/ds-store/src/migrate.rs).
+-- -------------------------------------------------------------------------
+CREATE INDEX CONCURRENTLY IF NOT EXISTS incidents_search_document
+    ON incidents USING GIN (to_tsvector('english'::regconfig, summary || ' ' || description));
