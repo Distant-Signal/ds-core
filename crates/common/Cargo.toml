@@ -38,6 +38,11 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5"
 
+# `common::heap`: `mallopt` and `malloc_trim`, glibc only. Already in the
+# tree via tokio/std.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+libc = "0.2"
+
 [features]
 # Every service uses the defaults. `ds-store` turns them off: its normal
 # dependency closure must not contain hyper or reqwest

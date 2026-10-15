@@ -15,6 +15,7 @@ pub mod corpus_inference;
 pub mod full_coverage_window;
 #[cfg(feature = "http")]
 pub mod gcp_external_account;
+pub mod heap;
 #[cfg(feature = "redis")]
 pub mod incident_text_changed;
 #[cfg(feature = "http")]
