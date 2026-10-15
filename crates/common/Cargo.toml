@@ -56,7 +56,9 @@ http = ["dep:reqwest", "metrics-exporter-prometheus/http-listener"]
 # and enricher; the pollers and consumers do not build sqlx.
 postgres = ["dep:sqlx"]
 # `common::redis_conn` (bounded Redis connection settings). Enabled by
-# movement-relay, movement-feed, enricher and api.
+# movement-relay, movement-feed, enricher, ingest-stream, ingest-writer and
+# poller-incidents (not the api: it has had no Redis client since ingest
+# phase 5, step 5.4).
 redis = ["dep:redis"]
 # `common::redis_group::fake::FakeConn`, a scripted Redis connection for
 # other crates' unit tests (movement-feed, enricher). Test-only.

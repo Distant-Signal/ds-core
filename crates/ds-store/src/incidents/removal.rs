@@ -80,13 +80,13 @@ pub const MISSES_TO_REMOVE: i16 = 2;
 /// only gets every other poll counted: slower, never wrong.
 pub const MIN_INFERENCE_GAP_SECS: f64 = 120.0;
 
-/// Suffix of `distant_signal_api_incident_removal_inference_total{outcome}`:
+/// Suffix of `distant_signal_store_incident_removal_inference_total{outcome}`:
 /// one increment per incidents POST, labelled with [`Inference::label`].
-pub const INFERENCE_METRIC: &str = "api_incident_removal_inference_total";
+pub const INFERENCE_METRIC: &str = "store_incident_removal_inference_total";
 
-/// Suffix of `distant_signal_api_incidents_marked_removed_total`: rows newly
+/// Suffix of `distant_signal_store_incidents_marked_removed_total`: rows newly
 /// given a `source_removed_at` (the per-poll removal count).
-pub const MARKED_REMOVED_METRIC: &str = "api_incidents_marked_removed_total";
+pub const MARKED_REMOVED_METRIC: &str = "store_incidents_marked_removed_total";
 
 /// Every [`Inference::label`], for zero-registration at startup.
 const OUTCOMES: [&str; 6] = [

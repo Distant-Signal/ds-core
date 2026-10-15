@@ -201,6 +201,21 @@ def observe(rows: Iterable[Statement], known: Iterable[str]) -> dict[str, RoleUs
     return usage
 
 
+def _privileges(value: object) -> set[str]:
+    """Return the verbs of one role's grant on one table, in any of its forms.
+
+    A string (``SIU``), a mapping (``{privileges: U, columns: [...]}``) or a
+    list of either (``[S, {privileges: U, columns: [...]}]``, the enricher on
+    ``incidents``). A column grant counts as the table verb: the report
+    works per table.
+    """
+    if isinstance(value, str):
+        return set(value)
+    if isinstance(value, list):
+        return set().union(*(_privileges(item) for item in cast("list[object]", value)))
+    return set(str(cast("dict[str, object]", value)["privileges"]))
+
+
 def granted(raw: Mapping[str, object]) -> dict[str, dict[str, set[str]]]:
     """Return {role name: {table: verbs}} from db-grants.yaml, read_shared included."""
     roles = cast("dict[str, dict[str, object]]", raw.get("roles") or {})
@@ -215,13 +230,7 @@ def granted(raw: Mapping[str, object]) -> dict[str, dict[str, set[str]]]:
             if "read_shared" in groups and spec.get("class") in READ_SHARED_CLASSES:
                 mine.setdefault(table, set()).add("S")
             if key in grants:
-                value = grants[key]
-                privileges = (
-                    value
-                    if isinstance(value, str)
-                    else str(cast("dict[str, object]", value)["privileges"])
-                )
-                mine.setdefault(table, set()).update(privileges)
+                mine.setdefault(table, set()).update(_privileges(grants[key]))
         if "schema_gate" in groups:
             mine.setdefault("_sqlx_migrations", set()).add("S")
         result[name] = mine

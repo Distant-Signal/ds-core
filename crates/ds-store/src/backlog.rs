@@ -81,7 +81,7 @@ pub async fn upsert_trust_event_backlog_batch(
 ///
 /// 1. [`upsert_trust_event_backlog_batch`]. Each row it refuses for a data
 ///    error is logged with its event and counted in
-///    `api_trust_event_backlog_rejected_rows_total{reason}`.
+///    `store_trust_event_backlog_rejected_rows_total{reason}`.
 /// 2. [`ingest_shared_movements_batch`] for the rows step 1 accepted only
 ///    (API-4): a refused row must not go on to create `trains` rows or
 ///    movements.
@@ -90,7 +90,7 @@ pub async fn upsert_trust_event_backlog_batch(
 ///    error fails the whole call, so the caller retries the batch. The
 ///    retry is safe: committed backlog rows conflict harmlessly on
 ///    `dedup_key`, and every shared write is idempotent too. Both count in
-///    `api_trust_event_backlog_shared_movement_errors_total{class}`.
+///    `store_trust_event_backlog_shared_movement_errors_total{class}`.
 ///
 /// `rejected` is sorted by index. `inserted` is step 1's insert count.
 pub async fn ingest_trust_event_backlog(
@@ -110,7 +110,7 @@ pub async fn ingest_trust_event_backlog(
             "rejected trust-event-backlog row; inserted the rest of its batch"
         );
         metrics::counter!(
-            common::metrics::metric_name("api_trust_event_backlog_rejected_rows_total"),
+            common::metrics::metric_name("store_trust_event_backlog_rejected_rows_total"),
             "reason" => rejected.reason.clone()
         )
         .increment(1);
@@ -139,7 +139,7 @@ pub async fn ingest_trust_event_backlog(
                 "shared movement write rejected this backlog event for a data error"
             );
             metrics::counter!(
-                common::metrics::metric_name("api_trust_event_backlog_shared_movement_errors_total"),
+                common::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
                 "class" => "data"
             )
             .increment(1);
@@ -154,7 +154,7 @@ pub async fn ingest_trust_event_backlog(
                 "shared movement write failed transiently; failing the batch so it is retried"
             );
             metrics::counter!(
-                common::metrics::metric_name("api_trust_event_backlog_shared_movement_errors_total"),
+                common::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
                 "class" => "transient"
             )
             .increment(1);
@@ -903,7 +903,7 @@ fn needs_identity(event: &TrustBacklogEventMessage) -> bool {
 }
 
 /// The metric counting how each uid-less event's identity was found.
-pub const UID_INFERRED_METRIC: &str = "api_trust_event_backlog_uid_inferred_total";
+pub const UID_INFERRED_METRIC: &str = "store_trust_event_backlog_uid_inferred_total";
 
 /// Registers [`UID_INFERRED_METRIC`] at 0 for every `source`.
 pub fn register_uid_inference_metrics() {

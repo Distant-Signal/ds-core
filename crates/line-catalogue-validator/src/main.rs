@@ -19,9 +19,10 @@
 //!
 //! ## Why a separate crate, not a `crates/api/src/bin/*.rs` binary
 //!
-//! `crates/api/src/bin/backfill_trains.rs`/`backfill_incident_lines.rs`
-//! are the existing precedent for a one-off analysis binary in this repo,
-//! but both genuinely need `api`'s own database layer (they run real SQL
+//! The api's former `backfill_trains`/`backfill_incident_lines` binaries
+//! (now `ds-migrate` and `writer-maintenance` subcommands) were the
+//! precedent for a one-off binary in this repo, but both genuinely needed
+//! a database layer (they run real SQL
 //! against `tracked_trains`/`incidents`). This validator needs none of
 //! that -- only `common::LineDefinition`'s existing TOML-parsing struct --
 //! so putting it in `crates/api` would pull in `api`'s full dependency

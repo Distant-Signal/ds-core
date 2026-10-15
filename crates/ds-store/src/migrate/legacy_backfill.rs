@@ -35,8 +35,8 @@
 //!   1. Deploy a build whose migrations stop BEFORE 20260906140000, or
 //!      let `api` start once against the expand-phase migrations only.
 //!   2. MIGRATION_DATABASE_URL=... ds-migrate backfill-trains
-//!         (`/usr/local/bin/ds-migrate` in the api image; the deprecated
-//!         `backfill_trains` binary does the same until phase 5 step 5.4b)
+//!         (`/usr/local/bin/ds-migrate` in the api image; the api's own
+//!         `backfill_trains` binary went in phase 5 step 5.4b)
 //!      -- idempotent, safe to run repeatedly, safe to re-run after a
 //!      partial failure.
 //!   3. Confirm it reports `remaining gaps: 0` for every table.

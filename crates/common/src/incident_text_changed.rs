@@ -2,11 +2,12 @@
 //! incident whose summary or description changed (or that is new), read by
 //! the enricher (`crates/enricher/src/stream.rs`, group `enricher`).
 //!
-//! Shared by both incident-snapshot writers (ingest architecture plan
-//! 2c.2): the api's `POST /private/incidents` and poller-incidents' DB
-//! sink. Both call [`publish`] after every chunk of
+//! Called by the incident-snapshot writer, poller-incidents' DB sink
+//! (ingest architecture plan 2c.2), after every chunk of
 //! `ds_store::incidents::apply_snapshot` has committed and before the
-//! removal inference. Moved here from `api/src/data/queries.rs` unchanged.
+//! removal inference. Moved here from `api/src/data/queries.rs` unchanged;
+//! the api's `POST /private/incidents` called it too until release B
+//! (ingest phase 5), and the api has had no Redis client since step 5.4.
 
 /// The stream's key.
 pub const STREAM: &str = "incident-text-changed";

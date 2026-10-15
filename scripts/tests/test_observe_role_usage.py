@@ -154,6 +154,27 @@ class ReportTest(unittest.TestCase):
         self.assertIn("| `incidents` | SU | SU |  |  |", text)
         self.assertIn("2 statements, 15 calls.", text)
 
+    def test_grants_in_mapping_and_list_form(self) -> None:
+        """A column grant, alone or in a list beside a table grant (5.5, Q3)."""
+        raw = {
+            "roles": {
+                "enricher": {"name": "distant_signal_enricher", "groups": []},
+                "writer": {"name": "distant_signal_writer", "groups": []},
+            },
+            "tables": {
+                "incidents": {
+                    "class": "ingest",
+                    "grants": {
+                        "enricher": ["S", {"privileges": "U", "columns": ["a"]}],
+                        "writer": {"privileges": "SU", "columns": ["b"]},
+                    },
+                },
+            },
+        }
+        grants = obs.granted(raw)
+        self.assertEqual(grants["distant_signal_enricher"]["incidents"], {"S", "U"})
+        self.assertEqual(grants["distant_signal_writer"]["incidents"], {"S", "U"})
+
 
 if __name__ == "__main__":
     unittest.main()

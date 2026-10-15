@@ -50,7 +50,8 @@ impl std::ops::Deref for LineCatalogue {
 /// unremarkable state rather than a configuration error, so nothing further
 /// downstream would ever notice -- the service would just run
 /// indefinitely, reporting no incidents ever match anything.
-/// `crates/api/src/bin/backfill_incident_lines.rs` already had to guard
+/// The incident-lines backfill (now `writer-maintenance
+/// backfill-incident-lines`) already had to guard
 /// this itself (`anyhow::ensure!(!lines.is_empty(), ...)`) precisely
 /// because this function didn't; every OTHER real caller
 /// (`aggregator`/`api`'s main service/`full-coverage-consumer`/

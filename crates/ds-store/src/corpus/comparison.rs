@@ -18,7 +18,7 @@
 //! Two ways to run it, both read-only:
 //!
 //! - after every CORPUS load, `POST /private/corpus-locations` logs the
-//!   [`ReportDetail::Summary`] and sets the `distant_signal_api_corpus_comparison_*`
+//!   [`ReportDetail::Summary`] and sets the `distant_signal_store_corpus_comparison_*`
 //!   gauges ([`record_metrics`]);
 //! - on demand, `corpus_compare` (`crates/api/src/bin/corpus_compare.rs`,
 //!   shipped in the api image) prints the full report against
@@ -652,7 +652,7 @@ fn not_station_outcomes(fills: &[Fill]) -> impl Iterator<Item = (&'static str, u
     })
 }
 
-/// Sets the `distant_signal_api_corpus_comparison_*` gauges from `c`.
+/// Sets the `distant_signal_store_corpus_comparison_*` gauges from `c`.
 #[expect(
     clippy::cast_precision_loss,
     reason = "metric gauges take f64, and these counts and timestamps stay far below 2^52"
@@ -672,7 +672,7 @@ pub fn record_metrics(c: &CorpusComparison) {
     .chain(not_station_outcomes(&c.tiploc_corpus_only_not_stations))
     {
         metrics::gauge!(
-            common::metrics::metric_name("api_corpus_comparison_tiplocs"),
+            common::metrics::metric_name("store_corpus_comparison_tiplocs"),
             "outcome" => outcome
         )
         .set(n as f64);
@@ -688,7 +688,7 @@ pub fn record_metrics(c: &CorpusComparison) {
     .chain(not_station_outcomes(&c.stanox_corpus_only_not_stations))
     {
         metrics::gauge!(
-            common::metrics::metric_name("api_corpus_comparison_stanoxes"),
+            common::metrics::metric_name("store_corpus_comparison_stanoxes"),
             "outcome" => outcome
         )
         .set(n as f64);

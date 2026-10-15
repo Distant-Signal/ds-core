@@ -336,7 +336,6 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         "trust-backlog-consumer",
         "full-coverage-consumer",
         "enricher",
-        "api",
         "exporter",
         "poller-incidents",
         "poller-ldbws",
@@ -354,6 +353,8 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             "{expected} missing from the template: {names:?}"
         );
     }
+    // Retired: the api has no Redis client (ingest phase 5, step 5.4).
+    assert!(!names.contains(&"api"), "api is retired: {names:?}");
     for user in &all {
         h.create(user);
     }
@@ -505,9 +506,12 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         }
     }
 
-    // api and (phase 2c) poller-incidents: XADD incident-text-changed
-    // MAXLEN ~ N (crates/api/src/data/queries.rs). Write only.
-    for user in ["api", "poller-incidents"] {
+    // poller-incidents: XADD incident-text-changed MAXLEN ~ N
+    // (common::incident_text_changed::publish). Write only. (The api's user
+    // with the same rights went with its Redis client, ingest phase 5 step
+    // 5.4.)
+    {
+        let user = "poller-incidents";
         let mut c = h.connect(user);
         allowed(
             user,

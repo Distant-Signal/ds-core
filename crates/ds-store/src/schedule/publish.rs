@@ -663,7 +663,7 @@ async fn finish_publish_part_declaring(
              until the next complete publish)"
         );
         metrics::counter!(
-            common::metrics::metric_name(staged_mismatch_metric()),
+            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
             "product" => sql.product
         )
         .increment(1);
@@ -741,61 +741,23 @@ pub async fn finish_schedule_calling_points_full_publish_without_rows(
     .await
 }
 
-/// `api_schedule_publish_staged_mismatch_total{product}`: a final publish
+/// `store_schedule_publish_staged_mismatch_total{product}`: a final publish
 /// chunk whose staged key count did not match the publisher's total, so the
 /// rows missing from that publish were NOT deleted (SCHED-2). The chart's
-/// `DistantSignalSchedulePublishStagedMismatch` alert reads it. The api's
-/// name; a direct writer counts [`STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`]
-/// instead (see [`use_store_metric_names`]).
+/// `DistantSignalSchedulePublishStagedMismatch` alert reads it. Its `api_`
+/// name went with the api's publish routes (release B) and the `api_`
+/// metric rename (ingest phase 5, Q1).
 pub const SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC: &str =
-    "api_schedule_publish_staged_mismatch_total";
-
-/// [`SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC`] under its `store_` name (spec
-/// §14.1), counted by a process other than the api that publishes directly
-/// (schedule-reference with `INGEST_SINK=db`, plan 2a.5). The alert takes
-/// `or` of both names until phase 5 drops the api's.
-pub const STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC: &str =
     "store_schedule_publish_staged_mismatch_total";
 
-/// Whether this process counts the `store_` names; see
-/// [`use_store_metric_names`].
-static STORE_METRIC_NAMES: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// Makes this process count the publish metrics under their `store_` names
-/// (spec §14.1): call once at startup, before
-/// [`register_schedule_publish_metrics`], in a direct writer. The api never
-/// calls it, so its metric names are unchanged.
-pub fn use_store_metric_names() {
-    STORE_METRIC_NAMES.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The staged-mismatch counter's name in this process.
-fn staged_mismatch_metric() -> &'static str {
-    staged_mismatch_metric_for(STORE_METRIC_NAMES.load(std::sync::atomic::Ordering::Relaxed))
-}
-
-const fn staged_mismatch_metric_for(store_names: bool) -> &'static str {
-    if store_names {
-        STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
-    } else {
-        SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
-    }
-}
-
-/// `api_schedule_publish_rows_total{product, outcome}`: incoming rows of a
+/// `store_schedule_publish_rows_total{product, outcome}`: incoming rows of a
 /// per-date schedule publish, by what the upsert did with them --
 /// `outcome="written"` (inserted, or updated because a value changed) or
 /// `outcome="unchanged"` (identical to the stored row, so skipped without
 /// being written or locked; a same-key duplicate within one chunk also
 /// counts here). `product` is `schedule_destination_departures`,
-/// `schedule_calling_points_full` or `schedule_services`. A direct writer
-/// counts [`STORE_SCHEDULE_PUBLISH_ROWS_METRIC`] instead (see
-/// [`use_store_metric_names`]).
-pub const SCHEDULE_PUBLISH_ROWS_METRIC: &str = "api_schedule_publish_rows_total";
-
-/// [`SCHEDULE_PUBLISH_ROWS_METRIC`] under its `store_` name (spec §14.1).
-pub const STORE_SCHEDULE_PUBLISH_ROWS_METRIC: &str = "store_schedule_publish_rows_total";
+/// `schedule_calling_points_full` or `schedule_services`.
+pub const SCHEDULE_PUBLISH_ROWS_METRIC: &str = "store_schedule_publish_rows_total";
 
 /// Every `product` label [`SCHEDULE_PUBLISH_ROWS_METRIC`] carries.
 const PUBLISH_ROWS_PRODUCTS: [&str; 3] = [
@@ -804,21 +766,12 @@ const PUBLISH_ROWS_PRODUCTS: [&str; 3] = [
     crate::schedule::services::PRODUCT,
 ];
 
-/// The publish-rows counter's name in this process.
-fn publish_rows_metric() -> &'static str {
-    if STORE_METRIC_NAMES.load(std::sync::atomic::Ordering::Relaxed) {
-        STORE_SCHEDULE_PUBLISH_ROWS_METRIC
-    } else {
-        SCHEDULE_PUBLISH_ROWS_METRIC
-    }
-}
-
 /// Counts one committed publish statement's rows in
 /// [`SCHEDULE_PUBLISH_ROWS_METRIC`]: `written` of the `incoming` rows were
 /// inserted or updated, the rest were unchanged.
 pub(crate) fn count_publish_rows(product: &'static str, incoming: usize, written: u64) {
     let incoming = incoming as u64;
-    let name = common::metrics::metric_name(publish_rows_metric());
+    let name = common::metrics::metric_name(SCHEDULE_PUBLISH_ROWS_METRIC);
     metrics::counter!(name.clone(), "product" => product, "outcome" => "written")
         .increment(written);
     metrics::counter!(name, "product" => product, "outcome" => "unchanged")
@@ -834,7 +787,7 @@ pub fn register_schedule_publish_metrics() {
         &CALLING_POINTS_FULL_PUBLISH_KEYS_SQL,
     ] {
         metrics::counter!(
-            common::metrics::metric_name(staged_mismatch_metric()),
+            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
             "product" => sql.product
         )
         .increment(0);
@@ -1613,8 +1566,8 @@ mod schedule_publish_diff_tests {
         // Written: the seed's 3 rows, then CHANGE and NEW. Unchanged: KEEP.
         let rendered = handle.render();
         for line in [
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="written"} 5"#,
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 1"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_destination_departures",outcome="written"} 5"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 1"#,
         ] {
             assert!(rendered.contains(line), "{line}\n{rendered}");
         }
@@ -1642,7 +1595,7 @@ mod schedule_publish_diff_tests {
         assert_eq!(keep_xmax().await, "0", "KEEP is still never locked");
         assert!(
             handle.render().contains(
-                r#"distant_signal_api_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
+                r#"distant_signal_store_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
             ),
             "the staged-mismatch path still triggers"
         );
@@ -2094,7 +2047,7 @@ mod schedule_publish_diff_tests {
         let rendered = handle.render();
         assert!(
             rendered.contains(
-                r#"distant_signal_api_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
+                r#"distant_signal_store_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
             ),
             "{rendered}"
         );
@@ -3162,38 +3115,9 @@ mod schedule_destination_departures_upsert_tests {
     }
 }
 
-/// The staged-mismatch counter's two names (plan 2a.5): the api keeps its
-/// `api_` name; a direct writer counts the `store_` one.
-#[cfg(test)]
-mod staged_mismatch_metric_name_tests {
-    use super::{
-        SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC, STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC,
-        staged_mismatch_metric_for,
-    };
-
-    #[test]
-    fn the_api_name_is_the_default_and_the_store_name_is_opt_in() {
-        assert_eq!(
-            staged_mismatch_metric_for(false),
-            SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
-        );
-        assert_eq!(
-            staged_mismatch_metric_for(true),
-            STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC
-        );
-        assert_eq!(
-            STORE_SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("store_"),
-            SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC.strip_prefix("api_"),
-        );
-    }
-}
-
 #[cfg(test)]
 mod publish_rows_metric_tests {
-    use super::{
-        SCHEDULE_PUBLISH_ROWS_METRIC, STORE_SCHEDULE_PUBLISH_ROWS_METRIC, count_publish_rows,
-        register_schedule_publish_metrics,
-    };
+    use super::{count_publish_rows, register_schedule_publish_metrics};
     use metrics_exporter_prometheus::PrometheusBuilder;
 
     #[test]
@@ -3206,16 +3130,12 @@ mod publish_rows_metric_tests {
         });
         let rendered = handle.render();
         for line in [
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="written"} 12"#,
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="unchanged"} 49988"#,
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 0"#,
-            r#"distant_signal_api_schedule_publish_rows_total{product="schedule_services",outcome="written"} 0"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="written"} 12"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_calling_points_full",outcome="unchanged"} 49988"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_destination_departures",outcome="unchanged"} 0"#,
+            r#"distant_signal_store_schedule_publish_rows_total{product="schedule_services",outcome="written"} 0"#,
         ] {
             assert!(rendered.contains(line), "{line}\n{rendered}");
         }
-        assert_eq!(
-            STORE_SCHEDULE_PUBLISH_ROWS_METRIC.strip_prefix("store_"),
-            SCHEDULE_PUBLISH_ROWS_METRIC.strip_prefix("api_"),
-        );
     }
 }

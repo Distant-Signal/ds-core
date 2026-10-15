@@ -206,7 +206,6 @@ dependencies = [
  "openidconnect",
  "pdf-extract",
  "rand 0.8.8",
- "redis",
  "regex",
  "reqwest 0.12.28",
  "schedule-query",

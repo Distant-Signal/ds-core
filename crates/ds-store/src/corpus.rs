@@ -217,7 +217,7 @@ pub async fn last_corpus_delivery(pool: &PgPool) -> Result<Option<DateTime<Utc>>
     Ok(latest)
 }
 
-/// `distant_signal_api_corpus_last_delivered_at_seconds`: the newest loaded
+/// `distant_signal_store_corpus_last_delivered_at_seconds`: the newest loaded
 /// CORPUS delivery's `delivered_at` as a Unix timestamp, the series behind
 /// the chart's `DistantSignalCorpusStale` alert.
 ///
@@ -229,7 +229,7 @@ pub async fn last_corpus_delivery(pool: &PgPool) -> Result<Option<DateTime<Utc>>
 /// would make any alert on it silently absent; this one survives restarts.
 /// Not set at all before the first load, so the alert cannot fire on a
 /// freshly enabled install that is still waiting for its first delivery.
-pub const LAST_DELIVERY_METRIC: &str = "api_corpus_last_delivered_at_seconds";
+pub const LAST_DELIVERY_METRIC: &str = "store_corpus_last_delivered_at_seconds";
 
 /// Reads the newest delivery and, if there is one, sets
 /// [`LAST_DELIVERY_METRIC`]. Returns what it read.

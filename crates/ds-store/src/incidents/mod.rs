@@ -191,7 +191,7 @@ pub const FETCHED_AT_SQL: &str = "GREATEST(incidents.fetched_at, \
 /// back to every line of their operators (2026-10-06 decision 9). Set on
 /// every snapshot POST. No labels: the phrase it missed goes to the debug
 /// log, never into a label (unbounded cardinality).
-pub const INCIDENTS_WITHOUT_PLACE_METRIC: &str = "api_incidents_without_resolved_place";
+pub const INCIDENTS_WITHOUT_PLACE_METRIC: &str = "store_incidents_without_resolved_place";
 
 /// Sets [`INCIDENTS_WITHOUT_PLACE_METRIC`] for this poll's live (uncleared)
 /// incidents and logs each one's summary at debug level, for finding the
