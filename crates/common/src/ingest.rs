@@ -48,10 +48,18 @@ impl std::error::Error for DataRejected {}
 /// everything else -- including any error this function does not recognise
 /// -- is [`FailureClass::Transient`], because wrongly treating an outage as
 /// a rejection dead-letters healthy data, while the reverse only delays it.
+///
+/// [`DataRejected`] counts wherever it sits: as the root error or a source
+/// in the chain (`chain()` + `downcast_ref`), or attached as a *context*
+/// layer (`err.context(DataRejected(..))`, as poller-incidents' DB sink
+/// does). The latter needs [`anyhow::Error::downcast_ref`]: a context layer
+/// appears in `chain()` as anyhow's private `ContextError<C, E>`, which no
+/// `downcast_ref::<C>()` on a `&dyn Error` can see through.
 pub fn classify_failure(err: &anyhow::Error) -> FailureClass {
-    if err
-        .chain()
-        .any(|cause| cause.downcast_ref::<DataRejected>().is_some())
+    if err.downcast_ref::<DataRejected>().is_some()
+        || err
+            .chain()
+            .any(|cause| cause.downcast_ref::<DataRejected>().is_some())
     {
         return FailureClass::Rejected;
     }
@@ -306,6 +314,18 @@ mod tests {
             FailureClass::Rejected,
             "a DB sink's data rejection is a rejection under a context layer too"
         );
+    }
+
+    /// A sink that marks a rejection by attaching [`DataRejected`] as a
+    /// context layer over the database error (poller-incidents'
+    /// `SinkError::from_db`) is a rejection too.
+    #[test]
+    fn a_data_rejection_attached_as_context_is_classified_rejected() {
+        let err = anyhow::anyhow!("23505 duplicate key")
+            .context(DataRejected("23505 duplicate key".to_string()));
+        assert_eq!(classify_failure(&err), FailureClass::Rejected);
+        let err = err.context("writing incidents");
+        assert_eq!(classify_failure(&err), FailureClass::Rejected);
     }
 
     #[test]

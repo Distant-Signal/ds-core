@@ -127,6 +127,47 @@ impl PoolSettings {
             .await
             .context("could not connect to the database")
     }
+
+    /// A long-running worker's startup connect: [`Self::connect_with`]
+    /// retried by `common::startup::retry_until_ready` (INF-5) with
+    /// [`common::startup::CONNECT_BACKOFF`] until it succeeds, logging each
+    /// failure ("Postgres is not reachable yet; retrying") and beating
+    /// `progress` so `/livez` stays 200 meanwhile.
+    ///
+    /// The pool itself is retried, not a throwaway probe connection before
+    /// a one-shot pool connect: `connect_with` opens its first connection
+    /// eagerly, and sqlx retries a refused TCP connect within it only until
+    /// `acquire_timeout` (5 s by default), then fails with `PoolTimedOut`.
+    /// With a probe first, a refusal lasting longer than that between the
+    /// probe and the pool (a new pod's `NetworkPolicy` still being
+    /// programmed by the CNI, Postgres restarting) exited the process into
+    /// `CrashLoopBackOff`.
+    pub async fn connect_with_until_ready(
+        &self,
+        base: PgConnectOptions,
+        progress: Option<&common::progress::Progress>,
+    ) -> PgPool {
+        common::startup::retry_until_ready(
+            "Postgres",
+            common::startup::CONNECT_BACKOFF,
+            progress,
+            || self.connect_with(base.clone()),
+        )
+        .await
+    }
+
+    /// Parses `database_url` (a malformed URL is an error at once, never
+    /// retried), then [`Self::connect_with_until_ready`].
+    pub async fn connect_until_ready(
+        &self,
+        database_url: &str,
+        progress: Option<&common::progress::Progress>,
+    ) -> Result<PgPool> {
+        let base: PgConnectOptions = database_url
+            .parse()
+            .context("could not parse DATABASE_URL")?;
+        Ok(self.connect_with_until_ready(base, progress).await)
+    }
 }
 
 impl From<common::pg::PoolSettings> for PoolSettings {
@@ -405,6 +446,86 @@ mod tests {
             .connect(&url)
             .await
             .expect("connect")
+    }
+
+    /// A loopback port nothing listens on: a connect is refused at once.
+    async fn refused_port() -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
+    /// A refused connect is retried (not returned as an error, so the
+    /// worker cannot exit into `CrashLoopBackOff`), beating `progress` so
+    /// `/livez` stays 200; a malformed URL is an error at once.
+    #[tokio::test]
+    async fn a_refused_startup_connect_is_retried_not_returned() {
+        let mut settings = PoolSettings::new("distant-signal-ds-store-pool-test", 1);
+        // sqlx retries a refused connect itself until `acquire_timeout`
+        // (then `PoolTimedOut`); short, so attempts fail inside the test.
+        settings.acquire_timeout = Duration::from_millis(200);
+        assert!(
+            settings
+                .connect_until_ready("not a url", None)
+                .await
+                .is_err()
+        );
+
+        let port = refused_port().await;
+        let url = format!("postgres://nobody@127.0.0.1:{port}/nothing");
+        let progress = common::progress::Progress::new(Duration::from_secs(60));
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        let started = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_millis(2500),
+            settings.connect_until_ready(&url, Some(&progress)),
+        )
+        .await;
+        assert!(result.is_err(), "it must still be retrying");
+        assert!(
+            progress.since_last_beat() < started.elapsed(),
+            "every failed attempt beats progress"
+        );
+    }
+
+    /// The NetworkPolicy-lag case end to end: connects are refused for the
+    /// first ~2 seconds (nothing listens on the port), then a TCP relay to
+    /// the real database comes up on it, and the same call returns a
+    /// working pool without the caller seeing an error.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL set and --ignored"]
+    async fn a_startup_connect_refused_at_first_comes_up_once_reachable() {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
+        let real: PgConnectOptions = url.parse().unwrap();
+        let upstream = format!("{}:{}", real.get_host(), real.get_port());
+        let port = refused_port().await;
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+                .await
+                .unwrap();
+            loop {
+                let (mut inbound, _) = listener.accept().await.unwrap();
+                let upstream = upstream.clone();
+                tokio::spawn(async move {
+                    let mut outbound = tokio::net::TcpStream::connect(upstream).await.unwrap();
+                    let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
+                });
+            }
+        });
+
+        let lagging = real.host("127.0.0.1").port(port);
+        let pool = tokio::time::timeout(
+            Duration::from_secs(30),
+            PoolSettings::new("distant-signal-ds-store-pool-test", 1)
+                .connect_with_until_ready(lagging, None),
+        )
+        .await
+        .expect("connects once the port answers");
+        let one: i32 = sqlx::query_scalar("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(one, 1);
     }
 
     #[tokio::test]
