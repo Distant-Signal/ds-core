@@ -222,7 +222,7 @@ dependencies = [
  "trip-planner",
  "trust-schema",
  "wiremock",
- "zip",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -1799,7 +1799,7 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror 2.0.20",
  "web-time",
- "zip",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -2921,6 +2921,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.13.1",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "nom"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3436,7 +3448,7 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
- "zip",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -3585,7 +3597,7 @@ dependencies = [
  "toml",
  "tracing",
  "wiremock",
- "zip",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -3724,9 +3736,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.17"
+version = "0.11.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04759210543be93709136e28212294a659ef5001836ff4eab4d663e4529bba83"
+checksum = "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe"
 dependencies = [
  "aws-lc-rs",
  "bytes",
@@ -4337,7 +4349,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "zip",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -6426,6 +6438,21 @@ dependencies = [
  "flate2",
  "indexmap 2.14.1",
  "memchr",
+ "typed-path",
+ "zopfli",
+]
+
+[[package]]
+name = "zip"
+version = "9.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap 2.14.1",
+ "memchr",
+ "nix",
  "typed-path",
  "zopfli",
 ]
