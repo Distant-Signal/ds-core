@@ -1550,6 +1550,39 @@ mod activity_tests {
         }
     }
 
+    /// The direction of a packed Activity field with operational codes
+    /// alongside (or instead of) a passenger one. `-D`/`-U`/`-T` are
+    /// attach/detach codes, not `D`/`U`: a call that only attaches or
+    /// detaches vehicles is no passenger stop, and one that also has `D` or
+    /// `U` keeps that direction. `TW` (token), `A` (stops for other trains to
+    /// pass), `RM` (reversing) and `OP` are operational only.
+    #[test]
+    fn operational_codes_never_widen_or_narrow_a_calls_direction() {
+        for (code, board, alight) in [
+            ("-D", false, false),
+            ("-U", false, false),
+            ("-T", false, false),
+            ("TW", false, false),
+            ("A", false, false),
+            ("RM", false, false),
+            ("OPRM", false, false),
+            ("T -D", true, true),
+            ("T -U", true, true),
+            ("D -D", false, true),
+            ("D RM", false, true),
+            ("U -U", true, false),
+            ("U A", true, false),
+            ("D N", false, false),
+            ("U N", false, false),
+            ("R N", false, false),
+        ] {
+            let line = with_activity(LI_CARLILE, CallingPointKind::Intermediate, code);
+            let parsed = cp(&line, CallingPointKind::Intermediate);
+            assert_eq!(parsed.can_board(), board, "{code:?} can_board");
+            assert_eq!(parsed.can_alight(), alight, "{code:?} can_alight");
+        }
+    }
+
     /// An origin is never somewhere to alight and a terminus never somewhere
     /// to board, whatever their activity says.
     #[test]
