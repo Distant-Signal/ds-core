@@ -90,9 +90,11 @@ pub struct Connection {
     pub departure_min: u32,
     pub arrival_min: u32,
     /// The same two times on the WORKING timetable (truncated to the
-    /// minute): what `scheduledDeparture`/`scheduledArrival` still serve
-    /// for one release, and what the live overlay matches TRUST and Darwin
-    /// reports against.
+    /// minute): what a trip-plan leg serves as `workingDeparture`/
+    /// `workingArrival` and finds its calls by, and what the live overlay
+    /// matches TRUST and Darwin reports against. (`scheduledDeparture`/
+    /// `scheduledArrival` served these until 2026-10-20; they are now the
+    /// public times.)
     pub working_departure_min: u32,
     pub working_arrival_min: u32,
     /// A passenger may board this train at `from_tiploc`. Riding through a

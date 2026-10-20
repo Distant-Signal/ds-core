@@ -67,11 +67,19 @@ pub struct RawTimetable {
     pub request_stop: Option<bool>,
 }
 
-/// `JourneyStop`'s public-time, working-time and direction fields,
-/// flattened into it on the wire (`publicArrival`, `publicDeparture`,
+/// `JourneyStop`'s timetable: its scheduled, public and working times and
+/// its direction, flattened into it on the wire (`scheduledArrival`,
+/// `scheduledDeparture`, `publicArrival`, `publicDeparture`,
 /// `workingArrival`, `workingDeparture`, `workingPass`, `canBoard`,
-/// `canAlight`, `requestStop`).
+/// `canAlight`, `requestStop`, `passingPoint`).
 ///
+/// * `scheduled*` (served only, see [`StopTimetable::scheduled_arrival`]):
+///   the time a passenger timetable shows, the public time, falling back to
+///   the working time (truncated to the minute) only on a side with no
+///   public time -- the departure of a set-down-only stop, the arrival of a
+///   pick-up-only one, a schedule stored before public times were. The same
+///   rule as `schedule_query::Connection::departure_min`. Until 2026-10-20
+///   these were the working time (design doc §9 decision 1).
 /// * `public*`: the public (GBTT) times -- what a passenger timetable and
 ///   the station screens show. `null` when there is no public call in that
 ///   direction (e.g. the departure of a set-down-only stop), and until the
@@ -79,8 +87,6 @@ pub struct RawTimetable {
 /// * `working*`: the exact working-timetable (WTT) times, with `:30`
 ///   seconds for a half-minute. `workingPass` is set only on a passing point
 ///   (the train runs through without stopping), which has no other time.
-///   `scheduledArrival`/`scheduledDeparture` are the WTT time truncated to
-///   the minute: kept for one release, then switched to public or removed.
 /// * `canBoard`/`canAlight`/`requestStop`: from the CIF Activity field. A
 ///   set-down-only stop has `canBoard: false`, a pick-up-only stop
 ///   `canAlight: false`.
@@ -89,13 +95,21 @@ pub struct RawTimetable {
 ///   a TRUST movement at a passing point fills `actual*` and `delayMinutes`
 ///   (the train's progress) but never makes it a stop. A passenger stop
 ///   list leaves these rows out.
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Default)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "a wire shape: each bool is an independent CIF schedule flag served as its own field"
 )]
 pub struct StopTimetable {
+    /// The working-timetable (WTT) arrival truncated to the minute. Internal,
+    /// never served under this name: what TRUST and Darwin facts are matched
+    /// on and what `estimated*` (this time plus TRUST's running delay) is
+    /// built from. Set from TRUST's own planned time for a call the schedule
+    /// lacks. The wire's `scheduledArrival` is
+    /// [`StopTimetable::scheduled_arrival`].
+    pub working_minute_arrival: Option<DateTime<Utc>>,
+    /// The departure counterpart of `working_minute_arrival`.
+    pub working_minute_departure: Option<DateTime<Utc>>,
     pub public_arrival: Option<DateTime<Utc>>,
     pub public_departure: Option<DateTime<Utc>>,
     pub working_arrival: Option<DateTime<Utc>>,
@@ -105,6 +119,58 @@ pub struct StopTimetable {
     pub can_alight: bool,
     pub request_stop: bool,
     pub passing_point: bool,
+}
+
+impl StopTimetable {
+    /// The served `scheduledArrival`: the public arrival, else the working
+    /// one (to the minute) when this call has no public arrival.
+    pub fn scheduled_arrival(&self) -> Option<DateTime<Utc>> {
+        self.public_arrival.or(self.working_minute_arrival)
+    }
+
+    /// The served `scheduledDeparture`: the public departure, else the
+    /// working one (to the minute) when this call has no public departure.
+    pub fn scheduled_departure(&self) -> Option<DateTime<Utc>> {
+        self.public_departure.or(self.working_minute_departure)
+    }
+}
+
+impl Serialize for StopTimetable {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        #[expect(
+            clippy::struct_excessive_bools,
+            reason = "mirrors StopTimetable's wire shape"
+        )]
+        struct Wire {
+            scheduled_arrival: Option<DateTime<Utc>>,
+            scheduled_departure: Option<DateTime<Utc>>,
+            public_arrival: Option<DateTime<Utc>>,
+            public_departure: Option<DateTime<Utc>>,
+            working_arrival: Option<DateTime<Utc>>,
+            working_departure: Option<DateTime<Utc>>,
+            working_pass: Option<DateTime<Utc>>,
+            can_board: bool,
+            can_alight: bool,
+            request_stop: bool,
+            passing_point: bool,
+        }
+        Wire {
+            scheduled_arrival: self.scheduled_arrival(),
+            scheduled_departure: self.scheduled_departure(),
+            public_arrival: self.public_arrival,
+            public_departure: self.public_departure,
+            working_arrival: self.working_arrival,
+            working_departure: self.working_departure,
+            working_pass: self.working_pass,
+            can_board: self.can_board,
+            can_alight: self.can_alight,
+            request_stop: self.request_stop,
+            passing_point: self.passing_point,
+        }
+        .serialize(serializer)
+    }
 }
 
 /// `booked` plus 30 seconds when `half_minute`.
@@ -185,6 +251,12 @@ impl StopTimetable {
             .or_else(|| with_half_minute(cp.booked_departure, t.is_half_minute_departure));
         let (can_board, can_alight) = direction_or_default(cp);
         Self {
+            working_minute_arrival: cp
+                .booked_arrival
+                .and_then(|t| london_to_utc(arrival_date.and_time(t))),
+            working_minute_departure: cp
+                .booked_departure
+                .and_then(|t| london_to_utc(departure_date.and_time(t))),
             public_arrival: instant(arrival_date, cp.booked_arrival, t.public_arrival),
             public_departure: instant(departure_date, cp.booked_departure, t.public_departure),
             working_arrival: instant(arrival_date, cp.booked_arrival, working_arrival),
@@ -414,15 +486,10 @@ pub struct JourneyStop {
     pub parent_crs: Option<String>,
     pub tiploc: Option<String>,
     pub kind: Option<schedule_query::CallingPointKind>,
-    /// The WORKING-timetable time, truncated to the minute. Deprecated on
-    /// the wire (docs/api-changelog.md): kept for one release, then switched
-    /// to the public time or removed. Read `publicArrival`/`publicDeparture`
-    /// (or `workingArrival`/`workingDeparture`) instead.
-    pub scheduled_arrival: Option<DateTime<Utc>>,
-    pub scheduled_departure: Option<DateTime<Utc>>,
     pub actual_arrival: Option<DateTime<Utc>>,
     pub actual_departure: Option<DateTime<Utc>>,
-    /// Scheduled time + the train's current overall delay, filled in by
+    /// The working time to the minute (`timetable.working_minute_arrival`)
+    /// plus the train's current overall delay, filled in by
     /// `apply_delay_estimates` (below) ONLY while `actual_arrival` is still
     /// `None` -- i.e. only for a stop live movement data hasn't reported an
     /// actual arrival for yet. Always `None` on a freshly-built stop, same
@@ -520,8 +587,9 @@ pub struct JourneyStop {
     /// the matching rules and when it is null. Serialized as `null`, never
     /// omitted.
     pub board: Option<StopBoard>,
-    /// Public and exact working times, and direction -- see
-    /// [`StopTimetable`]. Flattened: its fields sit directly on the stop.
+    /// Scheduled (public, else working), public and exact working times,
+    /// and direction -- see [`StopTimetable`]. Flattened: its fields sit
+    /// directly on the stop.
     #[serde(flatten)]
     pub timetable: StopTimetable,
 }
@@ -563,12 +631,6 @@ impl JourneyStop {
             // exactly what was stored.
             tiploc: Some(tiploc_key(&cp.tiploc)),
             kind: Some(cp.kind),
-            scheduled_arrival: cp
-                .booked_arrival
-                .and_then(|t| london_to_utc(calling_point_date.and_time(t))),
-            scheduled_departure: cp
-                .booked_departure
-                .and_then(|t| london_to_utc(departure_date.and_time(t))),
             actual_arrival: None,
             actual_departure: None,
             estimated_arrival: None,

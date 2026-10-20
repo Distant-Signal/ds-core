@@ -92,7 +92,7 @@ pub fn apply(stops: &mut [JourneyStop], cancelled: bool, live: bool) {
 
 /// Estimated minus the public time, in whole minutes: departure where the
 /// stop has one, else arrival. Each side's public time, else its working
-/// (`scheduled_*`) time when that side has no public one. Both instants are
+/// (`working_minute_*`) time when that side has no public one. Both instants are
 /// CIF-derived (the estimate is the working time plus TRUST's running
 /// delay), so no TRUST instant is compared with a CIF one.
 #[expect(
@@ -100,9 +100,12 @@ pub fn apply(stops: &mut [JourneyStop], cancelled: bool, live: bool) {
     reason = "lateness in minutes is far below i32::MAX"
 )]
 fn expected_lateness_minutes(stop: &JourneyStop) -> Option<i32> {
-    let departure = stop.timetable.public_departure.or(stop.scheduled_departure);
-    let arrival = stop.timetable.public_arrival.or(stop.scheduled_arrival);
-    let pair = match (stop.scheduled_departure, stop.estimated_departure) {
+    let departure = stop.timetable.scheduled_departure();
+    let arrival = stop.timetable.scheduled_arrival();
+    let pair = match (
+        stop.timetable.working_minute_departure,
+        stop.estimated_departure,
+    ) {
         (Some(_), Some(estimated)) => departure.map(|baseline| (baseline, estimated)),
         _ => arrival.zip(stop.estimated_arrival),
     };
@@ -131,8 +134,6 @@ mod tests {
             parent_crs: None,
             tiploc: None,
             kind: None,
-            scheduled_arrival: at(scheduled),
-            scheduled_departure: at(scheduled),
             actual_arrival: None,
             actual_departure: None,
             estimated_arrival: None,
@@ -151,7 +152,11 @@ mod tests {
             live_status: None,
             late_minutes: None,
             board: None,
-            timetable: StopTimetable::default(),
+            timetable: StopTimetable {
+                working_minute_arrival: at(scheduled),
+                working_minute_departure: at(scheduled),
+                ..StopTimetable::default()
+            },
         }
     }
 
@@ -226,7 +231,7 @@ mod tests {
     #[test]
     fn a_terminus_uses_its_arrival_estimate() {
         let mut stops = vec![stop("08:00")];
-        stops[0].scheduled_departure = None;
+        stops[0].timetable.working_minute_departure = None;
         stops[0].estimated_arrival = at("08:03");
         apply(&mut stops, false, true);
         assert_eq!(
@@ -241,7 +246,7 @@ mod tests {
     #[test]
     fn lateness_is_against_the_public_time_at_a_padded_terminus() {
         let mut stops = vec![stop("06:19")];
-        stops[0].scheduled_departure = None;
+        stops[0].timetable.working_minute_departure = None;
         stops[0].timetable.public_arrival = at("06:22");
         stops[0].estimated_arrival = at("06:21");
         apply(&mut stops, false, true);
