@@ -18,6 +18,7 @@ pub mod gcp_external_account;
 pub mod heap;
 #[cfg(feature = "redis")]
 pub mod incident_text_changed;
+pub mod incident_validity;
 #[cfg(feature = "http")]
 pub mod ingest;
 pub mod island_of_ireland;
