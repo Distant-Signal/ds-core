@@ -39,9 +39,10 @@ pub struct InterchangeData {
     pub change_time_by_tiploc: HashMap<String, i32>,
     pub tiploc_to_crs: HashMap<String, String>,
     pub crs_to_tiplocs: HashMap<String, Vec<String>>,
-    /// CRS -> every fixed link departing FROM it (ALF's `O` field),
-    /// unfiltered by date/time -- [`fixed_links_from`] applies the
-    /// date/time filter at lookup time.
+    /// CRS -> every fixed link departing FROM it, unfiltered by date/time
+    /// -- [`fixed_links_from`] applies the date/time filter at lookup time.
+    /// An ALF row is a link between its `O` and `D` both ways, so build
+    /// this with [`index_fixed_links_both_ways`], not from `O` alone.
     pub fixed_links_from_crs: HashMap<String, Vec<FixedLink>>,
     /// The extra change time owed when changing to or from a bus or ferry
     /// (see [`ModalChangeBuffer`]). Empty (no extra time) by default.
@@ -78,7 +79,7 @@ impl ModalChangeBuffer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FixedLink {
     pub mode: String,
     pub to_crs: String,
@@ -88,6 +89,136 @@ pub struct FixedLink {
     pub valid_to: String,
     /// Raw 7-char '0'/'1' bitmask, Monday-first.
     pub days_mask: String,
+}
+
+/// Indexes ALF fixed-link rows (`(from_crs, link)`) by the CRS they leave
+/// from, in BOTH directions: each row also yields its reverse, `to_crs` ->
+/// `from_crs` with the same mode, minutes, time window and day mask.
+///
+/// The ALF lists each link once, not once per direction. Its companion FLF
+/// member spells the same links out as "ADDITIONAL LINK: TUBE BETWEEN CHX
+/// AND EUS IN 18 MINUTES", and in the real file (RJTTF995ALF, 2026-10-20:
+/// 4,651 rows over 1,308 mode/origin/destination triples) not one triple
+/// has its reverse listed. Indexing the rows one way only left about half
+/// of every link unusable: `EUS -> VXH` by Tube worked, `VXH -> EUS` did
+/// not, so Vauxhall to Euston went round by Waterloo East and Charing
+/// Cross. The reverse keeps the row's validity window, read against the
+/// clock time the link is started at, as the forward row is.
+///
+/// An exact duplicate (a row listed twice, or a reverse the source already
+/// lists) is kept once. `fixed_links_from` still picks the shortest valid
+/// link per destination, so a source that does list a direction with its
+/// own minutes is honoured where that is quicker.
+///
+/// Each CRS's links come back sorted (see
+/// [`InterchangeData::sort_fixed_links`]), which the lookups rely on for
+/// speed: indexed both ways a London terminus has twice the links, and the
+/// planner looks them up on every improved arrival there.
+pub fn index_fixed_links_both_ways(
+    rows: impl IntoIterator<Item = (String, FixedLink)>,
+) -> HashMap<String, Vec<FixedLink>> {
+    let mut seen: std::collections::HashSet<(String, FixedLink)> = std::collections::HashSet::new();
+    let mut by_from: HashMap<String, Vec<FixedLink>> = HashMap::new();
+    for (from_crs, link) in rows {
+        let reverse_from = link.to_crs.clone();
+        let reverse = FixedLink {
+            to_crs: from_crs.clone(),
+            ..link.clone()
+        };
+        for (from, link) in [(from_crs, link), (reverse_from, reverse)] {
+            if seen.insert((from.clone(), link.clone())) {
+                by_from.entry(from).or_default().push(link);
+            }
+        }
+    }
+    for links in by_from.values_mut() {
+        links.sort_by(link_order);
+    }
+    by_from
+}
+
+/// The order [`fixed_links_from`] reads a CRS's links in: by destination,
+/// then minutes, then mode (its tie-break), then the rest so that equal
+/// rows sit together.
+fn link_order(a: &FixedLink, b: &FixedLink) -> std::cmp::Ordering {
+    (
+        &a.to_crs,
+        a.minutes,
+        &a.mode,
+        &a.valid_from,
+        &a.valid_to,
+        &a.days_mask,
+    )
+        .cmp(&(
+            &b.to_crs,
+            b.minutes,
+            &b.mode,
+            &b.valid_from,
+            &b.valid_to,
+            &b.days_mask,
+        ))
+}
+
+/// `(to_crs, minutes, mode)`: [`fixed_links_from`]'s order and tie-break.
+fn lookup_key(link: &FixedLink) -> (&str, i32, &str) {
+    (link.to_crs.as_str(), link.minutes, link.mode.as_str())
+}
+
+fn is_lookup_sorted(links: &[FixedLink]) -> bool {
+    links.is_sorted_by(|a, b| lookup_key(a) <= lookup_key(b))
+}
+
+impl InterchangeData {
+    /// Sorts every CRS's fixed links into lookup order. Lookups work on
+    /// unsorted lists too, but sort a copy each time; call this after
+    /// adding links to an index (as `api` does after its stop <-> station
+    /// walks).
+    pub fn sort_fixed_links(&mut self) {
+        for links in self.fixed_links_from_crs.values_mut() {
+            links.sort_by(link_order);
+        }
+    }
+}
+
+/// Every fixed link from `from_crs` to `to_crs`, whatever its validity.
+/// Sorted by minutes when the index is sorted.
+pub fn fixed_links_between<'a>(
+    data: &'a InterchangeData,
+    from_crs: &str,
+    to_crs: &'a str,
+) -> impl Iterator<Item = &'a FixedLink> + 'a {
+    let links: &'a [FixedLink] = data
+        .fixed_links_from_crs
+        .get(from_crs)
+        .map_or(&[], Vec::as_slice);
+    let links = if is_lookup_sorted(links) {
+        let start = links.partition_point(|link| link.to_crs.as_str() < to_crs);
+        let end = start + links[start..].partition_point(|link| link.to_crs.as_str() <= to_crs);
+        &links[start..end]
+    } else {
+        links
+    };
+    links.iter().filter(move |link| link.to_crs == to_crs)
+}
+
+/// The link [`fixed_links_from`] would take from `from_crs` to `to_crs` at
+/// `date`/`time_min`: the shortest one valid then, or `None`.
+#[expect(
+    clippy::similar_names,
+    reason = "the similar names are distinct domain terms"
+)]
+pub fn fixed_link_between<'a>(
+    data: &'a InterchangeData,
+    from_crs: &str,
+    to_crs: &'a str,
+    date: NaiveDate,
+    time_min: u32,
+) -> Option<&'a FixedLink> {
+    let clock = hhmm_bytes(clock_minutes(time_min));
+    let day = day_index(date);
+    fixed_links_between(data, from_crs, to_crs)
+        .filter(|link| applies(link, day, clock))
+        .min_by(|a, b| lookup_key(a).cmp(&lookup_key(b)))
 }
 
 /// The result of looking up a station's minimum same-train-to-different-train
@@ -186,8 +317,30 @@ fn clock_minutes(time_min: u32) -> u32 {
     time_min % 1440
 }
 
-fn to_hhmm(minutes: u32) -> String {
-    format!("{:02}{:02}", minutes / 60, minutes % 60)
+/// `minutes` (a clock position, under 1440) as the ASCII bytes of `HHMM`,
+/// which compare as the time does against an ALF row's `valid_from` and
+/// `valid_to`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "each value is a single decimal digit"
+)]
+fn hhmm_bytes(minutes: u32) -> [u8; 4] {
+    let (hours, minutes) = (minutes / 60, minutes % 60);
+    [
+        b'0' + (hours / 10) as u8,
+        b'0' + (hours % 10) as u8,
+        b'0' + (minutes / 10) as u8,
+        b'0' + (minutes % 10) as u8,
+    ]
+}
+
+/// Whether `link` runs on weekday `day` (0 = Monday) at `clock` (`HHMM`
+/// bytes): its day-mask flag is `'1'` and `clock` is inside its window,
+/// both ends inclusive.
+fn applies(link: &FixedLink, day: usize, clock: [u8; 4]) -> bool {
+    link.days_mask.as_bytes().get(day) == Some(&b'1')
+        && link.valid_from.as_bytes() <= clock.as_slice()
+        && clock.as_slice() <= link.valid_to.as_bytes()
 }
 
 /// The fixed links (tube, walk, transfer, bus, ferry) actually usable from
@@ -206,15 +359,14 @@ fn to_hhmm(minutes: u32) -> String {
 /// timetabled at the same moment (the real Euston↔King's Cross
 /// tube-vs-transfer case, §0.4 of the design spec).
 ///
-/// Both the candidate scan order and the returned `Vec`'s order are made
-/// deterministic by sorting on `(to_crs, minutes, mode)`: `candidates` is
-/// sorted before the shortest-per-destination scan so an exact-`minutes`
-/// tie always resolves the same way regardless of the order Postgres
-/// happened to return `fixed_links` rows in (that table's own `SELECT` has
-/// no `ORDER BY` -- see `crates/api/src/data/trip_planning.rs`'s
-/// `fetch_interchange_data`), and the final result is sorted again since
-/// `shortest_by_destination` is itself a `HashMap`, whose iteration order
-/// is otherwise randomized per-process.
+/// Both the candidate scan order and the returned `Vec`'s order are
+/// deterministic, `(to_crs, minutes, mode)`: an exact-`minutes` tie always
+/// resolves the same way regardless of the order Postgres happened to
+/// return `fixed_links` rows in (that table's own `SELECT` has no `ORDER
+/// BY` -- see `crates/api/src/data/trip_planning.rs`'s
+/// `fetch_interchange_data`). An index already in that order (see
+/// [`InterchangeData::sort_fixed_links`]) is read as it is; any other is
+/// sorted per call.
 #[expect(
     clippy::similar_names,
     reason = "the similar names are distinct domain terms"
@@ -225,45 +377,31 @@ pub fn fixed_links_from<'a>(
     date: NaiveDate,
     time_min: u32,
 ) -> Vec<&'a FixedLink> {
-    let clock = to_hhmm(clock_minutes(time_min));
+    let clock = hhmm_bytes(clock_minutes(time_min));
     let day = day_index(date);
 
     let Some(candidates) = data.fixed_links_from_crs.get(from_crs) else {
         return Vec::new();
     };
 
-    #[expect(
-        clippy::items_after_statements,
-        reason = "a local type or import sits next to its only use"
-    )]
-    fn sort_key(link: &FixedLink) -> (&str, i32, &str) {
-        (link.to_crs.as_str(), link.minutes, link.mode.as_str())
-    }
-
-    let mut sorted_candidates: Vec<&FixedLink> = candidates.iter().collect();
-    sorted_candidates.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
-
-    let mut shortest_by_destination: HashMap<&str, &FixedLink> = HashMap::new();
-    for link in sorted_candidates {
-        let Some(day_flag) = link.days_mask.as_bytes().get(day) else {
-            continue;
-        };
-        if *day_flag != b'1' {
-            continue;
-        }
-        if !(link.valid_from.as_str() <= clock.as_str() && clock.as_str() <= link.valid_to.as_str())
+    // In `(to_crs, minutes, mode)` order the first valid link to each
+    // destination is its shortest, and the result comes out sorted. An
+    // index from `index_fixed_links_both_ways` or `sort_fixed_links` is
+    // already in that order; anything else is sorted here first.
+    let mut result: Vec<&FixedLink> = Vec::new();
+    let mut take = |link: &'a FixedLink| {
+        if applies(link, day, clock) && result.last().is_none_or(|last| last.to_crs != link.to_crs)
         {
-            continue;
+            result.push(link);
         }
-        match shortest_by_destination.get(link.to_crs.as_str()) {
-            Some(existing) if existing.minutes <= link.minutes => {}
-            _ => {
-                shortest_by_destination.insert(&link.to_crs, link);
-            }
-        }
+    };
+    if is_lookup_sorted(candidates) {
+        candidates.iter().for_each(&mut take);
+    } else {
+        let mut sorted: Vec<&FixedLink> = candidates.iter().collect();
+        sorted.sort_by(|a, b| lookup_key(a).cmp(&lookup_key(b)));
+        sorted.into_iter().for_each(&mut take);
     }
-    let mut result: Vec<&FixedLink> = shortest_by_destination.into_values().collect();
-    result.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
     result
 }
 
@@ -405,6 +543,129 @@ mod tests {
         // 1440 + 8*60 = day-2 08:00 -- must still match a same-clock-time window.
         let links = fixed_links_from(&data, "EUS", monday(), 1440 + 8 * 60);
         assert_eq!(links.len(), 1);
+    }
+
+    #[test]
+    fn a_link_listed_once_is_indexed_both_ways() {
+        // The real ALF row `M=TUBE,O=EUS,D=VXH,T=22,S=0700,E=1900,R=1111110`
+        // is the only Euston <-> Vauxhall row; Vauxhall must reach Euston too.
+        let data = InterchangeData {
+            fixed_links_from_crs: index_fixed_links_both_ways([(
+                "EUS".to_string(),
+                link("VXH", 22, "0700", "1900", "1111110"),
+            )]),
+            ..empty_data()
+        };
+        let back = fixed_links_from(&data, "VXH", monday(), 10 * 60);
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].to_crs, "EUS");
+        assert_eq!(back[0].minutes, 22);
+        assert_eq!(back[0].mode, "TUBE");
+        let forward = fixed_links_from(&data, "EUS", monday(), 10 * 60);
+        assert_eq!(forward[0].to_crs, "VXH");
+        // The reverse keeps the row's window and days: not on a Sunday,
+        // not after 19:00.
+        let sunday = NaiveDate::from_ymd_opt(2026, 9, 6).unwrap();
+        assert!(fixed_links_from(&data, "VXH", sunday, 10 * 60).is_empty());
+        assert!(fixed_links_from(&data, "VXH", monday(), 20 * 60).is_empty());
+    }
+
+    #[test]
+    fn duplicate_rows_and_already_listed_reverses_are_kept_once() {
+        let index = index_fixed_links_both_ways([
+            (
+                "VIC".to_string(),
+                link("WAT", 17, "0700", "1900", "1111110"),
+            ),
+            (
+                "VIC".to_string(),
+                link("WAT", 17, "0700", "1900", "1111110"),
+            ),
+            (
+                "WAT".to_string(),
+                link("VIC", 17, "0700", "1900", "1111110"),
+            ),
+            // A reverse with its own minutes is a different link: both stay.
+            (
+                "WAT".to_string(),
+                link("VIC", 15, "0700", "1900", "1111110"),
+            ),
+        ]);
+        // 17 (listed twice, and listed back) once each way; 15 both ways.
+        assert_eq!(index["VIC"].len(), 2);
+        assert_eq!(index["WAT"].len(), 2);
+        let data = InterchangeData {
+            fixed_links_from_crs: index,
+            ..empty_data()
+        };
+        let quickest = fixed_links_from(&data, "WAT", monday(), 10 * 60);
+        assert_eq!(quickest[0].minutes, 15);
+    }
+
+    #[test]
+    fn sorted_and_unsorted_indexes_look_up_the_same_links() {
+        let rows = vec![
+            link("KGX", 15, "0000", "2359", "1111111"),
+            link("VIC", 9, "0700", "1900", "1111110"),
+            link("KGX", 5, "0500", "2359", "1111111"),
+            link("STP", 5, "0700", "1900", "1111110"),
+            link("KGX", 10, "1901", "2359", "1111110"),
+            link("VIC", 14, "1901", "2359", "1111110"),
+        ];
+        let unsorted = InterchangeData {
+            fixed_links_from_crs: HashMap::from([("EUS".to_string(), rows)]),
+            ..empty_data()
+        };
+        let mut sorted = unsorted.clone();
+        sorted.sort_fixed_links();
+        assert_ne!(
+            sorted.fixed_links_from_crs["EUS"],
+            unsorted.fixed_links_from_crs["EUS"]
+        );
+        for minute in [6 * 60, 8 * 60, 19 * 60 + 30, 1440 + 8 * 60] {
+            let from_sorted = fixed_links_from(&sorted, "EUS", monday(), minute);
+            assert_eq!(
+                from_sorted,
+                fixed_links_from(&unsorted, "EUS", monday(), minute)
+            );
+            for to in ["KGX", "VIC", "STP", "ZZZ"] {
+                let between = fixed_link_between(&sorted, "EUS", to, monday(), minute);
+                assert_eq!(
+                    between,
+                    fixed_link_between(&unsorted, "EUS", to, monday(), minute)
+                );
+                assert_eq!(
+                    between,
+                    from_sorted.iter().find(|l| l.to_crs == to).copied()
+                );
+            }
+        }
+        let at_eight: Vec<i32> = fixed_links_from(&sorted, "EUS", monday(), 8 * 60)
+            .iter()
+            .map(|l| l.minutes)
+            .collect();
+        // KGX 5 (not 15), STP 5, VIC 9, in destination order.
+        assert_eq!(at_eight, [5, 5, 9]);
+        let mut kgx: Vec<i32> = fixed_links_between(&unsorted, "EUS", "KGX")
+            .map(|l| l.minutes)
+            .collect();
+        kgx.sort_unstable();
+        assert_eq!(kgx, [5, 10, 15]);
+        let sorted_kgx: Vec<i32> = fixed_links_between(&sorted, "EUS", "KGX")
+            .map(|l| l.minutes)
+            .collect();
+        assert_eq!(sorted_kgx, [5, 10, 15]);
+        assert_eq!(fixed_links_between(&sorted, "VXH", "KGX").count(), 0);
+    }
+
+    #[test]
+    fn a_pair_with_no_link_either_way_gains_none() {
+        let index = index_fixed_links_both_ways([(
+            "EUS".to_string(),
+            link("VXH", 22, "0700", "1900", "1111110"),
+        )]);
+        assert!(!index.contains_key("VIC"));
+        assert!(index["VXH"].iter().all(|l| l.to_crs == "EUS"));
     }
 
     #[test]

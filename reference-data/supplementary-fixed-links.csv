@@ -1,0 +1,42 @@
+# Curated fixed links the timetable feed's ALF member lacks: Tube (or
+# other) hops between National Rail stations that the journey planner
+# should offer. Merged with the ALF links at load
+# (crates/api/src/data/trip_planning.rs, `fetch_interchange_data`); like an
+# ALF row, each row is a link BOTH ways
+# (`schedule_query::index_fixed_links_both_ways`), and where the ALF also
+# has the pair, the shorter link valid at the time wins.
+#
+# Scope (2026-10-20 gap analysis against RJTTF995ALF): of the 105 pairs
+# among VXH ZFD LBG WAT CHX VIC PAD MYB EUS KGX STP LST FST CST BFR, 20 have
+# no ALF link either way. 19 are covered without one: by a direct train in
+# the timetable (VXH-WAT, ZFD-STP, ZFD-BFR, ZFD-LBG), or by a train or link
+# to a neighbour followed by an ALF link (for example ZFD-KGX by Thameslink
+# to St Pancras and the 1-minute walk; VXH-CHX by Victoria and the CHX-VIC
+# link once VXH-VIC exists). The one gap that matters is Vauxhall-Victoria,
+# one stop on the Victoria line, which otherwise plans via Euston or
+# Clapham Junction.
+#
+# Minutes are hand estimates, not TfL data: the in-train time (Victoria
+# line Vauxhall-Victoria, about 2 minutes) plus waiting and the walks
+# between the National Rail and Underground stations, set to match how the
+# ALF times the neighbouring links. The ALF's Euston, King's Cross and St
+# Pancras links are 10 to 13 minutes longer to Vauxhall than to Victoria,
+# one stop apart; 11 minutes is taken here. Off-peak and Sunday rows add 5
+# minutes and use the ALF's own time windows, as its rows for these
+# stations do.
+#
+# Columns: from_crs and to_crs (CRS codes; order does not matter), mode (as
+# the ALF's M=: TUBE, WALK, METRO, ...), line (the line's name, for people
+# and for a later TfL-derived set; not used by the planner yet), minutes
+# (1-120), valid_from and valid_to (HHMM, inclusive, the time the link is
+# started), days_mask (Monday-first, 7 x 0/1), source (where the minutes
+# come from).
+#
+# The TfL stop lookup (DS-79) will give stations, lines and a CRS <-> TfL
+# crosswalk; links between National Rail stations on one line can then be
+# generated in this same shape and replace the hand-written rows.
+from_crs,to_crs,mode,line,minutes,valid_from,valid_to,days_mask,source
+VXH,VIC,TUBE,Victoria,11,0700,1900,1111110,estimate: 2 min Victoria line + wait + NR/LU interchange at both ends; calibrated to ALF EUS/KGX/STP links to VXH vs VIC
+VXH,VIC,TUBE,Victoria,16,0529,0659,1111110,estimate: as above + 5 min off-peak (ALF convention)
+VXH,VIC,TUBE,Victoria,16,1901,2359,1111110,estimate: as above + 5 min off-peak (ALF convention)
+VXH,VIC,TUBE,Victoria,16,0700,2359,0000001,estimate: as above + 5 min Sunday (ALF convention)
