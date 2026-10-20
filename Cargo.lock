@@ -4331,16 +4331,22 @@ name = "schedule-ingest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aws-lc-rs",
+ "base64 0.22.1",
  "chrono",
  "chrono-tz",
  "clap",
  "common",
+ "crc",
  "dotenvy",
  "ds-store",
  "flate2",
  "health-http",
+ "md-5 0.10.6",
  "metrics",
+ "metrics-exporter-prometheus",
  "quick-xml",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4349,6 +4355,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wiremock",
  "zip 9.0.5",
 ]
 
