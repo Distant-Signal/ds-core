@@ -84,8 +84,17 @@ pub struct RawTimetable {
 /// * `canBoard`/`canAlight`/`requestStop`: from the CIF Activity field. A
 ///   set-down-only stop has `canBoard: false`, a pick-up-only stop
 ///   `canAlight: false`.
+/// * `passingPoint`: the schedule books no stop here (no arrival or
+///   departure, only a pass time or none). It never changes with live data:
+///   a TRUST movement at a passing point fills `actual*` and `delayMinutes`
+///   (the train's progress) but never makes it a stop. A passenger stop
+///   list leaves these rows out.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a wire shape: each bool is an independent CIF schedule flag served as its own field"
+)]
 pub struct StopTimetable {
     pub public_arrival: Option<DateTime<Utc>>,
     pub public_departure: Option<DateTime<Utc>>,
@@ -95,6 +104,7 @@ pub struct StopTimetable {
     pub can_board: bool,
     pub can_alight: bool,
     pub request_stop: bool,
+    pub passing_point: bool,
 }
 
 /// `booked` plus 30 seconds when `half_minute`.
@@ -183,6 +193,7 @@ impl StopTimetable {
             can_board,
             can_alight,
             request_stop: t.request_stop.unwrap_or(false),
+            passing_point: cp.booked_arrival.is_none() && cp.booked_departure.is_none(),
         }
     }
 }
