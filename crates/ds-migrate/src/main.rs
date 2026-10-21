@@ -43,7 +43,7 @@
 //!   up to `MIGRATION_CONNECT_DEADLINE_SECS`) and refuse the api's role. The
 //!   logic is `ds_store::migrate::legacy_backfill::run_backfill` and
 //!   `ds_store::schedule::summaries::backfill_all`; both are idempotent.
-//!   The old api binaries still work, deprecated, until step 5.4b.
+//!   Release C (step 5.4b) deleted the old api binaries.
 //!
 //! Exit status 0 on success, 1 on any error (logged as one line).
 

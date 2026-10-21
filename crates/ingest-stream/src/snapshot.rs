@@ -478,7 +478,7 @@ impl fmt::Debug for RedisArgs {
 impl RedisArgs {
     /// The client for `REDIS_URL` with the ACL user's credentials applied.
     /// `Err` (a message) when `REDIS_URL` is unset or the credentials do
-    /// not combine; `why` names what needs it (`"INGEST_SINK=stream"`).
+    /// not combine; `why` names what needs it (`"the ingest stream"`).
     ///
     /// # Errors
     ///
@@ -813,8 +813,8 @@ mod tests {
             redis_password: None,
             redis_username: None,
         };
-        let err = none.client("INGEST_SINK=stream").unwrap_err();
-        assert!(err.contains("INGEST_SINK=stream needs REDIS_URL"), "{err}");
+        let err = none.client("the ingest stream").unwrap_err();
+        assert!(err.contains("the ingest stream needs REDIS_URL"), "{err}");
         let user = RedisArgs {
             redis_url: Some("redis://redis:6379".into()),
             redis_password: Some("pw".into()),

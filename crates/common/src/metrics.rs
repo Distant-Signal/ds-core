@@ -98,7 +98,7 @@ static INFO: std::sync::Mutex<Vec<Info>> = std::sync::Mutex::new(Vec::new());
 /// Sets the info gauge `<metric_name(suffix)>{labels} 1` now, and again
 /// when [`install`] installs a recorder later, so it can be called before
 /// or after the recorder exists. For settings an alert or a dashboard
-/// should be able to read (the ingest sink, the read source).
+/// should be able to read (the ingest-writer's stream modes).
 pub fn set_info(suffix: &str, labels: &[(&'static str, &str)]) {
     let info: Info = (
         metric_name(suffix),
@@ -120,23 +120,6 @@ fn emit_info((name, labels): &Info) {
         .map(|(key, value)| metrics::Label::new(*key, value.clone()))
         .collect();
     metrics::gauge!(name.clone(), labels).set(1.0);
-}
-
-/// `distant_signal_ingest_sink_info{sink}`: where a producer delivers
-/// (`INGEST_SINK`: `stream` or `db`; release B removed `http` and
-/// `http+shadow`).
-pub fn ingest_sink_info(sink: &str) {
-    set_info("ingest_sink_info", &[("sink", sink)]);
-}
-
-/// `distant_signal_internal_reads_source_info{read, source}`: where an
-/// internal reader reads `read` from (`db`, the only source since release
-/// B; the `*_SOURCE` variables of ingest plan phase 4).
-pub fn internal_reads_source_info(read: &str, source: &str) {
-    set_info(
-        "internal_reads_source_info",
-        &[("read", read), ("source", source)],
-    );
 }
 
 fn unix_now() -> f64 {
@@ -294,13 +277,16 @@ mod tests {
         let recorder = PrometheusBuilder::new().build_recorder();
         let handle = recorder.handle();
         metrics::with_local_recorder(&recorder, || {
-            ingest_sink_info("stream");
-            internal_reads_source_info("population", "db");
+            set_info("test_mode_info", &[("mode", "apply")]);
+            set_info(
+                "test_pair_info",
+                &[("read", "population"), ("source", "db")],
+            );
         });
         let rendered = handle.render();
         for series in [
-            r#"distant_signal_ingest_sink_info{sink="stream"} 1"#,
-            r#"distant_signal_internal_reads_source_info{read="population",source="db"} 1"#,
+            r#"distant_signal_test_mode_info{mode="apply"} 1"#,
+            r#"distant_signal_test_pair_info{read="population",source="db"} 1"#,
         ] {
             assert!(
                 rendered.contains(series),
@@ -308,13 +294,13 @@ mod tests {
             );
         }
         // Kept once, for the recorder `install` sets up later.
-        ingest_sink_info("stream");
+        set_info("test_mode_info", &[("mode", "apply")]);
         let held = INFO.lock().unwrap();
-        let sinks = held
+        let modes = held
             .iter()
-            .filter(|(name, _)| name == "distant_signal_ingest_sink_info")
+            .filter(|(name, _)| name == "distant_signal_test_mode_info")
             .count();
-        assert_eq!(sinks, 1);
+        assert_eq!(modes, 1);
     }
 
     #[test]
