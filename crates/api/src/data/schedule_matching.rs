@@ -32,15 +32,12 @@ mod db_tests {
     async fn attempt_schedule_match_reproduces_the_eus_bug_and_now_resolves_it() {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-EUS";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("schedule-match@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         sqlx::query(
             "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
@@ -167,15 +164,12 @@ mod db_tests {
     async fn attempt_schedule_match_matches_a_post_midnight_calling_point_via_its_day_offset() {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-MIDNIGHT";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("schedule-match-midnight@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         sqlx::query(
             "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
@@ -341,15 +335,12 @@ mod db_tests {
     {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-NO-TOML-TIPLOC";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("no-toml-tiploc@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         // Real, CIF-derived data -- entirely independent of the TOML
         // catalogue below, and the only place a real TIPLOC comes from now.
@@ -462,15 +453,12 @@ mod db_tests {
     async fn attempt_schedule_match_with_no_candidate_line_leaves_the_row_pending() {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-NO-CANDIDATE";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("no-candidate@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(

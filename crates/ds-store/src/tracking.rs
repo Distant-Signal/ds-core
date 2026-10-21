@@ -1647,15 +1647,12 @@ mod db_tests {
     async fn a_live_resolution_with_a_known_train_uid_dual_writes_the_shared_trains_row() {
         let pool = connect().await;
         let user_id = "TEST-LIVE-RESOLUTION-DUAL-WRITE";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("live-resolution@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-06".parse().unwrap();
         let (tracked_train_id,): (i64,) = sqlx::query_as(

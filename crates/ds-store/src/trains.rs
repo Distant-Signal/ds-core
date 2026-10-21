@@ -768,7 +768,7 @@ mod db_tests {
                 .ok();
         };
         cleanup().await;
-        sqlx::query("INSERT INTO users (id, email, name) VALUES ($1, 'db2-5@example.com', $1)")
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $1)")
             .bind(user_id)
             .execute(&pool)
             .await

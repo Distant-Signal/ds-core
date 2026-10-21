@@ -1202,8 +1202,7 @@ mod contradiction_filter_tests {
 #[cfg(test)]
 #[expect(
     clippy::similar_names,
-    clippy::too_many_lines,
-    reason = "test code: paired test values share names; scenario tests read top to bottom"
+    reason = "test code: paired test values share names"
 )]
 mod db_tests {
     use super::*;
@@ -1215,15 +1214,12 @@ mod db_tests {
     async fn no_matching_backlog_rows_leaves_the_pin_untouched() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-MATCH-EMPTY-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-match-empty@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T09:00:00Z".parse().unwrap();
@@ -1273,15 +1269,12 @@ mod db_tests {
     async fn an_implausible_actual_timestamp_is_rejected_and_leaves_the_pin_pending() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-IMPLAUSIBLE-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-implausible@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
@@ -1380,15 +1373,12 @@ mod db_tests {
     async fn a_busy_stations_closest_departure_wins_over_an_earlier_unrelated_one() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-CLOSEST-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-closest@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-25".parse().unwrap();
         // The pin's own scheduled departure.
@@ -1497,15 +1487,12 @@ mod db_tests {
     async fn a_backlog_match_with_an_activation_also_dual_writes_the_shared_trains_row() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-DUAL-WRITE-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-dual-write@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-06".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-06T18:15:00Z".parse().unwrap();
@@ -1636,15 +1623,12 @@ mod db_tests {
     async fn run_backlog_match_sweep_resolves_a_pin_the_backlog_had_nothing_for_at_creation_time() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-SWEEP-E2E-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-sweep-e2e@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         // Deliberately NOT a fixed wall-clock time (e.g. "today at 18:15") --
         // `find_backlog_match`'s plausibility guard below rejects any
@@ -1779,15 +1763,12 @@ mod db_tests {
     async fn an_unrelated_arrival_event_never_falsely_matches_a_pins_scheduled_departure() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-ARRIVAL-GUARD-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-arrival-guard@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
@@ -1878,15 +1859,12 @@ mod db_tests {
     async fn a_real_departure_is_still_found_despite_a_more_favorably_sorted_unrelated_arrival() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-ARRIVAL-FALLTHROUGH-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-arrival-fallthrough@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
@@ -2045,15 +2023,12 @@ mod db_tests {
             .await
             .ok();
 
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .expect("seed fixture user");
 
         // The pin's OWN identity, on the shared `trains` row -- where a
         // subscription's resolved identity actually lives (Task 22 dropped
@@ -2387,15 +2362,12 @@ mod db_tests {
     async fn a_pin_with_no_identity_of_its_own_is_unaffected_by_the_contradiction_filter() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-UID-UNKNOWN-PIN-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-uid-unknown-pin@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         // A third distinct hour, for the reason the timestamp note on
         // `a_backlog_candidate_naming_a_different_train_uid_never_repoints_an_identified_pin`
@@ -2597,15 +2569,12 @@ mod db_tests {
         crs: &str,
         scheduled: DateTime<Utc>,
     ) -> i64 {
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .expect("seed fixture user");
         let (id,): (i64,) = sqlx::query_as(
             "INSERT INTO train_subscriptions \
                 (user_id, service_date, pin_origin_crs, pin_scheduled_departure) \
@@ -3026,15 +2995,12 @@ mod db_tests {
 
         // What `POST /Train/by-uid/{uid}/{date}/track` sets up before calling
         // this: a subscription already bound to the `(uid, date)` row.
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
         let trains_id = crate::trains::find_or_create_train(&pool, train_uid, day_one)
             .await
             .expect("find_or_create_train");
@@ -3134,15 +3100,12 @@ mod db_tests {
         .await
         .expect("seed a split-date backlog train");
 
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
         let trains_id = crate::trains::find_or_create_train(&pool, train_uid, origin_date)
             .await
             .expect("find_or_create_train");
@@ -3205,15 +3168,12 @@ mod db_tests {
         let departure: DateTime<Utc> = "2026-09-25T08:30:00Z".parse().unwrap();
         seed_backlog_run(&pool, train_id, train_uid, day, "ZDU", departure).await;
 
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(format!("{user_id}@example.com"))
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
         let other_trains_id = crate::trains::find_or_create_train(&pool, other_uid, day)
             .await
             .expect("find_or_create_train (other)");
@@ -3337,15 +3297,12 @@ mod db_tests {
     async fn a_full_activation_plus_movement_backlog_resolves_the_pin_to_resolved() {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-MATCH-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-match@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();
@@ -3482,15 +3439,12 @@ mod db_tests {
      {
         let pool = connect().await;
         let user_id = "TEST-BACKLOG-FALLTHROUGH-USER";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("backlog-fallthrough@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let service_date: NaiveDate = "2026-09-05".parse().unwrap();
         let scheduled: DateTime<Utc> = "2026-09-05T18:15:00Z".parse().unwrap();

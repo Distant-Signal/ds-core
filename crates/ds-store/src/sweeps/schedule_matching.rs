@@ -1376,11 +1376,10 @@ mod db_tests {
             let scheduled: DateTime<Utc> = at.parse().unwrap();
             async move {
                 sqlx::query(
-                    "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) \
+                    "INSERT INTO users (id, name) VALUES ($1, $2) \
                      ON CONFLICT (id) DO NOTHING",
                 )
                 .bind(user_id)
-                .bind(format!("{user_id}@example.com"))
                 .bind(user_id)
                 .execute(&pool)
                 .await
@@ -1685,15 +1684,12 @@ mod db_tests {
     async fn attempt_schedule_match_also_dual_writes_the_shared_trains_row() {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-DUAL-WRITE";
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("dual-write@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         sqlx::query(
             "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
@@ -2068,15 +2064,12 @@ mod db_tests {
         let pool = connect().await;
         let user_id = "TEST-SCHEDULE-MATCH-UNTARGETED";
         let service_date: NaiveDate = "2026-09-24".parse().unwrap();
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("untargeted@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         sqlx::query(
             "INSERT INTO stanox_crs (stanox, crs, tiploc, station_name, source_sequence) \
@@ -2255,15 +2248,12 @@ mod db_tests {
         let rival_uid = "TEST-TIE-TO-LICHFIELD";
         let service_date: NaiveDate = "2026-09-24".parse().unwrap();
 
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("dest-tie@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         // Origin (the busy station both services leave) plus both termini, as
         // real CIF-derived crosswalk rows -- `find_schedule_match` resolves
@@ -2614,15 +2604,12 @@ mod db_tests {
         let pool = connect().await;
         let user_id = "TEST-APPLY-ATOMIC";
         let service_date: NaiveDate = "2026-09-25".parse().unwrap();
-        sqlx::query(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-        )
-        .bind(user_id)
-        .bind("apply-atomic@example.com")
-        .bind(user_id)
-        .execute(&pool)
-        .await
-        .expect("seed fixture user");
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING")
+            .bind(user_id)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("seed fixture user");
 
         let matched_trains_id =
             crate::trains::find_or_create_train(&pool, "TEST-APPLY-ATOMIC-UID", service_date)
@@ -2765,9 +2752,8 @@ mod db_tests {
         };
         cleanup().await;
 
-        sqlx::query("INSERT INTO users (id, email, name) VALUES ($1, $2, $1)")
+        sqlx::query("INSERT INTO users (id, name) VALUES ($1, $1)")
             .bind(user_id)
-            .bind("db2-8@example.com")
             .execute(&pool)
             .await
             .expect("seed user");
