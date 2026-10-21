@@ -12,7 +12,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::corpus::is_sha256_hex;
+use crate::corpus::{delivery_source_problem, is_sha256_hex};
 
 /// Timestamp of the most recently *delivered* schedule feed (i.e.
 /// `MAX(delivered_at)`, the delivery zip's own mtime -- not
@@ -53,8 +53,9 @@ pub async fn insert_schedule_feed_ingest(
 ) -> Result<()> {
     sqlx::query(
         "INSERT INTO schedule_feed_ingests \
-             (delivered_at, ingested_at, files, source_file, source_bytes, source_sha256) \
-         VALUES ($1, $2, $3, $4, $5, $6) \
+             (delivered_at, ingested_at, files, source_file, source_bytes, source_sha256, \
+              delivery_source) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
          ON CONFLICT (delivered_at) DO NOTHING",
     )
     .bind(delivered_at)
@@ -63,6 +64,7 @@ pub async fn insert_schedule_feed_ingest(
     .bind(source.file)
     .bind(source.bytes)
     .bind(source.sha256)
+    .bind(source.delivery_source)
     .execute(pool)
     .await?;
     Ok(())
@@ -72,11 +74,15 @@ pub async fn insert_schedule_feed_ingest(
 /// and SHA-256 as `schedule-ingest` read it (migration
 /// `20261001150000_schedule_feed_delivery_sha256.sql`). Every field is
 /// `None` for a record from a `schedule-ingest` that predates it.
+/// `delivery_source` is the delivery source the recorded copy came from,
+/// one of [`crate::corpus::DELIVERY_SOURCES`] (migration
+/// `20261021090500_schedule_delivery_source.sql`).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScheduleFeedSource<'a> {
     pub file: Option<&'a str>,
     pub bytes: Option<i64>,
     pub sha256: Option<&'a str>,
+    pub delivery_source: Option<&'a str>,
 }
 
 /// The delivery directory name (`YYYYMMDDTHHMMSSZ`) whose `schedule-reference`
@@ -142,7 +148,8 @@ pub async fn insert_schedule_reference_publish(pool: &PgPool, delivery: &str) ->
 /// kept only as separate observability data.
 ///
 /// `source_*` describe the delivered zip itself (its name, size and
-/// SHA-256 as `schedule-ingest` read it); absent from an older
+/// SHA-256 as `schedule-ingest` read it), and `delivery_source` which
+/// delivery source it came from (`sftp` or `bucket`); absent from an older
 /// `schedule-ingest`, so all optional.
 #[derive(Debug, Deserialize)]
 pub struct ScheduleFeedIngestRequest {
@@ -155,6 +162,8 @@ pub struct ScheduleFeedIngestRequest {
     pub source_bytes: Option<u64>,
     #[serde(default)]
     pub source_sha256: Option<String>,
+    #[serde(default)]
+    pub delivery_source: Option<String>,
 }
 
 /// One file observed as part of a schedule-feed delivery. `bytes` is the
@@ -190,6 +199,9 @@ pub fn schedule_feed_ingest_problem(req: &ScheduleFeedIngestRequest) -> Option<S
         .is_some_and(|f| f.trim().is_empty())
     {
         return Some("source_file must not be blank".to_string());
+    }
+    if let Some(problem) = delivery_source_problem(req.delivery_source.as_deref()) {
+        return Some(problem);
     }
     req.files
         .iter()
@@ -248,6 +260,7 @@ mod schedule_feed_ingest_query_tests {
                 file: Some("timetable_full.zip"),
                 bytes: Some(77_222_226),
                 sha256: Some(&sha),
+                delivery_source: Some("bucket"),
             },
         )
         .await
@@ -257,8 +270,9 @@ mod schedule_feed_ingest_query_tests {
             Option<i64>,
             Option<String>,
             serde_json::Value,
+            Option<String>,
         ) = sqlx::query_as(
-            "SELECT source_file, source_bytes, source_sha256, files \
+            "SELECT source_file, source_bytes, source_sha256, files, delivery_source \
              FROM schedule_feed_ingests WHERE delivered_at = $1",
         )
         .bind(delivered_at)
@@ -269,6 +283,7 @@ mod schedule_feed_ingest_query_tests {
         assert_eq!(row.1, Some(77_222_226));
         assert_eq!(row.2.as_deref(), Some(sha.as_str()));
         assert_eq!(row.3, files);
+        assert_eq!(row.4.as_deref(), Some("bucket"));
 
         let bad_at = delivered_at + chrono::Duration::seconds(1);
         let err = insert_schedule_feed_ingest(
@@ -285,6 +300,21 @@ mod schedule_feed_ingest_query_tests {
         assert!(
             err.is_err(),
             "the CHECK constraint refuses a malformed hash"
+        );
+        let err = insert_schedule_feed_ingest(
+            &pool,
+            bad_at,
+            bad_at,
+            &files,
+            &ScheduleFeedSource {
+                delivery_source: Some("ftp"),
+                ..ScheduleFeedSource::default()
+            },
+        )
+        .await;
+        assert!(
+            err.is_err(),
+            "the CHECK constraint refuses an unknown source"
         );
 
         sqlx::query("DELETE FROM schedule_feed_ingests WHERE delivered_at IN ($1, $2)")
@@ -479,9 +509,11 @@ mod schedule_feed_provenance_tests {
             "files": [{"name": "RJTTF975MCA.txt", "bytes": 3, "sha256": "ab".repeat(32)}],
             "source_file": "timetable_full.zip",
             "source_bytes": 77_222_226,
-            "source_sha256": "0123456789abcdef".repeat(4)
+            "source_sha256": "0123456789abcdef".repeat(4),
+            "delivery_source": "bucket"
         }));
         assert_eq!(schedule_feed_ingest_problem(&req), None);
+        assert_eq!(req.delivery_source.as_deref(), Some("bucket"));
     }
 
     #[test]
@@ -494,6 +526,8 @@ mod schedule_feed_provenance_tests {
             ("source_sha256", serde_json::json!("abc")),
             ("source_bytes", serde_json::json!(u64::MAX)),
             ("source_file", serde_json::json!(" ")),
+            ("delivery_source", serde_json::json!("ftp")),
+            ("delivery_source", serde_json::json!("SFTP")),
         ] {
             let mut body = serde_json::json!({
                 "delivered_at": "2026-09-30T19:59:59Z",

@@ -113,12 +113,28 @@ pub async fn replace_corpus_locations(
 
 /// The delivered CORPUS file's size and SHA-256 as `schedule-ingest` read
 /// it, recorded in `corpus_deliveries` (migration
-/// `20261001150000_schedule_feed_delivery_sha256.sql`). `None` from an
-/// older `schedule-ingest`.
+/// `20261001150000_schedule_feed_delivery_sha256.sql`), and the delivery
+/// source it came from, one of [`DELIVERY_SOURCES`]
+/// (`20261021090500_schedule_delivery_source.sql`). `None` from an older
+/// `schedule-ingest`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeliveredFileProvenance<'a> {
     pub bytes: Option<i64>,
     pub sha256: Option<&'a str>,
+    pub delivery_source: Option<&'a str>,
+}
+
+/// The `delivery_source` values of `schedule_feed_ingests` and
+/// `corpus_deliveries` (their CHECKs): `schedule-ingest`'s SFTP push and
+/// GCS bucket sources.
+pub const DELIVERY_SOURCES: [&str; 2] = ["sftp", "bucket"];
+
+/// Why a record's `delivery_source` must be refused, or `None`: anything
+/// but absent or one of [`DELIVERY_SOURCES`].
+pub fn delivery_source_problem(delivery_source: Option<&str>) -> Option<String> {
+    delivery_source
+        .filter(|source| !DELIVERY_SOURCES.contains(source))
+        .map(|_| "delivery_source must be sftp or bucket".to_string())
 }
 
 /// [`replace_corpus_locations`], also recording the delivered file's
@@ -176,20 +192,23 @@ pub async fn replace_corpus_locations_with_provenance(
     .rows_affected();
     sqlx::query(
         "INSERT INTO corpus_deliveries \
-             (delivered_at, source_file, row_count, loaded_at, source_bytes, sha256) \
-         VALUES ($1, $2, $3, now(), $4, $5) \
+             (delivered_at, source_file, row_count, loaded_at, source_bytes, sha256, \
+              delivery_source) \
+         VALUES ($1, $2, $3, now(), $4, $5, $6) \
          ON CONFLICT (delivered_at) DO UPDATE SET \
              source_file = EXCLUDED.source_file, \
              row_count = EXCLUDED.row_count, \
              loaded_at = EXCLUDED.loaded_at, \
              source_bytes = EXCLUDED.source_bytes, \
-             sha256 = EXCLUDED.sha256",
+             sha256 = EXCLUDED.sha256, \
+             delivery_source = EXCLUDED.delivery_source",
     )
     .bind(delivered_at)
     .bind(source_file)
     .bind(row_count)
     .bind(provenance.bytes)
     .bind(provenance.sha256)
+    .bind(provenance.delivery_source)
     .execute(&mut *tx)
     .await?;
     crosswalk::write(&mut tx, delivered_at, crosswalk).await?;
@@ -260,7 +279,8 @@ pub fn is_sha256_hex(value: &str) -> bool {
 /// Mirrors `schedule-ingest::corpus::CorpusLoadRequest` field for field.
 /// `delivered_at` is the delivered file's own mtime.
 /// `source_bytes`/`sha256` describe the delivered file as `schedule-ingest`
-/// read it; absent from an older `schedule-ingest`.
+/// read it, `delivery_source` the source it came from; absent from an older
+/// `schedule-ingest`.
 #[derive(Debug, Deserialize)]
 pub struct CorpusLoadRequest {
     pub delivered_at: DateTime<Utc>,
@@ -270,6 +290,8 @@ pub struct CorpusLoadRequest {
     pub source_bytes: Option<u64>,
     #[serde(default)]
     pub sha256: Option<String>,
+    #[serde(default)]
+    pub delivery_source: Option<String>,
 }
 
 /// Why a CORPUS load must be refused (the api's 400), or `None`: an empty
@@ -532,8 +554,9 @@ mod db_tests {
         assert_eq!(locations, 1);
     }
 
-    /// The delivered file's size and SHA-256 land in `corpus_deliveries`;
-    /// the provenance-less wrapper leaves them NULL.
+    /// The delivered file's size, SHA-256 and delivery source land in
+    /// `corpus_deliveries`; the provenance-less wrapper leaves them NULL,
+    /// and the column's CHECK refuses an unknown source.
     #[sqlx::test(migrations = "./migrations")]
     #[ignore = "needs DATABASE_URL (a role that can create databases)"]
     async fn a_load_records_the_delivered_file_provenance(pool: PgPool) {
@@ -547,25 +570,44 @@ mod db_tests {
             &DeliveredFileProvenance {
                 bytes: Some(295_957),
                 sha256: Some(&sha),
+                delivery_source: Some("bucket"),
             },
             &rows,
         )
         .await
         .unwrap();
         let read = || async {
-            let row: (Option<i64>, Option<String>) =
-                sqlx::query_as("SELECT source_bytes, sha256 FROM corpus_deliveries")
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap();
+            let row: (Option<i64>, Option<String>, Option<String>) = sqlx::query_as(
+                "SELECT source_bytes, sha256, delivery_source FROM corpus_deliveries",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             row
         };
-        assert_eq!(read().await, (Some(295_957), Some(sha.clone())));
+        assert_eq!(
+            read().await,
+            (Some(295_957), Some(sha.clone()), Some("bucket".to_string()))
+        );
 
         replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &rows)
             .await
             .unwrap();
-        assert_eq!(read().await, (None, None));
+        assert_eq!(read().await, (None, None, None));
+
+        let refused = replace_corpus_locations_with_provenance(
+            &pool,
+            at,
+            "CORPUSExtract.json.gz",
+            &DeliveredFileProvenance {
+                delivery_source: Some("ftp"),
+                ..DeliveredFileProvenance::default()
+            },
+            &rows,
+        )
+        .await;
+        assert!(refused.is_err(), "the CHECK refuses an unknown source");
+        assert_eq!(read().await, (None, None, None), "rolled back");
     }
 
     /// The comparing body runs on a database with no CORPUS yet (nothing
