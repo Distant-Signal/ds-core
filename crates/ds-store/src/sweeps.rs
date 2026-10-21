@@ -1,5 +1,7 @@
 //! Background sweeps: `schedule_matching::run_schedule_match_sweep`,
-//! `find_schedule_match` and `reconciliation::run_reconciliation_sweep`.
+//! `find_schedule_match` and `reconciliation::run_reconciliation_sweep`,
+//! and `train_completion`, which moves `train_current_state` to `completed`
+//! after the fact (the reconciliation sweep's stale-train safety net).
 //!
 //! Moved whole from the api's `data::schedule_matching` and
 //! `data::reconciliation` (ingest architecture plan 1A.10); the api's
@@ -7,3 +9,4 @@
 
 pub mod reconciliation;
 pub mod schedule_matching;
+pub mod train_completion;

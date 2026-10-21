@@ -72,8 +72,9 @@ impl DerivedState {
 /// DEPARTURE from the origin, never an arrival), but a mid-journey ARRIVAL
 /// at a station the service later terminates at would still read as
 /// completion here, and a genuine terminus arrival ingested before any
-/// schedule supplied `destination_crs` is missed entirely and never
-/// re-derived.
+/// schedule supplied `destination_crs` is missed here (the schedule match
+/// and the backlog replay re-derive it afterwards:
+/// `ds_store::sweeps::train_completion`).
 ///
 /// Both are backstopped on the read side, where the ordered calling-point
 /// list actually exists: `api::data::journey::confirmed_final_arrival`

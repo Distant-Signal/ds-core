@@ -126,6 +126,12 @@ pub async fn find_or_create_trains_batch(
 /// row too"). `COALESCE`d against the existing value on every schedule
 /// column so a second subscriber's independent match against the same
 /// physical train never clobbers data an earlier one already wrote.
+///
+/// Then completes the train if its stored state is an `ARRIVAL` at the
+/// destination this match supplies
+/// ([`crate::sweeps::train_completion::complete_on_known_destination_arrival`]):
+/// a match that lands after the terminus arrival used to leave it
+/// `en_route` for good.
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is an independent input from the single caller; a struct would only wrap them"
@@ -203,6 +209,10 @@ pub async fn find_or_create_train_with_schedule_match(
     .bind(planned_platform)
     .fetch_one(pool)
     .await?;
+    // The match may be what first tells us where this train terminates, and
+    // its terminus ARRIVAL may already be stored as `en_route` (written while
+    // the destination was unknown): derive the completion it missed.
+    crate::sweeps::train_completion::complete_on_known_destination_arrival(pool, row.0).await?;
     Ok(row.0)
 }
 

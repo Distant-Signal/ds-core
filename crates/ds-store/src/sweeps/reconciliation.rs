@@ -1,6 +1,8 @@
 //! Periodic reconciliation for tracked-train state that a one-shot,
 //! in-process-only attempt failed to advance. See
 //! docs/superpowers/specs/2026-09-08-tracked-train-reconciliation-design.md.
+//! Each tick also finishes trains left `en_route` long after their service
+//! day ([`super::train_completion::finish_stale_en_route_trains`]).
 
 use std::collections::HashMap;
 
@@ -261,13 +263,16 @@ pub async fn retry_schedule_enrichment_for_nr_primary_trains(
     Ok(matched)
 }
 
-/// Both halves of the reconciliation sweep, combined for
-/// `main.rs`'s single background loop. See the design doc §3 Decision 5
-/// for why one shared interval governs both.
+/// Every part of the reconciliation sweep, combined for the single
+/// background loop. See the design doc §3 Decision 5 for why one shared
+/// interval governs them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ReconciliationSweepResult {
     pub resolution_status_reconciled: u64,
     pub schedule_enrichment_matched: u64,
+    /// Trains still `en_route` long after their service day, finished by
+    /// [`super::train_completion::finish_stale_en_route_trains`].
+    pub stale_en_route_finished: u64,
 }
 
 #[expect(
@@ -279,17 +284,19 @@ pub async fn run_reconciliation_sweep(
     crs_line_index: &HashMap<String, Vec<String>>,
     grace_period: chrono::Duration,
 ) -> anyhow::Result<ReconciliationSweepResult> {
+    let now = Utc::now();
     let resolution_status_reconciled = reconcile_stuck_resolution_status(pool).await?;
-    let schedule_enrichment_matched = retry_schedule_enrichment_for_nr_primary_trains(
-        pool,
-        crs_line_index,
-        grace_period,
-        Utc::now(),
-    )
-    .await?;
+    let schedule_enrichment_matched =
+        retry_schedule_enrichment_for_nr_primary_trains(pool, crs_line_index, grace_period, now)
+            .await?;
+    // Last: a schedule match above can still complete a train properly
+    // (an arrival at the destination it supplies) before this gives up on it.
+    let stale_en_route_finished =
+        super::train_completion::finish_stale_en_route_trains(pool, now).await?;
     Ok(ReconciliationSweepResult {
         resolution_status_reconciled,
         schedule_enrichment_matched,
+        stale_en_route_finished,
     })
 }
 

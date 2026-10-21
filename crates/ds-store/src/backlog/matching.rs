@@ -698,6 +698,16 @@ async fn replay_backlog_history(
         train_tracking::upsert_train_event(pool, &event).await?;
         previous = derived;
     }
+    // `destination_crs` was looked up before the replay, by `train_uid`:
+    // `None` when the backlog held no Activation (no uid to look it up by)
+    // even though the subscription may already be bound to a schedule-matched
+    // row that knows it. Whatever the replay derived, complete the train if
+    // its last event is the arrival at the destination its row now carries.
+    crate::sweeps::train_completion::complete_subscription_train_on_known_destination_arrival(
+        pool,
+        tracked_train_id,
+    )
+    .await?;
     Ok(())
 }
 
@@ -2433,6 +2443,102 @@ mod db_tests {
             "TEST-UNKNOWN-PIN-UID",
         )
         .await;
+    }
+
+    /// Train subscription 74 (2026-09-25): a schedule-matched pin, so its
+    /// `trains` row already knows the destination, backlog-matched from a
+    /// history with no Activation. With no `train_uid` the replay looked the
+    /// destination up by nothing, so the terminus ARRIVAL was written as
+    /// `en_route` and the journey never finished. The replay now completes
+    /// it from the bound row's destination.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_uidless_replay_onto_a_matched_pin_completes_at_the_known_destination \
+                -- --ignored --test-threads=1`"]
+    async fn a_uidless_replay_onto_a_matched_pin_completes_at_the_known_destination() {
+        let pool = connect().await;
+        let user_id = "TEST-BACKLOG-UIDLESS-COMPLETION-USER";
+        let pin_train_uid = "TEST-UIDLESS-COMPLETION-UID";
+        let backlog_train_id = "TEST-UIDLESS-COMPLETION-TRAIN-ID";
+        let pin_scheduled: DateTime<Utc> = "2026-09-21T09:23:00Z".parse().unwrap();
+        let service_date = pin_scheduled.date_naive();
+        let arrival = pin_scheduled + Duration::hours(2);
+        let _cleanup = crate::test_support::FixtureCleanup::new(
+            &pool,
+            [
+                format!("DELETE FROM trains WHERE train_uid = '{pin_train_uid}'"),
+                format!("DELETE FROM trust_event_backlog WHERE train_id = '{backlog_train_id}'"),
+                format!("DELETE FROM users WHERE id = '{user_id}'"),
+            ],
+        )
+        .await;
+        crate::test_support::seed_user(&pool, user_id).await;
+
+        let (trains_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO trains (train_uid, service_date, origin_crs, scheduled_departure, \
+                                 destination_crs, schedule_matched_at) \
+             VALUES ($1, $2, 'Z7A', $3, 'Z7B', NOW()) RETURNING id",
+        )
+        .bind(pin_train_uid)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .fetch_one(&pool)
+        .await
+        .expect("seed the pin's schedule-matched trains row");
+        let (tracked_train_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions \
+                (user_id, service_date, pin_origin_crs, pin_scheduled_departure, \
+                 trains_id, resolution_status) \
+             VALUES ($1, $2, 'Z7A', $3, $4, 'schedule_matched') RETURNING id",
+        )
+        .bind(user_id)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .bind(trains_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed the schedule-matched subscription");
+
+        // No Activation: the candidate carries no train_uid.
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES ('Z7A', NULL, $1, $2, '0003', 'DEPARTURE', $3, $3, 'ON TIME', $4), \
+                    ('Z7B', NULL, $1, $2, '0003', 'ARRIVAL', $5, $5, 'ON TIME', $6)",
+        )
+        .bind(backlog_train_id)
+        .bind(service_date)
+        .bind(pin_scheduled)
+        .bind(format!("{backlog_train_id}-departure"))
+        .bind(arrival)
+        .bind(format!("{backlog_train_id}-arrival"))
+        .execute(&pool)
+        .await
+        .expect("seed the uid-less backlog run");
+
+        let matched = attempt_backlog_match(&pool, tracked_train_id, "Z7A", pin_scheduled)
+            .await
+            .expect("attempt_backlog_match");
+        assert!(matched, "the CRS+time candidate must match the pin");
+
+        let (status, last_event_type, location): (String, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT status, last_event_type, last_reported_location \
+                 FROM train_current_state WHERE trains_id = $1",
+            )
+            .bind(trains_id)
+            .fetch_one(&pool)
+            .await
+            .expect("the replay wrote the bound train's state");
+        assert_eq!(
+            (
+                status.as_str(),
+                last_event_type.as_deref(),
+                location.as_deref()
+            ),
+            ("completed", Some("ARRIVAL"), Some("Z7B")),
+        );
     }
 
     /// M9 (Repeater Signal, 2026-09-26) boundary pin: `find_backlog_match`

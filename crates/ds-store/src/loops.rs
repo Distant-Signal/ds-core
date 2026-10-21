@@ -12,7 +12,7 @@
 //! | Loop | Lock | Body | Interval (env, default) |
 //! |---|---|---|---|
 //! | [`schedule_match`] | `SCHEDULE_MATCH_SWEEP` | [`run_schedule_match_sweep`] | `SCHEDULE_MATCH_INTERVAL_SECS`, 300 |
-//! | [`reconciliation`] | `RECONCILIATION_SWEEP` | [`run_reconciliation_sweep`] | `RECONCILIATION_SWEEP_INTERVAL_SECS`, 300 (grace `SCHEDULE_ENRICHMENT_GRACE_MINUTES`, 30) |
+//! | [`reconciliation`] | `RECONCILIATION_SWEEP` | [`run_reconciliation_sweep`] (with the stale-`en_route` safety net) | `RECONCILIATION_SWEEP_INTERVAL_SECS`, 300 (grace `SCHEDULE_ENRICHMENT_GRACE_MINUTES`, 30) |
 //! | [`backlog_match`] | `BACKLOG_MATCH_SWEEP` | [`run_backlog_match_sweep`] | `BACKLOG_MATCH_SWEEP_INTERVAL_SECS`, 300 |
 //! | [`corpus_crosswalk`] | `CORPUS_CROSSWALK` | [`rebuild_if_stale`], then [`refresh_last_delivery_metric`] | writer: `INGEST_WRITER_CORPUS_CROSSWALK_INTERVAL_SECS`, 600; api: once at startup ([`LoopRunner::run_once`]) |
 //! | [`corpus_crosswalk_comparing`] | `CORPUS_CROSSWALK` | as [`corpus_crosswalk`], then the CORPUS comparison after each new delivery | the writer's, in place of [`corpus_crosswalk`] (plan 2d.1) |
@@ -73,7 +73,8 @@ pub fn schedule_match(interval: Duration, index: CrsLineIndex) -> LoopSpec {
 }
 
 /// Periodic retry of the two tracked-train stalls (the api's former
-/// `reconciliation_sweep_loop`).
+/// `reconciliation_sweep_loop`), and the stale-`en_route` safety net
+/// ([`crate::sweeps::train_completion::finish_stale_en_route_trains`]).
 pub fn reconciliation(
     interval: Duration,
     index: CrsLineIndex,
@@ -95,10 +96,12 @@ pub fn reconciliation(
                     Ok(result) => {
                         if result.resolution_status_reconciled > 0
                             || result.schedule_enrichment_matched > 0
+                            || result.stale_en_route_finished > 0
                         {
                             tracing::info!(
                                 resolution_status_reconciled = result.resolution_status_reconciled,
                                 schedule_enrichment_matched = result.schedule_enrichment_matched,
+                                stale_en_route_finished = result.stale_en_route_finished,
                                 "reconciliation sweep made progress on stuck tracked-train state"
                             );
                         }
