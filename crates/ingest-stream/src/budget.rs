@@ -105,7 +105,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 8] = [
+pub const INGEST_STREAMS: [StreamDecl; 9] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -128,6 +128,16 @@ pub const INGEST_STREAMS: [StreamDecl; 8] = [
         entries_per_day: 12 * 24,
         entry_bytes: 2 * KIB,
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
+    },
+    // poller-tfl's stops job (off by default): one entry a day of about
+    // 400 stops, under 32 KB gzip; sized for a few restarts a day. Covers a
+    // week, so the last snapshot (the job's cursor and feed-guard
+    // baseline) outlives any writer outage.
+    StreamDecl {
+        stream: crate::streams::TFL_STOPS,
+        entries_per_day: 4,
+        entry_bytes: 32 * KIB,
+        bound: Bound::Covers(Duration::from_secs(7 * 24 * 3600)),
     },
     // poller-tocs: daily, about 3 KB (under the gzip threshold).
     StreamDecl {
@@ -290,6 +300,7 @@ mod tests {
                 ("ds:ingest:station-samples", 720),
                 ("ds:ingest:full-coverage", 360),
                 ("ds:ingest:tfl", 288),
+                ("ds:ingest:tfl-stops", 28),
                 ("ds:ingest:reference", 30),
                 ("ds:ingest:ioi-gtfs", 500),
                 ("ds:ingest:ioi-nir", 500),
@@ -303,9 +314,18 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 347 MB in all (292 before transit-metrolink's 55 MB): under
-        // the 75% alert line (384 MiB), let alone 512.
+        // About 356 MB in all (292 before transit-metrolink's 55 MB and
+        // tfl-stops' 8.5 MB): under the 75% alert line (384 MiB), let alone
+        // 512.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
+        let stops = report
+            .streams
+            .iter()
+            .find(|s| s.stream == "ds:ingest:tfl-stops")
+            .unwrap();
+        // (28 + 100) * (32 KiB + 512), twice: about 8.5 MB.
+        assert_eq!(stops.bytes, 128 * (32 * 1024 + 512));
+        assert!(stops.covers >= Duration::from_secs(7 * 24 * 3600));
         let transit = report.streams.last().unwrap();
         assert_eq!(transit.stream, "ds:ingest:transit-metrolink");
         assert!(transit.covers >= Duration::from_secs(24 * 3600));

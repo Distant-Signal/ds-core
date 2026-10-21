@@ -66,6 +66,7 @@ pub mod samples;
 pub mod schedule;
 pub mod schema;
 pub mod sweeps;
+pub mod tfl_stops;
 // Shared DB-test fixtures: this crate's tests, and other crates' tests
 // through the `test-support` feature (dev-dependencies only).
 #[cfg(any(test, feature = "test-support"))]

@@ -576,6 +576,8 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
     for (user, own, other) in [
         ("poller-ldbws", "ds:ingest:station-samples", "ds:ingest:tfl"),
         ("poller-tfl", "ds:ingest:tfl", "ds:ingest:station-samples"),
+        // Its daily stops job's own stream (TfL stop lookup, 2026-10-20).
+        ("poller-tfl", "ds:ingest:tfl-stops", "ds:ingest:reference"),
         ("poller-tocs", "ds:ingest:reference", "ds:ingest:tfl"),
         // One stream per island-of-Ireland poller (security review H1):
         // none may write another's.
