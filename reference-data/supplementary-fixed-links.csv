@@ -26,8 +26,8 @@
 # stations do.
 #
 # Columns: from_crs and to_crs (CRS codes; order does not matter), mode (as
-# the ALF's M=: TUBE, WALK, METRO, ...), line (the line's name, for people
-# and for a later TfL-derived set; not used by the planner yet), minutes
+# the ALF's M=: TUBE, WALK, METRO, ...), line (the line's name, which
+# /Trips/plan's transfer legs over this pair carry as `line`), minutes
 # (1-120), valid_from and valid_to (HHMM, inclusive, the time the link is
 # started), days_mask (Monday-first, 7 x 0/1), source (where the minutes
 # come from).
