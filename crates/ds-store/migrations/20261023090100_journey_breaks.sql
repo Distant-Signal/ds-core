@@ -12,8 +12,10 @@ SET LOCAL lock_timeout = '5s';
 -- Expand-only: one new table. Its foreign keys take brief SHARE ROW
 -- EXCLUSIVE locks on `journeys`, `users`, `journey_legs` and
 -- `journey_revisions` (new, empty), under the 5 s lock_timeout. Then
--- `journey_revisions.break_id` gets its foreign key; both tables are new,
--- so nothing waits on it. The enum CHECKs come NOT VALID in 20261023090300.
+-- `journey_revisions.break_id` gets its foreign key, NOT VALID (a table an
+-- earlier migration made is never scanned under its lock), validated with
+-- the CHECKs in 20261023090400. The enum CHECKs come NOT VALID in
+-- 20261023090300.
 -- -------------------------------------------------------------------------
 
 CREATE TABLE journey_breaks (
@@ -64,4 +66,5 @@ CREATE INDEX journey_breaks_accepted_revision_id ON journey_breaks (accepted_rev
 
 ALTER TABLE journey_revisions
     ADD CONSTRAINT journey_revisions_break_id_fkey
-    FOREIGN KEY (break_id) REFERENCES journey_breaks (id) ON DELETE SET NULL;
+    FOREIGN KEY (break_id) REFERENCES journey_breaks (id) ON DELETE SET NULL
+    NOT VALID;
