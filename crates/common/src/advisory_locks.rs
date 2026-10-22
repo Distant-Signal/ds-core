@@ -85,8 +85,16 @@ pub const INGEST_DEDUP_PRUNE: LoopLock = LoopLock {
     key: ascii_key(*b"dslpddup"),
 };
 
+/// `api::journey_break_sweep` (mid-journey changes spec 2026-10-22 §5.3):
+/// the api only, never the ingest-writer (it plans with the api's graph
+/// cache), one replica at a time.
+pub const JOURNEY_BREAKS_SWEEP: LoopLock = LoopLock {
+    name: "journey_breaks",
+    key: ascii_key(*b"dslpjbrk"),
+};
+
 /// Every loop lock, for uniqueness checks.
-pub const ALL: [LoopLock; 7] = [
+pub const ALL: [LoopLock; 8] = [
     SCHEDULE_MATCH_SWEEP,
     RECONCILIATION_SWEEP,
     BACKLOG_MATCH_SWEEP,
@@ -94,6 +102,7 @@ pub const ALL: [LoopLock; 7] = [
     WRITER_CANARY,
     INGEST_DEDUP_PRUNE,
     TRAIN_EVENT_OUTBOX,
+    JOURNEY_BREAKS_SWEEP,
 ];
 
 #[cfg(test)]
