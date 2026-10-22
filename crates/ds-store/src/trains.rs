@@ -177,6 +177,9 @@ pub async fn find_or_create_train_with_schedule_match(
     platform: Option<&str>,
     planned_platform: Option<&str>,
 ) -> anyhow::Result<i64> {
+    // One transaction with the subscribers' fill (DS-144), so no reader sees
+    // the row's route without its legs' and pins' copies of it.
+    let mut tx = pool.begin().await?;
     let row: (i64,) = sqlx::query_as(
         "INSERT INTO trains \
             (train_uid, service_date, origin_crs, scheduled_departure, destination_crs, \
@@ -208,13 +211,109 @@ pub async fn find_or_create_train_with_schedule_match(
     .bind(skipped_stations)
     .bind(platform)
     .bind(planned_platform)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    fill_route_into_subscribers(&mut *tx, row.0).await?;
+    tx.commit().await?;
     // The match may be what first tells us where this train terminates, and
     // its terminus ARRIVAL may already be stored as `en_route` (written while
     // the destination was unknown): derive the completion it missed.
     crate::sweeps::train_completion::complete_on_known_destination_arrival(pool, row.0).await?;
     Ok(row.0)
+}
+
+/// A leg's station end, for [`leg_crs_sql`].
+#[derive(Debug, Clone, Copy)]
+pub enum LegEnd {
+    Origin,
+    Destination,
+}
+
+/// SQL for a leg's effective station code at `end`: the leg's own code,
+/// else its subscription's pin, else its shared `trains` row's route
+/// (DS-144). `leg`, `sub` and `train` are the query's aliases for
+/// `journey_legs`, a `LEFT JOIN`ed `train_subscriptions` on the leg's
+/// `train_subscription_id`, and a `LEFT JOIN`ed `trains` on that row's
+/// `trains_id`.
+///
+/// A train leg picked before its train had a timetable stored no code at
+/// all: the leg copies the subscription's pins, which are copied from a
+/// `trains` row the route had only just minted by UID, and nothing
+/// rewrites either once the timetable arrives. Every journey read named
+/// such a journey "Unknown station". The tracked-train reads already fall
+/// back the same way (DS-111); a code the leg stored still wins. Since
+/// [`fill_route_into_subscribers`] copies a route onto such rows as it
+/// arrives, this mostly covers rows written before that, and a train
+/// whose route is never known.
+pub fn leg_crs_sql(end: LegEnd, leg: &str, sub: &str, train: &str) -> String {
+    let column = match end {
+        LegEnd::Origin => "origin_crs",
+        LegEnd::Destination => "destination_crs",
+    };
+    format!("COALESCE({leg}.{column}, {sub}.pin_{column}, {train}.{column})")
+}
+
+/// Copies train `trains_id`'s route onto what still lacks one (DS-144):
+/// the `NULL` station ends of the train legs bound to its subscriptions
+/// (each from the leg's pin, else the train's route) and the subscriptions'
+/// `NULL` pins (origin, destination and departure). Never overwrites a
+/// value already set, and touches no row with nothing to fill, so it is
+/// cheap to run on every route write.
+///
+/// A subscription made for a train the route had only just minted by UID
+/// copied that bare row's `NULL` route into its pins, and the leg copied the
+/// pins; nothing rewrote either once the timetable arrived, so every reader
+/// of the stored codes (the notifier's push text and candidate queries
+/// among them) saw no route at all. Every writer of a `trains` route calls
+/// this on the same transaction: [`find_or_create_train_with_schedule_match`]
+/// (schedule matching, `enrich_shared_train`, the backlog replay's schedule
+/// match) and the notifier's CIF enrichment.
+///
+/// Needs, beyond `trains`: SELECT on `journey_legs` (`id`, `kind`,
+/// `train_subscription_id`, `origin_crs`, `destination_crs`) and UPDATE of
+/// its two codes, SELECT on `train_subscriptions` (`id`, `trains_id` and
+/// the three pins) and UPDATE of the pins (db-grants.yaml).
+pub async fn fill_route_into_subscribers<'c, E>(executor: E, trains_id: i64) -> anyhow::Result<()>
+where
+    E: sqlx::PgExecutor<'c>,
+{
+    // One statement: both updates read the snapshot from before either
+    // ran, so a leg is filled from its pin as it was, else the route.
+    sqlx::query(
+        "WITH tr AS ( \
+             SELECT id, origin_crs, destination_crs, scheduled_departure \
+             FROM trains WHERE id = $1 \
+               AND (origin_crs IS NOT NULL OR destination_crs IS NOT NULL \
+                    OR scheduled_departure IS NOT NULL) \
+         ), legs AS ( \
+             UPDATE journey_legs jl SET \
+                 origin_crs = COALESCE(jl.origin_crs, ts.pin_origin_crs, tr.origin_crs), \
+                 destination_crs = COALESCE(jl.destination_crs, ts.pin_destination_crs, \
+                                            tr.destination_crs) \
+             FROM train_subscriptions ts, tr \
+             WHERE ts.trains_id = tr.id AND jl.train_subscription_id = ts.id \
+               AND jl.kind = 'train' \
+               AND ((jl.origin_crs IS NULL \
+                     AND COALESCE(ts.pin_origin_crs, tr.origin_crs) IS NOT NULL) \
+                 OR (jl.destination_crs IS NULL \
+                     AND COALESCE(ts.pin_destination_crs, tr.destination_crs) IS NOT NULL)) \
+             RETURNING jl.id \
+         ) \
+         UPDATE train_subscriptions ts SET \
+             pin_origin_crs = COALESCE(ts.pin_origin_crs, tr.origin_crs), \
+             pin_destination_crs = COALESCE(ts.pin_destination_crs, tr.destination_crs), \
+             pin_scheduled_departure = COALESCE(ts.pin_scheduled_departure, \
+                                                tr.scheduled_departure) \
+         FROM tr \
+         WHERE ts.trains_id = tr.id \
+           AND ((ts.pin_origin_crs IS NULL AND tr.origin_crs IS NOT NULL) \
+             OR (ts.pin_destination_crs IS NULL AND tr.destination_crs IS NOT NULL) \
+             OR (ts.pin_scheduled_departure IS NULL AND tr.scheduled_departure IS NOT NULL))",
+    )
+    .bind(trains_id)
+    .execute(executor)
+    .await?;
+    Ok(())
 }
 
 /// Points subscription `subscription_id` at `trains_id` for the backlog
@@ -909,5 +1008,230 @@ mod db_tests {
             .execute(&pool)
             .await
             .unwrap();
+    }
+
+    // --- DS-144: a route reaches the legs and pins saved without one ----
+
+    struct RoutelessFixture {
+        trains_id: i64,
+        bare_sub: i64,
+        bare_leg: i64,
+        pinned_sub: i64,
+        pinned_leg: i64,
+    }
+
+    const ROUTELESS_USERS: [&str; 2] = ["TEST-DS144-BARE", "TEST-DS144-PINNED"];
+
+    async fn cleanup_routeless(pool: &PgPool, uid: &str) {
+        for user in ROUTELESS_USERS {
+            sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user)
+                .execute(pool)
+                .await
+                .expect("cleanup fixture user (cascades journeys, legs, subscriptions)");
+        }
+        sqlx::query("DELETE FROM trains WHERE train_uid = $1")
+            .bind(uid)
+            .execute(pool)
+            .await
+            .expect("cleanup fixture train");
+    }
+
+    /// A bare `trains` row and two users' one-leg journeys on it: one saved
+    /// with no pins and no leg codes (journey 50's shape), one with a pinned
+    /// boarding point, a leg boarding elsewhere, and no destination.
+    async fn seed_routeless(pool: &PgPool, uid: &str, date: NaiveDate) -> RoutelessFixture {
+        cleanup_routeless(pool, uid).await;
+        let trains_id = find_or_create_train(pool, uid, date)
+            .await
+            .expect("a bare trains row");
+        let mut ids = Vec::new();
+        for (user, pin_origin, leg_origin) in [
+            (ROUTELESS_USERS[0], None, None),
+            (ROUTELESS_USERS[1], Some("ZXB"), Some("ZXC")),
+        ] {
+            sqlx::query("INSERT INTO users (id, name) VALUES ($1, $1)")
+                .bind(user)
+                .execute(pool)
+                .await
+                .expect("seed fixture user");
+            let sub: i64 = sqlx::query_scalar(
+                "INSERT INTO train_subscriptions \
+                     (user_id, trains_id, service_date, pin_origin_crs, resolution_status) \
+                 VALUES ($1, $2, $3, $4, 'resolved') RETURNING id",
+            )
+            .bind(user)
+            .bind(trains_id)
+            .bind(date)
+            .bind(pin_origin)
+            .fetch_one(pool)
+            .await
+            .expect("seed subscription");
+            let journey: i64 =
+                sqlx::query_scalar("INSERT INTO journeys (user_id) VALUES ($1) RETURNING id")
+                    .bind(user)
+                    .fetch_one(pool)
+                    .await
+                    .expect("seed journey");
+            let leg: i64 = sqlx::query_scalar(
+                "INSERT INTO journey_legs \
+                     (journey_id, leg_order, service_date, train_subscription_id, match_mode, \
+                      origin_crs) \
+                 VALUES ($1, 1, $2, $3, 'manual', $4) RETURNING id",
+            )
+            .bind(journey)
+            .bind(date)
+            .bind(sub)
+            .bind(leg_origin)
+            .fetch_one(pool)
+            .await
+            .expect("seed leg");
+            ids.push((sub, leg));
+        }
+        RoutelessFixture {
+            trains_id,
+            bare_sub: ids[0].0,
+            bare_leg: ids[0].1,
+            pinned_sub: ids[1].0,
+            pinned_leg: ids[1].1,
+        }
+    }
+
+    type Pins = (Option<String>, Option<String>, Option<DateTime<Utc>>);
+
+    async fn pins(pool: &PgPool, sub: i64) -> Pins {
+        sqlx::query_as(
+            "SELECT pin_origin_crs, pin_destination_crs, pin_scheduled_departure \
+             FROM train_subscriptions WHERE id = $1",
+        )
+        .bind(sub)
+        .fetch_one(pool)
+        .await
+        .expect("read pins")
+    }
+
+    async fn leg_codes(pool: &PgPool, leg: i64) -> (Option<String>, Option<String>) {
+        sqlx::query_as("SELECT origin_crs, destination_crs FROM journey_legs WHERE id = $1")
+            .bind(leg)
+            .fetch_one(pool)
+            .await
+            .expect("read leg")
+    }
+
+    /// The fill after a route reaches the row: NULLs only, each leg from
+    /// its pin before the train, nothing set overwritten.
+    async fn assert_routeless_filled(
+        pool: &PgPool,
+        fixture: &RoutelessFixture,
+        departure: DateTime<Utc>,
+    ) {
+        assert_eq!(
+            pins(pool, fixture.bare_sub).await,
+            (
+                Some("ZXA".to_string()),
+                Some("ZXD".to_string()),
+                Some(departure)
+            )
+        );
+        assert_eq!(
+            leg_codes(pool, fixture.bare_leg).await,
+            (Some("ZXA".to_string()), Some("ZXD".to_string()))
+        );
+        assert_eq!(
+            pins(pool, fixture.pinned_sub).await,
+            (
+                Some("ZXB".to_string()),
+                Some("ZXD".to_string()),
+                Some(departure)
+            ),
+            "the pinned boarding point stays"
+        );
+        assert_eq!(
+            leg_codes(pool, fixture.pinned_leg).await,
+            (Some("ZXC".to_string()), Some("ZXD".to_string())),
+            "the leg's own boarding point stays"
+        );
+    }
+
+    /// DS-144: a schedule match gives the train its route and, on the same
+    /// transaction, the legs and pins that were saved without one.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_schedule_match_fills_the_route_into_routeless_legs_and_pins \
+                -- --ignored --test-threads=1`"]
+    async fn a_schedule_match_fills_the_route_into_routeless_legs_and_pins() {
+        let pool = connect().await;
+        let uid = "TEST-DS144-FILL";
+        let date: NaiveDate = "2026-09-06".parse().unwrap();
+        let departure: DateTime<Utc> = "2026-09-06T12:00:00Z".parse().unwrap();
+        let fixture = seed_routeless(&pool, uid, date).await;
+
+        let matched = find_or_create_train_with_schedule_match(
+            &pool,
+            uid,
+            date,
+            Some("ZXA"),
+            Some(departure),
+            Some("ZXD"),
+            "line-ds144",
+            &serde_json::json!(["ZXA", "ZXB", "ZXC", "ZXD"]),
+            &[],
+            None,
+            None,
+        )
+        .await
+        .expect("schedule-match the bare row");
+        assert_eq!(matched, fixture.trains_id);
+        assert_routeless_filled(&pool, &fixture, departure).await;
+
+        // Idempotent: a second fill changes nothing.
+        let sql = format!(
+            "SELECT xmin::text FROM journey_legs WHERE id = {}",
+            fixture.bare_leg
+        );
+        let before = xmin(&pool, &sql).await;
+        fill_route_into_subscribers(&pool, fixture.trains_id)
+            .await
+            .expect("fill again");
+        assert_eq!(xmin(&pool, &sql).await, before, "nothing left to fill");
+
+        cleanup_routeless(&pool, uid).await;
+    }
+
+    /// DS-144's backfill migration fills the rows written before the
+    /// write-time fill, the same way, and is idempotent.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                the_route_backfill_migration_fills_routeless_legs_and_pins \
+                -- --ignored --test-threads=1`"]
+    async fn the_route_backfill_migration_fills_routeless_legs_and_pins() {
+        let pool = connect().await;
+        let uid = "TEST-DS144-BACKFILL";
+        let date: NaiveDate = "2026-09-06".parse().unwrap();
+        let departure: DateTime<Utc> = "2026-09-06T12:00:00Z".parse().unwrap();
+        let fixture = seed_routeless(&pool, uid, date).await;
+        // The route reached the row before this release, with no fill.
+        sqlx::query(
+            "UPDATE trains SET origin_crs = 'ZXA', destination_crs = 'ZXD', \
+                 scheduled_departure = $2 WHERE id = $1",
+        )
+        .bind(fixture.trains_id)
+        .bind(departure)
+        .execute(&pool)
+        .await
+        .expect("the route arrives");
+
+        let migration = include_str!("../migrations/20261023100000_journey_leg_route_backfill.sql");
+        for _ in 0..2 {
+            let mut tx = pool.begin().await.expect("begin");
+            sqlx::raw_sql(migration)
+                .execute(&mut *tx)
+                .await
+                .expect("run the backfill");
+            tx.commit().await.expect("commit");
+            assert_routeless_filled(&pool, &fixture, departure).await;
+        }
+
+        cleanup_routeless(&pool, uid).await;
     }
 }
