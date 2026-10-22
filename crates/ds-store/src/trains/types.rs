@@ -465,6 +465,23 @@ pub enum PlatformStatus {
     Cancelled,
 }
 
+/// `JourneyStop.platformBasis` (DS-127): what the stop's `displayPlatform`
+/// rests on. Serialized lowercase; `null` when there is no platform at
+/// all. Clients must treat an unknown value as `board`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PlatformBasis {
+    /// The timetable's (CIF) booked platform only: nothing live has shown
+    /// it yet, so it is provisional ("booked, not confirmed").
+    Booked,
+    /// A live departure board shows it (`platform`). Boards show the
+    /// booked platform until it changes, so this is not a confirmation.
+    Board,
+    /// Confirmed by the operator. Needs the Darwin Push Port (phase 3);
+    /// never served yet.
+    Confirmed,
+}
+
 /// One calling point of a train's journey, booked schedule merged with the
 /// latest reported live data for that location -- see this module's own
 /// doc comment and the design doc §2/§3.
@@ -498,6 +515,11 @@ pub struct JourneyStop {
     /// See `estimated_arrival`'s own doc comment -- same contract, gated on
     /// `actual_departure` instead.
     pub estimated_departure: Option<DateTime<Utc>>,
+    /// Where `estimated_arrival`/`estimated_departure` came from when it is
+    /// not the train's own TRUST delay: `"previous-working"` when they are a
+    /// predicted late start from the incoming train (DS-127). `None` for
+    /// the existing estimate (and for a stop with none).
+    pub estimate_source: Option<&'static str>,
     pub last_event_type: Option<String>,
     pub variation_status: Option<String>,
     /// How late the train was at this stop, in whole minutes (negative is
@@ -549,10 +571,14 @@ pub struct JourneyStop {
     /// booked platform. `None` under the same conditions as `platform`
     /// above.
     pub planned_platform: Option<String>,
-    /// `true` only when both `platform` and `planned_platform` are known
-    /// AND differ -- see `api::render::station_departure_json`'s identical
-    /// derivation for `StationDeparture`. Always `false` for a stop with no
-    /// platform signal at all (there is nothing to have changed).
+    /// Whether the live `platform` differs from the one the stop was meant
+    /// to use. Since DS-127 the comparison is against the timetable's
+    /// `booked_platform` whenever both are known (catching a change made
+    /// before the poller first saw the row, and surviving poller
+    /// restarts), ignoring case, spaces and a sub-platform letter on one
+    /// side only ("4" against "4A"). Without a booked platform it falls
+    /// back to `platform` against `planned_platform` (the first platform
+    /// the poller saw). Always `false` for a stop with no live platform.
     pub platform_changed: bool,
     /// Whether the train still calls at `platform`: `Some` exactly when
     /// `platform` is, `None` otherwise. See [`PlatformStatus`].
@@ -568,8 +594,19 @@ pub struct JourneyStop {
     /// can legitimately differ in form from Darwin's (e.g. a sub-platform
     /// suffix), so comparing them would risk a false "platform changed".
     /// `None` when the CIF field is blank, or the schedule row predates this
-    /// field -- "not known", never guessed.
+    /// field -- "not known", never guessed. Since DS-127 it is what
+    /// `platform_changed` compares against when both are known.
     pub booked_platform: Option<String>,
+    /// What `display_platform` rests on (DS-127): `board` when a live board
+    /// shows `platform`, `booked` when only `booked_platform` is known
+    /// (show it as provisional), `None` when neither is. Set by
+    /// `api::data::journey::apply_platform_basis`.
+    pub platform_basis: Option<PlatformBasis>,
+    /// The platform to show (DS-127): the live `platform` when known, else
+    /// `booked_platform`. A server-side convenience so every client applies
+    /// the same precedence; `platform` and `booked_platform` keep their
+    /// meanings.
+    pub display_platform: Option<String>,
     /// LDBWS-style live status of this stop (`OnTime`, `Late`, `Cancelled`,
     /// `NoReport`, `Arrived`, `Departed`, `Scheduled`), served as `status`.
     /// See `data::stop_live_status` for the mapping. Computed last, by the
@@ -635,6 +672,7 @@ impl JourneyStop {
             actual_departure: None,
             estimated_arrival: None,
             estimated_departure: None,
+            estimate_source: None,
             last_event_type: None,
             variation_status: None,
             delay_minutes: None,
@@ -651,6 +689,9 @@ impl JourneyStop {
             platform_changed: false,
             platform_status: None,
             booked_platform: cp.platform.clone(),
+            // Both set by `apply_platform_basis`, after the board overlay.
+            platform_basis: None,
+            display_platform: None,
             live_status: None,
             late_minutes: None,
             board: None,

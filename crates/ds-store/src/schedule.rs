@@ -14,6 +14,8 @@
 //! - `publish`: the network, destination and calling-point products and
 //!   the chunked diff-publish protocol.
 //! - [`services`]: the per-date `schedule_services` publish (plan 2a.2).
+//! - [`turnarounds`]: `schedule_turnarounds`, each train's previous working
+//!   (pre-departure prediction, DS-127).
 //! - [`summaries`]: `line_train_summaries`' derivation and the population
 //!   upsert that writes them in its transaction (plan 2a.2).
 
@@ -22,6 +24,7 @@ mod population;
 mod publish;
 pub mod services;
 pub mod summaries;
+pub mod turnarounds;
 
 pub use markers::{
     ScheduleFeedFile, ScheduleFeedIngestRequest, ScheduleFeedSource, insert_schedule_feed_ingest,

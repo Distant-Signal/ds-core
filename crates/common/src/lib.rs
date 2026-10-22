@@ -1324,6 +1324,23 @@ pub struct StationSample {
     pub departures: Vec<StationDeparture>,
 }
 
+/// One targeted LDBWS board for a tracked train's own stop (pre-departure
+/// prediction phase 1, DS-127): the departures at `crs` in a narrow window
+/// around that train's booked time there, polled by `poller-ldbws`'s
+/// tracked-stop lane and applied to `tracked_stop_boards` by ingest-writer
+/// (schema `tracked-stop-boards/1`, on the station-samples stream).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackedStopBoard {
+    pub train_uid: String,
+    pub service_date: NaiveDate,
+    pub crs: String,
+    pub polled_at: DateTime<Utc>,
+    pub departures: Vec<StationDeparture>,
+}
+
+/// The stream schema name of [`TrackedStopBoard`] snapshots.
+pub const TRACKED_STOP_BOARDS_SCHEMA: &str = "tracked-stop-boards";
+
 /// How old a [`StationSample`] may be (by `polled_at`) and still count as
 /// live data. The aggregator ignores older `station_samples` rows; see
 /// `aggregator::aggregation::drop_stale_samples` for why 15 minutes.

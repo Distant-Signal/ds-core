@@ -27,6 +27,7 @@ use common::{LineDefinition, TrackedTrainRef};
 use sqlx::PgPool;
 
 pub mod sample_stations;
+pub mod tracked_stop_targets;
 
 pub use crate::reference::{list_stanox_crs, list_stanox_crs_with};
 pub use crate::schedule::{ConditionalPopulation, get_schedule_line_population_conditional};
