@@ -107,7 +107,7 @@ mod tests {
         assert!(links.iter().any(|link| link.from_crs == "VXH"
             && link.to_crs == "VIC"
             && link.line == "Victoria"
-            && link.minutes == 11
+            && link.minutes == 14
             && link.valid_from == "0700"
             && link.valid_to == "1900"
             && link.days_mask == "1111110"));

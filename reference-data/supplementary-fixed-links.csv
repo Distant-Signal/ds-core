@@ -18,12 +18,19 @@
 #
 # Minutes are hand estimates, not TfL data: the in-train time (Victoria
 # line Vauxhall-Victoria, about 2 minutes) plus waiting and the walks
-# between the National Rail and Underground stations, set to match how the
-# ALF times the neighbouring links. The ALF's Euston, King's Cross and St
-# Pancras links are 10 to 13 minutes longer to Vauxhall than to Victoria,
-# one stop apart; 11 minutes is taken here. Off-peak and Sunday rows add 5
-# minutes and use the ALF's own time windows, as its rows for these
-# stations do.
+# between the National Rail and Underground stations at BOTH ends, as an
+# ALF time includes them. The ALF's Euston, King's Cross and St Pancras
+# links are 10 to 13 minutes longer to Vauxhall than to Victoria, one stop
+# apart. That difference is riding on past Victoria, not a ride that
+# starts there, and the planner chains links with no change between them
+# (DS-139): at 11 minutes, Euston-Victoria then Victoria-Vauxhall came in
+# under the ALF's own Euston-Vauxhall link and split one Victoria line ride
+# in two at Victoria. So the link is set above the largest difference, at
+# 14 minutes: no X-Victoria-Vauxhall chain beats X-Vauxhall (keep it so if
+# these rows change; `api`'s
+# the_checked_in_victoria_vauxhall_link_never_beats_euston_vauxhall test
+# checks Euston). Off-peak and Sunday rows add 5 minutes and use the ALF's
+# own time windows, as its rows for these stations do.
 #
 # Columns: from_crs and to_crs (CRS codes; order does not matter), mode (as
 # the ALF's M=: TUBE, WALK, METRO, ...), line (the line's name, which
@@ -36,7 +43,7 @@
 # crosswalk; links between National Rail stations on one line can then be
 # generated in this same shape and replace the hand-written rows.
 from_crs,to_crs,mode,line,minutes,valid_from,valid_to,days_mask,source
-VXH,VIC,TUBE,Victoria,11,0700,1900,1111110,estimate: 2 min Victoria line + wait + NR/LU interchange at both ends; calibrated to ALF EUS/KGX/STP links to VXH vs VIC
-VXH,VIC,TUBE,Victoria,16,0529,0659,1111110,estimate: as above + 5 min off-peak (ALF convention)
-VXH,VIC,TUBE,Victoria,16,1901,2359,1111110,estimate: as above + 5 min off-peak (ALF convention)
-VXH,VIC,TUBE,Victoria,16,0700,2359,0000001,estimate: as above + 5 min Sunday (ALF convention)
+VXH,VIC,TUBE,Victoria,14,0700,1900,1111110,estimate: 2 min Victoria line + wait + NR/LU interchange at both ends; above the 10-13 min the ALF's EUS/KGX/STP links add from VIC to VXH
+VXH,VIC,TUBE,Victoria,19,0529,0659,1111110,estimate: as above + 5 min off-peak (ALF convention)
+VXH,VIC,TUBE,Victoria,19,1901,2359,1111110,estimate: as above + 5 min off-peak (ALF convention)
+VXH,VIC,TUBE,Victoria,19,0700,2359,0000001,estimate: as above + 5 min Sunday (ALF convention)
