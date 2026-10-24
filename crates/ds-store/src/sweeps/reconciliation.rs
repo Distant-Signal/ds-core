@@ -289,6 +289,11 @@ pub async fn run_reconciliation_sweep(
     let schedule_enrichment_matched =
         retry_schedule_enrichment_for_nr_primary_trains(pool, crs_line_index, grace_period, now)
             .await?;
+    // A schedule match (above, the schedule-match sweep's, or the api's:
+    // DS-118) may supply the destination of an ARRIVAL already stored as
+    // `en_route`; the match does not complete the train itself.
+    super::train_completion::complete_tracked_trains_on_known_destination_arrival(pool, now)
+        .await?;
     // Last: a schedule match above can still complete a train properly
     // (an arrival at the destination it supplies) before this gives up on it.
     let stale_en_route_finished =

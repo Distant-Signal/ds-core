@@ -1088,6 +1088,15 @@ pub async fn run_schedule_match_sweep(
             }
         }
     }
+    if matched > 0 {
+        // A match may supply the destination of an ARRIVAL already stored
+        // (the match does not complete the train itself; DS-118).
+        super::train_completion::complete_tracked_trains_on_known_destination_arrival(
+            pool,
+            Utc::now(),
+        )
+        .await?;
+    }
     Ok(matched)
 }
 

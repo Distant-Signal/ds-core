@@ -89,6 +89,26 @@ use trust_schema::schema::Movement;
 
 use crate::tracking as train_tracking;
 
+/// Where a backlog replay writes the events it derives.
+///
+/// The shared train state (`train_movement_events`, `train_current_state`)
+/// is ingest state, written by the ingest roles: the writer, the TRUST
+/// consumers. The api's role may only read it (db-grants.yaml; ingest
+/// phase 5, DS-118), so a replay the api starts goes through the
+/// train-event outbox, which the writer's `train_event_outbox` loop applies
+/// (5 s by default) with the same [`train_tracking::upsert_train_event_on`]
+/// and then completes the train if its last event is the arrival at its
+/// known destination ([`crate::tracking::outbox`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayWrite {
+    /// Write the events now, then derive the completion: the writer's
+    /// backlog-match sweep, which holds those grants.
+    Direct,
+    /// Queue the events, in order, in `train_event_outbox` (one
+    /// transaction) for the writer's outbox loop: the api's track routes.
+    Outbox,
+}
+
 /// How far a backlog Movement's own SCHEDULED (`planned_timestamp`, i.e.
 /// WTT) departure time may sit from a pin's `pin_scheduled_departure` and
 /// still be believed to describe the same booked service.
@@ -530,9 +550,11 @@ async fn replay_backlog_history(
     train_uid: Option<&str>,
     destination_crs: Option<&str>,
     history: Vec<BacklogRow>,
+    write: ReplayWrite,
 ) -> anyhow::Result<()> {
     let mut previous = DerivedState::awaiting_activation();
     let mut resolution_claimed = false;
+    let mut events = Vec::with_capacity(history.len());
 
     for row in history {
         let (derived, event_type, planned, actual, variation_status) = match row.msg_type.as_str() {
@@ -695,8 +717,17 @@ async fn replay_backlog_history(
             eta_next: None,
             eta_source: None,
         };
-        train_tracking::upsert_train_event(pool, &event).await?;
+        events.push(event);
         previous = derived;
+    }
+    if write == ReplayWrite::Outbox {
+        // The outbox loop applies them in this order and then derives the
+        // completion below itself.
+        crate::tracking::outbox::enqueue_train_events(pool, &events).await?;
+        return Ok(());
+    }
+    for event in &events {
+        train_tracking::upsert_train_event(pool, event).await?;
     }
     // `destination_crs` was looked up before the replay, by `train_uid`:
     // `None` when the backlog held no Activation (no uid to look it up by)
@@ -736,6 +767,27 @@ pub async fn attempt_backlog_match(
     tracked_train_id: i64,
     pin_origin_crs: &str,
     pin_scheduled_departure: DateTime<Utc>,
+) -> anyhow::Result<bool> {
+    attempt_backlog_match_via(
+        pool,
+        tracked_train_id,
+        pin_origin_crs,
+        pin_scheduled_departure,
+        ReplayWrite::Direct,
+    )
+    .await
+}
+
+/// [`attempt_backlog_match`], writing the replay as `write` says: the api
+/// passes [`ReplayWrite::Outbox`] (its role may not write the shared train
+/// state). The `trains` and `train_subscriptions` writes before the replay
+/// (the Step A dual-write) are made here either way.
+pub async fn attempt_backlog_match_via(
+    pool: &PgPool,
+    tracked_train_id: i64,
+    pin_origin_crs: &str,
+    pin_scheduled_departure: DateTime<Utc>,
+    write: ReplayWrite,
 ) -> anyhow::Result<bool> {
     // No `service_date` parameter: the pin's own date is deliberately not
     // consulted anywhere below. The match is on absolute time, and every
@@ -917,6 +969,7 @@ pub async fn attempt_backlog_match(
         train_uid.as_deref(),
         destination_crs.as_deref(),
         history,
+        write,
     )
     .await?;
 
@@ -1027,16 +1080,37 @@ pub struct BacklogReplayOutcome {
 /// an honest, expected outcome, exactly as `Ok(false)` is for
 /// [`attempt_backlog_match`] -- or that the subscription is bound to a
 /// different train, which this never repoints (DB2-5; logged at warn).
-#[expect(
-    clippy::expect_used,
-    clippy::similar_names,
-    reason = "the invariant is established just above; the expect message names it; the similar names are distinct domain terms"
-)]
 pub async fn attempt_backlog_match_by_uid(
     pool: &PgPool,
     tracked_train_id: i64,
     train_uid: &str,
     service_date: NaiveDate,
+) -> anyhow::Result<Option<BacklogReplayOutcome>> {
+    attempt_backlog_match_by_uid_via(
+        pool,
+        tracked_train_id,
+        train_uid,
+        service_date,
+        ReplayWrite::Direct,
+    )
+    .await
+}
+
+/// [`attempt_backlog_match_by_uid`], writing the replay as `write` says
+/// (the api: [`ReplayWrite::Outbox`]). The returned `origin_departure`
+/// comes from the backlog itself, so the caller's schedule match need not
+/// wait for the queued replay to be applied.
+#[expect(
+    clippy::expect_used,
+    clippy::similar_names,
+    reason = "the invariant is established just above; the expect message names it; the similar names are distinct domain terms"
+)]
+pub async fn attempt_backlog_match_by_uid_via(
+    pool: &PgPool,
+    tracked_train_id: i64,
+    train_uid: &str,
+    service_date: NaiveDate,
+    write: ReplayWrite,
 ) -> anyhow::Result<Option<BacklogReplayOutcome>> {
     let Some(train_id) = find_train_id_by_uid(pool, train_uid, service_date).await? else {
         return Ok(None);
@@ -1139,6 +1213,7 @@ pub async fn attempt_backlog_match_by_uid(
         Some(train_uid),
         destination_crs.as_deref(),
         history,
+        write,
     )
     .await?;
 
@@ -3524,6 +3599,170 @@ mod db_tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// DS-118 (ingest phase 5, release D): the api's role may only read the
+    /// shared train state, so the replay its track routes start
+    /// ([`ReplayWrite::Outbox`]) is queued for the writer. Run as the api's
+    /// role (CI runs it with that role narrowed, `DATABASE_URL_API` as
+    /// `DATABASE_URL`), with the writer's outbox loop as the writer
+    /// (`DATABASE_URL_WRITER`) and the TRUST backlog seeded as the owner. The
+    /// api's schedule match comes after the replay was queued, as in
+    /// `enrich_shared_train`, so the queued ARRIVAL at the destination is
+    /// `en_route` and the outbox loop completes it. With the api's role
+    /// narrowed, a direct replay is refused.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                the_api_queues_its_replay_for_the_writer -- --ignored --test-threads=1`"]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one scenario: seed, queue, match, apply, then the refusals"
+    )]
+    async fn the_api_queues_its_replay_for_the_writer() {
+        let pool = connect().await;
+        let owner = crate::test_support::schedule_fixture_pool(&pool).await;
+        let writer = crate::test_support::writer_pool(&pool).await;
+        let user_id = "TEST-DS118-REPLAY-USER";
+        let train_uid = "C99118";
+        let train_id = "TEST-DS118-TRAIN-ID";
+        let service_date: NaiveDate = "2026-09-04".parse().unwrap();
+        let departed: DateTime<Utc> = "2026-09-04T18:15:00Z".parse().unwrap();
+        let arrived: DateTime<Utc> = "2026-09-04T19:40:00Z".parse().unwrap();
+        let cleanup = async |pool: &PgPool, owner: &PgPool| {
+            sqlx::query(
+                "DELETE FROM train_event_outbox WHERE tracked_train_id IN \
+                         (SELECT id FROM train_subscriptions WHERE user_id = $1)",
+            )
+            .bind(user_id)
+            .execute(owner)
+            .await
+            .ok();
+            sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
+                .execute(pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM trains WHERE train_uid = $1 AND service_date = $2")
+                .bind(train_uid)
+                .bind(service_date)
+                .execute(pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM trust_event_backlog WHERE train_id = $1")
+                .bind(train_id)
+                .execute(owner)
+                .await
+                .ok();
+        };
+        cleanup(&pool, &owner).await;
+        crate::test_support::seed_user(&pool, user_id).await;
+        sqlx::query(
+            "INSERT INTO trust_event_backlog \
+                (crs, train_uid, train_id, service_date, msg_type, event_type, \
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, 'test-ds118-act'), \
+                    ('EUS', NULL, $2, $3, '0003', 'DEPARTURE', $4, $4, 'ON TIME', 'test-ds118-dep'), \
+                    ('BHM', NULL, $2, $3, '0003', 'ARRIVAL', $5, $5, 'ON TIME', 'test-ds118-arr')",
+        )
+        .bind(train_uid)
+        .bind(train_id)
+        .bind(service_date)
+        .bind(departed)
+        .bind(arrived)
+        .execute(&owner)
+        .await
+        .expect("seed the TRUST backlog as the owner");
+        let pin = |pool: &PgPool| {
+            let pool = pool.clone();
+            async move {
+                crate::test_support::seed_backlog_candidate_pin(
+                    &pool,
+                    user_id,
+                    service_date,
+                    Some("EUS"),
+                    Some(departed),
+                    "pending",
+                    None,
+                )
+                .await
+            }
+        };
+        let subscription = pin(&pool).await;
+
+        assert!(
+            attempt_backlog_match_via(&pool, subscription, "EUS", departed, ReplayWrite::Outbox)
+                .await
+                .expect("the api queues the replay")
+        );
+        let trains_id = crate::trains::find_or_create_train_with_schedule_match(
+            &pool,
+            train_uid,
+            service_date,
+            Some("EUS"),
+            Some(departed),
+            Some("BHM"),
+            "test-line",
+            &serde_json::json!([]),
+            &[],
+            None,
+            None,
+        )
+        .await
+        .expect("the api's schedule match writes no shared train state");
+        let queued: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM train_event_outbox WHERE tracked_train_id = $1",
+        )
+        .bind(subscription)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(queued, 2, "both movements are queued");
+        let stored: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM train_movement_events WHERE trains_id = $1")
+                .bind(trains_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored, 0, "nothing is written before the writer applies it");
+
+        let tick = crate::tracking::outbox::apply_train_event_outbox(&writer)
+            .await
+            .expect("the writer applies the queue");
+        assert!(tick.rejected.is_empty(), "rejected: {:?}", tick.rejected);
+        let (status, location): (String, Option<String>) = sqlx::query_as(
+            "SELECT status, last_reported_location FROM train_current_state WHERE trains_id = $1",
+        )
+        .bind(trains_id)
+        .fetch_one(&pool)
+        .await
+        .expect("the writer stored the state");
+        assert_eq!(location.as_deref(), Some("BHM"));
+        assert_eq!(status, "completed", "the outbox loop completes the train");
+        let resolution: String =
+            sqlx::query_scalar("SELECT resolution_status FROM train_subscriptions WHERE id = $1")
+                .bind(subscription)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(resolution, "resolved");
+
+        if crate::test_support::role_is_narrowed("api") {
+            // The shared train state is the writer's: a direct replay as
+            // the api's role is refused (and so must never run there).
+            let second = pin(&pool).await;
+            let err =
+                attempt_backlog_match_via(&pool, second, "EUS", departed, ReplayWrite::Direct)
+                    .await
+                    .expect_err("a narrowed api role may not write train_movement_events");
+            assert!(crate::test_support::is_permission_denied(&err), "{err:#}");
+            let err = crate::sweeps::train_completion::complete_on_known_destination_arrival(
+                &pool, trains_id,
+            )
+            .await
+            .expect_err("nor update train_current_state");
+            assert!(crate::test_support::is_permission_denied(&err), "{err:#}");
+        }
+        cleanup(&pool, &owner).await;
     }
 
     /// Finding #4's own regression test: an implausible row and a genuinely

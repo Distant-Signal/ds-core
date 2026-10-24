@@ -128,11 +128,13 @@ pub async fn find_or_create_trains_batch(
 /// column so a second subscriber's independent match against the same
 /// physical train never clobbers data an earlier one already wrote.
 ///
-/// Then completes the train if its stored state is an `ARRIVAL` at the
-/// destination this match supplies
-/// ([`crate::sweeps::train_completion::complete_on_known_destination_arrival`]):
-/// a match that lands after the terminus arrival used to leave it
-/// `en_route` for good.
+/// It does not complete the train itself, though the destination it
+/// supplies may be that of an `ARRIVAL` already stored as `en_route`: the
+/// api matches too, and its role may not write `train_current_state`
+/// (DS-118). The writer completes such a train: the replay queued with the
+/// api's match through the train-event outbox, and the writer's own sweeps
+/// after their matches (and every reconciliation tick) through
+/// [`crate::sweeps::train_completion::complete_tracked_trains_on_known_destination_arrival`].
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is an independent input from the single caller; a struct would only wrap them"
@@ -215,10 +217,6 @@ pub async fn find_or_create_train_with_schedule_match(
     .await?;
     fill_route_into_subscribers(&mut *tx, row.0).await?;
     tx.commit().await?;
-    // The match may be what first tells us where this train terminates, and
-    // its terminus ARRIVAL may already be stored as `en_route` (written while
-    // the destination was unknown): derive the completion it missed.
-    crate::sweeps::train_completion::complete_on_known_destination_arrival(pool, row.0).await?;
     Ok(row.0)
 }
 

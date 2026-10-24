@@ -166,6 +166,43 @@ where
     Ok(outcome)
 }
 
+/// Queues `events` in `train_event_outbox`, in order, in one transaction,
+/// for [`apply_train_event_outbox`]: a backlog replay the api starts
+/// ([`crate::backlog::matching::ReplayWrite::Outbox`]; DS-118), whose role
+/// may not write the shared train state. A redelivered event still queued
+/// inserts nothing (`ON CONFLICT DO NOTHING`; re-applying one already
+/// applied is harmless). No forward signal: a replay raises none. Returns
+/// the rows queued.
+///
+/// From then on trust-consumer's sink ([`write_train_events_deferring`])
+/// queues the subscription's live events behind these, so they keep their
+/// order.
+pub async fn enqueue_train_events(
+    pool: &PgPool,
+    events: &[TrainMovementEventMessage],
+) -> anyhow::Result<u64> {
+    if events.is_empty() {
+        return Ok(0);
+    }
+    let mut tx = pool.begin().await?;
+    let mut queued = 0;
+    for event in events {
+        queued += sqlx::query(
+            "INSERT INTO train_event_outbox (tracked_train_id, dedup_key, event) \
+             VALUES ($1, $2, $3) \
+             ON CONFLICT (tracked_train_id, dedup_key) DO NOTHING",
+        )
+        .bind(event.tracked_train_id)
+        .bind(&event.dedup_key)
+        .bind(sqlx::types::Json(event))
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    }
+    tx.commit().await?;
+    Ok(queued)
+}
+
 /// How [`apply_train_event_outbox_with`] treats rows it cannot apply
 /// (security review L1, 2026-10-08).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -349,6 +386,7 @@ pub async fn apply_train_event_outbox_with(
     .fetch_all(&mut *tx)
     .await?;
     let mut failed = None;
+    let mut applied_subscriptions = Vec::new();
     for row in rows {
         let event = row.event.0;
         if row.tracked_train_id != event.tracked_train_id {
@@ -385,6 +423,9 @@ pub async fn apply_train_event_outbox_with(
                     .execute(&mut *tx)
                     .await?;
                 tick.applied += 1;
+                if !applied_subscriptions.contains(&row.tracked_train_id) {
+                    applied_subscriptions.push(row.tracked_train_id);
+                }
             }
             Err(err) => {
                 // If the savepoint cannot even roll back, the connection is
@@ -400,6 +441,17 @@ pub async fn apply_train_event_outbox_with(
                 }
             }
         }
+    }
+    // A replayed history (`enqueue_train_events`) may end at the terminus
+    // ARRIVAL of a train whose destination was learned after the event was
+    // derived (the api's schedule match runs after it queues the replay):
+    // complete it, as a direct replay does. A no-op for every other train.
+    for subscription_id in applied_subscriptions {
+        crate::sweeps::train_completion::complete_subscription_train_on_known_destination_arrival(
+            &mut *tx,
+            subscription_id,
+        )
+        .await?;
     }
     tx.commit().await?;
     metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => "applied")

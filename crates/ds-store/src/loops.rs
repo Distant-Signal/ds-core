@@ -16,7 +16,7 @@
 //! | [`backlog_match`] | `BACKLOG_MATCH_SWEEP` | [`run_backlog_match_sweep`] | `BACKLOG_MATCH_SWEEP_INTERVAL_SECS`, 300 |
 //! | [`corpus_crosswalk`] | `CORPUS_CROSSWALK` | [`rebuild_if_stale`], then [`refresh_last_delivery_metric`] | writer: `INGEST_WRITER_CORPUS_CROSSWALK_INTERVAL_SECS`, 600; api: once at startup ([`LoopRunner::run_once`]) |
 //! | [`corpus_crosswalk_comparing`] | `CORPUS_CROSSWALK` | as [`corpus_crosswalk`], then the CORPUS comparison after each new delivery | the writer's, in place of [`corpus_crosswalk`] (plan 2d.1) |
-//! | [`train_event_outbox`] | `TRAIN_EVENT_OUTBOX` | [`apply_train_event_outbox`] | writer only: `INGEST_WRITER_TRAIN_EVENT_OUTBOX_INTERVAL_SECS`, 5 |
+//! | [`train_event_outbox`] | `TRAIN_EVENT_OUTBOX` | [`apply_train_event_outbox`] | writer: `INGEST_WRITER_TRAIN_EVENT_OUTBOX_INTERVAL_SECS`, 5; api: 5 |
 //!
 //! [`run_schedule_match_sweep`]: crate::sweeps::schedule_matching::run_schedule_match_sweep
 //! [`run_reconciliation_sweep`]: crate::sweeps::reconciliation::run_reconciliation_sweep
@@ -217,9 +217,10 @@ async fn corpus_crosswalk_tick(
 pub const TRAIN_EVENT_OUTBOX_DEFAULT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Applies the train events trust-consumer's DB sink deferred (plan 3b.3,
-/// [`crate::tracking::outbox`]). Writer only: the outbox fills only under
-/// `trustConsumer.ingest.sink: db`, which the chart allows only with the
-/// writer's loops on.
+/// [`crate::tracking::outbox`]), and the backlog replays the api's track
+/// routes queue there (DS-118). The writer's; the api registers it too
+/// while it runs its own loops (`API_BACKGROUND_LOOPS`), so an install
+/// without the writer's loops still applies the api's replays.
 pub fn train_event_outbox(
     interval: Duration,
     policy: crate::tracking::outbox::OutboxPolicy,

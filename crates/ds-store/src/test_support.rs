@@ -67,6 +67,41 @@ pub async fn schedule_fixture_pool(pool: &PgPool) -> PgPool {
     }
 }
 
+/// The pool a test runs the writer's side through: `DATABASE_URL_WRITER`
+/// (the writer's role, which `scripts/test-postgres-roles.py --mode
+/// per-service` sets) when it is set, otherwise `pool`. A suite running as
+/// a narrowed role (the api's, DS-118) applies the train-event outbox
+/// through it, as the writer's loop does in production.
+pub async fn writer_pool(pool: &PgPool) -> PgPool {
+    match std::env::var("DATABASE_URL_WRITER") {
+        Ok(url) if !url.is_empty() => PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("connect to DATABASE_URL_WRITER"),
+        _ => pool.clone(),
+    }
+}
+
+/// Whether `role` (a db-grants.yaml key: `api`, `aggregator`, ...) is
+/// narrowed for this run: `scripts/test-postgres-roles.py --narrow` lists
+/// them in `DS_TEST_NARROWED_ROLES`. A test checks a refusal only then.
+pub fn role_is_narrowed(role: &str) -> bool {
+    std::env::var("DS_TEST_NARROWED_ROLES")
+        .is_ok_and(|roles| roles.split(',').any(|narrowed| narrowed.trim() == role))
+}
+
+/// Whether `err` is Postgres's "permission denied" (SQLSTATE 42501).
+pub fn is_permission_denied(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<sqlx::Error>()
+            .and_then(sqlx::Error::as_database_error)
+            .and_then(sqlx::error::DatabaseError::code)
+            .is_some_and(|code| code == "42501")
+    })
+}
+
 /// The database's own `CURRENT_DATE`, which is what every query under
 /// test compares `service_date` against. Seeding from
 /// `Utc::now().date_naive()` instead only agreed with it because the

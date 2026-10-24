@@ -11,10 +11,15 @@
 //!    order), or a backlog replay that could not look the destination up
 //!    (no Activation in the backlog, so no `train_uid` to key the lookup
 //!    on), wrote the arrival as `en_route`, and nothing derived it again.
-//!    [`complete_on_known_destination_arrival`] closes that: the schedule
-//!    match's write of `destination_crs`
-//!    (`trains::find_or_create_train_with_schedule_match`) and the backlog
-//!    replay both call it once they are done.
+//!    [`complete_on_known_destination_arrival`] closes that. A direct
+//!    backlog replay calls it once it is done; a replay queued in the
+//!    train-event outbox (the api's, DS-118) is completed by the outbox
+//!    loop once applied ([`complete_subscription_train_on_known_destination_arrival`]);
+//!    and a schedule match (`trains::find_or_create_train_with_schedule_match`,
+//!    which the api runs too, and the api's role may not write
+//!    `train_current_state`) is followed by the writer's
+//!    [`complete_tracked_trains_on_known_destination_arrival`], after its
+//!    own sweeps' matches and on every reconciliation tick.
 //! 2. **No terminating evidence ever arrives.** A train with no known
 //!    destination at all (most of the national population the TRUST backlog
 //!    consumer writes: only tracked trains are schedule-matched), one that
@@ -86,20 +91,58 @@ where
 /// [`complete_on_known_destination_arrival`] for the train subscription
 /// `subscription_id` is bound to, if any: the backlog replay knows its
 /// subscription, and the `trains` row it was bound to during the replay.
-pub async fn complete_subscription_train_on_known_destination_arrival(
-    pool: &PgPool,
+/// One statement, so it runs on the outbox loop's transaction too.
+pub async fn complete_subscription_train_on_known_destination_arrival<'c, E>(
+    executor: E,
     subscription_id: i64,
-) -> anyhow::Result<bool> {
-    let trains_id: Option<i64> =
-        sqlx::query_scalar("SELECT trains_id FROM train_subscriptions WHERE id = $1")
-            .bind(subscription_id)
-            .fetch_optional(pool)
-            .await?
-            .flatten();
-    match trains_id {
-        Some(trains_id) => complete_on_known_destination_arrival(pool, trains_id).await,
-        None => Ok(false),
-    }
+) -> anyhow::Result<bool>
+where
+    E: sqlx::PgExecutor<'c>,
+{
+    let result = sqlx::query(
+        "UPDATE train_current_state cs \
+         SET status = 'completed', updated_at = NOW() \
+         FROM train_subscriptions s \
+         JOIN trains t ON t.id = s.trains_id \
+         WHERE s.id = $1 \
+           AND cs.trains_id = t.id \
+           AND cs.status = 'en_route' \
+           AND cs.last_event_type = 'ARRIVAL' \
+           AND upper(cs.last_reported_location) = upper(t.destination_crs)",
+    )
+    .bind(subscription_id)
+    .execute(executor)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// [`complete_on_known_destination_arrival`] for every tracked train of a
+/// service date not yet past [`last_stale_service_date`] (older ones are
+/// [`finish_stale_en_route_trains`]'s): the writer's sweeps run it after
+/// their schedule matches. A schedule match does not complete the train
+/// itself any more (DS-118): the api's role may not write
+/// `train_current_state`, so a match the api makes after the terminus
+/// `ARRIVAL` was stored is completed here, by the writer's next
+/// reconciliation tick (5 minutes by default). Returns the rows changed.
+pub async fn complete_tracked_trains_on_known_destination_arrival(
+    pool: &PgPool,
+    now: DateTime<Utc>,
+) -> anyhow::Result<u64> {
+    let result = sqlx::query(
+        "UPDATE train_current_state cs \
+         SET status = 'completed', updated_at = NOW() \
+         FROM trains t \
+         WHERE cs.trains_id = t.id \
+           AND t.id IN (SELECT s.trains_id FROM train_subscriptions s \
+                        WHERE s.trains_id IS NOT NULL AND s.service_date > $1) \
+           AND cs.status = 'en_route' \
+           AND cs.last_event_type = 'ARRIVAL' \
+           AND upper(cs.last_reported_location) = upper(t.destination_crs)",
+    )
+    .bind(last_stale_service_date(now))
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }
 
 /// The last `service_date` [`finish_stale_en_route_trains`] treats as
@@ -359,8 +402,10 @@ mod db_tests {
 
     /// The production shape of the bug (train subscription 74, 2026-09-25):
     /// a backlog replay wrote the terminus arrival while the destination was
-    /// unknown, and the schedule match that supplied it came afterwards. The
-    /// schedule match's own write now completes the train.
+    /// unknown, and the schedule match that supplied it came afterwards.
+    /// The match itself writes no shared train state (the api runs it, and
+    /// its role may not; DS-118); the writer's sweep step completes the
+    /// tracked train.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
                 train_completion::db_tests -- --ignored --test-threads=1`"]
@@ -384,6 +429,19 @@ mod db_tests {
         )
         .await;
 
+        let user_id = "TEST-COMPLETION-LATE-MATCH-USER";
+        crate::test_support::seed_user(&pool, user_id).await;
+        crate::test_support::seed_backlog_candidate_pin(
+            &pool,
+            user_id,
+            service_date,
+            Some("EUS"),
+            Some(now),
+            "pending",
+            Some(trains_id),
+        )
+        .await;
+
         let matched = crate::trains::find_or_create_train_with_schedule_match(
             &pool,
             &uid,
@@ -400,7 +458,21 @@ mod db_tests {
         .await
         .unwrap();
         assert_eq!(matched, trains_id);
+        assert_eq!(status(&pool, trains_id).await, "en_route");
+
+        assert!(
+            complete_tracked_trains_on_known_destination_arrival(&pool, now)
+                .await
+                .unwrap()
+                >= 1
+        );
         assert_eq!(status(&pool, trains_id).await, "completed");
+        // Idempotent.
+        complete_tracked_trains_on_known_destination_arrival(&pool, now)
+            .await
+            .unwrap();
+        assert_eq!(status(&pool, trains_id).await, "completed");
+        crate::test_support::cleanup_user(&pool, user_id).await;
     }
 
     #[tokio::test]

@@ -2,7 +2,8 @@
 # ruff: noqa: T201  # a CLI: its progress report is stdout
 r"""Run a command against a fresh database with the Postgres role split.
 
-  scripts/test-postgres-roles.py [--mode new|existing] [--keep] -- COMMAND...
+  scripts/test-postgres-roles.py [--mode new|existing|per-service]
+      [--narrow ROLE,...] [--observe ROLE,...] [--keep] -- COMMAND...
 
 Proves that no runtime path needs a superuser (docs/postgres-app-role.md).
 Against the server in `DATABASE_URL` (a superuser, e.g. CI's `postgres`),
@@ -36,6 +37,23 @@ its own service's role:
 
 That mode reads db-grants.yaml, so it needs PyYAML (`uv run`).
 
+--narrow api,aggregator,... (per-service mode only) runs as if those roles
+were already `status: narrow` in db-grants.yaml: no longer members of the
+app role, holding exactly their own grants. The run renders a scratch
+postgres-grants.sql with them narrow and uses it instead of the committed
+one. Ingest phase 5 release D (docs/ingest-phase5-runbook.md §5.5) narrows
+the api, aggregator, enricher and notifier; CI runs their runtime paths
+this way first, so a write outside their grants fails in CI, not in
+production. The run sets DS_TEST_NARROWED_ROLES to the list, so a test can
+check a refusal only where it applies
+(ds_store::test_support::role_is_narrowed).
+
+--observe ROLE,... (per-service mode only) is the reverse: those roles run
+`status: observed` (members of the app role) whatever db-grants.yaml says,
+for a suite that still seeds its fixtures through its own role's pool
+once that role is narrow (release D), while --narrow runs its runtime
+paths.
+
 --check-setup-job runs the setup scripts once more, before COMMAND, as the
 chart's setup Job does (files/postgres-roles-setup.sh, one try each), while
 another session holds ACCESS SHARE on every relation in schema public in an
@@ -53,15 +71,19 @@ Needs psql (15+, for \getenv) and sqlx-cli on PATH. Example, as CI runs it:
 """
 
 import argparse
+import dataclasses
 import importlib.util
 import os
 import pathlib
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
+import types
 import urllib.parse
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SETUP_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-roles.sql"
@@ -80,8 +102,11 @@ FIRST_POLICY = (
 KINDS = ("owner", "app", "exporter", "dump", "backup")
 
 
-def per_service_kinds() -> tuple[list[str], list[str]]:
-    """Return the group and created-role keys of db-grants.yaml (needs PyYAML)."""
+def gen_db_grants() -> types.ModuleType:
+    """Import scripts/gen-db-grants.py once (it needs PyYAML)."""
+    loaded = sys.modules.get("gen_db_grants")
+    if loaded is not None:
+        return loaded
     spec = importlib.util.spec_from_file_location("gen_db_grants", GEN_DB_GRANTS)
     if spec is None or spec.loader is None:
         msg = f"cannot load {GEN_DB_GRANTS}"
@@ -89,8 +114,39 @@ def per_service_kinds() -> tuple[list[str], list[str]]:
     module = importlib.util.module_from_spec(spec)
     sys.modules["gen_db_grants"] = module
     spec.loader.exec_module(module)
-    model = module.load()
+    return module
+
+
+def per_service_kinds() -> tuple[list[str], list[str]]:
+    """Return the group and created-role keys of db-grants.yaml (needs PyYAML)."""
+    model = gen_db_grants().load()
     return list(model.groups), [role.key for role in model.created()]
+
+
+def render_with_statuses(statuses: Mapping[str, str]) -> str:
+    """Return postgres-grants.sql with each role in `statuses` given that status.
+
+    Each must be a created (not `planned`) role of db-grants.yaml, and each
+    status `narrow` or `observed`.
+    """
+    module = gen_db_grants()
+    model = module.load()
+    roles = dict(model.roles)
+    for key, status in statuses.items():
+        role = roles.get(key)
+        if role is None or role.status == "planned":
+            msg = f"{key!r} is not a created role in db-grants.yaml"
+            raise RuntimeError(msg)
+        if status not in {"narrow", "observed"}:
+            msg = f"{key}: status {status!r} is neither narrow nor observed"
+            raise RuntimeError(msg)
+        roles[key] = dataclasses.replace(role, status=status)
+    return cast("str", module.render(dataclasses.replace(model, roles=roles)))
+
+
+def render_narrowed(narrow: Sequence[str]) -> str:
+    """Return postgres-grants.sql as if the `narrow` roles were `narrow`."""
+    return render_with_statuses(dict.fromkeys(narrow, "narrow"))
 
 
 def with_credentials(url: str, user: str, password: str, database: str) -> str:
@@ -283,6 +339,18 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         action="store_true",
         help="prove a steady-state setup run takes no ACCESS EXCLUSIVE lock",
     )
+    parser.add_argument(
+        "--narrow",
+        default="",
+        metavar="ROLE,...",
+        help="per-service: run as if these db-grants.yaml roles were narrow",
+    )
+    parser.add_argument(
+        "--observe",
+        default="",
+        metavar="ROLE,...",
+        help="per-service: run as if these db-grants.yaml roles were observed",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command: list[str] = (
@@ -290,6 +358,12 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
     )
     if not command:
         parser.error("no command given after --")
+    narrow = [k.strip() for k in cast("str", args.narrow).split(",") if k.strip()]
+    observe = [k.strip() for k in cast("str", args.observe).split(",") if k.strip()]
+    if (narrow or observe) and args.mode != "per-service":
+        parser.error("--narrow and --observe need --mode per-service")
+    if set(narrow) & set(observe):
+        parser.error("a role cannot be both --narrow and --observe")
 
     superuser_url = os.environ.get("DATABASE_URL", "")
     if not superuser_url:
@@ -333,10 +407,21 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         f"--variable=backup_database={database}",
         f"--file={SETUP_SQL}",
     ]
+    grants_sql = GRANTS_SQL
+    scratch = tempfile.TemporaryDirectory(prefix="test-postgres-roles-")
+    if narrow or observe:
+        statuses = {
+            **dict.fromkeys(narrow, "narrow"),
+            **dict.fromkeys(observe, "observed"),
+        }
+        grants_sql = pathlib.Path(scratch.name) / "postgres-grants.sql"
+        grants_sql.write_text(render_with_statuses(statuses), encoding="utf-8")
+        rendered = ", ".join(f"{key} {status}" for key, status in statuses.items())
+        print(f"== postgres-grants.sql rendered with {rendered}")
     grants_args = [
         f"--variable=app={names['app']}",
         *(f"--variable={kind}={name}" for kind, name in service_names.items()),
-        f"--file={GRANTS_SQL}",
+        f"--file={grants_sql}",
     ]
     migrate = ["sqlx", "migrate", "run", "--source", str(MIGRATIONS), "--database-url"]
 
@@ -399,6 +484,9 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             test_env[f"DATABASE_URL_{kind.upper()}"] = with_credentials(
                 superuser_url, service_names[kind], service_passwords[kind], database
             )
+        # Tests that prove a narrowed role is refused a write check this
+        # (ds_store::test_support::role_is_narrowed).
+        test_env["DS_TEST_NARROWED_ROLES"] = ",".join(narrow)
         if services:
             print(f"== DATABASE_URL_<ROLE> for {', '.join(services)}", flush=True)
         print(
@@ -408,6 +496,7 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         status = subprocess.run(command, check=False, env=test_env).returncode  # noqa: S603  # the caller's own command
         print(f"== command exited {status}")
     finally:
+        scratch.cleanup()
         if args.keep:
             kept = ", ".join([*names.values(), *service_names.values()])
             print(f"kept database {database} and roles {kept}")
