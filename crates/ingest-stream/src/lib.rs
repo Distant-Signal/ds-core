@@ -43,9 +43,10 @@ pub mod streams {
     pub const STATION_SAMPLES: &str = "ds:ingest:station-samples";
     pub const FULL_COVERAGE: &str = "ds:ingest:full-coverage";
     pub const TFL: &str = "ds:ingest:tfl";
-    /// poller-tfl's daily stops job (`tfl-stops/1`; off by default). Its
-    /// own stream, so a day of line status never trims the last stops
-    /// snapshot, which the job's cursor and feed guard read back.
+    /// poller-tfl's daily stops job (`tfl-stops/1`) and route-sequences
+    /// job (`tfl-line-routes/1`, DS-151); both off by default. Their own
+    /// stream, so a day of line status never trims the last snapshots,
+    /// which each job's cursor and feed guard read back.
     pub const TFL_STOPS: &str = "ds:ingest:tfl-stops";
     /// tocs (`tocs/1`).
     pub const REFERENCE: &str = "ds:ingest:reference";

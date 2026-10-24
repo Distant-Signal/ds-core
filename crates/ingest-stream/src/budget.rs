@@ -129,10 +129,12 @@ pub const INGEST_STREAMS: [StreamDecl; 9] = [
         entry_bytes: 2 * KIB,
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
     },
-    // poller-tfl's stops job (off by default): one entry a day of about
-    // 400 stops, under 32 KB gzip; sized for a few restarts a day. Covers a
-    // week, so the last snapshot (the job's cursor and feed-guard
-    // baseline) outlives any writer outage.
+    // poller-tfl's stops and route-sequences jobs (off by default): one
+    // entry a day each, about 400 stops or 80 routes, under 32 KB gzip;
+    // sized for a restart of each a day (a restart sends nothing until the
+    // job's cursor is a day old). Covers a week, so each job's last
+    // snapshot (its cursor and feed-guard baseline) outlives any writer
+    // outage.
     StreamDecl {
         stream: crate::streams::TFL_STOPS,
         entries_per_day: 4,
