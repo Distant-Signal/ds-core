@@ -33,7 +33,9 @@ pub mod status;
 /// The networks compiled into this build (spec §5: adding a network is a
 /// code change). The producer refuses any other `TRANSIT_NETWORK`, and the
 /// writer pins each `ds:ingest:transit-<network>` stream to its network.
-pub const NETWORKS: &[&str] = &["metrolink"];
+/// `net` is Nottingham Express Transit (docs/superpowers/specs/2026-10-24-
+/// nottingham-net-design.md).
+pub const NETWORKS: &[&str] = &["metrolink", "net"];
 
 /// The schema names (all at version 1).
 pub mod schema {
@@ -669,7 +671,8 @@ mod tests {
         assert!(!is_stop_id(""));
         assert!(!is_stop_id("9400 ZZ"));
         assert!(metrolink().is_known());
-        assert!(!NetworkId::parse("net").unwrap().is_known());
+        assert!(NetworkId::parse("net").unwrap().is_known());
+        assert!(!NetworkId::parse("supertram").unwrap().is_known());
     }
 
     #[test]

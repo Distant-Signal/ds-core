@@ -64,6 +64,11 @@ pub mod streams {
     /// `transit-situations/1`. One stream per network, so the writer pins
     /// each to its network (transit spec §5, §9.1).
     pub const TRANSIT_METROLINK: &str = "ds:ingest:transit-metrolink";
+    /// poller-transit-schedule for network `net`, Nottingham Express
+    /// Transit (disabled by default): the same three schemas. NET has no
+    /// published disruptions, so in practice only its daily timetable
+    /// (docs/superpowers/specs/2026-10-24-nottingham-net-design.md §7).
+    pub const TRANSIT_NET: &str = "ds:ingest:transit-net";
 
     /// The transit stream of `network` (`ds:ingest:transit-<network>`).
     pub fn transit(network: &str) -> String {
@@ -111,6 +116,7 @@ mod tests {
             assert!(budget::decl(&stream).is_some(), "{stream}");
         }
         assert_eq!(streams::transit("metrolink"), streams::TRANSIT_METROLINK);
+        assert_eq!(streams::transit("net"), streams::TRANSIT_NET);
     }
 
     #[test]

@@ -345,6 +345,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         "poller-irish-rail-live",
         "poller-nir-stations",
         "poller-transit-metrolink",
+        "poller-transit-net",
         "ingest-writer",
         "ds-admin",
     ] {
@@ -601,6 +602,18 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             "poller-transit-metrolink",
             "ds:ingest:transit-metrolink",
             "ds:ingest:tfl",
+        ),
+        // Nottingham NET (NET design §7): neither network's user may
+        // write the other's stream.
+        (
+            "poller-transit-net",
+            "ds:ingest:transit-net",
+            "ds:ingest:transit-metrolink",
+        ),
+        (
+            "poller-transit-metrolink",
+            "ds:ingest:transit-metrolink",
+            "ds:ingest:transit-net",
         ),
     ] {
         let own = h.key(own);

@@ -105,7 +105,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 9] = [
+pub const INGEST_STREAMS: [StreamDecl; 10] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -178,6 +178,18 @@ pub const INGEST_STREAMS: [StreamDecl; 9] = [
     StreamDecl {
         stream: crate::streams::TRANSIT_METROLINK,
         entries_per_day: 288 + 32,
+        entry_bytes: TRANSIT_PART_BYTES as u64,
+        bound: Bound::Covers(Duration::from_secs(24 * 3600)),
+    },
+    // poller-transit-schedule (net, Nottingham Express Transit; disabled
+    // by default): no situations (BODS SIRI-SX has no Nottingham
+    // participant, so the loop stays off), only a daily timetable of a
+    // two-line network, well under 12 parts; sized for two items a day (a
+    // refresh). Covers a day, as metrolink's, for the same reason. Turning
+    // NET's situations on means resizing this first (NET design §7).
+    StreamDecl {
+        stream: crate::streams::TRANSIT_NET,
+        entries_per_day: 24,
         entry_bytes: TRANSIT_PART_BYTES as u64,
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
     },
@@ -308,6 +320,7 @@ mod tests {
                 ("ds:ingest:ioi-nir", 500),
                 ("ds:ingest:ioi-live", 1000),
                 ("ds:ingest:transit-metrolink", 320),
+                ("ds:ingest:transit-net", 24),
             ]
         );
         let station = &report.streams[0];
@@ -316,8 +329,8 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 356 MB in all (292 before transit-metrolink's 55 MB and
-        // tfl-stops' 8.5 MB): under the 75% alert line (384 MiB), let alone
+        // About 373 MB in all (292 before transit-metrolink's 55 MB,
+        // tfl-stops' 8.5 MB and transit-net's 16.5 MB): under the 75% alert line (384 MiB), let alone
         // 512.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
         let stops = report
@@ -328,12 +341,17 @@ mod tests {
         // (28 + 100) * (32 KiB + 512), twice: about 8.5 MB.
         assert_eq!(stops.bytes, 128 * (32 * 1024 + 512));
         assert!(stops.covers >= Duration::from_secs(7 * 24 * 3600));
-        let transit = report.streams.last().unwrap();
+        let transit = &report.streams[report.streams.len() - 2];
         assert_eq!(transit.stream, "ds:ingest:transit-metrolink");
         assert!(transit.covers >= Duration::from_secs(24 * 3600));
         // (320 + 100) * (64 KiB + 512), twice: about 55 MB.
         assert_eq!(transit.bytes, 420 * (64 * 1024 + 512));
-        assert!(report.total_bytes < 360_000_000, "{report:#?}");
+        let net = report.streams.last().unwrap();
+        assert_eq!(net.stream, "ds:ingest:transit-net");
+        assert!(net.covers >= Duration::from_secs(24 * 3600));
+        // (24 + 100) * (64 KiB + 512), twice: about 16 MB (NET design §7).
+        assert_eq!(net.bytes, 124 * (64 * 1024 + 512));
+        assert!(report.total_bytes < 380_000_000, "{report:#?}");
         assert_eq!(report.alert_bytes, 384 * 1024 * 1024);
         assert!(report.total_bytes > 250_000_000, "{report:#?}");
     }
