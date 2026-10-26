@@ -437,7 +437,7 @@ mod tests {
         assert_eq!(classify(&io), "down");
         let auth = RedisError::from((redis::ErrorKind::AuthenticationFailed, "bad"));
         assert_eq!(classify(&auth), "noauth");
-        let other = RedisError::from((redis::ErrorKind::TypeError, "bad"));
+        let other = RedisError::from((redis::ErrorKind::UnexpectedReturnType, "bad"));
         assert_eq!(classify(&other), "error");
         for outcome in ["oom", "noperm", "noauth", "misconf", "down", "error"] {
             assert!(metrics::PRODUCE_OUTCOMES.contains(&outcome), "{outcome}");

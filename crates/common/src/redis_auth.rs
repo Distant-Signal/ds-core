@@ -180,8 +180,8 @@ mod tests {
             "redis://default:hunter2@distant-signal-redis:6379"
         );
         let info = info(&url);
-        assert_eq!(info.redis.username.as_deref(), Some("default"));
-        assert_eq!(info.redis.password.as_deref(), Some("hunter2"));
+        assert_eq!(info.redis_settings().username(), Some("default"));
+        assert_eq!(info.redis_settings().password(), Some("hunter2"));
     }
 
     #[test]
@@ -191,12 +191,12 @@ mod tests {
             redis_url_with_password("redis://cache.example:6380/2", Some(&Secret::new(password)))
                 .unwrap();
         let info = info(&url);
-        assert_eq!(info.redis.password.as_deref(), Some(password));
-        assert_eq!(info.redis.username.as_deref(), Some("default"));
-        assert_eq!(info.redis.db, 2);
-        match info.addr {
+        assert_eq!(info.redis_settings().password(), Some(password));
+        assert_eq!(info.redis_settings().username(), Some("default"));
+        assert_eq!(info.redis_settings().db(), 2);
+        match info.addr() {
             redis::ConnectionAddr::Tcp(host, port) => {
-                assert_eq!((host.as_str(), port), ("cache.example", 6380));
+                assert_eq!((host.as_str(), *port), ("cache.example", 6380));
             }
             other => panic!("unexpected addr {other:?}"),
         }
@@ -207,8 +207,8 @@ mod tests {
         let url =
             redis_url_with_password("redis://app@redis:6379", Some(&Secret::new("pw"))).unwrap();
         let info = info(&url);
-        assert_eq!(info.redis.username.as_deref(), Some("app"));
-        assert_eq!(info.redis.password.as_deref(), Some("pw"));
+        assert_eq!(info.redis_settings().username(), Some("app"));
+        assert_eq!(info.redis_settings().password(), Some("pw"));
     }
 
     #[test]
@@ -243,11 +243,11 @@ mod tests {
             "redis://movement-relay:s3cr3t@distant-signal-redis:6379"
         );
         let info = info(&url);
-        assert_eq!(info.redis.username.as_deref(), Some("movement-relay"));
-        assert_eq!(info.redis.password.as_deref(), Some("s3cr3t"));
-        match info.addr {
+        assert_eq!(info.redis_settings().username(), Some("movement-relay"));
+        assert_eq!(info.redis_settings().password(), Some("s3cr3t"));
+        match info.addr() {
             redis::ConnectionAddr::Tcp(host, port) => {
-                assert_eq!((host.as_str(), port), ("distant-signal-redis", 6379));
+                assert_eq!((host.as_str(), *port), ("distant-signal-redis", 6379));
             }
             other => panic!("unexpected addr {other:?}"),
         }
@@ -264,9 +264,9 @@ mod tests {
         )
         .unwrap();
         let info = info(&url);
-        assert_eq!(info.redis.username.as_deref(), Some(user));
-        assert_eq!(info.redis.password.as_deref(), Some(password));
-        assert_eq!(info.redis.db, 2);
+        assert_eq!(info.redis_settings().username(), Some(user));
+        assert_eq!(info.redis_settings().password(), Some(password));
+        assert_eq!(info.redis_settings().db(), 2);
     }
 
     #[test]

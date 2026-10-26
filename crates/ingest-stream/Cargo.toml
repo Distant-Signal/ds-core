@@ -21,7 +21,7 @@ common = { path = "../common", features = ["redis"] }
 # schedule-ingest; the default (miniz_oxide, pure Rust) backend.
 flate2 = "1"
 metrics = "0.24"
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.8", features = ["tokio-comp", "connection-manager"] }
 serde = { version = "1.0.228", features = ["derive"] }
 # `raw_value`: the payload is carried as validated JSON text, not re-parsed
 # into a `Value` (a station-samples snapshot is about 500 KB).

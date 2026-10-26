@@ -227,10 +227,10 @@ fn allowed(user: &str, conn: &mut redis::Connection, args: &[&str]) {
         cmd.arg(*arg);
     }
     if let Err(e) = cmd.query::<redis::Value>(conn) {
-        let text = e.to_string();
+        // By code, not text: redis-rs 1.x displays NOPERM as `NoPerm: ...`.
         assert!(
-            !text.contains("NOPERM") && !text.contains("NOAUTH"),
-            "{user} must be allowed {args:?}: {text}"
+            !matches!(e.code(), Some("NOPERM" | "NOAUTH")),
+            "{user} must be allowed {args:?}: {e}"
         );
     }
 }

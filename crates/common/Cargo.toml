@@ -22,7 +22,7 @@ sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "r
 # Only with the `redis` feature: `common::redis_conn`, the bounded
 # ConnectionManager settings shared by every worker that holds a Redis
 # connection. Same version and features those crates already use.
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
+redis = { version = "1.8", features = ["tokio-comp", "connection-manager"], optional = true }
 # Only with the `http` feature (on by default): see [features].
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "form", "native-tls", "gzip"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -71,7 +71,7 @@ log = "0.4"
 tracing-log = "0.2"
 # Only to prove `redis_auth` URLs parse back to the same credentials in the
 # redis crate the services use (already in the workspace; no new crate).
-redis = { version = "0.27", default-features = false }
+redis = { version = "1.8", default-features = false }
 # `gcp_external_account`'s subject-token files (already in the workspace,
 # same spec as schedule-ingest's).
 tempfile = "3"

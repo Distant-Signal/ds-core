@@ -4,15 +4,17 @@
 //! and a startup connect that waits for Redis without hiding the wait.
 //!
 //! **Why not redis-rs's defaults.** `Client::get_connection_manager()`
-//! retries a failed (re)connect 6 more times on a 1s-then-60s (capped)
-//! jittered backoff, with no connect timeout and nothing logged. A worker
-//! that starts (or loses its connection) while the Redis pod is being
-//! recreated sits inside one `await` for minutes: no log line says why, its
-//! own loop cannot retry or beat its `/livez` progress, and a stall watchdog
-//! shorter than that wait (trust-consumer's is 300s) restarts a pod that was
-//! only waiting. It also never gets a response timeout, so a half-open TCP
-//! connection (the Redis node gone without a FIN/RST) hangs a command for as
-//! long as the kernel keeps retransmitting (~15 minutes).
+//! retries a failed (re)connect 6 more times on a growing jittered backoff,
+//! with nothing logged. A worker that starts (or loses its connection)
+//! while the Redis pod is being recreated sits inside one `await` for a
+//! long time: no log line says why, its own loop cannot retry or beat its
+//! `/livez` progress, and a stall watchdog shorter than that wait
+//! (trust-consumer's is 300s) restarts a pod that was only waiting.
+//! redis-rs 0.27 also had no response timeout, so a half-open TCP
+//! connection (the Redis node gone without a FIN/RST) hung a command for as
+//! long as the kernel kept retransmitting (~15 minutes); 1.x defaults to a
+//! 500ms response timeout instead, far too short for a 5s
+//! `XREADGROUP ... BLOCK`.
 //!
 //! [`connection_config`] instead makes every (re)connect ONE attempt,
 //! bounded by [`CONNECT_TIMEOUT`], and every command bounded by
@@ -25,17 +27,18 @@
 //!   logged per attempt, beating liveness progress;
 //! - afterwards, the worker loop's own error backoff.
 //!
-//! **Half-open connections.** A response timeout does NOT make redis-rs
-//! 0.27's `ConnectionManager` reconnect: it only reconnects on an error
-//! that says the socket is gone (reset, EOF, broken pipe, ...). When the
-//! peer vanishes without a FIN/RST (Redis pod or node gone, a conntrack
-//! entry dropped), the kernel keeps the socket up while it retransmits
-//! (`tcp_retries2`, ~15 minutes), so every command on it would time out,
-//! one [`RESPONSE_TIMEOUT`] at a time, for that long. redis-rs 0.27 offers
-//! no way to shorten that at the socket (its `keep-alive` feature, on by
-//! default, uses the system keepalive defaults -- 2 hours idle -- and does
-//! not fire while unacknowledged data is outstanding anyway; there is no
-//! `TCP_USER_TIMEOUT` setting). So [`connect`] returns a [`RedisConn`],
+//! **Half-open connections.** A response timeout does NOT make redis-rs's
+//! `ConnectionManager` reconnect (still true in 1.x: a timeout is
+//! `RetryMethod::RetryImmediately`, not a reconnect): it only reconnects on
+//! an error that says the socket is gone (reset, EOF, broken pipe, ...).
+//! When the peer vanishes without a FIN/RST (Redis pod or node gone, a
+//! conntrack entry dropped), the kernel keeps the socket up while it
+//! retransmits (`tcp_retries2`, ~15 minutes), so every command on it would
+//! time out, one [`RESPONSE_TIMEOUT`] at a time, for that long. TCP
+//! keepalive does not help (it uses the system defaults -- 2 hours idle --
+//! and does not fire while unacknowledged data is outstanding anyway), and
+//! redis-rs 1.x's `TcpSettings::set_user_timeout` (`TCP_USER_TIMEOUT`) is
+//! not used here. So [`connect`] returns a [`RedisConn`],
 //! which drops its connection on the FIRST timed-out command and makes the
 //! next command open a fresh one (one bounded [`connect`] attempt). A
 //! half-open connection therefore costs one timed-out command, not ~30.
@@ -65,7 +68,7 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// A timed-out command returns an error (`io::ErrorKind::TimedOut`) to the
 /// caller, whose loop logs it, backs off, beats progress and retries; and
 /// [`RedisConn`] replaces the connection before that retry (see the module
-/// docs: redis-rs 0.27's `ConnectionManager` would keep the half-open one).
+/// docs: redis-rs's `ConnectionManager` would keep the half-open one).
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The `ConnectionManager` settings every worker's Redis connection uses:
@@ -78,8 +81,8 @@ pub fn connection_config() -> ConnectionManagerConfig {
 fn connection_config_with(connect: Duration, response: Duration) -> ConnectionManagerConfig {
     ConnectionManagerConfig::new()
         .set_number_of_retries(0)
-        .set_connection_timeout(connect)
-        .set_response_timeout(response)
+        .set_connection_timeout(Some(connect))
+        .set_response_timeout(Some(response))
 }
 
 /// One bounded connect attempt with [`connection_config`]. Errors once
@@ -103,6 +106,18 @@ pub async fn connect_until_ready(
     crate::startup::retry_until_ready(what, backoff, progress, || connect(client)).await
 }
 
+/// `client` with TCP keepalive switched on (system default timings) for
+/// every socket it opens, as redis-rs 0.27's default `keep-alive` feature
+/// did; redis-rs 1.x only sets it when `TcpSettings` asks.
+fn with_keepalive(client: &redis::Client) -> RedisResult<redis::Client> {
+    let info = client.get_connection_info().clone();
+    let tcp = info
+        .tcp_settings()
+        .clone()
+        .set_keepalive(redis::io::tcp::socket2::TcpKeepalive::new());
+    redis::Client::open(info.set_tcp_settings(tcp))
+}
+
 /// A Redis connection that is replaced after a command times out.
 ///
 /// Wraps a [`ConnectionManager`] built with [`connection_config`] and
@@ -116,7 +131,7 @@ pub async fn connect_until_ready(
 /// already reconnects on a closed or reset socket.
 ///
 /// Why: a half-open connection (peer gone without a FIN/RST) is not
-/// replaced by redis-rs 0.27 until the kernel gives up on it (~15 minutes);
+/// replaced by redis-rs until the kernel gives up on it (~15 minutes);
 /// see the module docs. With this, it costs one [`RESPONSE_TIMEOUT`].
 ///
 /// Clones share one connection, and replace it together: a timeout seen by
@@ -146,12 +161,13 @@ impl RedisConn {
         client: &redis::Client,
         config: ConnectionManagerConfig,
     ) -> RedisResult<Self> {
+        let client = with_keepalive(client)?;
         let conn = client
             .get_connection_manager_with_config(config.clone())
             .await?;
         Ok(Self {
             shared: Arc::new(Shared {
-                client: client.clone(),
+                client,
                 config,
                 slot: Mutex::new(Slot {
                     generation: 1,
@@ -251,7 +267,11 @@ impl ConnectionLike for RedisConn {
     }
 
     fn get_db(&self) -> i64 {
-        self.shared.client.get_connection_info().redis.db
+        self.shared
+            .client
+            .get_connection_info()
+            .redis_settings()
+            .db()
     }
 }
 
@@ -273,7 +293,7 @@ mod tests {
     }
 
     /// A fake Redis that accepts connections and, when `answer_handshake`,
-    /// replies `+OK` to the connection-setup pipeline (redis-rs 0.27 sends
+    /// replies `+OK` to the connection-setup pipeline (redis-rs 1.x sends
     /// `CLIENT SETINFO LIB-NAME` and `LIB-VER`), then never answers again.
     /// Without `answer_handshake` it answers nothing at all.
     fn silent_redis(answer_handshake: bool) -> u16 {
@@ -306,16 +326,24 @@ mod tests {
 
     #[test]
     fn production_config_has_no_retries_and_both_timeouts() {
-        let config = format!("{:?}", connection_config());
-        assert!(config.contains("number_of_retries: 0"), "{config}");
-        assert!(
-            config.contains(&format!("connection_timeout: Some({CONNECT_TIMEOUT:?})")),
-            "{config}"
-        );
-        assert!(
-            config.contains(&format!("response_timeout: Some({RESPONSE_TIMEOUT:?})")),
-            "{config}"
-        );
+        let config = connection_config();
+        assert_eq!(config.number_of_retries(), 0, "{config:?}");
+        assert_eq!(config.connection_timeout(), Some(CONNECT_TIMEOUT));
+        assert_eq!(config.response_timeout(), Some(RESPONSE_TIMEOUT));
+    }
+
+    /// Every socket gets TCP keepalive, as with redis-rs 0.27's default
+    /// `keep-alive` feature; the rest of the connection info is kept.
+    #[test]
+    fn connections_keep_tcp_keepalive_on() {
+        let original = redis::Client::open("redis://user:pw@127.0.0.1:7/3").unwrap();
+        let client = with_keepalive(&original).unwrap();
+        let info = client.get_connection_info();
+        assert!(info.tcp_settings().keepalive().is_some());
+        assert_eq!(info.addr(), original.get_connection_info().addr());
+        assert_eq!(info.redis_settings().db(), 3);
+        assert_eq!(info.redis_settings().username(), Some("user"));
+        assert_eq!(info.redis_settings().password(), Some("pw"));
     }
 
     /// A refused connect is one attempt, returned at once -- not redis-rs's
@@ -675,7 +703,7 @@ mod tests {
     fn local_redis_addr() -> String {
         let url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
         let client = redis::Client::open(url).unwrap();
-        match &client.get_connection_info().addr {
+        match client.get_connection_info().addr() {
             redis::ConnectionAddr::Tcp(host, port) => format!("{host}:{port}"),
             other => panic!("needs a plain TCP Redis, got {other:?}"),
         }

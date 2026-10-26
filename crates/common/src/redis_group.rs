@@ -91,14 +91,14 @@ pub async fn group_last_delivered_id<C: ConnectionLike + Send>(
                 let mut map = HashMap::new();
                 let mut it = fields.iter();
                 while let (Some(k), Some(v)) = (it.next(), it.next()) {
-                    map.insert(redis::from_redis_value::<String>(k)?, v);
+                    map.insert(redis::from_redis_value_ref::<String>(k)?, v);
                 }
                 map
             }
             redis::Value::Map(pairs) => {
                 let mut map = HashMap::new();
                 for (k, v) in pairs {
-                    map.insert(redis::from_redis_value::<String>(k)?, v);
+                    map.insert(redis::from_redis_value_ref::<String>(k)?, v);
                 }
                 map
             }
@@ -106,10 +106,10 @@ pub async fn group_last_delivered_id<C: ConnectionLike + Send>(
         };
         let name: Option<String> = fields
             .get("name")
-            .and_then(|v| redis::from_redis_value(v).ok());
+            .and_then(|v| redis::from_redis_value_ref(v).ok());
         if name.as_deref() == Some(group) {
             return Ok(match fields.get("last-delivered-id") {
-                Some(value) => redis::from_redis_value::<Option<String>>(value)?,
+                Some(value) => redis::from_redis_value_ref::<Option<String>>(value)?,
                 None => None,
             });
         }
@@ -178,12 +178,14 @@ pub mod fake {
                 .map(|arg| match arg {
                     redis::Arg::Simple(bytes) => String::from_utf8_lossy(bytes).into_owned(),
                     redis::Arg::Cursor => "<cursor>".to_string(),
+                    // `Arg` is `#[non_exhaustive]` since redis-rs 1.0.
+                    _ => "<arg>".to_string(),
                 })
                 .collect();
             self.sent.push(args);
             let reply = self.replies.pop_front().unwrap_or_else(|| {
                 Err(redis::RedisError::from((
-                    redis::ErrorKind::ClientError,
+                    redis::ErrorKind::Client,
                     "FakeConn: no reply queued",
                 )))
             });
@@ -198,7 +200,7 @@ pub mod fake {
         ) -> RedisFuture<'a, Vec<Value>> {
             Box::pin(async {
                 Err(redis::RedisError::from((
-                    redis::ErrorKind::ClientError,
+                    redis::ErrorKind::Client,
                     "FakeConn: pipelines are not scripted",
                 )))
             })
@@ -285,7 +287,7 @@ mod tests {
             GroupPosition::Missing
         );
         let mut conn = FakeConn::new([Err(redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
+            redis::ErrorKind::Server(redis::ServerErrorKind::ResponseError),
             "ERR",
             "no such key".to_string(),
         )))]);
@@ -301,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn any_other_error_is_returned() {
         let mut conn = FakeConn::new([Err(redis::RedisError::from((
-            redis::ErrorKind::IoError,
+            redis::ErrorKind::Io,
             "connection reset",
         )))]);
         assert!(
@@ -312,7 +314,7 @@ mod tests {
         let mut conn = FakeConn::new([
             groups(vec![FakeConn::group_info("g", "1-0")]),
             Err(redis::RedisError::from((
-                redis::ErrorKind::ResponseError,
+                redis::ErrorKind::Server(redis::ServerErrorKind::NoPerm),
                 "NOPERM",
             ))),
         ]);

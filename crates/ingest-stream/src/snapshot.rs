@@ -428,7 +428,7 @@ pub async fn newest_of_schema(
         let fields: Vec<(String, Vec<u8>)> = entry
             .map
             .iter()
-            .filter_map(|(k, v)| Some((k.clone(), redis::from_redis_value(v).ok()?)))
+            .filter_map(|(k, v)| Some((k.clone(), redis::from_redis_value_ref(v).ok()?)))
             .collect();
         crate::Envelope::decode(&fields).ok()
     })
@@ -822,7 +822,7 @@ mod tests {
         };
         let client = user.client("x").unwrap();
         let info = client.get_connection_info();
-        assert_eq!(info.redis.username.as_deref(), Some("poller-tfl"));
+        assert_eq!(info.redis_settings().username(), Some("poller-tfl"));
         assert!(
             !format!("{user:?}").contains("pw\""),
             "the password is redacted"

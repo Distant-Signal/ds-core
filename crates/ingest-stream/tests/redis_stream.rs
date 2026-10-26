@@ -133,7 +133,7 @@ impl Scope {
                     .map
                     .iter()
                     .map(|(k, v)| {
-                        let bytes: Vec<u8> = redis::from_redis_value(v).unwrap();
+                        let bytes: Vec<u8> = redis::from_redis_value_ref(v).unwrap();
                         (k.clone(), String::from_utf8_lossy(&bytes).into_owned())
                     })
                     .collect();
@@ -145,7 +145,7 @@ impl Scope {
     fn pending(&mut self, stream: &str) -> u64 {
         let reply: redis::Value = self.cmd(&["XPENDING", stream, ingest_stream::WRITER_GROUP]);
         match reply {
-            redis::Value::Array(parts) => redis::from_redis_value(&parts[0]).unwrap(),
+            redis::Value::Array(parts) => redis::from_redis_value_ref(&parts[0]).unwrap(),
             other => panic!("{other:?}"),
         }
     }
@@ -791,7 +791,7 @@ fn start_forwarder(listener: tokio::net::TcpListener) -> tokio::task::JoinHandle
     let target = match redis::Client::open(redis_url())
         .unwrap()
         .get_connection_info()
-        .addr
+        .addr()
         .clone()
     {
         redis::ConnectionAddr::Tcp(host, port) => format!("{host}:{port}"),

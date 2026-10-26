@@ -871,7 +871,7 @@ struct RawEntry {
 
 fn unexpected(what: &str) -> RedisError {
     RedisError::from((
-        ErrorKind::TypeError,
+        ErrorKind::UnexpectedReturnType,
         "unexpected reply shape",
         what.to_owned(),
     ))
