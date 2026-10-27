@@ -5,6 +5,7 @@
 //! and the `JourneyStop`/`StopStatus`/`StopTimetable` types (which
 //! `api`'s `journey.rs` re-exports).
 
+pub mod cancellation;
 pub mod predicted_start;
 pub mod stop_delay;
 pub mod stop_live_status;
