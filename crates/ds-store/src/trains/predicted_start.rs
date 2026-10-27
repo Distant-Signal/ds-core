@@ -4,8 +4,8 @@
 //!
 //! Before TRUST reports a train T, DS knows nothing live about it. But the
 //! unit that forms T usually arrives on an earlier train P, its previous
-//! working (`schedule_turnarounds`). If P is late enough that the booked
-//! turnaround cannot absorb it, T starts late:
+//! working. If P is late enough that the booked turnaround cannot absorb
+//! it, T starts late:
 //!
 //! ```text
 //! excess = A - S          A: P's delay at its terminus, S: booked turnaround
@@ -16,13 +16,22 @@
 //! when P has not started either, P's own predicted late start from its
 //! previous working (two links deep at most).
 //!
+//! **The link** (spec section 4). Darwin's live next-working association
+//! (`darwin_previous_workings`, DS-152; `link = "association"`) is preferred:
+//! it follows the operator's own on-the-day plan. Without one, the
+//! timetable inference from the platform sequence (`schedule_turnarounds`,
+//! `link = "inferred"`) is used.
+//!
 //! **Confidence.**
 //!
 //! - `high`: one link, P's data is live and fresh (or P has arrived), the
 //!   excess is between 0 and [`MEDIUM_EXCESS_LIMIT`] (P has eaten the whole
-//!   slack), and the operator is not in [`MEDIUM_CAPPED_OPERATORS`]. Over a
-//!   week of TRUST actuals, 92% of such trains started at least 3 minutes
-//!   late, with a mean error of 2.1 minutes. Only `high` sends a push.
+//!   slack), and, for an inferred link only, the operator is not in
+//!   [`MEDIUM_CAPPED_OPERATORS`] and neither train joins or divides that
+//!   day (a CIF `JJ`/`VV` association in `schedule_associations`, spec
+//!   section 3a: where the platform sequence is least safe). Over a week of
+//!   TRUST actuals, 92% of such trains started at least 3 minutes late,
+//!   with a mean error of 2.1 minutes. Only `high` sends a push.
 //! - `medium`: one link, fresh, excess at most [`MEDIUM_EXCESS_LIMIT`].
 //! - `low`: the excess is above [`MEDIUM_EXCESS_LIMIT`], P's data is older
 //!   than [`FRESHNESS`], or the prediction is two links deep. Shown only as
@@ -53,11 +62,15 @@ pub const HORIZON: Duration = Duration::hours(3);
 pub const FRESHNESS: Duration = Duration::minutes(10);
 /// Operators whose high-confidence band was not precise enough over the
 /// phase 0 week (spec section 3a: Thameslink 69%, Chiltern 50% on 8
-/// pairs). Their predictions stop at medium, so they never push. Revisit
-/// with phase 2's association links.
+/// pairs). Their inferred predictions stop at medium, so they never push;
+/// a Darwin association link is exact and is not capped.
 pub const MEDIUM_CAPPED_OPERATORS: &[&str] = &["TL", "CH"];
 /// `predictedStart.basis`, and the stop estimates' `estimateSource`.
 pub const BASIS: &str = "previous-working";
+/// `previousWorking.link` of a Darwin live next-working association.
+pub const LINK_ASSOCIATION: &str = "association";
+/// `previousWorking.link` of the platform-sequence inference.
+pub const LINK_INFERRED: &str = "inferred";
 
 /// How sure the prediction is. Ordered: `Low < Medium < High`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -85,7 +98,8 @@ impl Confidence {
 pub struct PreviousWorking {
     pub train_uid: String,
     pub service_date: NaiveDate,
-    /// `inferred` (the platform sequence) or `association` (phase 2).
+    /// [`LINK_INFERRED`] (the platform sequence) or [`LINK_ASSOCIATION`]
+    /// (Darwin's live next-working link).
     pub link: String,
     /// P's `train_current_state.status` (`en_route`, `completed`,
     /// `awaiting_activation`), `None` without a state row.
@@ -113,6 +127,10 @@ pub struct PredictedStart {
     /// (never served).
     #[serde(skip)]
     pub minutes: i32,
+    /// T's booked working origin departure (never served): the notifier
+    /// pushes only before it.
+    #[serde(skip)]
+    pub departs_at: DateTime<Utc>,
 }
 
 impl PredictedStart {
@@ -135,6 +153,12 @@ pub struct Evidence<'a> {
     pub fresh: bool,
     /// 1 when the incoming train is live, 2 when its own prediction is used.
     pub depth: u8,
+    /// The link is Darwin's live association, not the inference: neither
+    /// cap below applies.
+    pub association: bool,
+    /// T or P joins or divides that day (CIF `JJ`/`VV`): an inferred link
+    /// is capped at medium.
+    pub join_divide: bool,
 }
 
 /// The section 5 rule: `(late minutes, confidence)`, or `None` when there
@@ -148,9 +172,11 @@ pub fn rule(evidence: &Evidence<'_>) -> Option<(i32, Confidence)> {
     if late == 0 {
         return None;
     }
-    let capped = evidence
-        .operator
-        .is_some_and(|op| MEDIUM_CAPPED_OPERATORS.contains(&op));
+    let capped = !evidence.association
+        && (evidence.join_divide
+            || evidence
+                .operator
+                .is_some_and(|op| MEDIUM_CAPPED_OPERATORS.contains(&op)));
     let confidence = if evidence.depth > 1 || !evidence.fresh || excess > MEDIUM_EXCESS_LIMIT {
         Confidence::Low
     } else if excess >= 0 && !capped {
@@ -199,8 +225,17 @@ pub struct LinkFacts {
     pub prev_uid: String,
     pub prev_service_date: NaiveDate,
     pub booked_turnaround_minutes: i32,
+    /// [`LINK_INFERRED`] or [`LINK_ASSOCIATION`].
     pub link: String,
+    /// Either train of the link joins or divides that day (CIF `JJ`/`VV`).
+    pub join_divide: bool,
     pub prev_state: LiveState,
+}
+
+impl LinkFacts {
+    fn is_association(&self) -> bool {
+        self.link == LINK_ASSOCIATION
+    }
 }
 
 /// Everything [`assemble`] needs for one train T.
@@ -244,6 +279,8 @@ pub fn assemble(facts: &TrainFacts, now: DateTime<Utc>) -> Option<PredictedStart
             operator,
             fresh: upstream.prev_state.is_fresh(now),
             depth: 1,
+            association: upstream.is_association(),
+            join_divide: upstream.join_divide,
         })?;
         (late, upstream.prev_state.is_fresh(now), 2)
     };
@@ -253,6 +290,8 @@ pub fn assemble(facts: &TrainFacts, now: DateTime<Utc>) -> Option<PredictedStart
         operator,
         fresh,
         depth,
+        association: previous.is_association(),
+        join_divide: previous.join_divide,
     })?;
     Some(PredictedStart {
         late_minutes: (confidence >= Confidence::Medium).then_some(minutes),
@@ -269,6 +308,7 @@ pub fn assemble(facts: &TrainFacts, now: DateTime<Utc>) -> Option<PredictedStart
             booked_turnaround_minutes: previous.booked_turnaround_minutes,
         },
         minutes,
+        departs_at: facts.departs_at,
     })
 }
 
@@ -276,7 +316,7 @@ pub fn assemble(facts: &TrainFacts, now: DateTime<Utc>) -> Option<PredictedStart
 struct FactsRow {
     uid: String,
     service_date: NaiveDate,
-    departs_at: DateTime<Utc>,
+    departs_at: Option<DateTime<Utc>>,
     operator_atoc: Option<String>,
     t_status: Option<String>,
     t_delay: Option<i32>,
@@ -284,6 +324,7 @@ struct FactsRow {
     prev_service_date: NaiveDate,
     turnaround: i16,
     link: String,
+    join_divide: bool,
     p_status: Option<String>,
     p_delay: Option<i32>,
     p_observed: Option<DateTime<Utc>>,
@@ -291,19 +332,23 @@ struct FactsRow {
     p2_service_date: Option<NaiveDate>,
     p2_turnaround: Option<i16>,
     p2_link: Option<String>,
+    p2_join_divide: Option<bool>,
     p2_status: Option<String>,
     p2_delay: Option<i32>,
     p2_observed: Option<DateTime<Utc>>,
 }
 
 impl FactsRow {
-    fn into_facts(self) -> ((String, NaiveDate), TrainFacts) {
+    /// `None` when T's departure is unknown (a Darwin link for a train
+    /// with no CIF origin call).
+    fn into_facts(self) -> Option<((String, NaiveDate), TrainFacts)> {
         let previous_of_previous = match (self.p2_uid, self.p2_service_date, self.p2_turnaround) {
             (Some(prev_uid), Some(prev_service_date), Some(turnaround)) => Some(LinkFacts {
                 prev_uid,
                 prev_service_date,
                 booked_turnaround_minutes: i32::from(turnaround),
-                link: self.p2_link.unwrap_or_else(|| "inferred".to_string()),
+                link: self.p2_link.unwrap_or_else(|| LINK_INFERRED.to_string()),
+                join_divide: self.p2_join_divide.unwrap_or(false),
                 prev_state: LiveState {
                     status: self.p2_status,
                     delay_minutes: self.p2_delay,
@@ -312,10 +357,10 @@ impl FactsRow {
             }),
             _ => None,
         };
-        (
+        Some((
             (self.uid, self.service_date),
             TrainFacts {
-                departs_at: self.departs_at,
+                departs_at: self.departs_at?,
                 operator: self.operator_atoc,
                 own_state: LiveState {
                     status: self.t_status,
@@ -327,6 +372,7 @@ impl FactsRow {
                     prev_service_date: self.prev_service_date,
                     booked_turnaround_minutes: i32::from(self.turnaround),
                     link: self.link,
+                    join_divide: self.join_divide,
                     prev_state: LiveState {
                         status: self.p_status,
                         delay_minutes: self.p_delay,
@@ -335,13 +381,60 @@ impl FactsRow {
                 },
                 previous_of_previous,
             },
-        )
+        ))
     }
 }
 
+/// The previous-working link of every `(uid, service_date)` in the CTE
+/// `keys`: Darwin's live association when there is one, else the
+/// inference; with T's booked working origin departure (the inference's,
+/// else T's CIF origin call's) and whether T or P joins or divides that
+/// day.
+fn link_sql(keys: &str) -> String {
+    let join_divide = |uid: &str, date: &str| {
+        format!(
+            "EXISTS (SELECT 1 FROM schedule_associations sa \
+                     WHERE sa.category IN ('JJ', 'VV') \
+                       AND ((sa.service_date = {date} AND sa.main_uid = {uid}) \
+                         OR (sa.assoc_service_date = {date} AND sa.assoc_uid = {uid})))"
+        )
+    };
+    let t_join = join_divide("k.uid", "k.service_date");
+    let p_join = join_divide(
+        "COALESCE(d.prev_uid, t.prev_uid)",
+        "COALESCE(d.prev_service_date, t.prev_service_date)",
+    );
+    format!(
+        "SELECT k.uid, k.service_date, \
+                COALESCE(d.prev_uid, t.prev_uid) AS prev_uid, \
+                COALESCE(d.prev_service_date, t.prev_service_date) AS prev_service_date, \
+                COALESCE(d.booked_turnaround_minutes, t.booked_turnaround_minutes) AS turnaround, \
+                CASE WHEN d.uid IS NOT NULL THEN '{LINK_ASSOCIATION}' ELSE t.link END AS link, \
+                COALESCE(t.departs_at, o.departs_at) AS departs_at, \
+                ({t_join} OR {p_join}) AS join_divide \
+         FROM {keys} k \
+         LEFT JOIN schedule_turnarounds t ON t.service_date = k.service_date AND t.uid = k.uid \
+         LEFT JOIN LATERAL ( \
+             SELECT dp.uid, dp.prev_uid, dp.prev_service_date, dp.booked_turnaround_minutes \
+             FROM darwin_previous_workings dp \
+             WHERE dp.service_date = k.service_date AND dp.uid = k.uid \
+             LIMIT 1 \
+         ) d ON true \
+         LEFT JOIN LATERAL ( \
+             SELECT ((c.service_date + c.day_offset \
+                      + COALESCE(c.working_departure, c.booked_departure)) \
+                     AT TIME ZONE 'Europe/London') AS departs_at \
+             FROM schedule_calling_points_full c \
+             WHERE c.service_date = k.service_date AND c.uid = k.uid AND c.kind = 'origin' \
+             ORDER BY c.seq LIMIT 1 \
+         ) o ON t.uid IS NULL \
+         WHERE t.uid IS NOT NULL OR d.uid IS NOT NULL"
+    )
+}
+
 /// The facts for every `(train_uid, service_date)` in `trains` that has a
-/// previous working, in one query: T's turnaround, operator and own state,
-/// P's state, and P's own previous working with its state.
+/// previous working, in one query: T's link, operator and own state, P's
+/// state, and P's own previous working with its state.
 pub async fn facts_for_trains(
     pool: &PgPool,
     trains: &[(String, NaiveDate)],
@@ -351,36 +444,41 @@ pub async fn facts_for_trains(
     }
     let uids: Vec<&str> = trains.iter().map(|(uid, _)| uid.as_str()).collect();
     let dates: Vec<NaiveDate> = trains.iter().map(|(_, date)| *date).collect();
-    let rows: Vec<FactsRow> = sqlx::query_as(
-        "SELECT k.uid, k.service_date, t.departs_at, ss.operator_atoc, \
+    let sql = format!(
+        "WITH k AS (SELECT DISTINCT * FROM UNNEST($1::text[], $2::date[]) AS k(uid, service_date)), \
+              l1 AS ({l1}), \
+              k2 AS (SELECT DISTINCT prev_uid AS uid, prev_service_date AS service_date FROM l1), \
+              l2 AS ({l2}) \
+         SELECT l1.uid, l1.service_date, l1.departs_at, ss.operator_atoc, \
                 cst.status AS t_status, cst.delay_minutes AS t_delay, \
-                t.prev_uid, t.prev_service_date, t.booked_turnaround_minutes AS turnaround, \
-                t.link, \
+                l1.prev_uid, l1.prev_service_date, l1.turnaround, l1.link, l1.join_divide, \
                 csp.status AS p_status, csp.delay_minutes AS p_delay, \
                 COALESCE(csp.event_time, csp.updated_at) AS p_observed, \
-                tp.prev_uid AS p2_uid, tp.prev_service_date AS p2_service_date, \
-                tp.booked_turnaround_minutes AS p2_turnaround, tp.link AS p2_link, \
+                l2.prev_uid AS p2_uid, l2.prev_service_date AS p2_service_date, \
+                l2.turnaround AS p2_turnaround, l2.link AS p2_link, \
+                l2.join_divide AS p2_join_divide, \
                 csp2.status AS p2_status, csp2.delay_minutes AS p2_delay, \
                 COALESCE(csp2.event_time, csp2.updated_at) AS p2_observed \
-         FROM (SELECT DISTINCT * FROM UNNEST($1::text[], $2::date[])) AS k(uid, service_date) \
-         JOIN schedule_turnarounds t ON t.service_date = k.service_date AND t.uid = k.uid \
-         LEFT JOIN schedule_services ss ON ss.service_date = k.service_date AND ss.uid = k.uid \
-         LEFT JOIN trains trt ON trt.train_uid = k.uid AND trt.service_date = k.service_date \
+         FROM l1 \
+         LEFT JOIN schedule_services ss ON ss.service_date = l1.service_date AND ss.uid = l1.uid \
+         LEFT JOIN trains trt ON trt.train_uid = l1.uid AND trt.service_date = l1.service_date \
          LEFT JOIN train_current_state cst ON cst.trains_id = trt.id \
          LEFT JOIN trains trp \
-           ON trp.train_uid = t.prev_uid AND trp.service_date = t.prev_service_date \
+           ON trp.train_uid = l1.prev_uid AND trp.service_date = l1.prev_service_date \
          LEFT JOIN train_current_state csp ON csp.trains_id = trp.id \
-         LEFT JOIN schedule_turnarounds tp \
-           ON tp.service_date = t.prev_service_date AND tp.uid = t.prev_uid \
+         LEFT JOIN l2 ON l2.uid = l1.prev_uid AND l2.service_date = l1.prev_service_date \
          LEFT JOIN trains trp2 \
-           ON trp2.train_uid = tp.prev_uid AND trp2.service_date = tp.prev_service_date \
+           ON trp2.train_uid = l2.prev_uid AND trp2.service_date = l2.prev_service_date \
          LEFT JOIN train_current_state csp2 ON csp2.trains_id = trp2.id",
-    )
-    .bind(&uids)
-    .bind(&dates)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows.into_iter().map(FactsRow::into_facts).collect())
+        l1 = link_sql("k"),
+        l2 = link_sql("k2"),
+    );
+    let rows: Vec<FactsRow> = sqlx::query_as(&sql)
+        .bind(&uids)
+        .bind(&dates)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().filter_map(FactsRow::into_facts).collect())
 }
 
 /// [`assemble`] over [`facts_for_trains`]: every train in `trains` with a
@@ -414,6 +512,8 @@ mod tests {
             operator: Some("NT"),
             fresh: true,
             depth: 1,
+            association: false,
+            join_divide: false,
         }
     }
 
@@ -435,6 +535,7 @@ mod tests {
                 prev_service_date: NaiveDate::from_ymd_opt(2099, 7, 10).expect("date"),
                 booked_turnaround_minutes: 12,
                 link: "inferred".to_string(),
+                join_divide: false,
                 prev_state,
             },
             previous_of_previous: None,
@@ -480,6 +581,51 @@ mod tests {
             ..evidence(20, 12)
         };
         assert_eq!(rule(&deep), Some((12, Confidence::Low)));
+    }
+
+    #[test]
+    fn a_join_or_divide_caps_an_inferred_link_at_medium() {
+        let joined = Evidence {
+            join_divide: true,
+            ..evidence(20, 12)
+        };
+        assert_eq!(rule(&joined), Some((12, Confidence::Medium)));
+        // Low stays low.
+        let stale = Evidence {
+            fresh: false,
+            ..joined
+        };
+        assert_eq!(rule(&stale), Some((12, Confidence::Low)));
+    }
+
+    #[test]
+    fn an_association_link_is_not_capped() {
+        for op in MEDIUM_CAPPED_OPERATORS {
+            let linked = Evidence {
+                operator: Some(op),
+                association: true,
+                join_divide: true,
+                ..evidence(20, 12)
+            };
+            assert_eq!(rule(&linked), Some((12, Confidence::High)));
+        }
+    }
+
+    #[test]
+    fn assemble_applies_the_link_kind_and_the_join_cap() {
+        let mut joined = facts(live("en_route", Some(20), "09:55"));
+        joined.previous.join_divide = true;
+        let predicted = assemble(&joined, at("10:00")).expect("a prediction");
+        assert_eq!(predicted.confidence, Confidence::Medium);
+        assert_eq!(predicted.departs_at, at("10:12"));
+
+        let mut linked = joined;
+        linked.previous.link = LINK_ASSOCIATION.to_string();
+        let predicted = assemble(&linked, at("10:00")).expect("a prediction");
+        assert_eq!(predicted.confidence, Confidence::High);
+        let json = serde_json::to_value(&predicted).expect("serialize");
+        assert_eq!(json["previousWorking"]["link"], "association");
+        assert!(json.get("departsAt").is_none());
     }
 
     #[test]
@@ -564,6 +710,7 @@ mod tests {
             prev_service_date: NaiveDate::from_ymd_opt(2099, 7, 10).expect("date"),
             booked_turnaround_minutes: 10,
             link: "inferred".to_string(),
+            join_divide: false,
             prev_state: live("en_route", Some(30), "09:55"),
         });
         let predicted = assemble(&two_deep, at("10:00")).expect("a prediction");
@@ -676,5 +823,194 @@ mod db_tests {
                 .await
                 .expect("cleanup");
         }
+    }
+
+    async fn exec(pool: &PgPool, sql: &str, date: NaiveDate) {
+        sqlx::query(sql)
+            .bind(date)
+            .execute(pool)
+            .await
+            .unwrap_or_else(|err| panic!("{sql}: {err}"));
+    }
+
+    async fn clean_link_fixtures(pool: &PgPool, date: NaiveDate) {
+        for sql in [
+            "DELETE FROM trains WHERE service_date = $1",
+            "DELETE FROM schedule_turnarounds WHERE service_date = $1",
+            "DELETE FROM schedule_services WHERE service_date = $1",
+            "DELETE FROM schedule_calling_points_full WHERE service_date = $1",
+            "DELETE FROM schedule_associations WHERE service_date = $1",
+            "DELETE FROM darwin_associations WHERE main_ssd = $1",
+            "DELETE FROM darwin_services WHERE ssd = $1",
+        ] {
+            exec(pool, sql, date).await;
+        }
+    }
+
+    /// A TRUST state for `uid`: `delay` minutes late, reported now.
+    async fn running(pool: &PgPool, uid: &str, date: NaiveDate, delay: i32) {
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO trains (train_uid, service_date) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(uid)
+        .bind(date)
+        .fetch_one(pool)
+        .await
+        .expect("insert trains");
+        sqlx::query(
+            "INSERT INTO train_current_state (trains_id, status, delay_minutes, event_time) \
+             VALUES ($1, 'en_route', $2, now())",
+        )
+        .bind(id)
+        .bind(delay)
+        .execute(pool)
+        .await
+        .expect("insert state");
+    }
+
+    /// DS-152: Darwin's live next-working link wins over the inference, an
+    /// association-only train takes its departure from its CIF origin call,
+    /// and a capped operator is not capped on an association link.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                predicted_start -- --ignored --test-threads=1"]
+    async fn a_darwin_association_link_is_preferred_over_the_inference() {
+        let reader = crate::test_support::connect().await;
+        let pool = crate::test_support::schedule_fixture_pool(&reader).await;
+        let date = NaiveDate::from_ymd_opt(2099, 7, 14).expect("date");
+        crate::test_support::assert_synthetic_date(date);
+        clean_link_fixtures(&pool, date).await;
+
+        let departs_at = Utc::now() + Duration::minutes(30);
+        // T1: inferred from PI00001 (on time), but Darwin links PD00001.
+        sqlx::query(
+            "INSERT INTO schedule_turnarounds (service_date, uid, prev_service_date, prev_uid, \
+             booked_turnaround_minutes, link, origin_tiploc, platform, departs_at) \
+             VALUES ($1, 'TD00001', $1, 'PI00001', 9, 'inferred', 'YORK', '3', $2)",
+        )
+        .bind(date)
+        .bind(departs_at)
+        .execute(&pool)
+        .await
+        .expect("insert turnaround");
+        // TL: a capped operator for the inference, not for Darwin.
+        exec(
+            &pool,
+            "INSERT INTO schedule_services (service_date, uid, mode, operator_atoc, stp) \
+             VALUES ($1, 'TD00001', 'train', 'TL', 'P'), ($1, 'TD00002', 'train', 'NT', 'P')",
+            date,
+        )
+        .await;
+        // T2: no inference at all; its CIF origin departs 30 minutes from
+        // now (London time).
+        let local = departs_at.with_timezone(&chrono_tz::Europe::London);
+        let origin_date = local.date_naive();
+        let day_offset = i16::try_from((origin_date - date).num_days()).expect("small");
+        sqlx::query(
+            "INSERT INTO schedule_calling_points_full (service_date, uid, seq, tiploc, kind, \
+             booked_departure, working_departure, day_offset) \
+             VALUES ($1, 'TD00002', 1, 'LEEDS', 'origin', $2, $2, $3)",
+        )
+        .bind(date)
+        .bind(local.time())
+        .bind(day_offset)
+        .execute(&pool)
+        .await
+        .expect("insert origin call");
+        // Darwin: PD00001 forms TD00001 (8-minute turnaround) and PD00002
+        // forms TD00002 (10 minutes).
+        exec(
+            &pool,
+            "INSERT INTO darwin_services (rid, uid, ssd, message_ts) VALUES \
+             ('209907148800001', 'TD00001', $1, now()), ('209907148800002', 'PD00001', $1, now()), \
+             ('209907148800003', 'TD00002', $1, now()), ('209907148800004', 'PD00002', $1, now())",
+            date,
+        )
+        .await;
+        exec(
+            &pool,
+            "INSERT INTO darwin_associations (main_rid, assoc_rid, tiploc, category, main_wta, \
+             assoc_wtd, main_ssd, message_ts) VALUES \
+             ('209907148800002', '209907148800001', 'YORK', 'NP', '10:00', '10:08', $1, now()), \
+             ('209907148800004', '209907148800003', 'LEEDS', 'NP', '10:00', '10:10', $1, now())",
+            date,
+        )
+        .await;
+        running(&pool, "PI00001", date, 0).await;
+        running(&pool, "PD00001", date, 16).await;
+        running(&pool, "PD00002", date, 20).await;
+
+        let t1 = ("TD00001".to_string(), date);
+        let t2 = ("TD00002".to_string(), date);
+        let predictions = predict_for_trains(&reader, &[t1.clone(), t2.clone()], Utc::now())
+            .await
+            .expect("predict");
+        let p1 = &predictions[&t1];
+        assert_eq!(p1.previous_working.train_uid, "PD00001");
+        assert_eq!(p1.previous_working.link, LINK_ASSOCIATION);
+        assert_eq!(p1.previous_working.booked_turnaround_minutes, 8);
+        // 16 late on 8: excess 8, late 12, high even for TL.
+        assert_eq!(p1.late_minutes, Some(12));
+        assert_eq!(p1.confidence, Confidence::High);
+        assert!((p1.departs_at - departs_at).num_milliseconds().abs() < 1000);
+        let p2 = &predictions[&t2];
+        assert_eq!(p2.previous_working.train_uid, "PD00002");
+        // 20 late on 10: excess 10, late 14.
+        assert_eq!(p2.late_minutes, Some(14));
+        assert_eq!(p2.confidence, Confidence::High);
+        assert!((p2.departs_at - departs_at).num_seconds().abs() < 60);
+
+        clean_link_fixtures(&pool, date).await;
+    }
+
+    /// DS-152, spec section 3a: an inferred link where either train joins or
+    /// divides that day is capped at medium.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                predicted_start -- --ignored --test-threads=1"]
+    async fn a_join_or_divide_caps_an_inferred_link_at_medium() {
+        let reader = crate::test_support::connect().await;
+        let pool = crate::test_support::schedule_fixture_pool(&reader).await;
+        let date = NaiveDate::from_ymd_opt(2099, 7, 15).expect("date");
+        crate::test_support::assert_synthetic_date(date);
+        clean_link_fixtures(&pool, date).await;
+
+        let departs_at = Utc::now() + Duration::minutes(30);
+        for (uid, prev) in [("TJ00001", "PJ00001"), ("TJ00002", "PJ00002")] {
+            sqlx::query(
+                "INSERT INTO schedule_turnarounds (service_date, uid, prev_service_date, \
+                 prev_uid, booked_turnaround_minutes, link, origin_tiploc, platform, departs_at) \
+                 VALUES ($1, $2, $1, $3, 9, 'inferred', 'YORK', '3', $4)",
+            )
+            .bind(date)
+            .bind(uid)
+            .bind(prev)
+            .bind(departs_at)
+            .execute(&pool)
+            .await
+            .expect("insert turnaround");
+            running(&pool, prev, date, 15).await;
+        }
+        // PJ00002, the second train's previous working, divides that day
+        // (as the associated train).
+        exec(
+            &pool,
+            "INSERT INTO schedule_associations (service_date, main_uid, assoc_uid, \
+             assoc_service_date, category, tiploc) \
+             VALUES ($1, 'MJ00009', 'PJ00002', $1, 'VV', 'DONC')",
+            date,
+        )
+        .await;
+
+        let t1 = ("TJ00001".to_string(), date);
+        let t2 = ("TJ00002".to_string(), date);
+        let predictions = predict_for_trains(&reader, &[t1.clone(), t2.clone()], Utc::now())
+            .await
+            .expect("predict");
+        assert_eq!(predictions[&t1].confidence, Confidence::High);
+        assert_eq!(predictions[&t2].confidence, Confidence::Medium);
+        assert_eq!(predictions[&t2].late_minutes, Some(10));
+
+        clean_link_fixtures(&pool, date).await;
     }
 }

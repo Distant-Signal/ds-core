@@ -54,6 +54,7 @@
 
 pub mod backlog;
 pub mod corpus;
+pub mod darwin;
 pub mod freshness;
 pub mod incidents;
 pub mod loops;

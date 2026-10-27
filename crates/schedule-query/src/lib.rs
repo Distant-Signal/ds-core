@@ -30,10 +30,13 @@
 //!   retrofitted.
 //! - **No Kafka consumer, no HTTP route, no database table or migration,
 //!   no dependency on `tokio`/`reqwest`/`sqlx`/`rdkafka`.**
-//! - **No CIF `AA` (Association) record, no freight-specific field, no
-//!   record type not already independently exercised against real
-//!   production CIF bytes** in the four validation sessions behind
+//! - **No freight-specific field, no record type not already independently
+//!   exercised against real production CIF bytes** in the four validation
+//!   sessions behind
 //!   `docs/superpowers/specs/2026-08-29-trust-schedule-delay-validation-findings.md`.
+//!   The one exception is CIF `AA` (association) records, decoded on their
+//!   own by [`associations`] (DS-152) for the join/divide cap on the
+//!   pre-departure prediction; the schedule index still ignores them.
 //!
 //! # What it is used for
 //!
@@ -69,6 +72,7 @@
 //! gate) for a human to re-check this crate's byte offsets against the
 //! real, full, untracked `timetable_full.zip` extract by hand.
 
+pub mod associations;
 pub mod compact;
 pub mod connections;
 pub mod interchange;
@@ -78,6 +82,10 @@ pub mod records;
 pub mod resolve;
 pub mod tiploc;
 
+pub use associations::{
+    ActiveAssociation, AssociationCategory, AssociationIndex, AssociationIndexBuilder,
+    AssociationRecord, parse_association_line,
+};
 pub use compact::SmallStr;
 pub use connections::{
     CallingPointForConnections, Connection, PassIndex, PassRow, build_connections,

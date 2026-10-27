@@ -64,6 +64,10 @@ pub mod streams {
     /// `transit-situations/1`. One stream per network, so the writer pins
     /// each to its network (transit spec §5, §9.1).
     pub const TRANSIT_METROLINK: &str = "ds:ingest:transit-metrolink";
+    /// darwin-relay (DS-152, off by default): `darwin-pushport/1`, the
+    /// Darwin Push Port's schedules, train status, associations and
+    /// deactivations in batches of a few seconds.
+    pub const DARWIN: &str = "ds:ingest:darwin";
     /// poller-transit-schedule for network `net`, Nottingham Express
     /// Transit (disabled by default): the same three schemas. NET has no
     /// published disruptions, so in practice only its daily timetable

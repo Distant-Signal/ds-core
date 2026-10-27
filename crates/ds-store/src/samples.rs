@@ -31,6 +31,9 @@ pub mod sources {
     pub const STATION_FULL_COVERAGE_SAMPLES: &str = "station-full-coverage-samples";
     /// `tracked-stop-boards/1` (pre-departure prediction, DS-127).
     pub const TRACKED_STOP_BOARDS: &str = "tracked-stop-boards";
+    /// `tracked-stop-arrival-boards/1` (pre-departure prediction phase 3,
+    /// DS-152).
+    pub const TRACKED_STOP_ARRIVAL_BOARDS: &str = "tracked-stop-arrival-boards";
 
     /// Every source above. The ingest-writer's `freshness_rls` tests check
     /// each against its RLS allow-list (db-grants.yaml `row_policies`), and
@@ -41,6 +44,7 @@ pub mod sources {
         FULL_COVERAGE_WINDOW_STATS,
         STATION_FULL_COVERAGE_SAMPLES,
         TRACKED_STOP_BOARDS,
+        TRACKED_STOP_ARRIVAL_BOARDS,
     ];
 }
 
@@ -213,6 +217,55 @@ pub async fn upsert_tracked_stop_boards_on(
         .bind(&crs)
         .bind(&polled_at)
         .bind(&departures)
+        .execute(conn)
+        .await?
+        .rows_affected())
+}
+
+/// Upserts a batch of targeted arrival boards for tracked trains' alighting
+/// stops (`tracked_stop_arrival_boards`, schema
+/// `tracked-stop-arrival-boards/1`, DS-152): the latest board per
+/// `(train_uid, service_date, crs)`, exactly like
+/// [`upsert_tracked_stop_boards_on`]. `guard` is the ordering guard on
+/// `polled_at`. Returns rows written.
+pub async fn upsert_tracked_stop_arrival_boards_on(
+    conn: &mut PgConnection,
+    boards: &[common::TrackedStopArrivalBoard],
+    guard: Option<&str>,
+) -> sqlx::Result<u64> {
+    if boards.is_empty() {
+        return Ok(0);
+    }
+    let batch = last_per_key(boards, |b| {
+        (b.train_uid.clone(), b.service_date, normalize_code(&b.crs))
+    });
+    let uids: Vec<&str> = batch.iter().map(|b| b.train_uid.as_str()).collect();
+    let dates: Vec<chrono::NaiveDate> = batch.iter().map(|b| b.service_date).collect();
+    let crs: Vec<String> = batch.iter().map(|b| normalize_code(&b.crs)).collect();
+    let polled_at: Vec<DateTime<Utc>> = batch.iter().map(|b| b.polled_at).collect();
+    let arrivals: Vec<serde_json::Value> = batch
+        .iter()
+        .map(|b| serde_json::to_value(&b.arrivals))
+        .collect::<Result<_, _>>()
+        .map_err(encode_error)?;
+    let sql = format!(
+        r"
+        INSERT INTO tracked_stop_arrival_boards (train_uid, service_date, crs, polled_at, arrivals)
+        SELECT * FROM UNNEST($1::text[], $2::date[], $3::text[], $4::timestamptz[], $5::jsonb[])
+        ON CONFLICT (train_uid, service_date, crs) DO UPDATE SET
+            polled_at = EXCLUDED.polled_at,
+            arrivals  = EXCLUDED.arrivals
+        WHERE (tracked_stop_arrival_boards.polled_at, tracked_stop_arrival_boards.arrivals)
+              IS DISTINCT FROM (EXCLUDED.polled_at, EXCLUDED.arrivals){}
+        ",
+        and_guard(guard)
+    );
+    Ok(sqlx::query(&sql)
+        .bind(&uids)
+        .bind(&dates)
+        .bind(&crs)
+        .bind(&polled_at)
+        .bind(&arrivals)
         .execute(conn)
         .await?
         .rows_affected())
@@ -1150,6 +1203,82 @@ mod db_tests {
         .expect("read");
         assert_eq!((crs.as_str(), platform.as_str()), ("YRK", "5"));
         sqlx::query("DELETE FROM tracked_stop_boards WHERE train_uid = 'TSB0001'")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+    }
+
+    fn arrival_board(polled_at: DateTime<Utc>, platform: &str) -> common::TrackedStopArrivalBoard {
+        common::TrackedStopArrivalBoard {
+            train_uid: "TSA0001".to_string(),
+            service_date: chrono::NaiveDate::from_ymd_opt(2099, 7, 12).expect("date"),
+            crs: "lds".to_string(),
+            polled_at,
+            arrivals: vec![common::StationArrival {
+                service_id: "LEEDS1234".to_string(),
+                operator: "NT".to_string(),
+                origin_crs: Some("YRK".to_string()),
+                scheduled: "11:00".to_string(),
+                estimated: "On time".to_string(),
+                is_cancelled: false,
+                platform: Some(platform.to_string()),
+                rsid: Some("NT123400".to_string()),
+            }],
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                upsert_tracked_stop_arrival_boards -- --ignored --test-threads=1`"]
+    async fn upsert_tracked_stop_arrival_boards_keeps_the_latest_board_per_stop() {
+        let pool = crate::test_support::schedule_fixture_pool(&test_pool().await).await;
+        sqlx::query("DELETE FROM tracked_stop_arrival_boards WHERE train_uid = 'TSA0001'")
+            .execute(&pool)
+            .await
+            .expect("cleanup");
+        let guard = "(tracked_stop_arrival_boards.polled_at IS NULL \
+                     OR EXCLUDED.polled_at >= tracked_stop_arrival_boards.polled_at)";
+        let now = Utc::now();
+        let mut conn = pool.acquire().await.expect("conn");
+        let written = upsert_tracked_stop_arrival_boards_on(
+            &mut conn,
+            &[arrival_board(now, "3")],
+            Some(guard),
+        )
+        .await
+        .expect("insert");
+        assert_eq!(written, 1);
+        // An older board applied late changes nothing.
+        let older = upsert_tracked_stop_arrival_boards_on(
+            &mut conn,
+            &[arrival_board(now - chrono::Duration::minutes(2), "4")],
+            Some(guard),
+        )
+        .await
+        .expect("older");
+        assert_eq!(older, 0);
+        // The same board twice in one batch: the last wins.
+        let newer = upsert_tracked_stop_arrival_boards_on(
+            &mut conn,
+            &[
+                arrival_board(now + chrono::Duration::seconds(20), "6"),
+                arrival_board(now + chrono::Duration::seconds(30), "5"),
+            ],
+            Some(guard),
+        )
+        .await
+        .expect("newer");
+        assert_eq!(newer, 1);
+        drop(conn);
+        let (crs, platform): (String, String) = sqlx::query_as(
+            "SELECT crs, arrivals->0->>'platform' FROM tracked_stop_arrival_boards \
+             WHERE train_uid = 'TSA0001'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read");
+        assert_eq!((crs.as_str(), platform.as_str()), ("LDS", "5"));
+        sqlx::query("DELETE FROM tracked_stop_arrival_boards WHERE train_uid = 'TSA0001'")
             .execute(&pool)
             .await
             .expect("cleanup");

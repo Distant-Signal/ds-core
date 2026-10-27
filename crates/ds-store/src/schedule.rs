@@ -16,9 +16,12 @@
 //! - [`services`]: the per-date `schedule_services` publish (plan 2a.2).
 //! - [`turnarounds`]: `schedule_turnarounds`, each train's previous working
 //!   (pre-departure prediction, DS-127).
+//! - [`associations`]: `schedule_associations`, the CIF joins and divides
+//!   in force per date (DS-152).
 //! - [`summaries`]: `line_train_summaries`' derivation and the population
 //!   upsert that writes them in its transaction (plan 2a.2).
 
+pub mod associations;
 mod markers;
 mod population;
 mod publish;

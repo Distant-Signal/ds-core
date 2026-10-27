@@ -479,6 +479,7 @@ pub enum PlatformBasis {
     Board,
     /// Tracking data ties the train (or the unit that will form it) to
     /// this platform (DS-180): see [`PlatformEvidence`] for what counts.
+    /// The Darwin Push Port's `conf` flag is one such source (DS-152).
     Confirmed,
 }
 
@@ -495,6 +496,10 @@ pub enum PlatformEvidenceSource {
     /// previous working) arrived at this platform, automatically reported,
     /// and has not moved since.
     PreviousWorkingArrival,
+    /// The Darwin Push Port marks this call's platform confirmed (`conf`,
+    /// DS-152): the operator confirmed it, and it is not suppressed from
+    /// public display.
+    DarwinConfirmed,
 }
 
 /// A platform tracking data ties to this stop, and where it came from.
@@ -621,12 +626,19 @@ pub struct JourneyStop {
     /// `platform_changed` compares against when both are known.
     pub booked_platform: Option<String>,
     /// What `display_platform` rests on (DS-127): `confirmed` when
-    /// `platform_evidence` is set (DS-180; `platform` is then that
+    /// `platform_evidence` is set (DS-180, or Darwin's confirmation, DS-152; `platform` is then that
     /// platform), else `board` when a live board shows `platform`, `booked`
     /// when only `booked_platform` is known (show it as provisional),
     /// `None` when none is. Set by
     /// `api::data::journey::apply_platform_basis`.
     pub platform_basis: Option<PlatformBasis>,
+    /// Darwin's Push Port has a platform for this stop but suppresses it
+    /// from public display (`platsup`, or a station CIS's `cisPlatsup`;
+    /// DS-152). That platform is not served: `platform` stays as any board
+    /// shows it (boards hide it too), and `displayPlatform` falls back to
+    /// the booked one. So "hidden" and "not allocated" differ: `true` here
+    /// means a platform exists but is not yet public.
+    pub platform_suppressed: bool,
     /// The platform to show (DS-127): the live `platform` when known, else
     /// `booked_platform`. A server-side convenience so every client applies
     /// the same precedence; `platform` and `booked_platform` keep their
@@ -635,7 +647,8 @@ pub struct JourneyStop {
     /// The platform tracking data confirms for this stop, if any (DS-180).
     /// Internal, never serialized: `apply_platform_basis` turns it into
     /// `platform`, `platform_changed` and `platform_basis: confirmed`. Set
-    /// by `api::data::platform_confirmation`.
+    /// by `api::data::platform_confirmation`, and from the Darwin Push
+    /// Port's confirmed flag by `api::data::pushport_platform` (DS-152).
     #[serde(skip)]
     pub platform_evidence: Option<PlatformEvidence>,
     /// LDBWS-style live status of this stop (`OnTime`, `Late`, `Cancelled`,
@@ -729,6 +742,7 @@ impl JourneyStop {
             booked_platform: cp.platform.clone(),
             // Both set by `apply_platform_basis`, after the board overlay.
             platform_basis: None,
+            platform_suppressed: false,
             display_platform: None,
             platform_evidence: None,
             live_status: None,

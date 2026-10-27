@@ -12,6 +12,7 @@ pub mod advisory_locks;
 pub mod backoff;
 pub mod config;
 pub mod corpus_inference;
+pub mod darwin;
 pub mod full_coverage_window;
 #[cfg(feature = "http")]
 pub mod gcp_external_account;
@@ -1341,6 +1342,53 @@ pub struct TrackedStopBoard {
 
 /// The stream schema name of [`TrackedStopBoard`] snapshots.
 pub const TRACKED_STOP_BOARDS_SCHEMA: &str = "tracked-stop-boards";
+
+/// One row of an LDBWS arrival board (`GetArrBoardWithDetails`), compacted
+/// to what the api's per-stop match needs (pre-departure prediction phase
+/// 3, DS-152). Stored inside `tracked_stop_arrival_boards.arrivals`, so
+/// absent values are omitted rather than stored as `null`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StationArrival {
+    /// LDBWS's board-relative `serviceID` (see
+    /// [`StationDeparture::service_id`]).
+    pub service_id: String,
+    /// `operatorCode` (ATOC).
+    pub operator: String,
+    /// The first `origin` CRS, when the board gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_crs: Option<String>,
+    /// `sta`: the scheduled (public) arrival, `"HH:MM"`.
+    pub scheduled: String,
+    /// `eta`: `"HH:MM"`, `"On time"`, `"Delayed"` or `"Cancelled"`.
+    pub estimated: String,
+    pub is_cancelled: bool,
+    /// The current platform for this arrival; `None` when absent, `null`
+    /// or hidden (the public board cannot tell those apart).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    /// The Retail Service ID, as on [`StationDeparture::rsid`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rsid: Option<String>,
+}
+
+/// One targeted LDBWS arrival board for a tracked train's alighting stop
+/// (DS-152): the arrivals at `crs` in a narrow window around that train's
+/// booked arrival there, polled by `poller-ldbws`'s tracked-stop lane and
+/// applied to `tracked_stop_arrival_boards` by ingest-writer (schema
+/// `tracked-stop-arrival-boards/1`, on the station-samples stream).
+/// Departure boards never list a terminating or set-down-only call; this is
+/// how such a stop gets a live platform without the Darwin Push Port.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackedStopArrivalBoard {
+    pub train_uid: String,
+    pub service_date: NaiveDate,
+    pub crs: String,
+    pub polled_at: DateTime<Utc>,
+    pub arrivals: Vec<StationArrival>,
+}
+
+/// The stream schema name of [`TrackedStopArrivalBoard`] snapshots.
+pub const TRACKED_STOP_ARRIVAL_BOARDS_SCHEMA: &str = "tracked-stop-arrival-boards";
 
 /// How old a [`StationSample`] may be (by `polled_at`) and still count as
 /// live data. The aggregator ignores older `station_samples` rows; see

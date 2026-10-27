@@ -1058,6 +1058,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "darwin-relay"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "common",
+ "dotenvy",
+ "flate2",
+ "health-http",
+ "ingest-stream",
+ "metrics",
+ "rdkafka",
+ "redis",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

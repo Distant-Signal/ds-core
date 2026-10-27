@@ -105,7 +105,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 10] = [
+pub const INGEST_STREAMS: [StreamDecl; 11] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -181,6 +181,17 @@ pub const INGEST_STREAMS: [StreamDecl; 10] = [
         entry_bytes: TRANSIT_PART_BYTES as u64,
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
     },
+    // darwin-relay (DS-152; off by default): one batch at most every
+    // DARWIN_BATCH_SECS (2,880 a day), each up to a thousand or so Push
+    // Port messages merged to unique rows, sized at 32 KB gzip (the rows'
+    // JSON compresses about 10:1; a batch over the 512 KiB cap is split,
+    // and the stream-memory alert catches a real overrun).
+    StreamDecl {
+        stream: crate::streams::DARWIN,
+        entries_per_day: 86_400 / DARWIN_BATCH_SECS,
+        entry_bytes: 32 * KIB,
+        bound: Bound::Covers(OUTAGE_TARGET),
+    },
     // poller-transit-schedule (net, Nottingham Express Transit; disabled
     // by default): no situations (BODS SIRI-SX has no Nottingham
     // participant, so the loop stays off), only a daily timetable of a
@@ -194,6 +205,11 @@ pub const INGEST_STREAMS: [StreamDecl; 10] = [
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
     },
 ];
+
+/// darwin-relay's batch length in seconds at the stream's budgeted rate
+/// (its `BATCH_MAX_SECS` default): a shorter one writes more entries than
+/// the `MAXLEN` covers for two hours.
+pub const DARWIN_BATCH_SECS: u64 = 30;
 
 /// The largest encoded body of a transit timetable part (transit spec
 /// §7.2): `Snapshot::add_capped`'s cap for the timetable, and the entry
@@ -320,6 +336,7 @@ mod tests {
                 ("ds:ingest:ioi-nir", 500),
                 ("ds:ingest:ioi-live", 1000),
                 ("ds:ingest:transit-metrolink", 320),
+                ("ds:ingest:darwin", 240),
                 ("ds:ingest:transit-net", 24),
             ]
         );
@@ -329,9 +346,9 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 373 MB in all (292 before transit-metrolink's 55 MB,
-        // tfl-stops' 8.5 MB and transit-net's 16.5 MB): under the 75% alert line (384 MiB), let alone
-        // 512.
+        // About 396 MB in all (292 before transit-metrolink's 55 MB,
+        // tfl-stops' 8.5 MB, transit-net's 16.5 MB and darwin's 22.6 MB):
+        // under the 75% alert line (384 MiB), let alone 512.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
         let stops = report
             .streams
@@ -341,17 +358,32 @@ mod tests {
         // (28 + 100) * (32 KiB + 512), twice: about 8.5 MB.
         assert_eq!(stops.bytes, 128 * (32 * 1024 + 512));
         assert!(stops.covers >= Duration::from_secs(7 * 24 * 3600));
-        let transit = &report.streams[report.streams.len() - 2];
+        let transit = report
+            .streams
+            .iter()
+            .find(|s| s.stream == "ds:ingest:transit-metrolink")
+            .unwrap();
         assert_eq!(transit.stream, "ds:ingest:transit-metrolink");
         assert!(transit.covers >= Duration::from_secs(24 * 3600));
         // (320 + 100) * (64 KiB + 512), twice: about 55 MB.
         assert_eq!(transit.bytes, 420 * (64 * 1024 + 512));
-        let net = report.streams.last().unwrap();
-        assert_eq!(net.stream, "ds:ingest:transit-net");
+        let net = report
+            .streams
+            .iter()
+            .find(|s| s.stream == "ds:ingest:transit-net")
+            .unwrap();
         assert!(net.covers >= Duration::from_secs(24 * 3600));
         // (24 + 100) * (64 KiB + 512), twice: about 16 MB (NET design §7).
         assert_eq!(net.bytes, 124 * (64 * 1024 + 512));
-        assert!(report.total_bytes < 380_000_000, "{report:#?}");
+        let darwin = report
+            .streams
+            .iter()
+            .find(|s| s.stream == "ds:ingest:darwin")
+            .unwrap();
+        // (240 + 100) * (32 KiB + 512), twice: about 23 MB.
+        assert_eq!(darwin.bytes, 340 * (32 * 1024 + 512));
+        assert_eq!(darwin.covers, OUTAGE_TARGET);
+        assert!(report.total_bytes < 400_000_000, "{report:#?}");
         assert_eq!(report.alert_bytes, 384 * 1024 * 1024);
         assert!(report.total_bytes > 250_000_000, "{report:#?}");
     }

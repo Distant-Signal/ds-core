@@ -345,6 +345,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         "poller-irish-rail-live",
         "poller-nir-stations",
         "poller-transit-metrolink",
+        "darwin-relay",
         "poller-transit-net",
         "ingest-writer",
         "ds-admin",
@@ -602,6 +603,12 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             "poller-transit-metrolink",
             "ds:ingest:transit-metrolink",
             "ds:ingest:tfl",
+        ),
+        // darwin-relay (DS-152): its own stream only.
+        (
+            "darwin-relay",
+            "ds:ingest:darwin",
+            "ds:ingest:station-samples",
         ),
         // Nottingham NET (NET design §7): neither network's user may
         // write the other's stream.
