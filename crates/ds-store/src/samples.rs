@@ -31,6 +31,17 @@ pub mod sources {
     pub const STATION_FULL_COVERAGE_SAMPLES: &str = "station-full-coverage-samples";
     /// `tracked-stop-boards/1` (pre-departure prediction, DS-127).
     pub const TRACKED_STOP_BOARDS: &str = "tracked-stop-boards";
+
+    /// Every source above. The ingest-writer's `freshness_rls` tests check
+    /// each against its RLS allow-list (db-grants.yaml `row_policies`), and
+    /// `every_source_constant_is_in_all` keeps this list complete.
+    pub const ALL: &[&str] = &[
+        STATION_SAMPLES,
+        FULL_COVERAGE_STATS,
+        FULL_COVERAGE_WINDOW_STATS,
+        STATION_FULL_COVERAGE_SAMPLES,
+        TRACKED_STOP_BOARDS,
+    ];
 }
 
 /// `GREATEST(<row_time>, <the feed's observed time>)`: a row's age when the
@@ -888,6 +899,49 @@ pub async fn upsert_full_coverage_line_stats_on(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The values of the `pub const NAME: &str = "...";` items in
+    /// `module`'s `pub mod sources { ... }` block.
+    fn source_literals(module: &str) -> Vec<&str> {
+        let start = module
+            .find("pub mod sources {")
+            .expect("a `pub mod sources` block");
+        let block = &module[start..];
+        let block = &block[..block.find("\n}").expect("the block's end")];
+        block
+            .lines()
+            .filter_map(|line| {
+                let rest = line.trim().strip_prefix("pub const ")?;
+                let (_, value) = rest.split_once(": &str = \"")?;
+                value.strip_suffix("\";")
+            })
+            .collect()
+    }
+
+    /// A new freshness source must join its `sources::ALL`, which the
+    /// ingest-writer's RLS tests check against the writer's allow-list (a
+    /// source missing there dead-letters its stream: 42501 is Poison).
+    #[test]
+    fn every_source_constant_is_in_all() {
+        for (file, module, all) in [
+            ("samples.rs", include_str!("samples.rs"), sources::ALL),
+            (
+                "samples/island_of_ireland.rs",
+                include_str!("samples/island_of_ireland.rs"),
+                island_of_ireland::sources::ALL,
+            ),
+        ] {
+            let literals = source_literals(module);
+            assert!(!literals.is_empty(), "{file}: no sources found");
+            for literal in &literals {
+                assert!(
+                    all.contains(literal),
+                    "{file}: {literal:?} is not in sources::ALL"
+                );
+            }
+            assert_eq!(literals.len(), all.len(), "{file}: sources::ALL");
+        }
+    }
 
     #[test]
     fn the_derived_resolved_at_is_the_feed_observed_at_fragment() {

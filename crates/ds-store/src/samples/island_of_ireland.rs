@@ -39,6 +39,9 @@ pub mod sources {
     pub const STATIONS_NIR: &str = "island_of_ireland_stations_nir";
     pub const LINES_GTFS: &str = "island_of_ireland_lines_gtfs";
     pub const LINES_NIR: &str = "island_of_ireland_lines_nir";
+
+    /// Every source above (as `crate::samples::sources::ALL`).
+    pub const ALL: &[&str] = &[STATIONS_GTFS, STATIONS_NIR, LINES_GTFS, LINES_NIR];
 }
 
 /// `network`'s `island_of_ireland_stations` freshness source.
