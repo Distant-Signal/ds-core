@@ -116,6 +116,41 @@ pub struct Movement {
     /// against, because it is a difference TRUST computed itself.
     #[serde(default)]
     pub timetable_variation: Option<String>,
+    /// TRUST's platform field, verbatim: two characters, right-justified
+    /// (`" 5"`, `"10"`), or blank where the location has no platforms.
+    /// Read through [`movement_reported_platform`], never directly.
+    #[serde(default)]
+    pub platform: Option<String>,
+    /// `AUTOMATIC` (from SMART, i.e. a train describer berth step) or
+    /// `MANUAL` (keyed in by staff). Gates [`movement_reported_platform`].
+    #[serde(default)]
+    pub event_source: Option<String>,
+}
+
+/// The platform a Movement shows the train at (DS-180), normalized
+/// (trimmed, upper case), or `None`.
+///
+/// Conservative on purpose: only an `AUTOMATIC` report counts, because
+/// its platform comes from the train describer berth the train actually
+/// stepped into (SMART maps berths to platforms); a `MANUAL` report's
+/// platform is keyed in and may simply repeat the timetable. Only an
+/// `ARRIVAL` or `DEPARTURE` counts: a `PASS` is not a call, so its
+/// platform is no use to a passenger. A blank, over-long or
+/// non-alphanumeric value is `None`, never a guess.
+pub fn movement_reported_platform(movement: &Movement) -> Option<String> {
+    let automatic = movement
+        .event_source
+        .as_deref()
+        .is_some_and(|source| source.trim().eq_ignore_ascii_case("AUTOMATIC"));
+    let call = matches!(movement.event_type.as_str(), "ARRIVAL" | "DEPARTURE");
+    if !automatic || !call {
+        return None;
+    }
+    let platform = movement.platform.as_deref()?.trim();
+    (!platform.is_empty()
+        && platform.len() <= 4
+        && platform.chars().all(|c| c.is_ascii_alphanumeric()))
+    .then(|| platform.to_ascii_uppercase())
 }
 
 /// A Movement's delay in minutes: TRUST's `timetable_variation` for
@@ -687,6 +722,8 @@ mod tests {
             toc_id: None,
             variation_status: status.map(str::to_string),
             timetable_variation: variation.map(str::to_string),
+            platform: None,
+            event_source: None,
         };
         assert_eq!(
             movement_delay_minutes(&movement(Some("LATE"), Some("12"))),
@@ -706,6 +743,52 @@ mod tests {
         );
         assert_eq!(
             movement_delay_minutes(&movement(Some("LATE"), Some("x"))),
+            None
+        );
+    }
+
+    /// DS-180: the platform is read from an automatic arrival or
+    /// departure only, trimmed; blank, manual, a pass or junk is `None`.
+    #[test]
+    fn movement_reported_platform_only_trusts_automatic_calls() {
+        let raw = r#"[{"header":{"msg_type":"0003"},"body":{
+            "train_id":"1","event_type":"ARRIVAL","event_source":"AUTOMATIC",
+            "platform":" 5","loc_stanox":"70261"}}]"#;
+        let messages = parse_batch(raw).unwrap();
+        let TrustMessage::Movement(arrival) = &messages[0] else {
+            panic!("{:?}", messages[0])
+        };
+        assert_eq!(movement_reported_platform(arrival), Some("5".to_string()));
+
+        let with = |event_type: &str, source: Option<&str>, platform: Option<&str>| Movement {
+            event_type: event_type.to_string(),
+            event_source: source.map(str::to_string),
+            platform: platform.map(str::to_string),
+            ..arrival.clone()
+        };
+        let reported = |m: Movement| movement_reported_platform(&m);
+        assert_eq!(
+            reported(with("DEPARTURE", Some("AUTOMATIC"), Some("4a"))),
+            Some("4A".to_string())
+        );
+        assert_eq!(
+            reported(with("DEPARTURE", Some("AUTOMATIC"), Some("10"))),
+            Some("10".to_string())
+        );
+        assert_eq!(reported(with("ARRIVAL", Some("MANUAL"), Some(" 5"))), None);
+        assert_eq!(reported(with("ARRIVAL", None, Some(" 5"))), None);
+        assert_eq!(reported(with("PASS", Some("AUTOMATIC"), Some(" 5"))), None);
+        assert_eq!(
+            reported(with("ARRIVAL", Some("AUTOMATIC"), Some("  "))),
+            None
+        );
+        assert_eq!(reported(with("ARRIVAL", Some("AUTOMATIC"), None)), None);
+        assert_eq!(
+            reported(with("ARRIVAL", Some("AUTOMATIC"), Some("5/6"))),
+            None
+        );
+        assert_eq!(
+            reported(with("ARRIVAL", Some("AUTOMATIC"), Some("12345"))),
             None
         );
     }

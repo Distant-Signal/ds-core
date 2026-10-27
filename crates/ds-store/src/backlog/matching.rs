@@ -159,6 +159,9 @@ struct BacklogRow {
     // Replayed onto `train_movement_events.gbtt_timestamp` so a backfilled
     // pin gets a public delay too, not just a live one.
     gbtt_timestamp: Option<DateTime<Utc>>,
+    // The berth-derived platform of a Movement row (DS-180), replayed onto
+    // `train_movement_events.platform`.
+    platform: Option<String>,
 }
 
 /// Decision 3 step 2: does any backlog row at `pin_origin_crs`, within
@@ -506,7 +509,7 @@ async fn fetch_backlog_history(
 ) -> anyhow::Result<Vec<BacklogRow>> {
     let rows = sqlx::query_as::<_, BacklogRow>(
         "SELECT train_id, service_date, msg_type, event_type, crs, planned_timestamp, \
-                actual_timestamp, variation_status, gbtt_timestamp \
+                actual_timestamp, variation_status, gbtt_timestamp, platform \
          FROM trust_event_backlog \
          WHERE train_id = $1 AND service_date = ANY($2) \
          ORDER BY received_at",
@@ -574,6 +577,10 @@ async fn replay_backlog_history(
                     toc_id: None,
                     variation_status: row.variation_status.clone(),
                     timetable_variation: None,
+                    // Read only for the state derivation; the stored
+                    // platform is copied onto the event below.
+                    platform: None,
+                    event_source: None,
                 };
                 let mut derived = journey::apply_movement(
                     &previous,
@@ -708,6 +715,7 @@ async fn replay_backlog_history(
             gbtt_timestamp: row.gbtt_timestamp,
             actual_timestamp: actual,
             variation_status,
+            platform: row.platform.clone(),
             raw_body: serde_json::json!({}),
             status: derived.status.clone(),
             last_reported_location: derived.last_reported_location.clone(),
@@ -3506,9 +3514,10 @@ mod db_tests {
         sqlx::query(
             "INSERT INTO trust_event_backlog \
                 (crs, train_uid, train_id, service_date, msg_type, event_type, \
-                 planned_timestamp, actual_timestamp, variation_status, dedup_key, gbtt_timestamp) \
-             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4, NULL), \
-                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'ON TIME', $7, $8)",
+                 planned_timestamp, actual_timestamp, variation_status, dedup_key, gbtt_timestamp, \
+                 platform) \
+             VALUES (NULL, $1, $2, $3, '0001', NULL, NULL, NULL, NULL, $4, NULL, NULL), \
+                    ($5, NULL, $2, $3, '0003', 'DEPARTURE', $6, $6, 'ON TIME', $7, $8, '14')",
         )
         .bind("C99999")
         .bind("TEST-BACKLOG-TRAIN-ID")
@@ -3553,8 +3562,8 @@ mod db_tests {
         .expect("read back tracked_trains joined to its resolved trains row");
         assert_eq!(resolution_status, "resolved");
         assert_eq!(train_uid, Some("C99999".to_string()));
-        let replayed_gbtt: Vec<Option<DateTime<Utc>>> = sqlx::query_scalar(
-            "SELECT m.gbtt_timestamp FROM train_movement_events m \
+        let replayed_gbtt: Vec<(Option<DateTime<Utc>>, Option<String>)> = sqlx::query_as(
+            "SELECT m.gbtt_timestamp, m.platform FROM train_movement_events m \
              JOIN train_subscriptions tt ON tt.trains_id = m.trains_id \
              WHERE tt.id = $1 AND m.msg_type = '0003'",
         )
@@ -3562,7 +3571,8 @@ mod db_tests {
         .fetch_all(&pool)
         .await
         .expect("read back the replayed movement");
-        assert_eq!(replayed_gbtt, vec![Some(gbtt)]);
+        // DS-180: the reported platform is replayed too.
+        assert_eq!(replayed_gbtt, vec![(Some(gbtt), Some("14".to_string()))]);
 
         // Real bug caught while running this plan's own end-to-end
         // verification (Task 13): this test's own fixture cleanup, as

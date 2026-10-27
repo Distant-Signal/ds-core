@@ -542,6 +542,7 @@ mod tests {
                 request_stop: false,
                 passing_point: false,
             },
+            platform_evidence: None,
         }
     }
 

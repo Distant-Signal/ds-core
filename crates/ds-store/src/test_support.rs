@@ -335,6 +335,7 @@ pub fn fixture_event(tracked_train_id: i64, dedup_key: &str) -> common::TrainMov
         next_calling_point: Some("CRE".to_string()),
         eta_next: None,
         eta_source: None,
+        platform: None,
     }
 }
 

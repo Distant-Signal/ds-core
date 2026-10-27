@@ -285,8 +285,9 @@ pub async fn upsert_train_movement_on(
     let inserted = sqlx::query(
         "INSERT INTO train_movement_events \
             (trains_id, dedup_key, msg_type, event_type, loc_stanox, loc_crs, \
-             planned_timestamp, actual_timestamp, variation_status, raw_body, gbtt_timestamp) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+             planned_timestamp, actual_timestamp, variation_status, raw_body, gbtt_timestamp, \
+             platform) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
          ON CONFLICT (trains_id, dedup_key) WHERE trains_id IS NOT NULL DO NOTHING",
     )
     .bind(trains_id)
@@ -300,6 +301,7 @@ pub async fn upsert_train_movement_on(
     .bind(&event.variation_status)
     .bind(&event.raw_body)
     .bind(event.gbtt_timestamp)
+    .bind(&event.platform)
     .execute(&mut *tx)
     .await?
     .rows_affected()
@@ -1261,6 +1263,7 @@ mod db_tests {
             delay_minutes: None,
             dedup_key: format!("h4-reopen-reinstate-{user_id}"),
             gbtt_timestamp: None,
+            platform: None,
         };
         let results = crate::backlog::ingest_shared_movements_batch(
             &pool,
@@ -1443,6 +1446,7 @@ mod db_tests {
             delay_minutes: None,
             dedup_key: dedup_key.to_string(),
             gbtt_timestamp: None,
+            platform: None,
         }
     }
 
@@ -1689,6 +1693,7 @@ mod db_tests {
             next_calling_point: None,
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
 
         upsert_train_event(&pool, &event)
@@ -1997,6 +2002,7 @@ mod db_tests {
             next_calling_point: None,
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
 
         upsert_train_movement(&pool, trains_id, &event)
@@ -2074,6 +2080,7 @@ mod db_tests {
             next_calling_point: None,
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
 
         upsert_train_movement(&pool, trains_id, &event)
@@ -2163,6 +2170,7 @@ mod db_tests {
             next_calling_point: None,
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         let xmin = |pool: PgPool| async move {
             let (xmin,): (String,) =
@@ -2264,6 +2272,7 @@ mod db_tests {
             next_calling_point: Some("BHM".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &newer_event)
             .await
@@ -2294,6 +2303,7 @@ mod db_tests {
             next_calling_point: Some("CRE".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &older_event)
             .await
@@ -2393,6 +2403,7 @@ mod db_tests {
             next_calling_point: Some("MKC".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &first_event)
             .await
@@ -2422,6 +2433,7 @@ mod db_tests {
             next_calling_point: Some("BHM".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &second_event)
             .await
@@ -2510,6 +2522,7 @@ mod db_tests {
             next_calling_point: Some("MKC".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &timed_event)
             .await
@@ -2542,6 +2555,7 @@ mod db_tests {
             next_calling_point: Some("MKC".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &no_timestamp_cancellation)
             .await
@@ -2613,6 +2627,7 @@ mod db_tests {
             next_calling_point: Some("MKC".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &timed_event)
             .await
@@ -2640,6 +2655,7 @@ mod db_tests {
             next_calling_point: Some("MKC".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &no_timestamp_event)
             .await
@@ -2683,6 +2699,7 @@ mod db_tests {
             next_calling_point: Some("YYY".to_string()),
             eta_next: None,
             eta_source: None,
+            platform: None,
         };
         upsert_train_movement(&pool, trains_id, &stale_timed_event)
             .await

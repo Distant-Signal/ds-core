@@ -1559,6 +1559,12 @@ pub struct TrainMovementEventMessage {
     pub actual_timestamp: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variation_status: Option<String>,
+    /// The platform an AUTOMATIC (berth-derived) arrival or departure
+    /// reports, from `trust_schema::schema::movement_reported_platform`
+    /// (DS-180); `None` otherwise. Stored as
+    /// `train_movement_events.platform`. Optional on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
     pub raw_body: serde_json::Value,
 
     // Derived current-state fields, computed by trust-consumer (Tasks
@@ -1621,6 +1627,12 @@ pub struct TrustBacklogEventMessage {
     /// wire both ways, so an older consumer or `api` interoperates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbtt_timestamp: Option<DateTime<Utc>>,
+    /// The platform a Movement reports, as on
+    /// [`TrainMovementEventMessage::platform`] (DS-180). Stored as
+    /// `trust_event_backlog.platform` and replayed onto
+    /// `train_movement_events.platform` when the train is matched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
 }
 
 /// Response body of `POST /private/trust-event-backlog`, shared by `api`

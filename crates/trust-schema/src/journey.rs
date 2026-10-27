@@ -273,6 +273,8 @@ mod tests {
             toc_id: None,
             variation_status: variation_status.map(str::to_string),
             timetable_variation: None,
+            platform: None,
+            event_source: None,
         }
     }
 
