@@ -617,6 +617,13 @@ pub struct JourneyStop {
     /// How many minutes late this stop is expected to be; `Some` only when
     /// `live_status` is `Late`.
     pub late_minutes: Option<i32>,
+    /// Whether this call is in a cancelled part of the train's run (DS-181):
+    /// the train is cancelled, terminated short before it, starts after it,
+    /// or is cancelled between two stations around it. Set with
+    /// `live_status` by the train-detail routes from the train's
+    /// `cancellation` (`api::data::cancellation`); `false` on a freshly built
+    /// stop. A skipped call (`stop_status` `Skipped`) is not counted here.
+    pub cancelled: bool,
     /// This train's row on the stop's current LDBWS departure board
     /// (Darwin's `delayReason`/`cancelReason`/`isCancelled`/`etd`), or
     /// `None` when there is no unique fresh match. Set by
@@ -694,6 +701,7 @@ impl JourneyStop {
             display_platform: None,
             live_status: None,
             late_minutes: None,
+            cancelled: false,
             board: None,
             timetable: StopTimetable::from_calling_point(cp, calling_point_date, departure_date),
         }

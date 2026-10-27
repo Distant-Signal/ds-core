@@ -9,7 +9,7 @@
 //!
 //! | `status`    | When | LDBWS equivalent |
 //! |-------------|------|------------------|
-//! | `Cancelled` | Darwin or TRUST says this call is skipped (`stopStatus: Skipped`), or the train is cancelled and has not reached this stop | `isCancelled: true` |
+//! | `Cancelled` | Darwin or TRUST says this call is skipped (`stopStatus: Skipped`), or the stop is in a cancelled part of the run (`cancelled`, see `api::data::cancellation`) and was not reported | `isCancelled: true` |
 //! | `Departed`  | A TRUST departure was reported here | `at`/`atd` = the actual time |
 //! | `Arrived`   | A TRUST arrival, but no departure yet (or the terminus) | `ata` = the actual time |
 //! | `NoReport`  | Not reported, but a LATER stop has been, so the train has passed it | `at: "No report"` |
@@ -28,9 +28,10 @@
 //!   later stop's working time (`journey::apply_delay_estimates`), not
 //!   Darwin's own forecasts, so recovery time between stops is not
 //!   modelled.
-//! - A train cancelled en route marks every stop it has not reached as
-//!   `Cancelled`, including a stop it passed without TRUST reporting it
-//!   (unless a later stop was reported, which gives `NoReport`).
+//! - Which stops are cancelled comes from TRUST's cancellation,
+//!   reinstatement and change-of-origin messages (`api::data::cancellation`):
+//!   a train with no location for its cancellation marks every stop after
+//!   the last one it reported as `Cancelled`.
 //! - There is no `Delayed` (late, with no estimate): a stop with no
 //!   estimate is `Scheduled`.
 
@@ -60,8 +61,10 @@ pub fn train_has_live_data(status: Option<&str>, stops: &[JourneyStop]) -> bool 
             .any(|s| s.actual_arrival.is_some() || s.actual_departure.is_some())
 }
 
-/// Sets `live_status` and `late_minutes` on every stop.
-pub fn apply(stops: &mut [JourneyStop], cancelled: bool, live: bool) {
+/// Sets `live_status` and `late_minutes` on every stop. A stop's own
+/// `cancelled` flag (set first, from the train's cancellation) makes it
+/// `Cancelled` unless TRUST reported it.
+pub fn apply(stops: &mut [JourneyStop], live: bool) {
     let last_reached = stops
         .iter()
         .rposition(|s| s.actual_arrival.is_some() || s.actual_departure.is_some());
@@ -72,10 +75,12 @@ pub fn apply(stops: &mut [JourneyStop], cancelled: bool, live: bool) {
             (LiveStopStatus::Departed, None)
         } else if stop.actual_arrival.is_some() {
             (LiveStopStatus::Arrived, None)
+        } else if stop.cancelled {
+            // Before `NoReport`: a stop in a cancelled section between two
+            // stations is cancelled even though a later stop was reached.
+            (LiveStopStatus::Cancelled, None)
         } else if last_reached.is_some_and(|reached| reached > index) {
             (LiveStopStatus::NoReport, None)
-        } else if cancelled {
-            (LiveStopStatus::Cancelled, None)
         } else if !live {
             (LiveStopStatus::Scheduled, None)
         } else {
@@ -154,6 +159,7 @@ mod tests {
             display_platform: None,
             live_status: None,
             late_minutes: None,
+            cancelled: false,
             board: None,
             timetable: StopTimetable {
                 working_minute_arrival: at(scheduled),
@@ -186,7 +192,7 @@ mod tests {
         stops[3].estimated_departure = at("08:35"); // Late by 5
         stops[4].estimated_departure = at("08:40"); // OnTime
         stops[5].stop_status = StopStatus::Skipped; // Cancelled
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![
@@ -201,10 +207,13 @@ mod tests {
     }
 
     #[test]
-    fn a_cancelled_train_cancels_only_the_stops_it_has_not_reached() {
+    fn a_cancelled_stop_is_cancelled_unless_it_was_reported() {
         let mut stops = vec![stop("08:00"), stop("08:10"), stop("08:20")];
         stops[0].actual_departure = at("08:00");
-        apply(&mut stops, true, true);
+        for stop in &mut stops[1..] {
+            stop.cancelled = true;
+        }
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![
@@ -216,15 +225,32 @@ mod tests {
     }
 
     #[test]
+    fn a_cancelled_section_before_a_reported_stop_is_cancelled_not_no_report() {
+        let mut stops = vec![stop("08:00"), stop("08:10"), stop("08:20")];
+        stops[0].actual_departure = at("08:00");
+        stops[1].cancelled = true;
+        stops[2].actual_arrival = at("08:21");
+        apply(&mut stops, true);
+        assert_eq!(
+            statuses(&stops),
+            vec![
+                (Some(LiveStopStatus::Departed), None),
+                (Some(LiveStopStatus::Cancelled), None),
+                (Some(LiveStopStatus::Arrived), None),
+            ]
+        );
+    }
+
+    #[test]
     fn no_live_data_or_no_estimate_is_scheduled_not_on_time() {
         let mut stops = vec![stop("08:00")];
-        apply(&mut stops, false, false);
+        apply(&mut stops, false);
         assert_eq!(
             statuses(&stops),
             vec![(Some(LiveStopStatus::Scheduled), None)]
         );
         let mut stops = vec![stop("08:00")];
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![(Some(LiveStopStatus::Scheduled), None)]
@@ -236,7 +262,7 @@ mod tests {
         let mut stops = vec![stop("08:00")];
         stops[0].timetable.working_minute_departure = None;
         stops[0].estimated_arrival = at("08:03");
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![(Some(LiveStopStatus::Late), Some(3))]
@@ -252,10 +278,10 @@ mod tests {
         stops[0].timetable.working_minute_departure = None;
         stops[0].timetable.public_arrival = at("06:22");
         stops[0].estimated_arrival = at("06:21");
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(statuses(&stops), vec![(Some(LiveStopStatus::OnTime), None)]);
         stops[0].estimated_arrival = at("06:24");
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![(Some(LiveStopStatus::Late), Some(2))]
@@ -269,7 +295,7 @@ mod tests {
         let mut stops = vec![stop("17:02")];
         stops[0].timetable.public_arrival = at("17:01");
         stops[0].estimated_departure = at("17:05");
-        apply(&mut stops, false, true);
+        apply(&mut stops, true);
         assert_eq!(
             statuses(&stops),
             vec![(Some(LiveStopStatus::Late), Some(3))]

@@ -34,6 +34,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 /// The bundled glossary, `code -> description`.
@@ -151,15 +152,50 @@ async fn upsert_one(pool: &PgPool, reason: &common::TrainReasonMessage) -> anyho
     Ok(result.rows_affected() > 0)
 }
 
-/// The stored codes for one train.
+/// One stored TRUST message for a train (a `train_reasons` row), with its
+/// location resolved through `stanox_crs`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct StoredReasons {
-    pub cancel_code: Option<String>,
-    pub change_of_origin_code: Option<String>,
+pub struct ReasonEvent {
+    /// The delay attribution code; `None` when the message carried none
+    /// (stored as `''`, and always so for a `0005`).
+    pub code: Option<String>,
+    /// `0002` only: `AT ORIGIN`, `EN ROUTE`, `ON CALL` or `OUT OF PLAN`.
+    pub canx_type: Option<String>,
+    pub loc_stanox: Option<String>,
+    /// `stanox_crs`'s TIPLOC and CRS for `loc_stanox`, when it has a row.
+    pub loc_tiploc: Option<String>,
+    pub loc_crs: Option<String>,
+    /// The message's own corrected timestamp: when the cancellation,
+    /// reinstatement or change of origin was made.
+    pub event_at: Option<DateTime<Utc>>,
 }
 
-/// The stored codes of every train in `trains_ids`, keyed by `trains.id`.
-/// A train with none is absent. One query for the whole batch.
+/// The stored messages for one train: the latest of each type.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StoredReasons {
+    /// `0002` Cancellation.
+    pub cancellation: Option<ReasonEvent>,
+    /// `0005` Reinstatement (DS-181).
+    pub reinstatement: Option<ReasonEvent>,
+    /// `0006` Change of Origin.
+    pub change_of_origin: Option<ReasonEvent>,
+}
+
+impl StoredReasons {
+    /// The `0002` code, if the stored cancellation carried one.
+    pub fn cancel_code(&self) -> Option<&str> {
+        self.cancellation.as_ref()?.code.as_deref()
+    }
+
+    /// The `0006` code, if the stored change of origin carried one.
+    pub fn change_of_origin_code(&self) -> Option<&str> {
+        self.change_of_origin.as_ref()?.code.as_deref()
+    }
+}
+
+/// The stored messages of every train in `trains_ids`, keyed by
+/// `trains.id`, each location resolved through `stanox_crs`. A train with
+/// none is absent. One query for the whole batch.
 pub async fn reasons_for_trains(
     pool: &PgPool,
     trains_ids: &[i64],
@@ -167,22 +203,48 @@ pub async fn reasons_for_trains(
     if trains_ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let rows: Vec<(i64, String, String)> = sqlx::query_as(
-        "SELECT trains_id, msg_type, reason_code FROM train_reasons WHERE trains_id = ANY($1)",
+    let rows: Vec<ReasonEventRow> = sqlx::query_as(
+        "SELECT r.trains_id, r.msg_type, NULLIF(BTRIM(r.reason_code), '') AS code, \
+                r.canx_type, r.loc_stanox, s.tiploc AS loc_tiploc, s.crs AS loc_crs, \
+                r.event_at \
+         FROM train_reasons r \
+         LEFT JOIN stanox_crs s ON s.stanox = r.loc_stanox \
+         WHERE r.trains_id = ANY($1)",
     )
     .bind(trains_ids)
     .fetch_all(pool)
     .await?;
     let mut out: HashMap<i64, StoredReasons> = HashMap::new();
-    for (trains_id, msg_type, code) in rows {
-        let entry = out.entry(trains_id).or_default();
-        match msg_type.as_str() {
-            "0002" => entry.cancel_code = Some(code),
-            "0006" => entry.change_of_origin_code = Some(code),
+    for row in rows {
+        let event = ReasonEvent {
+            code: row.code,
+            canx_type: row.canx_type.map(|t| t.trim().to_string()),
+            loc_stanox: row.loc_stanox,
+            loc_tiploc: row.loc_tiploc,
+            loc_crs: row.loc_crs,
+            event_at: row.event_at,
+        };
+        let entry = out.entry(row.trains_id).or_default();
+        match row.msg_type.as_str() {
+            "0002" => entry.cancellation = Some(event),
+            "0005" => entry.reinstatement = Some(event),
+            "0006" => entry.change_of_origin = Some(event),
             _ => {}
         }
     }
     Ok(out)
+}
+
+#[derive(sqlx::FromRow)]
+struct ReasonEventRow {
+    trains_id: i64,
+    msg_type: String,
+    code: Option<String>,
+    canx_type: Option<String>,
+    loc_stanox: Option<String>,
+    loc_tiploc: Option<String>,
+    loc_crs: Option<String>,
+    event_at: Option<DateTime<Utc>>,
 }
 
 /// The five wire fields, computed from a train's status and stored codes.
@@ -195,10 +257,15 @@ pub struct ReasonFields {
     pub change_of_origin_reason: Option<String>,
 }
 
-pub fn reason_fields(status: Option<&str>, stored: Option<StoredReasons>) -> ReasonFields {
+pub fn reason_fields(status: Option<&str>, stored: Option<&StoredReasons>) -> ReasonFields {
     let cancelled = status == Some("cancelled");
-    let stored = stored.unwrap_or_default();
-    let cancel_reason_code = stored.cancel_code.filter(|_| cancelled);
+    let cancel_reason_code = stored
+        .and_then(StoredReasons::cancel_code)
+        .filter(|_| cancelled)
+        .map(str::to_string);
+    let change_of_origin_reason_code = stored
+        .and_then(StoredReasons::change_of_origin_code)
+        .map(str::to_string);
     ReasonFields {
         cancelled,
         cancel_reason: cancel_reason_code
@@ -206,12 +273,11 @@ pub fn reason_fields(status: Option<&str>, stored: Option<StoredReasons>) -> Rea
             .and_then(reason_text)
             .map(str::to_string),
         cancel_reason_code,
-        change_of_origin_reason: stored
-            .change_of_origin_code
+        change_of_origin_reason: change_of_origin_reason_code
             .as_deref()
             .and_then(reason_text)
             .map(str::to_string),
-        change_of_origin_reason_code: stored.change_of_origin_code,
+        change_of_origin_reason_code,
     }
 }
 
@@ -239,12 +305,16 @@ mod tests {
 
     #[test]
     fn a_cancel_reason_is_served_only_while_cancelled() {
-        let stored = || {
-            Some(StoredReasons {
-                cancel_code: Some("TG".to_string()),
-                change_of_origin_code: Some("YI".to_string()),
-            })
+        let coded = |code: &str| ReasonEvent {
+            code: Some(code.to_string()),
+            ..ReasonEvent::default()
         };
+        let stored = StoredReasons {
+            cancellation: Some(coded("TG")),
+            reinstatement: None,
+            change_of_origin: Some(coded("YI")),
+        };
+        let stored = || Some(&stored);
         let cancelled = reason_fields(Some("cancelled"), stored());
         assert!(cancelled.cancelled);
         assert_eq!(cancelled.cancel_reason_code.as_deref(), Some("TG"));
@@ -263,6 +333,15 @@ mod tests {
         assert_eq!(running.change_of_origin_reason_code.as_deref(), Some("YI"));
 
         assert_eq!(reason_fields(None, None), ReasonFields::default());
+
+        // An uncoded cancellation (stored as '') serves no code.
+        let uncoded = StoredReasons {
+            cancellation: Some(ReasonEvent::default()),
+            ..StoredReasons::default()
+        };
+        let fields = reason_fields(Some("cancelled"), Some(&uncoded));
+        assert!(fields.cancelled);
+        assert_eq!(fields.cancel_reason_code, None);
     }
 }
 
@@ -299,13 +378,17 @@ mod db_tests {
             .await
             .unwrap();
         let stored = reasons_for_trains(&pool, &[trains_id]).await.unwrap();
+        let train = &stored[&trains_id];
+        assert_eq!(train.cancel_code(), Some("TG"));
+        assert_eq!(train.change_of_origin_code(), Some("YI"));
+        let cancellation = train.cancellation.as_ref().unwrap();
+        assert_eq!(cancellation.canx_type.as_deref(), Some("AT ORIGIN"));
+        assert_eq!(cancellation.loc_stanox.as_deref(), Some("87701"));
         assert_eq!(
-            stored.get(&trains_id),
-            Some(&StoredReasons {
-                cancel_code: Some("TG".to_string()),
-                change_of_origin_code: Some("YI".to_string()),
-            })
+            cancellation.event_at,
+            Some("2031-05-06T08:00:00Z".parse().unwrap())
         );
+        assert_eq!(train.reinstatement, None);
 
         // A newer message replaces it (a re-cancellation after a reinstatement).
         upsert_reasons(
@@ -320,7 +403,29 @@ mod db_tests {
         .await
         .unwrap();
         let stored = reasons_for_trains(&pool, &[trains_id]).await.unwrap();
-        assert_eq!(stored[&trains_id].cancel_code.as_deref(), Some("M8"));
+        assert_eq!(stored[&trains_id].cancel_code(), Some("M8"));
+
+        // A reinstatement (DS-181) and an uncoded cancellation are kept:
+        // no code, but their location and time.
+        upsert_reasons(
+            &pool,
+            &[
+                message(Some("TRSN01"), "0005", "", "2031-05-06T09:30:00Z"),
+                message(Some("TRSN01"), "0002", "  ", "2031-05-06T09:45:00Z"),
+            ],
+        )
+        .await
+        .unwrap();
+        let stored = reasons_for_trains(&pool, &[trains_id]).await.unwrap();
+        let train = &stored[&trains_id];
+        let reinstatement = train.reinstatement.as_ref().unwrap();
+        assert_eq!(reinstatement.code, None);
+        assert_eq!(reinstatement.loc_stanox.as_deref(), Some("87701"));
+        assert_eq!(train.cancel_code(), None);
+        assert_eq!(
+            train.cancellation.as_ref().unwrap().event_at,
+            Some("2031-05-06T09:45:00Z".parse().unwrap())
+        );
 
         // Without a uid: found by TRUST train_id once the row carries it;
         // dropped (not an error) before then.
@@ -340,7 +445,7 @@ mod db_tests {
             .unwrap();
         assert_eq!(upsert_reasons(&pool, &[no_uid]).await.unwrap(), 1);
         let stored = reasons_for_trains(&pool, &[second]).await.unwrap();
-        assert_eq!(stored[&second].cancel_code.as_deref(), Some("XA"));
+        assert_eq!(stored[&second].cancel_code(), Some("XA"));
 
         // Retention follows `trains`.
         sqlx::query("DELETE FROM trains WHERE train_uid IN ('TRSN01', 'TRSN02')")

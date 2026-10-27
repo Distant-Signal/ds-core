@@ -218,6 +218,12 @@ pub struct Reinstatement {
     /// timestamp slot of the `0005` dedup key in both consumers.
     #[serde(default)]
     pub reinstatement_timestamp: Option<String>,
+    /// The STANOX the train runs again from (named in the same production
+    /// sample). Read by `trust-backlog-consumer`, which stores it in
+    /// `train_reasons` so a train reinstated part-way along its route reads
+    /// "cancelled between" rather than wholly running (DS-181).
+    #[serde(default)]
+    pub loc_stanox: Option<String>,
 }
 
 #[derive(Debug, Clone)]

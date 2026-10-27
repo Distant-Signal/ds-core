@@ -370,8 +370,8 @@ pub fn population_json_multi(entries: &[(&str, &str, &str)]) -> serde_json::Valu
     )
 }
 
-/// A TRUST cancellation (`0002`) or change-of-origin (`0006`) reason for
-/// headcode `9TR0000Q26` on 2031-05-06, at `at` (RFC 3339).
+/// A TRUST cancellation (`0002`), reinstatement (`0005`) or change-of-origin
+/// (`0006`) row for headcode `9TR0000Q26` on 2031-05-06, at `at` (RFC 3339).
 pub fn train_reason_message(
     uid: Option<&str>,
     msg_type: &str,

@@ -9,7 +9,7 @@
 //!
 //! | `status`    | When | LDBWS equivalent |
 //! |-------------|------|------------------|
-//! | `Cancelled` | Darwin or TRUST says this call is skipped (`stopStatus: Skipped`), or the train is cancelled and has not reached this stop | `isCancelled: true` |
+//! | `Cancelled` | Darwin or TRUST says this call is skipped (`stopStatus: Skipped`), or the stop is in a cancelled part of the run (`cancelled`, see `data::cancellation`) and was not reported | `isCancelled: true` |
 //! | `Departed`  | A TRUST departure was reported here | `at`/`atd` = the actual time |
 //! | `Arrived`   | A TRUST arrival, but no departure yet (or the terminus) | `ata` = the actual time |
 //! | `NoReport`  | Not reported, but a LATER stop has been, so the train has passed it | `at: "No report"` |
@@ -28,9 +28,10 @@
 //!   later stop's working time (`journey::apply_delay_estimates`), not
 //!   Darwin's own forecasts, so recovery time between stops is not
 //!   modelled.
-//! - A train cancelled en route marks every stop it has not reached as
-//!   `Cancelled`, including a stop it passed without TRUST reporting it
-//!   (unless a later stop was reported, which gives `NoReport`).
+//! - Which stops are cancelled comes from TRUST's cancellation,
+//!   reinstatement and change-of-origin messages (`data::cancellation`): a
+//!   train with no location for its cancellation marks every stop after
+//!   the last one it reported as `Cancelled`.
 //! - There is no `Delayed` (late, with no estimate): a stop with no
 //!   estimate is `Scheduled`.
 
