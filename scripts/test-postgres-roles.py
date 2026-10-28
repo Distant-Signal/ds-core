@@ -64,7 +64,13 @@ would queue behind every long reader and block everything queued behind it
 bites: with one row policy dropped, that run must fail with a lock timeout
 (55P03), and the next run, without the reader, puts the policy back.
 
-Needs psql (15+, for \getenv) and sqlx-cli on PATH. Example, as CI runs it:
+Needs psql (15+, for \getenv) and sqlx-cli on PATH. COMMAND is anything;
+CI runs one pass of scripts/db-tests.py from its prebuilt test archive:
+
+  scripts/test-postgres-roles.py --mode existing -- \
+      uv run --no-sync scripts/db-tests.py run existing --archive-file A
+
+and locally a plain cargo command works as well:
 
   scripts/test-postgres-roles.py -- cargo test -p api -- --ignored \
       --test-threads=1 --skip corpus::db_tests ...
