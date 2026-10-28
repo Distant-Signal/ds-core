@@ -111,6 +111,51 @@ class VerbsTest(unittest.TestCase):
         sql = "SELECT id FROM journeys WHERE user_id = $1 FOR UPDATE"
         self.assertEqual(verbs(sql), {"journeys": "SU"})
 
+    def test_for_update_of_locks_only_the_named_alias(self) -> None:
+        """The aggregator's archive lock: OF t locks trains, not a subquery's table.
+
+        2026-10-28 report: it flagged train_subscriptions U because the
+        NOT EXISTS subquery reads it.
+        """
+        sql = (
+            "SELECT t.id FROM trains t WHERE t.id = ANY($3)"
+            " AND t.service_date < CURRENT_DATE - ($4 || $5)::interval"
+            " AND ((NOT EXISTS (SELECT $6 FROM train_subscriptions s"
+            " WHERE s.trains_id = t.id))"
+            " OR EXISTS (SELECT $7 FROM train_subscriptions s"
+            " WHERE s.trains_id = t.id))"
+            " ORDER BY t.id FOR UPDATE OF t"
+        )
+        self.assertEqual(verbs(sql), {"trains": "SU", "train_subscriptions": "S"})
+
+    def test_for_update_of_by_table_name_and_list(self) -> None:
+        """OF takes table names or aliases; an unnamed FROM item is not locked."""
+        sql = (
+            "SELECT 1 FROM trains JOIN train_subscriptions s ON s.trains_id = trains.id"
+            " JOIN stations st ON st.crs = $1"
+            " FOR NO KEY UPDATE OF trains, s SKIP LOCKED"
+        )
+        self.assertEqual(
+            verbs(sql), {"trains": "SU", "train_subscriptions": "SU", "stations": "S"}
+        )
+
+    def test_plain_for_update_skips_subqueries(self) -> None:
+        """Without OF, only the locking level's FROM items are locked."""
+        sql = (
+            "SELECT id FROM journeys WHERE id IN (SELECT trains_id FROM trains)"
+            " FOR KEY SHARE"
+        )
+        self.assertEqual(verbs(sql), {"journeys": "SU", "trains": "S"})
+
+    def test_for_update_inside_a_cte(self) -> None:
+        """A lock in a CTE body locks that body's tables only."""
+        sql = (
+            "WITH c AS (SELECT id FROM trains WHERE id = $1 FOR UPDATE)"
+            " UPDATE train_subscriptions SET trains_id = c.id FROM c"
+            " WHERE train_subscriptions.id = $2"
+        )
+        self.assertEqual(verbs(sql), {"trains": "SU", "train_subscriptions": "SU"})
+
     def test_comments_strings_schema_and_unknown_names(self) -> None:
         """Literals and comments cannot fake a table; public. is stripped."""
         sql = (

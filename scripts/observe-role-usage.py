@@ -20,11 +20,15 @@ grants in charts/distant-signal/files/db-grants.yaml:
 
 Verbs: S (read: FROM, JOIN, USING, a subquery, and the WHERE/RETURNING of
 an UPDATE or DELETE), I (INSERT), U (UPDATE; also INSERT ... ON CONFLICT DO
-UPDATE and SELECT ... FOR UPDATE/SHARE, which need it), D (DELETE).
+UPDATE and SELECT ... FOR UPDATE/SHARE, which need it: only on the tables
+that level of the query locks, its `OF` list if it has one), D (DELETE).
 pg_stat_statements text is normalised ($1 for constants) and may be
 truncated by track_activity_query_size; only names listed in db-grants.yaml
 count, so catalog queries and functions are ignored. It is a heuristic,
-not a SQL parser: the per-role DB suites in CI stay the real proof.
+not a SQL parser: the per-role DB suites in CI stay the real proof. It
+works per table, not per column: a column grant (`{privileges: U, columns:
+[...]}`) counts as the table's verb, so a statement that writes a column
+outside the grant is not flagged here (the narrowed CI suites catch that).
 
 --database-url connects with psql in a read-only transaction. Production is
 reached through kubectl instead, so --from-file reads the same rows saved
@@ -81,7 +85,10 @@ _UPDATE = re.compile(
 _DELETE = re.compile(r"\bdelete\s+from\s+(?:only\s+)?" + _IDENT)
 _READ = re.compile(r"\b(?:from|join|using)\s+(?:only\s+|lateral\s+)?" + _IDENT)
 _FROM_LIST_MORE = re.compile(r"\s*(?:as\s+)?(?:[a-z_][a-z0-9_]*\s*)?,\s*" + _IDENT)
-_LOCK = re.compile(r"\bfor\s+(?:no\s+key\s+)?(?:update|share)\b")
+_LOCK = re.compile(
+    r"\bfor\s+(?:(?:no\s+key\s+)?update|(?:key\s+)?share)\b"
+    r"(?:\s+of\s+([a-z_][a-z0-9_]*(?:\s*,\s*[a-z_][a-z0-9_]*)*))?"
+)
 _CONFLICT_UPDATE = re.compile(r"\bon\s+conflict\b[^;]*?\bdo\s+update\b")
 
 
@@ -120,6 +127,71 @@ def _reads(text: str, add: Callable[[str, str], None]) -> None:
             position = more.end()
 
 
+def _scope(text: str, position: int) -> str:
+    """Return the query level `position` is in, its subqueries blanked out.
+
+    The level is the innermost parenthesis around `position` (or the whole
+    statement); text inside parentheses nested in it becomes spaces.
+    """
+    depth = 0
+    start = 0
+    for i in range(position - 1, -1, -1):
+        if text[i] == ")":
+            depth += 1
+        elif text[i] == "(":
+            if depth == 0:
+                start = i + 1
+                break
+            depth -= 1
+    chars: list[str] = []
+    depth = 0
+    for char in text[start:]:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                break
+            depth -= 1
+        chars.append(char if depth == 0 and char not in "()" else " ")
+    return "".join(chars)
+
+
+def _read_tables(text: str) -> set[str]:
+    """Return every table `_reads` finds in `text`."""
+    found: set[str] = set()
+
+    def add(table: str, _verb: str) -> None:
+        found.add(table)
+
+    _reads(text, add)
+    return found
+
+
+def _locked(text: str, known: set[str]) -> set[str]:
+    """Return the tables a FOR UPDATE/SHARE clause locks.
+
+    Only its own query level's FROM items, not a subquery's (an EXISTS in
+    the WHERE), and only those named by `OF`, by table name or alias.
+    """
+    locked: set[str] = set()
+    for lock in _LOCK.finditer(text):
+        scope = _scope(text, lock.start())
+        read = _read_tables(scope)
+        names = lock.group(1)
+        if names is None:
+            locked |= read & known
+            continue
+        for name in (n.strip() for n in names.split(",")):
+            if name in read:
+                locked.add(name)
+                continue
+            alias = re.compile(_IDENT + r"\s+(?:as\s+)?" + re.escape(name) + r"\b")
+            locked.update(
+                m.group(1) for m in alias.finditer(scope) if m.group(1) in read
+            )
+    return locked & known
+
+
 def verbs_by_table(sql: str, known: Iterable[str]) -> dict[str, set[str]]:
     """Return {table: verbs} for one statement, limited to `known` tables."""
     text = normalise(sql)
@@ -133,11 +205,9 @@ def verbs_by_table(sql: str, known: Iterable[str]) -> dict[str, set[str]]:
 
     _writes(text, add)
     _reads(text, add)
-    if _LOCK.search(text):
-        # SELECT ... FOR UPDATE/SHARE needs UPDATE on the locked tables.
-        for table, verbs in list(used.items()):
-            if "S" in verbs:
-                add(table, "U")
+    # SELECT ... FOR UPDATE/SHARE needs UPDATE on the tables it locks.
+    for table in _locked(text, known_set):
+        add(table, "U")
     return used
 
 

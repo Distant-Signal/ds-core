@@ -38,6 +38,17 @@ def _raw() -> dict[str, Any]:
     return raw
 
 
+RELEASE_D = ("api", "aggregator", "enricher", "notifier")
+
+
+def _raw_observed(*kinds: str) -> dict[str, Any]:
+    """Return the committed YAML with `kinds` (default: release D's four) observed."""
+    raw = _raw()
+    for kind in kinds or RELEASE_D:
+        raw["roles"][kind]["status"] = "observed"
+    return raw
+
+
 class RepoFilesTest(unittest.TestCase):
     """The committed YAML and SQL."""
 
@@ -48,17 +59,18 @@ class RepoFilesTest(unittest.TestCase):
             status = gen.main(["check"])
         self.assertEqual(status, 0, out.getvalue())
 
-    def test_phase_0b_creates_observed_members_of_app_and_the_narrow_ones(self) -> None:
-        """Phase 0b: the DB services; the writer and phases 2-4: narrow roles."""
+    def test_every_created_role_is_narrow_since_release_d(self) -> None:
+        """Release D (5.5 step 3, 2026-10-28): no role is an app member any more."""
         model = gen.load()
         status = {r.key: r.status for r in model.created()}
         self.assertEqual(
             status,
             {
-                "aggregator": "observed",
-                "api": "observed",
-                "enricher": "observed",
-                "notifier": "observed",
+                # Release D (DS-118): the phase 0b DB services.
+                "aggregator": "narrow",
+                "api": "narrow",
+                "enricher": "narrow",
+                "notifier": "narrow",
                 # Security review M1 (2026-10-08): narrow, not an app member.
                 "writer": "narrow",
                 "incidents": "narrow",
@@ -230,8 +242,9 @@ class RenderTest(unittest.TestCase):
 
         Narrow roles get their grants: 2a's schedule_reference, 2b's
         stations exactly its two tables, and 3b's TRUST roles exactly theirs.
+        (Release D narrowed the four phase 0b roles; observed again here.)
         """
-        sql = gen.render(gen.load())
+        sql = gen.render(gen.parse(_raw_observed()))
         self.assertIn("('api', 'observed')", sql)
         # Security review M1: no member may SET ROLE to app or a group.
         self.assertEqual(sql.count("'GRANT %I TO %I WITH INHERIT TRUE, SET FALSE'"), 2)
@@ -337,8 +350,9 @@ class RenderTest(unittest.TestCase):
     def test_the_enricher_targets_column_update_on_incidents(self) -> None:
         """Q3 prep: table SELECT plus UPDATE on the extraction columns only.
 
-        While the enricher is observed nothing renders for it; narrowed (5.5)
-        the same YAML gives exactly those rows and no table-wide UPDATE.
+        While the enricher is observed nothing renders for it; narrowed (5.5,
+        the committed YAML since release D) the same rows give exactly those
+        grants and no table-wide UPDATE.
         """
         extraction = [
             "extracted_at",
@@ -354,11 +368,11 @@ class RenderTest(unittest.TestCase):
             if g.role == "enricher"
         ]
         self.assertEqual(grants, [("S", ()), ("U", tuple(extraction))])
-        self.assertNotIn("'enricher', 'UPDATE'", gen.render(model))
+        self.assertNotIn(
+            "'enricher', 'UPDATE'", gen.render(gen.parse(_raw_observed("enricher")))
+        )
 
-        raw = _raw()
-        raw["roles"]["enricher"]["status"] = "narrow"
-        sql = gen.render(gen.parse(raw))
+        sql = gen.render(model)
         self.assertIn("('incidents', 'enricher', 'SELECT', '')", sql)
         self.assertNotIn("('incidents', 'enricher', 'UPDATE', '')", sql)
         updates = sorted(
@@ -536,10 +550,10 @@ class AppRevokesTest(unittest.TestCase):
 
     def test_what_an_observed_role_is_granted_cannot_be_revoked(self) -> None:
         """An observed role has nothing of its own: it would lose the grant."""
-        raw = _raw()
+        raw = _raw_observed()
         raw["app_revokes"]["tables"] = ["users"]
         self.assert_refused(raw, "granted to observed role(s) ['api']")
-        raw = _raw()
+        raw = _raw_observed()
         raw["functions"]["analyze_publish_keys(text)"]["grants"].append("notifier")
         self.assert_refused(raw, "granted to observed role(s) ['notifier']")
 
