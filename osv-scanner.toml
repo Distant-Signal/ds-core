@@ -33,3 +33,22 @@ name). Our own crates are on zip 9. gtfs-structures still requires zip \
 Accepted by the user 2026-10-19; at expiry, bump gtfs-structures and \
 `cargo update -p zip` if a release has shipped, otherwise review again.\
 """
+
+[[IgnoredVulns]]
+id = "GHSA-m665-v7pm-7grj"
+ignoreUntil = 2026-12-18T00:00:00Z
+reason = """\
+zip 8.6.0 ("zip cloaking": local and central headers that disagree, so \
+two parsers see different entries; file overwrite or RCE on extraction). \
+The only zip 8 user is gtfs-structures 0.50 (via poller-irish-rail-gtfs), \
+which only reads entries in memory (Gtfs::from_reader); nothing in this \
+workspace extracts to disk. Our own crates are on zip 9.0.5, which is \
+fixed. Residual risk: the poller's zip-bomb pre-check reads the archive \
+with zip 9 while gtfs-structures parses it with zip 8, so a crafted \
+archive could pass the check and inflate differently. The feed is \
+fetched over HTTPS from Irish Rail's published GTFS, a trusted source. \
+Even gtfs-structures 0.52 still requires zip ^8.6. Accepted by the user \
+2026-10-30 (DS-189), with DS-58 (move off zip 8). At expiry, bump \
+gtfs-structures and `cargo update -p zip` if a release has shipped, \
+otherwise review again.\
+"""
