@@ -6,7 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use common::tfl_routes::{DIRECTIONS, MAX_STOPS, NAME_MAX_CHARS, TflLineRoute, is_line_id};
+use common::tfl_routes::{
+    DIRECTIONS, MAX_STOPS, NAME_MAX_CHARS, TflLineRoute, is_line_id, step_seconds_fit,
+};
 use common::tfl_stops::is_stop_id;
 use serde::Serialize;
 use sqlx::PgConnection;
@@ -27,6 +29,10 @@ pub struct Replaced {
     pub invalid: Vec<String>,
     /// The stored routes are from a newer snapshot: nothing was written.
     pub skipped_older: bool,
+    /// Routes written without their running times (DS-206), as
+    /// `line/direction`: `step_seconds` that do not fit the stops
+    /// ([`common::tfl_routes::step_seconds_fit`]).
+    pub untimed: Vec<String>,
 }
 
 /// One row as the insert's `jsonb_to_recordset` reads it.
@@ -37,6 +43,7 @@ struct Row<'a> {
     route_index: i16,
     name: String,
     stop_ids: &'a [String],
+    step_seconds: Option<&'a [Option<u32>]>,
 }
 
 fn valid(route: &TflLineRoute) -> bool {
@@ -91,12 +98,23 @@ pub async fn replace(
         let index = next_index
             .entry((&route.line_id, &route.direction))
             .or_default();
+        let step_seconds = route.step_seconds.as_deref();
+        let step_seconds = match step_seconds {
+            Some(steps) if !step_seconds_fit(steps, route.stop_ids.len()) => {
+                outcome
+                    .untimed
+                    .push(format!("{}/{}", route.line_id, route.direction));
+                None
+            }
+            steps => steps,
+        };
         rows.push(Row {
             line_id: &route.line_id,
             direction: &route.direction,
             route_index: *index,
             name: route.name.trim().chars().take(NAME_MAX_CHARS).collect(),
             stop_ids: &route.stop_ids,
+            step_seconds,
         });
         *index = index.saturating_add(1);
     }
@@ -110,11 +128,19 @@ pub async fn replace(
         .rows_affected();
     outcome.written = sqlx::query(
         r"
-        INSERT INTO tfl_line_routes (line_id, direction, route_index, name, stop_ids, fetched_at)
+        INSERT INTO tfl_line_routes
+            (line_id, direction, route_index, name, stop_ids, step_seconds, fetched_at)
         SELECT r.line_id, r.direction, r.route_index, r.name,
-               ARRAY(SELECT jsonb_array_elements_text(r.stop_ids)), $2
+               ARRAY(SELECT jsonb_array_elements_text(r.stop_ids)),
+               CASE WHEN jsonb_typeof(r.step_seconds) = 'array' THEN
+                   ARRAY(SELECT NULLIF(step.value, 'null'::jsonb)::INTEGER
+                         FROM jsonb_array_elements(r.step_seconds) WITH ORDINALITY AS step(value, n)
+                         ORDER BY step.n)
+               END,
+               $2
         FROM jsonb_to_recordset($1::jsonb) AS r(
-            line_id TEXT, direction TEXT, route_index SMALLINT, name TEXT, stop_ids JSONB)
+            line_id TEXT, direction TEXT, route_index SMALLINT, name TEXT, stop_ids JSONB,
+            step_seconds JSONB)
         ",
     )
     .bind(sqlx::types::Json(&rows))
@@ -142,6 +168,7 @@ mod tests {
             direction: direction.into(),
             name: "Test".into(),
             stop_ids: stops.iter().map(|s| (*s).to_owned()).collect(),
+            step_seconds: None,
         }
     }
 
