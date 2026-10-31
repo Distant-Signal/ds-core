@@ -77,6 +77,7 @@ pub mod compact;
 pub mod connections;
 pub mod interchange;
 pub mod line_membership;
+pub mod operator;
 pub mod parse;
 pub mod records;
 pub mod resolve;
@@ -100,6 +101,7 @@ pub use line_membership::{
     DayTrains, LineDue, LineMembers, LineScope, Membership, MembershipLine, RunDirection, classify,
     line_due,
 };
+pub use operator::{ATOC_SPACE, DsOperator, OperatorId, OperatorMask};
 pub use parse::{ScheduleRecordParser, parse_schedule_records};
 pub use records::{
     Activity, BasicSchedule, CallingPoint, CallingPointKind, DestinationDeparture, HalfMinuteTime,

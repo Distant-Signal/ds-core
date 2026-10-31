@@ -20,6 +20,7 @@
 
 use std::collections::HashMap;
 
+use crate::operator::OperatorId;
 use chrono::NaiveDate;
 
 /// Every other TIPLOC sharing this one's CRS code -- a different platform
@@ -89,6 +90,19 @@ pub struct FixedLink {
     pub valid_to: String,
     /// Raw 7-char '0'/'1' bitmask, Monday-first.
     pub days_mask: String,
+    /// Who runs it (planner operator filtering spec §5.1): `LT` for a
+    /// `TUBE` link and a `TRANSFER` between a Tube pair, a DS operator for
+    /// an attributed `METRO` link, else [`OperatorId::UNKNOWN`]. Set by
+    /// the api's graph build; a parsed row starts unknown.
+    pub operator: OperatorId,
+}
+
+impl FixedLink {
+    /// A walk (`WALK`): never blocked by an operator filter.
+    #[must_use]
+    pub fn is_walk(&self) -> bool {
+        self.mode == "WALK"
+    }
 }
 
 /// Indexes ALF fixed-link rows (`(from_crs, link)`) by the CRS they leave
@@ -484,6 +498,7 @@ mod tests {
         days_mask: &str,
     ) -> FixedLink {
         FixedLink {
+            operator: OperatorId::UNKNOWN,
             mode: "TUBE".to_string(),
             to_crs: to_crs.to_string(),
             minutes,

@@ -16,6 +16,7 @@
 
 use std::collections::HashMap;
 
+use crate::operator::OperatorId;
 use chrono::NaiveTime;
 
 /// One calling point, reduced to exactly what `build_connections` needs --
@@ -103,6 +104,11 @@ pub struct Connection {
     /// A passenger may get off this train at `to_tiploc`. When `false` the
     /// searches carry on along the train but never record an arrival there.
     pub can_alight: bool,
+    /// Who runs it (planner operator filtering spec §6.2): the schedule's
+    /// ATOC code, or a transit network's DS operator. [`build_connections`]
+    /// leaves it [`OperatorId::UNKNOWN`]; the api's graph build fills it
+    /// from `schedule_services`.
+    pub operator: OperatorId,
 }
 
 fn minutes_from_midnight(time: NaiveTime, day_offset: u8) -> u32 {
@@ -318,6 +324,7 @@ fn build<'a>(
             arrived_at = Some((i + 1 + offset, arrival_min));
             connections.push((
                 Connection {
+                    operator: OperatorId::UNKNOWN,
                     uid: uid.to_string(),
                     from_tiploc: from.tiploc.clone(),
                     to_tiploc: to.tiploc.clone(),
