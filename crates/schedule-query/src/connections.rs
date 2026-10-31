@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 use crate::operator::OperatorId;
 use chrono::NaiveTime;
+use compact_str::CompactString;
 
 /// One calling point, reduced to exactly what `build_connections` needs --
 /// deliberately NOT [`crate::records::CallingPoint`] itself, so this module
@@ -73,11 +74,21 @@ impl From<&crate::records::CallingPoint> for CallingPointForConnections {
 /// Judgment Call 4 for why this app needs no separate synthetic id, unlike
 /// the sibling `Distant-Signal-MCP` project's own `scheduleId`/
 /// `sourceScheduleId` split).
+///
+/// **Memory.** The three codes are [`CompactString`]s, held inline up to
+/// 24 bytes (every UID, TIPLOC and transit stop code is shorter), so a
+/// connection is 96 bytes with no allocation of its own: half what three
+/// `String`s cost, which made room for `TfL`'s 230,000 connections a
+/// weekday (docs/superpowers/specs/2026-10-30-tfl-transit-design.md §11.2;
+/// the rail day went from about 104 MB to 64 MB in
+/// `crates/api/tests/transit_planning_budget.rs`). The struct's padding
+/// after the two `bool`s still has room for a 2-byte field (the planner
+/// operator filtering spec's `OperatorId`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
-    pub uid: String,
-    pub from_tiploc: String,
-    pub to_tiploc: String,
+    pub uid: CompactString,
+    pub from_tiploc: CompactString,
+    pub to_tiploc: CompactString,
     /// Minutes from midnight of the schedule's OWN service date --
     /// `day_offset * 1440 + minutes-since-midnight`, so a connection whose
     /// calling points fall on a later calendar day than the schedule's own
@@ -325,9 +336,9 @@ fn build<'a>(
             connections.push((
                 Connection {
                     operator: OperatorId::UNKNOWN,
-                    uid: uid.to_string(),
-                    from_tiploc: from.tiploc.clone(),
-                    to_tiploc: to.tiploc.clone(),
+                    uid: CompactString::from(uid),
+                    from_tiploc: CompactString::from(from.tiploc.as_str()),
+                    to_tiploc: CompactString::from(to.tiploc.as_str()),
                     departure_min,
                     arrival_min,
                     working_departure_min,
@@ -694,5 +705,17 @@ mod tests {
         assert_eq!(passes.passes_at("CMDNJN")[0].position, 0);
         assert_eq!(passes.passes_at("WATFDJ")[0].position, 1);
         assert!(passes.passes_at("MKC").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::Connection;
+
+    /// The planner's memory budget (the `TfL` transit design §11.2) assumes
+    /// it: three inline codes, four minutes, two flags.
+    #[test]
+    fn a_connection_is_96_bytes() {
+        assert_eq!(size_of::<Connection>(), 96);
     }
 }
