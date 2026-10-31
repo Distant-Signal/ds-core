@@ -20,11 +20,13 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
-use common::transit::status::{NetworkLine, concerns_line, is_current, upcoming_period};
+use common::transit::status::{
+    NetworkLine, concerns_line, is_current, line_effects, upcoming_period,
+};
 use common::transit::{
     Period, SituationScope, TransitConsequence, TransitSituation, situations_freshness_source,
 };
-use common::{LineStatus, UpcomingDisruption};
+use common::{LineStatus, Severity, UpcomingDisruption, severity_rank};
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -237,40 +239,201 @@ type SituationRow = (
     String,
 );
 
-/// Every stored situation of the network, by id.
+const SITUATION_COLUMNS: &str = "situation_id, version, progress, planned, reason, summary, \
+     description, info_url, validity, publication, consequences, line_ids, stop_ids, scope";
+
+/// Every stored situation of the network still listed (not ended), by id.
 pub async fn stored_situations(pool: &PgPool, network: &str) -> Result<Vec<TransitSituation>> {
-    let rows: Vec<SituationRow> = sqlx::query_as(
-        "SELECT situation_id, version, progress, planned, reason, summary, description, \
-                info_url, validity, publication, consequences, line_ids, stop_ids, scope \
-           FROM transit_situations WHERE network = $1 ORDER BY situation_id",
-    )
+    let rows: Vec<SituationRow> = sqlx::query_as(&format!(
+        "SELECT {SITUATION_COLUMNS} FROM transit_situations \
+          WHERE network = $1 AND ended_at IS NULL ORDER BY situation_id"
+    ))
     .bind(network)
     .fetch_all(pool)
     .await
     .context("transit situations")?;
-    Ok(rows
-        .into_iter()
-        .map(|r| TransitSituation {
-            situation_id: r.0,
-            version: r.1,
-            progress: r.2,
-            planned: r.3,
-            reason: r.4,
-            summary: r.5,
-            description: r.6,
-            info_url: r.7,
-            validity: r.8.0,
-            publication: r.9.0,
-            consequences: r.10.0,
-            line_ids: r.11,
-            stop_ids: r.12,
-            scope: match r.13.as_str() {
-                "line" => SituationScope::Line,
-                "stop" => SituationScope::Stop,
-                _ => SituationScope::Network,
-            },
-        })
-        .collect())
+    Ok(rows.into_iter().map(situation_from_row).collect())
+}
+
+fn situation_from_row(r: SituationRow) -> TransitSituation {
+    TransitSituation {
+        situation_id: r.0,
+        version: r.1,
+        progress: r.2,
+        planned: r.3,
+        reason: r.4,
+        summary: r.5,
+        description: r.6,
+        info_url: r.7,
+        validity: r.8.0,
+        publication: r.9.0,
+        consequences: r.10.0,
+        line_ids: r.11,
+        stop_ids: r.12,
+        scope: match r.13.as_str() {
+            "line" => SituationScope::Line,
+            "stop" => SituationScope::Stop,
+            _ => SituationScope::Network,
+        },
+    }
+}
+
+/// One stored situation, listed or ended, with its times.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredSituation {
+    pub situation: TransitSituation,
+    pub first_seen_at: DateTime<Utc>,
+    /// The snapshot that last listed it.
+    pub observed_at: DateTime<Utc>,
+    /// When the snapshots stopped listing it; `None` while listed.
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+/// The network's situation `situation_id`, ended or not (an ended one is
+/// kept for a week, `transit::situations::ENDED_KEPT_FOR`).
+pub async fn stored_situation(
+    pool: &PgPool,
+    network: &str,
+    situation_id: &str,
+) -> Result<Option<StoredSituation>> {
+    use sqlx::{FromRow, Row};
+    let Some(row) = sqlx::query(&format!(
+        "SELECT {SITUATION_COLUMNS}, first_seen_at, observed_at, ended_at \
+           FROM transit_situations WHERE network = $1 AND situation_id = $2"
+    ))
+    .bind(network)
+    .bind(situation_id)
+    .fetch_optional(pool)
+    .await
+    .context("transit situation")?
+    else {
+        return Ok(None);
+    };
+    // The situation's columns come first, so the tuple reads them by
+    // position; the times follow.
+    Ok(Some(StoredSituation {
+        situation: situation_from_row(SituationRow::from_row(&row).context("situation row")?),
+        first_seen_at: row.try_get("first_seen_at")?,
+        observed_at: row.try_get("observed_at")?,
+        ended_at: row.try_get("ended_at")?,
+    }))
+}
+
+/// Where a situation stands, for its own page: the incident pages' words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SituationState {
+    /// Listed, and in effect now.
+    Active,
+    /// Listed, and a validity period starts later.
+    Upcoming,
+    /// No longer listed, closed, or every validity period is over.
+    Ended,
+}
+
+/// A line a situation changes the status of, and to what.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AffectedLine {
+    /// The public id (`metrolink:blue`).
+    pub id: String,
+    pub name: String,
+    /// A `common::Severity` number.
+    pub severity: u8,
+    pub description: String,
+}
+
+/// One situation as its page shows it: the listing's fields, where it
+/// stands, the lines it changes and how, and its times.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SituationDetailView {
+    #[serde(flatten)]
+    pub situation: SituationView,
+    pub state: SituationState,
+    /// Its worst status over the lines it affects (`Information` when it
+    /// changes none: a stop notice). A `common::Severity` number.
+    pub severity: u8,
+    pub severity_description: String,
+    /// Worst first, then by name. Empty for a stop notice or a
+    /// network-wide one.
+    pub affects: Vec<AffectedLine>,
+    pub first_seen_at: DateTime<Utc>,
+    /// The snapshot that last listed it.
+    pub updated_at: DateTime<Utc>,
+    /// When the snapshots stopped listing it (so it is `ended`).
+    pub ended_at: Option<DateTime<Utc>>,
+    /// For `ended` while still listed: when its last validity period ended.
+    pub validity_ended_at: Option<DateTime<Utc>>,
+}
+
+/// `stored`'s page at `now`, against the network's `lines`.
+pub fn detail_view(
+    network: &str,
+    stored: &StoredSituation,
+    lines: &[NetworkLine],
+    now: DateTime<Utc>,
+) -> SituationDetailView {
+    let situation = &stored.situation;
+    let next_start = situation
+        .validity
+        .iter()
+        .filter(|p| p.start > now)
+        .map(|p| p.start)
+        .min();
+    let open = situation.progress == "open";
+    let (state, starts, validity_ended_at) = if stored.ended_at.is_some() {
+        (SituationState::Ended, None, None)
+    } else if is_current(situation, now) {
+        (SituationState::Active, None, None)
+    } else if open && next_start.is_some() {
+        (SituationState::Upcoming, next_start, None)
+    } else {
+        let last_end = situation
+            .validity
+            .iter()
+            .map(|p| p.end)
+            .collect::<Option<Vec<_>>>()
+            .and_then(|ends| ends.into_iter().max());
+        (SituationState::Ended, None, last_end)
+    };
+    let effects = line_effects(situation, lines);
+    let mut affected: Vec<(Severity, &NetworkLine)> = lines
+        .iter()
+        .filter_map(|line| effects.get(&line.line_id).map(|severity| (*severity, line)))
+        .collect();
+    affected.sort_by(|(a, a_line), (b, b_line)| {
+        severity_rank(*b)
+            .cmp(&severity_rank(*a))
+            .then_with(|| a_line.name.cmp(&b_line.name))
+    });
+    let worst = affected
+        .first()
+        .map_or(Severity::Information, |(severity, _)| *severity);
+    SituationDetailView {
+        situation: view(network, situation, starts),
+        state,
+        severity: worst as u8,
+        severity_description: worst.description().to_owned(),
+        affects: affected
+            .into_iter()
+            .map(|(severity, line)| AffectedLine {
+                id: format!("{network}:{}", line.line_id),
+                name: line.name.clone(),
+                severity: severity as u8,
+                description: severity.description().to_owned(),
+            })
+            .collect(),
+        first_seen_at: stored.first_seen_at,
+        updated_at: stored.observed_at,
+        ended_at: stored.ended_at,
+        validity_ended_at,
+    }
+}
+
+/// The network's lines in its active timetable, with their stations.
+pub async fn network_lines(pool: &PgPool, network: &str) -> Result<Vec<NetworkLine>> {
+    super::situations::network_lines(pool, network).await
 }
 
 fn view(
@@ -399,6 +562,107 @@ mod tests {
             full_coverage_stats: None,
             full_coverage_availability: common::FullCoverageAvailability::not_enabled_default(),
         }
+    }
+
+    fn stored(validity: Vec<Period>, ended_at: Option<DateTime<Utc>>) -> StoredSituation {
+        StoredSituation {
+            situation: TransitSituation {
+                situation_id: "S1".to_owned(),
+                version: None,
+                progress: "open".to_owned(),
+                planned: false,
+                reason: None,
+                summary: "Delays".to_owned(),
+                description: None,
+                info_url: None,
+                validity,
+                publication: Vec::new(),
+                consequences: vec![TransitConsequence {
+                    condition: Some("delayed".to_owned()),
+                    severity: Some("severe".to_owned()),
+                    all_lines: false,
+                    line_ids: vec!["blue".to_owned(), "green".to_owned()],
+                    unmapped_line_refs: Vec::new(),
+                    stop_ids: Vec::new(),
+                    advice: None,
+                }],
+                line_ids: vec!["blue".to_owned(), "green".to_owned()],
+                stop_ids: Vec::new(),
+                scope: SituationScope::Line,
+            },
+            first_seen_at: at(6),
+            observed_at: at(11),
+            ended_at,
+        }
+    }
+
+    fn lines() -> Vec<NetworkLine> {
+        ["green", "blue", "red"]
+            .into_iter()
+            .map(|id| NetworkLine {
+                line_id: id.to_owned(),
+                name: format!("{id} line"),
+                stations: BTreeSet::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_detail_says_where_the_situation_stands() {
+        let from = |h: u32, to: Option<u32>| Period {
+            start: at(h),
+            end: to.map(at),
+        };
+        let active = detail_view(
+            "metrolink",
+            &stored(vec![from(6, None)], None),
+            &lines(),
+            at(12),
+        );
+        assert_eq!(active.state, SituationState::Active);
+        assert_eq!(active.severity, Severity::SevereDelays as u8);
+        assert_eq!(active.severity_description, "Severe Delays");
+        let affected: Vec<&str> = active.affects.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(affected, ["metrolink:blue", "metrolink:green"], "by name");
+        assert_eq!(active.updated_at, at(11));
+
+        let upcoming = detail_view(
+            "metrolink",
+            &stored(vec![from(20, Some(22))], None),
+            &lines(),
+            at(12),
+        );
+        assert_eq!(upcoming.state, SituationState::Upcoming);
+        assert_eq!(upcoming.situation.starts, Some(at(20)));
+
+        let over = detail_view(
+            "metrolink",
+            &stored(vec![from(6, Some(9))], None),
+            &lines(),
+            at(12),
+        );
+        assert_eq!(over.state, SituationState::Ended);
+        assert_eq!(over.validity_ended_at, Some(at(9)));
+        assert_eq!(over.ended_at, None);
+
+        let ended = detail_view(
+            "metrolink",
+            &stored(vec![from(6, None)], Some(at(10))),
+            &lines(),
+            at(12),
+        );
+        assert_eq!(ended.state, SituationState::Ended);
+        assert_eq!(ended.ended_at, Some(at(10)));
+        assert_eq!(ended.validity_ended_at, None);
+
+        // A stop notice changes no line: Information.
+        let mut notice = stored(vec![from(6, None)], None);
+        notice.situation.reason = Some("equipment:liftFailure".to_owned());
+        notice.situation.stop_ids = vec!["9400ZZMAPIC".to_owned()];
+        notice.situation.scope = SituationScope::Stop;
+        let notice = detail_view("metrolink", &notice, &lines(), at(12));
+        assert!(notice.affects.is_empty());
+        assert_eq!(notice.severity, Severity::Information as u8);
     }
 
     #[test]

@@ -209,8 +209,13 @@ fn affected<'a>(
     (pool.into_iter().filter(|l| serves(l)).collect(), true)
 }
 
-/// Each line's worst status from `situation`, keyed by local line id.
-fn line_effects(situation: &TransitSituation, lines: &[NetworkLine]) -> BTreeMap<String, Severity> {
+/// Each line's worst status from `situation`, keyed by local line id: the
+/// lines it changes the status of, as [`derive`] does (none for a stop
+/// notice or a network-scope situation).
+pub fn line_effects(
+    situation: &TransitSituation,
+    lines: &[NetworkLine],
+) -> BTreeMap<String, Severity> {
     let mut out: BTreeMap<String, Severity> = BTreeMap::new();
     if situation.scope == SituationScope::Network
         || (is_equipment(situation) && !situation.stop_ids.is_empty())

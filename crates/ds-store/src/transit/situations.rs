@@ -12,8 +12,10 @@
 //! 2. Every situation is upserted (`observed_at` is the envelope's
 //!    `produced_at`; `first_seen_at` is kept), with the row guard
 //!    `EXCLUDED.observed_at >= observed_at OR observed_at > now() + 2 min`.
-//! 3. The network's situations missing from the snapshot are deleted: they
-//!    ended.
+//! 3. The network's situations missing from the snapshot ended: their
+//!    `ended_at` is set (once), so their pages can say so, and those ended
+//!    over [`ENDED_KEPT_FOR`] ago are deleted. One listed again is current
+//!    again (`ended_at` cleared).
 //! 4. The lines' statuses are derived from the snapshot
 //!    (`common::transit::status::derive`, at `produced_at`) against the
 //!    active timetable's lines, and written to `line_status` with
@@ -43,6 +45,10 @@ use sqlx::PgConnection;
 use super::write::lock_network;
 use crate::freshness::record_ingest;
 
+/// How long an ended situation is kept, for its page
+/// (`/transit/<network>/incidents/<id>`).
+pub const ENDED_KEPT_FOR: chrono::Duration = chrono::Duration::days(7);
+
 /// What [`apply_situations`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SituationsOutcome {
@@ -56,8 +62,10 @@ pub enum SituationsOutcome {
 pub struct SituationsApplied {
     /// Situations inserted or updated (the row guard's refusals aside).
     pub situations: u64,
-    /// Situations deleted because the snapshot no longer lists them.
+    /// Situations the snapshot no longer lists, newly marked ended.
     pub ended: u64,
+    /// Ended situations deleted, [`ENDED_KEPT_FOR`] after they ended.
+    pub purged: u64,
     /// `line_status` rows written.
     pub lines: u64,
     /// `line_status_history` rows appended.
@@ -105,7 +113,10 @@ pub fn statuses_changed(stored: Option<&serde_json::Value>, incoming: &serde_jso
 
 /// The network's lines in its active timetable, with every station each
 /// serves.
-async fn network_lines(conn: &mut PgConnection, network: &NetworkId) -> Result<Vec<NetworkLine>> {
+pub(crate) async fn network_lines<'e>(
+    exec: impl sqlx::PgExecutor<'e>,
+    network: &str,
+) -> Result<Vec<NetworkLine>> {
     let rows: Vec<(String, String, sqlx::types::Json<Vec<TransitLineDirection>>)> = sqlx::query_as(
         "SELECT l.line_id, l.name, l.directions \
            FROM transit_lines l \
@@ -114,8 +125,8 @@ async fn network_lines(conn: &mut PgConnection, network: &NetworkId) -> Result<V
           WHERE l.network = $1 \
           ORDER BY l.line_id",
     )
-    .bind(network.as_str())
-    .fetch_all(&mut *conn)
+    .bind(network)
+    .fetch_all(exec)
     .await
     .context("transit lines")?;
     Ok(rows
@@ -160,16 +171,26 @@ pub async fn apply_situations(
         .map(|s| s.situation_id.as_str())
         .collect();
     applied.ended = sqlx::query(
-        "DELETE FROM transit_situations WHERE network = $1 AND NOT (situation_id = ANY($2))",
+        "UPDATE transit_situations SET ended_at = $3 \
+          WHERE network = $1 AND ended_at IS NULL AND NOT (situation_id = ANY($2))",
     )
     .bind(network.as_str())
     .bind(&ids)
+    .bind(produced_at)
     .execute(&mut *conn)
     .await
-    .context("delete ended situations")?
+    .context("end situations")?
     .rows_affected();
+    applied.purged =
+        sqlx::query("DELETE FROM transit_situations WHERE network = $1 AND ended_at < $2")
+            .bind(network.as_str())
+            .bind(produced_at - ENDED_KEPT_FOR)
+            .execute(&mut *conn)
+            .await
+            .context("purge ended situations")?
+            .rows_affected();
 
-    let lines = network_lines(conn, network).await?;
+    let lines = network_lines(&mut *conn, network.as_str()).await?;
     let derived = derive(network, &snapshot.situations, &lines, produced_at);
     write_line_status(conn, network, &derived, produced_at, &mut applied).await?;
 
@@ -216,7 +237,8 @@ async fn upsert_situations(
             line_ids = EXCLUDED.line_ids,
             stop_ids = EXCLUDED.stop_ids,
             scope = EXCLUDED.scope,
-            observed_at = EXCLUDED.observed_at
+            observed_at = EXCLUDED.observed_at,
+            ended_at = NULL
         WHERE EXCLUDED.observed_at >= transit_situations.observed_at
            OR transit_situations.observed_at > now() + interval '2 min'
         ",
