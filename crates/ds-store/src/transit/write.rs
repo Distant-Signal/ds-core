@@ -359,7 +359,8 @@ async fn active_version(
 ///    has service ([`CommitOutcome::Inconsistent`]);
 /// 5. the flip: the old active version becomes `previous`, every other
 ///    version of the network is deleted (its rows cascade), this one
-///    becomes `active`, `transit_networks` points at it, and
+///    becomes `active`, `transit_networks` points at it (a new network's
+///    row is then analysed: `analyze_networks`), and
 ///    `transit_rail_links` is replaced with its rail links;
 /// 6. the freshness marker, at `produced_at`.
 pub async fn commit(
@@ -481,14 +482,17 @@ async fn activate(
     .bind(produced_at)
     .execute(&mut *conn)
     .await?;
-    sqlx::query(
+    // `xmax = 0` only on a freshly inserted row: an `ON CONFLICT` update
+    // leaves this transaction's id in the old row version's xmax.
+    let inserted: bool = sqlx::query_scalar(
         "INSERT INTO transit_networks \
          (network, name, mode, timezone, attribution, active_feed_version, activated_at, updated_at) \
          VALUES ($1, $2, $3, $4, $5, $6, now(), now()) \
          ON CONFLICT (network) DO UPDATE SET name = EXCLUDED.name, mode = EXCLUDED.mode, \
              timezone = EXCLUDED.timezone, attribution = EXCLUDED.attribution, \
              active_feed_version = EXCLUDED.active_feed_version, \
-             activated_at = EXCLUDED.activated_at, updated_at = EXCLUDED.updated_at",
+             activated_at = EXCLUDED.activated_at, updated_at = EXCLUDED.updated_at \
+         RETURNING (xmax = 0)",
     )
     .bind(network)
     .bind(&network_row.name)
@@ -496,8 +500,28 @@ async fn activate(
     .bind(&network_row.timezone)
     .bind(serde_json::to_value(&network_row.attribution)?)
     .bind(version)
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
+    if inserted {
+        analyze_networks(conn).await?;
+    }
+    Ok(())
+}
+
+/// Refreshes `transit_networks`' planner statistics after a new network's
+/// row. The table is a handful of rows that never change in number
+/// otherwise, so autovacuum's analyze threshold (50 rows plus 10%) is never
+/// crossed and the planner kept its default guess of hundreds of rows
+/// (DS-223). Through `analyze_transit_networks()`, a `SECURITY DEFINER`
+/// function (migration `20261031180000`): on Postgres 16 only the owner may
+/// ANALYZE, and the writer's narrowed role's own ANALYZE would only warn
+/// and skip. Runs in the activation's transaction: its `SHARE UPDATE
+/// EXCLUSIVE` lock blocks no reads or writes, and the new row counts as
+/// live.
+async fn analyze_networks(conn: &mut PgConnection) -> Result<()> {
+    sqlx::query("SELECT analyze_transit_networks()")
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 

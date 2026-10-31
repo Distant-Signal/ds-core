@@ -196,7 +196,10 @@ class DatabaseComparisonTest(unittest.TestCase):
             "table": set(model.tables),
             "view": set(model.views),
             "sequence": set(model.sequences),
-            "function": {"analyze_publish_keys(target text)"},
+            "function": {
+                "analyze_publish_keys(target text)",
+                "analyze_transit_networks()",
+            },
         }
 
     def test_matching_schema_has_no_problems(self) -> None:
