@@ -15,13 +15,158 @@
 //! keeps owning that state in its own `main()` and captures it by mutable
 //! reference in the `cycle` closure passed in here -- ordinary `FnMut`
 //! semantics, no change needed to this function's own signature.
+//!
+//! # Once mode (a scheduled Job)
+//!
+//! With `RUN_ONCE=true` ([`RunOnce`]) every entry point runs at most one
+//! cycle and returns instead of looping, for a poller deployed as a
+//! Kubernetes `CronJob` (docs/scheduled-jobs.md):
+//!
+//! - it reads the same last-fetch cursor first, and if the data is younger
+//!   than `RUN_ONCE_SKIP_IF_FRESHER_THAN_SECS` it skips the cycle and
+//!   returns `Ok` (a second Job of the same schedule, or a manual run soon
+//!   after a scheduled one, never re-fetches upstream);
+//! - otherwise it runs one cycle: `Ok` on success; on failure the error,
+//!   with [`ExitStatus::REJECTED`] attached when the data itself was
+//!   refused ([`ingest::FailureClass::Rejected`]), so the process exits 3
+//!   and the Job's pod failure policy fails it instead of retrying, and
+//!   exits 1 (retried) otherwise;
+//! - a stream producer must then wait for its snapshot to reach Redis
+//!   before exiting: [`finish_once`] with its producer's shutdown.
 
 use std::future::Future;
 use std::time::Duration;
 
 use crate::backoff::Backoff;
 use crate::ingest;
+use crate::logging::ExitStatus;
 use crate::progress::Progress;
+
+/// Run one cycle and return instead of looping (see the module doc).
+pub const RUN_ONCE_ENV: &str = "RUN_ONCE";
+/// In once mode, skip the cycle when the cursor is younger than this many
+/// seconds.
+pub const RUN_ONCE_SKIP_ENV: &str = "RUN_ONCE_SKIP_IF_FRESHER_THAN_SECS";
+
+/// Once mode's settings (see the module doc), read from the environment so
+/// every poller has it without its own config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunOnce {
+    /// Skip the cycle when the data last landed less than this long ago.
+    /// Zero never skips.
+    pub skip_if_fresher_than: Duration,
+}
+
+impl RunOnce {
+    /// `Some` when `RUN_ONCE` is `true` or `1`.
+    ///
+    /// # Errors
+    ///
+    /// `RUN_ONCE` or `RUN_ONCE_SKIP_IF_FRESHER_THAN_SECS` is not a valid
+    /// value.
+    pub fn from_env() -> anyhow::Result<Option<Self>> {
+        Self::from_lookup(|key| std::env::var(key).ok())
+    }
+
+    fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> anyhow::Result<Option<Self>> {
+        let on = match lookup(RUN_ONCE_ENV).as_deref().map(str::trim) {
+            None | Some("" | "false" | "0") => false,
+            Some("true" | "1") => true,
+            Some(other) => anyhow::bail!("{RUN_ONCE_ENV} must be true or false, not {other:?}"),
+        };
+        if !on {
+            return Ok(None);
+        }
+        let secs = match lookup(RUN_ONCE_SKIP_ENV) {
+            None => 0,
+            Some(value) => value.trim().parse::<u64>().map_err(|err| {
+                anyhow::anyhow!("{RUN_ONCE_SKIP_ENV} must be whole seconds, not {value:?}: {err}")
+            })?,
+        };
+        Ok(Some(Self {
+            skip_if_fresher_than: Duration::from_secs(secs),
+        }))
+    }
+}
+
+/// What a once-mode run did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnceOutcome {
+    /// The data was fresher than the skip threshold: nothing fetched.
+    Skipped,
+    /// One cycle ran and succeeded.
+    Ran,
+}
+
+/// After a once-mode run, waits for what the cycle queued to be written
+/// (`flushed`: a stream producer's shutdown, true when nothing was left
+/// unwritten) and turns an unwritten snapshot into an error (exit 1, so the
+/// Job retries). A failed run's error is returned as it was, after the
+/// flush is still awaited (it ends the producer task cleanly).
+///
+/// # Errors
+///
+/// The run's own error, or the snapshot not reaching the stream.
+pub async fn finish_once(
+    result: anyhow::Result<()>,
+    flushed: impl Future<Output = bool>,
+) -> anyhow::Result<()> {
+    let written = flushed.await;
+    result?;
+    if !written {
+        anyhow::bail!(
+            "the snapshot was not written to the ingest stream before the deadline; the Job retries"
+        );
+    }
+    Ok(())
+}
+
+/// Once mode: the cursor check, then at most one cycle (see the module doc).
+async fn run_once<C, F, Fut>(
+    policy: &RetryPolicy,
+    poller_label: &'static str,
+    last_fetched: &mut C,
+    once: RunOnce,
+    progress: &Progress,
+    mut cycle: F,
+) -> anyhow::Result<OnceOutcome>
+where
+    C: ingest::LastFetched,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    if !once.skip_if_fresher_than.is_zero() {
+        // Unreachable after the bounded wait: run anyway (as the loop's
+        // "poll now"); the cursor only saves an upstream fetch.
+        let delay = ingest::time_until_next_poll_for(
+            last_fetched,
+            once.skip_if_fresher_than,
+            &policy.api_wait,
+            Some(progress),
+        )
+        .await;
+        if !delay.is_zero() {
+            tracing::info!(
+                poller = poller_label,
+                skip_if_fresher_than_secs = once.skip_if_fresher_than.as_secs(),
+                "data still fresh; skipping this run"
+            );
+            return Ok(OnceOutcome::Skipped);
+        }
+    }
+    let result = cycle().await;
+    progress.beat();
+    match result {
+        Ok(()) => {
+            tracing::info!(poller = poller_label, "run succeeded");
+            Ok(OnceOutcome::Ran)
+        }
+        Err(err) => match ingest::classify_failure(&err) {
+            ingest::FailureClass::Rejected => Err(err.context(ExitStatus::REJECTED)),
+            ingest::FailureClass::Transient => Err(err),
+        },
+    }
+}
 
 /// Builds the poll-cycle `tokio::time::Interval`, first ticking at `start`
 /// and thereafter every `poll_interval` -- with `MissedTickBehavior::Delay`
@@ -244,6 +389,23 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
+    if let Some(once) = RunOnce::from_env()? {
+        tracing::info!(
+            poller = poller_label,
+            skip_if_fresher_than_secs = once.skip_if_fresher_than.as_secs(),
+            "once mode: at most one cycle, then exit"
+        );
+        return run_once(
+            policy,
+            poller_label,
+            &mut last_fetched,
+            once,
+            progress,
+            cycle,
+        )
+        .await
+        .map(|_| ());
+    }
     register_cycle_metrics(poller_label);
     let delay = ingest::time_until_next_poll_for(
         &mut last_fetched,
@@ -422,6 +584,178 @@ mod tests {
         assert!(
             call_count.load(Ordering::Relaxed) >= 1,
             "the cycle closure must run at least once within 100ms at a 10ms interval"
+        );
+    }
+
+    fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        move |key| pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+    }
+
+    #[test]
+    fn once_mode_reads_its_two_variables() {
+        assert_eq!(RunOnce::from_lookup(env(&[])).unwrap(), None);
+        assert_eq!(
+            RunOnce::from_lookup(env(&[(RUN_ONCE_ENV, "false")])).unwrap(),
+            None
+        );
+        assert_eq!(
+            RunOnce::from_lookup(env(&[(RUN_ONCE_ENV, "true")])).unwrap(),
+            Some(RunOnce {
+                skip_if_fresher_than: Duration::ZERO
+            })
+        );
+        assert_eq!(
+            RunOnce::from_lookup(env(&[(RUN_ONCE_ENV, "1"), (RUN_ONCE_SKIP_ENV, "43200")]))
+                .unwrap(),
+            Some(RunOnce {
+                skip_if_fresher_than: Duration::from_secs(43_200)
+            })
+        );
+        assert!(RunOnce::from_lookup(env(&[(RUN_ONCE_ENV, "yes")])).is_err());
+        assert!(
+            RunOnce::from_lookup(env(&[(RUN_ONCE_ENV, "true"), (RUN_ONCE_SKIP_ENV, "12h")]))
+                .is_err()
+        );
+    }
+
+    fn once(secs: u64) -> RunOnce {
+        RunOnce {
+            skip_if_fresher_than: Duration::from_secs(secs),
+        }
+    }
+
+    /// Fresher than the threshold: no cycle, `Ok` (exit 0).
+    #[tokio::test]
+    async fn once_mode_skips_fresh_data_without_fetching() {
+        let calls = AtomicUsize::new(0);
+        let progress = Progress::new(Duration::from_secs(60));
+        let mut fresh = || async { Ok(Some(chrono::Utc::now() - chrono::Duration::hours(1))) };
+        let outcome = run_once(
+            &FAST_POLICY,
+            "test",
+            &mut fresh,
+            once(43_200),
+            &progress,
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                async { Ok(()) }
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome, OnceOutcome::Skipped);
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+    }
+
+    /// Older than the threshold, or never fetched: exactly one cycle.
+    #[tokio::test]
+    async fn once_mode_runs_one_cycle_on_stale_or_missing_data() {
+        let progress = Progress::new(Duration::from_secs(60));
+        let mut stale = || async { Ok(Some(chrono::Utc::now() - chrono::Duration::hours(13))) };
+        let calls = AtomicUsize::new(0);
+        let outcome = run_once(
+            &FAST_POLICY,
+            "test",
+            &mut stale,
+            once(43_200),
+            &progress,
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                async { Ok(()) }
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (outcome, calls.load(Ordering::Relaxed)),
+            (OnceOutcome::Ran, 1)
+        );
+
+        let mut never = never_fetched;
+        let calls = AtomicUsize::new(0);
+        let outcome = run_once(
+            &FAST_POLICY,
+            "test",
+            &mut never,
+            once(43_200),
+            &progress,
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                async { Ok(()) }
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (outcome, calls.load(Ordering::Relaxed)),
+            (OnceOutcome::Ran, 1)
+        );
+    }
+
+    /// A transient failure exits 1 (the Job retries); refused data exits 3
+    /// (the pod failure policy fails the Job). Neither retries in-process.
+    #[tokio::test]
+    async fn once_mode_failures_carry_their_exit_status() {
+        let progress = Progress::new(Duration::from_secs(60));
+        let calls = AtomicUsize::new(0);
+        let err = run_once(
+            &FAST_POLICY,
+            "test",
+            &mut never_fetched,
+            once(0),
+            &progress,
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                async { Err(transient_failure()) }
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(crate::logging::exit_status_of(&err), 1);
+        assert_eq!(calls.load(Ordering::Relaxed), 1, "no in-process retry");
+
+        let err = run_once(
+            &FAST_POLICY,
+            "test",
+            &mut never_fetched,
+            once(0),
+            &progress,
+            || async { Err(anyhow::Error::new(ingest::DataRejected("bad feed".into()))) },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(crate::logging::exit_status_of(&err), 3);
+    }
+
+    /// The process exits only once the queued snapshot is written: an
+    /// unwritten one fails the run (exit 1, retried); a failed run keeps its
+    /// own error.
+    #[tokio::test]
+    async fn finish_once_waits_for_the_snapshot_to_be_written() {
+        let flushed = Arc::new(AtomicUsize::new(0));
+        let flush = |written: bool| {
+            let flushed = Arc::clone(&flushed);
+            async move {
+                tokio::task::yield_now().await;
+                flushed.fetch_add(1, Ordering::Relaxed);
+                written
+            }
+        };
+        finish_once(Ok(()), flush(true)).await.unwrap();
+        let err = finish_once(Ok(()), flush(false)).await.unwrap_err();
+        assert!(err.to_string().contains("not written"), "{err}");
+        assert_eq!(crate::logging::exit_status_of(&err), 1);
+        let rejected = anyhow::anyhow!("bad").context(ExitStatus::REJECTED);
+        let err = finish_once(Err(rejected), flush(true)).await.unwrap_err();
+        assert_eq!(crate::logging::exit_status_of(&err), 3);
+        assert_eq!(
+            flushed.load(Ordering::Relaxed),
+            3,
+            "every path awaits the flush"
         );
     }
 

@@ -146,16 +146,55 @@ where
         .finish()
 }
 
+/// A fatal error's own exit status, attached as a context layer
+/// (`err.context(ExitStatus::REJECTED)`); [`exit_code`] exits with it
+/// instead of 1. A scheduled Job's pod failure policy reads the status
+/// (docs/scheduled-jobs.md): 3 fails the Job at once, 1 is retried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExitStatus(pub u8);
+
+impl ExitStatus {
+    /// The run refused its input (the data was rejected): a retry of the
+    /// same input fails the same way, so the Job should not retry.
+    pub const REJECTED: Self = Self(3);
+}
+
+impl std::error::Error for ExitStatus {}
+
+impl fmt::Display for ExitStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == Self::REJECTED {
+            write!(f, "the run refused its input (exit status {})", self.0)
+        } else {
+            write!(f, "exit status {}", self.0)
+        }
+    }
+}
+
+/// The status [`exit_code`] exits with for `err`: an attached
+/// [`ExitStatus`] (as context or anywhere in the chain), else 1.
+#[must_use]
+pub fn exit_status_of(err: &anyhow::Error) -> u8 {
+    err.downcast_ref::<ExitStatus>()
+        .or_else(|| {
+            err.chain()
+                .find_map(|cause| cause.downcast_ref::<ExitStatus>())
+        })
+        .map_or(1, |status| status.0)
+}
+
 /// Turn `main`'s result into the process exit code. An error is logged as
 /// one `ERROR` line (target `fatal`, `error` = the `: `-joined cause chain,
 /// `stack` when anyhow captured a backtrace) and gives exit code 1, the
-/// same code `fn main() -> anyhow::Result<()>` exits with. Before [`init`]
-/// has run, or in `pretty` mode, it prints `Error: {err:?}` to stderr as the
+/// same code `fn main() -> anyhow::Result<()>` exits with, unless an
+/// [`ExitStatus`] is attached ([`exit_status_of`]). Before [`init`] has
+/// run, or in `pretty` mode, it prints `Error: {err:?}` to stderr as the
 /// standard library would.
 pub fn exit_code(result: anyhow::Result<()>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
+            let status = exit_status_of(&err);
             if INSTALLED.get() == Some(&LogFormat::Json) {
                 let backtrace = err.backtrace();
                 let stack = (backtrace.status() == BacktraceStatus::Captured)
@@ -169,7 +208,7 @@ pub fn exit_code(result: anyhow::Result<()>) -> ExitCode {
             } else {
                 eprintln!("Error: {err:?}");
             }
-            ExitCode::FAILURE
+            ExitCode::from(status)
         }
     }
 }
@@ -381,6 +420,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
+
+    #[test]
+    fn an_error_exits_1_unless_an_exit_status_is_attached() {
+        let plain = anyhow::anyhow!("database unavailable");
+        assert_eq!(exit_status_of(&plain), 1);
+        let rejected = anyhow::anyhow!("bad feed").context(ExitStatus::REJECTED);
+        assert_eq!(exit_status_of(&rejected), 3);
+        // Further context on top keeps the attached status.
+        let wrapped = rejected.context("poll cycle");
+        assert_eq!(exit_status_of(&wrapped), 3);
+        assert_eq!(
+            ExitStatus::REJECTED.to_string(),
+            "the run refused its input (exit status 3)"
+        );
+    }
     use crate::secret::Secret;
 
     /// A `MakeWriter` collecting everything written into one buffer.
