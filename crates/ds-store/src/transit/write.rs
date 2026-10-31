@@ -182,8 +182,9 @@ async fn insert_lines(conn: &mut PgConnection, keys: Keys<'_>, rows: &[TransitLi
     }
     sqlx::query(
         "INSERT INTO transit_lines \
-         (network, feed_version, line_id, name, colour, sort_order, directions) \
-         SELECT $1, $2, * FROM UNNEST($3::text[], $4::text[], $5::text[], $6::int[], $7::jsonb[]) \
+         (network, feed_version, line_id, name, colour, sort_order, directions, mode) \
+         SELECT $1, $2, * FROM UNNEST($3::text[], $4::text[], $5::text[], $6::int[], $7::jsonb[], \
+                $8::text[]) \
          ON CONFLICT DO NOTHING",
     )
     .bind(keys.0)
@@ -193,6 +194,7 @@ async fn insert_lines(conn: &mut PgConnection, keys: Keys<'_>, rows: &[TransitLi
     .bind(rows.iter().map(|r| r.colour.clone()).collect::<Vec<_>>())
     .bind(rows.iter().map(|r| r.sort_order).collect::<Vec<_>>())
     .bind(directions)
+    .bind(rows.iter().map(|r| r.mode.clone()).collect::<Vec<_>>())
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -536,33 +538,37 @@ async fn inconsistency(
 ) -> Result<Option<String>> {
     let network = commit.network.as_str();
     let version = commit.feed_version.as_str();
+    // Each check is a set difference (`EXCEPT`), hashed or sorted, never a
+    // per-row `NOT EXISTS`: on a version's first activation its rows are
+    // fresh and unanalysed, and the planner then chose a nested loop that
+    // scanned `transit_patterns` once per trip (49 s for TfL's 58,383 trips
+    // and 7,849 patterns; the TfL transit design §10).
     let checks: [(&str, &str); 4] = [
         (
             "a trip whose pattern is missing",
-            "SELECT t.trip_id FROM transit_trips t WHERE t.network = $1 AND t.feed_version = $2 \
-             AND NOT EXISTS (SELECT 1 FROM transit_patterns p WHERE p.network = t.network \
-               AND p.feed_version = t.feed_version AND p.pattern_id = t.pattern_id) LIMIT 1",
+            "(SELECT pattern_id FROM transit_trips WHERE network = $1 AND feed_version = $2 \
+             EXCEPT SELECT pattern_id FROM transit_patterns WHERE network = $1 AND feed_version = $2) \
+             LIMIT 1",
         ),
         (
             "a trip whose line is missing",
-            "SELECT t.trip_id FROM transit_trips t WHERE t.network = $1 AND t.feed_version = $2 \
-             AND t.line_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM transit_lines l \
-               WHERE l.network = t.network AND l.feed_version = t.feed_version \
-               AND l.line_id = t.line_id) LIMIT 1",
+            "(SELECT line_id FROM transit_trips WHERE network = $1 AND feed_version = $2 \
+               AND line_id IS NOT NULL \
+             EXCEPT SELECT line_id FROM transit_lines WHERE network = $1 AND feed_version = $2) \
+             LIMIT 1",
         ),
         (
             "a pattern whose line is missing",
-            "SELECT p.pattern_id FROM transit_patterns p WHERE p.network = $1 \
-             AND p.feed_version = $2 AND p.line_id IS NOT NULL AND NOT EXISTS \
-               (SELECT 1 FROM transit_lines l WHERE l.network = p.network \
-               AND l.feed_version = p.feed_version AND l.line_id = p.line_id) LIMIT 1",
+            "(SELECT line_id FROM transit_patterns WHERE network = $1 AND feed_version = $2 \
+               AND line_id IS NOT NULL \
+             EXCEPT SELECT line_id FROM transit_lines WHERE network = $1 AND feed_version = $2) \
+             LIMIT 1",
         ),
         (
             "a call at a missing stop",
-            "SELECT s.pattern_id || ':' || s.stop_id FROM transit_pattern_stops s \
-             WHERE s.network = $1 AND s.feed_version = $2 AND NOT EXISTS \
-               (SELECT 1 FROM transit_stops t WHERE t.network = s.network \
-               AND t.feed_version = s.feed_version AND t.stop_id = s.stop_id) LIMIT 1",
+            "(SELECT stop_id FROM transit_pattern_stops WHERE network = $1 AND feed_version = $2 \
+             EXCEPT SELECT stop_id FROM transit_stops WHERE network = $1 AND feed_version = $2) \
+             LIMIT 1",
         ),
     ];
     for (what, sql) in checks {

@@ -121,32 +121,46 @@ pub struct SituationsView {
     pub upcoming: Vec<SituationView>,
 }
 
-/// The network's situations marker.
+/// The network's status marker: its situations' freshness, or for a
+/// network whose status is `TfL`'s (`common::transit::status_from_tfl`)
+/// poller-tfl's (`ingest_freshness` source `tfl`).
 pub async fn situations_as_of(pool: &PgPool, network: &str) -> Result<Option<DateTime<Utc>>> {
     let Ok(id) = common::transit::NetworkId::parse(network) else {
         return Ok(None);
     };
+    let source = if common::transit::status_from_tfl(network) {
+        "tfl".to_owned()
+    } else {
+        situations_freshness_source(&id)
+    };
     sqlx::query_scalar("SELECT fetched_at FROM ingest_freshness WHERE source = $1")
-        .bind(situations_freshness_source(&id))
+        .bind(source)
         .fetch_optional(pool)
         .await
         .context("situations freshness")
 }
 
-/// Every line's stored statuses and upcoming situations, by local id.
+/// Every line's stored statuses and upcoming situations, by local id: the
+/// network's `transit` rows (`<network>:<line>`), or for a network whose
+/// status is `TfL`'s, poller-tfl's `tfl-<line>` rows.
 pub async fn stored_line_statuses(
     pool: &PgPool,
     network: &str,
 ) -> Result<HashMap<String, (Vec<LineStatus>, Vec<UpcomingDisruption>)>> {
+    let (source, prefix) = if common::transit::status_from_tfl(network) {
+        ("tfl", common::TFL_LINE_ID_PREFIX.to_owned())
+    } else {
+        ("transit", format!("{network}:"))
+    };
     let rows: Vec<(String, serde_json::Value, serde_json::Value)> = sqlx::query_as(
         "SELECT line_id, statuses, upcoming FROM line_status \
-          WHERE source = 'transit' AND starts_with(line_id, $1 || ':')",
+          WHERE source = $1 AND starts_with(line_id, $2)",
     )
-    .bind(network)
+    .bind(source)
+    .bind(&prefix)
     .fetch_all(pool)
     .await
     .context("transit line statuses")?;
-    let prefix = format!("{network}:");
     rows.into_iter()
         .map(|(id, statuses, upcoming)| {
             let local = id.strip_prefix(&prefix).unwrap_or(&id).to_owned();

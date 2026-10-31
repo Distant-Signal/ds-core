@@ -11,7 +11,7 @@
 //!   item per snapshot, the stream cursor
 //!   (plans 3a.7, 3a.8, 3c.2).
 //! - [`budget`]: per-stream `MAXLEN` from rates, sizes and the 2-hour
-//!   outage target, checked against the 512 MB budget.
+//!   outage target, checked against the 576 MiB budget.
 //!
 //! It has no database dependency, so the stream producers stay light.
 
@@ -73,6 +73,11 @@ pub mod streams {
     /// published disruptions, so in practice only its daily timetable
     /// (docs/superpowers/specs/2026-10-24-nottingham-net-design.md §7).
     pub const TRANSIT_NET: &str = "ds:ingest:transit-net";
+    /// poller-transit-schedule for network `tfl`, `TfL`'s Underground, DLR
+    /// and London Trams (disabled by default): the same three schemas, in
+    /// practice only its daily timetable (status comes from poller-tfl;
+    /// docs/superpowers/specs/2026-10-30-tfl-transit-design.md §9).
+    pub const TRANSIT_TFL: &str = "ds:ingest:transit-tfl";
 
     /// The transit stream of `network` (`ds:ingest:transit-<network>`).
     pub fn transit(network: &str) -> String {
@@ -121,6 +126,7 @@ mod tests {
         }
         assert_eq!(streams::transit("metrolink"), streams::TRANSIT_METROLINK);
         assert_eq!(streams::transit("net"), streams::TRANSIT_NET);
+        assert_eq!(streams::transit("tfl"), streams::TRANSIT_TFL);
     }
 
     #[test]

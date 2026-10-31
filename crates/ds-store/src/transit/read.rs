@@ -47,7 +47,7 @@ type RailLinkRow = (
 /// `stations`' row: id, name, lat, lon, local line ids.
 type StationRow = (String, String, Option<f64>, Option<f64>, Vec<String>);
 /// `stop_departures`' row: seconds after midnight, trip, platform, indicator, line id, line
-/// name, colour, replacement bus, headsign, last stop's name.
+/// name, colour, replacement bus, headsign, last stop's name, line mode.
 type BoardSqlRow = (
     i32,
     String,
@@ -57,6 +57,7 @@ type BoardSqlRow = (
     Option<String>,
     Option<String>,
     bool,
+    Option<String>,
     Option<String>,
     Option<String>,
 );
@@ -88,6 +89,13 @@ pub struct LineSummary {
     pub line_id: String,
     pub name: String,
     pub colour: Option<String>,
+    /// The line's own mode (`tube`, `dlr`, `tram`), else its network's
+    /// (the `TfL` design §6).
+    pub mode: String,
+    /// The `line_status` id its status is read from, and that a pin of it
+    /// stores: its own public id, or for a network whose status is `TfL`'s
+    /// (`common::transit::status_from_tfl`) `TfL`'s line (`tfl-victoria`).
+    pub status_line_id: String,
 }
 
 /// A station, as a list entry or a reference.
@@ -261,6 +269,191 @@ pub struct LineTimetable {
     pub outside_horizon: bool,
 }
 
+/// A band of the service day, for a line's frequency summary (the `TfL`
+/// design §8.3): `[from_s, to_s)` seconds after midnight.
+const FREQUENCY_BANDS: &[(&str, i32, i32)] = &[
+    ("early", 0, 7 * 3600),
+    ("morning-peak", 7 * 3600, 10 * 3600),
+    ("daytime", 10 * 3600, 16 * 3600),
+    ("evening-peak", 16 * 3600, 19 * 3600),
+    ("evening", 19 * 3600, 22 * 3600),
+    ("late", 22 * 3600, 2 * DAY_S),
+];
+
+/// Gaps shorter than this are trains of two branches meeting, not a
+/// frequency: left out of a band's shortest gap.
+const MIN_GAP_S: i32 = 60;
+
+/// One band of a direction's frequency summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrequencyBand {
+    /// `early`, `morning-peak`, `daytime`, `evening-peak`, `evening`,
+    /// `late`.
+    pub band: String,
+    /// `HH:MM`, its start and end (`24:00` style ends are `00:00`).
+    pub from: String,
+    pub to: String,
+    /// Departures in the band from the station.
+    pub departures: u32,
+    /// The shortest and longest gap in whole minutes between one departure
+    /// in the band and the next; `None` with fewer than two.
+    pub min_gap_minutes: Option<u32>,
+    pub max_gap_minutes: Option<u32>,
+}
+
+/// One direction's frequency summary, at its busiest station.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectionFrequency {
+    /// `outbound` or `inbound`.
+    pub direction: String,
+    /// The station measured: the direction's with the most departures.
+    pub station: StationRef,
+    /// `HH:MM` London time: the first and last departure from it.
+    pub first: String,
+    pub last: String,
+    pub bands: Vec<FrequencyBand>,
+}
+
+/// A line's frequency summary for a date.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LineFrequency {
+    pub date: NaiveDate,
+    pub directions: Vec<DirectionFrequency>,
+    /// The date is outside the timetable's horizon (no directions).
+    pub outside_horizon: bool,
+}
+
+/// The frequency summary of one direction's sorted departure times.
+fn bands_of(times: &[i32]) -> Vec<FrequencyBand> {
+    FREQUENCY_BANDS
+        .iter()
+        .filter_map(|&(band, from, to)| {
+            let inside: Vec<i32> = times
+                .iter()
+                .copied()
+                .filter(|t| (from..to).contains(t))
+                .collect();
+            if inside.is_empty() {
+                return None;
+            }
+            let gaps: Vec<i32> = inside
+                .windows(2)
+                .map(|w| w[1] - w[0])
+                .filter(|g| *g >= MIN_GAP_S)
+                .collect();
+            let minutes = |s: i32| u32::try_from((s + 30) / 60).unwrap_or(0);
+            Some(FrequencyBand {
+                band: band.to_owned(),
+                from: clock(from),
+                to: clock(to.min(DAY_S)),
+                departures: u32::try_from(inside.len()).unwrap_or(u32::MAX),
+                min_gap_minutes: gaps.iter().copied().min().map(minutes),
+                max_gap_minutes: gaps.iter().copied().max().map(minutes),
+            })
+        })
+        .collect()
+}
+
+/// `line`'s frequency summary on `date` (the `TfL` design §8.3): for each
+/// direction, the departures of its trips (replacement buses left out)
+/// from its busiest station (of equals, the one trips reach first), their
+/// first and last, and the gaps between them by band of the day. `None`
+/// for an unknown line.
+pub async fn line_frequency(
+    pool: &PgPool,
+    network: &str,
+    line: &str,
+    date: NaiveDate,
+) -> Result<Option<LineFrequency>> {
+    let Some(detail) = get_line(pool, network, line).await? else {
+        return Ok(None);
+    };
+    let Some(act) = active(pool, network).await? else {
+        return Ok(None);
+    };
+    if !act.covers(date) {
+        return Ok(Some(LineFrequency {
+            date,
+            directions: vec![],
+            outside_horizon: true,
+        }));
+    }
+    let names: HashMap<String, String> = detail
+        .directions
+        .iter()
+        .flat_map(|d| d.stations.iter().map(|s| (s.id.clone(), s.name.clone())))
+        .collect();
+    let rows: Vec<(i16, String, i32)> = sqlx::query_as(
+        "WITH calls AS ( \
+           SELECT p.direction, COALESCE(pl.parent_stop_id, pl.stop_id) AS station, \
+                  t.start_s + ps.dep_offset_s AS at_s, ps.seq \
+           FROM transit_trips t \
+           JOIN transit_patterns p ON p.network = t.network AND p.feed_version = t.feed_version \
+                AND p.pattern_id = t.pattern_id \
+           JOIN transit_service_days d ON d.network = t.network AND d.feed_version = t.feed_version \
+                AND d.service_id = t.service_id AND d.service_date = $4 \
+           JOIN transit_pattern_stops ps ON ps.network = t.network AND ps.feed_version = t.feed_version \
+                AND ps.pattern_id = t.pattern_id \
+           JOIN transit_stops pl ON pl.network = ps.network AND pl.feed_version = ps.feed_version \
+                AND pl.stop_id = ps.stop_id \
+           WHERE t.network = $1 AND t.feed_version = $2 AND t.line_id = $3 \
+             AND NOT t.replacement_bus AND ps.pickup <> 1 \
+         ), busiest AS ( \
+           SELECT DISTINCT ON (direction) direction, station FROM calls \
+           GROUP BY direction, station ORDER BY direction, count(*) DESC, min(seq), station \
+         ) \
+         SELECT c.direction, c.station, c.at_s FROM calls c \
+         JOIN busiest b ON b.direction = c.direction AND b.station = c.station \
+         ORDER BY c.direction, c.at_s",
+    )
+    .bind(network)
+    .bind(&act.feed_version)
+    .bind(line)
+    .bind(date)
+    .fetch_all(pool)
+    .await?;
+    let mut by_direction: BTreeMap<i16, (String, Vec<i32>)> = BTreeMap::new();
+    for (direction, station, at) in rows {
+        by_direction
+            .entry(direction)
+            .or_insert_with(|| (station, Vec::new()))
+            .1
+            .push(at);
+    }
+    let directions = by_direction
+        .into_iter()
+        .filter_map(|(direction, (station, times))| {
+            let (&first, &last) = (times.first()?, times.last()?);
+            Some(DirectionFrequency {
+                direction: if direction == 1 {
+                    "inbound"
+                } else {
+                    "outbound"
+                }
+                .to_owned(),
+                station: StationRef {
+                    name: names
+                        .get(&station)
+                        .cloned()
+                        .unwrap_or_else(|| station.clone()),
+                    id: station,
+                },
+                first: clock(first),
+                last: clock(last),
+                bands: bands_of(&times),
+            })
+        })
+        .collect();
+    Ok(Some(LineFrequency {
+        date,
+        directions,
+        outside_horizon: false,
+    }))
+}
+
 /// The network's active version and its horizon.
 struct Active {
     feed_version: String,
@@ -337,19 +530,28 @@ fn line_summary(
     line_id: String,
     name: String,
     colour: Option<String>,
+    mode: String,
 ) -> LineSummary {
+    let id = format!("{network}:{line_id}");
+    let status_line_id = if common::transit::status_from_tfl(network) {
+        format!("{}{line_id}", common::TFL_LINE_ID_PREFIX)
+    } else {
+        id.clone()
+    };
     LineSummary {
-        id: format!("{network}:{line_id}"),
+        id,
         line_id,
         name,
         colour,
+        mode,
+        status_line_id,
     }
 }
 
 /// The network's lines, in their order.
 pub async fn list_lines(pool: &PgPool, network: &str) -> Result<Vec<LineSummary>> {
-    let rows: Vec<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT l.line_id, l.name, l.colour FROM transit_lines l \
+    let rows: Vec<(String, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT l.line_id, l.name, l.colour, COALESCE(l.mode, n.mode) FROM transit_lines l \
          JOIN transit_networks n ON n.network = l.network AND n.active_feed_version = l.feed_version \
          WHERE l.network = $1 ORDER BY l.sort_order, l.line_id",
     )
@@ -358,7 +560,7 @@ pub async fn list_lines(pool: &PgPool, network: &str) -> Result<Vec<LineSummary>
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(id, name, colour)| line_summary(network, id, name, colour))
+        .map(|(id, name, colour, mode)| line_summary(network, id, name, colour, mode))
         .collect())
 }
 
@@ -387,16 +589,17 @@ pub async fn get_line(pool: &PgPool, network: &str, line: &str) -> Result<Option
     let Some(act) = active(pool, network).await? else {
         return Ok(None);
     };
-    let row: Option<(String, Option<String>, serde_json::Value)> = sqlx::query_as(
-        "SELECT name, colour, directions FROM transit_lines \
-         WHERE network = $1 AND feed_version = $2 AND line_id = $3",
+    let row: Option<(String, Option<String>, serde_json::Value, String)> = sqlx::query_as(
+        "SELECT l.name, l.colour, l.directions, COALESCE(l.mode, n.mode) FROM transit_lines l \
+         JOIN transit_networks n ON n.network = l.network \
+         WHERE l.network = $1 AND l.feed_version = $2 AND l.line_id = $3",
     )
     .bind(network)
     .bind(&act.feed_version)
     .bind(line)
     .fetch_optional(pool)
     .await?;
-    let Some((name, colour, directions)) = row else {
+    let Some((name, colour, directions, mode)) = row else {
         return Ok(None);
     };
     let names = station_names(pool, network, &act.feed_version).await?;
@@ -418,7 +621,7 @@ pub async fn get_line(pool: &PgPool, network: &str, line: &str) -> Result<Option
         })
         .collect();
     Ok(Some(LineDetail {
-        line: line_summary(network, line.to_owned(), name, colour),
+        line: line_summary(network, line.to_owned(), name, colour, mode),
         directions,
     }))
 }
@@ -611,7 +814,8 @@ pub async fn stop_departures(
                    LEFT JOIN transit_stops st ON st.network = pf.network AND st.feed_version = pf.feed_version \
                         AND st.stop_id = pf.parent_stop_id \
                    WHERE z.network = $1 AND z.feed_version = $2 AND z.pattern_id = c.pattern_id \
-                   ORDER BY z.seq DESC LIMIT 1) \
+                   ORDER BY z.seq DESC LIMIT 1), \
+                COALESCE(l.mode, (SELECT n.mode FROM transit_networks n WHERE n.network = $1)) \
          FROM calls c \
          LEFT JOIN transit_lines l ON l.network = $1 AND l.feed_version = $2 AND l.line_id = c.line_id \
          WHERE c.at_s >= 0 AND c.at_s < 86400 AND (c.at_s, c.trip_id, c.stop_id) > ($6, $7, $8) \
@@ -647,8 +851,10 @@ pub async fn stop_departures(
             trip_id: r.1,
             platform_id: r.2,
             platform: r.3,
-            line: match (r.4, r.5) {
-                (Some(id), Some(name)) => Some(line_summary(network, id, name, r.6)),
+            line: match (r.4, r.5, r.10) {
+                (Some(id), Some(name), Some(line_mode)) => {
+                    Some(line_summary(network, id, name, r.6, line_mode))
+                }
                 _ => None,
             },
             replacement_bus: r.7,
@@ -757,6 +963,40 @@ pub async fn line_timetable(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frequency_bands_take_gaps_inside_each_band() {
+        let at = |h: i32, m: i32| h * 3600 + m * 60;
+        let times = [
+            at(5, 30),
+            at(6, 0),
+            at(7, 0),
+            at(7, 2),
+            at(7, 2) + 20,
+            at(7, 6),
+            at(23, 50),
+            at(24, 20),
+        ];
+        let bands = bands_of(&times);
+        let names: Vec<&str> = bands.iter().map(|b| b.band.as_str()).collect();
+        assert_eq!(names, ["early", "morning-peak", "late"]);
+        assert_eq!(bands[0].departures, 2);
+        assert_eq!(bands[0].min_gap_minutes, Some(30));
+        // 07:02 and 07:02:20 are two branches meeting: not a 0-minute gap.
+        assert_eq!(bands[1].departures, 4);
+        assert_eq!(bands[1].min_gap_minutes, Some(2));
+        assert_eq!(bands[1].max_gap_minutes, Some(4));
+        assert_eq!(
+            (bands[1].from.as_str(), bands[1].to.as_str()),
+            ("07:00", "10:00")
+        );
+        // Past midnight belongs to the late band, which ends at 00:00.
+        assert_eq!(bands[2].departures, 2);
+        assert_eq!(bands[2].max_gap_minutes, Some(30));
+        assert_eq!(bands[2].to, "00:00");
+        assert!(bands_of(&[]).is_empty());
+        assert_eq!(bands_of(&[at(12, 0)])[0].min_gap_minutes, None);
+    }
 
     #[test]
     fn clocks_and_cursors() {

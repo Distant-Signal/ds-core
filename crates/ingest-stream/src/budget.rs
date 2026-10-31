@@ -6,7 +6,7 @@
 //! cover more (`TfL` a day, tocs 30 days). [`check_budget`] computes every
 //! `MAXLEN` and the worst-case memory of each stream **and** its
 //! dead-letter stream (capped at the same `MAXLEN`), and fails if the sum
-//! does not fit [`BUDGET_BYTES`] (512 MB). The alert fires at
+//! does not fit [`BUDGET_BYTES`] (576 MiB). The alert fires at
 //! [`ALERT_FRACTION`] of it.
 //!
 //! Worst case per stream is `(MAXLEN + TRIM_SLACK_ENTRIES) * (entry bytes +
@@ -19,10 +19,12 @@ use std::time::Duration;
 /// The writer outage every snapshot stream's `MAXLEN` covers at least.
 pub const OUTAGE_TARGET: Duration = Duration::from_secs(2 * 3600);
 
-/// All `ds:ingest:*` and `ds:dlq:*` keys together (decision D5,
-/// 2026-10-07: 512 MB of the 2 GB Redis `maxmemory`), in Redis's own
-/// units (`512mb` is 512 MiB).
-pub const BUDGET_BYTES: u64 = 512 * 1024 * 1024;
+/// All `ds:ingest:*` and `ds:dlq:*` keys together, in Redis's own units
+/// (`576mb` is 576 MiB). Decision D5 (2026-10-07) set 512 MB of the 2 GB
+/// Redis `maxmemory`; raised to 576 MiB for `TfL`'s timetable stream
+/// (docs/superpowers/specs/2026-10-30-tfl-transit-design.md §9), which
+/// with movement-relay's 1 GiB still leaves production's 2048mb room.
+pub const BUDGET_BYTES: u64 = 576 * 1024 * 1024;
 
 /// `DistantSignalIngestStreamMemoryHigh` fires at this fraction of
 /// [`BUDGET_BYTES`].
@@ -105,7 +107,7 @@ const KIB: u64 = 1024;
 
 /// The ingest streams (spec §7.1, with D1: no `train-events` and no
 /// `trust-backlog` stream).
-pub const INGEST_STREAMS: [StreamDecl; 11] = [
+pub const INGEST_STREAMS: [StreamDecl; 12] = [
     // poller-ldbws: 1 snapshot a minute in 6 parts of 100 stations, about
     // 60–80 KB gzip each.
     StreamDecl {
@@ -201,6 +203,18 @@ pub const INGEST_STREAMS: [StreamDecl; 11] = [
     StreamDecl {
         stream: crate::streams::TRANSIT_NET,
         entries_per_day: 24,
+        entry_bytes: TRANSIT_PART_BYTES as u64,
+        bound: Bound::Covers(Duration::from_secs(24 * 3600)),
+    },
+    // poller-transit-schedule (tfl: TfL's Underground, DLR and trams;
+    // disabled by default): no situations (status is poller-tfl's), only a
+    // daily timetable of 61 parts plus its commit (measured on TfL's
+    // 2026-10-26 export: 7,849 patterns, 58,383 trips, about 4 MB
+    // gzipped), sized for two items a day (a refresh). Covers a day, as
+    // metrolink's (the TfL design §9).
+    StreamDecl {
+        stream: crate::streams::TRANSIT_TFL,
+        entries_per_day: 128,
         entry_bytes: TRANSIT_PART_BYTES as u64,
         bound: Bound::Covers(Duration::from_secs(24 * 3600)),
     },
@@ -316,7 +330,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_spec_stream_table_fits_the_512_mb_budget() {
+    fn the_spec_stream_table_fits_the_budget() {
         let report = check_budget(&INGEST_STREAMS, BUDGET_BYTES).unwrap();
         let maxlens: Vec<(&str, u64)> = report
             .streams
@@ -338,6 +352,7 @@ mod tests {
                 ("ds:ingest:transit-metrolink", 320),
                 ("ds:ingest:darwin", 240),
                 ("ds:ingest:transit-net", 24),
+                ("ds:ingest:transit-tfl", 128),
             ]
         );
         let station = &report.streams[0];
@@ -346,9 +361,10 @@ mod tests {
         // dead-letter stream.
         assert_eq!(station.bytes, 820 * (80 * 1024 + 512));
         assert_eq!(station.dead_letter_bytes, station.bytes);
-        // About 396 MB in all (292 before transit-metrolink's 55 MB,
-        // tfl-stops' 8.5 MB, transit-net's 16.5 MB and darwin's 22.6 MB):
-        // under the 75% alert line (384 MiB), let alone 512.
+        // About 426 MB in all (292 before transit-metrolink's 55 MB,
+        // tfl-stops' 8.5 MB, transit-net's 16.5 MB, darwin's 22.6 MB and
+        // transit-tfl's 30 MB): under the 75% alert line (432 MiB), let
+        // alone 576.
         assert!(report.total_bytes < report.alert_bytes, "{report:#?}");
         let stops = report
             .streams
@@ -383,8 +399,16 @@ mod tests {
         // (240 + 100) * (32 KiB + 512), twice: about 23 MB.
         assert_eq!(darwin.bytes, 340 * (32 * 1024 + 512));
         assert_eq!(darwin.covers, OUTAGE_TARGET);
-        assert!(report.total_bytes < 400_000_000, "{report:#?}");
-        assert_eq!(report.alert_bytes, 384 * 1024 * 1024);
+        let tfl = report
+            .streams
+            .iter()
+            .find(|s| s.stream == "ds:ingest:transit-tfl")
+            .unwrap();
+        assert!(tfl.covers >= Duration::from_secs(24 * 3600));
+        // (128 + 100) * (64 KiB + 512), twice: about 30 MB (TfL design §9).
+        assert_eq!(tfl.bytes, 228 * (64 * 1024 + 512));
+        assert!(report.total_bytes < 430_000_000, "{report:#?}");
+        assert_eq!(report.alert_bytes, 432 * 1024 * 1024);
         assert!(report.total_bytes > 250_000_000, "{report:#?}");
     }
 

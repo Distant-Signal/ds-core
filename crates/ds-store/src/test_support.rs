@@ -676,6 +676,7 @@ pub mod transit {
                     name: "Blue Line".to_owned(),
                     colour: Some("#1f6fb5".to_owned()),
                     sort_order: 1,
+                    mode: None,
                     directions: vec![
                         TransitLineDirection {
                             direction: Direction::Outbound,

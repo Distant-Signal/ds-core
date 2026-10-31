@@ -347,6 +347,7 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
         "poller-transit-metrolink",
         "darwin-relay",
         "poller-transit-net",
+        "poller-transit-tfl",
         "ingest-writer",
         "ds-admin",
     ] {
@@ -621,6 +622,12 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             "poller-transit-metrolink",
             "ds:ingest:transit-metrolink",
             "ds:ingest:transit-net",
+        ),
+        // TfL (TfL design §9): its own stream, never TfL's line status.
+        (
+            "poller-transit-tfl",
+            "ds:ingest:transit-tfl",
+            "ds:ingest:tfl",
         ),
     ] {
         let own = h.key(own);

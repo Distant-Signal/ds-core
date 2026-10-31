@@ -35,7 +35,20 @@ pub mod status;
 /// writer pins each `ds:ingest:transit-<network>` stream to its network.
 /// `net` is Nottingham Express Transit (docs/superpowers/specs/2026-10-24-
 /// nottingham-net-design.md).
-pub const NETWORKS: &[&str] = &["metrolink", "net"];
+/// `tfl` is `TfL`'s Underground, DLR and London Trams
+/// (docs/superpowers/specs/2026-10-30-tfl-transit-design.md).
+pub const NETWORKS: &[&str] = &["metrolink", "net", "tfl"];
+
+/// The networks whose lines' status is `TfL`'s own (poller-tfl's
+/// `tfl-<line>` rows in `line_status`) rather than their SIRI-SX
+/// situations: `tfl`, whose line ids are `TfL`'s
+/// (docs/superpowers/specs/2026-10-30-tfl-transit-design.md §7).
+pub const TFL_STATUS_NETWORKS: &[&str] = &["tfl"];
+
+/// Whether `network`'s line status comes from `TfL` ([`TFL_STATUS_NETWORKS`]).
+pub fn status_from_tfl(network: &str) -> bool {
+    TFL_STATUS_NETWORKS.contains(&network)
+}
 
 /// The schema names (all at version 1).
 pub mod schema {
@@ -386,6 +399,11 @@ pub struct TransitLine {
     pub sort_order: i32,
     /// Station order per direction (spec §6.2 step 10).
     pub directions: Vec<TransitLineDirection>,
+    /// The line's own mode where its network mixes modes (`tube`, `dlr`,
+    /// `tram`; the `TfL` design §6). Absent on the wire when `None`, so a
+    /// network without line modes hashes and reads as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 /// One direction of a line: its stations in order.
@@ -672,6 +690,7 @@ mod tests {
         assert!(!is_stop_id("9400 ZZ"));
         assert!(metrolink().is_known());
         assert!(NetworkId::parse("net").unwrap().is_known());
+        assert!(NetworkId::parse("tfl").unwrap().is_known());
         assert!(!NetworkId::parse("supertram").unwrap().is_known());
     }
 

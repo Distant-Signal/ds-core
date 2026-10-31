@@ -318,7 +318,7 @@ pub const TFL_LINE_ID_PREFIX: &str = "tfl-";
 /// `GET /Line/Mode/overground/Status` call rather than guessed.
 /// `nr_line_id_for_tfl`/`tfl_line_id_for_nr` are written generically over
 /// this table so extending it needs no code change beyond a new row.
-const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[
+pub const TFL_TO_NR_LINE_ID: &[(&str, &str)] = &[
     ("tfl-elizabeth", "elizabeth-line"),
     ("tfl-liberty", "overground-liberty"),
     ("tfl-lioness", "overground-lioness"),
