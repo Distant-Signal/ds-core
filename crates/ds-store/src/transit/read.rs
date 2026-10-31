@@ -44,8 +44,16 @@ type RailLinkRow = (
     Option<String>,
     Option<String>,
 );
-/// `stations`' row: id, name, lat, lon, local line ids.
-type StationRow = (String, String, Option<f64>, Option<f64>, Vec<String>);
+/// `stations`' row: id, name, lat, lon, feed version, member stops (the
+/// station and its platforms).
+type StationRow = (
+    String,
+    String,
+    Option<f64>,
+    Option<f64>,
+    String,
+    Vec<String>,
+);
 /// `stop_departures`' row: seconds after midnight, trip, platform, indicator, line id, line
 /// name, colour, replacement bus, headsign, last stop's name, line mode.
 type BoardSqlRow = (
@@ -970,26 +978,56 @@ async fn line_with_patterns(
 }
 
 /// Stations (all, or one) with their lines and rail links.
+///
+/// Two queries, each joined on plain equalities: the stations with their
+/// member stops (the station and its platforms, where its calls are), from
+/// `transit_stops` alone; then the lines calling at those stops, an index
+/// lookup per member (`ps.stop_id = ANY($3)`). Not one join of stations to
+/// pattern stops on "the station's or a platform's id": production's
+/// Postgres 16 cannot use that `OR` as an index condition, and with the
+/// stations underestimated it filtered every pattern stop of the network
+/// per station and platform, so `TfL`'s list (1,143 stops, 216,766 pattern
+/// stops) hit the 30 s statement timeout (DS-223). These take about 0.3 s
+/// there.
 async fn stations(pool: &PgPool, network: &str, only: Option<&str>) -> Result<Vec<StopSummary>> {
     let rows: Vec<StationRow> = sqlx::query_as(
-        "SELECT s.stop_id, s.name, s.lat, s.lon, \
-                COALESCE(array_agg(DISTINCT p.line_id) FILTER (WHERE p.line_id IS NOT NULL), '{}') \
+        "SELECT s.stop_id, s.name, s.lat, s.lon, s.feed_version, array_agg(m.stop_id) \
          FROM transit_networks n \
          JOIN transit_stops s ON s.network = n.network AND s.feed_version = n.active_feed_version \
-         LEFT JOIN transit_stops pl ON pl.network = s.network AND pl.feed_version = s.feed_version \
-              AND pl.parent_stop_id = s.stop_id \
-         LEFT JOIN transit_pattern_stops ps ON ps.network = s.network AND ps.feed_version = s.feed_version \
-              AND ps.stop_id IN (pl.stop_id, s.stop_id) \
-         LEFT JOIN transit_patterns p ON p.network = ps.network AND p.feed_version = ps.feed_version \
-              AND p.pattern_id = ps.pattern_id \
+         JOIN transit_stops m ON m.network = s.network AND m.feed_version = s.feed_version \
+              AND COALESCE(m.parent_stop_id, m.stop_id) = s.stop_id \
          WHERE n.network = $1 AND s.kind = 'station' AND ($2::text IS NULL OR s.stop_id = $2) \
-         GROUP BY s.stop_id, s.name, s.lat, s.lon \
+         GROUP BY s.stop_id, s.name, s.lat, s.lon, s.feed_version \
          ORDER BY s.name, s.stop_id",
     )
     .bind(network)
     .bind(only)
     .fetch_all(pool)
     .await?;
+    let Some(feed_version) = rows.first().map(|row| row.4.clone()) else {
+        return Ok(Vec::new());
+    };
+    let members: Vec<&str> = rows
+        .iter()
+        .flat_map(|row| row.5.iter().map(String::as_str))
+        .collect();
+    let calls: Vec<(String, String)> = sqlx::query_as(
+        "SELECT DISTINCT ps.stop_id, p.line_id \
+         FROM transit_pattern_stops ps \
+         JOIN transit_patterns p ON p.network = ps.network AND p.feed_version = ps.feed_version \
+              AND p.pattern_id = ps.pattern_id \
+         WHERE ps.network = $1 AND ps.feed_version = $2 AND ps.stop_id = ANY($3) \
+           AND p.line_id IS NOT NULL",
+    )
+    .bind(network)
+    .bind(&feed_version)
+    .bind(&members)
+    .fetch_all(pool)
+    .await?;
+    let mut lines_at: HashMap<String, Vec<String>> = HashMap::new();
+    for (stop, line) in calls {
+        lines_at.entry(stop).or_default().push(line);
+    }
     let order: HashMap<String, usize> = list_lines(pool, network)
         .await?
         .into_iter()
@@ -1017,11 +1055,18 @@ async fn stations(pool: &PgPool, network: &str, only: Option<&str>) -> Result<Ve
     }
     Ok(rows
         .into_iter()
-        .map(|(id, name, lat, lon, mut lines)| {
-            lines.sort_by_key(|l| order.get(l).copied().unwrap_or(usize::MAX));
+        .map(|(id, name, lat, lon, _, members)| {
+            let mut called: Vec<String> = members
+                .iter()
+                .filter_map(|m| lines_at.get(m))
+                .flatten()
+                .cloned()
+                .collect();
+            called.sort_by_key(|l| (order.get(l).copied().unwrap_or(usize::MAX), l.clone()));
+            called.dedup();
             StopSummary {
                 rail_links: links_by.remove(&id).unwrap_or_default(),
-                lines: lines
+                lines: called
                     .into_iter()
                     .map(|l| format!("{network}:{l}"))
                     .collect(),
@@ -1428,7 +1473,7 @@ mod tests {
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use crate::test_support::transit::{A, B, cleanup, seed};
+    use crate::test_support::transit::{A, B, cleanup, feed, seed, seed_feed};
 
     const NETWORK: &str = "test-read";
 
@@ -1622,5 +1667,152 @@ mod db_tests {
             ]
         );
         cleanup(&pool, NETWORK).await;
+    }
+
+    /// `TfL`'s shape: stations whose calls are all at their platforms, tens
+    /// of thousands of pattern stops. The stations list joined stations to
+    /// pattern stops on "the station's or a platform's id" (an `OR`); on
+    /// production's Postgres 16, with the stations underestimated, that
+    /// filtered every pattern stop of the network per station and platform:
+    /// 30 s, the statement timeout, on `TfL`'s 1,143 stops and 216,766
+    /// pattern stops, and `/transit/tfl` failed (DS-223). Postgres 18 (CI)
+    /// turns that `OR` into an index condition, so this guards the scale
+    /// and the lines through platforms rather than replaying the plan.
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL (a migrated database)"]
+    #[expect(clippy::too_many_lines, reason = "one generated feed, part by part")]
+    async fn the_stations_list_scales_to_a_tfl_sized_network() {
+        use common::transit::{
+            Direction, StopKind, TimetableRows, TransitLine, TransitLineDirection, TransitPattern,
+            TransitPatternStop, TransitStop,
+        };
+        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+        const SCALE: &str = "test-scale";
+        const STATIONS: usize = 300;
+        const PATTERNS: usize = 3000;
+        const CALLS: usize = 30;
+        let pool = crate::test_support::connect().await;
+        let today = NaiveDate::from_ymd_opt(2026, 10, 14).unwrap();
+        let station = |i: usize| format!("9400ZZTS{i:03}");
+        let stop = |id: String, parent: Option<String>, name: String| TransitStop {
+            stop_id: id,
+            kind: if parent.is_some() {
+                StopKind::Platform
+            } else {
+                StopKind::Station
+            },
+            parent_stop_id: parent,
+            name,
+            indicator: None,
+            lat: None,
+            lon: None,
+            wheelchair: None,
+        };
+        let call = |stop_id: String, k: usize| TransitPatternStop {
+            stop_id,
+            arr_offset_s: i32::try_from(k * 60).unwrap(),
+            dep_offset_s: i32::try_from(k * 60).unwrap(),
+            pickup: 0,
+            drop_off: 0,
+        };
+        let (mut parts, mut manifest) = feed(SCALE, today);
+        for (part, _) in &mut parts {
+            match &mut part.rows {
+                TimetableRows::Lines(lines) => lines.push(TransitLine {
+                    line_id: "red".to_owned(),
+                    name: "Red Line".to_owned(),
+                    colour: None,
+                    sort_order: 2,
+                    mode: None,
+                    directions: vec![TransitLineDirection {
+                        direction: Direction::Outbound,
+                        headsign: None,
+                        stations: vec![station(0)],
+                    }],
+                }),
+                TimetableRows::Stops(stops) => {
+                    for i in 0..STATIONS {
+                        stops.push(stop(station(i), None, format!("Gen {i:03}")));
+                        for p in 1..=3 {
+                            let platform = format!("{}{p}", station(i));
+                            stops.push(stop(platform, Some(station(i)), format!("Gen {i:03}")));
+                        }
+                    }
+                    // A station nothing calls at.
+                    stops.push(stop("9400ZZTSNONE".to_owned(), None, "Gen none".to_owned()));
+                }
+                TimetableRows::Patterns(patterns) => {
+                    for i in 0..PATTERNS {
+                        patterns.push(TransitPattern {
+                            pattern_id: format!("g{i}"),
+                            line_id: Some("red".to_owned()),
+                            direction: Direction::Outbound,
+                            headsign: None,
+                            stops: (0..CALLS)
+                                .map(|k| {
+                                    let at = (i * 7 + k) % STATIONS;
+                                    call(format!("{}{}", station(at), (i + k) % 3 + 1), k)
+                                })
+                                .collect(),
+                        });
+                    }
+                    // A call at a station's own id, not a platform's.
+                    patterns.push(TransitPattern {
+                        pattern_id: "direct".to_owned(),
+                        line_id: Some("blue".to_owned()),
+                        direction: Direction::Outbound,
+                        headsign: None,
+                        stops: vec![call(station(0), 0), call(station(1), 1)],
+                    });
+                }
+                _ => {}
+            }
+        }
+        manifest.counts.lines += 1;
+        manifest.counts.stops += u32::try_from(STATIONS * 4 + 1).unwrap();
+        manifest.counts.patterns += u32::try_from(PATTERNS + 1).unwrap();
+        seed_feed(&pool, &parts, &manifest, today).await;
+
+        // Analysed, as production's tables were when `/transit/tfl` failed:
+        // a plan from statistics older than the seed is the planner's
+        // guess, and no shape of the query is safe from every guess.
+        let owner = crate::test_support::schedule_fixture_pool(&pool).await;
+        sqlx::query("ANALYZE transit_stops, transit_patterns, transit_pattern_stops")
+            .execute(&owner)
+            .await
+            .unwrap();
+        // Well inside production's 30 s.
+        let options: PgConnectOptions = std::env::var("DATABASE_URL")
+            .unwrap()
+            .parse::<PgConnectOptions>()
+            .unwrap()
+            .options([("statement_timeout", "5s")]);
+        let bounded = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let stops = list_stops(&bounded, SCALE).await.unwrap();
+        assert_eq!(stops.len(), 2 + STATIONS + 1);
+        let lines_of = |id: &str| {
+            stops
+                .iter()
+                .find(|s| s.id == id)
+                .map(|s| s.lines.clone())
+                .unwrap()
+        };
+        // Through its platforms (red) and its own id (blue), in line order.
+        assert_eq!(lines_of(&station(0)), ["test-scale:blue", "test-scale:red"]);
+        assert_eq!(lines_of(&station(150)), ["test-scale:red"]);
+        assert!(lines_of("9400ZZTSNONE").is_empty());
+        assert_eq!(lines_of(A), ["test-scale:blue"]);
+        let one = get_stop(&bounded, SCALE, &station(0))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(one.stop.lines, ["test-scale:blue", "test-scale:red"]);
+        assert_eq!(one.platforms.len(), 3);
+        cleanup(&pool, SCALE).await;
     }
 }

@@ -859,11 +859,22 @@ pub mod transit {
     /// Seeds the feed for `network`, active as of now, `today` its last
     /// service day.
     pub async fn seed(pool: &PgPool, network: &str, today: NaiveDate) {
-        cleanup(pool, network).await;
-        let owner = super::schedule_fixture_pool(pool).await;
         let (parts, manifest) = feed(network, today);
+        seed_feed(pool, &parts, &manifest, today).await;
+    }
+
+    /// Seeds `parts` (a [`feed`], perhaps reshaped by the test) as the
+    /// manifest's network's active version, as of `today`.
+    pub async fn seed_feed(
+        pool: &PgPool,
+        parts: &[(TimetablePart, PartIndex)],
+        manifest: &TimetableCommit,
+        today: NaiveDate,
+    ) {
+        cleanup(pool, manifest.network.as_str()).await;
+        let owner = super::schedule_fixture_pool(pool).await;
         let mut tx = owner.begin().await.expect("begin");
-        for (part, index) in &parts {
+        for (part, index) in parts {
             stage_part(&mut tx, part, *index, Utc::now())
                 .await
                 .expect("stage");
@@ -871,7 +882,7 @@ pub mod transit {
         // Activated as of the last service day (the "service today" check).
         let at = today.and_hms_opt(12, 0, 0).expect("noon").and_utc();
         assert_eq!(
-            commit(&mut tx, &manifest, at).await.expect("commit"),
+            commit(&mut tx, manifest, at).await.expect("commit"),
             CommitOutcome::Activated
         );
         tx.commit().await.expect("commit");
