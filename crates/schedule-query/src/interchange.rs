@@ -95,6 +95,12 @@ pub struct FixedLink {
     /// an attributed `METRO` link, else [`OperatorId::UNKNOWN`]. Set by
     /// the api's graph build; a parsed row starts unknown.
     pub operator: OperatorId,
+    /// [`OperatorId::UNKNOWN`] for an ordinary link. Otherwise the link is
+    /// a stand-in, usable only by a search whose operator filter rules
+    /// that operator out: the estimated walks between London Underground
+    /// pairs, used only when the Tube is (planner operator filtering spec
+    /// §5.1).
+    pub only_without: OperatorId,
 }
 
 impl FixedLink {
@@ -102,6 +108,13 @@ impl FixedLink {
     #[must_use]
     pub fn is_walk(&self) -> bool {
         self.mode == "WALK"
+    }
+
+    /// A stand-in link ([`Self::only_without`]): never used without an
+    /// operator filter that rules its operator out.
+    #[must_use]
+    pub fn is_stand_in(&self) -> bool {
+        !self.only_without.is_unknown()
     }
 }
 
@@ -228,10 +241,29 @@ pub fn fixed_link_between<'a>(
     date: NaiveDate,
     time_min: u32,
 ) -> Option<&'a FixedLink> {
+    fixed_link_between_where(data, from_crs, to_crs, date, time_min, |link| {
+        !link.is_stand_in()
+    })
+}
+
+/// [`fixed_link_between`] among the links `allow` accepts (an operator
+/// filter's: see [`fixed_links_from_where`]).
+#[expect(
+    clippy::similar_names,
+    reason = "the similar names are distinct domain terms"
+)]
+pub fn fixed_link_between_where<'a>(
+    data: &'a InterchangeData,
+    from_crs: &str,
+    to_crs: &'a str,
+    date: NaiveDate,
+    time_min: u32,
+    allow: impl Fn(&FixedLink) -> bool,
+) -> Option<&'a FixedLink> {
     let clock = hhmm_bytes(clock_minutes(time_min));
     let day = day_index(date);
     fixed_links_between(data, from_crs, to_crs)
-        .filter(|link| applies(link, day, clock))
+        .filter(|link| allow(link) && applies(link, day, clock))
         .min_by(|a, b| lookup_key(a).cmp(&lookup_key(b)))
 }
 
@@ -391,6 +423,26 @@ pub fn fixed_links_from<'a>(
     date: NaiveDate,
     time_min: u32,
 ) -> Vec<&'a FixedLink> {
+    fixed_links_from_where(data, from_crs, date, time_min, |link| !link.is_stand_in())
+}
+
+/// [`fixed_links_from`] among the links `allow` accepts: the shortest
+/// ALLOWED link to each destination. A search with an operator filter
+/// passes its rule here rather than dropping the chosen link afterwards,
+/// which would lose a longer link it may use (a walk where the Tube is
+/// ruled out). [`fixed_links_from`] itself accepts every link but the
+/// stand-ins ([`FixedLink::only_without`]).
+#[expect(
+    clippy::similar_names,
+    reason = "the similar names are distinct domain terms"
+)]
+pub fn fixed_links_from_where<'a>(
+    data: &'a InterchangeData,
+    from_crs: &str,
+    date: NaiveDate,
+    time_min: u32,
+    allow: impl Fn(&FixedLink) -> bool,
+) -> Vec<&'a FixedLink> {
     let clock = hhmm_bytes(clock_minutes(time_min));
     let day = day_index(date);
 
@@ -404,7 +456,9 @@ pub fn fixed_links_from<'a>(
     // already in that order; anything else is sorted here first.
     let mut result: Vec<&FixedLink> = Vec::new();
     let mut take = |link: &'a FixedLink| {
-        if applies(link, day, clock) && result.last().is_none_or(|last| last.to_crs != link.to_crs)
+        if allow(link)
+            && applies(link, day, clock)
+            && result.last().is_none_or(|last| last.to_crs != link.to_crs)
         {
             result.push(link);
         }
@@ -498,6 +552,7 @@ mod tests {
         days_mask: &str,
     ) -> FixedLink {
         FixedLink {
+            only_without: OperatorId::UNKNOWN,
             operator: OperatorId::UNKNOWN,
             mode: "TUBE".to_string(),
             to_crs: to_crs.to_string(),

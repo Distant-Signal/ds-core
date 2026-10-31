@@ -94,8 +94,8 @@ pub use connections::{
 };
 pub use interchange::{
     ChangeTime, FixedLink, InterchangeData, ModalChangeBuffer, fixed_link_between,
-    fixed_links_between, fixed_links_from, index_fixed_links_both_ways, minimum_change_time,
-    sibling_tiplocs,
+    fixed_link_between_where, fixed_links_between, fixed_links_from, fixed_links_from_where,
+    index_fixed_links_both_ways, minimum_change_time, sibling_tiplocs,
 };
 pub use line_membership::{
     DayTrains, LineDue, LineMembers, LineScope, Membership, MembershipLine, RunDirection, classify,
