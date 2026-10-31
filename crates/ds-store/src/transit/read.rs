@@ -123,6 +123,167 @@ pub struct LineDetail {
     #[serde(flatten)]
     pub line: LineSummary,
     pub directions: Vec<LineDirection>,
+    /// The line's branches (the `TfL` design §8.3): the station runs its
+    /// trips make, each direction's in order of their share of its trips.
+    pub branches: Vec<LineBranch>,
+}
+
+/// One branch of a line: a run of stations that at least
+/// [`BRANCH_MIN_SHARE_PERCENT`] of a direction's trips make (a trip making
+/// part of a longer run counts for the longer one).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LineBranch {
+    /// `<direction>-<n>`, stable for a feed version: the timetable's
+    /// `branch`.
+    pub id: String,
+    /// `outbound` or `inbound`.
+    pub direction: String,
+    /// `Edgware to Morden`, with `via <station>` when two branches share
+    /// their ends.
+    pub name: String,
+    pub stations: Vec<StationRef>,
+    /// Its share of the direction's trips, whole percent.
+    pub share_percent: u32,
+}
+
+/// A branch carrying a smaller share of its direction's trips is left out
+/// (an odd depot run, not a branch).
+const BRANCH_MIN_SHARE_PERCENT: u32 = 5;
+
+/// One pattern of a line: its direction, its stations in order (a
+/// platform as its station, repeats in a row once) and its trips.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LinePattern {
+    pattern_id: String,
+    direction: i16,
+    stations: Vec<String>,
+    trips: i64,
+}
+
+/// Whether `needle` is a run of `hay`'s stations, in order.
+fn contains_run(hay: &[String], needle: &[String]) -> bool {
+    needle.is_empty() || hay.windows(needle.len()).any(|window| window == needle)
+}
+
+/// A line's patterns (the trips' stopping patterns), with their trips
+/// (replacement buses left out).
+async fn line_patterns(
+    pool: &PgPool,
+    network: &str,
+    feed_version: &str,
+    line: &str,
+) -> Result<Vec<LinePattern>> {
+    let rows: Vec<(String, i16, Vec<String>, i64)> = sqlx::query_as(
+        "SELECT p.pattern_id, p.direction, \
+                array_agg(COALESCE(pl.parent_stop_id, pl.stop_id) ORDER BY ps.seq), \
+                (SELECT count(*) FROM transit_trips t WHERE t.network = p.network \
+                   AND t.feed_version = p.feed_version AND t.pattern_id = p.pattern_id \
+                   AND NOT t.replacement_bus) \
+         FROM transit_patterns p \
+         JOIN transit_pattern_stops ps ON ps.network = p.network AND ps.feed_version = p.feed_version \
+              AND ps.pattern_id = p.pattern_id \
+         JOIN transit_stops pl ON pl.network = ps.network AND pl.feed_version = ps.feed_version \
+              AND pl.stop_id = ps.stop_id \
+         WHERE p.network = $1 AND p.feed_version = $2 AND p.line_id = $3 \
+         GROUP BY p.network, p.feed_version, p.pattern_id, p.direction",
+    )
+    .bind(network)
+    .bind(feed_version)
+    .bind(line)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(pattern_id, direction, mut stations, trips)| {
+            stations.dedup();
+            LinePattern {
+                pattern_id,
+                direction,
+                stations,
+                trips,
+            }
+        })
+        .collect())
+}
+
+/// The branches of `patterns` (see [`LineBranch`]): per direction, the
+/// station runs longest first, a run inside a longer one counted for that
+/// one, those under [`BRANCH_MIN_SHARE_PERCENT`] left out, the rest by
+/// share. Named by their ends, with `via` the first station that tells two
+/// with the same ends apart.
+fn branches_of(patterns: &[LinePattern], names: &HashMap<String, String>) -> Vec<LineBranch> {
+    let name_of = |id: &String| names.get(id).cloned().unwrap_or_else(|| id.clone());
+    let mut out = Vec::new();
+    for direction in [0_i16, 1] {
+        let mut runs: BTreeMap<&[String], i64> = BTreeMap::new();
+        for pattern in patterns.iter().filter(|p| p.direction == direction) {
+            *runs.entry(pattern.stations.as_slice()).or_default() += pattern.trips;
+        }
+        let total: i64 = runs.values().sum();
+        if total == 0 {
+            continue;
+        }
+        let mut ordered: Vec<(&[String], i64)> = runs.into_iter().collect();
+        // Longest first; then the busier; then by content, for a stable order.
+        ordered.sort_by(|a, b| {
+            b.0.len()
+                .cmp(&a.0.len())
+                .then(b.1.cmp(&a.1))
+                .then(a.0.cmp(b.0))
+        });
+        let mut kept: Vec<(&[String], i64)> = Vec::new();
+        for (run, trips) in ordered {
+            match kept
+                .iter_mut()
+                .find(|(longer, _)| contains_run(longer, run))
+            {
+                Some(longer) => longer.1 += trips,
+                None => kept.push((run, trips)),
+            }
+        }
+        let share = |trips: i64| u32::try_from(trips * 100 / total).unwrap_or(0);
+        kept.retain(|(_, trips)| share(*trips) >= BRANCH_MIN_SHARE_PERCENT);
+        kept.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        let ends: Vec<String> = kept
+            .iter()
+            .map(|(run, _)| match (run.first(), run.last()) {
+                (Some(first), Some(last)) => format!("{} to {}", name_of(first), name_of(last)),
+                _ => String::new(),
+            })
+            .collect();
+        for (n, (run, trips)) in kept.iter().enumerate() {
+            let mut name = ends[n].clone();
+            let twin = kept
+                .iter()
+                .enumerate()
+                .find(|(m, _)| *m != n && ends[*m] == ends[n]);
+            if let Some((_, (other, _))) = twin
+                && let Some(via) = run.iter().find(|s| !other.contains(s))
+            {
+                name = format!("{name} via {}", name_of(via));
+            }
+            let direction_name = if direction == 1 {
+                "inbound"
+            } else {
+                "outbound"
+            };
+            out.push(LineBranch {
+                id: format!("{direction_name}-{}", n + 1),
+                direction: direction_name.to_owned(),
+                name,
+                stations: run
+                    .iter()
+                    .map(|id| StationRef {
+                        id: id.clone(),
+                        name: name_of(id),
+                    })
+                    .collect(),
+                share_percent: share(*trips),
+            });
+        }
+    }
+    out
 }
 
 /// A link to a National Rail station.
@@ -264,9 +425,177 @@ pub struct TimetableTrip {
 pub struct LineTimetable {
     pub date: NaiveDate,
     pub direction: String,
+    /// The branch shown (`LineBranch::id`), when one was asked for and is
+    /// the direction's: its stations are the rows, and only trips that
+    /// stay on it are listed.
+    pub branch: Option<String>,
     pub stations: Vec<StationRef>,
     pub trips: Vec<TimetableTrip>,
     pub outside_horizon: bool,
+}
+
+/// The timetable's trips from its calls (trip, start, headsign, station,
+/// time; in trip and call order), one column per station of `stations`:
+/// each trip's first time at each.
+fn timetable_grid(
+    rows: Vec<(String, i32, Option<String>, String, i32)>,
+    stations: &[StationRef],
+) -> Vec<TimetableTrip> {
+    let column: HashMap<&str, usize> = stations
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.id.as_str(), i))
+        .collect();
+    let mut trips: Vec<TimetableTrip> = Vec::new();
+    for (trip_id, _, headsign, station, at) in rows {
+        if trips.last().is_none_or(|t| t.trip_id != trip_id) {
+            trips.push(TimetableTrip {
+                trip_id: trip_id.clone(),
+                headsign,
+                times: vec![None; stations.len()],
+            });
+        }
+        if let (Some(trip), Some(&i)) = (trips.last_mut(), column.get(station.as_str()))
+            && trip.times[i].is_none()
+        {
+            trip.times[i] = Some(clock(at));
+        }
+    }
+    trips
+}
+
+/// What a line timetable shows: one direction (and branch) of one date,
+/// trips starting in `[from_s, to_s)`.
+#[derive(Debug, Clone, Copy)]
+pub struct TimetableWindow<'a> {
+    pub date: NaiveDate,
+    /// `outbound` or `inbound`.
+    pub direction: &'a str,
+    pub from_s: i32,
+    pub to_s: i32,
+    /// A `LineBranch::id`; an unknown one or another direction's shows the
+    /// whole direction.
+    pub branch: Option<&'a str>,
+}
+
+/// A stop's first and last departure of the day on one line, one way
+/// (the `TfL` design §8.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StopFirstLast {
+    pub line: LineSummary,
+    /// `outbound` or `inbound`.
+    pub direction: String,
+    /// Where that direction goes: its headsign, else its last station.
+    pub towards: Option<String>,
+    /// `HH:MM` London time.
+    pub first: String,
+    pub last: String,
+}
+
+/// `station`'s first and last departures on `date` per line and
+/// direction (trips that start there or call there, not those ending
+/// there; replacement buses left out), in the network's line order. `None`
+/// for an unknown station; empty outside the horizon.
+pub async fn stop_first_last(
+    pool: &PgPool,
+    network: &str,
+    station: &str,
+    date: NaiveDate,
+) -> Result<Option<Vec<StopFirstLast>>> {
+    let Some(act) = active(pool, network).await? else {
+        return Ok(None);
+    };
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM transit_stops WHERE network = $1 AND feed_version = $2 \
+         AND stop_id = $3 AND kind = 'station')",
+    )
+    .bind(network)
+    .bind(&act.feed_version)
+    .bind(station)
+    .fetch_one(pool)
+    .await?;
+    if !exists {
+        return Ok(None);
+    }
+    if !act.covers(date) {
+        return Ok(Some(Vec::new()));
+    }
+    let rows: Vec<(String, i16, i32, i32)> = sqlx::query_as(
+        "SELECT t.line_id, p.direction, min(t.start_s + ps.dep_offset_s), \
+                max(t.start_s + ps.dep_offset_s) \
+         FROM transit_stops pl \
+         JOIN transit_pattern_stops ps ON ps.network = pl.network AND ps.feed_version = pl.feed_version \
+              AND ps.stop_id = pl.stop_id \
+         JOIN transit_patterns p ON p.network = ps.network AND p.feed_version = ps.feed_version \
+              AND p.pattern_id = ps.pattern_id \
+         JOIN transit_trips t ON t.network = ps.network AND t.feed_version = ps.feed_version \
+              AND t.pattern_id = ps.pattern_id \
+         JOIN transit_service_days d ON d.network = t.network AND d.feed_version = t.feed_version \
+              AND d.service_id = t.service_id AND d.service_date = $4 \
+         WHERE pl.network = $1 AND pl.feed_version = $2 AND (pl.stop_id = $3 OR pl.parent_stop_id = $3) \
+           AND ps.pickup <> 1 AND t.line_id IS NOT NULL AND NOT t.replacement_bus \
+           AND ps.seq < (SELECT max(x.seq) FROM transit_pattern_stops x WHERE x.network = ps.network \
+                AND x.feed_version = ps.feed_version AND x.pattern_id = ps.pattern_id) \
+         GROUP BY t.line_id, p.direction",
+    )
+    .bind(network)
+    .bind(&act.feed_version)
+    .bind(station)
+    .bind(date)
+    .fetch_all(pool)
+    .await?;
+    let lines = list_lines(pool, network).await?;
+    let names = station_names(pool, network, &act.feed_version).await?;
+    let directions: Vec<(String, serde_json::Value)> = sqlx::query_as(
+        "SELECT line_id, directions FROM transit_lines WHERE network = $1 AND feed_version = $2",
+    )
+    .bind(network)
+    .bind(&act.feed_version)
+    .fetch_all(pool)
+    .await?;
+    let mut towards: HashMap<(String, String), String> = HashMap::new();
+    for (line_id, json) in directions {
+        let stored: Vec<StoredDirection> =
+            serde_json::from_value(json).context("transit_lines.directions")?;
+        for d in stored {
+            let name = d
+                .headsign
+                .or_else(|| d.stations.last().and_then(|s| names.get(s).cloned()));
+            if let Some(name) = name {
+                towards.insert((line_id.clone(), d.direction), name);
+            }
+        }
+    }
+    let order: HashMap<&str, usize> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (l.line_id.as_str(), i))
+        .collect();
+    let mut out: Vec<(usize, i16, StopFirstLast)> = rows
+        .into_iter()
+        .filter_map(|(line_id, direction, first, last)| {
+            let index = *order.get(line_id.as_str())?;
+            let direction_name = if direction == 1 {
+                "inbound"
+            } else {
+                "outbound"
+            };
+            Some((
+                index,
+                direction,
+                StopFirstLast {
+                    line: lines[index].clone(),
+                    direction: direction_name.to_owned(),
+                    towards: towards.get(&(line_id, direction_name.to_owned())).cloned(),
+                    first: clock(first),
+                    last: clock(last),
+                },
+            ))
+        })
+        .collect();
+    out.sort_by_key(|(index, direction, _)| (*index, *direction));
+    Ok(Some(out.into_iter().map(|(_, _, row)| row).collect()))
 }
 
 /// A band of the service day, for a line's frequency summary (the `TfL`
@@ -586,6 +915,17 @@ struct StoredDirection {
 
 /// A line and its stations per direction.
 pub async fn get_line(pool: &PgPool, network: &str, line: &str) -> Result<Option<LineDetail>> {
+    Ok(line_with_patterns(pool, network, line)
+        .await?
+        .map(|(detail, _)| detail))
+}
+
+/// [`get_line`] and the line's patterns, which its branches came from.
+async fn line_with_patterns(
+    pool: &PgPool,
+    network: &str,
+    line: &str,
+) -> Result<Option<(LineDetail, Vec<LinePattern>)>> {
     let Some(act) = active(pool, network).await? else {
         return Ok(None);
     };
@@ -620,10 +960,13 @@ pub async fn get_line(pool: &PgPool, network: &str, line: &str) -> Result<Option
                 .collect(),
         })
         .collect();
-    Ok(Some(LineDetail {
+    let patterns = line_patterns(pool, network, &act.feed_version, line).await?;
+    let detail = LineDetail {
         line: line_summary(network, line.to_owned(), name, colour, mode),
         directions,
-    }))
+        branches: branches_of(&patterns, &names),
+    };
+    Ok(Some((detail, patterns)))
 }
 
 /// Stations (all, or one) with their lines and rail links.
@@ -877,12 +1220,16 @@ pub async fn line_timetable(
     pool: &PgPool,
     network: &str,
     line: &str,
-    date: NaiveDate,
-    direction: &str,
-    from_s: i32,
-    to_s: i32,
+    window: TimetableWindow<'_>,
 ) -> Result<Option<LineTimetable>> {
-    let Some(detail) = get_line(pool, network, line).await? else {
+    let TimetableWindow {
+        date,
+        direction,
+        from_s,
+        to_s,
+        branch,
+    } = window;
+    let Some((detail, patterns)) = line_with_patterns(pool, network, line).await? else {
         return Ok(None);
     };
     let Some(dir) = detail
@@ -895,16 +1242,37 @@ pub async fn line_timetable(
     let Some(act) = active(pool, network).await? else {
         return Ok(None);
     };
+    let direction_id = i16::from(direction == "inbound");
+    let branch = branch.and_then(|id| {
+        detail
+            .branches
+            .into_iter()
+            .find(|b| b.id == id && b.direction == direction)
+    });
+    // A branch: its stations, and the patterns that stay on them.
+    let (stations, only_patterns) = match branch.as_ref() {
+        Some(branch) => {
+            let ids: Vec<String> = branch.stations.iter().map(|s| s.id.clone()).collect();
+            let keep: Vec<String> = patterns
+                .iter()
+                .filter(|p| p.direction == direction_id && contains_run(&ids, &p.stations))
+                .map(|p| p.pattern_id.clone())
+                .collect();
+            (branch.stations.clone(), Some(keep))
+        }
+        None => (dir.stations, None),
+    };
+    let branch = branch.map(|b| b.id);
     if !act.covers(date) {
         return Ok(Some(LineTimetable {
             date,
             direction: direction.to_owned(),
-            stations: dir.stations,
+            branch,
+            stations,
             trips: vec![],
             outside_horizon: true,
         }));
     }
-    let direction_id = i16::from(direction == "inbound");
     let rows: Vec<(String, i32, Option<String>, String, i32)> = sqlx::query_as(
         "SELECT t.trip_id, t.start_s, t.headsign, COALESCE(pl.parent_stop_id, pl.stop_id), \
                 t.start_s + ps.dep_offset_s \
@@ -919,6 +1287,7 @@ pub async fn line_timetable(
               AND pl.stop_id = ps.stop_id \
          WHERE t.network = $1 AND t.feed_version = $2 AND t.line_id = $3 AND NOT t.replacement_bus \
            AND p.direction = $5 AND t.start_s >= $6 AND t.start_s < $7 \
+           AND ($8::text[] IS NULL OR t.pattern_id = ANY($8)) \
          ORDER BY t.start_s, t.trip_id, ps.seq",
     )
     .bind(network)
@@ -928,33 +1297,15 @@ pub async fn line_timetable(
     .bind(direction_id)
     .bind(from_s)
     .bind(to_s)
+    .bind(only_patterns)
     .fetch_all(pool)
     .await?;
-    let column: HashMap<&str, usize> = dir
-        .stations
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.id.as_str(), i))
-        .collect();
-    let mut trips: Vec<TimetableTrip> = Vec::new();
-    for (trip_id, _, headsign, station, at) in rows {
-        if trips.last().is_none_or(|t| t.trip_id != trip_id) {
-            trips.push(TimetableTrip {
-                trip_id: trip_id.clone(),
-                headsign,
-                times: vec![None; dir.stations.len()],
-            });
-        }
-        if let (Some(trip), Some(&i)) = (trips.last_mut(), column.get(station.as_str()))
-            && trip.times[i].is_none()
-        {
-            trip.times[i] = Some(clock(at));
-        }
-    }
+    let trips = timetable_grid(rows, &stations);
     Ok(Some(LineTimetable {
         date,
         direction: direction.to_owned(),
-        stations: dir.stations,
+        branch,
+        stations,
         trips,
         outside_horizon: false,
     }))
@@ -963,6 +1314,62 @@ pub async fn line_timetable(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run(ids: &str) -> Vec<String> {
+        ids.split(' ').map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn branches_merge_short_runs_and_name_twins_by_where_they_differ() {
+        // A Northern-like line, outbound only: two ends north (E, H), a
+        // trunk (C), two ways through the middle (B for Bank, X for
+        // Charing Cross) and two ends south (M, P); short workings, and a
+        // rare depot run.
+        let pattern = |id: &str, stations: &str, trips: i64| LinePattern {
+            pattern_id: id.to_owned(),
+            direction: 0,
+            stations: run(stations),
+            trips,
+        };
+        let patterns = [
+            pattern("p1", "E C B M", 40),
+            pattern("p2", "H C X P", 30),
+            pattern("p3", "E C X M", 20),
+            // Short workings inside p1 and p2.
+            pattern("p4", "C B M", 6),
+            pattern("p5", "H C", 2),
+            // A depot run: under 5% of the direction's trips.
+            pattern("p6", "Q E", 2),
+        ];
+        let names: HashMap<String, String> = [
+            ("B", "Bank"),
+            ("C", "Camden"),
+            ("E", "Edgware"),
+            ("H", "High Barnet"),
+            ("M", "Morden"),
+            ("P", "Battersea"),
+            ("X", "Charing Cross"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+        let branches = branches_of(&patterns, &names);
+        let got: Vec<(&str, &str, u32)> = branches
+            .iter()
+            .map(|b| (b.id.as_str(), b.name.as_str(), b.share_percent))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("outbound-1", "Edgware to Morden via Bank", 46),
+                ("outbound-2", "High Barnet to Battersea", 32),
+                ("outbound-3", "Edgware to Morden via Charing Cross", 20),
+            ]
+        );
+        assert_eq!(branches[0].stations[2].name, "Bank");
+        assert!(contains_run(&run("E C B M"), &run("C B")));
+        assert!(!contains_run(&run("E C B M"), &run("C M")));
+    }
 
     #[test]
     fn frequency_bands_take_gaps_inside_each_band() {
@@ -1141,14 +1548,18 @@ mod db_tests {
     #[ignore = "requires DATABASE_URL (a migrated database)"]
     async fn the_line_timetable_is_a_grid_without_buses() {
         let (pool, today) = setup().await;
+        let window = |direction, from_s, to_s, branch| TimetableWindow {
+            date: today,
+            direction,
+            from_s,
+            to_s,
+            branch,
+        };
         let grid = line_timetable(
             &pool,
             NETWORK,
             "blue",
-            today,
-            "outbound",
-            6 * 3600,
-            9 * 3600,
+            window("outbound", 6 * 3600, 9 * 3600, None),
         )
         .await
         .unwrap()
@@ -1160,17 +1571,55 @@ mod db_tests {
             grid.trips[0].times,
             [Some("06:00".to_owned()), Some("06:30".to_owned())]
         );
-        let inbound = line_timetable(&pool, NETWORK, "blue", today, "inbound", 0, 86_400)
+        assert_eq!(grid.branch, None);
+        // The line's one outbound branch: the same trips; another
+        // direction's branch, or an unknown one, is the whole direction.
+        let branch = line_timetable(
+            &pool,
+            NETWORK,
+            "blue",
+            window("outbound", 6 * 3600, 9 * 3600, Some("outbound-1")),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(branch.branch.as_deref(), Some("outbound-1"));
+        assert_eq!(branch.trips.len(), 2);
+        let other = line_timetable(
+            &pool,
+            NETWORK,
+            "blue",
+            window("outbound", 6 * 3600, 9 * 3600, Some("inbound-1")),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(other.branch, None);
+        assert_eq!(other.trips.len(), 2);
+        let inbound = line_timetable(&pool, NETWORK, "blue", window("inbound", 0, 86_400, None))
             .await
             .unwrap()
             .unwrap();
         assert_eq!(inbound.stations[0].id, B);
         assert_eq!(inbound.trips.len(), 1);
         assert!(
-            line_timetable(&pool, NETWORK, "blue", today, "sideways", 0, 1)
+            line_timetable(&pool, NETWORK, "blue", window("sideways", 0, 1, None))
                 .await
                 .unwrap()
                 .is_none()
+        );
+        let line = get_line(&pool, NETWORK, "blue").await.unwrap().unwrap();
+        let branches: Vec<(&str, &str, u32)> = line
+            .branches
+            .iter()
+            .map(|b| (b.id.as_str(), b.name.as_str(), b.share_percent))
+            .collect();
+        assert_eq!(
+            branches,
+            [
+                ("outbound-1", "Aaa to Bbb", 100),
+                ("inbound-1", "Bbb to Aaa", 100)
+            ]
         );
         cleanup(&pool, NETWORK).await;
     }
