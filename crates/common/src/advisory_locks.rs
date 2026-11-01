@@ -93,6 +93,12 @@ pub const JOURNEY_BREAKS_SWEEP: LoopLock = LoopLock {
     key: ascii_key(*b"dslpjbrk"),
 };
 
+/// schedule-reference's run lock (`ds_store::schedule::reference_signals::RunLock`,
+/// `CronJob` phase 4): a session lock held for a whole run, so two runs never
+/// publish at once. Not a loop lock (no runner takes it), but in the same
+/// key space.
+pub const SCHEDULE_REFERENCE_RUN_KEY: i64 = ascii_key(*b"dsschref");
+
 /// Every loop lock, for uniqueness checks.
 pub const ALL: [LoopLock; 8] = [
     SCHEDULE_MATCH_SWEEP,
@@ -117,6 +123,7 @@ mod tests {
         let keys: HashSet<_> = ALL.iter().map(|lock| lock.key).collect();
         assert_eq!(names.len(), ALL.len());
         assert_eq!(keys.len(), ALL.len());
+        assert!(!keys.contains(&SCHEDULE_REFERENCE_RUN_KEY));
     }
 
     /// The keys taken elsewhere (see the module docs), as literals: `common`

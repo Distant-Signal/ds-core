@@ -232,8 +232,21 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
     # its own service's role. See the CI step's comment for each role.
     "per-service": (
         per_service("api", "api", skips=SQLX_TEST_SKIPS),
-        per_service("ds-store", "api", skips=(*SQLX_TEST_SKIPS, "schedule::publish::")),
-        per_service("ds-store", "schedule_reference", filters=("schedule::publish::",)),
+        per_service(
+            "ds-store",
+            "api",
+            skips=(
+                *SQLX_TEST_SKIPS,
+                "schedule::publish::",
+                "schedule::reference_signals::",
+            ),
+        ),
+        # schedule-reference's tables and its run signals (DS-241).
+        per_service(
+            "ds-store",
+            "schedule_reference",
+            filters=("schedule::publish::", "schedule::reference_signals::"),
+        ),
         per_service("aggregator", "aggregator", skips=SQLX_TEST_SKIPS),
         per_service("notifier", "notifier", skips=SQLX_TEST_SKIPS),
         per_service("ingest-writer", "writer"),

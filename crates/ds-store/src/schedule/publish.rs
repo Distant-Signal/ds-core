@@ -667,6 +667,15 @@ async fn finish_publish_part_declaring(
             "product" => sql.product
         )
         .increment(1);
+        // And in Postgres, in this transaction, for the alert when the
+        // publisher is a CronJob run that exits before any scrape (DS-241).
+        super::reference_signals::record(
+            &mut **tx,
+            super::reference_signals::Signal::StagedMismatch,
+            sql.product,
+            None,
+        )
+        .await?;
         0
     };
 
@@ -1598,6 +1607,18 @@ mod schedule_publish_diff_tests {
                 r#"distant_signal_store_schedule_publish_staged_mismatch_total{product="schedule_destination_departures"} 1"#
             ),
             "the staged-mismatch path still triggers"
+        );
+        // And it is recorded in Postgres for the exporter (DS-241).
+        let signal_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            "SELECT recorded_at FROM schedule_reference_signals \
+             WHERE kind = 'staged_mismatch' AND product = 'schedule_destination_departures'",
+        )
+        .fetch_optional(&pool)
+        .await
+        .expect("read the signal");
+        assert!(
+            signal_at.is_some_and(|at| chrono::Utc::now() - at < chrono::Duration::minutes(5)),
+            "the mismatch is recorded as a signal: {signal_at:?}"
         );
 
         clear_dates(&pool, &[date]).await;

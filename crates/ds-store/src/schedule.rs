@@ -20,11 +20,14 @@
 //!   in force per date (DS-152).
 //! - [`summaries`]: `line_train_summaries`' derivation and the population
 //!   upsert that writes them in its transaction (plan 2a.2).
+//! - [`reference_signals`]: schedule-reference's run signals (the facts its
+//!   alerts read) and its run lock (`CronJob` phase 4, DS-241).
 
 pub mod associations;
 mod markers;
 mod population;
 mod publish;
+pub mod reference_signals;
 pub mod services;
 pub mod summaries;
 pub mod turnarounds;
