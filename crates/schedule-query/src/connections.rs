@@ -229,7 +229,7 @@ pub fn build_connections<'a>(
 /// TIPLOC lies (0 = the first row after the departure call), so the order in
 /// which a train passes two places between the same pair of calls is known
 /// (`/Trips/plan`'s ordered pass-through `via`).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PassIndex {
     by_tiploc: HashMap<String, Vec<PassRow>>,
 }
