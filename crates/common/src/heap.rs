@@ -84,7 +84,12 @@ pub fn peak_resident_set_bytes() -> Option<u64> {
 
 fn proc_status_bytes(field: &str) -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    parse_status_kib(&status, field).map(|kib| kib * 1024)
+    status_bytes(&status, field)
+}
+
+/// The value of `field` in a `/proc/<pid>/status` text, in bytes.
+fn status_bytes(status: &str, field: &str) -> Option<u64> {
+    parse_status_kib(status, field).map(|kib| kib * 1024)
 }
 
 /// The `kB` value of `field` (e.g. `VmRSS:`) in a `/proc/<pid>/status` text.
@@ -117,7 +122,20 @@ mod tests {
     fn reads_this_process_rss() {
         let rss = resident_set_bytes().expect("Linux has /proc/self/status");
         let peak = peak_resident_set_bytes().expect("Linux has /proc/self/status");
-        assert!(rss > 0 && peak >= rss, "rss {rss}, peak {peak}");
+        assert!(rss > 0 && peak > 0, "rss {rss}, peak {peak}");
+
+        // The two calls above are separate reads, and RSS can move between
+        // them (other test threads allocate; the kernel's RSS counters are
+        // per-CPU approximations), so only order the fields within one
+        // snapshot, where the kernel reports VmHWM as at least VmRSS.
+        let status =
+            std::fs::read_to_string("/proc/self/status").expect("Linux has /proc/self/status");
+        let rss = status_bytes(&status, "VmRSS:").expect("status has VmRSS");
+        let peak = status_bytes(&status, "VmHWM:").expect("status has VmHWM");
+        assert!(
+            rss > 0 && peak >= rss,
+            "one snapshot: rss {rss}, peak {peak}"
+        );
     }
 
     #[test]
