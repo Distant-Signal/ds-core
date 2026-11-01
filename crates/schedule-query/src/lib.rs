@@ -73,6 +73,7 @@
 //! real, full, untracked `timetable_full.zip` extract by hand.
 
 pub mod associations;
+pub mod code;
 pub mod compact;
 pub mod connections;
 pub mod interchange;
@@ -87,15 +88,16 @@ pub use associations::{
     ActiveAssociation, AssociationCategory, AssociationIndex, AssociationIndexBuilder,
     AssociationRecord, parse_association_line,
 };
+pub use code::{StopCode, TripCode};
 pub use compact::SmallStr;
 pub use connections::{
     CallingPointForConnections, Connection, PassIndex, PassRow, build_connections,
     build_connections_with_passes,
 };
 pub use interchange::{
-    ChangeTime, FixedLink, InterchangeData, ModalChangeBuffer, fixed_link_between,
+    ChangeTime, FixedLink, InterchangeData, LinkWindow, ModalChangeBuffer, fixed_link_between,
     fixed_link_between_where, fixed_links_between, fixed_links_from, fixed_links_from_where,
-    index_fixed_links_both_ways, minimum_change_time, sibling_tiplocs,
+    index_fixed_links_both_ways, links_in_lookup_order, minimum_change_time, sibling_tiplocs,
 };
 pub use line_membership::{
     DayTrains, LineDue, LineMembers, LineScope, Membership, MembershipLine, RunDirection, classify,

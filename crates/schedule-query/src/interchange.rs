@@ -389,6 +389,43 @@ fn applies(link: &FixedLink, day: usize, clock: [u8; 4]) -> bool {
         && clock.as_slice() <= link.valid_to.as_bytes()
 }
 
+/// A CRS's fixed links in [`fixed_links_from`]'s lookup order, fetched (and
+/// sorted, if the index is not) once: for a search that expands the same
+/// stop's links many times and filters them with a [`LinkWindow`] each time
+/// (DS-225). Empty for a CRS with none.
+pub fn links_in_lookup_order<'a>(data: &'a InterchangeData, from_crs: &str) -> Vec<&'a FixedLink> {
+    let Some(candidates) = data.fixed_links_from_crs.get(from_crs) else {
+        return Vec::new();
+    };
+    let mut links: Vec<&FixedLink> = candidates.iter().collect();
+    if !is_lookup_sorted(candidates) {
+        links.sort_by(|a, b| lookup_key(a).cmp(&lookup_key(b)));
+    }
+    links
+}
+
+/// When a link is walked: [`fixed_links_from_where`]'s per-call date and
+/// clock, for a caller holding [`links_in_lookup_order`]'s list.
+#[derive(Debug, Clone, Copy)]
+pub struct LinkWindow {
+    day: usize,
+    clock: [u8; 4],
+}
+
+impl LinkWindow {
+    pub fn new(date: NaiveDate, time_min: u32) -> Self {
+        Self {
+            day: day_index(date),
+            clock: hhmm_bytes(clock_minutes(time_min)),
+        }
+    }
+
+    /// Whether `link` runs then (see [`fixed_links_from_where`]).
+    pub fn applies(&self, link: &FixedLink) -> bool {
+        applies(link, self.day, self.clock)
+    }
+}
+
 /// The fixed links (tube, walk, transfer, bus, ferry) actually usable from
 /// `from_crs` at `date`/`time_min` -- ALF's raw rows, resolved down to the
 /// ones that genuinely apply. `time_min` may exceed 1440 (an overnight
@@ -568,6 +605,44 @@ mod tests {
         // codebase's own tests (schedule_query::records's own BasicSchedule
         // doc comment).
         NaiveDate::from_ymd_opt(2026, 8, 31).unwrap()
+    }
+
+    /// A search's own walk over [`links_in_lookup_order`] with a
+    /// [`LinkWindow`] (DS-225) picks what [`fixed_links_from_where`] does,
+    /// on an unsorted list with several links per destination, at every
+    /// minute of a day.
+    #[test]
+    fn a_link_window_over_the_lookup_order_matches_fixed_links_from() {
+        let mut data = empty_data();
+        data.fixed_links_from_crs.insert(
+            "EUS".to_string(),
+            vec![
+                link("STP", 9, "0000", "2359", "1111111"),
+                link("KGX", 12, "0000", "2359", "1111111"),
+                link("KGX", 5, "0600", "0959", "1111100"),
+                link("VIC", 20, "1700", "2359", "1111111"),
+                link("KGX", 7, "0000", "0559", "1111111"),
+                link("STP", 4, "0700", "0900", "0000011"),
+            ],
+        );
+        let ordered = links_in_lookup_order(&data, "EUS");
+        assert!(links_in_lookup_order(&data, "NOWHERE").is_empty());
+        for minute in (0..1440).step_by(7) {
+            let window = LinkWindow::new(monday(), minute);
+            let mut chosen: Vec<&FixedLink> = Vec::new();
+            for link in &ordered {
+                if window.applies(link)
+                    && chosen.last().is_none_or(|last| last.to_crs != link.to_crs)
+                {
+                    chosen.push(link);
+                }
+            }
+            assert_eq!(
+                chosen,
+                fixed_links_from(&data, "EUS", monday(), minute),
+                "{minute}"
+            );
+        }
     }
 
     #[test]

@@ -16,9 +16,9 @@
 
 use std::collections::HashMap;
 
+use crate::code::{StopCode, TripCode};
 use crate::operator::OperatorId;
 use chrono::NaiveTime;
-use compact_str::CompactString;
 
 /// One calling point, reduced to exactly what `build_connections` needs --
 /// deliberately NOT [`crate::records::CallingPoint`] itself, so this module
@@ -75,20 +75,17 @@ impl From<&crate::records::CallingPoint> for CallingPointForConnections {
 /// the sibling `Distant-Signal-MCP` project's own `scheduleId`/
 /// `sourceScheduleId` split).
 ///
-/// **Memory.** The three codes are [`CompactString`]s, held inline up to
-/// 24 bytes (every UID, TIPLOC and transit stop code is shorter), so a
-/// connection is 96 bytes with no allocation of its own: half what three
-/// `String`s cost, which made room for `TfL`'s 230,000 connections a
-/// weekday (docs/superpowers/specs/2026-10-30-tfl-transit-design.md §11.2;
-/// the rail day went from about 104 MB to 64 MB in
-/// `crates/api/tests/transit_planning_budget.rs`). The struct's padding
-/// after the two `bool`s still has room for a 2-byte field (the planner
-/// operator filtering spec's `OperatorId`).
+/// **Memory.** The three codes are interned ([`TripCode`], [`StopCode`]:
+/// a `u32` each, see [`crate::code`]), so a connection is 32 bytes: a
+/// third of the 96 it took with three inline `CompactString`s (DS-225), and
+/// the searches index their state by code instead of hashing strings.
+/// `uid`, `from_tiploc` and `to_tiploc` still read as `&str` through
+/// `Deref`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
-    pub uid: CompactString,
-    pub from_tiploc: CompactString,
-    pub to_tiploc: CompactString,
+    pub uid: TripCode,
+    pub from_tiploc: StopCode,
+    pub to_tiploc: StopCode,
     /// Minutes from midnight of the schedule's OWN service date --
     /// `day_offset * 1440 + minutes-since-midnight`, so a connection whose
     /// calling points fall on a later calendar day than the schedule's own
@@ -336,9 +333,9 @@ fn build<'a>(
             connections.push((
                 Connection {
                     operator: OperatorId::UNKNOWN,
-                    uid: CompactString::from(uid),
-                    from_tiploc: CompactString::from(from.tiploc.as_str()),
-                    to_tiploc: CompactString::from(to.tiploc.as_str()),
+                    uid: TripCode::new(uid),
+                    from_tiploc: StopCode::new(&from.tiploc),
+                    to_tiploc: StopCode::new(&to.tiploc),
                     departure_min,
                     arrival_min,
                     working_departure_min,
@@ -712,10 +709,10 @@ mod tests {
 mod size_tests {
     use super::Connection;
 
-    /// The planner's memory budget (the `TfL` transit design §11.2) assumes
-    /// it: three inline codes, four minutes, two flags.
+    /// The planner's memory budget assumes it (DS-225): three interned
+    /// codes, four minutes, an operator and two flags.
     #[test]
-    fn a_connection_is_96_bytes() {
-        assert_eq!(size_of::<Connection>(), 96);
+    fn a_connection_is_32_bytes() {
+        assert_eq!(size_of::<Connection>(), 32);
     }
 }
