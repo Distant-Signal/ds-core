@@ -1,12 +1,12 @@
 # hadolint config for every tracked Dockerfile (docker/*.Dockerfile,
-# frontend/Dockerfile). CI: the `scripts-lint` job, via
-# scripts/lint-scripts.py, which passes this file explicitly. hadolint is
+# frontend/Dockerfile). CI: the `scripts-lint` job, via Distant-Signal/ci's
+# lint-scripts.py, which passes this file explicitly. hadolint is
 # pinned in pyproject.toml's `lint` dependency group (hadolint-py).
 #
 # Strict by default: every rule on at its default severity, and any finding,
 # down to style level, fails. hadolint also runs its embedded ShellCheck
 # over each shell-form RUN, but with default checks only (it does not read
-# .shellcheckrc); scripts/lint-containers.py re-checks every RUN body with
+# .shellcheckrc); Distant-Signal/ci's lint-containers.py re-checks every RUN body with
 # the full .shellcheckrc, and also requires every image to be digest-pinned
 # (hadolint has no rule for that).
 # Opt out per instruction with the line directly above it:
