@@ -975,9 +975,9 @@ async fn shutdown_while_down_gives_up_after_the_grace_period() {
 }
 
 // ---------------------------------------------------------------------------
-// Restricted ACL users, from the chart's template (phase 0c).
+// Restricted ACL users, from access/redis-users.acl.tpl (phase 0c).
 
-const TEMPLATE: &str = "../../charts/distant-signal/files/redis-users.acl.tpl";
+const TEMPLATE: &str = "../../access/redis-users.acl.tpl";
 
 /// The template's rules for `user`, with `prefix` before every key pattern,
 /// as ACL SETUSER arguments (a parenthesised selector is one argument, as

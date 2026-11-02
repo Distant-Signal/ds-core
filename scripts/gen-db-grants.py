@@ -2,6 +2,10 @@
 # ruff: noqa: T201  # a CLI whose output (the failures) is stdout
 r"""Render and check the Postgres grants in db-grants.yaml.
 
+The grants' source is crates/ds-store/db-grants.yaml (repo split spec
+§5.1); the chart's files/db-grants.yaml is a copy of it that
+scripts/sync-chart-core-files.py writes and checks.
+
   uv run scripts/gen-db-grants.py render [--output FILE]
   uv run scripts/gen-db-grants.py check [--database-url URL]
 
@@ -55,7 +59,7 @@ if TYPE_CHECKING:
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FILES = ROOT / "charts" / "distant-signal" / "files"
-GRANTS_YAML = FILES / "db-grants.yaml"
+GRANTS_YAML = ROOT / "crates" / "ds-store" / "db-grants.yaml"
 GRANTS_SQL = FILES / "postgres-grants.sql"
 SQL_TEMPLATE = ROOT / "scripts" / "db-grants.sql.tpl"
 

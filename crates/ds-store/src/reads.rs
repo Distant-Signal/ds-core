@@ -5,7 +5,7 @@
 //! sample-stations,stanox-crs}`.
 //!
 //! Each reader connects as a read-only role (`full_coverage_ro`,
-//! `trust_consumer`, `ldbws_ro` in `files/db-grants.yaml`) that can read
+//! `trust_consumer`, `ldbws_ro` in `db-grants.yaml`) that can read
 //! exactly what its functions here touch:
 //!
 //! | Reader | Function | Reads |

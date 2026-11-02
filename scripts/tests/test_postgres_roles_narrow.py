@@ -22,7 +22,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "test-postgres-roles.py"
 PASSES = REPO / ".github" / "db-tests.toml"
-GRANTS_YAML = REPO / "charts" / "distant-signal" / "files" / "db-grants.yaml"
+GRANTS_YAML = REPO / "crates" / "ds-store" / "db-grants.yaml"
 
 
 def per_service_runs() -> dict[str, list[str]]:

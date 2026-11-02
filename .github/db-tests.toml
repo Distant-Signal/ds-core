@@ -44,7 +44,7 @@ uv run --locked --no-default-groups scripts/db-tests.py archive --archive-file "
 #
 # Ingest architecture phase 0b: every table, view, sequence and function the
 # migrations create must be classified in
-# charts/distant-signal/files/db-grants.yaml (a new table without a
+# crates/ds-store/db-grants.yaml (a new table without a
 # classification fails here, not in production), and postgres-grants.sql
 # must be what that file renders to.
 #
