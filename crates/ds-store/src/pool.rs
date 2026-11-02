@@ -147,7 +147,10 @@ impl PoolSettings {
     /// `DATABASE_STARTUP_CONNECT_TIMEOUT_SECS`); the success after them is
     /// logged at INFO. Any other failure, or one past the budget, is logged
     /// as "Postgres is not reachable yet; retrying" at WARN, as before. The
-    /// pool's `acquire_timeout` is unchanged.
+    /// pool's `acquire_timeout` is unchanged. A Postgres in recovery
+    /// (read-only WAL replay after a restore) is not ready either: that
+    /// first connection checks `pg_is_in_recovery()` and fails with
+    /// [`IN_RECOVERY`], a WARN on each try, until it is false.
     ///
     /// The pool itself is retried, not a probe followed by a one-shot pool
     /// connect: a refusal lasting past `acquire_timeout` between the two
@@ -190,19 +193,40 @@ impl PoolSettings {
 /// Opens one connection with `options` and closes it again, failing at once
 /// on a refused connect (no sqlx pool retry) and after `timeout` on one that
 /// never completes (a dropped SYN), as an `Io` `TimedOut` error.
+///
+/// It also fails, with [`IN_RECOVERY`], while Postgres is in recovery: one
+/// replaying WAL after a pgBackRest restore accepts connections but is
+/// read-only, so a writer started on it fails its first write (2 Nov 2026,
+/// docs/postgres-18-upgrade.md "Known traps"). That is a reply from
+/// Postgres, not network lag, so it is retried with a WARN on each try
+/// until recovery ends.
 async fn first_connection(options: &PgConnectOptions, timeout: Duration) -> sqlx::Result<()> {
-    let conn = tokio::time::timeout(timeout, PgConnection::connect_with(options))
-        .await
-        .map_err(|_| {
-            sqlx::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("no connection within {}s", timeout.as_secs_f64()),
-            ))
-        })??;
-    // Only the connect mattered; a failed goodbye changes nothing.
+    let (conn, in_recovery) = tokio::time::timeout(timeout, async {
+        let mut conn = PgConnection::connect_with(options).await?;
+        let in_recovery: bool = sqlx::query_scalar("SELECT pg_is_in_recovery()")
+            .fetch_one(&mut conn)
+            .await?;
+        Ok::<_, sqlx::Error>((conn, in_recovery))
+    })
+    .await
+    .map_err(|_| {
+        sqlx::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            format!("no connection within {}s", timeout.as_secs_f64()),
+        ))
+    })??;
+    // Only the connect and the check mattered; a failed goodbye changes
+    // nothing.
     conn.close().await.ok();
+    if in_recovery {
+        return Err(sqlx::Error::Protocol(IN_RECOVERY.to_owned()));
+    }
     Ok(())
 }
+
+/// The error [`first_connection`] gives for a Postgres in recovery.
+pub const IN_RECOVERY: &str =
+    "Postgres is in recovery (read-only WAL replay, e.g. after a restore); waiting until it ends";
 
 /// Whether a failed connect never reached Postgres (refused, reset, timed
 /// out, or the pool's own refused-connect retry running out), as while a
@@ -568,6 +592,28 @@ mod tests {
         assert!(!is_network_lag(&sqlx::Error::Protocol(
             "password authentication failed".to_owned()
         )));
+    }
+
+    /// A Postgres in recovery (a standby, or a restore still replaying WAL)
+    /// is not ready: the first connection fails with [`IN_RECOVERY`], which
+    /// is not network lag. Needs `RECOVERY_DATABASE_URL`, a standby; CI's
+    /// DB-test jobs run every ignored test and have none, so unset skips.
+    #[tokio::test]
+    #[ignore = "requires a standby; run with RECOVERY_DATABASE_URL set and --ignored"]
+    async fn a_postgres_in_recovery_is_not_ready() {
+        let Ok(url) = std::env::var("RECOVERY_DATABASE_URL") else {
+            eprintln!("RECOVERY_DATABASE_URL unset; skipping");
+            return;
+        };
+        let options: PgConnectOptions = url.parse().unwrap();
+        let err = first_connection(&options, Duration::from_secs(5))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, sqlx::Error::Protocol(m) if m == IN_RECOVERY),
+            "{err:?}"
+        );
+        assert!(!is_network_lag(&err));
     }
 
     /// The NetworkPolicy-lag case end to end: connects are refused for the
