@@ -84,6 +84,7 @@ use serde::Serialize;
 
 /// Whether every public call is cancelled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub enum CancellationKind {
     Full,
@@ -93,6 +94,7 @@ pub enum CancellationKind {
 /// Where a cancellation's reason came from; see the module doc for the
 /// precedence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub enum ReasonSource {
     /// Darwin Push Port (DS-152). Not produced yet.
@@ -102,6 +104,7 @@ pub enum ReasonSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct CancellationReason {
     /// The source's own code: a TRUST delay attribution code (`"JP"`), or
@@ -116,6 +119,7 @@ pub struct CancellationReason {
 
 /// A call named by a cancellation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct CancellationStop {
     pub crs: Option<String>,
@@ -128,6 +132,7 @@ pub struct CancellationStop {
 /// `from` and `to` are cancelled, and so is `from` at the origin end or `to`
 /// at the destination end.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct CancelledSection {
     pub from: CancellationStop,
@@ -135,6 +140,7 @@ pub struct CancelledSection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Cancellation {
     pub kind: CancellationKind,
@@ -497,6 +503,7 @@ fn trust_reason(stored: &StoredReasons, used_cancellation: bool) -> Option<Cance
 /// A place a [`CancellationSummary`] names. No `stopIndex`: a list row
 /// carries no stops to index.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct CancellationPlace {
     pub crs: Option<String>,
@@ -528,6 +535,7 @@ impl CancellationPlace {
 /// say "Terminates at York" or "Starts from York" rather than plain
 /// "Cancelled", and why.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct CancellationSummary {
     pub kind: CancellationKind,
