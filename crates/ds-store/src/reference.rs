@@ -954,7 +954,7 @@ pub async fn crs_for_tiplocs_batch_with(
 /// than one of Network Rail's own `X`-prefixed pseudo-codes for a
 /// non-passenger location (a junction, siding, or depot that still needs a
 /// STANOX->CRS entry for TRUST tracking purposes but was never sold a
-/// ticket to) -- see `reference-data/stanox-crs.md`'s own "Extraction and
+/// ticket to) -- see `crates/trust-consumer/reference-data/stanox-crs.md`'s own "Extraction and
 /// exclusion policy" section and `schedule_reference::parser::resolve`'s
 /// doc comment, which both independently document this exact convention.
 ///

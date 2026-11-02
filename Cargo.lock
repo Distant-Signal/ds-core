@@ -84,6 +84,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "futures-util",
@@ -194,6 +195,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "flate2",
@@ -1274,12 +1276,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "ds-lines"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common",
+ "serde_json",
+]
+
+[[package]]
 name = "ds-migrate"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
  "common",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "sqlx",
@@ -1683,6 +1695,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",
@@ -2395,6 +2408,7 @@ dependencies = [
  "chrono",
  "clap",
  "common",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",
@@ -3532,6 +3546,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",
@@ -3598,6 +3613,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",
@@ -4509,6 +4525,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",
@@ -5713,6 +5730,7 @@ dependencies = [
  "clap",
  "common",
  "dotenvy",
+ "ds-lines",
  "ds-runtime",
  "ds-store",
  "health-http",

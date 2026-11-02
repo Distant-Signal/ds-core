@@ -5,13 +5,13 @@ used by `crates/line-catalogue-validator` to check every `crs`, `tiploc`
 and `operators` value in `lines/*.toml` against real, currently-valid
 external data. See that crate's `src/main.rs` module doc for how they're
 used; this file is the extraction methodology, mirroring
-`reference-data/stanox-crs.md`'s existing precedent for documenting a
+`crates/trust-consumer/reference-data/stanox-crs.md`'s existing precedent for documenting a
 vendored snapshot's provenance next to the data itself.
 
 ## Why a vendored snapshot, not this app's own CIF-derived `stanox_crs`
 
 This repo already has a CIF-derived reference table two ways:
-`reference-data/stanox-crs.csv` (checked-in, STANOX->CRS only, no TIPLOC
+`crates/trust-consumer/reference-data/stanox-crs.csv` (checked-in, STANOX->CRS only, no TIPLOC
 column) and the live `stanox_crs` Postgres table `crates/schedule-reference`
 populates daily from the real CIF SCHEDULE feed `schedule-ingest` receives
 over SFTP from Network Rail Data Feeds. Both are genuinely *external*

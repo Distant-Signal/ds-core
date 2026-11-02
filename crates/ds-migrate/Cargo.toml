@@ -20,6 +20,8 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 # (hyper). `postgres`: `ds_runtime::pg`'s dead-client detection settings.
 # (`common` keeps the same features it had before the ds-runtime split.)
 common = { path = "../common", default-features = false, features = ["postgres"] }
+# The line catalogue, embedded (`--lines-dir` defaults to it).
+ds-lines = { path = "../ds-lines" }
 ds-runtime = { path = "../ds-runtime", default-features = false, features = ["postgres"] }
 ds-store = { path = "../ds-store" }
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio", "tls-native-tls"] }

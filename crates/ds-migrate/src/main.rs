@@ -88,9 +88,10 @@ struct SummariesArgs {
     /// Rewrite every population's rows, current or not.
     #[arg(long)]
     force: bool,
-    /// The line catalogue that decides what "current" means: the deployed
-    /// image's, as the api uses.
-    #[arg(long, env = "LINES_DIR", default_value = "/app/lines")]
+    /// The line catalogue that decides what "current" means: the one built
+    /// into the binary (`ds_lines::EMBEDDED`), as the api uses, or a
+    /// directory.
+    #[arg(long, env = "LINES_DIR", default_value = ds_lines::EMBEDDED)]
     lines_dir: String,
 }
 
@@ -260,7 +261,7 @@ async fn backfill_trains(args: &RunArgs) -> anyhow::Result<()> {
 
 /// `ds-migrate backfill-line-train-summaries`.
 async fn backfill_line_train_summaries(args: &SummariesArgs) -> anyhow::Result<()> {
-    let lines = common::config::parse_lines(&args.lines_dir)?;
+    let lines = ds_lines::parse_lines(&args.lines_dir)?;
     anyhow::ensure!(
         !lines.is_empty(),
         "no line definitions found in {}: rows derived without the catalogue would carry no \
