@@ -1,0 +1,22 @@
+[package]
+name = "ds-lines"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "The line catalogue (lines/), embedded at build time"
+
+[dependencies]
+anyhow = "1.0.102"
+# Only `LineDefinition` and the catalogue checks. No default features, so
+# `ds-migrate` (which must not link an HTTP stack, check-crate-deps.py)
+# can use this crate.
+common = { path = "../common", default-features = false }
+
+[dev-dependencies]
+# The catalogue comparison in the tests (already in the workspace).
+serde_json = "1.0.149"
+
+[lints]
+workspace = true

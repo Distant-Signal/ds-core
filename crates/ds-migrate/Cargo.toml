@@ -19,6 +19,8 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 # No default features: they bring reqwest and the metrics HTTP listener
 # (hyper). `postgres`: `common::pg`'s dead-client detection settings.
 common = { path = "../common", default-features = false, features = ["postgres"] }
+# The line catalogue, embedded (`--lines-dir` defaults to it).
+ds-lines = { path = "../ds-lines" }
 ds-store = { path = "../ds-store" }
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio", "tls-native-tls"] }
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
