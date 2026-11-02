@@ -1,7 +1,9 @@
 # Tooling config for the repo's scripts (scripts/*.py, every *.sh, and the
 # workflow run: blocks), managed with uv (Ranma-Config new-service guidance
-# 3.3a). CI: the `scripts-lint` job in .github/workflows/ci.yml; locally,
-# `uv run scripts/lint-scripts.py` runs the same checks.
+# 3.3a). CI: the `scripts-lint` job in .github/workflows/ci.yml, which runs
+# Distant-Signal/ci's scripts/lint-scripts.py in this project; locally,
+# `uv run python ../ci/scripts/lint-scripts.py` (with a checkout of
+# Distant-Signal/ci beside this one) runs the same checks.
 #
 # Strict by default. Opt out per line (`# noqa: XXXX  # reason`,
 # `# type: ignore[code]  # reason`) rather than here, unless a rule genuinely
@@ -23,7 +25,7 @@ dependencies = []
 [tool.uv]
 package = false # don't build or install the repo itself
 # `uv sync` / `uv run` install the lint group without a --group flag, so
-# `uv run scripts/lint-scripts.py` works from a fresh clone.
+# `uv run python ../ci/scripts/lint-scripts.py` works from a fresh clone.
 default-groups = ["lint"]
 
 [dependency-groups]
@@ -35,8 +37,9 @@ default-groups = ["lint"]
 # 1.7.12, hadolint 2.15.1 (hadolint-py's Linux x86_64 wheel carries the
 # byte-identical hadolint/hadolint v2.15.1 release binary, checked against
 # that release's checksums.sha256). PyYAML is the one dependency of
-# scripts/chart-values-doc.py (the scripts-lint job also runs its `check`)
-# and scripts/lint-containers.py; types-PyYAML lets mypy check them.
+# scripts/chart-values-doc.py and the other chart scripts (the repo-checks
+# job runs them) and of Distant-Signal/ci's lint-containers.py;
+# types-PyYAML lets mypy check them.
 lint = [
     "actionlint-py==1.7.12.25",
     "hadolint-py==2.15.1.2",

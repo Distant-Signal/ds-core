@@ -2,15 +2,17 @@
 
 `render_narrowed` renders postgres-grants.sql as if the named roles were
 `status: narrow` in db-grants.yaml, so CI ran release D's narrowing before
-db-grants.yaml made it (2026-10-28). CI's "Release D's narrowed roles" step
-runs it against Postgres; its per-service step runs the four roles'
-suites `--observe`d until their fixtures move to the owner.
+db-grants.yaml made it (2026-10-28). CI's per-service DB test pass
+(.github/db-tests.toml) runs it against Postgres in its "Release D's
+narrowed roles" command, and runs the four roles' suites `--observe`d in
+its Stage 0b command until their fixtures move to the owner.
 """
 
 import importlib.util
 import pathlib
 import shlex
 import sys
+import tomllib
 import types
 import unittest
 from typing import Any, cast, override
@@ -19,21 +21,22 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "test-postgres-roles.py"
-CI = REPO / ".github" / "workflows" / "ci.yml"
+PASSES = REPO / ".github" / "db-tests.toml"
 GRANTS_YAML = REPO / "crates" / "ds-store" / "db-grants.yaml"
 
 
 def per_service_runs() -> dict[str, list[str]]:
-    """Return {db-tests.py pass: test-postgres-roles.py args} from ci.yml.
+    """Return {db-tests.py pass: test-postgres-roles.py args} from CI's passes.
 
-    Each step that runs `test-postgres-roles.py --mode per-service -- ...
-    db-tests.py run PASS`, keyed by PASS.
+    Each command in .github/db-tests.toml's pass scripts (what CI's
+    rust-db-tests job runs) that runs `test-postgres-roles.py --mode
+    per-service -- ... db-tests.py run PASS`, keyed by PASS.
     """
-    workflow = cast("dict[str, Any]", yaml.safe_load(CI.read_text(encoding="utf-8")))
+    passes = tomllib.loads(PASSES.read_text(encoding="utf-8"))
     runs: dict[str, list[str]] = {}
-    for job in cast("dict[str, dict[str, Any]]", workflow["jobs"]).values():
-        for step in cast("list[dict[str, Any]]", job.get("steps") or []):
-            text = str(step.get("run") or "")
+    for test_pass in cast("list[dict[str, Any]]", passes["pass"]):
+        script = str(test_pass["run"]).replace("\\\n", " ")
+        for text in script.splitlines():
             if "scripts/test-postgres-roles.py" not in text:
                 continue
             argv = shlex.split(text)
@@ -45,9 +48,9 @@ def per_service_runs() -> dict[str, list[str]]:
                 continue
             if roles_args[roles_args.index("--mode") + 1] != "per-service":
                 continue
-            script = command.index("scripts/db-tests.py")
-            if command[script + 1] == "run":
-                runs[command[script + 2]] = roles_args
+            db_tests = command.index("scripts/db-tests.py")
+            if command[db_tests + 1] == "run":
+                runs[command[db_tests + 2]] = roles_args
     return runs
 
 
@@ -109,7 +112,7 @@ class RenderNarrowedTest(unittest.TestCase):
         rendered = self.script.render_with_statuses({"writer": "observed"})
         self.assertIn("('writer', 'observed')", rendered)
         self.assertNotIn("('trains', 'writer', 'INSERT'", rendered)
-        # CI's per-service step: release D's four, observed again.
+        # CI's Stage 0b command: release D's four, observed again.
         rendered = self.script.render_with_statuses(
             dict.fromkeys(("api", "aggregator", "enricher", "notifier"), "observed")
         )
@@ -124,7 +127,7 @@ class RenderNarrowedTest(unittest.TestCase):
 
 
 class CiInvocationTest(unittest.TestCase):
-    """ci.yml's per-service passes against db-grants.yaml (release D)."""
+    """CI's per-service passes (.github/db-tests.toml) against db-grants.yaml."""
 
     def test_the_stage_0b_pass_observes_exactly_the_release_d_roles(self) -> None:
         """Release D's roles: observed for the full suites, narrowed for the rest.
