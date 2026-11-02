@@ -1,0 +1,170 @@
+# The DB test passes: ci.yml's `rust-db-tests` job runs Distant-Signal/ci's
+# reusable rust-db-tests.yml, which reads this file (format: that
+# repository's scripts/db-tests-passes.py).
+#
+# The DATABASE_URL/REDIS_URL-gated `#[ignore]`d integration tests (every
+# `#[ignore = "..."]` reason in the workspace needs only a live Postgres,
+# Redis or fake-gcs-server, except the enricher's LLM-gated live evals and
+# replay harness, which stay excluded: there is no LLM_BASE_URL or
+# REPLAY_HISTORY_JSONL in CI). Build once, run many (2026-10-27): the suites
+# run several times, as the superuser and as the role split's roles, and
+# each `cargo test -p` selection used to unify features differently and
+# recompile `common`, `ds-store`, the api and the rest. So the archive step
+# builds every test binary once into a cargo-nextest archive
+# (scripts/db-tests.py holds the package list and every pass's steps, each
+# a former `cargo test` invocation with the same libtest arguments), and
+# one job per [[pass]] below runs from it in parallel, each against its own
+# Postgres and Redis. Each pass already made its own fresh database, so
+# splitting them changes nothing they see.
+#
+# Every script runs with bash -euo pipefail from the repository root, with
+# DATABASE_URL (the superuser), REDIS_URL, DB_TESTS_ARCHIVE, sqlx-cli,
+# cargo-nextest and `uv sync --locked --group lint` (PyYAML for the scripts).
+# Every pass extracts the archive into the checkout (--extract-to), where
+# the archive build's target/ was: build-time paths such as
+# `env!("CARGO_BIN_EXE_api")` (the ticket-parse child's tests) then still
+# point at the binaries.
+
+[archive]
+run = '''
+uv run --locked --no-default-groups scripts/db-tests.py archive --archive-file "${DB_TESTS_ARCHIVE}"
+'''
+
+# The superuser pass on the `postgres` database the migrations ran on, plus
+# the Redis-only and fake-gcs-server suites (the #[sqlx::test] modules run
+# only here): ds-store, the api's data access (ingest plan 1A); ds-migrate
+# (1B.1) `run` against the migrated database; schedule-reference (2a.2), its
+# db sink's protocol and parity tests; poller-stations (2b.1) and
+# poller-incidents (2c.2), their sinks and schema gates; common::pg's pool
+# settings; the enricher (minus the LLM-gated evals); the Redis stream and
+# ACL suites (phases 0c and 3a); the ingest-writer's loop runner (1B.6); the
+# phase 4 readers' db sources; schedule-ingest's direct sink (2d) and its
+# bucket source against fake-gcs-server; the TRUST consumers' direct sinks
+# (3b).
+#
+# Ingest architecture phase 0b: every table, view, sequence and function the
+# migrations create must be classified in
+# charts/distant-signal/files/db-grants.yaml (a new table without a
+# classification fails here, not in production), and postgres-grants.sql
+# must be what that file renders to.
+#
+# fake-gcs-server (DS-92, crates/schedule-ingest/src/bucket_e2e_tests.rs) is
+# a `docker run` rather than a service: the emulator needs command-line flags
+# (`-scheme http`), which a service container cannot be given. Pinned by
+# digest. No Google credentials: the reader signs in with a throwaway key the
+# emulator ignores.
+[[pass]]
+id = "superuser"
+name = "DB tests as the superuser (+ Redis, fake-gcs-server)"
+run = '''
+echo "== Run the migrations (crates/ds-store/migrations)"
+(cd crates/ds-store && sqlx migrate run)
+
+echo "== every public table, view and sequence is classified (db-grants.yaml)"
+uv run --no-sync scripts/gen-db-grants.py check --database-url "${DATABASE_URL}"
+
+echo "== Start fake-gcs-server"
+docker run -d --name fake-gcs -p 127.0.0.1:4443:4443 \
+  docker.io/fsouza/fake-gcs-server:1.55@sha256:91afded49de804aa61b5f3eb6c7cd65205acf9e5c5e047cf0ba7d9507af806c8 \
+  -scheme http -port 4443 -backend memory
+up=false
+for _ in $(seq 30); do
+  if curl -sf http://127.0.0.1:4443/storage/v1/b >/dev/null; then
+    up=true
+    break
+  fi
+  sleep 1
+done
+if [[ "${up}" != true ]]; then
+  docker logs fake-gcs
+  exit 1
+fi
+
+echo "== DB/Redis-backed tests as the superuser (scripts/db-tests.py run superuser)"
+FAKE_GCS_URL=http://127.0.0.1:4443 uv run --no-sync scripts/db-tests.py run superuser --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
+'''
+
+# The Postgres role split (docs/postgres-app-role.md): proves no runtime
+# path needs a superuser. scripts/test-postgres-roles.py makes a fresh
+# database and roles with the chart's own setup script
+# (charts/distant-signal/files/postgres-roles.sql), then runs the DB-backed
+# suites with DATABASE_URL as the DML-only app role and
+# MIGRATION_DATABASE_URL as the schema owner, as the chart wires them.
+# `existing` converts a database migrated as the superuser (today's
+# production); `new` creates the roles first and migrates as the owner (a
+# new cluster). The #[sqlx::test] modules are skipped: they create a
+# throwaway database per test, which needs CREATEDB, a test-harness right,
+# not a runtime one; their DML runs in the superuser pass.
+# --check-setup-job: the setup scripts run once more, through the setup
+# Job's entrypoint, behind a reader holding ACCESS SHARE on every table,
+# with lock_timeout=2s: a steady-state release takes no ACCESS EXCLUSIVE
+# lock (2026-10-14, Helm v252).
+[[pass]]
+id = "app-role"
+name = "DB tests as the app role (existing and new cluster)"
+run = '''
+echo "== DB-backed tests as the non-superuser app role (existing cluster)"
+uv run --no-sync scripts/test-postgres-roles.py --mode existing --check-setup-job -- \
+  uv run --no-sync scripts/db-tests.py run existing --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
+
+echo "== DB-backed tests as the non-superuser app role (new cluster)"
+uv run --no-sync scripts/test-postgres-roles.py --mode new -- \
+  uv run --no-sync scripts/db-tests.py run new --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
+'''
+
+# Stage 0b (postgresql.roles.perService): the same suites, each as its own
+# service's role from files/postgres-grants.sql. The roles are still members
+# of the app role, so this passes today; it is the harness each later
+# narrowing (phases 2-5) runs against. ds-store's tests run as the api role:
+# in phase 1A they are the api's moved tests; spec §6.5 runs them per
+# narrowed role later. Each DB service's tests/schema_gate.rs (plan 1B.2)
+# checks its own role's grants, so every service with one runs as its own
+# role, the writer included. schedule-reference's role is narrow (plan
+# 2a.6): its db sink's parity and protocol tests prove exactly its
+# db-grants.yaml grants. poller-stations runs last, as its narrow role (plan
+# 2b.3), which cannot DELETE the test stations it leaves behind.
+# poller-incidents runs as its narrow role (plan 2c.3) too, cleaning up
+# through MIGRATION_DATABASE_URL (the owner) since the role has no DELETE.
+# The TRUST consumers (plan 3b) run as their narrow roles; their fixtures
+# (users, subscriptions) go through DATABASE_URL_API, and their tests delete
+# nothing they need. trust-consumer skips its reads:: tests here
+# (#[sqlx::test]: they create databases, which no narrow role may). The
+# phase 4 readers' read-only roles (full_coverage_ro, ldbws_ro; plan 4.7)
+# run each crate's role_reads test: the schema gate and every db-source
+# query as the role. ingest-writer's line_status_rls test (plan 3c.3) runs
+# as the writer, reading DATABASE_URL_WRITER/_AGGREGATOR/_API itself.
+# ds-store's schedule::publish tests run as schedule_reference (the other
+# suites seed schedule products as the owner, MIGRATION_DATABASE_URL;
+# ds_store::test_support::schedule_fixture_pool): since release B the app
+# role (and so the api role) no longer holds the *_publish_keys tables or
+# analyze_publish_keys (db-grants.yaml app_revokes). writer-maintenance's
+# backfill-incident-lines preflight runs as the incidents role, the role
+# that subcommand is run as (ingest phase 5, 5.4b; the writer run checks the
+# refusal).
+#
+# Ingest phase 5 release D (docs/ingest-phase5-runbook.md §5.5, DS-118)
+# narrows the api, aggregator, enricher and notifier roles: no longer
+# members of the app role, exactly their own db-grants.yaml grants.
+# db-grants.yaml says so since 2026-10-28; --narrow keeps the narrowed step
+# narrowing them whatever the Stage 0b pass observes. Those tests run each
+# narrowed role's runtime writes that reach outside its own tables, with
+# their fixtures written as the owner: the api's track routes queue their
+# backlog replay in train_event_outbox and the writer applies and completes
+# it (a direct replay is refused); the aggregator's archive takes its FOR
+# UPDATE row lock on trains (which needs UPDATE, not just DELETE). The full
+# suites still seed most fixtures through the role's own pool, so the Stage
+# 0b pass runs the four `--observe`d (members of app again) until those
+# fixtures move to the owner pool (scripts/tests/test_postgres_roles_narrow.py
+# pins both lists).
+[[pass]]
+id = "per-service"
+name = "DB tests as each service's role (Stage 0b, release D)"
+run = '''
+echo "== DB-backed tests as each service's own role (Stage 0b)"
+uv run --no-sync scripts/test-postgres-roles.py --mode per-service --check-setup-job --observe api,aggregator,enricher,notifier -- \
+  uv run --no-sync scripts/db-tests.py run per-service --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
+
+echo "== Release D's narrowed roles (api, aggregator, enricher, notifier)"
+uv run --no-sync scripts/test-postgres-roles.py --mode per-service --narrow api,aggregator,enricher,notifier -- \
+  uv run --no-sync scripts/db-tests.py run narrow --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
+'''
