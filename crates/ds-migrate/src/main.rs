@@ -1,7 +1,8 @@
 //! `ds-migrate`: the schema migrator as its own binary (ingest architecture
-//! spec §12.1, plan 1B.1). Built into the api image as
-//! `/usr/local/bin/ds-migrate`; the chart's migrate hook Job
-//! (`templates/migrate-job.yaml`, `migrate.job`) runs `ds-migrate run`.
+//! spec §12.1, plan 1B.1). Its own image (`docker/ds-migrate.Dockerfile`,
+//! repo split spec §5.1) ships it as `/usr/local/bin/ds-migrate`, and the
+//! api image still does too; the chart's migrate hook Job
+//! (`templates/migrate-job.yaml`, `migrate.image`) runs `ds-migrate run`.
 //!
 //! ```text
 //!   MIGRATION_DATABASE_URL=postgres://owner@... ds-migrate run
