@@ -9,6 +9,11 @@ crates/*/tests/fixtures/** -text
 *.lock              linguist-generated=true
 package-lock.json   linguist-generated=true
 
+# Copies of crates/ds-store/db-grants.yaml and access/redis-users.acl.tpl
+# (scripts/sync-chart-core-files.py): review the sources instead.
+charts/distant-signal/files/db-grants.yaml       linguist-generated=true
+charts/distant-signal/files/redis-users.acl.tpl  linguist-generated=true
+
 # Binary assets.
 *.png binary
 *.zip binary

@@ -1310,6 +1310,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "rand 0.8.8",
+ "regex",
  "schedule-query",
  "serde",
  "serde_json",

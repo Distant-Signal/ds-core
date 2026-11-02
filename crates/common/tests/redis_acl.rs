@@ -1,6 +1,6 @@
 //! Redis ACL conformance (ingest architecture phase 0c; docs/redis-acl.md).
 //!
-//! Every user in `charts/distant-signal/files/redis-users.acl.tpl` is created
+//! Every user in `access/redis-users.acl.tpl` (the chart copies it) is created
 //! with its `narrow` rights (step 3 of the rollout) on a real Redis or valkey,
 //! and then:
 //!
@@ -40,7 +40,7 @@ use std::path::PathBuf;
 use common::redis_auth::{redis_url_with_credentials, redis_url_with_password};
 use common::secret::Secret;
 
-const TEMPLATE: &str = "../../charts/distant-signal/files/redis-users.acl.tpl";
+const TEMPLATE: &str = "../../access/redis-users.acl.tpl";
 
 /// One line of the template: `<user> <kind> <rules...>`.
 struct User {
