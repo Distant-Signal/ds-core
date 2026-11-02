@@ -10,13 +10,39 @@
 //! ```text
 //! distant-signal-poller-irish-rail-live/0.1.0 (+https://github.com/FasterSpeeding/Distant-Signal)
 //! ```
+//!
+//! The URL comes from `DS_PROJECT_URL` at compile time, not from a literal
+//! here, so it follows the repository's owner:
+//! .github/workflows/containers.yml passes the building repository's URL
+//! into every Rust image build, and `.cargo/config.toml` holds the default
+//! for local builds and CI's cargo jobs.
 
 /// Public project URL carried in every [`user_agent!`](crate::user_agent)
 /// string, so an upstream operator seeing our traffic can find the source
-/// and a contact route. Kept in sync with the literal inside the macro
-/// (a `macro_rules!` `concat!` can only take literals); the unit test below
-/// pins the two together.
-pub const PROJECT_URL: &str = "https://github.com/FasterSpeeding/Distant-Signal";
+/// and a contact route. `DS_PROJECT_URL` at compile time (see the module
+/// docs); the macro reads the same variable, and the unit test below pins
+/// the two together.
+pub const PROJECT_URL: &str = env!("DS_PROJECT_URL");
+
+// An empty or non-https `DS_PROJECT_URL` (say, a build arg passed blank)
+// fails the build rather than shipping a User-Agent with no contact URL.
+// Inline rather than a helper fn: newer rustc calls a fn used only in a
+// const item dead code.
+const _: () = {
+    let (url, prefix) = (PROJECT_URL.as_bytes(), b"https://".as_slice());
+    assert!(
+        url.len() > prefix.len(),
+        "DS_PROJECT_URL must be an https:// URL"
+    );
+    let mut i = 0;
+    while i < prefix.len() {
+        assert!(
+            url[i] == prefix[i],
+            "DS_PROJECT_URL must be an https:// URL"
+        );
+        i += 1;
+    }
+};
 
 /// Expands to a `&'static str` `User-Agent` of the form
 /// `distant-signal-<calling crate>/<calling crate version> (+<project URL>)`.
@@ -32,7 +58,9 @@ macro_rules! user_agent {
             env!("CARGO_PKG_NAME"),
             "/",
             env!("CARGO_PKG_VERSION"),
-            " (+https://github.com/FasterSpeeding/Distant-Signal)"
+            " (+",
+            env!("DS_PROJECT_URL"),
+            ")"
         )
     };
 }
