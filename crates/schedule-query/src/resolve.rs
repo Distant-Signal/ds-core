@@ -481,7 +481,7 @@ fn collect_crs_departures(
 /// `tiploc_to_crs` entry is no longer dropped entirely. It used to be --
 /// see [`unresolved_destination_key`]'s own doc comment for why that was a
 /// real, live completeness bug (not a hypothetical one: STANOX `89428`,
-/// `52215` and `89530` in `reference-data/stanox-crs.md`'s own documented
+/// `52215` and `89530` in `crates/trust-consumer/reference-data/stanox-crs.md`'s own documented
 /// ambiguity list are Ashford International, Stratford International and
 /// Ebbsfleet International -- real major stations, real genuine schedule
 /// termini, permanently unresolvable via this map) rather than a justified
@@ -663,7 +663,7 @@ pub fn departures_by_destination_crs(
 /// `tiploc_to_crs` entry.
 ///
 /// **This is a real, live gap, confirmed against this repo's own checked-in
-/// reference data, not a hypothetical one.** `reference-data/stanox-crs.md`
+/// reference data, not a hypothetical one.** `crates/trust-consumer/reference-data/stanox-crs.md`
 /// documents 5 real STANOX values that are permanently excluded from CRS
 /// resolution because two genuinely distinct, non-`X`-prefixed CRS codes
 /// share one physical STANOX with no principled tiebreaker (see that file's
@@ -726,7 +726,7 @@ pub fn departures_by_destination_crs(
 ///
 /// **Never collides with a real CRS.** Every real CRS (including
 /// `X`-prefixed pseudo-codes) is exactly 3 uppercase ASCII letters by
-/// Network Rail's own convention -- see `reference-data/stanox-crs.md`.
+/// Network Rail's own convention -- see `crates/trust-consumer/reference-data/stanox-crs.md`.
 /// The `tiploc:` prefix (lower case, with a colon) can never be one, so this
 /// key stays distinguishable from a real CRS regardless of the TIPLOC's own
 /// length (some real TIPLOCs, e.g. `ASH`/`LEE`/`ORE`, are themselves three
@@ -2107,7 +2107,7 @@ mod tests {
     #[test]
     fn departures_by_destination_crs_falls_back_for_the_real_ashford_international_ambiguity() {
         // Grounded in real, checked-in reference data, not a synthetic
-        // worst case: reference-data/stanox-crs.md documents STANOX 89428
+        // worst case: crates/trust-consumer/reference-data/stanox-crs.md documents STANOX 89428
         // as genuinely irresolvable -- TIPLOC ASHFKI/CRS ASI (Ashford
         // International) and TIPLOC ASHFKY/CRS AFK (Ashford (Kent)) share
         // one physical STANOX with no principled tiebreaker between two

@@ -1,12 +1,12 @@
 //! Curated fixed links the timetable's ALF lacks:
-//! `reference-data/supplementary-fixed-links.csv`, compiled in. `api`
+//! `crates/common/reference-data/supplementary-fixed-links.csv`, compiled in. `api`
 //! merges them with the ALF's `fixed_links` rows when it builds the
 //! planner's interchange data. The CSV's header comment says what is in
 //! it, why, and where its minutes come from.
 
-/// `reference-data/supplementary-fixed-links.csv`, compiled in.
+/// `crates/common/reference-data/supplementary-fixed-links.csv`, compiled in.
 pub const SUPPLEMENTARY_LINKS_CSV: &str =
-    include_str!("../../../reference-data/supplementary-fixed-links.csv");
+    include_str!("../reference-data/supplementary-fixed-links.csv");
 
 /// The longest link the CSV may give.
 pub const MAX_MINUTES: i32 = 120;

@@ -19,7 +19,7 @@
 //!   code and its text, whenever there is one.
 //!
 //! **Text.** A code is looked up in the Network Rail Historic Delay
-//! Attribution Glossary (reference-data/delay-attribution-reasons.tsv,
+//! Attribution Glossary (crates/ds-store/reference-data/delay-attribution-reasons.tsv,
 //! August 2021, bundled at compile time). The text is the glossary's own
 //! description, verbatim: industry attribution wording, not Darwin's
 //! passenger prose. The text is `None`, and the code is still served, when:
@@ -40,7 +40,7 @@ use sqlx::PgPool;
 /// The bundled glossary, `code -> description`.
 static REASON_TEXT: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     parse_reason_table(include_str!(
-        "../../../../reference-data/delay-attribution-reasons.tsv"
+        "../../reference-data/delay-attribution-reasons.tsv"
     ))
 });
 

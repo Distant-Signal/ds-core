@@ -1963,7 +1963,7 @@ pub enum ParentSource {
     SameTiploc,
     /// The nearest station by MSN grid reference, within 400 m.
     Nearest,
-    /// `reference-data/tiploc-parent-stations.csv`.
+    /// `crates/common/reference-data/tiploc-parent-stations.csv`.
     Curated,
 }
 
