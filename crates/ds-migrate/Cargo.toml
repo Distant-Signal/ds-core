@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # The schema migrator (ingest architecture spec §12.1, plan 1B.1): the
 # chart's migrate hook Job runs `ds-migrate run` from the api image. It

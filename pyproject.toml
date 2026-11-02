@@ -12,6 +12,8 @@
 # documented layout for a non-package project, with `package = false` below).
 name = "distant-signal-scripts"
 version = "0"
+# PEP 639 SPDX expression: the repository's licence (LICENSE).
+license = "AGPL-3.0-or-later"
 # The oldest Python the scripts support; equal to ruff's target-version and
 # mypy's python_version below. .python-version (3.14) is what CI and
 # `uv run` actually use.

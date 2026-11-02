@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # The dependency rules are the ingest architecture spec's §5.1.
 # scripts/check-crate-deps.py (CI's scripts-lint job) fails if this crate's

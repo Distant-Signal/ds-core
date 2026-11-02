@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # Deliberately lib-only: no `main.rs`/`[[bin]]`, no dependency on `tokio`,
 # `reqwest`, `sqlx`, or `rdkafka`. See src/lib.rs's module doc. `tracing` is

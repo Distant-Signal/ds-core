@@ -43,8 +43,11 @@ edition = "2024"
 # Dockerfile builds with rust:1.88.0.
 rust-version = "1.88"
 # Nothing here is published; this also lets deny.toml skip the workspace's
-# own unlicensed crates.
+# own crates.
 publish = false
+# The whole repository is AGPL-3.0-or-later (LICENSE). Every crate inherits
+# it with `license.workspace = true`.
+license = "AGPL-3.0-or-later"
 
 # Strict baseline from the "Strict Config Starting Points" guide. Every crate
 # opts in with `[lints] workspace = true`. Lints stay at "warn" here and CI

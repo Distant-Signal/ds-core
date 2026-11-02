@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 # The Redis Streams ingest runtime (ingest architecture spec §7, plan 3a):
 # the envelope, the producer, the writer's consumer runtime and the memory
