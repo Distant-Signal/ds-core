@@ -12,6 +12,9 @@
 //! `CrashLoopBackOff` under the Deployment's `strategy: Recreate`. See also
 //! `migration_index_locking.rs`'s module docs.
 //!
+//! The lock and both guards live here, next to the migrations they protect
+//! (repo split spec §5.1; they were in `crates/api/tests` until phase 3).
+//!
 //! M16 found two files edited after merge (`20260831090001`,
 //! `20260908150000`). On 2026-09-27 production's `_sqlx_migrations` held 98
 //! rows whose checksums all equal the SHA-384 of the current files, those two
@@ -51,12 +54,12 @@ use sha2::{Digest, Sha384};
 /// binary would otherwise read another worktree's migrations. Not embedded
 /// with `sqlx::migrate!` either: that cannot see a NEW file until something
 /// else forces a rebuild.
-fn api_dir() -> PathBuf {
+fn store_dir() -> PathBuf {
     common::manifest_dir!()
 }
 
 fn locked_checksums() -> BTreeMap<String, String> {
-    let path = api_dir().join("tests/migration_checksums.lock");
+    let path = store_dir().join("tests/migration_checksums.lock");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
     text.lines()
@@ -72,8 +75,7 @@ fn locked_checksums() -> BTreeMap<String, String> {
 }
 
 fn current_checksums() -> BTreeMap<String, String> {
-    // Plan task 1B.1 moved the directory into ds-store; the lock stays here.
-    let dir = api_dir().join("../ds-store/migrations");
+    let dir = store_dir().join("migrations");
     std::fs::read_dir(&dir)
         .unwrap_or_else(|err| panic!("read_dir {}: {err}", dir.display()))
         .map(|entry| entry.expect("read migrations dir entry").path())
@@ -136,7 +138,7 @@ fn the_checksum_matches_what_sqlx_records() {
     // sqlx's own resolver so a change in how sqlx checksums would show up
     // here rather than as a surprise in production.
     let locked = locked_checksums();
-    let migrator = sqlx::migrate!("../ds-store/migrations");
+    let migrator = sqlx::migrate!("./migrations");
     let migration = migrator
         .iter()
         .find(|m| m.version == 20_260_831_090_001)

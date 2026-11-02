@@ -20,7 +20,7 @@ A merged migration is immutable: sqlx compares each applied file's SHA-384
 with _sqlx_migrations.checksum at startup, so an edited file crash-loops
 the api on every database that already ran it, and a renamed or deleted
 one leaves an applied row with no file. This diff-against-BASE check needs
-no upkeep; crates/api/tests/migration_checksums.rs (the checksum lock)
+no upkeep; crates/ds-store/tests/migration_checksums.rs (the checksum lock)
 covers the same ground for migrations recorded in its .lock file, including
 changes made outside a PR.
 
@@ -47,7 +47,7 @@ The contract check covers the migrations added since BASE plus every
 migration newer than CONTRACT_CHECK_CUTOFF, the newest migration when the
 check was introduced (2026-10-07). Older ones are grandfathered: they are
 applied in production, and adding a header would change their sqlx
-checksums, which crates/api/tests/migration_checksums.rs locks.
+checksums, which crates/ds-store/tests/migration_checksums.rs locks.
 
 BASE is a commit, e.g. `$(git merge-base origin/main HEAD)` for a branch, or
 the pre-push commit for a push. Run it before merging a worktree branch
