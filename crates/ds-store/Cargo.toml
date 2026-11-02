@@ -42,6 +42,8 @@ sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "der
 # `rt`: the loop runner's `JoinSet` (`loops::runner`).
 tokio = { version = "1.52.3", features = ["rt", "sync", "time"] }
 tracing = "0.1.44"
+# Only with the `ts` feature: see [features].
+ts-rs = { version = "=12.0.1", default-features = false, features = ["serde-compat", "chrono-impl", "serde-json-impl"], optional = true }
 trust-schema = { path = "../trust-schema" }
 
 [features]
@@ -53,6 +55,10 @@ trust-schema = { path = "../trust-schema" }
 # through `cfg(test)`. `tokio/rt`: `FixtureCleanup`'s drop runs its deletes
 # on a runtime of its own.
 test-support = ["tokio/rt"]
+# `ts_rs::TS` on the read models the api sends the frontend, for its
+# generated TypeScript (`api::api_types`, repo-split spec §5.3). Enabled by
+# the api only.
+ts = ["dep:ts-rs", "common/ts"]
 
 [dev-dependencies]
 metrics-exporter-prometheus = { version = "0.18", default-features = false }

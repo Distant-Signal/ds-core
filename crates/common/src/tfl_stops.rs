@@ -21,6 +21,7 @@ pub const NAME_MAX_CHARS: usize = 100;
 
 /// One line serving a stop.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TflStopLine {
     /// `TfL`'s line id (`victoria`, `dlr`, `tram`).
     pub id: String,

@@ -30,6 +30,8 @@ serde_json = "1.0.149"
 serde_repr = "0.1.20"
 sha2 = "0.10"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "net"] }
+# Only with the `ts` feature: see [features].
+ts-rs = { version = "=12.0.1", default-features = false, features = ["serde-compat", "chrono-impl", "serde-json-impl"], optional = true }
 toml = { version = "1.1.2", features = ["serde"] }
 tracing = "0.1.44"
 url = "2.5"
@@ -48,6 +50,10 @@ http = ["dep:reqwest", "ds-runtime/http"]
 postgres = ["dep:sqlx"]
 # `common::incident_text_changed` (over `ds_runtime::redis_conn`).
 redis = ["dep:redis", "ds-runtime/redis"]
+# `ts_rs::TS` on the domain types the api sends the frontend, for its
+# generated TypeScript (`api::api_types`, repo-split spec §5.3). Enabled by
+# the api only.
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 # `poller_loop`'s and `gcp_external_account`'s metric tests build a
