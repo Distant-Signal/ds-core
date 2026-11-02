@@ -8,7 +8,7 @@
 //! each binary names itself and its own crate version:
 //!
 //! ```text
-//! distant-signal-poller-irish-rail-live/0.1.0 (+https://github.com/FasterSpeeding/Distant-Signal)
+//! distant-signal-poller-irish-rail-live/0.1.0 (+https://github.com/Distant-Signal/distant-signal)
 //! ```
 //!
 //! The URL comes from `DS_PROJECT_URL` at compile time, not from a literal

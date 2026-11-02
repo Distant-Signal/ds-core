@@ -106,7 +106,7 @@ const BATCH: i64 = 500;
 /// Recovered verbatim (`SELECT ... WHERE train_uid IS NOT NULL AND
 /// trains_id IS NULL LIMIT 500`, then `find_or_create_train` +
 /// `UPDATE ... SET trains_id`) from the deleted
-/// `backfill_trains_id_for_resolved_rows`, commit `e0fec2b`. The upsert is
+/// `backfill_trains_id_for_resolved_rows`, commit `9a36b0b`. The upsert is
 /// inlined here rather than calling `crate::trains::find_or_create_train`
 /// only so this module needs no other module at all; the SQL is identical.
 async fn backfill_subscriptions(pool: &PgPool, table: &str) -> anyhow::Result<u64> {
@@ -155,7 +155,7 @@ async fn backfill_subscriptions(pool: &PgPool, table: &str) -> anyhow::Result<u6
 /// Phase D: copy each subscription's (now-populated) `trains_id` down onto
 /// the movement rows that still key off `tracked_train_id`.
 ///
-/// Recovered verbatim from the deleted Step D job, commit `438ff2c`'s
+/// Recovered verbatim from the deleted Step D job, commit `415b96f`'s
 /// `run_backfill_pass`. `tt.trains_id IS NOT NULL` in the join is
 /// load-bearing, not defensive: a movement row under a subscription that
 /// itself never resolved has no identity to inherit and must stay `NULL`

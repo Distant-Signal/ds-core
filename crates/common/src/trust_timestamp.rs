@@ -825,7 +825,7 @@ mod tests {
     }
 
     /// The regression a second, independent adversarial review found in
-    /// `6f58e0b` (the commit that fixed Finding #3, the fixed-BST-candidate
+    /// `856ea05` (the commit that fixed Finding #3, the fixed-BST-candidate
     /// autumn-fallback bug): sharing just the corrected-vs-raw BRANCH
     /// between `planned` and `actual` is not enough, because
     /// `apply_correction_decision` used to re-call

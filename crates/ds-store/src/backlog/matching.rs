@@ -263,7 +263,7 @@ struct BacklogRow {
 ///   departure (`TrackTrainForm.tsx` takes the picked wall-clock string's
 ///   date), so a pin at an intermediate stop at 00:30 is dated D+1;
 /// - a backlog row's `service_date` is the train's ORIGIN date, since
-///   commit 97ccd3ea dates an Activation by `tp_origin_timestamp` and its
+///   commit 9433d646 dates an Activation by `tp_origin_timestamp` and its
 ///   Movements inherit that date. A train that left its origin at 23:30 on
 ///   D is filed under D.
 ///
@@ -384,7 +384,7 @@ struct BacklogCandidate {
     /// The date the train's identity is keyed on: the Activation's own
     /// `service_date` when there is one (that row states the
     /// `(train_uid, date)` pair directly, and is the CIF schedule's date by
-    /// construction since 97ccd3ea), otherwise `service_date`. The two only
+    /// construction since 9433d646), otherwise `service_date`. The two only
     /// differ for a train whose Movements were dated without a parked
     /// Activation -- see `find_backlog_match`'s Activation lookup.
     identity_date: NaiveDate,
@@ -424,7 +424,7 @@ async fn known_train_uid_for_subscription(
 /// The exact same shape, and the exact same reasoning, as the
 /// contradiction filter `trust-consumer::process::process_message` applies
 /// in front of `matching::resolve_origin_departure` (commit
-/// `4340c97f`, "a parked Activation's `train_uid` vetoes a wrong CRS+time
+/// `856ac43e`, "a parked Activation's `train_uid` vetoes a wrong CRS+time
 /// claim"): only a comparison between two identities that are BOTH already
 /// known can ever prove a mismatch. When either side is unknown the
 /// underlying CRS+time heuristic is all there is, and it must run exactly
@@ -813,7 +813,7 @@ pub async fn attempt_backlog_match_via(
     } = candidate;
 
     // CONTRADICTION FILTER -- the same fix, for the same class of bug, as
-    // commit `4340c97f`'s ("a parked Activation's train_uid vetoes a wrong
+    // commit `856ac43e`'s ("a parked Activation's train_uid vetoes a wrong
     // CRS+time claim") guard in front of
     // `trust-consumer::matching::resolve_origin_departure`. That fix closed
     // this shape on the LIVE matching path; this closes it on the BACKLOG
@@ -1125,7 +1125,7 @@ pub async fn attempt_backlog_match_by_uid_via(
     };
 
     // `service_date` here is the train's identity date (its Activation's
-    // `service_date`, the origin date since 97ccd3ea). Its Movements are
+    // `service_date`, the origin date since 9433d646). Its Movements are
     // usually filed under the same date, but one processed with no parked
     // Activation (a trust-backlog-consumer restart between the two) is
     // dated by its own calendar date, which after midnight is the NEXT day.
@@ -2713,7 +2713,7 @@ mod db_tests {
     // ---------------------------------------------------------------------
 
     /// One run of a train in `trust_event_backlog`, as the backlog consumer
-    /// files it since 97ccd3ea: an Activation carrying the uid, then a
+    /// files it since 9433d646: an Activation carrying the uid, then a
     /// DEPARTURE at `crs` and an ARRIVAL at a synthetic terminus 30 minutes
     /// later, all under `service_date` (the origin date).
     async fn seed_backlog_run(

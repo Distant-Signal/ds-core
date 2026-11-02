@@ -76,9 +76,9 @@ operators = [
 #
 # DELETED-FILE CHECK (`lines/lnwr-euston-commuter.toml`, Task 1.7): `git
 # log --all --oneline -- 'lines/lnwr-euston*'` shows this file was added
-# (`a4f40806`), corrected once (`f012ade1`), then deleted
-# (`762445ce`, "Fold lnwr-euston-commuter.toml into
-# lnwr-birmingham-crewe.toml"). Read in full via `git show f012ade1` before
+# (`5aba0b0d`), corrected once (`5aba0b0d`), then deleted
+# (`72a88ccf`, "Fold lnwr-euston-commuter.toml into
+# lnwr-birmingham-crewe.toml"). Read in full via `git show 5aba0b0d` before
 # writing this file: it modelled "London Northwestern Railway:
 # Euston-Northampton" -- EUS, WFJ, LBZ, BLY, MKC on a `lnwr-euston-trunk`
 # segment, then WOL, NMP on its own `lnwr-northampton` segment -- i.e. the
