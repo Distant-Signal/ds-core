@@ -35,6 +35,12 @@
 //! surfaces as a fast error rather than a queue of requests each waiting half
 //! a minute.
 //!
+//! The process's first connect has a budget of its own,
+//! [`PoolSettings::startup_connect_timeout`] (15 s): a new pod's connects are
+//! refused for 2 to 5 s while its `NetworkPolicy` is programmed, which ate
+//! most of the 5 s. `ds_store::pool::PoolSettings::connect_with_until_ready`
+//! spends it; `acquire_timeout` is unchanged.
+//!
 //! # Configuration
 //!
 //! Environment variables, read by [`PoolSettings::from_env`]; the chart sets
@@ -45,6 +51,7 @@
 //! | `DATABASE_STATEMENT_TIMEOUT_SECS` | 60 |
 //! | `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_SECS` | 30 |
 //! | `DATABASE_ACQUIRE_TIMEOUT_SECS` | 5 |
+//! | `DATABASE_STARTUP_CONNECT_TIMEOUT_SECS` | 15 (`0`: none) |
 //! | `DATABASE_MAX_CONNECTIONS` | per crate (api 50, aggregator 10, notifier 5, enricher 5) |
 
 use std::time::Duration;
@@ -59,6 +66,9 @@ pub const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// Default pool `acquire_timeout`.
 pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Default [`PoolSettings::startup_connect_timeout`].
+pub const DEFAULT_STARTUP_CONNECT_TIMEOUT: Duration =
+    crate::startup::DEFAULT_STARTUP_CONNECT_BUDGET;
 
 /// Session settings that make Postgres notice a client that has gone away
 /// (2026-09-27 incident: schedule publish deletes kept running for many
@@ -85,6 +95,7 @@ pub const DEAD_CLIENT_DETECTION_SETTINGS: [(&str, &str); 4] = [
 pub const STATEMENT_TIMEOUT_ENV: &str = "DATABASE_STATEMENT_TIMEOUT_SECS";
 pub const IDLE_IN_TRANSACTION_TIMEOUT_ENV: &str = "DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_SECS";
 pub const ACQUIRE_TIMEOUT_ENV: &str = "DATABASE_ACQUIRE_TIMEOUT_SECS";
+pub const STARTUP_CONNECT_TIMEOUT_ENV: &str = "DATABASE_STARTUP_CONNECT_TIMEOUT_SECS";
 pub const MAX_CONNECTIONS_ENV: &str = "DATABASE_MAX_CONNECTIONS";
 
 /// Everything a crate's pool is built from. See the module docs.
@@ -98,6 +109,11 @@ pub struct PoolSettings {
     /// `Duration::ZERO` leaves the server's own setting alone.
     pub idle_in_transaction_timeout: Duration,
     pub acquire_timeout: Duration,
+    /// The startup budget (`crate::startup`, "The startup budget") for the
+    /// process's first connect: how long network-level failures (a new
+    /// pod's `NetworkPolicy` lag) are retried quietly before they warn.
+    /// `Duration::ZERO` turns it off.
+    pub startup_connect_timeout: Duration,
 }
 
 impl PoolSettings {
@@ -109,6 +125,7 @@ impl PoolSettings {
             statement_timeout: DEFAULT_STATEMENT_TIMEOUT,
             idle_in_transaction_timeout: DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT,
             acquire_timeout: DEFAULT_ACQUIRE_TIMEOUT,
+            startup_connect_timeout: DEFAULT_STARTUP_CONNECT_TIMEOUT,
         }
     }
 
@@ -149,6 +166,9 @@ impl PoolSettings {
                 "{ACQUIRE_TIMEOUT_ENV} must be at least 1 second"
             );
             settings.acquire_timeout = value;
+        }
+        if let Some(value) = secs(STARTUP_CONNECT_TIMEOUT_ENV)? {
+            settings.startup_connect_timeout = value;
         }
         if let Some(raw) = lookup(MAX_CONNECTIONS_ENV) {
             let value: u32 = raw.trim().parse().with_context(|| {
@@ -302,6 +322,7 @@ mod tests {
             Duration::from_secs(30)
         );
         assert_eq!(settings.acquire_timeout, Duration::from_secs(5));
+        assert_eq!(settings.startup_connect_timeout, Duration::from_secs(15));
         assert_eq!(
             settings.session_options(),
             vec![
@@ -324,6 +345,7 @@ mod tests {
                 (STATEMENT_TIMEOUT_ENV, "90"),
                 (IDLE_IN_TRANSACTION_TIMEOUT_ENV, " 45 "),
                 (ACQUIRE_TIMEOUT_ENV, "2"),
+                (STARTUP_CONNECT_TIMEOUT_ENV, "30"),
                 (MAX_CONNECTIONS_ENV, "12"),
             ]),
         )
@@ -334,6 +356,7 @@ mod tests {
             Duration::from_secs(45)
         );
         assert_eq!(settings.acquire_timeout, Duration::from_secs(2));
+        assert_eq!(settings.startup_connect_timeout, Duration::from_secs(30));
         assert_eq!(settings.max_connections, 12);
     }
 
@@ -345,9 +368,11 @@ mod tests {
             lookup(&[
                 (STATEMENT_TIMEOUT_ENV, "0"),
                 (IDLE_IN_TRANSACTION_TIMEOUT_ENV, "0"),
+                (STARTUP_CONNECT_TIMEOUT_ENV, "0"),
             ]),
         )
         .unwrap();
+        assert_eq!(settings.startup_connect_timeout, Duration::ZERO);
         let names: Vec<&str> = settings
             .session_options()
             .into_iter()
@@ -368,6 +393,7 @@ mod tests {
             [(STATEMENT_TIMEOUT_ENV, "60s")],
             [(IDLE_IN_TRANSACTION_TIMEOUT_ENV, "-1")],
             [(ACQUIRE_TIMEOUT_ENV, "0")],
+            [(STARTUP_CONNECT_TIMEOUT_ENV, "15s")],
             [(MAX_CONNECTIONS_ENV, "0")],
             [(MAX_CONNECTIONS_ENV, "many")],
         ] {

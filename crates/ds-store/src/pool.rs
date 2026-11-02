@@ -51,8 +51,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use common::metrics::metric_name;
 use sqlx::pool::PoolConnection;
-use sqlx::postgres::{PgConnectOptions, PgPool};
-use sqlx::{Postgres, Transaction};
+use sqlx::postgres::{PgConnectOptions, PgConnection, PgPool};
+use sqlx::{Connection as _, Postgres, Transaction};
 
 /// `db_pool_connections{state}`: the pool's connections, idle or in use.
 pub const POOL_CONNECTIONS_METRIC: &str = "db_pool_connections";
@@ -129,29 +129,46 @@ impl PoolSettings {
     }
 
     /// A long-running worker's startup connect: [`Self::connect_with`]
-    /// retried by `common::startup::retry_until_ready` (INF-5) with
-    /// [`common::startup::CONNECT_BACKOFF`] until it succeeds, logging each
-    /// failure ("Postgres is not reachable yet; retrying") and beating
-    /// `progress` so `/livez` stays 200 meanwhile.
+    /// retried by `common::startup::retry_until_ready_past_startup_lag`
+    /// (INF-5) with [`common::startup::CONNECT_BACKOFF`] until it succeeds,
+    /// beating `progress` so `/livez` stays 200 meanwhile.
     ///
-    /// The pool itself is retried, not a throwaway probe connection before
-    /// a one-shot pool connect: `connect_with` opens its first connection
-    /// eagerly, and sqlx retries a refused TCP connect within it only until
-    /// `acquire_timeout` (5 s by default), then fails with `PoolTimedOut`.
-    /// With a probe first, a refusal lasting longer than that between the
-    /// probe and the pool (a new pod's `NetworkPolicy` still being
-    /// programmed by the CNI, Postgres restarting) exited the process into
+    /// **The startup budget.** A new pod's first connects are refused for
+    /// 2 to 5 s while its `NetworkPolicy` is programmed
+    /// (docs/specs/postgres-connection-pooling.md). Each attempt therefore
+    /// opens one plain connection first ([`first_connection`]), which fails
+    /// at once on a refusal, unlike the pool's eager first connect: sqlx
+    /// retries a refused connect inside it until `acquire_timeout` (5 s),
+    /// then fails with `PoolTimedOut`, and a connect that does get through
+    /// after more than 2 s logs sqlx's "acquired connection, but time to
+    /// acquire exceeded slow threshold" WARN. Network-level failures
+    /// ([`is_network_lag`]) are retried quietly (DEBUG, 100 to 500 ms apart)
+    /// for up to `startup_connect_timeout` (15 s,
+    /// `DATABASE_STARTUP_CONNECT_TIMEOUT_SECS`); the success after them is
+    /// logged at INFO. Any other failure, or one past the budget, is logged
+    /// as "Postgres is not reachable yet; retrying" at WARN, as before. The
+    /// pool's `acquire_timeout` is unchanged.
+    ///
+    /// The pool itself is retried, not a probe followed by a one-shot pool
+    /// connect: a refusal lasting past `acquire_timeout` between the two
+    /// (Postgres restarting) used to exit the process into
     /// `CrashLoopBackOff`.
     pub async fn connect_with_until_ready(
         &self,
         base: PgConnectOptions,
         progress: Option<&common::progress::Progress>,
     ) -> PgPool {
-        common::startup::retry_until_ready(
+        let first = self.0.connect_options(base.clone());
+        common::startup::retry_until_ready_past_startup_lag(
             "Postgres",
+            self.0.startup_connect_timeout,
+            is_network_lag,
             common::startup::CONNECT_BACKOFF,
             progress,
-            || self.connect_with(base.clone()),
+            || async {
+                first_connection(&first, self.0.acquire_timeout).await?;
+                self.connect_with(base.clone()).await
+            },
         )
         .await
     }
@@ -168,6 +185,31 @@ impl PoolSettings {
             .context("could not parse DATABASE_URL")?;
         Ok(self.connect_with_until_ready(base, progress).await)
     }
+}
+
+/// Opens one connection with `options` and closes it again, failing at once
+/// on a refused connect (no sqlx pool retry) and after `timeout` on one that
+/// never completes (a dropped SYN), as an `Io` `TimedOut` error.
+async fn first_connection(options: &PgConnectOptions, timeout: Duration) -> sqlx::Result<()> {
+    let conn = tokio::time::timeout(timeout, PgConnection::connect_with(options))
+        .await
+        .map_err(|_| {
+            sqlx::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("no connection within {}s", timeout.as_secs_f64()),
+            ))
+        })??;
+    // Only the connect mattered; a failed goodbye changes nothing.
+    conn.close().await.ok();
+    Ok(())
+}
+
+/// Whether a failed connect never reached Postgres (refused, reset, timed
+/// out, or the pool's own refused-connect retry running out), as while a
+/// new pod's `NetworkPolicy` is programmed. A reply from Postgres (a wrong
+/// password, "the database system is starting up") is not.
+pub fn is_network_lag(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut)
 }
 
 impl From<common::pg::PoolSettings> for PoolSettings {
@@ -487,6 +529,47 @@ mod tests {
         );
     }
 
+    /// The startup budget's first connection fails at once on a refused
+    /// port and after its timeout on a silent one; both count as network
+    /// lag, a reply from the server does not.
+    #[tokio::test]
+    async fn refused_and_silent_first_connections_are_network_lag() {
+        let port = refused_port().await;
+        let options = PgConnectOptions::new()
+            .host("127.0.0.1")
+            .port(port)
+            .username("nobody");
+        let started = Instant::now();
+        let refused = first_connection(&options, Duration::from_secs(5))
+            .await
+            .unwrap_err();
+        assert!(matches!(refused, sqlx::Error::Io(_)), "{refused:?}");
+        assert!(is_network_lag(&refused));
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "no retry inside"
+        );
+
+        // Accepts, never answers.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let silent = options.port(listener.local_addr().unwrap().port());
+        let started = Instant::now();
+        let timed_out = first_connection(&silent, Duration::from_millis(300))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&timed_out, sqlx::Error::Io(e) if e.kind() == std::io::ErrorKind::TimedOut),
+            "{timed_out:?}"
+        );
+        assert!(is_network_lag(&timed_out));
+        assert!(started.elapsed() < Duration::from_secs(2));
+
+        assert!(is_network_lag(&sqlx::Error::PoolTimedOut));
+        assert!(!is_network_lag(&sqlx::Error::Protocol(
+            "password authentication failed".to_owned()
+        )));
+    }
+
     /// The NetworkPolicy-lag case end to end: connects are refused for the
     /// first ~2 seconds (nothing listens on the port), then a TCP relay to
     /// the real database comes up on it, and the same call returns a
@@ -514,6 +597,7 @@ mod tests {
         });
 
         let lagging = real.host("127.0.0.1").port(port);
+        let started = Instant::now();
         let pool = tokio::time::timeout(
             Duration::from_secs(30),
             PoolSettings::new("distant-signal-ds-store-pool-test", 1)
@@ -521,6 +605,13 @@ mod tests {
         )
         .await
         .expect("connects once the port answers");
+        // Within the startup budget the retries are at most 1 s apart (on
+        // CONNECT_BACKOFF alone, a 2 s refusal took up to 3 s more).
+        assert!(
+            started.elapsed() < Duration::from_millis(3500),
+            "took {:?}",
+            started.elapsed()
+        );
         let one: i32 = sqlx::query_scalar("SELECT 1")
             .fetch_one(&pool)
             .await

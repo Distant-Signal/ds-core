@@ -24,7 +24,8 @@
 //!
 //! - at startup, [`connect_until_ready`] (or the worker's own
 //!   `common::startup::retry_until_ready` around a larger connect step):
-//!   logged per attempt, beating liveness progress;
+//!   logged per attempt, beating liveness progress (a new pod's
+//!   `NetworkPolicy` lag quietly, within the startup budget);
 //! - afterwards, the worker loop's own error backoff.
 //!
 //! **Half-open connections.** A response timeout does NOT make redis-rs's
@@ -91,19 +92,61 @@ pub async fn connect(client: &redis::Client) -> RedisResult<RedisConn> {
     RedisConn::connect_with(client, connection_config()).await
 }
 
+/// The startup budget for a new pod's first Redis connect
+/// (`crate::startup`, "The startup budget"): whole seconds, `0` for none,
+/// default [`crate::startup::DEFAULT_STARTUP_CONNECT_BUDGET`].
+pub const STARTUP_CONNECT_TIMEOUT_ENV: &str = "REDIS_STARTUP_CONNECT_TIMEOUT_SECS";
+
 /// [`connect`], retried on `backoff` until Redis is reachable (INF-5: an
 /// unreachable Redis at startup -- its pod being recreated by the same
 /// rollout, or still loading its AOF -- is waited for, not exited on). Each
-/// failed attempt is logged as `what` and beats `progress`, so `/livez`
-/// stays 200 while this waits. Pass [`crate::startup::CONNECT_BACKOFF`]
-/// outside tests.
+/// failed attempt beats `progress`, so `/livez` stays 200 while this waits.
+/// Pass [`crate::startup::CONNECT_BACKOFF`] outside tests.
+///
+/// A network-level failure ([`is_network_lag`]: refused, timed out) within
+/// the [`STARTUP_CONNECT_TIMEOUT_ENV`] budget is a new pod's
+/// `NetworkPolicy` lag, retried quickly and logged at DEBUG
+/// (`crate::startup::retry_until_ready_past_startup_lag`); every other
+/// failure is logged as `what` at WARN. A bad value in the variable is
+/// warned about and the default used: this returns no error.
 pub async fn connect_until_ready(
     what: &str,
     client: &redis::Client,
     backoff: Backoff,
     progress: Option<&Progress>,
 ) -> RedisConn {
-    crate::startup::retry_until_ready(what, backoff, progress, || connect(client)).await
+    let budget = crate::startup::startup_connect_budget_from_env(STARTUP_CONNECT_TIMEOUT_ENV)
+        .unwrap_or_else(|err| {
+            tracing::warn!(error = %err, "using the default Redis startup connect budget");
+            crate::startup::DEFAULT_STARTUP_CONNECT_BUDGET
+        });
+    connect_until_ready_within(what, client, budget, backoff, progress).await
+}
+
+/// [`connect_until_ready`] with the startup budget given.
+async fn connect_until_ready_within(
+    what: &str,
+    client: &redis::Client,
+    budget: Duration,
+    backoff: Backoff,
+    progress: Option<&Progress>,
+) -> RedisConn {
+    crate::startup::retry_until_ready_past_startup_lag(
+        what,
+        budget,
+        is_network_lag,
+        backoff,
+        progress,
+        || connect(client),
+    )
+    .await
+}
+
+/// Whether a failed [`connect`] never reached Redis (refused, reset, timed
+/// out: an I/O error), as while a new pod's `NetworkPolicy` is programmed,
+/// rather than being answered with an error (a wrong password, `LOADING`).
+pub fn is_network_lag(err: &redis::RedisError) -> bool {
+    err.is_io_error() || err.is_connection_refusal() || err.is_timeout()
 }
 
 /// `client` with TCP keepalive switched on (system default timings) for
@@ -405,6 +448,38 @@ mod tests {
         );
     }
 
+    /// A refused connect and a connect that times out are both the network
+    /// lag the startup budget covers.
+    #[tokio::test]
+    async fn refused_and_timed_out_connects_count_as_network_lag() {
+        let Err(refused) = connect(&client(closed_local_port())).await else {
+            panic!("nothing listens on the port");
+        };
+        assert!(is_network_lag(&refused), "{refused:?}");
+
+        // Accepts, never answers: the handshake times out.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let Err(silent) = RedisConn::connect_with(
+            &client(port),
+            connection_config_with(Duration::from_millis(200), Duration::from_millis(200)),
+        )
+        .await
+        else {
+            panic!("nothing answers the handshake");
+        };
+        assert!(is_network_lag(&silent), "{silent:?}");
+        drop(listener);
+    }
+
+    /// An answer, even an error, is not network lag: a wrong password must
+    /// warn at once.
+    #[test]
+    fn a_server_error_is_not_network_lag() {
+        let err = redis::RedisError::from((redis::ErrorKind::AuthenticationFailed, "WRONGPASS"));
+        assert!(!is_network_lag(&err));
+    }
+
     /// Unreachable Redis at startup: retried (logged), beating progress on
     /// every failure; returns once Redis answers.
     #[tokio::test]
@@ -413,9 +488,11 @@ mod tests {
         let port = closed_local_port();
         let progress = Progress::new(Duration::from_millis(400));
         let client = client(port);
-        let waiting = connect_until_ready(
+        // No startup budget: this is about the WARN path's backoff.
+        let waiting = connect_until_ready_within(
             "Redis",
             &client,
+            Duration::ZERO,
             Backoff::new(Duration::from_millis(20), Duration::from_millis(50)),
             Some(&progress),
         );
