@@ -7,7 +7,8 @@ publish.workspace = true
 license.workspace = true
 
 # The schema migrator (ingest architecture spec §12.1, plan 1B.1): the
-# chart's migrate hook Job runs `ds-migrate run` from the api image. It
+# chart's migrate hook Job runs `ds-migrate run` from its own image
+# (docker/ds-migrate.Dockerfile). It
 # links only `ds-store`'s `migrate` and `schema` (`wait`), so like
 # `ds-store` its normal dependency closure must not contain axum, tower,
 # hyper, redis, reqwest, oauth2, openidconnect or api
