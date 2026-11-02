@@ -78,7 +78,9 @@ SQLX_TEST_SKIPS = (
     "crosswalk::db_tests",
     "freshness::db_tests",
     "line_timetable::db_tests",
+    "auth::sliding_session_tests",
     "reads::db_tests",
+    "users::sliding_session_db_tests",
 )
 # enricher: the LLM-gated live evals and the offline replay harness need
 # credentials or an exported history file CI does not have.
