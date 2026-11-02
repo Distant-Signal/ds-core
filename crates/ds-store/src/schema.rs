@@ -7,7 +7,7 @@
 //! 1. `SELECT max(version) FROM _sqlx_migrations WHERE success` is at least
 //!    [`REQUIRED_MIGRATION`], the newest migration embedded in this build;
 //!    and
-//! 2. `current_user` holds every privilege the chart's `db-grants.yaml`
+//! 2. `current_user` holds every privilege this crate's `db-grants.yaml`
 //!    gives the service's role ([`DbRole`]): one `has_table_privilege` per
 //!    required table and privilege (`has_column_privilege` for a
 //!    column-limited grant), plus SELECT on every shared table for a

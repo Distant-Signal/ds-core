@@ -10,7 +10,7 @@ its own role (still a member of the app role), and after about 7 days
 pg_stat_statements holds each role's statements. This script reads them,
 READ-ONLY, extracts the tables each statement touches and with which verb,
 and writes a Markdown report per role with a diff against the role's
-grants in charts/distant-signal/files/db-grants.yaml:
+grants in crates/ds-store/db-grants.yaml:
 
   - "used, not granted": would fail with `permission denied` once the role
     is narrowed. Fix db-grants.yaml (or the code) before narrowing;
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-GRANTS_YAML = ROOT / "charts" / "distant-signal" / "files" / "db-grants.yaml"
+GRANTS_YAML = ROOT / "crates" / "ds-store" / "db-grants.yaml"
 READ_SHARED_CLASSES = frozenset({"shared-train", "ingest", "derived", "reference"})
 VERBS = "SIUD"
 
@@ -319,7 +319,7 @@ def report(
         "# Role usage report",
         "",
         "From pg_stat_statements (scripts/observe-role-usage.py), compared with",
-        "charts/distant-signal/files/db-grants.yaml. S/I/U/D as in that file.",
+        "crates/ds-store/db-grants.yaml. S/I/U/D as in that file.",
         "",
     ]
     for role in sorted(set(usage) | set(grants)):
