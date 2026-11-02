@@ -21,7 +21,7 @@ operators = [
 # `operators` was already correct (the single "LM" ATOC code covers both
 # brands), so only the `id`/filename/`name` needed correcting. The `id` was
 # judged safe to rename rather than just fixing `name`: `git log` shows this
-# file was created in batch 2 (commit cb1d4f64) and had been on `main` for
+# file was created in batch 2 (commit 012c167a) and had been on `main` for
 # about 3 hours before this rename, but was verified never to have reached
 # production -- the live production API still serves the pre-split
 # `emr-rural-branches` as of this check, confirming no external consumer

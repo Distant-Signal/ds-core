@@ -10,7 +10,7 @@ operators = ["NT"]
 # untested) assumption that `id` should stay stable once a file lands. On
 # review, that assumption doesn't actually apply here: `git log` confirms
 # this file was created and landed in a single commit today
-# (56355fe6, "feat(lines): add Yorkshire/North East line-coverage batch (8
+# (012c167a, "feat(lines): add Yorkshire/North East line-coverage batch (8
 # files)") and a repo-wide grep turns up no reference to
 # `northern-dearne-valley` anywhere outside this file itself -- no external
 # consumer, dashboard or test has had the chance to depend on it. Renamed to

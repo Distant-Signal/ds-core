@@ -8,7 +8,7 @@ name = "South Devon & Cornish Main Line"
 # Devon and Cornish Mainline" (per GWR's own published route list) — this
 # name matches it. `id` intentionally left unchanged: this file was already
 # published in a prior commit on this branch's history
-# (8c9c1a26/gwr-cornish-main-line.toml), and SCHEMA.md's own `id` field rule
+# (012c167a/gwr-cornish-main-line.toml), and SCHEMA.md's own `id` field rule
 # ("stable... never change once published") applies.
 mode = "national-rail"
 category = "main-line"
