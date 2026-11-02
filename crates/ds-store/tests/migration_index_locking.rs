@@ -161,11 +161,8 @@ const GRANDFATHERED_TABLE_LOCK_HAZARDS: &[(&str, TableLockHazard)] = &[
 /// worktree's migrations. Not embedded with `sqlx::migrate!` either: that
 /// cannot see a NEW file until something else forces a rebuild, so the guard
 /// would silently skip a just-added migration.
-///
-/// The directory is `crates/ds-store/migrations` (moved from this crate by
-/// plan task 1B.1); the guard stays here with `migration_checksums`.
 fn migrations_dir() -> PathBuf {
-    common::manifest_dir!().join("../ds-store/migrations")
+    common::manifest_dir!().join("migrations")
 }
 
 fn migration_files() -> Vec<PathBuf> {

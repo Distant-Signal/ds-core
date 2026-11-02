@@ -8,7 +8,7 @@
 //! **When Redis is unavailable** (down, NOAUTH/NOPERM, OOM under
 //! `noeviction`, MISCONF after a failed AOF write: all treated alike) the
 //! task retries with the shared backoff (1 s doubling to 60 s, jittered;
-//! `common::backoff`) and [`Producer::is_available`] turns false, which the
+//! `ds_runtime::backoff`) and [`Producer::is_available`] turns false, which the
 //! caller's readiness reports as `stream_unavailable` (its `/livez` stays
 //! 200). What happens to new items depends on the [`ProducePolicy`]:
 //!
@@ -37,8 +37,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use common::backoff::{Backoff, FailureStreak};
-use common::redis_conn::RedisConn;
+use ds_runtime::backoff::{Backoff, FailureStreak};
+use ds_runtime::redis_conn::RedisConn;
 use redis::RedisError;
 use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinHandle;
@@ -135,7 +135,7 @@ struct Item {
 
 impl Producer {
     /// Starts the producer task. It connects lazily (one bounded attempt per
-    /// try, `common::redis_conn::connect`) and runs until [`Producer::close`]
+    /// try, `ds_runtime::redis_conn::connect`) and runs until [`Producer::close`]
     /// and an empty queue, or until the handle is aborted.
     pub fn spawn(client: redis::Client, config: ProducerConfig) -> (Self, JoinHandle<()>) {
         metrics::register_producer(&config.stream);
@@ -278,7 +278,7 @@ async fn worker(client: redis::Client, shared: Arc<Shared>) {
         let entry = &parts[index];
         let result = match conn.as_mut() {
             Some(c) => xadd_entry(c, &shared.stream, shared.maxlen, entry).await,
-            None => match common::redis_conn::connect(&client).await {
+            None => match ds_runtime::redis_conn::connect(&client).await {
                 Ok(mut c) => {
                     let r = xadd_entry(&mut c, &shared.stream, shared.maxlen, entry).await;
                     conn = Some(c);

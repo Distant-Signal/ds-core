@@ -10,19 +10,17 @@ license.workspace = true
 anyhow = "1.0.102"
 chrono = { version = "0.4.44", features = ["serde"] }
 chrono-tz = "0.10"
-clap = { version = "4.6.6", features = ["derive", "env"] }
+# The domain-free runtime (backoff, logging, metrics, service args, ...),
+# split out of this crate (repo-split spec §5.8). Its features follow this
+# crate's: `ds-store` turns the defaults off here and so there.
+ds-runtime = { path = "../ds-runtime", default-features = false }
 glob = "0.3.3"
 metrics = "0.24"
-# The listener (`http-listener`, hence hyper) only with the `http` feature;
-# without it the crate still builds recorders (tests, `ds-store`).
-metrics-exporter-prometheus = { version = "0.18", default-features = false }
-# Only with the `postgres` feature: `common::pg`, the pool settings shared by
-# the crates that hold a Postgres pool, and `common::public_delay::db` (hence
+# Only with the `postgres` feature: `common::public_delay::db` (hence
 # `chrono` and `derive`). Same version and features the workspace already uses.
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio", "chrono", "derive"], optional = true }
-# Only with the `redis` feature: `common::redis_conn`, the bounded
-# ConnectionManager settings shared by every worker that holds a Redis
-# connection. Same version and features those crates already use.
+# Only with the `redis` feature: `common::incident_text_changed`. Same
+# version and features those crates already use.
 redis = { version = "1.8", features = ["tokio-comp", "connection-manager"], optional = true }
 # Only with the `http` feature (on by default): see [features].
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "form", "native-tls", "gzip"], optional = true }
@@ -36,15 +34,7 @@ tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "
 ts-rs = { version = "=12.0.1", default-features = false, features = ["serde-compat", "chrono-impl", "serde-json-impl"], optional = true }
 toml = { version = "1.1.2", features = ["serde"] }
 tracing = "0.1.44"
-# `common::logging`: the one subscriber setup every binary shares. `json` for
-# the span-field storage (`JsonFields`) behind the JSON line format.
-tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = "2.5"
-
-# `common::heap`: `mallopt` and `malloc_trim`, glibc only. Already in the
-# tree via tokio/std.
-[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
-libc = "0.2"
 
 [features]
 # Every service uses the defaults. `ds-store` turns them off: its normal
@@ -52,32 +42,25 @@ libc = "0.2"
 # (scripts/check-crate-deps.py, ingest architecture spec §5.1).
 default = ["http"]
 # Outbound HTTP (reqwest: `ingest`, `poller_loop`,
-# `gcp_external_account`, `outbound_endpoint_guard`) and the metrics HTTP
-# listener (`metrics::install`, hyper via `http-listener`).
-http = ["dep:reqwest", "metrics-exporter-prometheus/http-listener"]
-# `common::pg` (Postgres pool settings). Enabled by api, aggregator, notifier
-# and enricher; the pollers and consumers do not build sqlx.
+# `gcp_external_account`) and, through `ds-runtime/http`, the metrics HTTP
+# listener `poller_loop` installs.
+http = ["dep:reqwest", "ds-runtime/http"]
+# `common::public_delay::db` (sqlx). The pollers and consumers do not build
+# sqlx.
 postgres = ["dep:sqlx"]
-# `common::redis_conn` (bounded Redis connection settings). Enabled by
-# movement-relay, movement-feed, enricher, ingest-stream, ingest-writer and
-# poller-incidents (not the api: it has had no Redis client since ingest
-# phase 5, step 5.4).
-redis = ["dep:redis"]
-# `common::redis_group::fake::FakeConn`, a scripted Redis connection for
-# other crates' unit tests (movement-feed, enricher). Test-only.
-redis-test-util = ["redis"]
+# `common::incident_text_changed` (over `ds_runtime::redis_conn`).
+redis = ["dep:redis", "ds-runtime/redis"]
 # `ts_rs::TS` on the domain types the api sends the frontend, for its
 # generated TypeScript (`api::api_types`, repo-split spec §5.3). Enabled by
 # the api only.
 ts = ["dep:ts-rs"]
 
 [dev-dependencies]
-# `logging`'s test of `log`-crate events (both already in the workspace via
-# tracing-subscriber's default `tracing-log` feature).
-log = "0.4"
-tracing-log = "0.2"
-# Only to prove `redis_auth` URLs parse back to the same credentials in the
-# redis crate the services use (already in the workspace; no new crate).
+# `poller_loop`'s and `gcp_external_account`'s metric tests build a
+# recorder (no listener).
+metrics-exporter-prometheus = { version = "0.18", default-features = false }
+# tests/redis_acl.rs drives a real Redis as each ACL user (already in the
+# workspace; no new crate).
 redis = { version = "1.8", default-features = false }
 # `gcp_external_account`'s subject-token files (already in the workspace,
 # same spec as schedule-ingest's).

@@ -246,7 +246,7 @@ async fn live_toc_codes(
 /// honest and identifying -- this crate's name and version plus the
 /// project URL -- instead of the browser-impersonating
 /// `"Mozilla/5.0 ..."` string this validator used to send.
-pub(crate) const USER_AGENT: &str = common::user_agent!();
+pub(crate) const USER_AGENT: &str = ds_runtime::user_agent!();
 
 async fn fetch_with_identifying_ua(client: &reqwest::Client, url: &str) -> Result<String> {
     // railwaycodes.org.uk 403s a request with no `User-Agent` at all
@@ -533,7 +533,7 @@ mod tests {
     #[test]
     fn live_tier_user_agent_is_honest_and_identifying() {
         assert!(USER_AGENT.starts_with("distant-signal-line-catalogue-validator/"));
-        assert!(USER_AGENT.contains(common::user_agent::PROJECT_URL));
+        assert!(USER_AGENT.contains(ds_runtime::user_agent::PROJECT_URL));
         assert!(!USER_AGENT.contains("Mozilla"));
     }
 

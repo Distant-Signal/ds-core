@@ -119,7 +119,9 @@ class StepTests(unittest.TestCase):
         self.assertEqual(argv[:4], ["cargo", "nextest", "run", "--locked"])
         packages = [argv[i + 1] for i, a in enumerate(argv) if a == "-p"]
         self.assertEqual(packages, list(db.ARCHIVE_PACKAGES))
-        self.assertEqual(argv[argv.index("--features") + 1], "common/postgres")
+        self.assertEqual(
+            argv[argv.index("--features") + 1], "common/postgres,ds-runtime/postgres"
+        )
 
     def test_archive_builds_every_package_once(self) -> None:
         """One `cargo nextest archive` with every package and feature."""
@@ -141,7 +143,7 @@ class StepTests(unittest.TestCase):
         superuser = db.PASSES["superuser"]
         self.assertEqual(
             superuser[1].describe(),
-            "cargo test -p common pg::tests -- --ignored --test-threads=1",
+            "cargo test -p ds-runtime pg::tests -- --ignored --test-threads=1",
         )
 
 

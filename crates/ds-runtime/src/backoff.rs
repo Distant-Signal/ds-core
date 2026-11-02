@@ -53,7 +53,7 @@ impl Backoff {
     }
 
     /// [`Backoff::delay`], but never less than `retry_after` (a server's
-    /// `Retry-After`, see [`crate::ingest::retry_after`]), which is capped at
+    /// `Retry-After`, see `common::ingest::retry_after`), which is capped at
     /// [`MAX_HONOURED_RETRY_AFTER`] and jittered up by at most a quarter.
     pub fn delay_honouring(&self, attempt: u32, retry_after: Option<Duration>) -> Duration {
         let delay = self.delay(attempt);

@@ -15,9 +15,10 @@ chrono = { version = "0.4.44", features = ["serde"] }
 # `snapshot::RedisArgs`, flattened into each stream producer's config
 # (plan 3c.2). Same version and features as every binary.
 clap = { version = "4.6.1", features = ["derive", "env"] }
-# The shared backoff (`common::backoff`) and the bounded Redis connection
-# (`common::redis_conn`, feature `redis`).
+# The shared backoff (`ds_runtime::backoff`) and the bounded Redis connection
+# (`ds_runtime::redis_conn`, feature `redis`).
 common = { path = "../common", features = ["redis"] }
+ds-runtime = { path = "../ds-runtime", features = ["redis"] }
 # gzip above 8 KiB (spec §7.2). Already in the tree through api and
 # schedule-ingest; the default (miniz_oxide, pure Rust) backend.
 flate2 = "1"

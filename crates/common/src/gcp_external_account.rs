@@ -30,7 +30,7 @@
 //! Metrics, shaped like the enricher's `enricher_llm_token_exchange_total`:
 //! `gcp_token_exchange_total{stage="sts"|"impersonation", outcome}` and
 //! `gcp_token_remaining_seconds`, both under the shared `distant_signal_`
-//! prefix ([`crate::metrics::metric_name`]).
+//! prefix ([`ds_runtime::metrics::metric_name`]).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,7 +40,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, bail};
 use serde::Deserialize;
 
-use crate::secret::Secret;
+use ds_runtime::secret::Secret;
 
 /// `gcp_token_exchange_total{stage, outcome}`.
 pub const EXCHANGE_METRIC: &str = "gcp_token_exchange_total";
@@ -435,7 +435,7 @@ fn error_outcome(status: u16, body: &ErrorBody) -> &'static str {
 
 fn record_exchange(stage: Stage, outcome: &'static str) {
     metrics::counter!(
-        crate::metrics::metric_name(EXCHANGE_METRIC),
+        ds_runtime::metrics::metric_name(EXCHANGE_METRIC),
         "stage" => stage.label(),
         "outcome" => outcome
     )
@@ -453,7 +453,8 @@ fn fail(stage: Stage, outcome: &'static str) -> CredentialError {
     reason = "a token lifetime in seconds is far below 2^52"
 )]
 fn record_remaining(remaining: Duration) {
-    metrics::gauge!(crate::metrics::metric_name(REMAINING_METRIC)).set(remaining.as_secs() as f64);
+    metrics::gauge!(ds_runtime::metrics::metric_name(REMAINING_METRIC))
+        .set(remaining.as_secs() as f64);
 }
 
 /// `(refresh_at, expires_at)` for a token issued in a request started at
@@ -503,7 +504,7 @@ impl ExternalAccountTokenSource {
         for stage in stages {
             for outcome in EXCHANGE_OUTCOMES {
                 metrics::counter!(
-                    crate::metrics::metric_name(EXCHANGE_METRIC),
+                    ds_runtime::metrics::metric_name(EXCHANGE_METRIC),
                     "stage" => stage.label(),
                     "outcome" => outcome
                 )

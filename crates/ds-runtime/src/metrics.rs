@@ -147,7 +147,7 @@ pub const DB_POOL_ACQUIRE_SECONDS: &str = "distant_signal_db_pool_acquire_second
 
 /// Buckets for [`DB_POOL_ACQUIRE_SECONDS`]: 1 ms to 5 s. A healthy acquire
 /// takes well under a millisecond and `acquire_timeout` defaults to 5 s
-/// (`common::pg`), so the range covers a pool from idle to exhausted, which
+/// (`ds_runtime::pg`), so the range covers a pool from idle to exhausted, which
 /// [`DEFAULT_BUCKETS`] (from 50 ms) could not resolve.
 pub const DB_POOL_ACQUIRE_SECONDS_BUCKETS: &[f64] = &[
     0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,

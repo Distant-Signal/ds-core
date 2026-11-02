@@ -37,10 +37,10 @@
 use std::future::Future;
 use std::time::Duration;
 
-use crate::backoff::Backoff;
 use crate::ingest;
-use crate::logging::ExitStatus;
-use crate::progress::Progress;
+use ds_runtime::backoff::Backoff;
+use ds_runtime::logging::ExitStatus;
+use ds_runtime::progress::Progress;
 
 /// Run one cycle and return instead of looping (see the module doc).
 pub const RUN_ONCE_ENV: &str = "RUN_ONCE";
@@ -299,7 +299,7 @@ where
     Fut: Future<Output = anyhow::Result<()>>,
 {
     if metrics_enabled {
-        crate::metrics::install(metrics_port)?;
+        ds_runtime::metrics::install(metrics_port)?;
     }
     run_cursor_loop_with(
         policy,
@@ -349,7 +349,7 @@ where
     .await
 }
 
-/// The `<service>` of [`crate::metrics::register_cycle`]'s metric names for
+/// The `<service>` of [`ds_runtime::metrics::register_cycle`]'s metric names for
 /// every poller: `distant_signal_poller_last_success_timestamp_seconds` and
 /// `distant_signal_poller_cycles_total`, with the poller's label as
 /// `cycle`. The latter repeats `poller_cycle_total{poller}` (which the
@@ -362,11 +362,11 @@ pub const LAST_SUCCESS_SERVICE: &str = "poller";
 /// success) after a pod start rather than the series merely appearing.
 fn register_cycle_metrics(poller_label: &'static str) {
     // `poller_last_success_timestamp_seconds{cycle=<poller>}`: the chart's
-    // DistantSignalPollerStale reads it (see `common::metrics::register_cycle`).
-    crate::metrics::register_cycle(LAST_SUCCESS_SERVICE, poller_label);
+    // DistantSignalPollerStale reads it (see `ds_runtime::metrics::register_cycle`).
+    ds_runtime::metrics::register_cycle(LAST_SUCCESS_SERVICE, poller_label);
     for result in ["success", "failure"] {
         metrics::counter!(
-            crate::metrics::metric_name("poller_cycle_total"),
+            ds_runtime::metrics::metric_name("poller_cycle_total"),
             "poller" => poller_label,
             "result" => result
         )
@@ -475,17 +475,17 @@ where
         let result = cycle().await;
         progress.beat();
         metrics::histogram!(
-            crate::metrics::metric_name("poller_cycle_duration_seconds"),
+            ds_runtime::metrics::metric_name("poller_cycle_duration_seconds"),
             "poller" => poller_label
         )
         .record(cycle_start.elapsed().as_secs_f64());
         metrics::counter!(
-            crate::metrics::metric_name("poller_cycle_total"),
+            ds_runtime::metrics::metric_name("poller_cycle_total"),
             "poller" => poller_label,
             "result" => if result.is_ok() { "success" } else { "failure" }
         )
         .increment(1);
-        crate::metrics::record_cycle(LAST_SUCCESS_SERVICE, poller_label, result.is_ok());
+        ds_runtime::metrics::record_cycle(LAST_SUCCESS_SERVICE, poller_label, result.is_ok());
 
         match result {
             Ok(()) => consecutive_failures = 0,
@@ -715,7 +715,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(crate::logging::exit_status_of(&err), 1);
+        assert_eq!(ds_runtime::logging::exit_status_of(&err), 1);
         assert_eq!(calls.load(Ordering::Relaxed), 1, "no in-process retry");
 
         let err = run_once(
@@ -728,7 +728,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(crate::logging::exit_status_of(&err), 3);
+        assert_eq!(ds_runtime::logging::exit_status_of(&err), 3);
     }
 
     /// The process exits only once the queued snapshot is written: an
@@ -748,10 +748,10 @@ mod tests {
         finish_once(Ok(()), flush(true)).await.unwrap();
         let err = finish_once(Ok(()), flush(false)).await.unwrap_err();
         assert!(err.to_string().contains("not written"), "{err}");
-        assert_eq!(crate::logging::exit_status_of(&err), 1);
+        assert_eq!(ds_runtime::logging::exit_status_of(&err), 1);
         let rejected = anyhow::anyhow!("bad").context(ExitStatus::REJECTED);
         let err = finish_once(Err(rejected), flush(true)).await.unwrap_err();
-        assert_eq!(crate::logging::exit_status_of(&err), 3);
+        assert_eq!(ds_runtime::logging::exit_status_of(&err), 3);
         assert_eq!(
             flushed.load(Ordering::Relaxed),
             3,

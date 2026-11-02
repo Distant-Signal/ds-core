@@ -8,7 +8,7 @@
 //!   needs no second edit, and so it is, by construction, the newest
 //!   migration built into the same binary.
 //! - `required_privileges.rs` (plan task 1B.2): for every role in the
-//!   chart's `db-grants.yaml`, the table privileges that file gives it, so
+//!   crate's own `db-grants.yaml`, the table privileges that file gives it, so
 //!   the gate can check one `has_table_privilege` per required table for
 //!   the calling service's role. Baked in at build time so the binary
 //!   checks the grants it was built against, as with the migration.
@@ -24,9 +24,10 @@ use std::{env, fs};
 
 /// The migrations directory, relative to this crate.
 const MIGRATIONS: &str = "migrations";
-/// The grants, relative to this crate (the whole repository is in every
-/// image's build context).
-const GRANTS: &str = "../../charts/distant-signal/files/db-grants.yaml";
+/// The grants, relative to this crate: the source of truth (repo split spec
+/// §5.1). The chart's `files/db-grants.yaml` is a copy of it
+/// (`scripts/sync-chart-core-files.py`).
+const GRANTS: &str = "db-grants.yaml";
 
 /// The classes of table the `read_shared` group may SELECT
 /// (`READ_SHARED_CLASSES` in `scripts/gen-db-grants.py`).

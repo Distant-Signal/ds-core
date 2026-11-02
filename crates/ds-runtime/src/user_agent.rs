@@ -75,7 +75,7 @@ mod tests {
         assert_eq!(
             ua,
             format!(
-                "distant-signal-common/{} (+{PROJECT_URL})",
+                "distant-signal-ds-runtime/{} (+{PROJECT_URL})",
                 env!("CARGO_PKG_VERSION")
             )
         );

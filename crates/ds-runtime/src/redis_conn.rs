@@ -23,7 +23,7 @@
 //! which the next command awaits), and the retrying lives in the worker:
 //!
 //! - at startup, [`connect_until_ready`] (or the worker's own
-//!   `common::startup::retry_until_ready` around a larger connect step):
+//!   `ds_runtime::startup::retry_until_ready` around a larger connect step):
 //!   logged per attempt, beating liveness progress (a new pod's
 //!   `NetworkPolicy` lag quietly, within the startup budget);
 //! - afterwards, the worker loop's own error backoff.
@@ -819,7 +819,7 @@ mod tests {
     /// half-open connection is a proxy in front of it going silent.
     ///
     /// ```text
-    /// REDIS_URL=redis://127.0.0.1:6379 cargo test -p common --features redis \
+    /// REDIS_URL=redis://127.0.0.1:6379 cargo test -p ds-runtime --features redis \
     ///   -- --ignored half_open --nocapture
     /// ```
     #[tokio::test]
