@@ -38,8 +38,8 @@
 use std::time::Duration;
 
 use anyhow::{Result, bail};
-use common::metrics::metric_name;
-use common::progress::Progress;
+use ds_runtime::metrics::metric_name;
+use ds_runtime::progress::Progress;
 use sqlx::pool::PoolConnection;
 use sqlx::{PgPool, Postgres};
 

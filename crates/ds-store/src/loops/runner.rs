@@ -13,7 +13,7 @@
 //!
 //! The ingest-writer and the api (`API_BACKGROUND_LOOPS`) both run their
 //! train-domain loops through this runner, on the same keys
-//! ([`common::advisory_locks`]), so during the cutover each sweep runs in
+//! ([`ds_runtime::advisory_locks`]), so during the cutover each sweep runs in
 //! one process at a time.
 //!
 //! # Holding, not taking per tick
@@ -71,7 +71,7 @@
 //!
 //! - `distant_signal_loop_cycles_total{cycle, result}` and
 //!   `distant_signal_loop_last_success_timestamp_seconds{cycle}`
-//!   ([`common::metrics::register_cycle`] with the service [`METRIC_SERVICE`]):
+//!   ([`ds_runtime::metrics::register_cycle`] with the service [`METRIC_SERVICE`]):
 //!   the body's outcomes. A standby process's gauge stays at its start
 //!   time, so read it as `max by (cycle)`;
 //! - `distant_signal_loop_ticks_total{loop, outcome}`, outcome `ran`,
@@ -88,15 +88,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use common::advisory_locks::LoopLock;
-use common::metrics::metric_name;
-use common::progress::Progress;
+use ds_runtime::advisory_locks::LoopLock;
+use ds_runtime::metrics::metric_name;
+use ds_runtime::progress::Progress;
 use sqlx::pool::PoolConnection;
 use sqlx::{ConnectOptions, Connection, PgConnection, PgPool, Postgres};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-/// The `<service>` of [`common::metrics::register_cycle`]'s metric names,
+/// The `<service>` of [`ds_runtime::metrics::register_cycle`]'s metric names,
 /// and the prefix of the runner's own: `distant_signal_loop_*`.
 pub const METRIC_SERVICE: &str = "loop";
 const TICKS_METRIC: &str = "loop_ticks_total";
@@ -573,7 +573,7 @@ async fn tick(pool: &PgPool, session: &LockSession, spec: &LoopSpec) -> TickOutc
             let result = (spec.body)(pool.clone()).await;
             metrics::histogram!(metric_name(SECONDS_METRIC), "loop" => name)
                 .record(started.elapsed().as_secs_f64());
-            common::metrics::record_cycle(METRIC_SERVICE, name, result.is_ok());
+            ds_runtime::metrics::record_cycle(METRIC_SERVICE, name, result.is_ok());
             match result {
                 Ok(()) => TickOutcome::Ran,
                 Err(err) => {
@@ -612,7 +612,7 @@ async fn tick(pool: &PgPool, session: &LockSession, spec: &LoopSpec) -> TickOutc
 }
 
 fn register_metrics(name: &'static str) {
-    common::metrics::register_cycle(METRIC_SERVICE, name);
+    ds_runtime::metrics::register_cycle(METRIC_SERVICE, name);
     for outcome in TickOutcome::ALL {
         metrics::counter!(
             metric_name(TICKS_METRIC),

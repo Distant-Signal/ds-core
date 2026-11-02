@@ -216,8 +216,10 @@ fn record_unresolved_places(
             );
         }
     }
-    metrics::gauge!(common::metrics::metric_name(INCIDENTS_WITHOUT_PLACE_METRIC))
-        .set(unresolved as f64);
+    metrics::gauge!(ds_runtime::metrics::metric_name(
+        INCIDENTS_WITHOUT_PLACE_METRIC
+    ))
+    .set(unresolved as f64);
 }
 
 /// Upserts a snapshot of Knowledgebase incidents (step 1 of the module

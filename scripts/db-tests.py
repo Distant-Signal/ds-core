@@ -46,8 +46,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Every package a step below tests. The archive builds their test binaries
-# with one feature resolution; `common`'s `postgres` feature is named
-# explicitly (pg::tests need it; api and the others enable it anyway).
+# with one feature resolution; `ds-runtime`'s and `common`'s `postgres`
+# features are named explicitly (pg::tests need ds-runtime's; api and the
+# others enable them anyway).
 ARCHIVE_PACKAGES = (
     "api",
     "ds-store",
@@ -58,6 +59,7 @@ ARCHIVE_PACKAGES = (
     "poller-stations",
     "poller-incidents",
     "common",
+    "ds-runtime",
     "enricher",
     "movement-feed",
     "ingest-writer",
@@ -68,7 +70,7 @@ ARCHIVE_PACKAGES = (
     "trust-backlog-consumer",
     "ingest-stream",
 )
-ARCHIVE_FEATURES = ("common/postgres",)
+ARCHIVE_FEATURES = ("common/postgres", "ds-runtime/postgres")
 
 # The modules of `#[sqlx::test]` tests: each test creates a database, a
 # test-harness right (CREATEDB) the runtime roles do not have. They run as
@@ -190,8 +192,9 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
                 "poller-incidents",
             )
         ),
-        # common::pg's pool settings (behind common's `postgres` feature).
-        Step(packages=("common",), filters=("pg::tests",)),
+        # ds_runtime::pg's pool settings (behind ds-runtime's `postgres`
+        # feature).
+        Step(packages=("ds-runtime",), filters=("pg::tests",)),
         Step(packages=("enricher",), skips=ENRICHER_SKIPS),
         Step(packages=("movement-feed",)),
         # Every Redis ACL user's command sequence (ingest phase 0c).
@@ -218,7 +221,7 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
             packages=("api", "ds-store", "aggregator", "notifier"),
             skips=SQLX_TEST_SKIPS,
         ),
-        Step(packages=("common",), filters=("pg::tests",)),
+        Step(packages=("ds-runtime",), filters=("pg::tests",)),
         Step(packages=("ingest-writer",)),
         Step(packages=("schedule-reference",)),
         Step(packages=("enricher",), skips=ENRICHER_SKIPS),

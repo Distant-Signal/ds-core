@@ -8,7 +8,7 @@
 //! from 1B.7, so during the cutover (writer on, `API_BACKGROUND_LOOPS`
 //! still true) each sweep runs in one place at a time.
 //!
-//! Plain constants, no sqlx: `common` builds them without its `postgres`
+//! Plain constants, no sqlx: this crate builds them without its `postgres`
 //! feature.
 //!
 //! # Keys already in use elsewhere (not moved here)
@@ -19,7 +19,7 @@
 //!   transaction lock around a CORPUS load and the crosswalk rebuild;
 //! - the schedule publish locks in `api::data::queries` (per product,
 //!   transaction-scoped);
-//! - `common::pg::lock_user_train_subscription`
+//! - `ds_runtime::pg::lock_user_train_subscription`
 //!   (`hashtextextended('train_subscription:…')`, transaction-scoped).
 //!
 //! Every key below is eight ASCII bytes read big-endian, like the
@@ -126,7 +126,7 @@ mod tests {
         assert!(!keys.contains(&SCHEDULE_REFERENCE_RUN_KEY));
     }
 
-    /// The keys taken elsewhere (see the module docs), as literals: `common`
+    /// The keys taken elsewhere (see the module docs), as literals: `ds-runtime`
     /// cannot depend on `api`.
     #[test]
     fn no_key_collides_with_the_existing_locks() {

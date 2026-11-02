@@ -1,10 +1,10 @@
-//! The pool for any DB service: `common::pg::PoolSettings` wrapped so it
+//! The pool for any DB service: `ds_runtime::pg::PoolSettings` wrapped so it
 //! records `db_pool_*` (spec §14.1), and the DB health probe that was
 //! `api/src/data/db_health.rs` (plan task 1A.11).
 //!
 //! # Pool metrics
 //!
-//! All prefixed `distant_signal_` ([`common::metrics::metric_name`]). No
+//! All prefixed `distant_signal_` ([`ds_runtime::metrics::metric_name`]). No
 //! labels beyond `state`, which has two values, so the cardinality is fixed.
 //! The scrape's target labels (`job`, `pod`) say which service a series
 //! belongs to.
@@ -19,7 +19,7 @@
 //! `idle + in_use` is the pool's size (`PgPool::size`).
 //!
 //! `db_pool_acquire_seconds` has buckets from 1 ms to 5 s
-//! (`common::metrics::SHARED_BUCKETS`), which `common::metrics::install`
+//! (`ds_runtime::metrics::SHARED_BUCKETS`), which `ds_runtime::metrics::install`
 //! and the api's recorder both apply; without them the exporter renders a
 //! summary.
 //!
@@ -49,7 +49,7 @@ use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use common::metrics::metric_name;
+use ds_runtime::metrics::metric_name;
 use sqlx::pool::PoolConnection;
 use sqlx::postgres::{PgConnectOptions, PgConnection, PgPool};
 use sqlx::{Connection as _, Postgres, Transaction};
@@ -73,33 +73,33 @@ pub const PROBE_INTERVAL: Duration = Duration::from_secs(15);
 /// gets its full wait first.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// [`common::pg::PoolSettings`] (application name, timeouts, size; see
+/// [`ds_runtime::pg::PoolSettings`] (application name, timeouts, size; see
 /// there), plus the `db_pool_*` metrics for the pools it builds. Derefs to
 /// the inner settings, so its fields and methods are all reachable.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoolSettings(common::pg::PoolSettings);
+pub struct PoolSettings(ds_runtime::pg::PoolSettings);
 
 impl PoolSettings {
     /// The defaults, without reading the environment.
     pub fn new(application_name: &str, max_connections: u32) -> Self {
-        Self(common::pg::PoolSettings::new(
+        Self(ds_runtime::pg::PoolSettings::new(
             application_name,
             max_connections,
         ))
     }
 
     /// The defaults overridden by the `DATABASE_*` variables; see
-    /// [`common::pg::PoolSettings::from_env`].
+    /// [`ds_runtime::pg::PoolSettings::from_env`].
     pub fn from_env(application_name: &str, default_max_connections: u32) -> Result<Self> {
-        common::pg::PoolSettings::from_env(application_name, default_max_connections).map(Self)
+        ds_runtime::pg::PoolSettings::from_env(application_name, default_max_connections).map(Self)
     }
 
     /// The wrapped settings.
-    pub fn into_inner(self) -> common::pg::PoolSettings {
+    pub fn into_inner(self) -> ds_runtime::pg::PoolSettings {
         self.0
     }
 
-    /// Connects a pool exactly as `common::pg::PoolSettings` does (its
+    /// Connects a pool exactly as `ds_runtime::pg::PoolSettings` does (its
     /// `pool_options` with its `connect_options` on top of `base`), then
     /// spawns [`sample_loop`] for it. Needs a Tokio runtime.
     ///
@@ -129,8 +129,8 @@ impl PoolSettings {
     }
 
     /// A long-running worker's startup connect: [`Self::connect_with`]
-    /// retried by `common::startup::retry_until_ready_past_startup_lag`
-    /// (INF-5) with [`common::startup::CONNECT_BACKOFF`] until it succeeds,
+    /// retried by `ds_runtime::startup::retry_until_ready_past_startup_lag`
+    /// (INF-5) with [`ds_runtime::startup::CONNECT_BACKOFF`] until it succeeds,
     /// beating `progress` so `/livez` stays 200 meanwhile.
     ///
     /// **The startup budget.** A new pod's first connects are refused for
@@ -159,14 +159,14 @@ impl PoolSettings {
     pub async fn connect_with_until_ready(
         &self,
         base: PgConnectOptions,
-        progress: Option<&common::progress::Progress>,
+        progress: Option<&ds_runtime::progress::Progress>,
     ) -> PgPool {
         let first = self.0.connect_options(base.clone());
-        common::startup::retry_until_ready_past_startup_lag(
+        ds_runtime::startup::retry_until_ready_past_startup_lag(
             "Postgres",
             self.0.startup_connect_timeout,
             is_network_lag,
-            common::startup::CONNECT_BACKOFF,
+            ds_runtime::startup::CONNECT_BACKOFF,
             progress,
             || async {
                 first_connection(&first, self.0.acquire_timeout).await?;
@@ -181,7 +181,7 @@ impl PoolSettings {
     pub async fn connect_until_ready(
         &self,
         database_url: &str,
-        progress: Option<&common::progress::Progress>,
+        progress: Option<&ds_runtime::progress::Progress>,
     ) -> Result<PgPool> {
         let base: PgConnectOptions = database_url
             .parse()
@@ -236,14 +236,14 @@ pub fn is_network_lag(err: &sqlx::Error) -> bool {
     matches!(err, sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut)
 }
 
-impl From<common::pg::PoolSettings> for PoolSettings {
-    fn from(settings: common::pg::PoolSettings) -> Self {
+impl From<ds_runtime::pg::PoolSettings> for PoolSettings {
+    fn from(settings: ds_runtime::pg::PoolSettings) -> Self {
         Self(settings)
     }
 }
 
 impl Deref for PoolSettings {
-    type Target = common::pg::PoolSettings;
+    type Target = ds_runtime::pg::PoolSettings;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -403,18 +403,18 @@ mod tests {
         handle.render()
     }
 
-    /// `common::metrics::SHARED_BUCKETS` gives the acquire time its buckets
+    /// `ds_runtime::metrics::SHARED_BUCKETS` gives the acquire time its buckets
     /// by full name; the two must not drift apart.
     #[test]
     fn the_acquire_histogram_is_the_one_with_shared_buckets() {
         assert_eq!(
             metric_name(POOL_ACQUIRE_SECONDS_METRIC),
-            common::metrics::DB_POOL_ACQUIRE_SECONDS
+            ds_runtime::metrics::DB_POOL_ACQUIRE_SECONDS
         );
         assert!(
-            common::metrics::SHARED_BUCKETS
+            ds_runtime::metrics::SHARED_BUCKETS
                 .iter()
-                .any(|(name, _)| *name == common::metrics::DB_POOL_ACQUIRE_SECONDS)
+                .any(|(name, _)| *name == ds_runtime::metrics::DB_POOL_ACQUIRE_SECONDS)
         );
     }
 
@@ -444,12 +444,12 @@ mod tests {
         let settings = PoolSettings::new("distant-signal-test", 7);
         assert_eq!(
             settings.clone().into_inner(),
-            common::pg::PoolSettings::new("distant-signal-test", 7)
+            ds_runtime::pg::PoolSettings::new("distant-signal-test", 7)
         );
         assert_eq!(settings.max_connections, 7);
         assert_eq!(
             settings.acquire_timeout,
-            common::pg::DEFAULT_ACQUIRE_TIMEOUT
+            ds_runtime::pg::DEFAULT_ACQUIRE_TIMEOUT
         );
     }
 
@@ -538,7 +538,7 @@ mod tests {
 
         let port = refused_port().await;
         let url = format!("postgres://nobody@127.0.0.1:{port}/nothing");
-        let progress = common::progress::Progress::new(Duration::from_secs(60));
+        let progress = ds_runtime::progress::Progress::new(Duration::from_secs(60));
         tokio::time::sleep(Duration::from_millis(1200)).await;
         let started = Instant::now();
         let result = tokio::time::timeout(

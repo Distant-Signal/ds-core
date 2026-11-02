@@ -46,7 +46,7 @@ pub struct HealthArgs {
     pub health_bind_url: String,
     /// `/livez` answers 503 "stalled" once one loop iteration has run for
     /// this many seconds without completing. Idle time between iterations
-    /// never counts (`common::progress::Progress::idle`), so this only needs
+    /// never counts (`ds_runtime::progress::Progress::idle`), so this only needs
     /// to exceed the longest legitimate single iteration.
     #[arg(long, env, default_value_t = 1800)]
     pub progress_stall_secs: u64,
