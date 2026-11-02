@@ -36,6 +36,7 @@ members = [
     "crates/line-catalogue-validator",
     "crates/ingest-writer",
     "crates/ingest-stream",
+    "crates/ds-lines",
 ]
 
 [workspace.package]

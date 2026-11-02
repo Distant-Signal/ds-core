@@ -73,14 +73,21 @@ pub fn parse_lines(path: &str) -> anyhow::Result<LineCatalogue> {
          refusing to start with a silently empty line catalogue. Check --lines-dir/LINES_DIR for \
          a typo."
     );
+    reject_reserved_ids(&catalogue, path)?;
+    Ok(catalogue)
+}
+
+/// Fails when a catalogue line claims a `custom-` id (see [`parse_lines`]);
+/// `origin` names where the catalogue came from.
+pub fn reject_reserved_ids(catalogue: &[LineDefinition], origin: &str) -> anyhow::Result<()> {
     if let Some(offender) = catalogue.iter().find(|l| l.id.starts_with("custom-")) {
         anyhow::bail!(
             "catalogue line id {:?} uses the `custom-` prefix, which is reserved for private \
-             user-created lines -- rename it in {path}",
+             user-created lines -- rename it in {origin}",
             offender.id
         );
     }
-    Ok(catalogue)
+    Ok(())
 }
 
 #[cfg(test)]

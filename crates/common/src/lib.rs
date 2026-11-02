@@ -1048,9 +1048,35 @@ pub struct LineDefinition {
 
 impl LineDefinition {
     pub fn from_file(path: &Path) -> Result<Self> {
-        let mut line: Self = toml::from_str(&std::fs::read_to_string(path)?)?;
+        Self::from_toml(&std::fs::read_to_string(path)?, path)
+    }
+
+    /// One line from the text of its TOML file; `path` names the file in
+    /// warnings.
+    pub fn from_toml(text: &str, path: &Path) -> Result<Self> {
+        let mut line: Self = toml::from_str(text)?;
         line.drop_empty_keywords(path);
         Ok(line)
+    }
+
+    /// [`Self::from_dir`] over files already read: `files` is each line
+    /// file's name and text, in the order `from_dir` would read them, and
+    /// `pass_through` the text of the generated pass-through file, if any.
+    /// The `ds-lines` crate builds its embedded catalogue with this.
+    pub fn from_files<'a>(
+        files: impl IntoIterator<Item = (&'a str, &'a str)>,
+        pass_through: Option<&str>,
+    ) -> Result<Vec<Self>> {
+        let mut lines: Vec<Self> = files
+            .into_iter()
+            .map(|(name, text)| Self::from_toml(text, Path::new(name)))
+            .collect::<Result<_>>()?;
+        if let Some(text) = pass_through {
+            let pass_through = pass_through::PassThrough::parse(text)
+                .map_err(|e| e.context(format!("parsing {}", pass_through::PASS_THROUGH_FILE)))?;
+            attach_pass_through(&mut lines, &pass_through);
+        }
+        Ok(lines)
     }
 
     /// Every `*.toml` line in `dir_path`, with the generated pass-through
@@ -1917,7 +1943,7 @@ pub enum ParentSource {
     SameTiploc,
     /// The nearest station by MSN grid reference, within 400 m.
     Nearest,
-    /// `reference-data/tiploc-parent-stations.csv`.
+    /// `crates/common/reference-data/tiploc-parent-stations.csv`.
     Curated,
 }
 

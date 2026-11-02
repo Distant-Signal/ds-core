@@ -1,5 +1,5 @@
 //! Bus stops' and ferry terminals' parent stations: the curated
-//! `reference-data/tiploc-parent-stations.csv`, and the walking time
+//! `crates/common/reference-data/tiploc-parent-stations.csv`, and the walking time
 //! between a stop and its parent.
 //!
 //! `schedule-reference` reads the CSV's parents (its third parent rule,
@@ -12,9 +12,8 @@
 
 use std::collections::BTreeMap;
 
-/// `reference-data/tiploc-parent-stations.csv`, compiled in.
-pub const CURATED_PARENTS_CSV: &str =
-    include_str!("../../../reference-data/tiploc-parent-stations.csv");
+/// `crates/common/reference-data/tiploc-parent-stations.csv`, compiled in.
+pub const CURATED_PARENTS_CSV: &str = include_str!("../reference-data/tiploc-parent-stations.csv");
 
 /// Walking pace assumed over an MSN grid distance: 80 m a minute (4.8
 /// km/h), the usual planning figure for a walk with luggage.
