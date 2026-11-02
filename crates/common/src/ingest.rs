@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
-use crate::backoff::Backoff;
-use crate::progress::Progress;
+use ds_runtime::backoff::Backoff;
+use ds_runtime::progress::Progress;
 
 /// Why a downstream write failed, as far as retrying it is concerned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

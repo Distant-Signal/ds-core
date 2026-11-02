@@ -418,7 +418,7 @@ struct PublishKeysSql {
 
 /// `statement_timeout` for every statement of a schedule ingest chunk's
 /// transaction (both products), raised above the
-/// pool's 60s default (`common::pg`) with `SET LOCAL`. The bulk
+/// pool's 60s default (`ds_runtime::pg`) with `SET LOCAL`. The bulk
 /// `INSERT ... SELECT FROM UNNEST` of up to ~250k rows takes 3-8s in
 /// production; 120s
 /// keeps a healthy chunk far inside the budget while still bounding a
@@ -663,7 +663,7 @@ async fn finish_publish_part_declaring(
              until the next complete publish)"
         );
         metrics::counter!(
-            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
+            ds_runtime::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
             "product" => sql.product
         )
         .increment(1);
@@ -704,7 +704,7 @@ async fn finish_publish_without_rows(
     }
     let declared: Vec<chrono::NaiveDate> = service_date.into_iter().collect();
     let mut tx = pool.begin().await?;
-    common::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
+    ds_runtime::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
     discard_superseded_publish_keys(&mut tx, sql, part, &declared).await?;
     let deleted = finish_publish_part_declaring(
         &mut tx,
@@ -780,7 +780,7 @@ const PUBLISH_ROWS_PRODUCTS: [&str; 3] = [
 /// inserted or updated, the rest were unchanged.
 pub(crate) fn count_publish_rows(product: &'static str, incoming: usize, written: u64) {
     let incoming = incoming as u64;
-    let name = common::metrics::metric_name(SCHEDULE_PUBLISH_ROWS_METRIC);
+    let name = ds_runtime::metrics::metric_name(SCHEDULE_PUBLISH_ROWS_METRIC);
     metrics::counter!(name.clone(), "product" => product, "outcome" => "written")
         .increment(written);
     metrics::counter!(name, "product" => product, "outcome" => "unchanged")
@@ -796,7 +796,7 @@ pub fn register_schedule_publish_metrics() {
         &CALLING_POINTS_FULL_PUBLISH_KEYS_SQL,
     ] {
         metrics::counter!(
-            common::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
+            ds_runtime::metrics::metric_name(SCHEDULE_PUBLISH_STAGED_MISMATCH_METRIC),
             "product" => sql.product
         )
         .increment(0);
@@ -862,7 +862,7 @@ pub async fn upsert_schedule_destination_departures_publish_part(
 
     let sql = &DESTINATION_DEPARTURES_PUBLISH_KEYS_SQL;
     let mut tx = pool.begin().await?;
-    common::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
+    ds_runtime::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
 
     discard_superseded_publish_keys(&mut tx, sql, part, &distinct_dates).await?;
 
@@ -1129,7 +1129,7 @@ pub async fn upsert_schedule_calling_points_full_publish_part(
 
     let sql = &CALLING_POINTS_FULL_PUBLISH_KEYS_SQL;
     let mut tx = pool.begin().await?;
-    common::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
+    ds_runtime::pg::set_local_statement_timeout(&mut tx, SCHEDULE_CHUNK_STATEMENT_TIMEOUT).await?;
 
     discard_superseded_publish_keys(&mut tx, sql, part, &distinct_dates).await?;
 

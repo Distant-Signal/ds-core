@@ -7,7 +7,7 @@
 //!
 //! - `distant_signal_db_writes_total{operation, outcome}`, and
 //! - `distant_signal_db_write_seconds{operation}` (a histogram, the
-//!   default buckets of `common::metrics::install`),
+//!   default buckets of `ds_runtime::metrics::install`),
 //!
 //! where `outcome` is `ok` or a [`WriteFailure`]. [`classify`] is the one
 //! place a write error becomes a [`WriteFailure`], so every direct writer
@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use common::metrics::metric_name;
+use ds_runtime::metrics::metric_name;
 
 /// `db_writes_total{operation, outcome}`.
 pub const DB_WRITES_METRIC: &str = "db_writes_total";

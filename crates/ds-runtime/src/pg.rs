@@ -425,7 +425,7 @@ mod tests {
 
     /// The settings reach the session: `SHOW` on a pooled connection.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p common \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-runtime \
                 --features postgres pg:: -- --ignored --test-threads=1`"]
     async fn pooled_connections_carry_the_settings() {
         let mut settings = PoolSettings::new("distant-signal-pg-test", 2);
@@ -471,7 +471,7 @@ mod tests {
     /// A statement over the timeout is cancelled (57014), and the connection
     /// goes back to the pool usable, with nothing left running server-side.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p common \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-runtime \
                 --features postgres pg:: -- --ignored --test-threads=1`"]
     async fn a_statement_over_the_timeout_is_cancelled_and_does_not_leak() {
         let app = "distant-signal-pg-timeout-test";
@@ -511,7 +511,7 @@ mod tests {
 
     /// A transaction left idle is ended by the server.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p common \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-runtime \
                 --features postgres pg:: -- --ignored --test-threads=1`"]
     async fn an_idle_transaction_is_terminated() {
         let mut settings = PoolSettings::new("distant-signal-pg-idle-test", 1);
@@ -535,7 +535,7 @@ mod tests {
 
     /// An exhausted pool fails an acquire after `acquire_timeout`, not 30s.
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p common \
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-runtime \
                 --features postgres pg:: -- --ignored --test-threads=1`"]
     async fn an_exhausted_pool_fails_fast() {
         let mut settings = PoolSettings::new("distant-signal-pg-acquire-test", 1);

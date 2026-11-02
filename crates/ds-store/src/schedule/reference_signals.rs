@@ -112,8 +112,8 @@ pub fn delivery_timestamp(dir_name: &str) -> Option<i64> {
 }
 
 /// [`RunLock`]'s session advisory-lock key
-/// (`common::advisory_locks::SCHEDULE_REFERENCE_RUN_KEY`).
-pub const RUN_LOCK_KEY: i64 = common::advisory_locks::SCHEDULE_REFERENCE_RUN_KEY;
+/// (`ds_runtime::advisory_locks::SCHEDULE_REFERENCE_RUN_KEY`).
+pub const RUN_LOCK_KEY: i64 = ds_runtime::advisory_locks::SCHEDULE_REFERENCE_RUN_KEY;
 
 /// `pg_try_advisory_lock(RUN_LOCK_KEY)` on a connection of its own, held
 /// until [`RunLock::release`] (or the process exits: the server frees a

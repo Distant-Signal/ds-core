@@ -5,7 +5,7 @@
 //! and then:
 //!
 //! - connects with `redis://<user>:<password>@...` built by
-//!   `common::redis_auth::redis_url_with_credentials` (so the redis crate's
+//!   `ds_runtime::redis_auth::redis_url_with_credentials` (so the redis crate's
 //!   own handshake, AUTH plus CLIENT SETINFO, runs as that user);
 //! - runs its client's real command sequence, mirrored from the code that
 //!   issues it (comments name the source), all of which must be allowed;
@@ -37,8 +37,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use common::redis_auth::{redis_url_with_credentials, redis_url_with_password};
-use common::secret::Secret;
+use ds_runtime::redis_auth::{redis_url_with_credentials, redis_url_with_password};
+use ds_runtime::secret::Secret;
 
 const TEMPLATE: &str = "../../access/redis-users.acl.tpl";
 
@@ -287,7 +287,7 @@ fn movement_consumer(h: &mut Harness, user: &str) {
             "0",
         ],
         vec!["XACK", &stream, user, "0-1"],
-        // common::redis_group::restore_group_position, after a failed read.
+        // ds_runtime::redis_group::restore_group_position, after a failed read.
         vec!["XGROUP", "SETID", &stream, user, "0-1"],
         vec![
             "XAUTOCLAIM",

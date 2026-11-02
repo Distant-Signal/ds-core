@@ -255,7 +255,7 @@ impl OutboxTick {
 /// `increase()` sees the first rejection (the writer calls it at startup).
 pub fn register_metrics() {
     for outcome in ["applied", "rejected"] {
-        metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => outcome)
+        metrics::counter!(ds_runtime::metrics::metric_name(OUTBOX_METRIC), "outcome" => outcome)
             .increment(0);
     }
 }
@@ -454,9 +454,9 @@ pub async fn apply_train_event_outbox_with(
         .await?;
     }
     tx.commit().await?;
-    metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => "applied")
+    metrics::counter!(ds_runtime::metrics::metric_name(OUTBOX_METRIC), "outcome" => "applied")
         .increment(tick.applied);
-    metrics::counter!(common::metrics::metric_name(OUTBOX_METRIC), "outcome" => "rejected")
+    metrics::counter!(ds_runtime::metrics::metric_name(OUTBOX_METRIC), "outcome" => "rejected")
         .increment(tick.rejected_count());
     if let Some(err) = failed {
         return Err(err);
@@ -476,7 +476,8 @@ pub async fn apply_train_event_outbox_with(
     )
     .fetch_one(pool)
     .await?;
-    metrics::gauge!(common::metrics::metric_name(OLDEST_PENDING_METRIC)).set(oldest.unwrap_or(0.0));
+    metrics::gauge!(ds_runtime::metrics::metric_name(OLDEST_PENDING_METRIC))
+        .set(oldest.unwrap_or(0.0));
     Ok(tick)
 }
 
@@ -512,7 +513,7 @@ mod tests {
         for outcome in ["applied", "rejected"] {
             let line = format!(
                 "{}{{outcome=\"{outcome}\"}} 0",
-                common::metrics::metric_name(OUTBOX_METRIC)
+                ds_runtime::metrics::metric_name(OUTBOX_METRIC)
             );
             assert!(text.contains(&line), "{line} not in {text}");
         }

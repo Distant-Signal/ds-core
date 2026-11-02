@@ -103,10 +103,10 @@ const OUTCOMES: [&str; 6] = [
 /// increment of every series.
 pub fn register_metrics() {
     for outcome in OUTCOMES {
-        metrics::counter!(common::metrics::metric_name(INFERENCE_METRIC), "outcome" => outcome)
+        metrics::counter!(ds_runtime::metrics::metric_name(INFERENCE_METRIC), "outcome" => outcome)
             .increment(0);
     }
-    metrics::counter!(common::metrics::metric_name(MARKED_REMOVED_METRIC)).increment(0);
+    metrics::counter!(ds_runtime::metrics::metric_name(MARKED_REMOVED_METRIC)).increment(0);
 }
 
 /// What one snapshot's inference did.
@@ -278,13 +278,13 @@ pub async fn infer_removals(
 /// Logs and counts one verdict, returning it.
 fn record(verdict: Inference) -> Inference {
     metrics::counter!(
-        common::metrics::metric_name(INFERENCE_METRIC),
+        ds_runtime::metrics::metric_name(INFERENCE_METRIC),
         "outcome" => verdict.label()
     )
     .increment(1);
     match verdict {
         Inference::Applied { missing, removed } => {
-            metrics::counter!(common::metrics::metric_name(MARKED_REMOVED_METRIC))
+            metrics::counter!(ds_runtime::metrics::metric_name(MARKED_REMOVED_METRIC))
                 .increment(removed);
             if missing > 0 {
                 tracing::info!(

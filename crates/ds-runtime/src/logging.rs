@@ -518,7 +518,7 @@ mod tests {
         assert!(ts.ends_with('Z'), "{ts}");
         assert_eq!(line["level"], "INFO");
         assert_eq!(line["service"], "poller-test");
-        assert_eq!(line["target"], "common::logging::tests");
+        assert_eq!(line["target"], "ds_runtime::logging::tests");
         assert_eq!(line["message"], "fetched\nstations");
         assert_eq!(line["count"], 3);
         assert_eq!(line["crs"], "KGX");

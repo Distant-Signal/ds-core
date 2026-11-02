@@ -4,9 +4,10 @@
 //! and `/livez`) reports unhealthy once no beat has arrived for
 //! `stall_after`.
 //!
-//! Lives in `common` rather than `health-http` so `common::poller_loop` and
-//! `common::startup` can beat it too (`health-http` depends on `common`, not
-//! the reverse); `health_http::Progress` re-exports this type.
+//! Lives in `ds-runtime` rather than `health-http` so `common::poller_loop`
+//! and `ds_runtime::startup` can beat it too (`health-http` depends on
+//! `ds-runtime`, not the reverse); `health_http::Progress` re-exports this
+//! type.
 //!
 //! A connected-or-not flag alone cannot catch a wedged loop: a loop stuck
 //! forever inside an `await` (a half-open HTTP connection with no timeout,

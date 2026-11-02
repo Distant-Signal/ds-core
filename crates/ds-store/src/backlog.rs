@@ -110,7 +110,7 @@ pub async fn ingest_trust_event_backlog(
             "rejected trust-event-backlog row; inserted the rest of its batch"
         );
         metrics::counter!(
-            common::metrics::metric_name("store_trust_event_backlog_rejected_rows_total"),
+            ds_runtime::metrics::metric_name("store_trust_event_backlog_rejected_rows_total"),
             "reason" => rejected.reason.clone()
         )
         .increment(1);
@@ -139,7 +139,7 @@ pub async fn ingest_trust_event_backlog(
                 "shared movement write rejected this backlog event for a data error"
             );
             metrics::counter!(
-                common::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
+                ds_runtime::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
                 "class" => "data"
             )
             .increment(1);
@@ -154,7 +154,7 @@ pub async fn ingest_trust_event_backlog(
                 "shared movement write failed transiently; failing the batch so it is retried"
             );
             metrics::counter!(
-                common::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
+                ds_runtime::metrics::metric_name("store_trust_event_backlog_shared_movement_errors_total"),
                 "class" => "transient"
             )
             .increment(1);
@@ -916,7 +916,7 @@ pub const UID_INFERRED_METRIC: &str = "store_trust_event_backlog_uid_inferred_to
 /// Registers [`UID_INFERRED_METRIC`] at 0 for every `source`.
 pub fn register_uid_inference_metrics() {
     for source in ["activation", "none"] {
-        metrics::counter!(common::metrics::metric_name(UID_INFERRED_METRIC), "source" => source)
+        metrics::counter!(ds_runtime::metrics::metric_name(UID_INFERRED_METRIC), "source" => source)
             .increment(0);
     }
 }
@@ -993,9 +993,9 @@ async fn infer_train_identities(
         .filter_map(|(idx, mut found)| (found.len() == 1).then(|| (idx, found.remove(0))))
         .collect();
     let unresolved = indices.len() - inferred.len();
-    metrics::counter!(common::metrics::metric_name(UID_INFERRED_METRIC), "source" => "activation")
+    metrics::counter!(ds_runtime::metrics::metric_name(UID_INFERRED_METRIC), "source" => "activation")
         .increment(inferred.len() as u64);
-    metrics::counter!(common::metrics::metric_name(UID_INFERRED_METRIC), "source" => "none")
+    metrics::counter!(ds_runtime::metrics::metric_name(UID_INFERRED_METRIC), "source" => "none")
         .increment(unresolved as u64);
     Ok(inferred)
 }

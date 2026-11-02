@@ -40,7 +40,7 @@
 //! | [`tracking`] | 1A.9 | the ingest half of `train_tracking`, forward signals |
 //! | [`backlog`] | 1A.10 | the TRUST event backlog and its match sweep, train reasons |
 //! | [`sweeps`] | 1A.10 | the schedule-match and reconciliation sweeps |
-//! | [`pool`] | 1A.11 | `common::pg::PoolSettings` wrapped with `db_pool_*` metrics, the DB health probe |
+//! | [`pool`] | 1A.11 | `ds_runtime::pg::PoolSettings` wrapped with `db_pool_*` metrics, the DB health probe |
 //! | [`schema`] | 1A.12 | `REQUIRED_MIGRATION`; `wait_for_schema` in 1B.2 |
 //! | [`migrate`] | 1B.1 | `api::migrate` and the contract-migration guard, with `migrations/` |
 //! | [`loops`] | 1B.6, 1B.7 | the advisory-locked loop runner and the train-domain loops the api and the ingest-writer both run |
