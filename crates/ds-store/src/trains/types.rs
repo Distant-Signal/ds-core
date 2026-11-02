@@ -135,28 +135,68 @@ impl StopTimetable {
     }
 }
 
+/// [`StopTimetable`]'s wire shape: what its `Serialize` writes, and its
+/// generated TypeScript (the api's `api_types`).
+#[derive(Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "StopTimetable"))]
+#[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors StopTimetable's wire shape"
+)]
+pub struct StopTimetableWire {
+    pub scheduled_arrival: Option<DateTime<Utc>>,
+    pub scheduled_departure: Option<DateTime<Utc>>,
+    pub public_arrival: Option<DateTime<Utc>>,
+    pub public_departure: Option<DateTime<Utc>>,
+    pub working_arrival: Option<DateTime<Utc>>,
+    pub working_departure: Option<DateTime<Utc>>,
+    pub working_pass: Option<DateTime<Utc>>,
+    pub can_board: bool,
+    pub can_alight: bool,
+    pub request_stop: bool,
+    pub passing_point: bool,
+}
+
+/// `ts_rs::TS` by way of [`StopTimetableWire`], written out because `#[ts(as)]` cannot
+/// be flattened, and this type is `#[serde(flatten)]`ed into response types.
+#[cfg(feature = "ts")]
+impl ts_rs::TS for StopTimetable {
+    type WithoutGenerics = <StopTimetableWire as ts_rs::TS>::WithoutGenerics;
+    type OptionInnerType = Self;
+
+    fn docs() -> Option<String> {
+        <StopTimetableWire as ts_rs::TS>::docs()
+    }
+    fn ident(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::ident(cfg)
+    }
+    fn name(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::name(cfg)
+    }
+    fn inline(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::inline(cfg)
+    }
+    fn inline_flattened(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::inline_flattened(cfg)
+    }
+    fn decl(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::decl(cfg)
+    }
+    fn decl_concrete(cfg: &ts_rs::Config) -> String {
+        <StopTimetableWire as ts_rs::TS>::decl_concrete(cfg)
+    }
+    fn visit_dependencies(v: &mut impl ts_rs::TypeVisitor) {
+        <StopTimetableWire as ts_rs::TS>::visit_dependencies(v);
+    }
+    fn output_path() -> Option<std::path::PathBuf> {
+        <StopTimetableWire as ts_rs::TS>::output_path()
+    }
+}
+
 impl Serialize for StopTimetable {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        #[expect(
-            clippy::struct_excessive_bools,
-            reason = "mirrors StopTimetable's wire shape"
-        )]
-        struct Wire {
-            scheduled_arrival: Option<DateTime<Utc>>,
-            scheduled_departure: Option<DateTime<Utc>>,
-            public_arrival: Option<DateTime<Utc>>,
-            public_departure: Option<DateTime<Utc>>,
-            working_arrival: Option<DateTime<Utc>>,
-            working_departure: Option<DateTime<Utc>>,
-            working_pass: Option<DateTime<Utc>>,
-            can_board: bool,
-            can_alight: bool,
-            request_stop: bool,
-            passing_point: bool,
-        }
-        Wire {
+        StopTimetableWire {
             scheduled_arrival: self.scheduled_arrival(),
             scheduled_departure: self.scheduled_departure(),
             public_arrival: self.public_arrival,
@@ -393,6 +433,7 @@ pub fn tiploc_key(raw_tiploc: &str) -> String {
 /// this one sits right next to on every `JourneyStop`
 /// (`frontend/lib/types.ts`'s `JourneyStopKind` mirrors it the same way).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum StopStatus {
     /// Not a genuine booked calling point -- see this type's own doc
     /// comment.
@@ -437,6 +478,7 @@ pub enum StopStatus {
 ///   `Darwin` alone, just worth surfacing that TRUST's own running data
 ///   corroborates it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum SkipSource {
     Darwin,
     Trust,
@@ -454,6 +496,7 @@ pub enum SkipSource {
 /// orthogonal (a cancelled call can also have changed platform) and is
 /// already served.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum PlatformStatus {
     /// The train is expected to call at this platform.
@@ -469,6 +512,7 @@ pub enum PlatformStatus {
 /// rests on. Serialized lowercase; `null` when there is no platform at
 /// all. Clients must treat an unknown value as `board`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum PlatformBasis {
     /// The timetable's (CIF) booked platform only: nothing live has shown
@@ -514,6 +558,7 @@ pub struct PlatformEvidence {
 /// latest reported live data for that location -- see this module's own
 /// doc comment and the design doc §2/§3.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct JourneyStop {
     pub crs: Option<String>,
@@ -530,6 +575,11 @@ pub struct JourneyStop {
     /// `stations` CRS), to link to instead of a page of its own.
     pub parent_crs: Option<String>,
     pub tiploc: Option<String>,
+    // `schedule_query::CallingPointKind`, which has no `TS` of its own.
+    #[cfg_attr(
+        feature = "ts",
+        ts(type = "\"Origin\" | \"Intermediate\" | \"Terminate\" | null")
+    )]
     pub kind: Option<schedule_query::CallingPointKind>,
     pub actual_arrival: Option<DateTime<Utc>>,
     pub actual_departure: Option<DateTime<Utc>>,
@@ -650,6 +700,7 @@ pub struct JourneyStop {
     /// by `api::data::platform_confirmation`, and from the Darwin Push
     /// Port's confirmed flag by `api::data::pushport_platform` (DS-152).
     #[serde(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub platform_evidence: Option<PlatformEvidence>,
     /// LDBWS-style live status of this stop (`OnTime`, `Late`, `Cancelled`,
     /// `NoReport`, `Arrived`, `Departed`, `Scheduled`), served as `status`.
@@ -756,6 +807,7 @@ impl JourneyStop {
 
 /// `journeyStops[].board`. See the module doc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct StopBoard {
     /// Darwin's passenger delay text, verbatim.

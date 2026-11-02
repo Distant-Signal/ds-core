@@ -32,6 +32,8 @@ serde_json = "1.0.149"
 serde_repr = "0.1.20"
 sha2 = "0.10"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "net"] }
+# Only with the `ts` feature: see [features].
+ts-rs = { version = "=12.0.1", default-features = false, features = ["serde-compat", "chrono-impl", "serde-json-impl"], optional = true }
 toml = { version = "1.1.2", features = ["serde"] }
 tracing = "0.1.44"
 # `common::logging`: the one subscriber setup every binary shares. `json` for
@@ -64,6 +66,10 @@ redis = ["dep:redis"]
 # `common::redis_group::fake::FakeConn`, a scripted Redis connection for
 # other crates' unit tests (movement-feed, enricher). Test-only.
 redis-test-util = ["redis"]
+# `ts_rs::TS` on the domain types the api sends the frontend, for its
+# generated TypeScript (`api::api_types`, repo-split spec §5.3). Enabled by
+# the api only.
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 # `logging`'s test of `log`-crate events (both already in the workspace via
