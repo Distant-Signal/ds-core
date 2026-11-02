@@ -55,6 +55,8 @@ test-support = ["tokio/rt"]
 
 [dev-dependencies]
 metrics-exporter-prometheus = { version = "0.18", default-features = false }
+# tests/migration_index_locking.rs scans the migrations' SQL.
+regex = "1"
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 
 [lints]
