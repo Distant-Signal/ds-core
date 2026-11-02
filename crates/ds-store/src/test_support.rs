@@ -39,6 +39,11 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Connection, PgConnection, PgPool};
 
 /// A pool on `DATABASE_URL`, for a database-gated test.
+/// This crate's `db-grants.yaml`, the source of the grants and row
+/// policies (repo split spec §5.1), for other crates' tests to check their
+/// writes against without reading the chart's rendered copy.
+pub const DB_GRANTS_YAML: &str = include_str!("../db-grants.yaml");
+
 pub async fn connect() -> PgPool {
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run this test");
