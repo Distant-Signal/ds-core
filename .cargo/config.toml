@@ -1,7 +1,7 @@
 # Environment for every rustc this workspace runs (cargo's `[env]`).
 [env]
 # The public project URL every outbound User-Agent carries
-# (crates/common/src/user_agent.rs). This is the local default only: an
+# (crates/ds-runtime/src/user_agent.rs). This is the local default only: an
 # environment variable of the same name wins (`force` is off), and
 # .github/workflows/containers.yml passes the building repository's own URL
 # into every Rust image build, so published images follow the repository's

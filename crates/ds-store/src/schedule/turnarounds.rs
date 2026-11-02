@@ -48,7 +48,7 @@ const STATEMENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12
 /// new one. Returns the number of links written.
 pub async fn replace_inferred_for_date(pool: &PgPool, service_date: NaiveDate) -> Result<u64> {
     let mut tx = pool.begin().await?;
-    common::pg::set_local_statement_timeout(&mut tx, STATEMENT_TIMEOUT).await?;
+    ds_runtime::pg::set_local_statement_timeout(&mut tx, STATEMENT_TIMEOUT).await?;
     sqlx::query("DELETE FROM schedule_turnarounds WHERE service_date = $1 AND link = 'inferred'")
         .bind(service_date)
         .execute(&mut *tx)

@@ -105,7 +105,7 @@ pub async fn upsert_reasons(
             Err(err) => {
                 if crate::backlog::classify_anyhow_data_error(&err).is_some() {
                     tracing::warn!(index, error = ?err, reason = ?reason, "skipping a train reason rejected for a data error");
-                    metrics::counter!(common::metrics::metric_name(
+                    metrics::counter!(ds_runtime::metrics::metric_name(
                         "store_train_reasons_rejected_rows_total"
                     ))
                     .increment(1);

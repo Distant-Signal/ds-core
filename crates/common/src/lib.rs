@@ -8,15 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_inline_default::serde_inline_default;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-pub mod advisory_locks;
-pub mod backoff;
 pub mod config;
 pub mod corpus_inference;
 pub mod darwin;
 pub mod full_coverage_window;
 #[cfg(feature = "http")]
 pub mod gcp_external_account;
-pub mod heap;
 #[cfg(feature = "redis")]
 pub mod incident_text_changed;
 pub mod incident_validity;
@@ -24,30 +21,14 @@ pub mod incident_validity;
 pub mod ingest;
 pub mod island_of_ireland;
 pub mod location_naming;
-pub mod log_once;
-pub mod logging;
 pub mod matcher;
-pub mod metrics;
-#[cfg(feature = "http")]
-pub mod outbound_endpoint_guard;
 pub mod pass_through;
-#[cfg(feature = "postgres")]
-pub mod pg;
 #[cfg(feature = "http")]
 pub mod poller_loop;
-pub mod progress;
 pub mod public_delay;
 pub mod rail_day;
-pub mod redis_auth;
-#[cfg(feature = "redis")]
-pub mod redis_conn;
-#[cfg(feature = "redis")]
-pub mod redis_group;
 pub mod schedule_delivery;
-pub mod secret;
 pub mod segments;
-pub mod service_args;
-pub mod startup;
 pub mod station_resolver;
 pub mod supplementary_links;
 pub mod test_paths;
@@ -57,7 +38,6 @@ pub mod tfl_stops;
 pub mod tiploc_parents;
 pub mod transit;
 pub mod trust_timestamp;
-pub mod user_agent;
 
 pub use full_coverage_window::{
     FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,

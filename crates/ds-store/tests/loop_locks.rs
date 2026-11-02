@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use common::advisory_locks::{self, LoopLock};
+use ds_runtime::advisory_locks::{self, LoopLock};
 use ds_store::loops::{
     CrsLineIndex, LockSession, LoopRunner, LoopSpec, TickOutcome, TrainLoopIntervals,
 };

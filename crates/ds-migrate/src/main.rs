@@ -20,7 +20,7 @@
 //!   `MIGRATION_DATABASE_URL` when set and not blank, else `DATABASE_URL`,
 //!   as the api does. Two connections at most: the contract check's pool
 //!   (one) and the migration connection (spec §5.3). The first connection
-//!   is retried (`common::startup`) for up to
+//!   is retried (`ds_runtime::startup`) for up to
 //!   `MIGRATION_CONNECT_DEADLINE_SECS` (default 120), then exits 1.
 //! - `wait` blocks until the database has this build's schema: the schema
 //!   gate the DB services run in-process (`ds_store::schema`, spec §12.2,
@@ -51,7 +51,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
-use common::secret::Secret;
+use ds_runtime::secret::Secret;
 use ds_store::migrate::{self, MigrationSettings};
 use ds_store::schema::{self, DbRole, SchemaGate};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -169,14 +169,14 @@ const WAIT_APPLICATION_NAME: &str = "ds-migrate-wait";
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
-    common::logging::exit_code(dispatch(Cli::parse()).await)
+    ds_runtime::logging::exit_code(dispatch(Cli::parse()).await)
 }
 
 async fn dispatch(cli: Cli) -> anyhow::Result<()> {
-    common::logging::init_with_filter(
+    ds_runtime::logging::init_with_filter(
         "ds-migrate",
-        common::logging::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| common::logging::EnvFilter::new("info")),
+        ds_runtime::logging::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| ds_runtime::logging::EnvFilter::new("info")),
     );
     match cli.command {
         Command::Run(args) => {
@@ -216,14 +216,14 @@ async fn backfill_pool(args: &RunArgs, tool: &str) -> anyhow::Result<sqlx::PgPoo
         .parse()
         .with_context(|| format!("could not parse {var}"))?;
     let options = options
-        .options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS)
+        .options(ds_runtime::pg::DEAD_CLIENT_DETECTION_SETTINGS)
         .application_name(BACKFILL_APPLICATION_NAME);
     // The first connection is retried like `run`'s, for up to
     // `MIGRATION_CONNECT_DEADLINE_SECS`: these run as Jobs or one-off pods
     // on the same saturated node, through the same NetworkPolicy.
-    let pool = common::startup::retry_until_ready_within(
+    let pool = ds_runtime::startup::retry_until_ready_within(
         "postgres",
-        common::startup::CONNECT_BACKOFF,
+        ds_runtime::startup::CONNECT_BACKOFF,
         Duration::from_secs(args.migration_connect_deadline_secs),
         || {
             PgPoolOptions::new()
@@ -309,13 +309,13 @@ async fn run(
     connect_deadline: Duration,
 ) -> anyhow::Result<()> {
     // Dead-client detection, as the api's migration connection has.
-    let options = options.options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS);
+    let options = options.options(ds_runtime::pg::DEAD_CLIENT_DETECTION_SETTINGS);
     let check_options = options
         .clone()
         .application_name(migrate::MIGRATION_APPLICATION_NAME);
-    let check = common::startup::retry_until_ready_within(
+    let check = ds_runtime::startup::retry_until_ready_within(
         "postgres",
-        common::startup::CONNECT_BACKOFF,
+        ds_runtime::startup::CONNECT_BACKOFF,
         connect_deadline,
         || {
             PgPoolOptions::new()
@@ -350,7 +350,7 @@ fn gate(role: Option<Role>) -> SchemaGate {
 /// Returns the applied migration.
 async fn wait(options: PgConnectOptions, gate: &SchemaGate) -> anyhow::Result<i64> {
     let options = options
-        .options(common::pg::DEAD_CLIENT_DETECTION_SETTINGS)
+        .options(ds_runtime::pg::DEAD_CLIENT_DETECTION_SETTINGS)
         .application_name(WAIT_APPLICATION_NAME);
     let pool = PgPoolOptions::new()
         .max_connections(1)

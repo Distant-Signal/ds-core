@@ -26,9 +26,9 @@ use axum::routing::get;
 /// (`Arc<AtomicBool>`) under its own crate-local name.
 pub type ConnectionState = Arc<AtomicBool>;
 
-/// Liveness-by-progress; see [`common::progress`]. Re-exported so every
+/// Liveness-by-progress; see [`ds_runtime::progress`]. Re-exported so every
 /// caller keeps using `health_http::Progress`.
-pub use common::progress::Progress;
+pub use ds_runtime::progress::Progress;
 
 /// [`spawn`], plus a [`Progress`] watchdog: `/healthz` answers 503 with
 /// `"stalled"` whenever no iteration has completed within `stall_after`,
@@ -55,7 +55,7 @@ pub fn spawn_with_progress(
 /// `HealthArgs`: `/livez` for the liveness probe (progress only) and
 /// `/healthz` for readiness (also 503 `"connecting"` until the caller flips
 /// the returned state, once its initial database/Redis connection is up).
-pub fn spawn_worker(args: &common::service_args::HealthArgs) -> (ConnectionState, Progress) {
+pub fn spawn_worker(args: &ds_runtime::service_args::HealthArgs) -> (ConnectionState, Progress) {
     spawn_with_progress(
         args.health_bind_url.clone(),
         "ok",
@@ -67,7 +67,7 @@ pub fn spawn_worker(args: &common::service_args::HealthArgs) -> (ConnectionState
 /// [`spawn_worker`] for a worker with no persistent connection to wait for
 /// (the pollers): ready at once, so `/healthz` and `/livez` both reflect
 /// loop progress only.
-pub fn spawn_liveness(args: &common::service_args::HealthArgs) -> Progress {
+pub fn spawn_liveness(args: &ds_runtime::service_args::HealthArgs) -> Progress {
     let (state, progress) = spawn_worker(args);
     state.store(true, Ordering::Relaxed);
     progress
@@ -179,7 +179,7 @@ async fn livez(progress: Option<Progress>) -> (StatusCode, &'static str) {
 /// strings -- every real caller passes the exact string it emits today.
 pub fn set_connected(state: &ConnectionState, gauge_name: &str, connected: bool) {
     state.store(connected, Ordering::Relaxed);
-    metrics::gauge!(common::metrics::metric_name(gauge_name)).set(if connected {
+    metrics::gauge!(ds_runtime::metrics::metric_name(gauge_name)).set(if connected {
         1.0
     } else {
         0.0

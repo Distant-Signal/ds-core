@@ -259,7 +259,7 @@ pub const LAST_DELIVERY_METRIC: &str = "store_corpus_last_delivered_at_seconds";
 pub async fn refresh_last_delivery_metric(pool: &PgPool) -> Result<Option<DateTime<Utc>>> {
     let latest = last_corpus_delivery(pool).await?;
     if let Some(delivered_at) = latest {
-        metrics::gauge!(common::metrics::metric_name(LAST_DELIVERY_METRIC))
+        metrics::gauge!(ds_runtime::metrics::metric_name(LAST_DELIVERY_METRIC))
             .set(delivered_at.timestamp() as f64);
     }
     Ok(latest)

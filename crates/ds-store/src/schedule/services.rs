@@ -124,7 +124,7 @@ pub async fn replace_for_date(
     let stps: Vec<&str> = rows.iter().map(|r| r.stp.as_str()).collect();
 
     let mut tx = pool.begin().await?;
-    common::pg::set_local_statement_timeout(&mut tx, PUBLISH_STATEMENT_TIMEOUT).await?;
+    ds_runtime::pg::set_local_statement_timeout(&mut tx, PUBLISH_STATEMENT_TIMEOUT).await?;
 
     // DISTINCT ON keeps the LAST row per uid (`ORDER BY ... ord DESC`) so a
     // duplicated uid cannot make ON CONFLICT touch one row twice. The

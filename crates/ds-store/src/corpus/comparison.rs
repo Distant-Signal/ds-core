@@ -672,7 +672,7 @@ pub fn record_metrics(c: &CorpusComparison) {
     .chain(not_station_outcomes(&c.tiploc_corpus_only_not_stations))
     {
         metrics::gauge!(
-            common::metrics::metric_name("store_corpus_comparison_tiplocs"),
+            ds_runtime::metrics::metric_name("store_corpus_comparison_tiplocs"),
             "outcome" => outcome
         )
         .set(n as f64);
@@ -688,7 +688,7 @@ pub fn record_metrics(c: &CorpusComparison) {
     .chain(not_station_outcomes(&c.stanox_corpus_only_not_stations))
     {
         metrics::gauge!(
-            common::metrics::metric_name("store_corpus_comparison_stanoxes"),
+            ds_runtime::metrics::metric_name("store_corpus_comparison_stanoxes"),
             "outcome" => outcome
         )
         .set(n as f64);

@@ -4,7 +4,7 @@
 //! (`API_BACKGROUND_LOOPS`) run them with.
 //!
 //! Each constructor below is the whole loop: its lock
-//! ([`common::advisory_locks`]), its interval and its body, which calls the
+//! ([`ds_runtime::advisory_locks`]), its interval and its body, which calls the
 //! sweep and logs its outcome with the messages the api's own loops have
 //! always used. The api and the writer register the same [`LoopSpec`]s, so
 //! a sweep logs and counts the same whichever process holds its lock.
@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::advisory_locks;
+use ds_runtime::advisory_locks;
 
 pub use runner::{LockSession, LoopRunner, LoopSpec, RunningLoops, TickOutcome};
 

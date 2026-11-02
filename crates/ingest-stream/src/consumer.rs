@@ -38,9 +38,9 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
-use common::backoff::{Backoff, FailureStreak};
-use common::progress::Progress;
-use common::redis_conn::RedisConn;
+use ds_runtime::backoff::{Backoff, FailureStreak};
+use ds_runtime::progress::Progress;
+use ds_runtime::redis_conn::RedisConn;
 use redis::{ErrorKind, RedisError, Value};
 use serde_json::value::RawValue;
 
@@ -52,7 +52,7 @@ pub const READ_BLOCK_MS: u64 = 5000;
 
 // A blocked read must finish well inside the shared per-command timeout.
 const _: () =
-    assert!((READ_BLOCK_MS as u128) * 2 < common::redis_conn::RESPONSE_TIMEOUT.as_millis());
+    assert!((READ_BLOCK_MS as u128) * 2 < ds_runtime::redis_conn::RESPONSE_TIMEOUT.as_millis());
 
 /// The consumer's retry schedule after a transient failure (spec §7.3).
 pub const CONSUMER_BACKOFF: Backoff = Backoff::new(Duration::from_secs(1), Duration::from_secs(60));

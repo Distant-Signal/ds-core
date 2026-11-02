@@ -1,8 +1,8 @@
 //! Metric names (without the `distant_signal_` prefix that
-//! [`common::metrics::metric_name`] adds) and label values. The chart's
+//! [`ds_runtime::metrics::metric_name`] adds) and label values. The chart's
 //! alerts (plan 3a.4) are written against these; spec §14.1 lists them.
 
-use common::metrics::metric_name;
+use ds_runtime::metrics::metric_name;
 
 // Producer side.
 

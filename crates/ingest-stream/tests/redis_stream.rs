@@ -26,10 +26,10 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use chrono::Utc;
-use common::backoff::Backoff;
-use common::redis_auth::{redis_url_with_credentials, redis_url_with_password};
-use common::redis_conn::RedisConn;
-use common::secret::Secret;
+use ds_runtime::backoff::Backoff;
+use ds_runtime::redis_auth::{redis_url_with_credentials, redis_url_with_password};
+use ds_runtime::redis_conn::RedisConn;
+use ds_runtime::secret::Secret;
 use ingest_stream::consumer::UNSUPPORTED_EXPIRED;
 use ingest_stream::{
     ConsumerConfig, EncodedEntry, Envelope, Handled, Handler, HandlerError, NotWritten,
@@ -197,7 +197,7 @@ impl Drop for Scope {
 }
 
 async fn connect(url: &str) -> RedisConn {
-    common::redis_conn::connect(&redis::Client::open(url).unwrap())
+    ds_runtime::redis_conn::connect(&redis::Client::open(url).unwrap())
         .await
         .unwrap()
 }

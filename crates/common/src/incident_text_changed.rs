@@ -45,7 +45,7 @@ pub fn xadd(incident_id: &str) -> redis::Cmd {
 /// therefore surfaces as a failed publish instead of failing the writer's
 /// startup.
 ///
-/// The connection is [`crate::redis_conn::connect`]'s (INF-5): ONE connect
+/// The connection is [`ds_runtime::redis_conn::connect`]'s (INF-5): ONE connect
 /// attempt bounded by `CONNECT_TIMEOUT`, every command bounded by
 /// `RESPONSE_TIMEOUT`. It used to be redis-rs's default
 /// `get_connection_manager()`, which retries a failed connect 6 more times
@@ -53,7 +53,7 @@ pub fn xadd(incident_id: &str) -> redis::Cmd {
 /// five minutes inside the poller's ingest request whenever the Redis pod
 /// was being recreated, and no bound at all on a half-open connection.
 pub async fn publish(redis: &redis::Client, incident_ids: Vec<String>) {
-    let mut conn = match crate::redis_conn::connect(redis).await {
+    let mut conn = match ds_runtime::redis_conn::connect(redis).await {
         Ok(conn) => conn,
         Err(err) => {
             tracing::warn!(
@@ -89,7 +89,7 @@ mod tests {
         let client = redis::Client::open(format!("redis://127.0.0.1:{port}")).unwrap();
 
         tokio::time::timeout(
-            crate::redis_conn::CONNECT_TIMEOUT * 2,
+            ds_runtime::redis_conn::CONNECT_TIMEOUT * 2,
             publish(&client, vec!["INC-1".to_string()]),
         )
         .await

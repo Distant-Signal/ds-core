@@ -35,7 +35,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use common::secret::Secret;
+use ds_runtime::secret::Secret;
 use serde::Serialize;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -362,7 +362,7 @@ pub async fn cursor(
     client: &redis::Client,
     stream: &str,
 ) -> redis::RedisResult<Option<DateTime<Utc>>> {
-    let mut conn = common::redis_conn::connect(client).await?;
+    let mut conn = ds_runtime::redis_conn::connect(client).await?;
     last_produced_at(&mut conn, stream).await
 }
 
@@ -375,7 +375,7 @@ async fn scan_back<T>(
     mut pick: impl FnMut(&redis::streams::StreamId) -> Option<T>,
 ) -> redis::RedisResult<Option<T>> {
     const PAGE: usize = 50;
-    let mut conn = common::redis_conn::connect(client).await?;
+    let mut conn = ds_runtime::redis_conn::connect(client).await?;
     let limit = stream_decl(stream)
         .map_or(2000, budget::StreamDecl::maxlen)
         .saturating_add(100);
@@ -454,7 +454,7 @@ pub struct RedisArgs {
     pub redis_url: Option<Secret>,
 
     /// Redis AUTH password (chart `redis.auth`, or the producer's ACL
-    /// user's own). Applied by `common::redis_auth::redis_url_with_credentials`,
+    /// user's own). Applied by `ds_runtime::redis_auth::redis_url_with_credentials`,
     /// never logged.
     #[arg(long, env, hide_env_values = true)]
     pub redis_password: Option<Secret>,
@@ -487,7 +487,7 @@ impl RedisArgs {
         let Some(url) = &self.redis_url else {
             return Err(format!("{why} needs REDIS_URL"));
         };
-        let url = common::redis_auth::redis_url_with_credentials(
+        let url = ds_runtime::redis_auth::redis_url_with_credentials(
             url.expose(),
             self.redis_username.as_deref(),
             self.redis_password.as_ref(),
