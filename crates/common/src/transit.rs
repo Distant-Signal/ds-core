@@ -354,6 +354,7 @@ pub struct TransitNetworkRow {
 
 /// The licence notice a network's data needs (spec §12.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransitAttribution {
     /// SPDX-style id (`OGL-UK-3.0`).
     pub licence: String,
