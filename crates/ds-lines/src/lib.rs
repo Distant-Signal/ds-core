@@ -37,6 +37,18 @@ pub fn parse_lines(lines_dir: &str) -> anyhow::Result<LineCatalogue> {
     }
 }
 
+/// The core reference data in `reference-data/`, which
+/// `line-catalogue-validator` checks the catalogue against, embedded for
+/// other crates' tests: the directory stays in `ds-core` when they leave it
+/// (repo split spec §9, phase 4). Only a crate that names a constant
+/// carries its bytes.
+pub mod reference_data {
+    /// `reference-data/toc-codes.csv`: ATOC code, operator name.
+    pub const TOC_CODES_CSV: &str = include_str!("../../../reference-data/toc-codes.csv");
+    /// `reference-data/crs-tiploc.csv`: CRS, TIPLOC, name.
+    pub const CRS_TIPLOC_CSV: &str = include_str!("../../../reference-data/crs-tiploc.csv");
+}
+
 /// The names of the embedded `lines/*.toml` files, sorted.
 pub fn file_names() -> impl Iterator<Item = &'static str> {
     FILES.iter().map(|(name, _)| *name)

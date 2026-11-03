@@ -8,7 +8,7 @@ r"""Run a command against a fresh database with the Postgres role split.
 Proves that no runtime path needs a superuser (docs/postgres-app-role.md).
 Against the server in `DATABASE_URL` (a superuser, e.g. CI's `postgres`),
 it creates a uniquely named database and five uniquely named roles with the
-chart's own setup script (charts/distant-signal/files/postgres-roles.sql),
+chart's own setup script (access/postgres-roles.sql, copied into the chart),
 then runs COMMAND with
 
   DATABASE_URL=<the app role>  MIGRATION_DATABASE_URL=<the owner role>
@@ -92,10 +92,10 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SETUP_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-roles.sql"
-SETUP_JOB = ROOT / "charts" / "distant-signal" / "files" / "postgres-roles-setup.sh"
+SETUP_SQL = ROOT / "access" / "postgres-roles.sql"
+SETUP_JOB = ROOT / "access" / "postgres-roles-setup.sh"
 MIGRATIONS = ROOT / "crates" / "ds-store" / "migrations"
-GRANTS_SQL = ROOT / "charts" / "distant-signal" / "files" / "postgres-grants.sql"
+GRANTS_SQL = ROOT / "access" / "postgres-grants.sql"
 GEN_DB_GRANTS = ROOT / "scripts" / "gen-db-grants.py"
 # The application_name of the session AccessShareReader opens.
 READER = "test-postgres-roles-reader"

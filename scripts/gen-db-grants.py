@@ -9,7 +9,8 @@ scripts/sync-chart-core-files.py writes and checks.
   uv run scripts/gen-db-grants.py render [--output FILE]
   uv run scripts/gen-db-grants.py check [--database-url URL]
 
-`render` writes charts/distant-signal/files/postgres-grants.sql: an
+`render` writes access/postgres-grants.sql (the chart's
+files/postgres-grants.sql is a copy, like db-grants.yaml's): an
 idempotent psql script, run as a superuser after postgres-roles.sql (the
 chart's role setup Job, when `postgresql.roles.perService.enabled`). It
 creates the group roles (`read_shared`, `schema_gate`) and every role whose
@@ -58,9 +59,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-FILES = ROOT / "charts" / "distant-signal" / "files"
 GRANTS_YAML = ROOT / "crates" / "ds-store" / "db-grants.yaml"
-GRANTS_SQL = FILES / "postgres-grants.sql"
+GRANTS_SQL = ROOT / "access" / "postgres-grants.sql"
 SQL_TEMPLATE = ROOT / "scripts" / "db-grants.sql.tpl"
 
 CLASSES = frozenset(

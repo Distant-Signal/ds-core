@@ -87,7 +87,7 @@ FAKE_GCS_URL=http://127.0.0.1:4443 uv run --no-sync scripts/db-tests.py run supe
 # The Postgres role split (docs/postgres-app-role.md): proves no runtime
 # path needs a superuser. scripts/test-postgres-roles.py makes a fresh
 # database and roles with the chart's own setup script
-# (charts/distant-signal/files/postgres-roles.sql), then runs the DB-backed
+# (access/postgres-roles.sql; the chart runs its copy), then runs the DB-backed
 # suites with DATABASE_URL as the DML-only app role and
 # MIGRATION_DATABASE_URL as the schema owner, as the chart wires them.
 # `existing` converts a database migrated as the superuser (today's
