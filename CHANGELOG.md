@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 (2026-11-04)
+
+- Add users.discord_id and ON UPDATE CASCADE on every users(id) FK (#3)
+
+**Migrations** (4): `20261104090000_users_discord_id.sql`, `20261104090100_users_discord_id_key.sql`, `20261104090200_users_fk_on_update_cascade.sql`, `20261104090300_users_fk_on_update_cascade_validate.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.1.0 (2026-11-03)
 
 - Extracted from the monorepo (`Distant-Signal/distant-signal` at
