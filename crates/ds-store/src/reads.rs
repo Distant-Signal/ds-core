@@ -512,11 +512,11 @@ mod db_tests {
             .map(|v| (v.line_id.as_str(), v.service_date))
             .collect();
         assert_eq!(keys, vec![("anglia", day), ("wcml", day), ("wcml", next)]);
-        assert!(
+        assert_eq!(
             list_population_versions(&reader, &[], &[day])
                 .await
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            []
         );
 
         // A held version that still matches reads nothing; a stale one

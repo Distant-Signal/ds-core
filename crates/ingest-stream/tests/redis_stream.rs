@@ -770,7 +770,7 @@ async fn maxlen_trims_the_stream_and_a_trimmed_pending_entry_is_acked() {
         first == Step::Processed(1) || first == Step::PelDrained,
         "{first:?}"
     );
-    assert!(handler.seen().is_empty());
+    assert_eq!(handler.seen(), [] as [String; 0]);
     assert_eq!(scope.pending(&stream), 0);
     assert_eq!(
         metric(&format!(

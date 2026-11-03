@@ -1028,7 +1028,10 @@ fn guard_catches_table_rewrites_and_validating_or_indexed_add_column() {
         assert!(hazard_kinds(sql).is_empty(), "{sql}");
         assert!(index_hits(sql).is_empty(), "{sql}");
     }
-    assert!(index_hits("ALTER TABLE t ADD CONSTRAINT t_u UNIQUE USING INDEX t_u_idx;").is_empty());
+    assert_eq!(
+        index_hits("ALTER TABLE t ADD CONSTRAINT t_u UNIQUE USING INDEX t_u_idx;"),
+        []
+    );
 }
 
 // ---- The guard's own patterns, against sample SQL ----

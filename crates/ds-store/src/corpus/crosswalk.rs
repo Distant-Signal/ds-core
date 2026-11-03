@@ -796,7 +796,7 @@ mod db_tests {
         };
         assert_eq!(for_crs("CLJ").await, ["CLPHMJN", "CLPHMJW"]);
         // CONFLCT is the timetable's BBB, so CORPUS's AAA lists nothing.
-        assert!(for_crs("AAA").await.is_empty());
+        assert_eq!(for_crs("AAA").await, [] as [String; 0]);
         assert_eq!(for_crs("BBB").await, ["CONFLCT"]);
 
         let tiplocs: Vec<(String, String, i32)> = queries::list_tiploc_crs_with(&pool, true)

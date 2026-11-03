@@ -186,9 +186,9 @@ mod tests {
         let row: TflStop =
             serde_json::from_str(r#"{"id":"940GZZLUXXA","name":"Testbury","modes":["tube"]}"#)
                 .unwrap();
-        assert!(row.lines.is_empty());
+        assert_eq!(row.lines, []);
         assert_eq!(row.hub_code, None);
-        assert!(row.crs.is_empty());
+        assert_eq!(row.crs, [] as [String; 0]);
         let json = serde_json::to_string(&row).unwrap();
         assert_eq!(serde_json::from_str::<TflStop>(&json).unwrap(), row);
     }

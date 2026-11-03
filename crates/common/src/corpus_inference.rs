@@ -1046,7 +1046,7 @@ mod tests {
     #[test]
     fn nothing_in_nothing_out() {
         let inferred = infer_crs_tiploc(&[]);
-        assert!(inferred.rows.is_empty());
+        assert_eq!(inferred.rows, []);
         assert_eq!(crosswalk(&[], &inferred), Crosswalk::default());
     }
 }
