@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].basic.uid, "G00704");
         assert_eq!(schedules[0].basic.stp_indicator, StpIndicator::Cancellation);
-        assert!(schedules[0].calling_points.is_empty());
+        assert_eq!(schedules[0].calling_points, []);
     }
 
     #[test]
@@ -1118,7 +1118,7 @@ mod tests {
     #[test]
     fn empty_and_whitespace_only_input_parses_to_nothing() {
         for text in ["", "\n", "\r\n", "  ", "\n\n\n", "B", "L", "\0", "\0\0"] {
-            assert!(parse_schedule_records(text).is_empty());
+            assert_eq!(parse_schedule_records(text), []);
         }
     }
 
@@ -1213,22 +1213,22 @@ mod tests {
     #[test]
     fn a_blank_uid_or_unknown_stp_indicator_is_a_skip_not_a_panic() {
         // UID field (`3..9`) all spaces -> trims to empty -> skipped.
-        assert!(parse_schedule_records(&bs_line_with(3..9, "      ")).is_empty());
+        assert_eq!(parse_schedule_records(&bs_line_with(3..9, "      ")), []);
 
         // Final significant character is not one of C/N/O/P.
         let len = BS_C00573_PERMANENT.len();
-        assert!(parse_schedule_records(&bs_line_with(len - 1..len, "Z")).is_empty());
+        assert_eq!(parse_schedule_records(&bs_line_with(len - 1..len, "Z")), []);
 
         // Truncated to exactly the fixed fields this parser decodes and
         // then space-padded out to the real 80-byte width: the fixed STP
         // column now lands on a space (part of the padding, not real data),
         // which is not a valid STP indicator either.
         let padded = format!("{}{}", &BS_C00573_PERMANENT[..MIN_BS_LEN], " ".repeat(52));
-        assert!(parse_schedule_records(&padded).is_empty());
+        assert_eq!(parse_schedule_records(&padded), []);
 
         // And a line that is nothing but its two-character record identity
         // plus spaces: no significant character after trimming at all.
-        assert!(parse_schedule_records(&format!("BS{}", " ".repeat(78))).is_empty());
+        assert_eq!(parse_schedule_records(&format!("BS{}", " ".repeat(78))), []);
     }
 
     #[test]
@@ -1252,7 +1252,7 @@ mod tests {
         // Orphan LO/LI/LT lines before any BS line: `current` is `None`,
         // so there is nothing to push onto and nothing to index into.
         let text = format!("{LO_EUSTON}\n{LI_CARLILE}\n{LT_EUSTON}\n{LT_EUSTON}");
-        assert!(parse_schedule_records(&text).is_empty());
+        assert_eq!(parse_schedule_records(&text), []);
     }
 
     #[test]

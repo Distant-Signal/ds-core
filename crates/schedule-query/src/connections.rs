@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn a_single_calling_point_schedule_produces_no_connections() {
         let points = vec![cp("EUSTON", None, Some("08:00:00"), 0)];
-        assert!(build_connections([("C11052", points.as_slice())]).is_empty());
+        assert_eq!(build_connections([("C11052", points.as_slice())]), []);
     }
 
     #[test]
@@ -591,7 +591,7 @@ mod tests {
             cp("EUSTON", None, None, 0),
             cp("MKC", Some("08:50:00"), None, 0),
         ];
-        assert!(build_connections([("C1", points.as_slice())]).is_empty());
+        assert_eq!(build_connections([("C1", points.as_slice())]), []);
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod tests {
         // The order the train runs past them in.
         assert_eq!(passes.passes_at("CMDNJN")[0].position, 0);
         assert_eq!(passes.passes_at("WATFDJ")[0].position, 1);
-        assert!(passes.passes_at("MKC").is_empty());
+        assert_eq!(passes.passes_at("MKC"), []);
     }
 }
 

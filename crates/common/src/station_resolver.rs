@@ -739,7 +739,7 @@ mod tests {
             ["PAD", "HWV", "RDG"]
         );
         // A number after the name still rules it out.
-        assert!(all("Works from March 2027").is_empty());
+        assert_eq!(all("Works from March 2027"), [] as [String; 0]);
     }
 
     #[test]
@@ -759,7 +759,7 @@ mod tests {
             ["HWV"]
         );
         // The operator brand is not a place.
-        assert!(all("Tickets valid on Heathrow Express").is_empty());
+        assert_eq!(all("Tickets valid on Heathrow Express"), [] as [String; 0]);
         assert_eq!(
             all("Disruption between Birmingham and Manchester"),
             ["BHM", "MAN"]
@@ -876,12 +876,15 @@ mod tests {
 
     #[test]
     fn common_words_need_a_place_context() {
-        assert!(all("Reading the timetable before you travel").is_empty());
-        assert!(all("reading the timetable").is_empty());
+        assert_eq!(
+            all("Reading the timetable before you travel"),
+            [] as [String; 0]
+        );
+        assert_eq!(all("reading the timetable"), [] as [String; 0]);
         assert_eq!(all("Disruption between Oxford and Reading"), ["RDG"]);
         assert_eq!(all("Trains to Reading are delayed"), ["RDG"]);
-        assert!(all("Works from March 2027").is_empty());
-        assert!(all("Until 3 March").is_empty());
+        assert_eq!(all("Works from March 2027"), [] as [String; 0]);
+        assert_eq!(all("Until 3 March"), [] as [String; 0]);
         assert_eq!(all("Buses between Ely and March"), ["MCH"]);
         // Not a common word: any capitalised mention counts.
         assert_eq!(all("Ore / Eastbourne"), ["ORE", "EBN"]);
@@ -889,9 +892,15 @@ mod tests {
 
     #[test]
     fn line_and_operator_names_are_not_stations() {
-        assert!(all("Disruption on the Brighton Main Line").is_empty());
-        assert!(all("Tickets valid on Hull Trains services").is_empty());
-        assert!(all("Victoria line closed").is_empty());
+        assert_eq!(
+            all("Disruption on the Brighton Main Line"),
+            [] as [String; 0]
+        );
+        assert_eq!(
+            all("Tickets valid on Hull Trains services"),
+            [] as [String; 0]
+        );
+        assert_eq!(all("Victoria line closed"), [] as [String; 0]);
         assert_eq!(all("Trains between Brighton and Hull"), ["BTN", "HUL"]);
         // Punctuation between the name and "Lines" ends the name.
         assert_eq!(

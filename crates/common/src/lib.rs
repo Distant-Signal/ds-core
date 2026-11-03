@@ -712,7 +712,7 @@ mod station_departure_board_fields_tests {
         });
         let d: StationDeparture = serde_json::from_value(old).unwrap();
         assert_eq!(d.rsid, None);
-        assert!(d.calling_points.is_empty());
+        assert_eq!(d.calling_points, []);
         assert!(!d.calls_at("WAT"));
     }
 
@@ -2572,7 +2572,9 @@ mod defaults_tests {
     }
 
     #[test]
-    #[expect(clippy::float_cmp, reason = "the override copies the exact value")]
+    // `allow`, not `expect`: clippy 1.99's `float_cmp` no longer fires
+    // here, but older toolchains' does (workspace Cargo.toml).
+    #[allow(clippy::float_cmp, reason = "the override copies the exact value")]
     fn partial_override_changes_only_named_fields() {
         let defaults = Defaults::default();
         let mut overrides = HashMap::new();
@@ -2586,7 +2588,9 @@ mod defaults_tests {
     }
 
     #[test]
-    #[expect(clippy::float_cmp, reason = "the override copies the exact value")]
+    // `allow`, not `expect`: clippy 1.99's `float_cmp` no longer fires
+    // here, but older toolchains' does (workspace Cargo.toml).
+    #[allow(clippy::float_cmp, reason = "the override copies the exact value")]
     fn every_field_can_be_overridden() {
         let defaults = Defaults::default();
         let mut overrides = HashMap::new();
@@ -2669,7 +2673,9 @@ pub fn merge_sample_stats(all: &[SampleStats]) -> Option<SampleStats> {
 }
 
 #[cfg(test)]
-#[expect(
+// `allow`, not `expect`: clippy 1.99's `float_cmp` no longer fires
+// here, but older toolchains' does (workspace Cargo.toml).
+#[allow(
     clippy::float_cmp,
     reason = "test code: exact expected values are the point"
 )]
@@ -2704,7 +2710,9 @@ mod merge_sample_stats_tests {
     }
 
     #[test]
-    #[expect(
+    // `allow`, not `expect`: clippy 1.99's `float_cmp` no longer fires
+    // here, but older toolchains' does (workspace Cargo.toml).
+    #[allow(
         clippy::float_cmp,
         reason = "the weighted mean of these inputs is exactly 8.0"
     )]
@@ -2732,7 +2740,9 @@ mod merge_sample_stats_tests {
 }
 
 #[cfg(test)]
-#[expect(
+// `allow`, not `expect`: clippy 1.99's `float_cmp` no longer fires
+// here, but older toolchains' does (workspace Cargo.toml).
+#[allow(
     clippy::float_cmp,
     reason = "test code: exact expected values are the point"
 )]
@@ -2910,7 +2920,7 @@ mod custom_line_tests {
             line.sample_stations,
             vec!["WOK".to_string(), "AON".to_string()]
         );
-        assert!(line.match_keywords.is_empty());
+        assert_eq!(line.match_keywords, [] as [String; 0]);
         assert!(line.severity_overrides.is_empty());
         assert_eq!(line.headcode_prefixes, vec!["1P".to_string()]);
         assert_eq!(line.destination_crs_filter, vec!["AON".to_string()]);
@@ -3198,7 +3208,7 @@ mod pass_through_attach_tests {
         assert!(!line.has_station("NWD"));
         assert_eq!(line.stations_for_place("NWD"), ["LBG", "ECR"]);
         assert_eq!(line.stations_for_place("ECR"), ["ECR"]);
-        assert!(line.stations_for_place("BTN").is_empty());
+        assert_eq!(line.stations_for_place("BTN"), [] as [String; 0]);
         // Never serialised: no API response carries it.
         let json = serde_json::to_value(line).expect("serialises");
         assert!(json.get("pass_through").is_none(), "{json}");
@@ -3227,7 +3237,7 @@ mod pass_through_attach_tests {
         ));
         let lines = LineDefinition::from_dir(&dir).expect("loads");
         std::fs::remove_dir_all(&dir).ok();
-        assert!(lines[0].pass_through.is_empty());
+        assert_eq!(lines[0].pass_through, []);
     }
 
     #[test]
@@ -3235,7 +3245,7 @@ mod pass_through_attach_tests {
         let dir = catalogue_dir(None);
         let lines = LineDefinition::from_dir(&dir).expect("loads");
         std::fs::remove_dir_all(&dir).ok();
-        assert!(lines[0].pass_through.is_empty());
+        assert_eq!(lines[0].pass_through, []);
     }
 
     #[test]

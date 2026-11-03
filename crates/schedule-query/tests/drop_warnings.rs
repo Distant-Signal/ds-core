@@ -188,7 +188,7 @@ fn a_dropped_line_with_no_open_block_stays_silent() {
 
     let (schedules, captured) = capture(&text);
 
-    assert!(schedules.is_empty());
+    assert_eq!(schedules, []);
     assert!(
         captured.is_empty(),
         "an orphaned body line has no open block to fabricate a connection in"

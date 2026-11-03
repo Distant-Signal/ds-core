@@ -941,9 +941,9 @@ mod tests {
         let (_, timetable) = fixture();
         let c = compare(&[], &timetable);
         assert_eq!(c.tiploc_agree.values().sum::<usize>(), 0);
-        assert!(c.tiploc_corpus_only.is_empty());
+        assert_eq!(c.tiploc_corpus_only, []);
         assert_eq!(c.tiploc_timetable_only_absent.len(), 5);
-        assert!(c.tiploc_corpus_only_not_stations.is_empty());
+        assert_eq!(c.tiploc_corpus_only_not_stations, []);
         let summary = render(&c, ReportDetail::Summary);
         assert!(
             summary.contains(

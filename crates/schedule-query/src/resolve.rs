@@ -1171,7 +1171,7 @@ mod tests {
         let resolved = resolve_for_date(&c11052_raw(), "C11052", date).unwrap();
         assert_eq!(resolved.stp_indicator, StpIndicator::Cancellation);
         assert!(resolved.cancelled);
-        assert!(resolved.calling_points.is_empty());
+        assert_eq!(resolved.calling_points, []);
     }
 
     #[test]
@@ -3004,7 +3004,7 @@ mod tests {
             let tiploc_to_crs = tiploc_map(&[("EUSTON", "EUS")]);
 
             let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
-            assert!(unresolved.is_empty());
+            assert_eq!(unresolved, [] as [String; 0]);
         }
 
         #[test]
@@ -3105,7 +3105,7 @@ mod tests {
             let tiploc_to_crs = HashMap::new();
 
             let unresolved = unresolved_booked_tiplocs(&index, date, &tiploc_to_crs);
-            assert!(unresolved.is_empty());
+            assert_eq!(unresolved, [] as [String; 0]);
         }
 
         #[test]

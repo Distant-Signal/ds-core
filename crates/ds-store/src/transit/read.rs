@@ -1446,7 +1446,7 @@ mod tests {
         assert_eq!(bands[2].departures, 2);
         assert_eq!(bands[2].max_gap_minutes, Some(30));
         assert_eq!(bands[2].to, "00:00");
-        assert!(bands_of(&[]).is_empty());
+        assert_eq!(bands_of(&[]), []);
         assert_eq!(bands_of(&[at(12, 0)])[0].min_gap_minutes, None);
     }
 
@@ -1805,7 +1805,7 @@ mod db_tests {
         // Through its platforms (red) and its own id (blue), in line order.
         assert_eq!(lines_of(&station(0)), ["test-scale:blue", "test-scale:red"]);
         assert_eq!(lines_of(&station(150)), ["test-scale:red"]);
-        assert!(lines_of("9400ZZTSNONE").is_empty());
+        assert_eq!(lines_of("9400ZZTSNONE"), [] as [String; 0]);
         assert_eq!(lines_of(A), ["test-scale:blue"]);
         let one = get_stop(&bounded, SCALE, &station(0))
             .await

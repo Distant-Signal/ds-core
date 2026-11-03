@@ -1038,7 +1038,7 @@ mod tests {
         };
         let c = derive(Some("cancelled"), Some(&stored), None).unwrap();
         assert_eq!(c.kind, CancellationKind::Full);
-        assert!(c.sections.is_empty());
+        assert_eq!(c.sections, []);
         assert_eq!(derive(Some("en_route"), Some(&stored), None), None);
     }
 

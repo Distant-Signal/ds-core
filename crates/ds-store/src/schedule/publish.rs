@@ -1968,7 +1968,7 @@ mod schedule_publish_diff_tests {
         .await
         .expect("empty final publish");
         assert_eq!(deleted, 1);
-        assert!(departure_tuples(&pool, date).await.is_empty());
+        assert_eq!(departure_tuples(&pool, date).await, []);
         assert_eq!(
             uids(&departure_tuples(&pool, other).await),
             vec!["PREVIOUS"],
@@ -2622,7 +2622,7 @@ mod schedule_publish_diff_tests {
             "B must fail fast, not queue behind A"
         );
         // B rolled back whole: no upserted rows, no staged keys left behind.
-        assert!(departure_tuples(&pool, date_b).await.is_empty());
+        assert_eq!(departure_tuples(&pool, date_b).await, []);
         assert_eq!(
             staged_key_count(
                 &pool,

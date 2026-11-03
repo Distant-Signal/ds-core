@@ -666,6 +666,6 @@ mod tests {
         assert!(message.starts_with("panicked at "), "{message}");
         assert!(message.ends_with(": boom 7"), "{message}");
         assert!(message.contains("logging.rs"), "{message}");
-        assert!(!line["stack"].as_str().unwrap().is_empty());
+        assert_ne!(line["stack"].as_str().unwrap(), "");
     }
 }

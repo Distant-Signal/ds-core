@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn sibling_tiplocs_is_empty_for_a_tiploc_with_no_crs() {
-        assert!(sibling_tiplocs(&empty_data(), "JUNCTION").is_empty());
+        assert_eq!(sibling_tiplocs(&empty_data(), "JUNCTION"), [] as [&str; 0]);
     }
 
     fn link(
@@ -626,7 +626,10 @@ mod tests {
             ],
         );
         let ordered = links_in_lookup_order(&data, "EUS");
-        assert!(links_in_lookup_order(&data, "NOWHERE").is_empty());
+        assert_eq!(
+            links_in_lookup_order(&data, "NOWHERE"),
+            [] as [&FixedLink; 0]
+        );
         for minute in (0..1440).step_by(7) {
             let window = LinkWindow::new(monday(), minute);
             let mut chosen: Vec<&FixedLink> = Vec::new();
@@ -665,7 +668,10 @@ mod tests {
             "EUS".to_string(),
             vec![link("KGX", 5, "0000", "2359", "0000001")],
         );
-        assert!(fixed_links_from(&data, "EUS", monday(), 8 * 60).is_empty());
+        assert_eq!(
+            fixed_links_from(&data, "EUS", monday(), 8 * 60),
+            [] as [&FixedLink; 0]
+        );
     }
 
     #[test]
@@ -675,7 +681,10 @@ mod tests {
             "EUS".to_string(),
             vec![link("KGX", 5, "0500", "0800", "1111111")],
         );
-        assert!(fixed_links_from(&data, "EUS", monday(), 9 * 60).is_empty());
+        assert_eq!(
+            fixed_links_from(&data, "EUS", monday(), 9 * 60),
+            [] as [&FixedLink; 0]
+        );
     }
 
     #[test]
@@ -711,8 +720,14 @@ mod tests {
         // The reverse keeps the row's window and days: not on a Sunday,
         // not after 19:00.
         let sunday = NaiveDate::from_ymd_opt(2026, 9, 6).unwrap();
-        assert!(fixed_links_from(&data, "VXH", sunday, 10 * 60).is_empty());
-        assert!(fixed_links_from(&data, "VXH", monday(), 20 * 60).is_empty());
+        assert_eq!(
+            fixed_links_from(&data, "VXH", sunday, 10 * 60),
+            [] as [&FixedLink; 0]
+        );
+        assert_eq!(
+            fixed_links_from(&data, "VXH", monday(), 20 * 60),
+            [] as [&FixedLink; 0]
+        );
     }
 
     #[test]

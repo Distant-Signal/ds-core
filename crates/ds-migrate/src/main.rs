@@ -532,10 +532,10 @@ mod tests {
         let writer = gate(Some(Role::Writer));
         assert_eq!(writer.required_migration, schema::REQUIRED_MIGRATION);
         assert_eq!(writer.privileges, DbRole::Writer.required_privileges());
-        assert!(!writer.privileges.is_empty());
+        assert_ne!(writer.privileges, []);
         let none = gate(None);
         assert_eq!(none.required_migration, schema::REQUIRED_MIGRATION);
-        assert!(none.privileges.is_empty());
+        assert_eq!(none.privileges, []);
         assert_eq!(none.deadline, schema::DEADLINE);
     }
 
