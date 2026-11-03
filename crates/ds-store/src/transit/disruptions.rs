@@ -35,6 +35,7 @@ pub const STATUS_STALE_AFTER: Duration = Duration::minutes(30);
 
 /// What the situations' freshness allows to be shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStatusState"))]
 #[serde(rename_all = "snake_case")]
 pub enum StatusState {
     Current,
@@ -53,6 +54,7 @@ pub fn state_at(as_of: Option<DateTime<Utc>>, now: DateTime<Utc>) -> StatusState
 
 /// One status of a line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStatusEntry"))]
 #[serde(rename_all = "camelCase")]
 pub struct StatusEntry {
     /// A `common::Severity` number.
@@ -66,6 +68,7 @@ pub struct StatusEntry {
 
 /// An announced situation that has not started.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitUpcomingEntry"))]
 #[serde(rename_all = "camelCase")]
 pub struct UpcomingEntry {
     pub from: DateTime<Utc>,
@@ -76,6 +79,7 @@ pub struct UpcomingEntry {
 
 /// A line's status as the api shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitLineStatus"))]
 #[serde(rename_all = "camelCase")]
 pub struct LineStatusView {
     pub state: StatusState,
@@ -89,6 +93,7 @@ pub struct LineStatusView {
 
 /// A situation as the api shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitSituation"))]
 #[serde(rename_all = "camelCase")]
 pub struct SituationView {
     pub id: String,
@@ -113,6 +118,7 @@ pub struct SituationView {
 
 /// Current and upcoming situations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitSituations"))]
 #[serde(rename_all = "camelCase")]
 pub struct SituationsView {
     pub state: StatusState,
@@ -321,6 +327,11 @@ pub async fn stored_situation(
 
 /// Where a situation stands, for its own page: the incident pages' words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitSituationState")
+)]
 #[serde(rename_all = "snake_case")]
 pub enum SituationState {
     /// Listed, and in effect now.
@@ -333,6 +344,7 @@ pub enum SituationState {
 
 /// A line a situation changes the status of, and to what.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitAffectedLine"))]
 #[serde(rename_all = "camelCase")]
 pub struct AffectedLine {
     /// The public id (`metrolink:blue`).
@@ -346,6 +358,11 @@ pub struct AffectedLine {
 /// One situation as its page shows it: the listing's fields, where it
 /// stands, the lines it changes and how, and its times.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitSituationDetailBase")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct SituationDetailView {
     #[serde(flatten)]

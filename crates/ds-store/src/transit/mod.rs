@@ -17,3 +17,6 @@ pub mod write;
 
 pub use situations::{SituationsApplied, SituationsOutcome, apply_situations};
 pub use write::{CommitOutcome, PartIndex, StageOutcome, commit, stage_part};
+
+#[cfg(feature = "ts")]
+pub mod ts_values;

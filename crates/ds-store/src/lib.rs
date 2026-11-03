@@ -76,5 +76,7 @@ pub mod test_support;
 pub mod tracking;
 pub mod trains;
 pub mod transit;
+#[cfg(feature = "ts")]
+pub mod ts_values;
 pub mod validate;
 pub mod writes;

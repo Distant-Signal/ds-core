@@ -38,6 +38,8 @@ pub mod tfl_stops;
 pub mod tiploc_parents;
 pub mod transit;
 pub mod trust_timestamp;
+#[cfg(feature = "ts")]
+pub mod ts_values;
 
 pub use full_coverage_window::{
     FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,
@@ -1432,6 +1434,7 @@ pub struct StationFullCoverageSample {
 /// schedule-first match (`crates/api/src/data/schedule_matching.rs`), or
 /// trust-consumer's live TRUST matching (`crates/trust-consumer/src/matching.rs`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(optional_fields = nullable))]
 pub struct TrackPinRequest {
     pub service_date: NaiveDate,
     pub origin_crs: String,
@@ -1489,6 +1492,7 @@ pub struct TrackPinRequest {
 /// this codebase's existing wire responses is already shaped, rather than
 /// introducing a new nested-object convention on the read side too.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(optional_fields = nullable))]
 pub struct TimeWindow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after: Option<chrono::NaiveTime>,
@@ -1517,6 +1521,7 @@ impl TimeWindow {
 /// / "pdf-heuristic") -- there is no separate "confirm upload" endpoint;
 /// this is the only write path, deliberately.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(optional_fields = nullable))]
 pub struct TicketEntryRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
@@ -1537,6 +1542,10 @@ pub struct TicketEntryRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_departure_date: Option<DateTime<Utc>>,
     #[serde(default = "default_ticket_source")]
+    #[cfg_attr(
+        feature = "ts",
+        ts(optional = nullable, as = "ts_values::TicketSource")
+    )]
     pub source: String,
 }
 

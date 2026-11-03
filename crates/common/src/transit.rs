@@ -638,6 +638,7 @@ pub struct TransitSituation {
 
 /// A time window; `end: None` is open-ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitPeriod"))]
 pub struct Period {
     pub start: DateTime<Utc>,
     pub end: Option<DateTime<Utc>>,
@@ -662,6 +663,11 @@ pub struct TransitConsequence {
 
 /// What a situation affects (spec §10.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitSituationScope")
+)]
 #[serde(rename_all = "snake_case")]
 pub enum SituationScope {
     Line,

@@ -72,11 +72,17 @@ type BoardSqlRow = (
 
 /// A network as `/public/transit/networks` lists it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitNetworkSummary")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkSummary {
     pub id: String,
     pub name: String,
     pub mode: String,
+    #[cfg_attr(feature = "ts", ts(as = "common::transit::TransitAttribution"))]
     pub attribution: serde_json::Value,
     pub feed_version: String,
     pub horizon_from: Option<NaiveDate>,
@@ -89,6 +95,7 @@ pub struct NetworkSummary {
 
 /// A line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitLine"))]
 #[serde(rename_all = "camelCase")]
 pub struct LineSummary {
     /// The public id, `<network>:<line>`.
@@ -108,6 +115,7 @@ pub struct LineSummary {
 
 /// A station, as a list entry or a reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStationRef"))]
 #[serde(rename_all = "camelCase")]
 pub struct StationRef {
     pub id: String,
@@ -116,9 +124,11 @@ pub struct StationRef {
 
 /// One direction of a line, its stations in order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitLineDirection"))]
 #[serde(rename_all = "camelCase")]
 pub struct LineDirection {
     /// `outbound` or `inbound`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitDirection"))]
     pub direction: String,
     pub headsign: Option<String>,
     pub stations: Vec<StationRef>,
@@ -126,6 +136,11 @@ pub struct LineDirection {
 
 /// `/public/transit/{network}/lines/{line}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitLineDetailBase")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct LineDetail {
     #[serde(flatten)]
@@ -140,12 +155,14 @@ pub struct LineDetail {
 /// [`BRANCH_MIN_SHARE_PERCENT`] of a direction's trips make (a trip making
 /// part of a longer run counts for the longer one).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitLineBranch"))]
 #[serde(rename_all = "camelCase")]
 pub struct LineBranch {
     /// `<direction>-<n>`, stable for a feed version: the timetable's
     /// `branch`.
     pub id: String,
     /// `outbound` or `inbound`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitDirection"))]
     pub direction: String,
     /// `Edgware to Morden`, with `via <station>` when two branches share
     /// their ends.
@@ -296,11 +313,13 @@ fn branches_of(patterns: &[LinePattern], names: &HashMap<String, String>) -> Vec
 
 /// A link to a National Rail station.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitRailLink"))]
 #[serde(rename_all = "camelCase")]
 pub struct RailLink {
     pub crs: String,
     pub tiploc: String,
     /// `interchange` or `nearby`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitLinkKind"))]
     pub kind: String,
     pub note: Option<String>,
     /// The National Rail station's name (`Manchester Piccadilly`), when
@@ -311,6 +330,7 @@ pub struct RailLink {
 /// A transit stop linked to a National Rail station
 /// (`/public/transit/rail-links?crs=`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStationLink"))]
 #[serde(rename_all = "camelCase")]
 pub struct StationTransitLink {
     pub network: String,
@@ -319,6 +339,7 @@ pub struct StationTransitLink {
     pub stop_id: String,
     pub stop_name: String,
     /// `interchange` or `nearby`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitLinkKind"))]
     pub kind: String,
     pub note: Option<String>,
 }
@@ -361,6 +382,7 @@ pub async fn rail_links_for_crs(
 
 /// A station with the lines calling there and its rail links.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStop"))]
 #[serde(rename_all = "camelCase")]
 pub struct StopSummary {
     pub id: String,
@@ -374,6 +396,7 @@ pub struct StopSummary {
 
 /// A platform of a station.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitPlatform"))]
 #[serde(rename_all = "camelCase")]
 pub struct Platform {
     pub id: String,
@@ -382,6 +405,11 @@ pub struct Platform {
 
 /// `/public/transit/{network}/stops/{stop}`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitStopDetailBase")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct StopDetail {
     #[serde(flatten)]
@@ -391,6 +419,7 @@ pub struct StopDetail {
 
 /// One scheduled departure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitDeparture"))]
 #[serde(rename_all = "camelCase")]
 pub struct BoardRow {
     /// London local time, RFC 3339 with its offset.
@@ -406,6 +435,7 @@ pub struct BoardRow {
 
 /// A scheduled board page (spec §11: never live).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitBoardBase"))]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
     pub date: NaiveDate,
@@ -419,6 +449,7 @@ pub struct Board {
 /// One trip of a line timetable: its time at each station (`None` where it
 /// does not call).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitTimetableTrip"))]
 #[serde(rename_all = "camelCase")]
 pub struct TimetableTrip {
     pub trip_id: String,
@@ -429,9 +460,15 @@ pub struct TimetableTrip {
 
 /// `/public/transit/{network}/lines/{line}/timetable`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitLineTimetableBase")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct LineTimetable {
     pub date: NaiveDate,
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitDirection"))]
     pub direction: String,
     /// The branch shown (`LineBranch::id`), when one was asked for and is
     /// the direction's: its stations are the rows, and only trips that
@@ -489,10 +526,12 @@ pub struct TimetableWindow<'a> {
 /// A stop's first and last departure of the day on one line, one way
 /// (the `TfL` design §8.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitStopFirstLast"))]
 #[serde(rename_all = "camelCase")]
 pub struct StopFirstLast {
     pub line: LineSummary,
     /// `outbound` or `inbound`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitDirection"))]
     pub direction: String,
     /// Where that direction goes: its headsign, else its last station.
     pub towards: Option<String>,
@@ -623,10 +662,15 @@ const MIN_GAP_S: i32 = 60;
 
 /// One band of a direction's frequency summary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitFrequencyBand"))]
 #[serde(rename_all = "camelCase")]
 pub struct FrequencyBand {
     /// `early`, `morning-peak`, `daytime`, `evening-peak`, `evening`,
     /// `late`.
+    #[cfg_attr(
+        feature = "ts",
+        ts(as = "crate::transit::ts_values::FrequencyBandName")
+    )]
     pub band: String,
     /// `HH:MM`, its start and end (`24:00` style ends are `00:00`).
     pub from: String,
@@ -641,9 +685,15 @@ pub struct FrequencyBand {
 
 /// One direction's frequency summary, at its busiest station.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TransitDirectionFrequency")
+)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectionFrequency {
     /// `outbound` or `inbound`.
+    #[cfg_attr(feature = "ts", ts(as = "crate::transit::ts_values::TransitDirection"))]
     pub direction: String,
     /// The station measured: the direction's with the most departures.
     pub station: StationRef,
@@ -655,6 +705,7 @@ pub struct DirectionFrequency {
 
 /// A line's frequency summary for a date.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TransitLineFrequency"))]
 #[serde(rename_all = "camelCase")]
 pub struct LineFrequency {
     pub date: NaiveDate,

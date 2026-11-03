@@ -626,6 +626,7 @@ pub struct JourneyStop {
     /// not the train's own TRUST delay: `"previous-working"` when they are a
     /// predicted late start from the incoming train (DS-127). `None` for
     /// the existing estimate (and for a stop with none).
+    #[cfg_attr(feature = "ts", ts(type = "\"previous-working\" | null"))]
     pub estimate_source: Option<&'static str>,
     pub last_event_type: Option<String>,
     pub variation_status: Option<String>,

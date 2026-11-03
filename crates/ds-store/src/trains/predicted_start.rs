@@ -102,9 +102,11 @@ pub struct PreviousWorking {
     pub service_date: NaiveDate,
     /// [`LINK_INFERRED`] (the platform sequence) or [`LINK_ASSOCIATION`]
     /// (Darwin's live next-working link).
+    #[cfg_attr(feature = "ts", ts(as = "crate::ts_values::PreviousWorkingLink"))]
     pub link: String,
     /// P's `train_current_state.status` (`en_route`, `completed`,
     /// `awaiting_activation`), `None` without a state row.
+    #[cfg_attr(feature = "ts", ts(type = "JourneyStatus | null"))]
     pub status: Option<String>,
     /// P's current TRUST delay, against the working timetable.
     pub delay_minutes: Option<i32>,
