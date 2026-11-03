@@ -19,6 +19,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # A run on demand: main's first commit was pushed while Actions was off,
+  # and GitHub doesn't replay it.
+  workflow_dispatch:
 
 permissions:
   contents: read
