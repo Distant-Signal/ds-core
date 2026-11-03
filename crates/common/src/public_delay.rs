@@ -47,7 +47,7 @@ use crate::trust_timestamp::{MAX_PLAUSIBLE_DELAY_MINUTES, plausible_delay_minute
 
 /// Which baseline a delay was measured against. See the module doc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum DelayBasis {
     /// TRUST's own public-timetable time (`gbtt_timestamp`).

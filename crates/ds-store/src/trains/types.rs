@@ -139,6 +139,11 @@ impl StopTimetable {
 /// generated TypeScript (the api's `api_types`).
 #[derive(Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "StopTimetable"))]
+#[cfg_attr(
+    feature = "ts",
+    derive(schemars::JsonSchema),
+    schemars(rename = "StopTimetable")
+)]
 #[serde(rename_all = "camelCase")]
 #[expect(
     clippy::struct_excessive_bools,
@@ -191,6 +196,29 @@ impl ts_rs::TS for StopTimetable {
     }
     fn output_path() -> Option<std::path::PathBuf> {
         <StopTimetableWire as ts_rs::TS>::output_path()
+    }
+}
+
+/// `schedule_query::CallingPointKind`'s values, for [`JourneyStop`]'s
+/// JSON Schema only (that crate has no `schemars`). Never built.
+#[cfg(feature = "ts")]
+#[derive(schemars::JsonSchema)]
+#[schemars(rename = "CallingPointKind")]
+pub enum CallingPointKindSchema {
+    Origin,
+    Intermediate,
+    Terminate,
+}
+
+/// `schemars::JsonSchema` by way of [`StopTimetableWire`], for the same
+/// reason as its `ts_rs::TS` above (the api's `OpenAPI` document).
+#[cfg(feature = "ts")]
+impl schemars::JsonSchema for StopTimetable {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        <StopTimetableWire as schemars::JsonSchema>::schema_name()
+    }
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        <StopTimetableWire as schemars::JsonSchema>::json_schema(generator)
     }
 }
 
@@ -433,7 +461,7 @@ pub fn tiploc_key(raw_tiploc: &str) -> String {
 /// this one sits right next to on every `JourneyStop`
 /// (`frontend/lib/types.ts`'s `JourneyStopKind` mirrors it the same way).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 pub enum StopStatus {
     /// Not a genuine booked calling point -- see this type's own doc
     /// comment.
@@ -478,7 +506,7 @@ pub enum StopStatus {
 ///   `Darwin` alone, just worth surfacing that TRUST's own running data
 ///   corroborates it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 pub enum SkipSource {
     Darwin,
     Trust,
@@ -496,7 +524,7 @@ pub enum SkipSource {
 /// orthogonal (a cancelled call can also have changed platform) and is
 /// already served.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PlatformStatus {
     /// The train is expected to call at this platform.
@@ -512,7 +540,7 @@ pub enum PlatformStatus {
 /// rests on. Serialized lowercase; `null` when there is no platform at
 /// all. Clients must treat an unknown value as `board`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PlatformBasis {
     /// The timetable's (CIF) booked platform only: nothing live has shown
@@ -558,7 +586,7 @@ pub struct PlatformEvidence {
 /// latest reported live data for that location -- see this module's own
 /// doc comment and the design doc §2/§3.
 #[derive(Debug, Clone, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct JourneyStop {
     pub crs: Option<String>,
@@ -578,7 +606,8 @@ pub struct JourneyStop {
     // `schedule_query::CallingPointKind`, which has no `TS` of its own.
     #[cfg_attr(
         feature = "ts",
-        ts(type = "\"Origin\" | \"Intermediate\" | \"Terminate\" | null")
+        ts(type = "\"Origin\" | \"Intermediate\" | \"Terminate\" | null"),
+        schemars(with = "Option<CallingPointKindSchema>")
     )]
     pub kind: Option<schedule_query::CallingPointKind>,
     pub actual_arrival: Option<DateTime<Utc>>,
@@ -807,7 +836,7 @@ impl JourneyStop {
 
 /// `journeyStops[].board`. See the module doc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct StopBoard {
     /// Darwin's passenger delay text, verbatim.
