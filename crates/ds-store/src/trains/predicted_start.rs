@@ -74,7 +74,7 @@ pub const LINK_INFERRED: &str = "inferred";
 
 /// How sure the prediction is. Ordered: `Low < Medium < High`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     Low,
@@ -95,7 +95,7 @@ impl Confidence {
 /// `predictedStart.previousWorking`: the incoming train the prediction
 /// rests on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PreviousWorking {
     pub train_uid: String,
@@ -116,7 +116,7 @@ pub struct PreviousWorking {
 /// A train's `predictedStart` (spec section 7). Additive and nullable on
 /// the wire: absent knowledge is `null`, never a guess of "on time".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PredictedStart {
     /// Minutes late T is expected to start; `None` at low confidence.

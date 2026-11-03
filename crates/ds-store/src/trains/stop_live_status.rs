@@ -42,7 +42,7 @@ use crate::trains::types::{JourneyStop, StopStatus};
 /// See the module doc for each value's meaning. `PascalCase` on the wire,
 /// like `StopStatus` beside it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 pub enum LiveStopStatus {
     OnTime,
     Late,

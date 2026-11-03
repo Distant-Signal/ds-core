@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 /// (CIF train status: bus or ship services only), then name heuristics
 /// ([`classify_name`]), then whether rail services only ever pass it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LocationType {
     Station,
