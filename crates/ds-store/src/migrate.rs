@@ -420,6 +420,72 @@ mod tests {
             .unwrap();
     }
 
+    /// Account continuity (20261104090200/090300): every foreign key to
+    /// `users(id)` is validated and ON UPDATE CASCADE, so re-keying a user
+    /// (`UPDATE users SET id = <new sub>`, the api's login callback) carries
+    /// their rows along. A new foreign key to `users(id)` without
+    /// `ON UPDATE CASCADE` fails here: with NO ACTION the re-key would fail
+    /// for every user with a row in that table.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn every_users_foreign_key_cascades_updates() {
+        let mut conn = connect().await;
+        let rows: Vec<(String, String, bool)> = sqlx::query_as(
+            "SELECT conrelid::regclass::text || '.' || conname, confupdtype::text, convalidated \
+             FROM pg_constraint \
+             WHERE contype = 'f' AND confrelid = 'public.users'::regclass \
+             ORDER BY 1",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        assert!(rows.len() >= 29, "found only {} foreign keys", rows.len());
+        let wrong: Vec<&String> = rows
+            .iter()
+            .filter(|(_, on_update, validated)| on_update != "c" || !validated)
+            .map(|(name, _, _)| name)
+            .collect();
+        assert!(
+            wrong.is_empty(),
+            "these foreign keys to users(id) must be validated and ON UPDATE CASCADE: {wrong:?}"
+        );
+
+        // And the cascade really runs, and the partial unique index holds
+        // (in a transaction that is rolled back).
+        let mut tx = conn.begin().await.unwrap();
+        for sql in [
+            "INSERT INTO users (id, discord_id) VALUES ('u-rekey-old', 'd-rekey')",
+            "INSERT INTO sessions (id, user_id, expires_at) \
+             VALUES ('s-rekey', 'u-rekey-old', now() + interval '1 day')",
+            "INSERT INTO pinned_lines (user_id, line_id) VALUES ('u-rekey-old', 'wcml')",
+            "UPDATE users SET id = 'u-rekey-new' WHERE id = 'u-rekey-old'",
+        ] {
+            sqlx::query(sql).execute(&mut *tx).await.unwrap();
+        }
+        let moved: (String, String) = sqlx::query_as(
+            "SELECT (SELECT user_id FROM sessions WHERE id = 's-rekey'), \
+                    (SELECT user_id FROM pinned_lines WHERE line_id = 'wcml' \
+                       AND user_id LIKE 'u-rekey-%')",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        assert_eq!(moved, ("u-rekey-new".to_owned(), "u-rekey-new".to_owned()));
+        let duplicate =
+            sqlx::query("INSERT INTO users (id, discord_id) VALUES ('u-rekey-2', 'd-rekey')")
+                .execute(&mut *tx)
+                .await
+                .expect_err("two users with one discord_id");
+        assert_eq!(
+            duplicate
+                .as_database_error()
+                .and_then(sqlx::error::DatabaseError::constraint),
+            Some("users_discord_id_key")
+        );
+        tx.rollback().await.unwrap();
+    }
+
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
