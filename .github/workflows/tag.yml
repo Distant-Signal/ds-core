@@ -75,10 +75,21 @@ jobs:
             echo "tag=true" >>"${GITHUB_OUTPUT}"
           fi
 
+      # Only a versioned contract migration (`-- contract: ... safe after
+      # core vA.B.C`) has a floor to check. Without one there is nothing to
+      # hold the tag for. With one, the chart's values must pin every image
+      # by digest: ds-deploy's main does from phase 5 (spec §5.4); the
+      # landing repository's checked-in values don't (containers.yml pins
+      # digests at package time), so until then such a release needs
+      # CHART_VALUES_URL pointed at values that do.
       - name: Contract migrations against the deployed chart
         if: steps.plan.outputs.tag == 'true'
         run: |
           set -euo pipefail
+          if ! grep -l -E '^--[[:space:]]*contract:.*safe after core' crates/ds-store/migrations/*.sql; then
+            echo "no versioned contract migration: no floor to check against the chart"
+            exit 0
+          fi
           curl -fsSL --retry 3 -o "${RUNNER_TEMP}/values.yaml" "${CHART_VALUES_URL}"
           uv run --no-sync scripts/release-order.py check --values "${RUNNER_TEMP}/values.yaml" --registry
 
