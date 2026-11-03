@@ -331,6 +331,7 @@ pub fn tfl_line_id_for_nr(nr_line_id: &str) -> Option<&'static str> {
 
 /// How confident are we in this status?
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "kebab-case")]
 pub enum DataQuality {
     #[default]
