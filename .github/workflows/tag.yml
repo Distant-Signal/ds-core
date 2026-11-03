@@ -15,8 +15,8 @@ name: Tag
 # The contract check refuses the tag while the deployed chart pins an image
 # built against a core older than a migration's `safe after core vA.B.C`
 # (scripts/release-order.py, rule 3). CHART_VALUES_URL is the chart's
-# values on its repository's main: the landing repository's until ds-deploy
-# takes the chart (phase 5), then ds-deploy's.
+# values on Distant-Signal/ds-deploy's main, which pins every image by tag
+# and digest (repo split spec §5.4, phase 5).
 
 concurrency:
   group: tag
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 env:
-  CHART_VALUES_URL: https://raw.githubusercontent.com/Distant-Signal/distant-signal/main/charts/distant-signal/values.yaml
+  CHART_VALUES_URL: https://raw.githubusercontent.com/Distant-Signal/ds-deploy/main/charts/distant-signal/values.yaml
 
 jobs:
   tag:
@@ -78,10 +78,7 @@ jobs:
       # Only a versioned contract migration (`-- contract: ... safe after
       # core vA.B.C`) has a floor to check. Without one there is nothing to
       # hold the tag for. With one, the chart's values must pin every image
-      # by digest: ds-deploy's main does from phase 5 (spec §5.4); the
-      # landing repository's checked-in values don't (containers.yml pins
-      # digests at package time), so until then such a release needs
-      # CHART_VALUES_URL pointed at values that do.
+      # by digest, which ds-deploy's main does (spec §5.4).
       - name: Contract migrations against the deployed chart
         if: steps.plan.outputs.tag == 'true'
         run: |
