@@ -275,7 +275,10 @@ mod tests {
             vec!["PMH", "WAT", "WOK"]
         );
         // Nobody has pinned anything: nothing to sample.
-        assert!(select_sample_stations(&lines, &pins(&[]), selection).is_empty());
+        assert_eq!(
+            select_sample_stations(&lines, &pins(&[]), selection),
+            [] as [String; 0]
+        );
     }
 
     #[test]

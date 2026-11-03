@@ -13022,7 +13022,7 @@ mod tests {
             found.iter().all(|(id, _)| id.starts_with("thameslink-")),
             "{found:?}"
         );
-        assert!(!found.is_empty());
+        assert_ne!(found, []);
     }
 
     #[test]

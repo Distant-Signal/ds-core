@@ -878,7 +878,7 @@ mod tests {
         day.push(&schedule("T1", "AA", 'P', &["XH*", "JUNC", "XE*"]));
         let lines = [line("l", &["AA"], &["A", "B"])];
         let out = classify(&day, &lines, &crosswalk());
-        assert!(out[0].members.is_empty());
+        assert_eq!(out[0].members, []);
         assert!(!day.is_called("JUNC"));
         assert!(day.is_called("XH"));
     }

@@ -903,7 +903,7 @@ mod tests {
     fn confirmed_envelope_bodies_counts_a_bare_envelope_missing_header() {
         let raw = r#"{"not_an_envelope": true}"#;
         let classified = confirmed_envelope_bodies(raw).unwrap();
-        assert!(classified.envelopes.is_empty());
+        assert_eq!(classified.envelopes, []);
         assert_eq!(classified.malformed, 1);
     }
 
@@ -934,7 +934,7 @@ mod tests {
         assert!(confirmed_envelope_bodies("42").is_err());
         assert!(confirmed_envelope_bodies(r#""a string""#).is_err());
         let empty = confirmed_envelope_bodies("[]").unwrap();
-        assert!(empty.envelopes.is_empty());
+        assert_eq!(empty.envelopes, []);
         assert_eq!(empty.malformed, 0);
     }
 
@@ -986,7 +986,7 @@ mod tests {
         let raw = r#"{"header":{"msg_type":"0002"},"body":{"train_id":"B"}}"#;
         let parsed = parse_batch_detailed(raw).unwrap();
         assert_eq!(parsed.messages.len(), 1);
-        assert!(parsed.failures.is_empty());
+        assert_eq!(parsed.failures, []);
     }
 
     #[test]

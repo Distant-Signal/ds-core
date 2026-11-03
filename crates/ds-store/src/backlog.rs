@@ -1296,7 +1296,7 @@ mod db_tests {
             .await
             .expect("insert");
         assert_eq!(inserted.inserted, 2);
-        assert!(inserted.rejected.is_empty());
+        assert_eq!(inserted.rejected, []);
 
         sqlx::query("DELETE FROM trust_event_backlog WHERE dedup_key LIKE 'test-dedup-key-%'")
             .execute(&pool)
@@ -1556,7 +1556,7 @@ mod db_tests {
             .await
             .expect("batch insert");
         assert_eq!(outcome.inserted, 2);
-        assert!(outcome.rejected.is_empty());
+        assert_eq!(outcome.rejected, []);
 
         let row: (Option<String>, String, Option<String>, bool, Option<i32>) = sqlx::query_as(
             "SELECT crs, msg_type, event_type, planned_timestamp IS NULL, delay_minutes \

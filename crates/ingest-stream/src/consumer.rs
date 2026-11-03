@@ -1028,7 +1028,7 @@ mod tests {
                 },
             ]
         );
-        assert!(parse_read_reply(Value::Nil).unwrap().is_empty());
+        assert_eq!(parse_read_reply(Value::Nil).unwrap(), []);
         assert!(parse_read_reply(Value::Int(3)).is_err());
     }
 

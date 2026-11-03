@@ -185,7 +185,7 @@ mod tests {
         assert!(bml[0].runs);
         assert!(!bml[1].runs);
         assert_eq!((bml[1].from.as_str(), bml[1].to.as_str()), ("CLJ", "LBG"));
-        assert!(bml[1].via.is_empty());
+        assert_eq!(bml[1].via, [] as [String; 0]);
         assert_eq!(file.lines["other"].len(), 1);
         assert!(PassThrough::parse("source_dates = []\n[breaks]\nbml = [\"CLJLBG\"]\n").is_err());
         assert!(PassThrough::parse("source_dates = []\n[breaks]\nbml = \"CLJ-LBG\"\n").is_err());
@@ -220,7 +220,7 @@ mod tests {
         let file = PassThrough::load(&dir)
             .expect("lines/generated/pass-through.toml should parse")
             .expect("lines/generated/pass-through.toml should exist");
-        assert!(!file.source_dates.is_empty());
+        assert_ne!(file.source_dates, [] as [String; 0]);
         assert!(!file.lines.is_empty());
     }
 }

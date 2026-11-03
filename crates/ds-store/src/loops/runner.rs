@@ -731,7 +731,7 @@ mod tests {
             let runner = LoopRunner::new(pool.clone(), LockSession::new(pool, "t"));
             let running = runner.spawn(Duration::from_secs(60));
             assert!(running.is_empty());
-            assert!(running.stalled().is_empty());
+            assert_eq!(running.stalled(), [] as [&str; 0]);
             running.shutdown().await;
         });
     }

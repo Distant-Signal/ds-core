@@ -661,7 +661,7 @@ mod tests {
         notice.situation.stop_ids = vec!["9400ZZMAPIC".to_owned()];
         notice.situation.scope = SituationScope::Stop;
         let notice = detail_view("metrolink", &notice, &lines(), at(12));
-        assert!(notice.affects.is_empty());
+        assert_eq!(notice.affects, []);
         assert_eq!(notice.severity, Severity::Information as u8);
     }
 
