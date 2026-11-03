@@ -33,6 +33,12 @@ pub use ds_runtime::progress::Progress;
 /// [`spawn`], plus a [`Progress`] watchdog: `/healthz` answers 503 with
 /// `"stalled"` whenever no iteration has completed within `stall_after`,
 /// whatever the connection state says.
+/// The readiness path: 503 until the dependencies are up, or once the loop
+/// has stalled.
+pub const HEALTHZ_PATH: &str = "/healthz";
+/// The liveness path: 503 only once the loop has stalled.
+pub const LIVEZ_PATH: &str = "/livez";
+
 pub fn spawn_with_progress(
     bind_url: String,
     healthy_text: &'static str,
@@ -110,7 +116,7 @@ fn serve(
         let livez_progress = progress.clone();
         let app = axum::Router::new()
             .route(
-                "/healthz",
+                HEALTHZ_PATH,
                 get(move || {
                     healthz(
                         Arc::clone(&state),
@@ -120,7 +126,7 @@ fn serve(
                     )
                 }),
             )
-            .route("/livez", get(move || livez(livez_progress.clone())));
+            .route(LIVEZ_PATH, get(move || livez(livez_progress.clone())));
         let listener = match tokio::net::TcpListener::bind(&bind_url).await {
             Ok(listener) => listener,
             Err(err) => {

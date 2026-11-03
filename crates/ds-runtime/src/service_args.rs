@@ -3,6 +3,183 @@
 //! per-crate field) across multiple binaries. See
 //! docs/superpowers/specs/2026-09-05-rust-service-deduplication-design.md
 //! §3.2 for the full per-field verification.
+//!
+//! Also `--print-config-defaults` ([`exit_if_print_config_defaults`]): every
+//! service binary prints the environment it reads, with each variable's
+//! default, as JSON and exits, without connecting to anything. The chart's
+//! contract check (`scripts/check-config-defaults-chart.py`, repo split spec
+//! §9 phase 3 item 7) compares `values.yaml` and the env the chart renders
+//! against it, so no crate test reads chart files.
+
+use std::collections::BTreeMap;
+use std::ffi::OsString;
+
+/// The one argument that makes a service print [`ConfigDefaults`] and exit.
+/// Not a clap argument: it is checked before the service's own parser runs
+/// (which would refuse to start without the required settings), and only
+/// when it is the sole argument, so it never mixes with a real start.
+pub const PRINT_CONFIG_DEFAULTS_FLAG: &str = "--print-config-defaults";
+
+/// What a service reads from its environment, and the contract constants
+/// the chart must agree with, as `--print-config-defaults` prints it.
+///
+/// ```json
+/// {"service": "notifier",
+///  "env": {"LOG_LEVEL": {"flag": "--log-level", "default": "info", "required": false}},
+///  "contract": {}}
+/// ```
+///
+/// `default` is `null` for a variable with no default (`required` says
+/// whether clap insists on it). A variable read outside clap
+/// ([`ConfigDefaults::env`]) has no `flag`.
+#[derive(Debug, Clone)]
+pub struct ConfigDefaults {
+    service: String,
+    env: BTreeMap<String, serde_json::Value>,
+    contract: BTreeMap<String, serde_json::Value>,
+}
+
+impl ConfigDefaults {
+    /// `service` is the binary's name (the chart check's key for it).
+    pub fn new(service: &str) -> Self {
+        Self {
+            service: service.to_owned(),
+            env: BTreeMap::new(),
+            contract: BTreeMap::new(),
+        }
+    }
+
+    /// [`ConfigDefaults::new`] with every env-backed argument of the
+    /// service's clap config `C`.
+    pub fn for_config<C: clap::CommandFactory>(service: &str) -> Self {
+        Self::new(service).args(&C::command())
+    }
+
+    /// Every env-backed argument of `command` (and its subcommands).
+    #[must_use]
+    pub fn args(mut self, command: &clap::Command) -> Self {
+        for arg in command.get_arguments() {
+            let Some(env) = arg.get_env().and_then(|env| env.to_str()) else {
+                continue;
+            };
+            let defaults: Vec<String> = arg
+                .get_default_values()
+                .iter()
+                .map(|value| value.to_string_lossy().into_owned())
+                .collect();
+            let default = if defaults.is_empty() {
+                serde_json::Value::Null
+            } else {
+                let delimiter = arg.get_value_delimiter().unwrap_or(',');
+                serde_json::Value::String(defaults.join(&delimiter.to_string()))
+            };
+            self.env.insert(
+                env.to_owned(),
+                serde_json::json!({
+                    "flag": arg.get_long().map(|long| format!("--{long}")),
+                    "default": default,
+                    "required": arg.is_required_set(),
+                }),
+            );
+        }
+        for subcommand in command.get_subcommands() {
+            self = self.args(subcommand);
+        }
+        self
+    }
+
+    /// A variable the service reads outside clap (`std::env::var`), with
+    /// the value it uses when the variable is unset (`None`: no default).
+    #[must_use]
+    pub fn env(mut self, name: &str, default: Option<&str>) -> Self {
+        self.env.insert(
+            name.to_owned(),
+            serde_json::json!({"flag": null, "default": default, "required": false}),
+        );
+        self
+    }
+
+    /// The `DATABASE_*` pool variables [`crate::pg::PoolSettings::from_env`]
+    /// reads, with the defaults it uses for a service whose own default
+    /// pool size is `max_connections`.
+    #[cfg(feature = "postgres")]
+    #[must_use]
+    pub fn postgres_pool(self, max_connections: u32) -> Self {
+        let defaults = crate::pg::PoolSettings::new("", max_connections);
+        let secs = |duration: std::time::Duration| duration.as_secs().to_string();
+        self.env(
+            crate::pg::MAX_CONNECTIONS_ENV,
+            Some(&defaults.max_connections.to_string()),
+        )
+        .env(
+            crate::pg::STATEMENT_TIMEOUT_ENV,
+            Some(&secs(defaults.statement_timeout)),
+        )
+        .env(
+            crate::pg::IDLE_IN_TRANSACTION_TIMEOUT_ENV,
+            Some(&secs(defaults.idle_in_transaction_timeout)),
+        )
+        .env(
+            crate::pg::ACQUIRE_TIMEOUT_ENV,
+            Some(&secs(defaults.acquire_timeout)),
+        )
+        .env(
+            crate::pg::STARTUP_CONNECT_TIMEOUT_ENV,
+            Some(&secs(defaults.startup_connect_timeout)),
+        )
+    }
+
+    /// The service's own Postgres role (its key in `db-grants.yaml`): with
+    /// per-service roles on, the chart must connect it as that role.
+    #[must_use]
+    pub fn db_role(self, key: &str) -> Self {
+        self.contract("db_role", key)
+    }
+
+    /// A constant the chart must agree with, e.g. the operations an alert
+    /// sums or the stream caps an alert compares against.
+    #[must_use]
+    pub fn contract(mut self, key: &str, value: impl Into<serde_json::Value>) -> Self {
+        self.contract.insert(key.to_owned(), value.into());
+        self
+    }
+
+    /// The JSON `--print-config-defaults` prints.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "service": self.service,
+            "env": self.env,
+            "contract": self.contract,
+        })
+    }
+}
+
+/// Whether `args` (a process's, program name first) ask for
+/// [`PRINT_CONFIG_DEFAULTS_FLAG`]: it must be the only argument.
+fn print_config_defaults_requested(args: impl IntoIterator<Item = OsString>) -> bool {
+    let mut args = args.into_iter().skip(1);
+    args.next()
+        .is_some_and(|arg| arg == PRINT_CONFIG_DEFAULTS_FLAG)
+        && args.next().is_none()
+}
+
+/// The first line of every service's `main`: with `--print-config-defaults`
+/// as the only argument, prints `defaults()` as JSON and exits 0 before the
+/// service parses its config, sets up logging or connects to anything.
+/// Otherwise returns at once without calling `defaults`.
+#[expect(
+    clippy::print_stdout,
+    reason = "the flag's whole output is this JSON on stdout"
+)]
+pub fn exit_if_print_config_defaults(defaults: impl FnOnce() -> ConfigDefaults) {
+    if !print_config_defaults_requested(std::env::args_os()) {
+        return;
+    }
+    let json = serde_json::to_string_pretty(&defaults().to_json())
+        .unwrap_or_else(|err| unreachable!("a JSON value always serialises: {err}"));
+    println!("{json}");
+    std::process::exit(0);
+}
 
 /// `metrics_enabled` only -- NOT `metrics_port`, whose default genuinely
 /// differs per crate (`9091`/`9092`/`9093`/`9095`) and which
@@ -130,6 +307,56 @@ mod tests {
         );
         assert_eq!(config.health.health_bind_url, "0.0.0.0:8090");
         assert_eq!(config.health.progress_stall_secs, 1800);
+    }
+
+    #[test]
+    fn config_defaults_lists_every_env_backed_argument() {
+        use clap::CommandFactory;
+        let json = ConfigDefaults::new("test")
+            .args(&TestConfig::command())
+            .env("RAW_SETTING", Some("7"))
+            .contract("operations", serde_json::json!(["a", "b"]))
+            .to_json();
+        assert_eq!(json["service"], "test");
+        let env = &json["env"];
+        assert_eq!(
+            env["METRICS_ENABLED"],
+            serde_json::json!({"flag": "--metrics-enabled", "default": "true", "required": false})
+        );
+        assert_eq!(env["HEALTH_BIND_URL"]["default"], "0.0.0.0:8090");
+        assert_eq!(env["PROGRESS_STALL_SECS"]["default"], "1800");
+        assert_eq!(
+            env["KAFKA_SASL_PASSWORD"],
+            serde_json::json!({"flag": "--kafka-sasl-password", "default": null, "required": true})
+        );
+        assert_eq!(
+            env["RAW_SETTING"],
+            serde_json::json!({"flag": null, "default": "7", "required": false})
+        );
+        assert_eq!(
+            json["contract"]["operations"],
+            serde_json::json!(["a", "b"])
+        );
+    }
+
+    #[test]
+    fn print_config_defaults_only_as_the_sole_argument() {
+        let args = |list: &[&str]| list.iter().map(OsString::from).collect::<Vec<_>>();
+        assert!(print_config_defaults_requested(args(&[
+            "svc",
+            "--print-config-defaults"
+        ])));
+        assert!(!print_config_defaults_requested(args(&["svc"])));
+        assert!(!print_config_defaults_requested(args(&[
+            "svc",
+            "--print-config-defaults",
+            "--metrics-enabled"
+        ])));
+        assert!(!print_config_defaults_requested(args(&[
+            "svc",
+            "--metrics-enabled",
+            "--print-config-defaults"
+        ])));
     }
 
     #[test]
