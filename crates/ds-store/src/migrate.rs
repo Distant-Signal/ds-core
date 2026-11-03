@@ -95,6 +95,27 @@ pub const MIGRATION_STATEMENT_TIMEOUT_ENV: &str = "MIGRATION_STATEMENT_TIMEOUT_S
 /// Environment variable naming the migration connection's URL.
 pub const MIGRATION_DATABASE_URL_ENV: &str = "MIGRATION_DATABASE_URL";
 
+/// Every migration in `crates/ds-store/migrations`, embedded. [`run`]
+/// applies it; other crates' tests use it instead of the directory, which
+/// stays in `ds-core` when they leave it (repo split spec §9, phase 4):
+/// `#[sqlx::test(migrator = "ds_store::migrate::MIGRATOR")]`, and
+/// [`migration_sql`] for one migration's text.
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+
+/// The SQL of the embedded migration `version` (its file name's numeric
+/// prefix), for tests that replay or inspect one migration.
+///
+/// # Panics
+///
+/// When no embedded migration has that version: a test's typo.
+pub fn migration_sql(version: i64) -> &'static str {
+    let migrations: &'static [sqlx::migrate::Migration] = &MIGRATOR.migrations;
+    migrations
+        .iter()
+        .find(|m| m.version == version)
+        .map_or_else(|| panic!("no embedded migration {version}"), |m| &*m.sql)
+}
+
 /// The URL the migrations connect with, and the variable it came from (for
 /// error messages): `migration_database_url` when set and not blank, else
 /// `database_url`. See the module docs, "Which role migrates".
@@ -211,7 +232,7 @@ async fn migrate_locked(conn: &mut PgConnection) -> Result<()> {
             "could not drop INVALID indexes before migrating; continuing"
         ),
     }
-    sqlx::migrate!()
+    MIGRATOR
         .run(&mut *conn)
         .await
         .context("running database migrations")?;
