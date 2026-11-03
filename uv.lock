@@ -77,7 +77,7 @@ wheels = [
 ]
 
 [[package]]
-name = "distant-signal-scripts"
+name = "ds-core-scripts"
 version = "0"
 source = { virtual = "." }
 default-groups = ["lint"]

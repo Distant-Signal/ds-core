@@ -156,13 +156,6 @@ class PinnedImagesTest(unittest.TestCase):
         with self.assertRaises(ro.InputError):
             images["aggregator"].reference("")
 
-    def test_the_chart_pins_every_built_image(self) -> None:
-        """The real values pin one image per containers.yml service, ds-migrate too."""
-        values = ro.read_values(REPO / "charts" / "distant-signal" / "values.yaml")
-        services = sorted(image.service for image in ro.pinned_images(values))
-        self.assertEqual(services, sorted(ro.image_labels(REPO)))
-        self.assertIn("ds-migrate", services)
-
 
 class LabelsTest(unittest.TestCase):
     """The labels each image is built with."""
@@ -201,18 +194,10 @@ class LabelsTest(unittest.TestCase):
             self.labels("Cargo-registry.lock")
 
     def test_this_repository(self) -> None:
-        """Today: one commit, so one core-version and one api-build everywhere."""
+        """ds-core labels only ds-migrate, with the workspace version."""
         labels = ro.image_labels(REPO)
-        self.assertEqual(len({v[CORE] for v in labels.values() if CORE in v}), 1)
-        self.assertEqual(
-            {labels["api"][API_BUILD], labels["frontend"][API_BUILD]},
-            {labels["frontend"][API_BUILD]},
-        )
-        self.assertNotIn(CORE, labels["frontend"])
-        lines = ro.as_label_lines(labels)
-        self.assertEqual(
-            lines["frontend"], f"{API_BUILD}={labels['frontend'][API_BUILD]}"
-        )
+        self.assertEqual(set(labels), {"ds-migrate"})
+        self.assertEqual(set(labels["ds-migrate"]), {CORE})
 
 
 class CheckTest(unittest.TestCase):
@@ -494,17 +479,6 @@ class MainTest(unittest.TestCase):
         self.assertTrue(written.startswith("labels={"))
         self.assertEqual(json.loads(written.removeprefix("labels=")), json.loads(out))
         self.assertIn("ds-migrate", json.loads(out))
-
-    def test_check_source_passes_on_this_repository(self) -> None:
-        """The pull request check: one commit, so it passes trivially."""
-        status, out = self.main(
-            "check",
-            "--values",
-            str(REPO / "charts" / "distant-signal" / "values.yaml"),
-            "--source",
-        )
-        self.assertEqual(status, 0, out)
-        self.assertIn("release ordering holds", out)
 
     def test_check_registry_fails_on_a_violation(self) -> None:
         """The pre-push check, against a registry whose service is too new."""

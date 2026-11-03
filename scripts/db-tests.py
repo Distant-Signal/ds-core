@@ -50,24 +50,10 @@ ROOT = Path(__file__).resolve().parent.parent
 # features are named explicitly (pg::tests need ds-runtime's; api and the
 # others enable them anyway).
 ARCHIVE_PACKAGES = (
-    "api",
     "ds-store",
     "ds-migrate",
-    "aggregator",
-    "notifier",
-    "schedule-reference",
-    "poller-stations",
-    "poller-incidents",
     "common",
     "ds-runtime",
-    "enricher",
-    "movement-feed",
-    "ingest-writer",
-    "full-coverage-consumer",
-    "trust-consumer",
-    "poller-ldbws",
-    "schedule-ingest",
-    "trust-backlog-consumer",
     "ingest-stream",
 )
 ARCHIVE_FEATURES = ("common/postgres", "ds-runtime/postgres")
@@ -84,9 +70,6 @@ SQLX_TEST_SKIPS = (
     "reads::db_tests",
     "users::sliding_session_db_tests",
 )
-# enricher: the LLM-gated live evals and the offline replay harness need
-# credentials or an exported history file CI does not have.
-ENRICHER_SKIPS = ("live_eval", "replay_")
 
 
 @dataclass(frozen=True)
@@ -180,63 +163,28 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
     # As the superuser on the migrated `postgres` database. The
     # #[sqlx::test] modules run only here.
     "superuser": (
-        Step(
-            packages=(
-                "api",
-                "ds-store",
-                "ds-migrate",
-                "aggregator",
-                "notifier",
-                "schedule-reference",
-                "poller-stations",
-                "poller-incidents",
-            )
-        ),
+        Step(packages=("ds-store", "ds-migrate")),
         # ds_runtime::pg's pool settings (behind ds-runtime's `postgres`
         # feature).
         Step(packages=("ds-runtime",), filters=("pg::tests",)),
-        Step(packages=("enricher",), skips=ENRICHER_SKIPS),
-        Step(packages=("movement-feed",)),
         # Every Redis ACL user's command sequence (ingest phase 0c).
         Step(packages=("common",), test_target="redis_acl"),
-        Step(packages=("ingest-writer",)),
-        # The phase 4 readers' db sources (#[sqlx::test]).
-        Step(
-            packages=("full-coverage-consumer",),
-            filters=("population_reload::db_tests",),
-        ),
-        Step(packages=("trust-consumer",), filters=("reads::",)),
-        Step(packages=("poller-ldbws",), filters=("sample_source::",)),
-        Step(packages=("schedule-ingest",), filters=("sink::db_tests",)),
-        # Against fake-gcs-server (FAKE_GCS_URL; the job starts it).
-        Step(
-            packages=("schedule-ingest",), filters=("bucket_e2e_tests",), serial=False
-        ),
-        Step(packages=("trust-backlog-consumer", "trust-consumer")),
         Step(packages=("ingest-stream",), test_target="redis_stream"),
     ),
     # test-postgres-roles.py --mode existing: DATABASE_URL is the app role.
     "existing": (
-        Step(
-            packages=("api", "ds-store", "aggregator", "notifier"),
-            skips=SQLX_TEST_SKIPS,
-        ),
+        Step(packages=("ds-store",), skips=SQLX_TEST_SKIPS),
         Step(packages=("ds-runtime",), filters=("pg::tests",)),
-        Step(packages=("ingest-writer",)),
-        Step(packages=("schedule-reference",)),
-        Step(packages=("enricher",), skips=ENRICHER_SKIPS),
     ),
     # test-postgres-roles.py --mode new: the migrations and the publish
     # protocol on a cluster whose roles came first.
     "new": (
-        Step(
-            packages=("api", "ds-store"), filters=("migrate::tests", "schedule_publish")
-        ),
+        Step(packages=("ds-store",), filters=("migrate::tests", "schedule_publish")),
     ),
-    # test-postgres-roles.py --mode per-service (Stage 0b): each suite as
-    # its own service's role. See the CI step's comment for each role.
+    # test-postgres-roles.py --mode per-service (Stage 0b): ds-store's
+    # suites as the service roles whose grants they exercise. Each
+    # service's own suites run in its own repository.
     "per-service": (
-        per_service("api", "api", skips=SQLX_TEST_SKIPS),
         per_service(
             "ds-store",
             "api",
@@ -252,22 +200,6 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
             "schedule_reference",
             filters=("schedule::publish::", "schedule::reference_signals::"),
         ),
-        per_service("aggregator", "aggregator", skips=SQLX_TEST_SKIPS),
-        per_service("notifier", "notifier", skips=SQLX_TEST_SKIPS),
-        per_service("ingest-writer", "writer"),
-        per_service("schedule-ingest", "schedule_ingest", filters=("sink::db_tests",)),
-        per_service("schedule-reference", "schedule_reference"),
-        per_service("enricher", "enricher", skips=ENRICHER_SKIPS),
-        per_service("trust-backlog-consumer", "trust_backlog"),
-        per_service("trust-consumer", "trust_consumer", skips=("reads::",)),
-        per_service(
-            "full-coverage-consumer", "full_coverage_ro", test_target="role_reads"
-        ),
-        per_service("poller-ldbws", "ldbws_ro", test_target="role_reads"),
-        per_service("poller-incidents", "incidents"),
-        per_service("ingest-writer", "incidents", bin_target="writer-maintenance"),
-        # Last: its narrow role cannot DELETE the stations it leaves behind.
-        per_service("poller-stations", "stations"),
     ),
     # test-postgres-roles.py --mode per-service --narrow
     # api,aggregator,enricher,notifier (release D).
@@ -280,18 +212,6 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
             ),
             exact=True,
         ),
-        per_service(
-            "api",
-            "api",
-            filters=(
-                (
-                    "routes::train::db_tests::"
-                    "post_track_by_uid_backfills_schedule_and_movement_data_from_the_backlog"
-                ),
-            ),
-            exact=True,
-        ),
-        per_service("aggregator", "aggregator", filters=("archive::tests::",)),
     ),
 }
 

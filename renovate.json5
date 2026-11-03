@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // The hosted Renovate GitHub App runs here, so this file and the public
+  // presets it extends are the whole config: no private presets or
+  // registries, no postUpgradeTasks (the hosted app doesn't run them).
+  //
+  // The shared Distant Signal preset (Distant-Signal/ci's
+  // renovate/default.json5): lock file maintenance, pinDigests, the
+  // non-major groups, the MSRV toolchain and sqlx <0.9 holds, the Valkey and
+  // Postgres major holds, cargo 0.x minors on their own, the custom managers
+  // for annotated `# renovate:` versions and digest-pinned images in
+  // workflow inputs, and the Distant-Signal/ci pins in the workflows.
+  "extends": ["github>Distant-Signal/ci//renovate/default.json5"],
+
+  "customManagers": [
+    {
+      // docker/ds-migrate.Dockerfile's cargo-chef. The landing repository
+      // generates its Dockerfiles (scripts/gen-rust-dockerfiles.py); this
+      // one is maintained here since the extraction, so its pin is bumped
+      // in place (the dockerfile manager handles its FROM lines).
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)docker/[^/]+\\.Dockerfile$/"],
+      "matchStrings": ["cargo install cargo-chef --locked --version (?<currentValue>\\S+)"],
+      "datasourceTemplate": "crate",
+      "depNameTemplate": "cargo-chef",
+    },
+  ],
+}

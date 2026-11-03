@@ -178,9 +178,11 @@ class PassTests(unittest.TestCase):
             for step in db.PASSES[name]:
                 self.assertIsNone(step.role, step.describe())
 
-    def test_the_stations_role_runs_last(self) -> None:
-        """poller-stations' narrow role leaves rows it cannot delete."""
-        self.assertEqual(db.PASSES["per-service"][-1].packages, ("poller-stations",))
+    def test_per_service_runs_ds_store_as_its_roles(self) -> None:
+        """ds-store's suites run as the api and schedule_reference roles."""
+        steps = db.PASSES["per-service"]
+        self.assertEqual({s.packages for s in steps}, {("ds-store",)})
+        self.assertEqual([s.role for s in steps], ["api", "schedule_reference"])
 
 
 class RunTests(unittest.TestCase):
@@ -231,7 +233,7 @@ class RunTests(unittest.TestCase):
         self.assertIn("--extract-to", extract)
         self.assertEqual(
             [c["database_url"] for c in calls[1:]],
-            ["postgres://api", "postgres://api", "postgres://aggregator"],
+            ["postgres://api"],
         )
         self.assertEqual({c["narrowed"] for c in calls}, {"api,aggregator"})
         for call in calls[1:]:

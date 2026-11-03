@@ -1,0 +1,95 @@
+name: Tag
+
+# Tags a ds-core release (repo split spec §5.2, phase 4 decisions) when
+# main's workspace version has no tag yet: a release pull request
+# (`scripts/release.py prepare --bump patch|minor`) bumps the version and
+# CHANGELOG.md, and when it merges this tags the merge commit `vX.Y.Z` and
+# starts release.yml on that tag, which builds and publishes it. A push
+# that doesn't change the version does nothing past the check.
+#
+# release.yml runs on the tag's ref, so its signatures name the tag
+# (release.yml@refs/tags/vX.Y.Z, the identity the chart's sync-core.py
+# verifies). A tag pushed with GITHUB_TOKEN starts no workflow, so this
+# dispatches release.yml itself (workflow_dispatch is the exception).
+#
+# The contract check refuses the tag while the deployed chart pins an image
+# built against a core older than a migration's `safe after core vA.B.C`
+# (scripts/release-order.py, rule 3). CHART_VALUES_URL is the chart's
+# values on its repository's main: the landing repository's until ds-deploy
+# takes the chart (phase 5), then ds-deploy's.
+
+concurrency:
+  group: tag
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CHART_VALUES_URL: https://raw.githubusercontent.com/Distant-Signal/distant-signal/main/charts/distant-signal/values.yaml
+
+jobs:
+  tag:
+    name: tag the release
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write # the tag
+      actions: write # dispatching release.yml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          # renovate: datasource=pypi depName=uv
+          version: "0.13.6"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install the pinned script tools
+        run: uv sync --locked --group lint
+
+      - name: Is this version tagged?
+        id: plan
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "${REF}" == refs/heads/main ]] || { echo "::error::tags come from main only"; exit 1; }
+          uv run --no-sync scripts/release.py check
+          version="$(uv run --no-sync scripts/release.py version)"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          if git rev-parse -q --verify "refs/tags/${version}" >/dev/null; then
+            echo "${version} is already tagged; nothing to do"
+            echo "tag=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "tag=true" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Contract migrations against the deployed chart
+        if: steps.plan.outputs.tag == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/values.yaml" "${CHART_VALUES_URL}"
+          uv run --no-sync scripts/release-order.py check --values "${RUNNER_TEMP}/values.yaml" --registry
+
+      - name: Tag ${{ steps.plan.outputs.version }} and start its release
+        if: steps.plan.outputs.tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${REPO}/git/refs" -f "ref=refs/tags/${VERSION}" -f "sha=${GITHUB_SHA}" >/dev/null
+          gh workflow run release.yml --repo "${REPO}" --ref "${VERSION}"
+          echo "tagged ${GITHUB_SHA} ${VERSION}; release.yml started on it" >>"${GITHUB_STEP_SUMMARY}"

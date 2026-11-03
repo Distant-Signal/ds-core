@@ -6,40 +6,20 @@ resolver = "3"
 members = [
     "crates/common",
     "crates/ds-runtime",
+    "crates/health-http",
+    "crates/trust-schema",
+    "crates/schedule-query",
+    "crates/ingest-stream",
     "crates/ds-store",
     "crates/ds-migrate",
-    "crates/api",
-    "crates/poller-incidents",
-    "crates/poller-stations",
-    "crates/poller-tocs",
-    "crates/poller-ldbws",
-    "crates/poller-tfl",
-    "crates/poller-irish-rail-gtfs",
-    "crates/poller-irish-rail-live",
-    "crates/poller-nir-stations",
-    "crates/poller-transit-schedule",
-    "crates/aggregator",
-    "crates/enricher",
-    "crates/trust-backlog-consumer",
-    "crates/trust-consumer",
-    "crates/schedule-ingest",
-    "crates/schedule-reference",
-    "crates/schedule-query",
-    "crates/trip-planner",
-    "crates/notifier",
-    "crates/trust-schema",
-    "crates/full-coverage-consumer",
-    "crates/health-http",
-    "crates/movement-feed",
-    "crates/movement-relay",
-    "crates/darwin-relay",
-    "crates/line-catalogue-validator",
-    "crates/ingest-writer",
-    "crates/ingest-stream",
     "crates/ds-lines",
+    "crates/line-catalogue-validator",
 ]
 
 [workspace.package]
+# The ds-core version: every crate inherits it, scripts/release.py bumps
+# it, and tag.yml tags `v<it>` (repo split spec §5.2).
+version = "0.1.0"
 edition = "2024"
 # MSRV: CI's msrv job checks it with `cargo +1.88.0 check`, and every
 # Dockerfile builds with rust:1.88.0.
