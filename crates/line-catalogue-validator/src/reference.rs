@@ -136,11 +136,12 @@ impl ReferenceData {
         for letter in b'a'..=b'z' {
             let letter = letter as char;
             // The only railwaycodes.org.uk fetch left. /attribution credits
-            // the site solely because of it (the `railwaycodes` entry in
-            // frontend/components/OpenDataAttribution.tsx): remove that
-            // credit when this scrape is removed.
-            // `tests::railwaycodes_credit_exists_exactly_while_the_live_tier_scrapes_it`
-            // fails if the two drift apart.
+            // the site solely because of it (its `railwaycodes` entry):
+            // when this scrape is removed, set `railwaycodes` to false in
+            // this crate's site-credits.json, and the web app's tests then
+            // ask for the credit to go.
+            // `tests::site_credits_say_whether_the_live_tier_scrapes_railwaycodes`
+            // fails if the file and this scrape drift apart.
             let url = format!("https://www.railwaycodes.org.uk/crs/crs{letter}.shtm");
             let body = fetch_with_identifying_ua(client, &url)
                 .await
@@ -490,40 +491,31 @@ mod tests {
 
     /// `/attribution` credits railwaycodes.org.uk only because the live
     /// tier scrapes its CRS pages (no committed file comes from it any
-    /// more), so the credit and the scrape must come and go together. Reads
-    /// both source files at test time: this module's non-test code for a
-    /// string-literal railwaycodes.org.uk URL, and the frontend's
-    /// `DATA_SOURCES` for the `railwaycodes` entry.
+    /// more), so the credit and the scrape must come and go together. This
+    /// crate states which in `site-credits.json` (`"railwaycodes": true`
+    /// while it scrapes), checked here against this module's non-test code
+    /// for a string-literal railwaycodes.org.uk URL. The web app's tests
+    /// (`frontend/components/OpenDataAttribution.test.tsx`) check its
+    /// `DATA_SOURCES` against the file, so nothing here reads the frontend.
     #[test]
-    fn railwaycodes_credit_exists_exactly_while_the_live_tier_scrapes_it() {
-        let manifest_dir = common::manifest_dir!();
-        let repo_root = manifest_dir
-            .parent()
-            .and_then(Path::parent)
-            .expect("crate lives at <repo>/crates/line-catalogue-validator");
+    fn site_credits_say_whether_the_live_tier_scrapes_railwaycodes() {
         // This file as compiled, not whatever is on disk (N6).
         let this_file = include_str!("reference.rs");
         let non_test_code = this_file.split("#[cfg(test)]").next().unwrap_or_default();
         let scrapes = non_test_code.contains("\"https://www.railwaycodes.org.uk/");
-        let attribution =
-            std::fs::read_to_string(repo_root.join("frontend/components/OpenDataAttribution.tsx"))
-                .expect("read frontend/components/OpenDataAttribution.tsx");
-        let credits = attribution.contains("id: 'railwaycodes'");
+        let credits: std::collections::BTreeMap<String, bool> =
+            serde_json::from_str(include_str!("../site-credits.json"))
+                .expect("site-credits.json is a JSON object of booleans");
         assert_eq!(
-            scrapes,
-            credits,
-            "the live tier {} railwaycodes.org.uk but /attribution {} it: remove the \
-             `railwaycodes` entry in frontend/components/OpenDataAttribution.tsx together \
-             with the scrape in reference.rs (or restore both)",
+            credits.get("railwaycodes").copied(),
+            Some(scrapes),
+            "the live tier {} railwaycodes.org.uk: set `railwaycodes` to {scrapes} in \
+             crates/line-catalogue-validator/site-credits.json (the web app's tests then \
+             ask for its /attribution credit to match)",
             if scrapes {
                 "scrapes"
             } else {
                 "no longer scrapes"
-            },
-            if credits {
-                "still credits"
-            } else {
-                "does not credit"
             },
         );
     }
