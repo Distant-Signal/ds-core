@@ -31,8 +31,8 @@ in the file's leading comment block (after `-- no-transaction`, if any).
 Such a migration must ship at least one release after every binary that
 used the object. The header may also name the first core version without
 that use, `(code stopped using it in <commit>; safe after core vA.B.C)`
-(repo split spec §5.1): scripts/release-order.py then refuses a chart that
-pins an image built against an older core. Destructive means:
+(repo split spec §5.1): Distant-Signal/ci's scripts/release-order.py then
+refuses a chart that pins an image built against an older core. Destructive means:
   - DROP TABLE / VIEW / MATERIALIZED VIEW / FUNCTION / PROCEDURE / TYPE /
     SEQUENCE / SCHEMA, and ALTER TABLE ... DROP [COLUMN];
   - any RENAME (ALTER TABLE/VIEW/INDEX/TYPE/... RENAME [COLUMN|TO|VALUE]);

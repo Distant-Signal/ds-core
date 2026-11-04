@@ -6,9 +6,9 @@ name: Dependency vulnerability scan
 # inconclusive scan; other HIGH/CRITICAL findings are warnings.
 #
 # No daily schedule here: its tracking issue needs Issues, which this
-# repository has off (repo split spec §4.2). Every consumer's Cargo.lock
-# holds ds-core's dependencies, so the landing repository's daily scan
-# already covers them.
+# repository has off (repo split spec §4.2). Distant-Signal/distant-signal's
+# dependency-scan-all.yml scans this repository's main daily and keeps its
+# tracking issue there (label dependency-vulnerability/ds-core).
 
 concurrency:
   group: dependency-scan-${{ github.ref }}
@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   dependency-scan:
-    uses: Distant-Signal/ci/.github/workflows/dependency-scan.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/dependency-scan.yml@d734bc69e3127d208304c9d6a5a04b9e5645fc76 # main
     permissions:
       contents: read
       checks: write
