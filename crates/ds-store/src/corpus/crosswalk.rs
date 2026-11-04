@@ -4,7 +4,10 @@
 //!
 //! **Derivation.** `common::corpus_inference` (the same conservative rule
 //! `line-catalogue-validator` regenerates `reference-data/crs-tiploc.csv`
-//! with) runs over the whole current `corpus_locations`; [`write`] stores its
+//! with) runs over the whole current `corpus_locations` -- per layer, once
+//! an NLC XML snapshot sits over a frozen JSON extract ([`CorpusLayers`],
+//! [`derive_layers`]: the XML's pairs, then the JSON's for keys the XML
+//! does not resolve); [`write`] stores its
 //! unambiguous keys whose CRS is a Knowledgebase station (`stations`; see
 //! [`corpus_inference::restrict_to_stations`]). That happens in the same
 //! transaction as every CORPUS load
@@ -45,7 +48,7 @@
 //! callers; each lookup also has a `*_with` variant taking the flag
 //! explicitly, which is what the tests use.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -75,12 +78,130 @@ pub fn derive(rows: &[CorpusRow]) -> (CorpusCrsTiploc, Crosswalk) {
     (inferred, crosswalk)
 }
 
-/// Every `corpus_locations` row, for a rebuild or a comparison.
-pub async fn load_corpus_locations<'e, E>(executor: E) -> Result<Vec<CorpusLocation>>
+/// Whether `source_file` names an NLC XML snapshot (`NLC20261030.xml.gz`,
+/// CORPUS API v2): the `NLC` prefix and the `.xml.gz` extension, case
+/// insensitive. The same rule as `schedule-ingest`'s
+/// `pattern::is_nlc_xml_name`. Every other source file is the JSON extract
+/// (`CORPUSExtract.json.gz`).
+pub fn is_xml_snapshot_name(source_file: &str) -> bool {
+    let lower = source_file.to_ascii_lowercase();
+    lower.starts_with("nlc") && lower.ends_with(".xml.gz") && lower.len() >= "nlc.xml.gz".len()
+}
+
+/// `corpus_locations` as two layers.
+///
+/// Once an XML snapshot (CORPUS API v2) has been loaded with
+/// [`super::replace_corpus_locations_keeping_json_fallback`], the table
+/// holds that snapshot (`primary`) and, frozen beside it, the rows of the
+/// last JSON extract loaded before it (`fallback`), each row keeping its
+/// own `source_file` and `delivered_at`. The JSON extract carries every
+/// location (~56,000 rows) and the XML only those with a TIPLOC (~12,100),
+/// so the frozen rows keep every code that resolved before the switch.
+/// Without an XML row, or after a JSON load, there is one layer: `primary`
+/// is every row and `fallback` is empty.
+///
+/// The XML always wins where both have a code: see [`Self::effective`]
+/// for the flat row set and [`derive_layers`] for the crosswalk. The
+/// fallback is dropped by the next JSON load, or by deleting the rows
+/// whose `source_file` is not an XML snapshot.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CorpusLayers {
+    pub primary: Vec<CorpusLocation>,
+    pub fallback: Vec<CorpusLocation>,
+}
+
+impl CorpusLayers {
+    /// One layer: `locations` alone.
+    pub fn single(locations: Vec<CorpusLocation>) -> Self {
+        Self {
+            primary: locations,
+            fallback: Vec::new(),
+        }
+    }
+
+    /// Splits rows tagged with their `source_file`: with any XML snapshot
+    /// row, the XML rows are primary and the rest the fallback; otherwise
+    /// every row is primary.
+    pub fn split(rows: Vec<(String, CorpusLocation)>) -> Self {
+        if !rows.iter().any(|(file, _)| is_xml_snapshot_name(file)) {
+            return Self::single(rows.into_iter().map(|(_, l)| l).collect());
+        }
+        let (primary, fallback): (Vec<_>, Vec<_>) = rows
+            .into_iter()
+            .partition(|(file, _)| is_xml_snapshot_name(file));
+        Self {
+            primary: primary.into_iter().map(|(_, l)| l).collect(),
+            fallback: fallback.into_iter().map(|(_, l)| l).collect(),
+        }
+    }
+
+    /// The fallback rows the primary layer does not cover: a row with a
+    /// TIPLOC the primary layer lacks, or a row without a TIPLOC whose NLC
+    /// the primary layer lacks.
+    pub fn uncovered_fallback(&self) -> impl Iterator<Item = &CorpusLocation> {
+        let tiplocs: HashSet<&str> = self
+            .primary
+            .iter()
+            .filter_map(|l| l.tiploc.as_deref())
+            .collect();
+        let nlcs: HashSet<&str> = self.primary.iter().map(|l| l.nlc.as_str()).collect();
+        self.fallback
+            .iter()
+            .filter(move |l| match l.tiploc.as_deref() {
+                Some(tiploc) => !tiplocs.contains(tiploc),
+                None => !nlcs.contains(l.nlc.as_str()),
+            })
+    }
+
+    /// One flat row set: every primary row, then the fallback rows it does
+    /// not cover ([`Self::uncovered_fallback`]).
+    pub fn effective(&self) -> Vec<CorpusLocation> {
+        let mut rows = self.primary.clone();
+        rows.extend(self.uncovered_fallback().cloned());
+        rows
+    }
+}
+
+/// The crosswalk of `layers`: the primary layer's, then every TIPLOC and
+/// STANOX the fallback layer's own crosswalk has and the primary's lacks.
+/// Each layer is derived on its own, so the fallback contributes exactly
+/// the pairs it gave when it was loaded alone, and never changes a key the
+/// primary layer resolves. The inference report is the primary layer's.
+pub fn derive_layers(layers: &CorpusLayers) -> (CorpusCrsTiploc, Crosswalk) {
+    let (inferred, mut crosswalk) = derive(&corpus_rows(&layers.primary));
+    if layers.fallback.is_empty() {
+        return (inferred, crosswalk);
+    }
+    let (_, fallback) = derive(&corpus_rows(&layers.fallback));
+    let tiplocs: HashSet<String> = crosswalk.tiplocs.iter().map(|t| t.tiploc.clone()).collect();
+    let stanoxes: HashSet<String> = crosswalk
+        .stanoxes
+        .iter()
+        .map(|s| s.stanox.clone())
+        .collect();
+    crosswalk.tiplocs.extend(
+        fallback
+            .tiplocs
+            .into_iter()
+            .filter(|t| !tiplocs.contains(&t.tiploc)),
+    );
+    crosswalk.stanoxes.extend(
+        fallback
+            .stanoxes
+            .into_iter()
+            .filter(|s| !stanoxes.contains(&s.stanox)),
+    );
+    (inferred, crosswalk)
+}
+
+/// Every `corpus_locations` row with its `source_file`, as
+/// [`CorpusLayers`], for a rebuild or a comparison.
+pub async fn load_corpus_layers<'e, E>(executor: E) -> Result<CorpusLayers>
 where
     E: sqlx::PgExecutor<'e>,
 {
     type Row = (
+        String,
         String,
         Option<String>,
         Option<String>,
@@ -90,24 +211,40 @@ where
         Option<String>,
     );
     let rows: Vec<Row> = sqlx::query_as(
-        "SELECT nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16 FROM corpus_locations ORDER BY id",
+        "SELECT source_file, nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16 \
+         FROM corpus_locations ORDER BY id",
     )
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(
-            |(nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16)| CorpusLocation {
-                nlc,
-                stanox,
-                tiploc,
-                crs,
-                uic,
-                nlc_desc,
-                nlc_desc16,
-            },
-        )
-        .collect())
+    Ok(CorpusLayers::split(
+        rows.into_iter()
+            .map(
+                |(source_file, nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16)| {
+                    (
+                        source_file,
+                        CorpusLocation {
+                            nlc,
+                            stanox,
+                            tiploc,
+                            crs,
+                            uic,
+                            nlc_desc,
+                            nlc_desc16,
+                        },
+                    )
+                },
+            )
+            .collect(),
+    ))
+}
+
+/// `corpus_locations` as one flat row set: [`CorpusLayers::effective`] of
+/// [`load_corpus_layers`] (every row, while there is one layer).
+pub async fn load_corpus_locations<'e, E>(executor: E) -> Result<Vec<CorpusLocation>>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    Ok(load_corpus_layers(executor).await?.effective())
 }
 
 /// The CRS codes in `stations` (Knowledgebase), which the stored crosswalk
@@ -301,8 +438,8 @@ pub async fn rebuild_if_stale(pool: &PgPool) -> Result<Option<DateTime<Utc>>> {
     let Some(latest) = is_stale(latest, built, stations) else {
         return Ok(None);
     };
-    let locations = load_corpus_locations(&mut *tx).await?;
-    let (_, crosswalk) = derive(&corpus_rows(&locations));
+    let layers = load_corpus_layers(&mut *tx).await?;
+    let (_, crosswalk) = derive_layers(&layers);
     let counts = write(&mut tx, latest, crosswalk).await?;
     tx.commit().await?;
     tracing::info!(
@@ -817,5 +954,280 @@ mod db_tests {
                 ("TTSHARE".to_owned(), "TTS".to_owned(), 1),
             ]
         );
+    }
+
+    /// The last JSON extract's rows, kept as a frozen fallback.
+    fn xml_snapshot() -> Vec<CorpusLocation> {
+        vec![
+            loc(
+                "559500",
+                "87219",
+                "CLPHMJN",
+                "CLJ",
+                "CLAPHAM JUNCTION LONDON",
+            ),
+            // The XML moves CONFLCT to another station: the XML wins.
+            loc("111100", "11111", "CONFLCT", "SHA", "CONFLICT A"),
+            loc("333300", "33333", "SHARED1", "SHA", "SHARED ONE"),
+        ]
+    }
+
+    async fn pairs(pool: &PgPool) -> (Vec<(String, String)>, Vec<(String, String)>) {
+        let tiplocs = sqlx::query_as("SELECT tiploc, crs FROM corpus_tiploc_crs ORDER BY tiploc")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        let stanoxes = sqlx::query_as("SELECT stanox, crs FROM corpus_stanox_crs ORDER BY stanox")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        (tiplocs, stanoxes)
+    }
+
+    async fn rows_by_source(pool: &PgPool) -> Vec<(String, DateTime<Utc>, i64)> {
+        sqlx::query_as(
+            "SELECT source_file, delivered_at, COUNT(*) FROM corpus_locations \
+             GROUP BY source_file, delivered_at ORDER BY delivered_at",
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    /// An NLC XML snapshot loaded over the JSON extract: every pair only the
+    /// JSON gives (NEWSTN, CLPHMJW, STANOX 22222) still resolves, the XML
+    /// wins the key both give (CONFLCT), the JSON rows stay marked by their
+    /// own source file and delivery, a later snapshot keeps them, and a
+    /// JSON load replaces both layers.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn an_xml_load_keeps_every_json_only_pair(pool: PgPool) {
+        use crate::corpus::{
+            DeliveredFileProvenance, replace_corpus_locations_keeping_json_fallback,
+        };
+        seed_stations(&pool, &STATIONS).await;
+        replace_corpus_locations(&pool, at(), "CORPUSExtract.json.gz", &corpus())
+            .await
+            .unwrap();
+        let (json_tiplocs, json_stanoxes) = pairs(&pool).await;
+        let s = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+        assert!(json_tiplocs.contains(&s("NEWSTN", "NEW")));
+        assert!(json_stanoxes.contains(&s("22222", "NEW")));
+
+        let xml_at = Utc.with_ymd_and_hms(2026, 11, 4, 19, 0, 5).unwrap();
+        let inserted = replace_corpus_locations_keeping_json_fallback(
+            &pool,
+            xml_at,
+            "NLC20261030.xml.gz",
+            &DeliveredFileProvenance::default(),
+            &xml_snapshot(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(inserted, 3);
+        let (tiplocs, stanoxes) = pairs(&pool).await;
+        assert_eq!(
+            tiplocs,
+            vec![
+                s("CLPHMJN", "CLJ"),
+                s("CLPHMJW", "CLJ"),
+                s("CONFLCT", "SHA"),
+                s("NEWSTN", "NEW"),
+                s("SHARED1", "SHA"),
+            ]
+        );
+        assert_eq!(
+            stanoxes,
+            vec![
+                s("11111", "SHA"),
+                s("22222", "NEW"),
+                s("33333", "SHA"),
+                s("87219", "CLJ"),
+            ]
+        );
+        // No JSON-only pair is lost.
+        for pair in &json_tiplocs {
+            assert!(
+                tiplocs.iter().any(|(tiploc, _)| *tiploc == pair.0),
+                "{pair:?} no longer resolves"
+            );
+        }
+        for pair in &json_stanoxes {
+            assert!(
+                stanoxes.iter().any(|(stanox, _)| *stanox == pair.0),
+                "{pair:?} no longer resolves"
+            );
+        }
+        assert_eq!(
+            rows_by_source(&pool).await,
+            vec![
+                ("CORPUSExtract.json.gz".to_owned(), at(), 9),
+                ("NLC20261030.xml.gz".to_owned(), xml_at, 3),
+            ]
+        );
+        assert_eq!(
+            crate::corpus::last_corpus_delivery(&pool).await.unwrap(),
+            Some(xml_at)
+        );
+        let layers = load_corpus_layers(&pool).await.unwrap();
+        assert_eq!((layers.primary.len(), layers.fallback.len()), (3, 9));
+        // The flat view: the XML rows, then the six JSON rows they don't cover.
+        assert_eq!(load_corpus_locations(&pool).await.unwrap().len(), 9);
+
+        // A rebuild (the ingest-writer's loop) derives the same crosswalk.
+        sqlx::query("UPDATE corpus_crosswalk_build SET rules_version = 1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(rebuild_if_stale(&pool).await.unwrap(), Some(xml_at));
+        assert_eq!(pairs(&pool).await, (tiplocs.clone(), stanoxes.clone()));
+
+        // The next snapshot replaces the last one; the JSON rows stay.
+        let next_at = Utc.with_ymd_and_hms(2026, 11, 7, 19, 0, 0).unwrap();
+        replace_corpus_locations_keeping_json_fallback(
+            &pool,
+            next_at,
+            "NLC20261106.xml.gz",
+            &DeliveredFileProvenance::default(),
+            &xml_snapshot()[..2],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            rows_by_source(&pool).await,
+            vec![
+                ("CORPUSExtract.json.gz".to_owned(), at(), 9),
+                ("NLC20261106.xml.gz".to_owned(), next_at, 2),
+            ]
+        );
+        // SHARED1 left the XML: the JSON's pair for it is back.
+        assert!(pairs(&pool).await.0.contains(&s("SHARED1", "SHA")));
+
+        // A JSON load replaces both layers.
+        let json_at = Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap();
+        replace_corpus_locations(&pool, json_at, "CORPUSExtract.json.gz", &corpus()[..2])
+            .await
+            .unwrap();
+        assert_eq!(
+            rows_by_source(&pool).await,
+            vec![("CORPUSExtract.json.gz".to_owned(), json_at, 2)]
+        );
+    }
+
+    /// Only an XML snapshot loads over the fallback.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_json_file_is_not_loaded_over_a_fallback(pool: PgPool) {
+        let refused = crate::corpus::replace_corpus_locations_keeping_json_fallback(
+            &pool,
+            at(),
+            "CORPUSExtract.json.gz",
+            &crate::corpus::DeliveredFileProvenance::default(),
+            &corpus(),
+        )
+        .await;
+        assert!(refused.is_err());
+    }
+}
+
+#[cfg(test)]
+mod layer_tests {
+    use super::*;
+
+    fn loc(nlc: &str, stanox: &str, tiploc: &str, crs: &str, desc: &str) -> CorpusLocation {
+        let opt = |s: &str| (!s.is_empty()).then(|| s.to_owned());
+        CorpusLocation {
+            nlc: nlc.to_owned(),
+            stanox: opt(stanox),
+            tiploc: opt(tiploc),
+            crs: opt(crs),
+            uic: None,
+            nlc_desc: opt(desc),
+            nlc_desc16: None,
+        }
+    }
+
+    #[test]
+    fn xml_snapshot_names() {
+        assert!(is_xml_snapshot_name("NLC20261030.xml.gz"));
+        assert!(is_xml_snapshot_name("nlc20261030.XML.GZ"));
+        assert!(is_xml_snapshot_name("NLC.xml.gz"));
+        assert!(!is_xml_snapshot_name("CORPUSExtract.json.gz"));
+        assert!(!is_xml_snapshot_name("NLC20261030.xml"));
+        assert!(!is_xml_snapshot_name("XNLC20261030.xml.gz"));
+    }
+
+    #[test]
+    fn rows_split_into_layers_only_with_an_xml_snapshot() {
+        let json = loc("100100", "10010", "JSONONE", "JSO", "JSON ONE");
+        let xml = loc("200200", "20020", "XMLONE", "XMO", "XML ONE");
+        let one = CorpusLayers::split(vec![("CORPUSExtract.json.gz".to_owned(), json.clone())]);
+        assert_eq!(one, CorpusLayers::single(vec![json.clone()]));
+        let two = CorpusLayers::split(vec![
+            ("CORPUSExtract.json.gz".to_owned(), json.clone()),
+            ("NLC20261030.xml.gz".to_owned(), xml.clone()),
+        ]);
+        assert_eq!(two.primary, vec![xml]);
+        assert_eq!(two.fallback, vec![json]);
+    }
+
+    #[test]
+    fn the_effective_rows_are_the_xml_and_the_json_rows_it_lacks() {
+        let layers = CorpusLayers {
+            primary: vec![loc("100100", "10010", "SAMETPL", "AAA", "SAME")],
+            fallback: vec![
+                loc("100100", "10010", "SAMETPL", "OLD", "SAME"),
+                loc("100100", "10010", "OTHERTP", "AAA", "SAME, ANOTHER TIPLOC"),
+                loc("100100", "", "", "", "SAME NLC, NO TIPLOC"),
+                loc("300300", "", "", "", "NLC ONLY"),
+            ],
+        };
+        let nlcs_and_tiplocs: Vec<(String, Option<String>)> = layers
+            .effective()
+            .into_iter()
+            .map(|l| (l.nlc, l.tiploc))
+            .collect();
+        assert_eq!(
+            nlcs_and_tiplocs,
+            vec![
+                ("100100".to_owned(), Some("SAMETPL".to_owned())),
+                ("100100".to_owned(), Some("OTHERTP".to_owned())),
+                ("300300".to_owned(), None),
+            ]
+        );
+    }
+
+    /// The XML wins a key both resolve; every key only the JSON resolves
+    /// is kept, exactly as the JSON alone derives it.
+    #[test]
+    fn the_layered_crosswalk_keeps_json_only_pairs_and_the_xml_wins() {
+        let json = vec![
+            loc("100100", "10010", "BOTHTPL", "OLD", "BOTH STATION"),
+            loc("200200", "20020", "JSONTPL", "JSN", "JSON STATION"),
+        ];
+        let xml = vec![loc("100100", "10010", "BOTHTPL", "NEW", "BOTH STATION")];
+        let (_, alone) = derive(&corpus_rows(&json));
+        let (_, crosswalk) = derive_layers(&CorpusLayers {
+            primary: xml,
+            fallback: json,
+        });
+        let tiplocs: Vec<(&str, &str)> = crosswalk
+            .tiplocs
+            .iter()
+            .map(|t| (t.tiploc.as_str(), t.crs.as_str()))
+            .collect();
+        assert_eq!(tiplocs, [("BOTHTPL", "NEW"), ("JSONTPL", "JSN")]);
+        let stanoxes: Vec<(&str, &str)> = crosswalk
+            .stanoxes
+            .iter()
+            .map(|s| (s.stanox.as_str(), s.crs.as_str()))
+            .collect();
+        assert_eq!(stanoxes, [("10010", "NEW"), ("20020", "JSN")]);
+        let json_only = alone
+            .tiplocs
+            .iter()
+            .find(|t| t.tiploc == "JSONTPL")
+            .unwrap();
+        assert!(crosswalk.tiplocs.contains(json_only));
     }
 }

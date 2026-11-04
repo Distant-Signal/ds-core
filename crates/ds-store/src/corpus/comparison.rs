@@ -208,13 +208,27 @@ fn name_key(name: &str) -> String {
 }
 
 /// Compares one CORPUS delivery with the timetable side.
+pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusComparison {
+    compare_layers(
+        &corpus_crosswalk::CorpusLayers::single(locations.to_vec()),
+        timetable,
+    )
+}
+
+/// [`compare`] on `corpus_locations` as layers: the crosswalk is the one
+/// the load stores ([`corpus_crosswalk::derive_layers`]), and the rows are
+/// [`corpus_crosswalk::CorpusLayers::effective`].
 #[expect(
     clippy::too_many_lines,
     reason = "long but linear; splitting it would scatter its shared state across helpers"
 )]
-pub fn compare(locations: &[CorpusLocation], timetable: &Timetable) -> CorpusComparison {
-    let rows = corpus_crosswalk::corpus_rows(locations);
-    let (inferred, crosswalk) = corpus_crosswalk::derive(&rows);
+pub fn compare_layers(
+    layers: &corpus_crosswalk::CorpusLayers,
+    timetable: &Timetable,
+) -> CorpusComparison {
+    let effective = layers.effective();
+    let locations = effective.as_slice();
+    let (inferred, crosswalk) = corpus_crosswalk::derive_layers(layers);
 
     // A TIPLOC's own description: its first row's NLCDESC.
     let mut corpus_desc: BTreeMap<String, String> = BTreeMap::new();
@@ -698,9 +712,18 @@ pub fn record_metrics(c: &CorpusComparison) {
 /// The post-load comparison: reads the timetable side, logs the summary
 /// and sets the gauges. Never fails the load; an error is logged.
 pub async fn log_after_load(pool: &PgPool, locations: &[CorpusLocation]) {
+    log_after_load_layers(
+        pool,
+        &corpus_crosswalk::CorpusLayers::single(locations.to_vec()),
+    )
+    .await;
+}
+
+/// [`log_after_load`] on `corpus_locations` as layers ([`compare_layers`]).
+pub async fn log_after_load_layers(pool: &PgPool, layers: &corpus_crosswalk::CorpusLayers) {
     match load_timetable(pool, None).await {
         Ok(timetable) => {
-            let c = compare(locations, &timetable);
+            let c = compare_layers(layers, &timetable);
             record_metrics(&c);
             tracing::info!(
                 tiploc_agree = c.tiploc_agree.values().sum::<usize>(),

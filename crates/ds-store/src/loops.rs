@@ -174,12 +174,12 @@ pub fn corpus_crosswalk_comparing(interval: Duration) -> LoopSpec {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))?;
             if let Some(latest) = latest.filter(|latest| last != Some(*latest)) {
-                let locations = crate::corpus::crosswalk::load_corpus_locations(&pool)
+                let layers = crate::corpus::crosswalk::load_corpus_layers(&pool)
                         .await
                         .inspect_err(|err| {
                             tracing::error!(error = ?err, "CORPUS comparison could not read corpus_locations; will retry next interval");
                         })?;
-                crate::corpus::comparison::log_after_load(&pool, &locations).await;
+                crate::corpus::comparison::log_after_load_layers(&pool, &layers).await;
                 *compared
                     .lock()
                     .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))? =
