@@ -31,8 +31,23 @@ pub(crate) async fn read_corpus_rows() -> Result<Vec<CorpusRow>> {
         Option<String>,
         Option<String>,
     );
+    // The effective rows (ds_store::corpus::crosswalk::CorpusLayers): with
+    // an NLC XML snapshot loaded over a frozen JSON extract, every XML row
+    // plus the JSON rows it does not cover (a TIPLOC it lacks, or, for a
+    // row without a TIPLOC, an NLC it lacks); otherwise every row.
     let rows: Vec<Row> = sqlx::query_as(
-        "SELECT nlc, stanox, tiploc, crs, nlc_desc FROM corpus_locations ORDER BY id",
+        r"WITH xml AS (
+              SELECT nlc, tiploc FROM corpus_locations
+              WHERE source_file ~* '^nlc.*\.xml\.gz$'
+          )
+          SELECT c.nlc, c.stanox, c.tiploc, c.crs, c.nlc_desc FROM corpus_locations c
+          WHERE NOT EXISTS (SELECT 1 FROM xml)
+             OR c.source_file ~* '^nlc.*\.xml\.gz$'
+             OR (c.tiploc IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM xml WHERE xml.tiploc = c.tiploc))
+             OR (c.tiploc IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM xml WHERE xml.nlc = c.nlc))
+          ORDER BY c.id",
     )
     .fetch_all(&pool)
     .await

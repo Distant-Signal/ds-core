@@ -146,6 +146,70 @@ pub async fn replace_corpus_locations_with_provenance(
     provenance: &DeliveredFileProvenance<'_>,
     locations: &[CorpusLocation],
 ) -> Result<u64> {
+    replace(
+        pool,
+        delivered_at,
+        source_file,
+        provenance,
+        locations,
+        Keep::Nothing,
+    )
+    .await
+}
+
+/// SQL: the rows that came from an NLC XML snapshot, as
+/// [`crosswalk::is_xml_snapshot_name`] decides.
+const XML_SOURCE_FILE: &str = r"source_file ~* '^nlc.*\.xml\.gz$'";
+
+/// Loads an NLC XML snapshot (CORPUS API v2) as the primary layer and keeps
+/// the rows of the last JSON extract as a frozen fallback
+/// ([`crosswalk::CorpusLayers`]). In one transaction, under the load lock:
+/// deletes only the rows of earlier XML snapshots, inserts `locations`,
+/// records the delivery and rebuilds the crosswalk from both layers (the
+/// XML wins every key it resolves).
+///
+/// The JSON rows keep their own `source_file` and `delivered_at`, so they
+/// can be told apart and dropped later; a JSON load
+/// ([`replace_corpus_locations_with_provenance`]) replaces both layers.
+/// With no JSON rows in the table this is a plain whole-table replace.
+pub async fn replace_corpus_locations_keeping_json_fallback(
+    pool: &PgPool,
+    delivered_at: DateTime<Utc>,
+    source_file: &str,
+    provenance: &DeliveredFileProvenance<'_>,
+    locations: &[CorpusLocation],
+) -> Result<u64> {
+    anyhow::ensure!(
+        crosswalk::is_xml_snapshot_name(source_file),
+        "only an NLC XML snapshot is loaded over a frozen JSON fallback, not {source_file:?}"
+    );
+    replace(
+        pool,
+        delivered_at,
+        source_file,
+        provenance,
+        locations,
+        Keep::JsonRows,
+    )
+    .await
+}
+
+/// What a load keeps of the current `corpus_locations`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Keep {
+    Nothing,
+    /// The rows whose `source_file` is not an XML snapshot.
+    JsonRows,
+}
+
+async fn replace(
+    pool: &PgPool,
+    delivered_at: DateTime<Utc>,
+    source_file: &str,
+    provenance: &DeliveredFileProvenance<'_>,
+    locations: &[CorpusLocation],
+    keep: Keep,
+) -> Result<u64> {
     anyhow::ensure!(
         !locations.is_empty(),
         "refusing to replace corpus_locations with an empty delivery"
@@ -162,13 +226,22 @@ pub async fn replace_corpus_locations_with_provenance(
     let nlc_desc = column(|l| &l.nlc_desc);
     let nlc_desc16 = column(|l| &l.nlc_desc16);
 
-    let (_, crosswalk) = crosswalk::derive(&crosswalk::corpus_rows(locations));
-
     let mut tx = pool.begin().await?;
     take_load_lock(&mut tx).await?;
-    sqlx::query("DELETE FROM corpus_locations")
-        .execute(&mut *tx)
-        .await?;
+    match keep {
+        Keep::Nothing => {
+            sqlx::query("DELETE FROM corpus_locations")
+                .execute(&mut *tx)
+                .await?;
+        }
+        Keep::JsonRows => {
+            sqlx::query(&format!(
+                "DELETE FROM corpus_locations WHERE {XML_SOURCE_FILE}"
+            ))
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
     let inserted = sqlx::query(
         r"
         INSERT INTO corpus_locations
@@ -211,6 +284,10 @@ pub async fn replace_corpus_locations_with_provenance(
     .bind(provenance.delivery_source)
     .execute(&mut *tx)
     .await?;
+    let (_, crosswalk) = match keep {
+        Keep::Nothing => crosswalk::derive(&crosswalk::corpus_rows(locations)),
+        Keep::JsonRows => crosswalk::derive_layers(&crosswalk::load_corpus_layers(&mut *tx).await?),
+    };
     crosswalk::write(&mut tx, delivered_at, crosswalk).await?;
     tx.commit().await?;
     Ok(inserted)
