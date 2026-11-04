@@ -151,7 +151,8 @@ pub const INGEST_STREAMS: [StreamDecl; 12] = [
         bound: Bound::Covers(Duration::from_secs(30 * 24 * 3600)),
     },
     // The three island-of-Ireland pollers (disabled), one stream each:
-    // live every 5 minutes, the GTFS and NIR stations pollers two snapshots
+    // live every 5 minutes (plus its station list when that changes, sized
+    // for hourly), the GTFS and NIR stations pollers two snapshots
     // (stations, lines) a cycle, daily by default (sized for hourly).
     // Together the 2,000 entries the shared stream had.
     StreamDecl {
@@ -168,7 +169,7 @@ pub const INGEST_STREAMS: [StreamDecl; 12] = [
     },
     StreamDecl {
         stream: crate::streams::IOI_LIVE,
-        entries_per_day: 12 * 24,
+        entries_per_day: 12 * 24 + 24,
         entry_bytes: 16 * KIB,
         bound: Bound::Fixed(1000),
     },

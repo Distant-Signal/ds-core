@@ -22,6 +22,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod live_codes;
+
 /// Which network's own feed is authoritative for this row -- "which feed do
 /// we source this from," not "which jurisdiction is this station
 /// physically in" (design spec §3: the Belfast-area border stations are
@@ -45,6 +47,11 @@ pub struct IslandOfIrelandStation {
     pub network: IslandOfIrelandNetwork,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    /// The source's own name when `name` is a tidied form of it, e.g. NIR's
+    /// raw `OpenDataNI` CSV value `"HOLLYWOOD RAIL HALT"` behind the display
+    /// name `"Holywood"`. `None` when the source's name is shown as is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_name: Option<String>,
 }
 
 /// A named line/route on either Irish-jurisdiction network. Deliberately
@@ -64,6 +71,44 @@ pub struct IslandOfIrelandLineDefinition {
     /// "longest trip" is this plan's chosen representative stopping
     /// pattern.
     pub stations: Vec<String>,
+    /// The feed's short name (GTFS `route_short_name`), when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub short_name: Option<String>,
+    /// The operator's name (GTFS `agency.txt`'s `agency_name`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agency: Option<String>,
+    /// The line's colour as `#RRGGBB` (GTFS `route_color`), when the feed
+    /// gives one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// The text colour to draw on [`Self::color`], as `#RRGGBB` (GTFS
+    /// `route_text_color`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_color: Option<String>,
+    /// Ids of the same network's earlier lines this one replaces: the
+    /// directional GTFS routes (`DUB-BFT-I`, `DUB-BFT-O`) merged into one
+    /// corridor (`DUB-BFT`). The writer deletes those rows when it applies
+    /// this line, so a merge leaves no stale directional rows behind.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replaces: Vec<String>,
+}
+
+/// One station as Iarnród Éireann's live API lists it (`getAllStationsXML`):
+/// the `StationCode` its departure boards are keyed by, and the name,
+/// alias and position used to match it to a catalogue station
+/// ([`live_codes`]). The list also holds non-passenger points (junctions),
+/// which simply match nothing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IslandOfIrelandLiveStation {
+    /// `StationCode`, e.g. `"BFSTC"`, trimmed.
+    pub code: String,
+    /// `StationDesc`, e.g. `"Belfast"`.
+    pub name: String,
+    /// `StationAlias`, e.g. `"Connolly"`, when not blank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 /// One service from an Iarnród Éireann live departure board
@@ -107,11 +152,10 @@ pub struct IslandOfIrelandDeparture {
 
 /// One live poll of one station's departure board.
 /// `station_id` is `api.irishrail.ie`'s own `StationCode` (e.g. `"BFSTC"`)
-/// -- NOT necessarily the same identifier as
-/// `IslandOfIrelandStation.id` for the same physical station when that
-/// station's `id` came from GTFS (Tier A). See
-/// docs/superpowers/plans/2026-09-05-ireland-rail-support-plan.md's
-/// Judgment Call #1 -- this is a real, unreconciled gap, not an oversight.
+/// -- NOT the same identifier as `IslandOfIrelandStation.id` for the same
+/// physical station when that station's `id` came from GTFS (Tier A). The
+/// two are joined by [`live_codes`], which the writer stores as
+/// `island_of_ireland_stations.live_code`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IslandOfIrelandStationSample {
     pub station_id: String,
@@ -144,6 +188,7 @@ mod tests {
             network: IslandOfIrelandNetwork::RepublicOfIreland,
             latitude: Some(53.3556),
             longitude: Some(-6.2497),
+            raw_name: None,
         };
         let json = serde_json::to_value(&station).unwrap();
         let back: IslandOfIrelandStation = serde_json::from_value(json).unwrap();
@@ -158,10 +203,39 @@ mod tests {
             name: "Belfast - Dublin".to_string(),
             network: IslandOfIrelandNetwork::RepublicOfIreland,
             stations: vec!["8350IR0001".to_string(), "BFSTC".to_string()],
+            short_name: None,
+            agency: Some("Iarnród Éireann / Irish Rail".to_string()),
+            color: Some("#00A651".to_string()),
+            text_color: None,
+            replaces: vec!["DUB-BFT-I".to_string()],
         };
         let json = serde_json::to_value(&line).unwrap();
         let back: IslandOfIrelandLineDefinition = serde_json::from_value(json).unwrap();
         assert_eq!(back.stations, line.stations);
+        assert_eq!(back.color, line.color);
+        assert_eq!(back.replaces, line.replaces);
+    }
+
+    /// A body from a producer built before the optional fields existed
+    /// still decodes (the writer may run ahead of the pollers), and an
+    /// unset optional field is left out of the wire form.
+    #[test]
+    fn bodies_without_the_optional_fields_decode() {
+        let station: IslandOfIrelandStation = serde_json::from_value(serde_json::json!({
+            "id": "nir-bangor", "name": "BANGOR RAIL STATION",
+            "network": "northern-ireland", "latitude": 54.6, "longitude": -5.6
+        }))
+        .unwrap();
+        assert_eq!(station.raw_name, None);
+        let line: IslandOfIrelandLineDefinition = serde_json::from_value(serde_json::json!({
+            "id": "DUB-BFT-I", "name": "Belfast - Dublin",
+            "network": "republic-of-ireland", "stations": ["A", "B"]
+        }))
+        .unwrap();
+        assert_eq!((line.color, line.agency), (None, None));
+        assert!(line.replaces.is_empty());
+        let json = serde_json::to_value(&station).unwrap();
+        assert!(json.get("raw_name").is_none());
     }
 }
 
