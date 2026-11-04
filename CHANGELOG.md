@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 (2026-11-04)
+
+- Point the contributing docs at guides that exist (#7)
+- Run release-order.py from Distant-Signal/ci; name the daily scan (#8)
+- Keep the last CORPUS JSON extract as a fallback under XML snapshots (#10)
+
 ## v0.1.1 (2026-11-04)
 
 - Add users.discord_id and ON UPDATE CASCADE on every users(id) FK (#3)
