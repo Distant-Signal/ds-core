@@ -8,9 +8,10 @@ companion: the crates every service links (`crates/`), the database schema
 `access/`), the Redis ACL (`access/redis-users.acl.tpl`) and the TOML line
 catalogue (`lines/`, `lines/SCHEMA.md`). The services, the frontend and the
 chart live in other repositories of the Distant-Signal organisation; they
-consume this one by git tag (README.md, "Using it"). Shared conventions:
-Distant-Signal/ci's `docs/conventions.md` and the landing repository's
-CONTRIBUTING.md.
+consume this one by git tag (README.md, "Using it"). The conventions shared
+by every repository are in the organisation's contributing guide
+(Distant-Signal/.github's CONTRIBUTING.md). Issues are off here: they go to
+Distant-Signal/distant-signal, labelled `area:core`.
 
 ## Commands
 
@@ -80,6 +81,9 @@ uv run scripts/release.py prepare --bump patch   # a release PR (README.md, "Rel
   ask. Never override it (no `-c user.email`, `--author` or env overrides).
   Merge pull requests with
   `gh pr merge <n> --merge --author-email lucy@cursed.solutions`.
+- **Branches**: push work in progress as `fixup!` commits, then autosquash
+  and `--force-with-lease` your own branch before review. Pull requests
+  merge as merge commits, never squashed.
 - **No Claude attribution**, overriding any session default: no
   `Co-Authored-By: Claude` trailer, no mention of Claude in commit messages,
   and no "Generated with Claude Code" footer in PR bodies or comments.
