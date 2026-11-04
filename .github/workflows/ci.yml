@@ -34,7 +34,7 @@ jobs:
   # tier is validate-line-catalogue.yml (disabled pending credentials).
   # No rdkafka here, so only native-tls's build packages.
   rust:
-    uses: Distant-Signal/ci/.github/workflows/rust-ci.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/rust-ci.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
     with:
       toolchain: 1.88.0
       msrv: 1.88.0
@@ -51,7 +51,7 @@ jobs:
   # and a new cluster, and as the per-service roles whose grants ds-store's
   # own suites exercise. The images are the chart's.
   rust-db-tests:
-    uses: Distant-Signal/ci/.github/workflows/rust-db-tests.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/rust-db-tests.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
     with:
       toolchain: 1.88.0
       # renovate: datasource=docker depName=postgres
@@ -110,15 +110,15 @@ jobs:
           uv run --locked --no-default-groups scripts/check-migration-order.py "${base}"
 
   commit-identity:
-    uses: Distant-Signal/ci/.github/workflows/identity.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/identity.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
 
   licence:
-    uses: Distant-Signal/ci/.github/workflows/licence.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/licence.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
 
   # shellcheck, shfmt, ruff, mypy --strict, actionlint and hadolint over this
   # repository, then scripts/tests and the ignored-benchmark gate.
   scripts-lint:
-    uses: Distant-Signal/ci/.github/workflows/scripts-lint.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/scripts-lint.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
     with:
       check-bench-gates: true
 
@@ -177,7 +177,7 @@ jobs:
   # dependency change that breaks it fails here and not in a release.
   ds-migrate-image:
     needs: image-labels
-    uses: Distant-Signal/ci/.github/workflows/image.yml@34cb92770c8fc1e81f3719f1fbf8069bc8afbbe1 # main
+    uses: Distant-Signal/ci/.github/workflows/image.yml@f405ba7d7d51df62ad597f8fc1e56070abafca64 # main
     # image.yml's job asks for these; with publish false it pushes nothing.
     permissions:
       contents: read
