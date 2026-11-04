@@ -57,7 +57,7 @@ pub mod streams {
     pub const IOI_GTFS: &str = "ds:ingest:ioi-gtfs";
     /// poller-nir-stations: `ioi-stations/1`, `ioi-lines/1`.
     pub const IOI_NIR: &str = "ds:ingest:ioi-nir";
-    /// poller-irish-rail-live: `ioi-station-samples/1`.
+    /// poller-irish-rail-live: `ioi-station-samples/1`, `ioi-live-stations/1`.
     pub const IOI_LIVE: &str = "ds:ingest:ioi-live";
     /// poller-transit-schedule for network `metrolink` (disabled by
     /// default): `transit-timetable/1`, `transit-timetable-commit/1` and

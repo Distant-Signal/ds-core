@@ -7,9 +7,10 @@
 //! (`data::island_of_ireland`).
 
 use anyhow::Result;
+use common::island_of_ireland::live_codes::{self, LiveCodeReport};
 use common::island_of_ireland::{
-    IslandOfIrelandLineDefinition, IslandOfIrelandNetwork, IslandOfIrelandStation,
-    IslandOfIrelandStationSample,
+    IslandOfIrelandLineDefinition, IslandOfIrelandLiveStation, IslandOfIrelandNetwork,
+    IslandOfIrelandStation, IslandOfIrelandStationSample,
 };
 use sqlx::{PgConnection, PgPool};
 
@@ -143,23 +144,29 @@ async fn write_stations(
     let networks: Vec<&str> = batch.iter().map(|s| network_wire(s.network)).collect();
     let latitudes: Vec<Option<f64>> = batch.iter().map(|s| s.latitude).collect();
     let longitudes: Vec<Option<f64>> = batch.iter().map(|s| s.longitude).collect();
+    let raw_names: Vec<Option<&str>> = batch.iter().map(|s| s.raw_name.as_deref()).collect();
 
+    // `live_code` is not the producer's: `refresh_live_codes` sets it.
     let done = sqlx::query(
         r"
-        INSERT INTO island_of_ireland_stations (id, name, network, latitude, longitude, fetched_at)
-        SELECT id, name, network, latitude, longitude, COALESCE($6::timestamptz, NOW())
-        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::float8[], $5::float8[])
-            AS i(id, name, network, latitude, longitude)
+        INSERT INTO island_of_ireland_stations
+            (id, name, network, latitude, longitude, raw_name, fetched_at)
+        SELECT id, name, network, latitude, longitude, raw_name, COALESCE($6::timestamptz, NOW())
+        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::float8[], $5::float8[], $7::text[])
+            AS i(id, name, network, latitude, longitude, raw_name)
         ON CONFLICT (id) DO UPDATE SET
             name       = EXCLUDED.name,
             network    = EXCLUDED.network,
             latitude   = EXCLUDED.latitude,
             longitude  = EXCLUDED.longitude,
+            raw_name   = EXCLUDED.raw_name,
             fetched_at = EXCLUDED.fetched_at
         WHERE (island_of_ireland_stations.name, island_of_ireland_stations.network,
-               island_of_ireland_stations.latitude, island_of_ireland_stations.longitude)
+               island_of_ireland_stations.latitude, island_of_ireland_stations.longitude,
+               island_of_ireland_stations.raw_name)
               IS DISTINCT FROM
-              (EXCLUDED.name, EXCLUDED.network, EXCLUDED.latitude, EXCLUDED.longitude)
+              (EXCLUDED.name, EXCLUDED.network, EXCLUDED.latitude, EXCLUDED.longitude,
+               EXCLUDED.raw_name)
           AND ($6::timestamptz IS NULL
                OR EXCLUDED.fetched_at >= island_of_ireland_stations.fetched_at
                OR island_of_ireland_stations.fetched_at > now() + interval '2 min')
@@ -173,6 +180,7 @@ async fn write_stations(
     .bind(&latitudes)
     .bind(&longitudes)
     .bind(observed_at)
+    .bind(&raw_names)
     .execute(&mut *conn)
     .await?;
     Ok(done.rows_affected())
@@ -231,22 +239,36 @@ async fn write_lines(
         .iter()
         .map(|l| serde_json::to_value(&l.stations))
         .collect::<Result<_, _>>()?;
+    let short_names: Vec<Option<&str>> = batch.iter().map(|l| l.short_name.as_deref()).collect();
+    let agencies: Vec<Option<&str>> = batch.iter().map(|l| l.agency.as_deref()).collect();
+    let colors: Vec<Option<&str>> = batch.iter().map(|l| l.color.as_deref()).collect();
+    let text_colors: Vec<Option<&str>> = batch.iter().map(|l| l.text_color.as_deref()).collect();
 
     let done = sqlx::query(
         r"
-        INSERT INTO island_of_ireland_lines (id, name, network, stations, fetched_at)
-        SELECT id, name, network, stations, COALESCE($5::timestamptz, NOW())
-        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[])
-            AS i(id, name, network, stations)
+        INSERT INTO island_of_ireland_lines
+            (id, name, network, stations, short_name, agency, color, text_color, fetched_at)
+        SELECT id, name, network, stations, short_name, agency, color, text_color,
+               COALESCE($5::timestamptz, NOW())
+        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[],
+                    $6::text[], $7::text[], $8::text[], $9::text[])
+            AS i(id, name, network, stations, short_name, agency, color, text_color)
         ON CONFLICT (id) DO UPDATE SET
             name       = EXCLUDED.name,
             network    = EXCLUDED.network,
             stations   = EXCLUDED.stations,
+            short_name = EXCLUDED.short_name,
+            agency     = EXCLUDED.agency,
+            color      = EXCLUDED.color,
+            text_color = EXCLUDED.text_color,
             fetched_at = EXCLUDED.fetched_at
         WHERE (island_of_ireland_lines.name, island_of_ireland_lines.network,
-               island_of_ireland_lines.stations)
+               island_of_ireland_lines.stations, island_of_ireland_lines.short_name,
+               island_of_ireland_lines.agency, island_of_ireland_lines.color,
+               island_of_ireland_lines.text_color)
               IS DISTINCT FROM
-              (EXCLUDED.name, EXCLUDED.network, EXCLUDED.stations)
+              (EXCLUDED.name, EXCLUDED.network, EXCLUDED.stations, EXCLUDED.short_name,
+               EXCLUDED.agency, EXCLUDED.color, EXCLUDED.text_color)
           AND ($5::timestamptz IS NULL
                OR EXCLUDED.fetched_at >= island_of_ireland_lines.fetched_at
                OR island_of_ireland_lines.fetched_at > now() + interval '2 min')
@@ -259,9 +281,193 @@ async fn write_lines(
     .bind(&networks)
     .bind(&stations)
     .bind(observed_at)
+    .bind(&short_names)
+    .bind(&agencies)
+    .bind(&colors)
+    .bind(&text_colors)
+    .execute(&mut *conn)
+    .await?;
+    let replaced = delete_replaced_lines(conn, &batch, observed_at).await?;
+    Ok(done.rows_affected() + replaced)
+}
+
+/// Deletes the rows `lines` replace ([`IslandOfIrelandLineDefinition::replaces`]:
+/// the directional GTFS routes merged into one corridor), each only in its
+/// replacing line's network and never a line the same batch writes. With
+/// `observed_at`, a row changed after it is kept (the ordering guard of
+/// [`write_lines`]: an older snapshot cannot delete a newer row). Returns
+/// the rows deleted.
+async fn delete_replaced_lines(
+    conn: &mut PgConnection,
+    lines: &[&IslandOfIrelandLineDefinition],
+    observed_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<u64> {
+    let written: Vec<&str> = lines.iter().map(|l| l.id.as_str()).collect();
+    let (ids, networks): (Vec<&str>, Vec<&str>) = lines
+        .iter()
+        .flat_map(|l| {
+            l.replaces
+                .iter()
+                .map(move |old| (old.as_str(), network_wire(l.network)))
+        })
+        .filter(|(old, _)| !written.contains(old))
+        .unzip();
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let done = sqlx::query(
+        r"
+        DELETE FROM island_of_ireland_lines AS l
+        USING UNNEST($1::text[], $2::text[]) AS r(id, network)
+        WHERE l.id = r.id
+          AND l.network = r.network
+          AND ($3::timestamptz IS NULL
+               OR l.fetched_at <= $3
+               OR l.fetched_at > now() + interval '2 min')
+        ",
+    )
+    .bind(&ids)
+    .bind(&networks)
+    .bind(observed_at)
     .execute(&mut *conn)
     .await?;
     Ok(done.rows_affected())
+}
+
+/// Upserts Iarnród Éireann's live station list (`ioi-live-stations/1`) into
+/// `island_of_ireland_live_stations`, in the caller's transaction, with the
+/// same unchanged-row skip and ordering guard as [`upsert_stations_observed`]
+/// (a changed row's `fetched_at` is `observed_at`). Rows the list no longer
+/// carries are kept: a code that disappears simply stops matching nothing
+/// new. Returns the rows written.
+pub async fn upsert_live_stations_observed(
+    conn: &mut PgConnection,
+    stations: &[IslandOfIrelandLiveStation],
+    observed_at: chrono::DateTime<chrono::Utc>,
+) -> Result<u64> {
+    if stations.is_empty() {
+        return Ok(0);
+    }
+    let batch = crate::freshness::last_per_key(stations, |station| station.code.clone());
+    let codes: Vec<&str> = batch.iter().map(|s| s.code.as_str()).collect();
+    let names: Vec<&str> = batch.iter().map(|s| s.name.as_str()).collect();
+    let aliases: Vec<Option<&str>> = batch.iter().map(|s| s.alias.as_deref()).collect();
+    let latitudes: Vec<Option<f64>> = batch.iter().map(|s| s.latitude).collect();
+    let longitudes: Vec<Option<f64>> = batch.iter().map(|s| s.longitude).collect();
+
+    let done = sqlx::query(
+        r"
+        INSERT INTO island_of_ireland_live_stations
+            (code, name, alias, latitude, longitude, fetched_at)
+        SELECT code, name, alias, latitude, longitude, $6::timestamptz
+        FROM UNNEST($1::text[], $2::text[], $3::text[], $4::float8[], $5::float8[])
+            AS i(code, name, alias, latitude, longitude)
+        ON CONFLICT (code) DO UPDATE SET
+            name       = EXCLUDED.name,
+            alias      = EXCLUDED.alias,
+            latitude   = EXCLUDED.latitude,
+            longitude  = EXCLUDED.longitude,
+            fetched_at = EXCLUDED.fetched_at
+        WHERE (island_of_ireland_live_stations.name, island_of_ireland_live_stations.alias,
+               island_of_ireland_live_stations.latitude, island_of_ireland_live_stations.longitude)
+              IS DISTINCT FROM
+              (EXCLUDED.name, EXCLUDED.alias, EXCLUDED.latitude, EXCLUDED.longitude)
+          AND (EXCLUDED.fetched_at >= island_of_ireland_live_stations.fetched_at
+               OR island_of_ireland_live_stations.fetched_at > now() + interval '2 min')
+        ",
+    )
+    .bind(&codes)
+    .bind(&names)
+    .bind(&aliases)
+    .bind(&latitudes)
+    .bind(&longitudes)
+    .bind(observed_at)
+    .execute(&mut *conn)
+    .await?;
+    Ok(done.rows_affected())
+}
+
+/// Recomputes every Republic of Ireland catalogue station's `live_code`
+/// from the stored catalogue and live station list
+/// ([`common::island_of_ireland::live_codes`]), in the caller's
+/// transaction, and writes only the codes that changed. Run after either
+/// side is applied. Does nothing while the live list is empty (the live
+/// poller has not sent one yet), so a catalogue applied first keeps its
+/// codes. Serialised by a transaction advisory lock, so two streams'
+/// refreshes cannot interleave and leave a stale result: the second reads
+/// after the first commits. Returns the match report (`None` when skipped)
+/// and the rows changed.
+pub async fn refresh_live_codes(conn: &mut PgConnection) -> Result<(Option<LiveCodeReport>, u64)> {
+    sqlx::query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('island_of_ireland:live_codes', 0))",
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    let live: Vec<IslandOfIrelandLiveStation> =
+        sqlx::query_as::<_, (String, String, Option<String>, Option<f64>, Option<f64>)>(
+            "SELECT code, name, alias, latitude, longitude FROM island_of_ireland_live_stations \
+         ORDER BY code",
+        )
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .map(
+            |(code, name, alias, latitude, longitude)| IslandOfIrelandLiveStation {
+                code,
+                name,
+                alias,
+                latitude,
+                longitude,
+            },
+        )
+        .collect();
+    if live.is_empty() {
+        return Ok((None, 0));
+    }
+
+    let republic = network_wire(IslandOfIrelandNetwork::RepublicOfIreland);
+    let stations: Vec<IslandOfIrelandStation> =
+        sqlx::query_as::<_, (String, String, Option<f64>, Option<f64>)>(
+            "SELECT id, name, latitude, longitude FROM island_of_ireland_stations \
+         WHERE network = $1 ORDER BY id",
+        )
+        .bind(republic)
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .map(|(id, name, latitude, longitude)| IslandOfIrelandStation {
+            id,
+            name,
+            network: IslandOfIrelandNetwork::RepublicOfIreland,
+            latitude,
+            longitude,
+            raw_name: None,
+        })
+        .collect();
+
+    let report = live_codes::match_live_codes(&stations, &live);
+    let (ids, codes): (Vec<&str>, Vec<&str>) = report.codes().unzip();
+    let done = sqlx::query(
+        r"
+        UPDATE island_of_ireland_stations AS s
+        SET live_code = m.code
+        FROM (
+            SELECT st.id, c.code
+            FROM island_of_ireland_stations AS st
+            LEFT JOIN UNNEST($1::text[], $2::text[]) AS c(id, code) ON c.id = st.id
+            WHERE st.network = $3
+        ) AS m
+        WHERE s.id = m.id
+          AND s.live_code IS DISTINCT FROM m.code
+        ",
+    )
+    .bind(&ids)
+    .bind(&codes)
+    .bind(republic)
+    .execute(&mut *conn)
+    .await?;
+    Ok((Some(report), done.rows_affected()))
 }
 
 /// When any network's feed last landed: the newest of `sources`'
@@ -409,5 +615,184 @@ mod db_tests {
         // already documents for its own table.
         let fetched = last_stations_fetch(&pool).await;
         assert!(fetched.is_ok());
+    }
+
+    fn roi_station(id: &str, name: &str, at: (f64, f64)) -> IslandOfIrelandStation {
+        IslandOfIrelandStation {
+            id: id.into(),
+            name: name.into(),
+            network: IslandOfIrelandNetwork::RepublicOfIreland,
+            latitude: Some(at.0),
+            longitude: Some(at.1),
+            raw_name: None,
+        }
+    }
+
+    fn roi_line(id: &str, replaces: &[&str]) -> IslandOfIrelandLineDefinition {
+        IslandOfIrelandLineDefinition {
+            id: id.into(),
+            name: "Zesttown - Zorough".into(),
+            network: IslandOfIrelandNetwork::RepublicOfIreland,
+            stations: vec!["ZS1".into(), "ZS2".into()],
+            short_name: None,
+            agency: Some("Zest Rail".into()),
+            color: Some("#00A651".into()),
+            text_color: Some("#FFFFFF".into()),
+            replaces: replaces.iter().map(ToString::to_string).collect(),
+        }
+    }
+
+    async fn line_ids(pool: &PgPool, prefix: &str) -> Vec<String> {
+        sqlx::query_scalar("SELECT id FROM island_of_ireland_lines WHERE id LIKE $1 ORDER BY id")
+            .bind(format!("{prefix}%"))
+            .fetch_all(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn clean(pool: &PgPool) {
+        for sql in [
+            "DELETE FROM island_of_ireland_lines WHERE id LIKE 'ZQL%'",
+            "DELETE FROM island_of_ireland_stations WHERE id LIKE 'ZQS%'",
+            "DELETE FROM island_of_ireland_live_stations WHERE code LIKE 'ZQ%'",
+        ] {
+            sqlx::query(sql).execute(pool).await.unwrap();
+        }
+    }
+
+    /// A merged corridor deletes the directional rows it replaces, but
+    /// only in its own network, never a line the batch itself writes, and
+    /// never a row changed after the snapshot. The colours and agency are
+    /// stored.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn a_merged_line_deletes_the_rows_it_replaces() {
+        let pool = connect().await;
+        clean(&pool).await;
+        let t0: chrono::DateTime<chrono::Utc> = "2026-11-01T00:00:00Z".parse().unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        let mut nir = roi_line("ZQL-NI", &[]);
+        nir.network = IslandOfIrelandNetwork::NorthernIreland;
+        upsert_lines_observed(
+            &mut conn,
+            &[roi_line("ZQL-I", &[]), roi_line("ZQL-O", &[])],
+            t0,
+        )
+        .await
+        .unwrap();
+        upsert_lines_observed(&mut conn, &[nir], t0).await.unwrap();
+        // A row changed after the merged snapshot's time survives it.
+        let later = roi_line("ZQL-LATE", &[]);
+        upsert_lines_observed(&mut conn, &[later], t0 + chrono::Duration::hours(2))
+            .await
+            .unwrap();
+
+        let merged = roi_line("ZQL", &["ZQL-I", "ZQL-O", "ZQL-NI", "ZQL-LATE", "ZQL"]);
+        let written = upsert_lines_observed(&mut conn, &[merged], t0 + chrono::Duration::hours(1))
+            .await
+            .unwrap();
+        assert_eq!(written, 3, "one insert and two deletes");
+        assert_eq!(line_ids(&pool, "ZQL").await, ["ZQL", "ZQL-LATE", "ZQL-NI"]);
+
+        let (agency, color, text_color): (Option<String>, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT agency, color, text_color FROM island_of_ireland_lines WHERE id = 'ZQL'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(agency.as_deref(), Some("Zest Rail"));
+        assert_eq!(color.as_deref(), Some("#00A651"));
+        assert_eq!(text_color.as_deref(), Some("#FFFFFF"));
+        drop(conn);
+        clean(&pool).await;
+    }
+
+    async fn live_code(pool: &PgPool, id: &str) -> Option<String> {
+        sqlx::query_scalar("SELECT live_code FROM island_of_ireland_stations WHERE id = $1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    /// The live list and the catalogue join through `live_code`, refreshed
+    /// from whichever side arrives; an unmatched station keeps no code and
+    /// a station that stops matching loses its code.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn refresh_live_codes_joins_the_catalogue_to_the_live_list() {
+        let pool = connect().await;
+        clean(&pool).await;
+        let t0: chrono::DateTime<chrono::Utc> = "2026-11-01T00:00:00Z".parse().unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        upsert_stations_observed(
+            &mut tx,
+            &[
+                roi_station("ZQS1", "Zesttown Kent", (53.0, -6.0)),
+                roi_station("ZQS2", "Zorough", (53.2, -6.2)),
+                roi_station("ZQS3", "Nowhere Halt", (52.0, -9.0)),
+            ],
+            t0,
+        )
+        .await
+        .unwrap();
+        let mut nir = roi_station("ZQS4", "Zorough", (53.2, -6.2));
+        nir.network = IslandOfIrelandNetwork::NorthernIreland;
+        nir.raw_name = Some("ZOROUGH RAIL HALT".into());
+        upsert_stations_observed(&mut tx, &[nir], t0).await.unwrap();
+
+        let live = |code: &str, name: &str, at: (f64, f64)| IslandOfIrelandLiveStation {
+            code: code.into(),
+            name: name.into(),
+            alias: None,
+            latitude: Some(at.0),
+            longitude: Some(at.1),
+        };
+        let written = upsert_live_stations_observed(
+            &mut tx,
+            &[
+                live("ZQZST", "Zesttown", (53.0005, -6.0005)),
+                live("ZQZRH", "Zorough", (53.2, -6.2)),
+            ],
+            t0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(written, 2);
+        let (report, changed) = refresh_live_codes(&mut tx).await.unwrap();
+        tx.commit().await.unwrap();
+        let report = report.expect("the live list is not empty");
+        assert!(changed >= 2);
+        assert_eq!(live_code(&pool, "ZQS1").await.as_deref(), Some("ZQZST"));
+        assert_eq!(live_code(&pool, "ZQS2").await.as_deref(), Some("ZQZRH"));
+        assert_eq!(live_code(&pool, "ZQS3").await, None);
+        // Only the Republic of Ireland's catalogue is matched.
+        assert_eq!(live_code(&pool, "ZQS4").await, None);
+        assert!(report.unmatched().any(|(id, _)| id == "ZQS3"));
+        let raw: Option<String> =
+            sqlx::query_scalar("SELECT raw_name FROM island_of_ireland_stations WHERE id = 'ZQS4'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(raw.as_deref(), Some("ZOROUGH RAIL HALT"));
+
+        // Zorough moves 40 km: its name still matches nothing nearby.
+        let mut tx = pool.begin().await.unwrap();
+        upsert_live_stations_observed(
+            &mut tx,
+            &[live("ZQZRH", "Zorough", (53.6, -6.2))],
+            t0 + chrono::Duration::hours(1),
+        )
+        .await
+        .unwrap();
+        let (_, changed) = refresh_live_codes(&mut tx).await.unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(changed, 1);
+        assert_eq!(live_code(&pool, "ZQS2").await, None);
+        assert_eq!(live_code(&pool, "ZQS1").await.as_deref(), Some("ZQZST"));
+        clean(&pool).await;
     }
 }
