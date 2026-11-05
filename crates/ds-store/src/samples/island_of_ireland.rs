@@ -589,6 +589,365 @@ async fn write_station_samples(
     Ok(done.rows_affected())
 }
 
+/// What [`record_train_history`] wrote.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrainHistoryWrite {
+    /// `island_of_ireland_trains` rows inserted or changed.
+    pub trains: u64,
+    /// `island_of_ireland_train_calls` rows inserted or changed.
+    pub calls: u64,
+    /// Departures left out: no `train_date` (a producer built before it was
+    /// parsed, or a value that didn't parse) or a code the tables refuse.
+    pub skipped: u64,
+}
+
+/// Whether `code` fits the history tables' `CHECK (train_code ~
+/// '^[A-Z0-9]{1,8}$')`: checked here so one odd row can't fail the batch.
+fn is_history_train_code(code: &str) -> bool {
+    (1..=8).contains(&code.len())
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
+/// One departure on one board, keyed for the history.
+struct HistoryRow<'a> {
+    network: &'static str,
+    station_code: &'a str,
+    polled_at: chrono::DateTime<chrono::Utc>,
+    train_date: chrono::NaiveDate,
+    departure: &'a common::island_of_ireland::IslandOfIrelandDeparture,
+}
+
+/// Records what `samples` say about each train in
+/// `island_of_ireland_trains` and `island_of_ireland_train_calls`, in the
+/// caller's transaction (the ingest-writer's `ioi-station-samples/1`
+/// apply, after [`upsert_station_samples_observed`], whose `polled_at`
+/// clamp it relies on). distant-signal's
+/// docs/superpowers/specs/2026-11-05-irish-rail-train-tracking-design.md
+/// §4.1.
+///
+/// - A call row (one per train, date and station) is written only when the
+///   board's times for it change; its `changed_at` is that sample's
+///   `polled_at`.
+/// - A train row takes the train-level fields (`Status`, `Late`,
+///   `Lastlocation`, ends and their times) from the newest sample showing
+///   it, the lowest station code on a tie, and moves `last_seen_at`
+///   forward on every poll, but not more often than every 4 minutes when
+///   nothing else changed (a redelivered or duplicate snapshot costs no
+///   write).
+/// - Neither goes backwards: a row whose stored time is newer than the
+///   sample's is left alone (unless it is more than 2 minutes in the
+///   future, the writer's clamp).
+/// - The feed's `00:00` "no time" becomes `NULL`
+///   ([`common::island_of_ireland::train_state::board_time`]).
+pub async fn record_train_history(
+    conn: &mut PgConnection,
+    samples: &[IslandOfIrelandStationSample],
+) -> Result<TrainHistoryWrite> {
+    let mut skipped = 0_u64;
+    let mut rows: Vec<HistoryRow<'_>> = Vec::new();
+    for sample in samples {
+        for departure in &sample.departures {
+            match departure.train_date {
+                Some(train_date) if is_history_train_code(&departure.train_code) => {
+                    rows.push(HistoryRow {
+                        network: network_wire(sample.network),
+                        station_code: sample.station_id.trim(),
+                        polled_at: sample.polled_at,
+                        train_date,
+                        departure,
+                    });
+                }
+                _ => skipped += 1,
+            }
+        }
+    }
+    if rows.is_empty() {
+        return Ok(TrainHistoryWrite {
+            skipped,
+            ..TrainHistoryWrite::default()
+        });
+    }
+
+    let calls = write_history_calls(conn, &rows).await?;
+    let trains = write_history_trains(conn, &rows).await?;
+    Ok(TrainHistoryWrite {
+        trains,
+        calls,
+        skipped,
+    })
+}
+
+/// [`write_history_calls`]' upsert: the guards are [`record_train_history`]'s.
+const HISTORY_CALLS_SQL: &str = r"
+    INSERT INTO island_of_ireland_train_calls AS c
+        (network, train_code, train_date, station_code,
+         scheduled_arrival, scheduled_departure, expected_arrival, expected_departure,
+         late_minutes, first_seen_at, changed_at)
+    SELECT network, train_code, train_date, station_code, sa, sd, ea, ed, late, seen, seen
+    FROM UNNEST($1::text[], $2::text[], $3::date[], $4::text[], $5::text[], $6::text[],
+                $7::text[], $8::text[], $9::int4[], $10::timestamptz[])
+        AS i(network, train_code, train_date, station_code, sa, sd, ea, ed, late, seen)
+    ON CONFLICT (network, train_code, train_date, station_code) DO UPDATE SET
+        scheduled_arrival   = EXCLUDED.scheduled_arrival,
+        scheduled_departure = EXCLUDED.scheduled_departure,
+        expected_arrival    = EXCLUDED.expected_arrival,
+        expected_departure  = EXCLUDED.expected_departure,
+        late_minutes        = EXCLUDED.late_minutes,
+        changed_at          = EXCLUDED.changed_at
+    WHERE (c.scheduled_arrival, c.scheduled_departure, c.expected_arrival,
+           c.expected_departure, c.late_minutes)
+          IS DISTINCT FROM
+          (EXCLUDED.scheduled_arrival, EXCLUDED.scheduled_departure,
+           EXCLUDED.expected_arrival, EXCLUDED.expected_departure, EXCLUDED.late_minutes)
+      AND (EXCLUDED.changed_at >= c.changed_at
+           OR c.changed_at > now() + interval '2 min')
+";
+
+/// [`record_train_history`]'s call rows. Returns the rows written.
+async fn write_history_calls(conn: &mut PgConnection, rows: &[HistoryRow<'_>]) -> Result<u64> {
+    use common::island_of_ireland::train_state::board_time;
+
+    // Calls: the last row per key wins (a station listed twice in one
+    // batch keeps its newer sample: samples arrive in poll order).
+    let calls = crate::freshness::last_per_key(rows, |r| {
+        (
+            r.network,
+            r.departure.train_code.clone(),
+            r.train_date,
+            r.station_code.to_owned(),
+        )
+    });
+    let time = |raw: &Option<String>| board_time(raw.as_deref());
+    let done_calls = sqlx::query(HISTORY_CALLS_SQL)
+        .bind(calls.iter().map(|r| r.network).collect::<Vec<_>>())
+        .bind(
+            calls
+                .iter()
+                .map(|r| r.departure.train_code.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(calls.iter().map(|r| r.train_date).collect::<Vec<_>>())
+        .bind(calls.iter().map(|r| r.station_code).collect::<Vec<_>>())
+        .bind(
+            calls
+                .iter()
+                .map(|r| time(&r.departure.scheduled_arrival))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            calls
+                .iter()
+                .map(|r| time(&r.departure.scheduled_departure))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            calls
+                .iter()
+                .map(|r| time(&r.departure.expected_arrival))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            calls
+                .iter()
+                .map(|r| time(&r.departure.expected_departure))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            calls
+                .iter()
+                .map(|r| r.departure.late_minutes)
+                .collect::<Vec<_>>(),
+        )
+        .bind(calls.iter().map(|r| r.polled_at).collect::<Vec<_>>())
+        .execute(&mut *conn)
+        .await?;
+
+    Ok(done_calls.rows_affected())
+}
+
+/// [`write_history_trains`]' upsert: the guards are [`record_train_history`]'s.
+const HISTORY_TRAINS_SQL: &str = r"
+    INSERT INTO island_of_ireland_trains AS t
+        (network, train_code, train_date, origin, destination, origin_time,
+         destination_time, status, late_minutes, last_location,
+         first_seen_at, last_seen_at, changed_at)
+    SELECT network, train_code, train_date, origin, destination, origin_time,
+           destination_time, status, late, last_location, seen, seen, seen
+    FROM UNNEST($1::text[], $2::text[], $3::date[], $4::text[], $5::text[], $6::text[],
+                $7::text[], $8::text[], $9::int4[], $10::text[], $11::timestamptz[])
+        AS i(network, train_code, train_date, origin, destination, origin_time,
+             destination_time, status, late, last_location, seen)
+    ON CONFLICT (network, train_code, train_date) DO UPDATE SET
+        origin           = EXCLUDED.origin,
+        destination      = EXCLUDED.destination,
+        origin_time      = EXCLUDED.origin_time,
+        destination_time = EXCLUDED.destination_time,
+        status           = EXCLUDED.status,
+        late_minutes     = EXCLUDED.late_minutes,
+        last_location    = EXCLUDED.last_location,
+        last_seen_at     = EXCLUDED.last_seen_at,
+        changed_at       = CASE
+            WHEN (t.origin, t.destination, t.origin_time, t.destination_time,
+                  t.status, t.late_minutes, t.last_location)
+                 IS DISTINCT FROM
+                 (EXCLUDED.origin, EXCLUDED.destination, EXCLUDED.origin_time,
+                  EXCLUDED.destination_time, EXCLUDED.status, EXCLUDED.late_minutes,
+                  EXCLUDED.last_location)
+            THEN EXCLUDED.last_seen_at
+            ELSE t.changed_at
+        END
+    WHERE (EXCLUDED.last_seen_at >= t.last_seen_at
+           OR t.last_seen_at > now() + interval '2 min')
+      AND ((t.origin, t.destination, t.origin_time, t.destination_time,
+            t.status, t.late_minutes, t.last_location)
+           IS DISTINCT FROM
+           (EXCLUDED.origin, EXCLUDED.destination, EXCLUDED.origin_time,
+            EXCLUDED.destination_time, EXCLUDED.status, EXCLUDED.late_minutes,
+            EXCLUDED.last_location)
+           OR EXCLUDED.last_seen_at >= t.last_seen_at + interval '4 min'
+           OR t.last_seen_at > now() + interval '2 min')
+";
+
+/// The newest sample of each train in `rows`, the lowest station code on a
+/// tie (a train shows the same `Late` on every board, but if two boards in
+/// one poll disagree, the choice must not depend on the order they came in).
+fn newest_per_train<'r, 'a>(rows: &'r [HistoryRow<'a>]) -> Vec<&'r HistoryRow<'a>> {
+    let mut newest: std::collections::BTreeMap<(&str, &str, chrono::NaiveDate), &HistoryRow<'_>> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        let key = (
+            row.network,
+            row.departure.train_code.as_str(),
+            row.train_date,
+        );
+        let replace = newest.get(&key).is_none_or(|kept| {
+            (row.polled_at, std::cmp::Reverse(row.station_code))
+                > (kept.polled_at, std::cmp::Reverse(kept.station_code))
+        });
+        if replace {
+            newest.insert(key, row);
+        }
+    }
+    newest.into_values().collect()
+}
+
+/// [`record_train_history`]'s train rows. Returns the rows written.
+async fn write_history_trains(conn: &mut PgConnection, rows: &[HistoryRow<'_>]) -> Result<u64> {
+    use common::island_of_ireland::train_state::board_time;
+
+    let time = |raw: &Option<String>| board_time(raw.as_deref());
+    let trains = newest_per_train(rows);
+    let text = |raw: &Option<String>| {
+        raw.as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+    };
+    let done_trains = sqlx::query(HISTORY_TRAINS_SQL)
+        .bind(trains.iter().map(|r| r.network).collect::<Vec<_>>())
+        .bind(
+            trains
+                .iter()
+                .map(|r| r.departure.train_code.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(trains.iter().map(|r| r.train_date).collect::<Vec<_>>())
+        .bind(
+            trains
+                .iter()
+                .map(|r| r.departure.origin.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| r.departure.destination.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| time(&r.departure.origin_time))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| time(&r.departure.destination_time))
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| r.departure.status.trim())
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| r.departure.late_minutes)
+                .collect::<Vec<_>>(),
+        )
+        .bind(
+            trains
+                .iter()
+                .map(|r| text(&r.departure.last_location))
+                .collect::<Vec<_>>(),
+        )
+        .bind(trains.iter().map(|r| r.polled_at).collect::<Vec<_>>())
+        .execute(&mut *conn)
+        .await?;
+
+    Ok(done_trains.rows_affected())
+}
+
+/// The most rows [`prune_train_history`] deletes from each table per call.
+/// Run once per `ioi-station-samples/1` apply (every 5 minutes), that is
+/// 576,000 rows a day against an intake of under 20,000 (design §4.3).
+pub const TRAIN_HISTORY_PRUNE_BATCH: i64 = 2_000;
+
+/// Deletes up to `batch` rows from each history table whose `train_date`
+/// is before `cutoff`, in the caller's transaction. One index probe when
+/// nothing is due. Returns the rows deleted.
+pub async fn prune_train_history(
+    conn: &mut PgConnection,
+    cutoff: chrono::NaiveDate,
+    batch: i64,
+) -> Result<u64> {
+    let calls = sqlx::query(
+        r"
+        DELETE FROM island_of_ireland_train_calls AS c
+        USING (SELECT network, train_code, train_date, station_code
+               FROM island_of_ireland_train_calls
+               WHERE train_date < $1
+               LIMIT $2) AS d
+        WHERE (c.network, c.train_code, c.train_date, c.station_code)
+            = (d.network, d.train_code, d.train_date, d.station_code)
+        ",
+    )
+    .bind(cutoff)
+    .bind(batch)
+    .execute(&mut *conn)
+    .await?;
+    let trains = sqlx::query(
+        r"
+        DELETE FROM island_of_ireland_trains AS t
+        USING (SELECT network, train_code, train_date
+               FROM island_of_ireland_trains
+               WHERE train_date < $1
+               LIMIT $2) AS d
+        WHERE (t.network, t.train_code, t.train_date) = (d.network, d.train_code, d.train_date)
+        ",
+    )
+    .bind(cutoff)
+    .bind(batch)
+    .execute(&mut *conn)
+    .await?;
+    Ok(calls.rows_affected() + trains.rows_affected())
+}
+
 pub async fn last_station_samples_fetch(
     pool: &PgPool,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
@@ -794,5 +1153,286 @@ mod db_tests {
         assert_eq!(live_code(&pool, "ZQS2").await, None);
         assert_eq!(live_code(&pool, "ZQS1").await.as_deref(), Some("ZQZST"));
         clean(&pool).await;
+    }
+
+    fn departure(
+        code: &str,
+        date: Option<chrono::NaiveDate>,
+        status: &str,
+        late: i32,
+        times: (&str, &str),
+        last_location: Option<&str>,
+    ) -> common::island_of_ireland::IslandOfIrelandDeparture {
+        common::island_of_ireland::IslandOfIrelandDeparture {
+            train_code: code.into(),
+            origin: "Zesttown".into(),
+            destination: "Zorough".into(),
+            scheduled_arrival: Some(times.0.into()),
+            scheduled_departure: Some(times.1.into()),
+            expected_arrival: Some(times.0.into()),
+            expected_departure: Some(times.1.into()),
+            late_minutes: late,
+            status: status.into(),
+            due_in_minutes: Some(5),
+            train_date: date,
+            origin_time: Some("23:40".into()),
+            destination_time: Some("00:00".into()),
+            last_location: last_location.map(Into::into),
+        }
+    }
+
+    /// A board polled `minutes` after the fixture's base time, an hour
+    /// before now (the guards treat a stored time more than 2 minutes
+    /// ahead of now as clock skew, so the polls must be in the past).
+    fn board(
+        station: &str,
+        minutes: i64,
+        departures: Vec<common::island_of_ireland::IslandOfIrelandDeparture>,
+    ) -> IslandOfIrelandStationSample {
+        IslandOfIrelandStationSample {
+            station_id: station.into(),
+            network: IslandOfIrelandNetwork::RepublicOfIreland,
+            polled_at: base() + chrono::Duration::seconds(minutes),
+            departures,
+        }
+    }
+
+    fn base() -> chrono::DateTime<chrono::Utc> {
+        use chrono::{DurationRound, TimeDelta};
+        (chrono::Utc::now() - chrono::Duration::hours(1))
+            .duration_trunc(TimeDelta::seconds(1))
+            .unwrap()
+    }
+
+    fn day(d: u32) -> chrono::NaiveDate {
+        let date = chrono::NaiveDate::from_ymd_opt(2099, 1, d).unwrap();
+        crate::test_support::assert_synthetic_date(date);
+        date
+    }
+
+    async fn clean_history(pool: &PgPool) {
+        for sql in [
+            "DELETE FROM island_of_ireland_train_calls WHERE train_code LIKE 'ZQ%'",
+            "DELETE FROM island_of_ireland_trains WHERE train_code LIKE 'ZQ%'",
+        ] {
+            sqlx::query(sql).execute(pool).await.unwrap();
+        }
+    }
+
+    type CallRow = (String, Option<String>, Option<String>, Option<i32>);
+
+    type TrainRow = (
+        String,
+        Option<i32>,
+        Option<String>,
+        Option<String>,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    );
+
+    async fn train_row(pool: &PgPool, code: &str) -> TrainRow {
+        sqlx::query_as(
+            "SELECT status, late_minutes, last_location, destination_time, \
+                    last_seen_at, changed_at \
+             FROM island_of_ireland_trains WHERE train_code = $1",
+        )
+        .bind(code)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    /// Two boards in one batch, then a later poll: each station's times
+    /// are kept per call, the train takes the newest board's train-level
+    /// fields, unchanged values write nothing, an older poll never wins,
+    /// and a departure with no `Traindate` is left out.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    #[expect(clippy::too_many_lines, reason = "one scenario, poll by poll")]
+    async fn train_history_keeps_each_call_and_the_newest_train_state() {
+        let pool = connect().await;
+        clean_history(&pool).await;
+        let mut conn = pool.acquire().await.unwrap();
+
+        let first = [
+            board(
+                "ZQAAA",
+                0,
+                vec![
+                    departure(
+                        "ZQ01",
+                        Some(day(1)),
+                        "No Information",
+                        0,
+                        ("00:00", "10:20"),
+                        None,
+                    ),
+                    departure("ZQ02", None, "En Route", 1, ("10:30", "10:31"), None),
+                ],
+            ),
+            board(
+                "ZQBBB",
+                5,
+                vec![departure(
+                    "ZQ01",
+                    Some(day(1)),
+                    "En Route",
+                    3,
+                    ("10:50", "10:51"),
+                    Some("Departed Zesttown"),
+                )],
+            ),
+        ];
+        let wrote = record_train_history(&mut conn, &first).await.unwrap();
+        assert_eq!(
+            wrote,
+            TrainHistoryWrite {
+                trains: 1,
+                calls: 2,
+                skipped: 1
+            }
+        );
+        let calls: Vec<CallRow> = sqlx::query_as(
+            "SELECT station_code, scheduled_arrival, scheduled_departure, late_minutes \
+             FROM island_of_ireland_train_calls WHERE train_code = 'ZQ01' ORDER BY station_code",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            calls,
+            vec![
+                ("ZQAAA".into(), None, Some("10:20".into()), Some(0)),
+                (
+                    "ZQBBB".into(),
+                    Some("10:50".into()),
+                    Some("10:51".into()),
+                    Some(3)
+                ),
+            ]
+        );
+        // The newer board's train-level fields; 00:00 is no time.
+        let row = train_row(&pool, "ZQ01").await;
+        assert_eq!(
+            (row.0.as_str(), row.1, row.2.as_deref(), row.3.as_deref()),
+            ("En Route", Some(3), Some("Departed Zesttown"), None)
+        );
+        let seen = row.4;
+        assert_eq!(row.5, seen);
+
+        // The same board again a minute later: nothing to write.
+        let again = [board(
+            "ZQBBB",
+            65,
+            vec![departure(
+                "ZQ01",
+                Some(day(1)),
+                "En Route",
+                3,
+                ("10:50", "10:51"),
+                Some("Departed Zesttown"),
+            )],
+        )];
+        let wrote = record_train_history(&mut conn, &again).await.unwrap();
+        assert_eq!((wrote.trains, wrote.calls), (0, 0));
+
+        // Five minutes on, still unchanged: only last_seen_at moves.
+        let later = [board(
+            "ZQBBB",
+            305,
+            vec![departure(
+                "ZQ01",
+                Some(day(1)),
+                "En Route",
+                3,
+                ("10:50", "10:51"),
+                Some("Departed Zesttown"),
+            )],
+        )];
+        let wrote = record_train_history(&mut conn, &later).await.unwrap();
+        assert_eq!((wrote.trains, wrote.calls), (1, 0));
+        let row = train_row(&pool, "ZQ01").await;
+        assert_eq!((row.4 - seen).num_seconds(), 300);
+        assert_eq!(row.5, seen);
+
+        // An older poll arriving late changes nothing.
+        let stale = [board(
+            "ZQBBB",
+            -300,
+            vec![departure(
+                "ZQ01",
+                Some(day(1)),
+                "No Information",
+                0,
+                ("10:50", "10:51"),
+                None,
+            )],
+        )];
+        let wrote = record_train_history(&mut conn, &stale).await.unwrap();
+        assert_eq!((wrote.trains, wrote.calls), (0, 0));
+        assert_eq!(train_row(&pool, "ZQ01").await.1, Some(3));
+
+        drop(conn);
+        clean_history(&pool).await;
+    }
+
+    /// The prune deletes only rows dated before the cutoff, at most
+    /// `batch` per table per call.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn train_history_prune_keeps_the_window_and_the_batch() {
+        let pool = connect().await;
+        clean_history(&pool).await;
+        let mut conn = pool.acquire().await.unwrap();
+        let boards = [board(
+            "ZQAAA",
+            0,
+            vec![
+                departure(
+                    "ZQ11",
+                    Some(day(1)),
+                    "En Route",
+                    0,
+                    ("10:00", "10:01"),
+                    None,
+                ),
+                departure(
+                    "ZQ12",
+                    Some(day(1)),
+                    "En Route",
+                    0,
+                    ("10:10", "10:11"),
+                    None,
+                ),
+                departure(
+                    "ZQ13",
+                    Some(day(3)),
+                    "En Route",
+                    0,
+                    ("10:20", "10:21"),
+                    None,
+                ),
+            ],
+        )];
+        record_train_history(&mut conn, &boards).await.unwrap();
+
+        // Batch 1: one call and one train per pass.
+        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 2);
+        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 2);
+        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 0);
+        let left: Vec<String> = sqlx::query_scalar(
+            "SELECT train_code FROM island_of_ireland_trains WHERE train_code LIKE 'ZQ%' \
+             UNION ALL SELECT train_code FROM island_of_ireland_train_calls \
+             WHERE train_code LIKE 'ZQ%' ORDER BY 1",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(left, ["ZQ13", "ZQ13"]);
+
+        drop(conn);
+        clean_history(&pool).await;
     }
 }
