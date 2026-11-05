@@ -1181,27 +1181,34 @@ mod db_tests {
         }
     }
 
-    /// A board polled `minutes` after the fixture's base time, an hour
+    /// A board polled `seconds` after the fixture's base time, an hour
     /// before now (the guards treat a stored time more than 2 minutes
     /// ahead of now as clock skew, so the polls must be in the past).
     fn board(
         station: &str,
-        minutes: i64,
+        seconds: i64,
         departures: Vec<common::island_of_ireland::IslandOfIrelandDeparture>,
     ) -> IslandOfIrelandStationSample {
         IslandOfIrelandStationSample {
             station_id: station.into(),
             network: IslandOfIrelandNetwork::RepublicOfIreland,
-            polled_at: base() + chrono::Duration::seconds(minutes),
+            polled_at: base() + chrono::Duration::seconds(seconds),
             departures,
         }
     }
 
+    /// The fixture's base time, fixed once per test process: read afresh
+    /// for each board, two boards built either side of a second boundary
+    /// were a second further apart than the test meant.
     fn base() -> chrono::DateTime<chrono::Utc> {
-        use chrono::{DurationRound, TimeDelta};
-        (chrono::Utc::now() - chrono::Duration::hours(1))
-            .duration_trunc(TimeDelta::seconds(1))
-            .unwrap()
+        static BASE: std::sync::LazyLock<chrono::DateTime<chrono::Utc>> =
+            std::sync::LazyLock::new(|| {
+                use chrono::{DurationRound, TimeDelta};
+                (chrono::Utc::now() - chrono::Duration::hours(1))
+                    .duration_trunc(TimeDelta::seconds(1))
+                    .unwrap()
+            });
+        *BASE
     }
 
     fn day(d: u32) -> chrono::NaiveDate {
