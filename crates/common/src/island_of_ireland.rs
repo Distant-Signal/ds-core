@@ -23,6 +23,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod live_codes;
+pub mod tracking;
 pub mod train_state;
 
 /// Which network's own feed is authoritative for this row -- "which feed do

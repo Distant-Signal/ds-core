@@ -1,7 +1,7 @@
 //! What an Iarnród Éireann departure board says about one train, read the
 //! same way everywhere (distant-signal's
 //! docs/superpowers/specs/2026-11-05-irish-rail-train-tracking-design.md
-//! §6): the api's train page and, later, the writer's tracked-train state.
+//! §6): the api's train page and the writer's tracked-train state.
 //!
 //! The rule is that a train we haven't seen is unknown, not on time: every
 //! state here needs an observation behind it, and a field the feed doesn't
@@ -132,6 +132,54 @@ pub fn interpret(observation: &Observation<'_>, now: DateTime<Utc>) -> Interpret
         late_minutes,
         last_location,
     }
+}
+
+/// What a tracked train's `train_current_state` row says, read from an
+/// [`Interpretation`] (design §6.2's last column).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentState {
+    /// `awaiting_activation`, `en_route` or `completed`: never `cancelled`,
+    /// which no board field tells us (design §6.4).
+    pub status: &'static str,
+    /// The feed's `Late`; `None` with no report.
+    pub delay_minutes: Option<i32>,
+    /// `Lastlocation`'s place.
+    pub last_reported_location: Option<String>,
+    /// `DEPARTURE` or `ARRIVAL`, from `Lastlocation`.
+    pub last_event_type: Option<&'static str>,
+}
+
+/// `train_current_state.last_event_type` for a [`LastLocationEvent`], in
+/// TRUST's words, as GB trains store it.
+pub fn event_type(event: LastLocationEvent) -> &'static str {
+    match event {
+        LastLocationEvent::Departed => "DEPARTURE",
+        LastLocationEvent::Arrived => "ARRIVAL",
+    }
+}
+
+/// The `train_current_state` a tracked train gets from `read`, or `None`
+/// for [`LiveState::NotSeenRecently`]: a train off every board keeps the
+/// state it had (design §6.2: "unchanged (no write)").
+pub fn current_state(read: &Interpretation) -> Option<CurrentState> {
+    let located = || {
+        read.last_location
+            .as_ref()
+            .map(|l| (l.place.clone(), event_type(l.event)))
+    };
+    let (status, delay_minutes, location) = match read.state {
+        LiveState::NotSeenRecently => return None,
+        LiveState::NoReport => ("awaiting_activation", None, None),
+        LiveState::Running => ("en_route", read.late_minutes, located()),
+        LiveState::Arrived => ("completed", read.late_minutes, located()),
+    };
+    let (last_reported_location, last_event_type) = location.unzip();
+    Some(CurrentState {
+        status,
+        delay_minutes,
+        last_reported_location,
+        last_event_type,
+    })
 }
 
 /// A board time as the history stores it: `HH:MM`, or `None` for a blank
@@ -289,6 +337,62 @@ mod tests {
             (moving.state, moving.late_minutes),
             (LiveState::Running, Some(3))
         );
+    }
+
+    /// Design §6.2's last column, row by row.
+    #[test]
+    fn current_state_follows_the_interpretation() {
+        let now = at(NOW);
+        let quiet = interpret(&observation("No Information", 0, None), now);
+        assert_eq!(
+            current_state(&quiet),
+            Some(CurrentState {
+                status: "awaiting_activation",
+                delay_minutes: None,
+                last_reported_location: None,
+                last_event_type: None,
+            })
+        );
+        let running = interpret(&observation("En Route", 16, Some("Departed Dundalk")), now);
+        assert_eq!(
+            current_state(&running),
+            Some(CurrentState {
+                status: "en_route",
+                delay_minutes: Some(16),
+                last_reported_location: Some("Dundalk".into()),
+                last_event_type: Some("DEPARTURE"),
+            })
+        );
+        let at_newry = interpret(&observation("En Route", 3, Some("Arrived Newry")), now);
+        assert_eq!(
+            current_state(&at_newry).map(|s| (s.status, s.last_event_type)),
+            Some(("en_route", Some("ARRIVAL")))
+        );
+        let no_location = interpret(&observation("En Route", 1, None), now);
+        assert_eq!(
+            current_state(&no_location),
+            Some(CurrentState {
+                status: "en_route",
+                delay_minutes: Some(1),
+                last_reported_location: None,
+                last_event_type: None,
+            })
+        );
+        let arrived = interpret(&observation("En Route", 4, Some("Arrived Belfast")), now);
+        assert_eq!(
+            current_state(&arrived),
+            Some(CurrentState {
+                status: "completed",
+                delay_minutes: Some(4),
+                last_reported_location: Some("Belfast".into()),
+                last_event_type: Some("ARRIVAL"),
+            })
+        );
+        let gone = interpret(
+            &observation("En Route", 6, Some("Departed Newry")),
+            at("2026-11-05T17:40:00Z"),
+        );
+        assert_eq!(current_state(&gone), None);
     }
 
     #[test]

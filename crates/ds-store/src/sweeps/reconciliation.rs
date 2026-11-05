@@ -85,6 +85,12 @@ struct EnrichmentCandidate {
 /// and a sweep that cannot match one would otherwise re-select it every
 /// tick. Their page needs no match anyway: journey stops fall back to the
 /// published calling points.
+///
+/// Iarnród Éireann trains (`ie:` uids, 2026-11-06) are excluded too: they
+/// have no CIF schedule, so each would cost one lookup every tick and find
+/// nothing (distant-signal's
+/// docs/superpowers/specs/2026-11-05-irish-rail-train-tracking-design.md
+/// §4.2).
 async fn list_trains_needing_schedule_enrichment(
     pool: &PgPool,
 ) -> anyhow::Result<Vec<EnrichmentCandidate>> {
@@ -95,6 +101,7 @@ async fn list_trains_needing_schedule_enrichment(
          WHERE tr.schedule_matched_at IS NULL \
            AND tr.service_date >= CURRENT_DATE - INTERVAL '2 days' \
            AND tr.service_date <= CURRENT_DATE + 1 \
+           AND tr.train_uid NOT LIKE 'ie:%' \
            AND NOT EXISTS ( \
                SELECT 1 FROM schedule_services ss \
                WHERE ss.service_date = tr.service_date AND ss.uid = tr.train_uid \
@@ -796,6 +803,37 @@ mod db_tests {
 
         cleanup(&pool, user_id, near_uid).await;
         cleanup(&pool, user_id, far_uid).await;
+    }
+
+    /// An Iarnród Éireann train has no CIF schedule: it is never an
+    /// enrichment candidate, while a GB train tracked the same day is.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                schedule_enrichment_candidates_leave_out_irish_trains \
+                -- --ignored --test-threads=1`"]
+    async fn schedule_enrichment_candidates_leave_out_irish_trains() {
+        let pool = connect().await;
+        let user_id = "TEST-RECON-IE";
+        let gb_uid = "TEST-RECON-IE-GB";
+        let ie_uid = "ie:ZR01";
+        cleanup(&pool, user_id, gb_uid).await;
+        cleanup(&pool, user_id, ie_uid).await;
+        seed_user(&pool, user_id).await;
+        let today: NaiveDate = sqlx::query_scalar("SELECT CURRENT_DATE")
+            .fetch_one(&pool)
+            .await
+            .expect("CURRENT_DATE");
+        let gb = seed_train(&pool, gb_uid, today).await;
+        let ie = seed_train(&pool, ie_uid, today).await;
+        seed_pending_subscription(&pool, user_id, today, gb).await;
+        seed_pending_subscription(&pool, user_id, today, ie).await;
+
+        let candidates = enrichment_candidate_ids_for_tests(&pool).await;
+        assert!(candidates.contains(&gb), "the GB train is a candidate");
+        assert!(!candidates.contains(&ie), "an ie: train is never one");
+
+        cleanup(&pool, user_id, gb_uid).await;
+        cleanup(&pool, user_id, ie_uid).await;
     }
 
     #[tokio::test]
