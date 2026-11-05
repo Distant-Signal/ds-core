@@ -35,7 +35,25 @@ use super::{IslandOfIrelandLiveStation, IslandOfIrelandStation};
 ///   Belfast (friction research §4). Their published positions are about
 ///   2 km apart, so this is pinned rather than left to the name step's
 ///   distance check.
-pub const OVERRIDES: &[(&str, Option<&str>)] = &[("7020IR2162", Some("BFSTC"))];
+/// - Five stations whose live list carries two or three codes with the
+///   same name, alias and position, where the name step can only report
+///   them as ambiguous: Park West (`8220IR0129`: `CHORC`, `PWESF`),
+///   Kishoge (`8220KISHO`: `KISHO`, `KISHF`, `KISHS`), Clondalkin
+///   (`8230IR0036`: `CLDKN`, `CLONF`, `CLONS`), Adamstown (`8230IR0128`:
+///   `ADMTN`, `ADAMF`) and Hazelhatch (`8260IR0063`: `HZLCH`, `HAZEF`,
+///   `HAZES`). The stored board
+///   history shows every code in a group returning the same board (the
+///   same trains, dates and times), so the variants are aliases of one
+///   board; each station is pinned to the code without the `F`/`S`
+///   suffix (DS-366).
+pub const OVERRIDES: &[(&str, Option<&str>)] = &[
+    ("7020IR2162", Some("BFSTC")),
+    ("8220IR0129", Some("CHORC")),
+    ("8220KISHO", Some("KISHO")),
+    ("8230IR0036", Some("CLDKN")),
+    ("8230IR0128", Some("ADMTN")),
+    ("8260IR0063", Some("HZLCH")),
+];
 
 /// Furthest apart an exact name match may be. Generous: the live API's
 /// positions are coarse (Belfast's is about 2 km from GTFS's), and the
@@ -560,6 +578,76 @@ mod tests {
             &live_list(),
         );
         assert_eq!(report.counts().get(&MatchMethod::Override), Some(&1));
+    }
+
+    /// The five stations whose live list has aliased codes (DS-366):
+    /// with every variant at one name and position, the shipped overrides
+    /// pick the unsuffixed code, where matching alone is ambiguous.
+    /// Names and positions are illustrative, a few km apart.
+    #[test]
+    fn the_shipped_overrides_pick_one_code_of_each_aliased_group() {
+        /// `(catalogue stop id, name, live codes, position)`.
+        type Group<'a> = (&'a str, &'a str, &'a [&'a str], (f64, f64));
+        let groups: [Group<'_>; 5] = [
+            (
+                "8220IR0129",
+                "Park West",
+                &["CHORC", "PWESF"],
+                (53.3343, -6.3790),
+            ),
+            (
+                "8220KISHO",
+                "Kishoge",
+                &["KISHF", "KISHO", "KISHS"],
+                (53.3315, -6.4205),
+            ),
+            (
+                "8230IR0036",
+                "Clondalkin",
+                &["CLDKN", "CLONF", "CLONS"],
+                (53.3349, -6.4064),
+            ),
+            (
+                "8230IR0128",
+                "Adamstown",
+                &["ADAMF", "ADMTN"],
+                (53.3353, -6.4523),
+            ),
+            (
+                "8260IR0063",
+                "Hazelhatch",
+                &["HAZEF", "HAZES", "HZLCH"],
+                (53.3226, -6.5232),
+            ),
+        ];
+        let live: Vec<_> = groups
+            .iter()
+            .flat_map(|(_, name, codes, at)| codes.iter().map(move |c| live(c, name, None, *at)))
+            .collect();
+        let stations: Vec<_> = groups
+            .iter()
+            .map(|(id, name, _, at)| stop(id, name, Some(*at)))
+            .collect();
+
+        let unpinned = match_live_codes_with(&stations, &live, &[]);
+        assert_eq!(unpinned.unmatched().count(), 5, "{unpinned:?}");
+
+        let report = match_live_codes(&stations, &live);
+        assert_eq!(report.unmatched().count(), 0, "{report:?}");
+        for (id, code) in [
+            ("8220IR0129", "CHORC"),
+            ("8220KISHO", "KISHO"),
+            ("8230IR0036", "CLDKN"),
+            ("8230IR0128", "ADMTN"),
+            ("8260IR0063", "HZLCH"),
+        ] {
+            assert!(OVERRIDES.contains(&(id, Some(code))), "{id}");
+            assert_eq!(
+                outcome(&report, id),
+                &matched(code, MatchMethod::Override),
+                "{id}"
+            );
+        }
     }
 
     #[test]
