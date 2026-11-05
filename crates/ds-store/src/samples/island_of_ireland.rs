@@ -14,6 +14,8 @@ use common::island_of_ireland::{
 };
 use sqlx::{PgConnection, PgPool};
 
+pub mod tracked;
+
 pub fn network_wire(network: IslandOfIrelandNetwork) -> &'static str {
     match network {
         IslandOfIrelandNetwork::NorthernIreland => "northern-ireland",
@@ -908,40 +910,62 @@ async fn write_history_trains(conn: &mut PgConnection, rows: &[HistoryRow<'_>]) 
 /// 576,000 rows a day against an intake of under 20,000 (design §4.3).
 pub const TRAIN_HISTORY_PRUNE_BATCH: i64 = 2_000;
 
-/// Deletes up to `batch` rows from each history table whose `train_date`
-/// is before `cutoff`, in the caller's transaction. One index probe when
-/// nothing is due. Returns the rows deleted.
+/// Whether a history row (`h`) belongs to a tracked train: a `trains` row
+/// with its `ie:` uid and date has a subscription. The `trains` row is
+/// shared train data, kept 30 days when subscribed (the aggregator's
+/// `prune_trains`), so no personal data is read.
+const HISTORY_ROW_TRACKED_SQL: &str = r"
+    EXISTS (SELECT 1 FROM trains tr
+            JOIN train_subscriptions ts ON ts.trains_id = tr.id
+            WHERE h.network = 'republic-of-ireland'
+              AND tr.train_uid = 'ie:' || h.train_code
+              AND tr.service_date = h.train_date)
+";
+
+/// Deletes up to `batch` rows from each history table, in the caller's
+/// transaction, in two tiers (design §4.3): a tracked train's rows once
+/// their `train_date` is before `tracked_cutoff`, and every other train's
+/// once it is before `cutoff`. A `tracked_cutoff` later than `cutoff` is
+/// treated as `cutoff` (a tracked train never goes sooner). One index probe
+/// when nothing is due, plus one `trains` lookup per tracked train kept
+/// past `cutoff`. Returns the rows deleted.
 pub async fn prune_train_history(
     conn: &mut PgConnection,
     cutoff: chrono::NaiveDate,
+    tracked_cutoff: chrono::NaiveDate,
     batch: i64,
 ) -> Result<u64> {
-    let calls = sqlx::query(
+    let tracked_cutoff = tracked_cutoff.min(cutoff);
+    let calls = sqlx::query(&format!(
         r"
         DELETE FROM island_of_ireland_train_calls AS c
         USING (SELECT network, train_code, train_date, station_code
-               FROM island_of_ireland_train_calls
+               FROM island_of_ireland_train_calls AS h
                WHERE train_date < $1
-               LIMIT $2) AS d
+                 AND (train_date < $2 OR NOT {HISTORY_ROW_TRACKED_SQL})
+               LIMIT $3) AS d
         WHERE (c.network, c.train_code, c.train_date, c.station_code)
             = (d.network, d.train_code, d.train_date, d.station_code)
         ",
-    )
+    ))
     .bind(cutoff)
+    .bind(tracked_cutoff)
     .bind(batch)
     .execute(&mut *conn)
     .await?;
-    let trains = sqlx::query(
+    let trains = sqlx::query(&format!(
         r"
         DELETE FROM island_of_ireland_trains AS t
         USING (SELECT network, train_code, train_date
-               FROM island_of_ireland_trains
+               FROM island_of_ireland_trains AS h
                WHERE train_date < $1
-               LIMIT $2) AS d
+                 AND (train_date < $2 OR NOT {HISTORY_ROW_TRACKED_SQL})
+               LIMIT $3) AS d
         WHERE (t.network, t.train_code, t.train_date) = (d.network, d.train_code, d.train_date)
         ",
-    )
+    ))
     .bind(cutoff)
+    .bind(tracked_cutoff)
     .bind(batch)
     .execute(&mut *conn)
     .await?;
@@ -1426,9 +1450,24 @@ mod db_tests {
         record_train_history(&mut conn, &boards).await.unwrap();
 
         // Batch 1: one call and one train per pass.
-        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 2);
-        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 2);
-        assert_eq!(prune_train_history(&mut conn, day(2), 1).await.unwrap(), 0);
+        assert_eq!(
+            prune_train_history(&mut conn, day(2), day(2), 1)
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            prune_train_history(&mut conn, day(2), day(2), 1)
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            prune_train_history(&mut conn, day(2), day(2), 1)
+                .await
+                .unwrap(),
+            0
+        );
         let left: Vec<String> = sqlx::query_scalar(
             "SELECT train_code FROM island_of_ireland_trains WHERE train_code LIKE 'ZQ%' \
              UNION ALL SELECT train_code FROM island_of_ireland_train_calls \
