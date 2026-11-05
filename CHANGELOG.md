@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.0 (2026-11-05)
+
+- Keep Iarnród Éireann board history by train (#14)
+
+**Migrations** (1): `20261105120000_island_of_ireland_train_history.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.2.0 (2026-11-04)
 
 - Join island-of-Ireland stations to live boards; keep line colours (#12)
