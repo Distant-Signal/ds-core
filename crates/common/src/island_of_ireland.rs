@@ -19,10 +19,11 @@
 //! identifier scheme from `api.irishrail.ie`'s own `StationCode` (Tier B) --
 //! see the plan's Judgment Call #1. Do not assume the two match.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod live_codes;
+pub mod train_state;
 
 /// Which network's own feed is authoritative for this row -- "which feed do
 /// we source this from," not "which jurisdiction is this station
@@ -148,6 +149,22 @@ pub struct IslandOfIrelandDeparture {
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_in_minutes: Option<i32>,
+    /// `Traindate`: the day the train started, which stays the same past
+    /// midnight. With `train_code` it names one train (train codes repeat
+    /// every day). `None` from a producer built before it was parsed, or
+    /// when the feed's value doesn't parse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub train_date: Option<NaiveDate>,
+    /// `Origintime`, `HH:MM` Irish local time, as sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_time: Option<String>,
+    /// `Destinationtime`, `HH:MM` Irish local time, as sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_time: Option<String>,
+    /// `Lastlocation`, e.g. `"Departed Dundalk"`, trimmed; `None` when
+    /// blank (a train with no report yet). [`train_state`] reads it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_location: Option<String>,
 }
 
 /// One live poll of one station's departure board.
@@ -260,11 +277,35 @@ mod sample_tests {
                 late_minutes: 0,
                 status: "On Time".to_string(),
                 due_in_minutes: Some(5),
+                train_date: Some(NaiveDate::from_ymd_opt(2026, 9, 5).unwrap()),
+                origin_time: Some("06:00".to_string()),
+                destination_time: Some("08:15".to_string()),
+                last_location: None,
             }],
         };
         let json = serde_json::to_value(&sample).unwrap();
+        assert_eq!(json["departures"][0]["train_date"], "2026-09-05");
         let back: IslandOfIrelandStationSample = serde_json::from_value(json).unwrap();
-        assert_eq!(back.departures[0].train_code, "A101");
+        assert_eq!(back, sample);
+    }
+
+    /// A sample from a poller built before `train_date` and the other
+    /// optional fields were parsed still decodes, with them `None`; and an
+    /// unset field is left out of the wire form, so an older writer reads
+    /// a newer poller's body too.
+    #[test]
+    fn departures_without_the_board_fields_decode() {
+        let departure: IslandOfIrelandDeparture = serde_json::from_value(serde_json::json!({
+            "train_code": "A101", "origin": "Belfast", "destination": "Dublin Connolly",
+            "late_minutes": 0, "status": "No Information"
+        }))
+        .unwrap();
+        assert_eq!(departure.train_date, None);
+        assert_eq!(departure.origin_time, None);
+        assert_eq!(departure.last_location, None);
+        let json = serde_json::to_value(&departure).unwrap();
+        assert!(json.get("train_date").is_none());
+        assert!(json.get("last_location").is_none());
     }
 
     #[test]
@@ -283,6 +324,10 @@ mod sample_tests {
             late_minutes: -2,
             status: "En Route".to_string(),
             due_in_minutes: Some(14),
+            train_date: None,
+            origin_time: None,
+            destination_time: None,
+            last_location: Some("Departed Portmarnock".to_string()),
         };
         let json = serde_json::to_value(&departure).unwrap();
         let back: IslandOfIrelandDeparture = serde_json::from_value(json).unwrap();
