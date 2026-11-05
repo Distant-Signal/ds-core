@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.0 (2026-11-05)
+
+- Lock the v0.2.0 and v0.3.0 migration checksums; fix a flaky test (#16)
+- Track Iarnród Éireann trains from the board history (#18)
+
+**Migrations** (2): `20261106120000_ireland_train_tracking.sql`, `20261106120100_ireland_train_tracking_validate.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.3.0 (2026-11-05)
 
 - Keep Iarnród Éireann board history by train (#14)
