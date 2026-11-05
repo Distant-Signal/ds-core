@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1 (2026-11-05)
+
+- Irish Rail: a live-board freshness source and five live-code overrides (#17)
+
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.4.0 (2026-11-05)
 
 - Lock the v0.2.0 and v0.3.0 migration checksums; fix a flaky test (#16)
