@@ -42,9 +42,22 @@ pub mod sources {
     pub const STATIONS_NIR: &str = "island_of_ireland_stations_nir";
     pub const LINES_GTFS: &str = "island_of_ireland_lines_gtfs";
     pub const LINES_NIR: &str = "island_of_ireland_lines_nir";
+    /// Iarnród Éireann's live boards (`ioi-station-samples/1` on
+    /// `ds:ingest:ioi-live`, poller-irish-rail-live, every 5 minutes): the
+    /// ingest-writer records it at the entry's `produced_at` after applying
+    /// a non-empty batch, so `DistantSignalIngestSourceStale` sees the live
+    /// feed stop (DS-363). The rows' own `polled_at` cannot: it is per
+    /// station, and only the writer reads the stream.
+    pub const STATION_SAMPLES_LIVE: &str = "island_of_ireland_station_samples_live";
 
     /// Every source above (as `crate::samples::sources::ALL`).
-    pub const ALL: &[&str] = &[STATIONS_GTFS, STATIONS_NIR, LINES_GTFS, LINES_NIR];
+    pub const ALL: &[&str] = &[
+        STATIONS_GTFS,
+        STATIONS_NIR,
+        LINES_GTFS,
+        LINES_NIR,
+        STATION_SAMPLES_LIVE,
+    ];
 }
 
 /// `network`'s `island_of_ireland_stations` freshness source.
@@ -531,7 +544,8 @@ pub async fn upsert_station_samples(
 /// 3c.1), in the caller's transaction, with the ordering guard on each
 /// row's own `polled_at` (decision D13: its observed time; the handler
 /// clamps it to the writer's `now() + 2 min` first): an older sample never
-/// overwrites a newer one. No freshness marker, as on the api's route.
+/// overwrites a newer one. No freshness marker here: the writer's handler
+/// records [`sources::STATION_SAMPLES_LIVE`] for the stream.
 /// Returns the rows written, as [`upsert_stations_observed`] does.
 pub async fn upsert_station_samples_observed(
     conn: &mut PgConnection,

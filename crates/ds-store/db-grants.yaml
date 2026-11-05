@@ -640,6 +640,8 @@ row_policies:
   #     island_of_ireland_* names writers recorded before the per-network
   #     split were dropped a release after it (batch 54; migration
   #     20261010100100 deletes their rows).
+  #     And Iarnród Éireann's live boards
+  #     (island_of_ireland_station_samples_live, ds:ingest:ioi-live), DS-363.
   ingest_freshness:
     writer:
       writes: >-
@@ -650,6 +652,7 @@ row_policies:
         'transit-metrolink-timetable', 'transit-metrolink-situations',
         'tfl-stops', 'tfl-line-routes', 'tracked-stop-boards', 'darwin-pushport',
         'tracked-stop-arrival-boards', 'transit-net-timetable', 'transit-net-situations',
-        'transit-tfl-timetable', 'transit-tfl-situations')
+        'transit-tfl-timetable', 'transit-tfl-situations',
+        'island_of_ireland_station_samples_live')
     stations: {writes: "source = 'stations'"}
     incidents: {writes: "source = 'incidents'"}
