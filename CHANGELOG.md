@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.0 (2026-11-06)
+
+- Record each journey leg's final arrival on the leg (#29)
+- Lock the checksums of the two leg final arrival migrations (#32)
+
+**Migrations** (2): `20261106200000_journey_legs_final_arrival.sql`, `20261106200100_journey_legs_final_arrival_validate.sql`
+
 ## v0.7.0 (2026-11-06)
 
 - Add leave-by buffers, preferences, push state and leave_by_sql (#26)
