@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.1 (2026-11-06)
+
+- Let the api read regular_journey_summaries for the account export (#34)
+
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.8.0 (2026-11-06)
 
 - Record each journey leg's final arrival on the leg (#29)
