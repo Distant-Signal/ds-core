@@ -528,7 +528,7 @@ mod db_tests {
             ]
         );
         assert_eq!(state(&pool, gb_id).await, None);
-        assert!(signal_keys(&pool, gb_id).await.is_empty());
+        assert_eq!(signal_keys(&pool, gb_id).await, Vec::<String>::new());
 
         // Read 30 minutes after the train's last board, nothing is written:
         // a quiet train keeps the state it had.
@@ -625,7 +625,7 @@ mod db_tests {
                 .unwrap(),
             2
         );
-        assert!(left().await.is_empty());
+        assert_eq!(left().await, Vec::<String>::new());
 
         drop(conn);
         clean(&pool).await;

@@ -251,7 +251,7 @@ mod tests {
         }))
         .unwrap();
         assert_eq!((line.color, line.agency), (None, None));
-        assert!(line.replaces.is_empty());
+        assert_eq!(line.replaces, Vec::<String>::new());
         let json = serde_json::to_value(&station).unwrap();
         assert!(json.get("raw_name").is_none());
     }
