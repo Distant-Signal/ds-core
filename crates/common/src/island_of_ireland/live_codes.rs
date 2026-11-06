@@ -430,7 +430,7 @@ mod tests {
             ["park", "west", "and", "cherry", "orchard"]
         );
         assert_eq!(normalise("Station"), ["station"]);
-        assert!(normalise("  ").is_empty());
+        assert_eq!(normalise("  "), Vec::<String>::new());
     }
 
     #[test]
