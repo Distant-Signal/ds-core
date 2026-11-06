@@ -806,6 +806,7 @@ BEGIN
         ('regular_journey_summaries', 'notifier', 'SELECT', ''),
         ('regular_journey_summaries', 'notifier', 'INSERT', ''),
         ('regular_journey_summaries', 'notifier', 'DELETE', ''),
+        ('regular_journey_summaries', 'api', 'SELECT', ''),
         ('ingest_dedup', 'writer', 'SELECT', ''),
         ('ingest_dedup', 'writer', 'INSERT', ''),
         ('ingest_dedup', 'writer', 'DELETE', ''),
