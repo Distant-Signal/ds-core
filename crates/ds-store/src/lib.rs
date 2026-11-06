@@ -47,6 +47,7 @@
 //! | [`writes`] | 2a.5 | `db_writes_total`/`db_write_seconds` and the direct writers' failure classes |
 //! | [`reads`] | 4.2 | the internal readers behind the narrow views, `list_population_versions`, the sample-station selection |
 //! | [`journeys`] | regular journeys 2 | `leave_by_sql`, the leave-by both the api and the notifier read |
+//! | [`bank_holidays`] | regular journeys 5 | the divisions and `bank_holiday_skip_sql`, the skip both the api and the notifier read |
 //! | [`transit`] | transit 1.5 | the transit networks' versioned timetable (staging and activation) |
 //!
 //! `test_support` (built for this crate's tests and, through the
@@ -54,6 +55,7 @@
 //! dev-depend on it) holds the shared DB-test fixtures.
 
 pub mod backlog;
+pub mod bank_holidays;
 pub mod corpus;
 pub mod darwin;
 pub mod freshness;

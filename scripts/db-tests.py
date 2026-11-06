@@ -62,6 +62,7 @@ ARCHIVE_FEATURES = ("common/postgres", "ds-runtime/postgres")
 # test-harness right (CREATEDB) the runtime roles do not have. They run as
 # the superuser only.
 SQLX_TEST_SKIPS = (
+    "bank_holidays::db_tests",
     "corpus::db_tests",
     "crosswalk::db_tests",
     "freshness::db_tests",

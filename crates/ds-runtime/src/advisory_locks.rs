@@ -100,6 +100,13 @@ pub const REGULAR_PLAN_SWEEP: LoopLock = LoopLock {
     key: ascii_key(*b"dslprgpl"),
 };
 
+/// `api::bank_holidays_sync` (regular journeys spec 2026-11-06 §8.2): one
+/// GOV.UK fetch for the whole service, by one api replica at a time.
+pub const BANK_HOLIDAYS_SYNC: LoopLock = LoopLock {
+    name: "bank_holidays_sync",
+    key: ascii_key(*b"dslpbhol"),
+};
+
 /// schedule-reference's run lock (`ds_store::schedule::reference_signals::RunLock`,
 /// `CronJob` phase 4): a session lock held for a whole run, so two runs never
 /// publish at once. Not a loop lock (no runner takes it), but in the same
@@ -107,7 +114,7 @@ pub const REGULAR_PLAN_SWEEP: LoopLock = LoopLock {
 pub const SCHEDULE_REFERENCE_RUN_KEY: i64 = ascii_key(*b"dsschref");
 
 /// Every loop lock, for uniqueness checks.
-pub const ALL: [LoopLock; 9] = [
+pub const ALL: [LoopLock; 10] = [
     SCHEDULE_MATCH_SWEEP,
     RECONCILIATION_SWEEP,
     BACKLOG_MATCH_SWEEP,
@@ -117,6 +124,7 @@ pub const ALL: [LoopLock; 9] = [
     TRAIN_EVENT_OUTBOX,
     JOURNEY_BREAKS_SWEEP,
     REGULAR_PLAN_SWEEP,
+    BANK_HOLIDAYS_SYNC,
 ];
 
 #[cfg(test)]
