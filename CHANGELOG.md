@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.0 (2026-11-06)
+
+- Add the regular plan columns and the plan sweep's advisory lock (#25)
+- Lock the checksums of the two regular plan migrations (#27)
+
+**Migrations** (2): `20261106184000_regular_plan.sql`, `20261106184100_regular_plan_validate.sql`
+
 ## v0.5.0 (2026-11-06)
 
 - Build with Rust 1.99.0, keep the MSRV at 1.88 (#21)
