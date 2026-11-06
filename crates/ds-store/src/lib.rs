@@ -66,6 +66,7 @@ pub mod maintenance;
 pub mod migrate;
 pub mod pool;
 pub mod reads;
+pub mod recurrence;
 pub mod reference;
 pub mod samples;
 pub mod schedule;
