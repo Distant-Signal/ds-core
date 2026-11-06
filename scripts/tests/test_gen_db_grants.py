@@ -347,7 +347,12 @@ class RenderTest(unittest.TestCase):
         self.assertIn("('journeys', 'notifier', 'INSERT', '')", sql)
         self.assertIn("('journeys_id_seq', 'notifier')", sql)
         self.assertIn("('incidents', 'notifier', 'UPDATE', 'summary')", sql)
-        self.assertNotIn("('users', 'notifier'", sql)
+        self.assertNotIn("('sessions', 'notifier'", sql)
+        # users: the bank holiday division only, never the whole row.
+        self.assertIn(
+            "('users', 'notifier', 'SELECT', 'id,bank_holiday_division')", sql
+        )
+        self.assertNotIn("('users', 'notifier', 'SELECT', '')", sql)
         self.assertIn("('notifier', 'narrow')", sql)
 
     def test_the_enricher_targets_column_update_on_incidents(self) -> None:
@@ -554,7 +559,7 @@ class AppRevokesTest(unittest.TestCase):
     def test_what_an_observed_role_is_granted_cannot_be_revoked(self) -> None:
         """An observed role has nothing of its own: it would lose the grant."""
         raw = _raw_observed()
-        raw["app_revokes"]["tables"] = ["users"]
+        raw["app_revokes"]["tables"] = ["sessions"]
         self.assert_refused(raw, "granted to observed role(s) ['api']")
         raw = _raw_observed()
         raw["functions"]["analyze_publish_keys(text)"]["grants"].append("notifier")
