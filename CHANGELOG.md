@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.0 (2026-11-06)
+
+- Add leave-by buffers, preferences, push state and leave_by_sql (#26)
+- Lock the checksums of the three leave-by migrations (#30)
+
+**Migrations** (3): `20261106190000_leave_by.sql`, `20261106190100_leave_by_validate.sql`, `20261106190200_journeys_station_buffer.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.6.0 (2026-11-06)
 
 - Add the regular plan columns and the plan sweep's advisory lock (#25)
