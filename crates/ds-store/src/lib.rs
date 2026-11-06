@@ -46,6 +46,7 @@
 //! | [`loops`] | 1B.6, 1B.7 | the advisory-locked loop runner and the train-domain loops the api and the ingest-writer both run |
 //! | [`writes`] | 2a.5 | `db_writes_total`/`db_write_seconds` and the direct writers' failure classes |
 //! | [`reads`] | 4.2 | the internal readers behind the narrow views, `list_population_versions`, the sample-station selection |
+//! | [`journeys`] | regular journeys 2 | `leave_by_sql`, the leave-by both the api and the notifier read |
 //! | [`transit`] | transit 1.5 | the transit networks' versioned timetable (staging and activation) |
 //!
 //! `test_support` (built for this crate's tests and, through the
@@ -57,6 +58,7 @@ pub mod corpus;
 pub mod darwin;
 pub mod freshness;
 pub mod incidents;
+pub mod journeys;
 pub mod loops;
 pub mod maintenance;
 pub mod migrate;
