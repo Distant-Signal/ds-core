@@ -1099,7 +1099,7 @@ mod db_tests {
     async fn a_weekday_with_variant_legs_uses_them(pool: PgPool) {
         let t = template(&pool, 127, false).await;
         for (variant, order, origin) in
-            [(None, 1, "WOK"), (None, 2, "CLJ"), (Some(5_i16), 1, "GLD")]
+            [(None, 1, "WOK"), (None, 2, "CLJ"), (Some(5_i16), 3, "GLD")]
         {
             sqlx::query(
                 "INSERT INTO journey_template_legs \
@@ -1114,11 +1114,13 @@ mod db_tests {
             .await
             .unwrap();
         }
-        // A second Friday leg 1 breaks the new key; a second plain leg 1 too.
+        // The Friday leg has its own position until a later release drops
+        // the old (template_id, leg_order) key. A second Friday leg 3, or a
+        // second plain leg 1, is refused either way.
         for variant in [Some(5_i16), None] {
             let dup = sqlx::query(
                 "INSERT INTO journey_template_legs (template_id, leg_order, variant_weekday) \
-                 VALUES ($1, 1, $2)",
+                 VALUES ($1, CASE WHEN $2::smallint IS NULL THEN 1 ELSE 3 END, $2)",
             )
             .bind(t)
             .bind(variant)
