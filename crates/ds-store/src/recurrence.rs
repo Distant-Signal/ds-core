@@ -902,6 +902,74 @@ mod db_tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn load_reads_the_pause_and_the_owners_time_away(pool: PgPool) {
+        let t = template(&pool, 127, false).await;
+        sqlx::query("UPDATE journey_templates SET paused_until = $2 WHERE id = $1")
+            .bind(t)
+            .bind(d(3, 4))
+            .execute(&pool)
+            .await
+            .unwrap();
+        for (start, end) in [(d(3, 10), d(3, 12)), (d(2, 1), d(2, 2)), (d(9, 1), d(9, 5))] {
+            sqlx::query(
+                "INSERT INTO user_away_periods (user_id, starts_on, ends_on, label) \
+                 VALUES ($1, $2, $3, 'Away')",
+            )
+            .bind(USER)
+            .bind(start)
+            .bind(end)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let got = load(&pool, &[t], d(3, 1), d(6, 30)).await.unwrap();
+        let s = &got[&t];
+        assert_eq!(s.rule.paused_until, Some(d(3, 4)));
+        // Only the period overlapping the range.
+        assert_eq!(s.exceptions.away, vec![(d(3, 10), d(3, 12))]);
+        let upcoming = s
+            .rule
+            .upcoming(&s.exceptions, d(3, 3), 10, DEFAULT_HORIZON_DAYS);
+        let reasons: Vec<_> = upcoming.iter().map(|u| (u.date, u.skip)).collect();
+        assert_eq!(reasons[0], (d(3, 3), Some(SkipReason::Paused)));
+        assert_eq!(reasons[1], (d(3, 4), None));
+        assert_eq!(reasons[7], (d(3, 10), Some(SkipReason::Away)));
+        assert_eq!(reasons[9], (d(3, 12), Some(SkipReason::Away)));
+
+        let preview = user_exceptions(&pool, USER, false, d(1, 1), d(12, 31))
+            .await
+            .unwrap();
+        assert_eq!(
+            preview.away,
+            vec![(d(2, 1), d(2, 2)), (d(3, 10), d(3, 12)), (d(9, 1), d(9, 5))]
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn time_away_checks_its_dates(pool: PgPool) {
+        crate::test_support::seed_user(&pool, USER).await;
+        for (start, end, label) in [
+            (d(3, 2), d(3, 1), None),
+            (d(1, 1), d(12, 31), Some("")),
+            (NaiveDate::from_ymd_opt(2049, 1, 1).unwrap(), d(1, 3), None),
+        ] {
+            let err = sqlx::query(
+                "INSERT INTO user_away_periods (user_id, starts_on, ends_on, label) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(USER)
+            .bind(start)
+            .bind(end)
+            .bind(label)
+            .execute(&pool)
+            .await;
+            assert!(err.is_err(), "{start} to {end} {label:?} must be refused");
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
     async fn the_prefilter_never_drops_a_due_date(pool: PgPool) {
         let mut ids = Vec::new();
         for days in [0b001_1111_i16, 1, 1 << 6, 0b101_0101] {
