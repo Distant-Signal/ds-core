@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 (2026-11-06)
+
+- Build with Rust 1.99.0, keep the MSRV at 1.88 (#21)
+- Add regular journey targets and pairs to journey_templates (#22)
+- Lock the checksums of the five newest migrations (#23)
+
+**Migrations** (3): `20261106130000_regular_journeys.sql`, `20261106130100_regular_journeys_validate.sql`, `20261106130200_journey_templates_paired_template_id.sql`
+
 ## v0.4.1 (2026-11-05)
 
 - Irish Rail: a live-board freshness source and five live-code overrides (#17)
