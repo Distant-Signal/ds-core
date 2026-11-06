@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.0 (2026-11-06)
+
+- Add bank holidays, the division preference and the skip flag (#36)
+- Lock the checksums of the two bank holidays migrations (#37)
+
+**Migrations** (2): `20261106210000_bank_holidays.sql`, `20261106210100_bank_holidays_validate.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.8.1 (2026-11-06)
 
 - Let the api read regular_journey_summaries for the account export (#34)
