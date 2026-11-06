@@ -3,7 +3,7 @@
 -- The template legs' new unique key: one leg per position for the
 -- template's own legs (variant_weekday NULL, read as 0) and for each
 -- weekday's variant. Built CONCURRENTLY, so writes carry on while it
--- builds; 20261106233300 then drops the old (template_id, leg_order) key,
+-- builds. A later release drops the old (template_id, leg_order) key,
 -- which would refuse a variant leg at a position the template's own legs
 -- already use.
 --

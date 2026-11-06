@@ -21,7 +21,8 @@ SET LOCAL lock_timeout = '5s';
 -- is added NOT VALID and validated by 20261106233100. The new table's
 -- foreign key takes a brief SHARE ROW EXCLUSIVE lock on
 -- `journey_templates`. The unique key moves to include the weekday in
--- 20261106233200 (built concurrently) and 20261106233300.
+-- 20261106233200 (built concurrently); a later release drops the old key
+-- with a contract header, and no api writes a variant leg before that.
 -- -------------------------------------------------------------------------
 
 CREATE TABLE journey_template_day_overrides (
