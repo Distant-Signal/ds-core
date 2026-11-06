@@ -804,6 +804,72 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Leg outcomes (20261106200000): the check is validated, accepts a
+    /// recorded outcome (known or not) and nothing at all, and rejects an
+    /// outcome with no `final_recorded_at`. In a transaction that is rolled
+    /// back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn leg_final_arrival_is_checked() {
+        let mut conn = connect().await;
+        let (validated,): (bool,) = sqlx::query_as(
+            "SELECT convalidated FROM pg_constraint \
+             WHERE conrelid = 'public.journey_legs'::regclass \
+               AND conname = 'journey_legs_final_arrival_check'",
+        )
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+        assert!(validated);
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let (leg,): (i64,) = sqlx::query_as(
+            "WITH j AS (INSERT INTO journeys (user_id) VALUES ('u-regular') RETURNING id) \
+             INSERT INTO journey_legs (journey_id, leg_order, service_date) \
+             SELECT id, 1, CURRENT_DATE FROM j RETURNING id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let set = "UPDATE journey_legs SET final_arrival_delay_minutes = $2, \
+                   final_train_cancelled = $3, \
+                   final_recorded_at = CASE WHEN $4 THEN now() END WHERE id = $1";
+        for (delay, cancelled, recorded) in [
+            (None, None, false),
+            (Some(16), Some(false), true),
+            (None, Some(true), true),
+            (None, None, true),
+        ] {
+            sqlx::query(set)
+                .bind(leg)
+                .bind(delay)
+                .bind(cancelled)
+                .bind(recorded)
+                .execute(&mut *tx)
+                .await
+                .unwrap_or_else(|e| panic!("{delay:?} {cancelled:?} {recorded}: {e}"));
+        }
+        for (delay, cancelled) in [(Some(3), None), (None, Some(false))] {
+            let mut savepoint = tx.begin().await.unwrap();
+            let error = sqlx::query(set)
+                .bind(leg)
+                .bind(delay)
+                .bind(cancelled)
+                .bind(false)
+                .execute(&mut *savepoint)
+                .await
+                .expect_err("rejected");
+            assert_eq!(
+                constraint_of(&error),
+                Some("journey_legs_final_arrival_check"),
+                "{delay:?} {cancelled:?}"
+            );
+            savepoint.rollback().await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+    }
+
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
