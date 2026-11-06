@@ -486,6 +486,260 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// One `journey_templates` row's target columns: origin, destination,
+    /// kind, time, day offset, plan options, usual itinerary.
+    type TargetRow = (
+        Option<&'static str>,
+        Option<&'static str>,
+        Option<&'static str>,
+        Option<&'static str>,
+        i16,
+        Option<&'static str>,
+        Option<&'static str>,
+    );
+
+    async fn insert_target(conn: &mut PgConnection, row: TargetRow) -> sqlx::Result<i64> {
+        let (origin, destination, kind, time, offset, options, usual) = row;
+        let (id,): (i64,) = sqlx::query_as(
+            "INSERT INTO journey_templates \
+             (user_id, days_of_week, origin_crs, destination_crs, target_kind, target_time, \
+              target_day_offset, plan_options, usual_itinerary) \
+             VALUES ('u-regular', 31, $1, $2, $3, $4::time, $5, $6::jsonb, $7::jsonb) \
+             RETURNING id",
+        )
+        .bind(origin)
+        .bind(destination)
+        .bind(kind)
+        .bind(time)
+        .bind(offset)
+        .bind(options)
+        .bind(usual)
+        .fetch_one(conn)
+        .await?;
+        Ok(id)
+    }
+
+    async fn add_regular_user(conn: &mut PgConnection) {
+        sqlx::query("INSERT INTO users (id) VALUES ('u-regular')")
+            .execute(conn)
+            .await
+            .unwrap();
+    }
+
+    fn constraint_of(error: &sqlx::Error) -> Option<&str> {
+        error
+            .as_database_error()
+            .and_then(sqlx::error::DatabaseError::constraint)
+    }
+
+    /// Regular journeys (20261106130000): the three constraints added NOT
+    /// VALID are validated by the next migration.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn regular_journey_constraints_are_validated() {
+        let mut conn = connect().await;
+        let validated: Vec<(String, bool)> = sqlx::query_as(
+            "SELECT conname::text, convalidated FROM pg_constraint \
+             WHERE conrelid = 'public.journey_templates'::regclass \
+               AND conname IN ('journey_templates_target_check', \
+                               'journey_templates_paired_fkey', \
+                               'journey_templates_paired_not_self') \
+             ORDER BY 1",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        assert_eq!(
+            validated,
+            vec![
+                ("journey_templates_paired_fkey".to_owned(), true),
+                ("journey_templates_paired_not_self".to_owned(), true),
+                ("journey_templates_target_check".to_owned(), true),
+            ]
+        );
+    }
+
+    /// The target check accepts a full target and an old-style template
+    /// without one, and rejects a partial target, a bad station code, a day
+    /// offset of 2 or a non-object itinerary. In a transaction that is
+    /// rolled back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn regular_journey_targets_are_checked() {
+        let mut conn = connect().await;
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let accepted: [TargetRow; 3] = [
+            (None, None, None, None, 0, None, None),
+            (
+                Some("WOK"),
+                Some("WAT"),
+                Some("depart_after"),
+                Some("07:45"),
+                0,
+                Some(r#"{"maxChanges": 1}"#),
+                Some(r#"{"legs": []}"#),
+            ),
+            (
+                Some("WAT"),
+                Some("WOK"),
+                Some("arrive_by"),
+                Some("00:30"),
+                1,
+                None,
+                None,
+            ),
+        ];
+        for row in accepted {
+            insert_target(&mut tx, row)
+                .await
+                .unwrap_or_else(|e| panic!("{row:?}: {e}"));
+        }
+        let rejected: [TargetRow; 8] = [
+            // A target with no time.
+            (
+                Some("WOK"),
+                Some("WAT"),
+                Some("depart_after"),
+                None,
+                0,
+                None,
+                None,
+            ),
+            // A time with no target.
+            (None, None, None, Some("07:45"), 0, None, None),
+            // A target with no origin or destination.
+            (
+                None,
+                Some("WAT"),
+                Some("depart_after"),
+                Some("07:45"),
+                0,
+                None,
+                None,
+            ),
+            (
+                Some("WOK"),
+                None,
+                Some("arrive_by"),
+                Some("07:45"),
+                0,
+                None,
+                None,
+            ),
+            // A usual itinerary with no target.
+            (None, None, None, None, 0, None, Some("{}")),
+            (
+                Some("wok"),
+                Some("WAT"),
+                Some("arrive_by"),
+                Some("07:45"),
+                0,
+                None,
+                None,
+            ),
+            (
+                Some("WOK"),
+                Some("WAT"),
+                Some("arrive_by"),
+                Some("07:45"),
+                2,
+                None,
+                None,
+            ),
+            (
+                Some("WOK"),
+                Some("WAT"),
+                Some("arrive_by"),
+                Some("07:45"),
+                0,
+                None,
+                Some("[]"),
+            ),
+        ];
+        for row in rejected {
+            let mut savepoint = tx.begin().await.unwrap();
+            let error = insert_target(&mut savepoint, row)
+                .await
+                .expect_err("rejected");
+            assert_eq!(
+                constraint_of(&error),
+                Some("journey_templates_target_check"),
+                "{row:?}"
+            );
+            savepoint.rollback().await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+    }
+
+    /// A pair can't point at itself, and deleting one side unlinks the
+    /// other (20261106130000). In a transaction that is rolled back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn regular_journey_pairs_unlink_on_delete() {
+        let mut conn = connect().await;
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let outbound = (
+            Some("WOK"),
+            Some("WAT"),
+            Some("depart_after"),
+            Some("07:45"),
+            0,
+            None,
+            None,
+        );
+        let back = (
+            Some("WAT"),
+            Some("WOK"),
+            Some("depart_after"),
+            Some("17:30"),
+            0,
+            None,
+            None,
+        );
+        let outbound = insert_target(&mut tx, outbound).await.unwrap();
+        let back = insert_target(&mut tx, back).await.unwrap();
+
+        let mut savepoint = tx.begin().await.unwrap();
+        let error =
+            sqlx::query("UPDATE journey_templates SET paired_template_id = id WHERE id = $1")
+                .bind(outbound)
+                .execute(&mut *savepoint)
+                .await
+                .expect_err("paired with itself");
+        assert_eq!(
+            constraint_of(&error),
+            Some("journey_templates_paired_not_self")
+        );
+        savepoint.rollback().await.unwrap();
+
+        for (id, other) in [(outbound, back), (back, outbound)] {
+            sqlx::query("UPDATE journey_templates SET paired_template_id = $2 WHERE id = $1")
+                .bind(id)
+                .bind(other)
+                .execute(&mut *tx)
+                .await
+                .unwrap();
+        }
+        sqlx::query("DELETE FROM journey_templates WHERE id = $1")
+            .bind(back)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let (paired,): (Option<i64>,) =
+            sqlx::query_as("SELECT paired_template_id FROM journey_templates WHERE id = $1")
+                .bind(outbound)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        assert_eq!(paired, None);
+        tx.rollback().await.unwrap();
+    }
+
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
