@@ -354,9 +354,10 @@ tables:
   journey_leg_notification_state: {class: internal, grants: {notifier: SIU, api: S}}
   # Regular journeys phase 2 (§5.1): the leave_reminder cycle's
   # bookkeeping per occurrence, and one morning summary per user and day
-  # (the notifier prunes these after 7 days).
+  # (the notifier prunes these after 7 days). api: S for the account
+  # export, as for the other notification state tables.
   regular_journey_push_state: {class: internal, grants: {notifier: SIU, api: S}}
-  regular_journey_summaries: {class: internal, grants: {notifier: SID}}
+  regular_journey_summaries: {class: internal, grants: {notifier: SID, api: S}}
   # The ingest-writer's stream idempotency keys (plan 3a.3, spec §7.4):
   # inserted with each applied entry, pruned hourly after 48 h.
   ingest_dedup: {class: internal, grants: {writer: SID}}
