@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.0 (2026-11-06)
+
+- Add ds_store::recurrence, the one rule for when a template is due (#39)
+
 ## v0.9.0 (2026-11-06)
 
 - Add bank holidays, the division preference and the skip flag (#36)
