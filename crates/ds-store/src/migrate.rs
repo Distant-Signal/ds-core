@@ -740,6 +740,70 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Regular plan (20261106184000): the status and plan check is
+    /// validated, accepts each status and an object plan, and rejects an
+    /// unknown status or a non-object plan. In a transaction that is rolled
+    /// back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn regular_plan_is_checked() {
+        let mut conn = connect().await;
+        let (validated,): (bool,) = sqlx::query_as(
+            "SELECT convalidated FROM pg_constraint \
+             WHERE conrelid = 'public.journeys'::regclass \
+               AND conname = 'journeys_regular_plan_check'",
+        )
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+        assert!(validated);
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let (journey,): (i64,) =
+            sqlx::query_as("INSERT INTO journeys (user_id) VALUES ('u-regular') RETURNING id")
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        let set = "UPDATE journeys SET regular_plan_status = $2, regular_plan = $3::jsonb, \
+                   regular_plan_marker = 'm1', regular_planned_at = now() WHERE id = $1";
+        for (status, plan) in [
+            (None, None),
+            (Some("pending"), None),
+            (
+                Some("suggested"),
+                Some(r#"{"choice": null, "alternatives": []}"#),
+            ),
+            (Some("committed"), Some(r#"{"sweepLegIds": [1]}"#)),
+            (Some("no_service"), None),
+        ] {
+            sqlx::query(set)
+                .bind(journey)
+                .bind(status)
+                .bind(plan)
+                .execute(&mut *tx)
+                .await
+                .unwrap_or_else(|e| panic!("{status:?} {plan:?}: {e}"));
+        }
+        for (status, plan) in [(Some("chosen"), None), (Some("suggested"), Some("[]"))] {
+            let mut savepoint = tx.begin().await.unwrap();
+            let error = sqlx::query(set)
+                .bind(journey)
+                .bind(status)
+                .bind(plan)
+                .execute(&mut *savepoint)
+                .await
+                .expect_err("rejected");
+            assert_eq!(
+                constraint_of(&error),
+                Some("journeys_regular_plan_check"),
+                "{status:?} {plan:?}"
+            );
+            savepoint.rollback().await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+    }
+
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
