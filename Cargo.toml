@@ -19,7 +19,7 @@ members = [
 [workspace.package]
 # The ds-core version: every crate inherits it, scripts/release.py bumps
 # it, and tag.yml tags `v<it>` (repo split spec §5.2).
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 # MSRV: CI's msrv job checks it with `cargo +1.88.0 check`. The other CI
 # jobs and every Dockerfile build with a newer stable (1.99.0), which
