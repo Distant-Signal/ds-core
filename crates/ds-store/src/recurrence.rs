@@ -329,6 +329,10 @@ struct ScheduleRow {
     starts_on: Option<NaiveDate>,
     ends_on: Option<NaiveDate>,
     paused_until: Option<NaiveDate>,
+    recurrence_kind: String,
+    interval_weeks: i16,
+    anchor_week: Option<NaiveDate>,
+    extra_dates: Vec<NaiveDate>,
     skipped: Vec<NaiveDate>,
     bank_holidays: Vec<NaiveDate>,
     away_starts: Vec<NaiveDate>,
@@ -370,7 +374,9 @@ fn away_array_sql(column: &str, user: &str, from: &str, to: &str) -> String {
 /// One statement, so it runs on a pool, a connection or inside a
 /// transaction. Reads `journey_templates` (`id`, `user_id`, `active`,
 /// `days_of_week`, `starts_on`, `ends_on`, `paused_until`,
-/// `skip_bank_holidays`), `journey_template_skipped_dates`,
+/// `recurrence_kind`, `interval_weeks`, `anchor_week`,
+/// `skip_bank_holidays`), `journey_template_extra_dates`,
+/// `journey_template_skipped_dates`,
 /// `user_away_periods`, `bank_holidays` and `users` (`id`,
 /// `bank_holiday_division`) (db-grants.yaml).
 ///
@@ -388,7 +394,11 @@ where
 {
     let rows: Vec<ScheduleRow> = sqlx::query_as(&format!(
         "SELECT jt.id, jt.user_id, jt.active, jt.days_of_week, jt.starts_on, jt.ends_on, \
-                jt.paused_until, \
+                jt.paused_until, jt.recurrence_kind, jt.interval_weeks, jt.anchor_week, \
+                ARRAY(SELECT rc_e.service_date FROM journey_template_extra_dates rc_e \
+                       WHERE rc_e.template_id = jt.id \
+                         AND rc_e.service_date BETWEEN $2 AND $3 \
+                       ORDER BY rc_e.service_date) AS extra_dates, \
                 ARRAY(SELECT rc_s.service_date FROM journey_template_skipped_dates rc_s \
                        WHERE rc_s.template_id = jt.id \
                          AND rc_s.service_date BETWEEN $2 AND $3 \
@@ -410,6 +420,10 @@ where
         .into_iter()
         .map(|row| {
             let mut rule = Rule::weekly(row.days_of_week);
+            rule.kind = Kind::parse(&row.recurrence_kind);
+            rule.interval_weeks = row.interval_weeks;
+            rule.anchor_week = row.anchor_week;
+            rule.extra_dates = row.extra_dates.into_iter().collect();
             rule.active = row.active;
             rule.starts_on = row.starts_on;
             rule.ends_on = row.ends_on;
@@ -474,17 +488,25 @@ where
 
 /// SQL boolean: whether template `template` (the outer query's alias for a
 /// `journey_templates` row) might be due on `date` (an SQL `DATE`
-/// expression). A cheap, indexed-columns-only superset of [`Rule::is_due`]
-/// for narrowing a scan; the caller then [`load`]s the candidates and
-/// decides with [`Rule::is_due`]. Never false for a date the rule is due.
+/// expression). A cheap superset of [`Rule::is_due`] for narrowing a scan
+/// (it ignores the interval and every exception); the caller then
+/// [`load`]s the candidates and decides with [`Rule::is_due`]. Never false
+/// for a date the rule is due.
+///
+/// Reads `journey_templates` (`id`, `active`, `recurrence_kind`,
+/// `days_of_week`, `starts_on`, `ends_on`) and
+/// `journey_template_extra_dates`.
 #[must_use]
 pub fn may_be_due_sql(template: &str, date: &str) -> String {
     format!(
-        "({template}.active \
-          AND {template}.days_of_week IS NOT NULL \
-          AND ({template}.days_of_week & (1 << (EXTRACT(ISODOW FROM ({date}))::int - 1))) != 0 \
-          AND ({date}) >= COALESCE({template}.starts_on, ({date})) \
-          AND ({date}) <= COALESCE({template}.ends_on, ({date})))"
+        "({template}.active AND ( \
+            ({template}.recurrence_kind = '{KIND_WEEKLY}' \
+             AND {template}.days_of_week IS NOT NULL \
+             AND ({template}.days_of_week & (1 << (EXTRACT(ISODOW FROM ({date}))::int - 1))) != 0 \
+             AND ({date}) >= COALESCE({template}.starts_on, ({date})) \
+             AND ({date}) <= COALESCE({template}.ends_on, ({date}))) \
+            OR EXISTS (SELECT 1 FROM journey_template_extra_dates rc_pe \
+                        WHERE rc_pe.template_id = {template}.id AND rc_pe.service_date = ({date}))))"
     )
 }
 
@@ -968,6 +990,92 @@ mod db_tests {
         }
     }
 
+    async fn extra_date(pool: &PgPool, template_id: i64, date: NaiveDate) {
+        sqlx::query(
+            "INSERT INTO journey_template_extra_dates (template_id, service_date) VALUES ($1, $2)",
+        )
+        .bind(template_id)
+        .bind(date)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn load_reads_the_kind_the_interval_and_the_extra_dates(pool: PgPool) {
+        let weekly = template(&pool, 1, false).await;
+        // 10 Jan 2050 is a Monday.
+        sqlx::query(
+            "UPDATE journey_templates SET interval_weeks = 2, anchor_week = $2 WHERE id = $1",
+        )
+        .bind(weekly)
+        .bind(d(1, 10))
+        .execute(&pool)
+        .await
+        .unwrap();
+        extra_date(&pool, weekly, d(1, 22)).await;
+        let listed = template(&pool, 127, false).await;
+        sqlx::query("UPDATE journey_templates SET recurrence_kind = 'dates' WHERE id = $1")
+            .bind(listed)
+            .execute(&pool)
+            .await
+            .unwrap();
+        extra_date(&pool, listed, d(2, 14)).await;
+        let rota = template(&pool, 127, false).await;
+        sqlx::query("UPDATE journey_templates SET recurrence_kind = 'cycle' WHERE id = $1")
+            .bind(rota)
+            .execute(&pool)
+            .await
+            .unwrap();
+        extra_date(&pool, rota, d(2, 14)).await;
+
+        let got = load(&pool, &[weekly, listed, rota], d(1, 1), d(3, 31))
+            .await
+            .unwrap();
+        let w = &got[&weekly];
+        assert_eq!(w.rule.kind, Kind::Weekly);
+        assert_eq!(w.rule.interval_weeks, 2);
+        let dates: Vec<_> = w
+            .rule
+            .upcoming(&w.exceptions, d(1, 3), 4, DEFAULT_HORIZON_DAYS)
+            .into_iter()
+            .map(|u| u.date)
+            .collect();
+        assert_eq!(dates, vec![d(1, 10), d(1, 22), d(1, 24), d(2, 7)]);
+        let l = &got[&listed];
+        assert_eq!(l.rule.kind, Kind::Dates);
+        assert_eq!(
+            l.rule
+                .next_due(&l.exceptions, d(1, 3), DEFAULT_HORIZON_DAYS),
+            Some(d(2, 14))
+        );
+        let r = &got[&rota];
+        assert_eq!(r.rule.kind, Kind::Unknown);
+        assert_eq!(
+            r.rule
+                .next_due(&r.exceptions, d(1, 3), DEFAULT_HORIZON_DAYS),
+            None
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn the_pattern_checks_refuse_bad_rows(pool: PgPool) {
+        let t = template(&pool, 1, false).await;
+        for sql in [
+            "UPDATE journey_templates SET recurrence_kind = 'rrule' WHERE id = $1",
+            "UPDATE journey_templates SET interval_weeks = 5, anchor_week = '2050-01-10' WHERE id = $1",
+            "UPDATE journey_templates SET interval_weeks = 2 WHERE id = $1",
+            "UPDATE journey_templates SET interval_weeks = 2, anchor_week = '2050-01-11' WHERE id = $1",
+        ] {
+            assert!(
+                sqlx::query(sql).bind(t).execute(&pool).await.is_err(),
+                "{sql} must be refused"
+            );
+        }
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     #[ignore = "needs DATABASE_URL (a role that can create databases)"]
     async fn the_prefilter_never_drops_a_due_date(pool: PgPool) {
@@ -986,7 +1094,24 @@ mod db_tests {
             .execute(&pool)
             .await
             .unwrap();
+        let listed = template(&pool, 0, false).await;
+        sqlx::query("UPDATE journey_templates SET recurrence_kind = 'dates' WHERE id = $1")
+            .bind(listed)
+            .execute(&pool)
+            .await
+            .unwrap();
+        extra_date(&pool, listed, d(2, 5)).await;
+        extra_date(&pool, ids[0], d(1, 8)).await;
+        sqlx::query(
+            "UPDATE journey_templates SET interval_weeks = 3, anchor_week = '2050-01-03' WHERE id = $1",
+        )
+        .bind(ids[1])
+        .execute(&pool)
+        .await
+        .unwrap();
+        ids.push(listed);
         let schedules = load(&pool, &ids, d(1, 1), d(3, 31)).await.unwrap();
+        let mut due_days = 0;
         let sql = format!(
             "SELECT jt.id FROM journey_templates jt WHERE jt.id = ANY($1) AND {}",
             may_be_due_sql("jt", "$2::date")
@@ -1000,9 +1125,11 @@ mod db_tests {
                 .unwrap();
             for (id, s) in &schedules {
                 if s.rule.is_due(&s.exceptions, date) {
+                    due_days += 1;
                     assert!(candidates.contains(id), "{id} due {date} but filtered");
                 }
             }
         }
+        assert!(due_days > 60, "the templates are due on {due_days} days");
     }
 }
