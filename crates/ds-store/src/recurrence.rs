@@ -1170,6 +1170,30 @@ mod db_tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_variant_leg_reuses_a_base_position(pool: PgPool) {
+        let t = template(&pool, 127, false).await;
+        let insert = "INSERT INTO journey_template_legs (template_id, leg_order, variant_weekday) \
+             VALUES ($1, 1, $2)";
+        for variant in [None, Some(5_i16), Some(7)] {
+            sqlx::query(insert)
+                .bind(t)
+                .bind(variant)
+                .execute(&pool)
+                .await
+                .unwrap_or_else(|e| panic!("leg 1 for {variant:?}: {e}"));
+        }
+        for variant in [None, Some(5_i16)] {
+            let dup = sqlx::query(insert)
+                .bind(t)
+                .bind(variant)
+                .execute(&pool)
+                .await;
+            assert!(dup.is_err(), "a second leg 1 for {variant:?}");
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
     async fn a_weekday_with_variant_legs_uses_them(pool: PgPool) {
         let t = template(&pool, 127, false).await;
         for (variant, order, origin) in [
@@ -1191,9 +1215,10 @@ mod db_tests {
             .await
             .unwrap();
         }
-        // The Friday leg has its own position until a later release drops
-        // the old (template_id, leg_order) key. A second Friday leg 3, or a
-        // second plain leg 1, is refused either way.
+        // The Friday leg could reuse position 1 since the old
+        // (template_id, leg_order) key was dropped (see
+        // a_variant_leg_reuses_a_base_position). A second Friday leg 3, or
+        // a second plain leg 1, is refused either way.
         for variant in [Some(5_i16), None] {
             let dup = sqlx::query(
                 "INSERT INTO journey_template_legs (template_id, leg_order, variant_weekday) \
