@@ -654,6 +654,7 @@ BEGIN
         ('journey_template_day_overrides', 'api', 'INSERT', ''),
         ('journey_template_day_overrides', 'api', 'UPDATE', ''),
         ('journey_template_day_overrides', 'api', 'DELETE', ''),
+        ('journey_template_day_overrides', 'notifier', 'SELECT', ''),
         ('push_subscriptions', 'api', 'SELECT', ''),
         ('push_subscriptions', 'api', 'INSERT', ''),
         ('push_subscriptions', 'api', 'UPDATE', ''),
