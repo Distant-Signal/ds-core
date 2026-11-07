@@ -510,6 +510,24 @@ pub fn may_be_due_sql(template: &str, date: &str) -> String {
     )
 }
 
+/// SQL for the `journey_template_legs.variant_weekday` whose legs a journey
+/// of template `template_id` (an SQL `BIGINT` expression) on `date` (an
+/// SQL `DATE`) is made from: the date's ISO weekday (1 Monday to 7 Sunday)
+/// when the template has variant legs for it (a different time that day),
+/// else NULL, the template's own legs. Use it as
+/// `WHERE template_id = ... AND variant_weekday IS NOT DISTINCT FROM ({sql})`.
+///
+/// Reads `journey_template_legs` (`template_id`, `variant_weekday`).
+#[must_use]
+pub fn leg_variant_sql(template_id: &str, date: &str) -> String {
+    format!(
+        "(SELECT rc_v.variant_weekday FROM journey_template_legs rc_v \
+           WHERE rc_v.template_id = ({template_id}) \
+             AND rc_v.variant_weekday = EXTRACT(ISODOW FROM ({date}))::smallint \
+           LIMIT 1)"
+    )
+}
+
 /// `from`, then each following date, for `days` dates.
 fn horizon(from: NaiveDate, days: u32) -> impl Iterator<Item = NaiveDate> {
     from.iter_days().take(days as usize)
@@ -1073,6 +1091,141 @@ mod db_tests {
                 sqlx::query(sql).bind(t).execute(&pool).await.is_err(),
                 "{sql} must be refused"
             );
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn the_day_override_checks_refuse_bad_rows(pool: PgPool) {
+        let t = template(&pool, 31, false).await;
+        let insert = "INSERT INTO journey_template_day_overrides \
+                (template_id, weekday, target_kind, target_time, target_day_offset, usual_itinerary) \
+             VALUES ($1, $2, $3, '07:15', $4, $5::jsonb)";
+        let ok: [(i16, &str, i16, Option<&str>); 2] = [
+            (5, "depart_after", 0, Some("{\"legs\": []}")),
+            (4, "arrive_by", 1, None),
+        ];
+        for (weekday, kind, offset, itinerary) in ok {
+            sqlx::query(insert)
+                .bind(t)
+                .bind(weekday)
+                .bind(kind)
+                .bind(offset)
+                .bind(itinerary)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let bad: [(i16, &str, i16, Option<&str>); 5] = [
+            (0, "depart_after", 0, None),
+            (8, "depart_after", 0, None),
+            (3, "leave_at", 0, None),
+            (3, "depart_after", 2, None),
+            (3, "depart_after", 0, Some("[]")),
+        ];
+        for (weekday, kind, offset, itinerary) in bad {
+            let got = sqlx::query(insert)
+                .bind(t)
+                .bind(weekday)
+                .bind(kind)
+                .bind(offset)
+                .bind(itinerary)
+                .execute(&pool)
+                .await;
+            assert!(got.is_err(), "{weekday} {kind} {offset} {itinerary:?}");
+        }
+        // One override per weekday.
+        let dup = sqlx::query(insert)
+            .bind(t)
+            .bind(5_i16)
+            .bind("arrive_by")
+            .bind(0_i16)
+            .bind(None::<&str>)
+            .execute(&pool)
+            .await;
+        assert!(dup.is_err(), "a second Friday override");
+        let bad_leg = sqlx::query(
+            "INSERT INTO journey_template_legs (template_id, leg_order, variant_weekday) \
+             VALUES ($1, 9, 8)",
+        )
+        .bind(t)
+        .execute(&pool)
+        .await;
+        assert!(bad_leg.is_err(), "a variant leg for weekday 8");
+        // Deleting the template deletes its overrides.
+        sqlx::query("DELETE FROM journey_templates WHERE id = $1")
+            .bind(t)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let left: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM journey_template_day_overrides WHERE template_id = $1",
+        )
+        .bind(t)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_weekday_with_variant_legs_uses_them(pool: PgPool) {
+        let t = template(&pool, 127, false).await;
+        for (variant, order, origin) in [
+            (None, 1, "WOK"),
+            (None, 2, "CLJ"),
+            (Some(5_i16), 3, "GLD"),
+            (Some(7), 4, "RDG"),
+        ] {
+            sqlx::query(
+                "INSERT INTO journey_template_legs \
+                    (template_id, leg_order, origin_crs, destination_crs, variant_weekday) \
+                 VALUES ($1, $2, $3, 'WAT', $4)",
+            )
+            .bind(t)
+            .bind(order)
+            .bind(origin)
+            .bind(variant)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        // The Friday leg has its own position until a later release drops
+        // the old (template_id, leg_order) key. A second Friday leg 3, or a
+        // second plain leg 1, is refused either way.
+        for variant in [Some(5_i16), None] {
+            let dup = sqlx::query(
+                "INSERT INTO journey_template_legs (template_id, leg_order, variant_weekday) \
+                 VALUES ($1, CASE WHEN $2::smallint IS NULL THEN 1 ELSE 3 END, $2)",
+            )
+            .bind(t)
+            .bind(variant)
+            .execute(&pool)
+            .await;
+            assert!(dup.is_err(), "a duplicate leg for {variant:?}");
+        }
+        let sql = format!(
+            "SELECT origin_crs FROM journey_template_legs \
+             WHERE template_id = $1 AND variant_weekday IS NOT DISTINCT FROM ({}) \
+             ORDER BY leg_order",
+            leg_variant_sql("$1", "$2::date")
+        );
+        // 7 Jan 2050 is a Friday, 6 Jan a Thursday and 9 Jan a Sunday (ISO
+        // weekday 7, not 0).
+        for (date, want) in [
+            (d(1, 7), vec!["GLD"]),
+            (d(1, 6), vec!["WOK", "CLJ"]),
+            (d(1, 9), vec!["RDG"]),
+            (d(1, 8), vec!["WOK", "CLJ"]),
+        ] {
+            let got: Vec<String> = sqlx::query_scalar(&sql)
+                .bind(t)
+                .bind(date)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            assert_eq!(got, want, "{date}");
         }
     }
 
