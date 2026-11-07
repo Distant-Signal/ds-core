@@ -328,8 +328,11 @@ struct ScheduleRow {
     days_of_week: Option<i16>,
     starts_on: Option<NaiveDate>,
     ends_on: Option<NaiveDate>,
+    paused_until: Option<NaiveDate>,
     skipped: Vec<NaiveDate>,
     bank_holidays: Vec<NaiveDate>,
+    away_starts: Vec<NaiveDate>,
+    away_ends: Vec<NaiveDate>,
 }
 
 /// SQL for the bank holidays from `$from` to `$to` (inclusive, SQL `DATE`
@@ -348,14 +351,27 @@ fn bank_holidays_array_sql(user: &str, from: &str, to: &str) -> String {
     )
 }
 
+/// SQL for one column (`starts_on` or `ends_on`) of `user`'s time away
+/// overlapping `$from..=$to`, as a `DATE[]` in a fixed order, so the two
+/// columns' arrays pair up by index.
+fn away_array_sql(column: &str, user: &str, from: &str, to: &str) -> String {
+    format!(
+        "ARRAY(SELECT rc_a.{column} FROM user_away_periods rc_a \
+                WHERE rc_a.user_id = {user} \
+                  AND rc_a.ends_on >= {from} AND rc_a.starts_on <= {to} \
+                ORDER BY rc_a.starts_on, rc_a.id)"
+    )
+}
+
 /// Each template in `template_ids` with its [`Rule`] and its
 /// [`Exceptions`] from `from` to `to` (inclusive), by id. A template that
 /// doesn't exist is absent.
 ///
 /// One statement, so it runs on a pool, a connection or inside a
 /// transaction. Reads `journey_templates` (`id`, `user_id`, `active`,
-/// `days_of_week`, `starts_on`, `ends_on`, `skip_bank_holidays`),
-/// `journey_template_skipped_dates`, `bank_holidays` and `users` (`id`,
+/// `days_of_week`, `starts_on`, `ends_on`, `paused_until`,
+/// `skip_bank_holidays`), `journey_template_skipped_dates`,
+/// `user_away_periods`, `bank_holidays` and `users` (`id`,
 /// `bank_holiday_division`) (db-grants.yaml).
 ///
 /// # Errors
@@ -372,14 +388,18 @@ where
 {
     let rows: Vec<ScheduleRow> = sqlx::query_as(&format!(
         "SELECT jt.id, jt.user_id, jt.active, jt.days_of_week, jt.starts_on, jt.ends_on, \
+                jt.paused_until, \
                 ARRAY(SELECT rc_s.service_date FROM journey_template_skipped_dates rc_s \
                        WHERE rc_s.template_id = jt.id \
                          AND rc_s.service_date BETWEEN $2 AND $3 \
                        ORDER BY rc_s.service_date) AS skipped, \
                 CASE WHEN jt.skip_bank_holidays THEN {holidays} \
-                     ELSE '{{}}'::date[] END AS bank_holidays \
+                     ELSE '{{}}'::date[] END AS bank_holidays, \
+                {away_starts} AS away_starts, {away_ends} AS away_ends \
          FROM journey_templates jt WHERE jt.id = ANY($1)",
         holidays = bank_holidays_array_sql("jt.user_id", "$2", "$3"),
+        away_starts = away_array_sql("starts_on", "jt.user_id", "$2", "$3"),
+        away_ends = away_array_sql("ends_on", "jt.user_id", "$2", "$3"),
     ))
     .bind(template_ids)
     .bind(from)
@@ -393,10 +413,11 @@ where
             rule.active = row.active;
             rule.starts_on = row.starts_on;
             rule.ends_on = row.ends_on;
+            rule.paused_until = row.paused_until;
             let exceptions = Exceptions {
                 skipped: row.skipped.into_iter().collect(),
                 bank_holidays: row.bank_holidays.into_iter().collect(),
-                away: Vec::new(),
+                away: row.away_starts.into_iter().zip(row.away_ends).collect(),
             };
             (
                 row.id,
@@ -411,10 +432,12 @@ where
 }
 
 /// The exceptions that come from a user rather than a template, from
-/// `from` to `to` (inclusive): their bank holidays when `skip_bank_holidays`,
-/// for previewing a rule not saved yet. A preview has no tombstones.
+/// `from` to `to` (inclusive): their time away, and their bank holidays
+/// when `skip_bank_holidays`. For previewing a rule not saved yet, which
+/// has no tombstones.
 ///
-/// Reads `bank_holidays` and `users` (`id`, `bank_holiday_division`).
+/// Reads `user_away_periods`, `bank_holidays` and `users` (`id`,
+/// `bank_holiday_division`).
 ///
 /// # Errors
 ///
@@ -429,21 +452,22 @@ pub async fn user_exceptions<'c, E>(
 where
     E: sqlx::PgExecutor<'c>,
 {
-    let holidays: Vec<NaiveDate> = if skip_bank_holidays {
-        sqlx::query_scalar(&format!(
-            "SELECT {}",
-            bank_holidays_array_sql("$1", "$2", "$3")
+    let (holidays, starts, ends): (Vec<NaiveDate>, Vec<NaiveDate>, Vec<NaiveDate>) =
+        sqlx::query_as(&format!(
+            "SELECT CASE WHEN $4 THEN {holidays} ELSE '{{}}'::date[] END, {starts}, {ends}",
+            holidays = bank_holidays_array_sql("$1", "$2", "$3"),
+            starts = away_array_sql("starts_on", "$1", "$2", "$3"),
+            ends = away_array_sql("ends_on", "$1", "$2", "$3"),
         ))
         .bind(user_id)
         .bind(from)
         .bind(to)
+        .bind(skip_bank_holidays)
         .fetch_one(executor)
-        .await?
-    } else {
-        Vec::new()
-    };
+        .await?;
     Ok(Exceptions {
         bank_holidays: holidays.into_iter().collect(),
+        away: starts.into_iter().zip(ends).collect(),
         ..Exceptions::default()
     })
 }
@@ -874,6 +898,74 @@ mod db_tests {
             .await
             .unwrap();
         assert_eq!(off, Exceptions::default());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn load_reads_the_pause_and_the_owners_time_away(pool: PgPool) {
+        let t = template(&pool, 127, false).await;
+        sqlx::query("UPDATE journey_templates SET paused_until = $2 WHERE id = $1")
+            .bind(t)
+            .bind(d(3, 4))
+            .execute(&pool)
+            .await
+            .unwrap();
+        for (start, end) in [(d(3, 10), d(3, 12)), (d(2, 1), d(2, 2)), (d(9, 1), d(9, 5))] {
+            sqlx::query(
+                "INSERT INTO user_away_periods (user_id, starts_on, ends_on, label) \
+                 VALUES ($1, $2, $3, 'Away')",
+            )
+            .bind(USER)
+            .bind(start)
+            .bind(end)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let got = load(&pool, &[t], d(3, 1), d(6, 30)).await.unwrap();
+        let s = &got[&t];
+        assert_eq!(s.rule.paused_until, Some(d(3, 4)));
+        // Only the period overlapping the range.
+        assert_eq!(s.exceptions.away, vec![(d(3, 10), d(3, 12))]);
+        let upcoming = s
+            .rule
+            .upcoming(&s.exceptions, d(3, 3), 10, DEFAULT_HORIZON_DAYS);
+        let reasons: Vec<_> = upcoming.iter().map(|u| (u.date, u.skip)).collect();
+        assert_eq!(reasons[0], (d(3, 3), Some(SkipReason::Paused)));
+        assert_eq!(reasons[1], (d(3, 4), None));
+        assert_eq!(reasons[7], (d(3, 10), Some(SkipReason::Away)));
+        assert_eq!(reasons[9], (d(3, 12), Some(SkipReason::Away)));
+
+        let preview = user_exceptions(&pool, USER, false, d(1, 1), d(12, 31))
+            .await
+            .unwrap();
+        assert_eq!(
+            preview.away,
+            vec![(d(2, 1), d(2, 2)), (d(3, 10), d(3, 12)), (d(9, 1), d(9, 5))]
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn time_away_checks_its_dates(pool: PgPool) {
+        crate::test_support::seed_user(&pool, USER).await;
+        for (start, end, label) in [
+            (d(3, 2), d(3, 1), None),
+            (d(1, 1), d(12, 31), Some("")),
+            (NaiveDate::from_ymd_opt(2049, 1, 1).unwrap(), d(1, 3), None),
+        ] {
+            let err = sqlx::query(
+                "INSERT INTO user_away_periods (user_id, starts_on, ends_on, label) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(USER)
+            .bind(start)
+            .bind(end)
+            .bind(label)
+            .execute(&pool)
+            .await;
+            assert!(err.is_err(), "{start} to {end} {label:?} must be refused");
+        }
     }
 
     #[sqlx::test(migrations = "./migrations")]
