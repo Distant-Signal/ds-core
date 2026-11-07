@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.13.0 (2026-11-07)
+
+- Add day overrides for regular journeys (#49)
+- Lock the checksums of the three day override migrations (#50)
+
+**Migrations** (3): `20261107170000_day_overrides.sql`, `20261107170100_day_overrides_validate.sql`, `20261107170200_journey_template_legs_variant_key.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.12.0 (2026-11-07)
 
 - Add recurrence patterns to regular journeys (#46)
