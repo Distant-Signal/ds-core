@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.14.0 (2026-11-07)
+
+- Drop the template legs' old unique key and let the notifier read day overrides (#52)
+- Lock the checksum of the template legs' old key drop migration (#53)
+
+**Migrations** (1): `20261107180000_journey_template_legs_drop_order_key.sql`
+**Contract migrations**: `20261107180000_journey_template_legs_drop_order_key.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.13.0 (2026-11-07)
 
 - Add day overrides for regular journeys (#49)
