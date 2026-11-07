@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.11.0 (2026-11-07)
+
+- Make an identical CORPUS redelivery a no-op (#42)
+- Add time away and pause until for regular journeys (#41)
+- Lock the checksums of the two CORPUS content hash migrations (#43)
+- Lock the checksum of the time away migration (#44)
+
+**Migrations** (3): `20261107140000_corpus_deliveries_content_sha256.sql`, `20261107140100_corpus_deliveries_content_sha256_validate.sql`, `20261107150000_time_away.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.10.0 (2026-11-06)
 
 - Add ds_store::recurrence, the one rule for when a template is due (#39)
