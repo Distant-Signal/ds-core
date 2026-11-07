@@ -150,30 +150,42 @@ pub fn corpus_crosswalk(interval: Duration) -> LoopSpec {
     LoopSpec::new(
         advisory_locks::CORPUS_CROSSWALK,
         interval,
-        |pool| async move { corpus_crosswalk_tick(&pool).await.map(|_| ()) },
+        |pool| async move { corpus_crosswalk_tick(&pool).await },
     )
 }
 
 /// [`corpus_crosswalk`], plus the CORPUS-vs-timetable comparison
-/// ([`log_after_load`]) whenever the newest delivery differs from the one
-/// this loop last compared, including on its first tick: the ingest-writer's
-/// CORPUS loop (plan 2d.1). With schedule-ingest writing CORPUS directly
+/// ([`log_after_load`]) whenever the applied delivery's content
+/// ([`AppliedDelivery::content_key`]) differs from the one this loop last
+/// compared, including on its first tick: the ingest-writer's CORPUS loop
+/// (plan 2d.1). Keyed on content, not on `MAX(delivered_at)`: an identical
+/// redelivery ([`CorpusLoad::Unchanged`]) changes neither the applied
+/// delivery nor its rows, so it never re-runs the comparison, which reads
+/// every CORPUS row and the timetable crosswalk (DS-390). With schedule-ingest writing CORPUS directly
 /// (`INGEST_SINK=db`) no api route runs the comparison after a load, so it
 /// runs here, at most one tick (10 minutes) after the load. A comparison
 /// that cannot read `corpus_locations` is retried next tick; one that fails
 /// on the timetable side is logged by [`log_after_load`] and not retried.
 ///
 /// [`log_after_load`]: crate::corpus::comparison::log_after_load
+/// [`AppliedDelivery::content_key`]: crate::corpus::AppliedDelivery::content_key
+/// [`CorpusLoad::Unchanged`]: crate::corpus::CorpusLoad::Unchanged
 pub fn corpus_crosswalk_comparing(interval: Duration) -> LoopSpec {
-    let compared: Arc<std::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>> = Arc::default();
+    let compared: Arc<std::sync::Mutex<Option<String>>> = Arc::default();
     LoopSpec::new(advisory_locks::CORPUS_CROSSWALK, interval, move |pool| {
         let compared = Arc::clone(&compared);
         async move {
-            let latest = corpus_crosswalk_tick(&pool).await?;
-            let last = *compared
+            corpus_crosswalk_tick(&pool).await?;
+            let applied = crate::corpus::applied_corpus_delivery(&pool)
+                .await
+                .inspect_err(|err| {
+                    tracing::error!(error = ?err, "CORPUS comparison could not read corpus_deliveries; will retry next interval");
+                })?;
+            let last = compared
                 .lock()
-                .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))?;
-            if let Some(latest) = latest.filter(|latest| last != Some(*latest)) {
+                .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))?
+                .clone();
+            if let Some(key) = corpus_comparison_due(last.as_deref(), applied.as_ref()) {
                 let layers = crate::corpus::crosswalk::load_corpus_layers(&pool)
                         .await
                         .inspect_err(|err| {
@@ -182,20 +194,28 @@ pub fn corpus_crosswalk_comparing(interval: Duration) -> LoopSpec {
                 crate::corpus::comparison::log_after_load_layers(&pool, &layers).await;
                 *compared
                     .lock()
-                    .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))? =
-                    Some(latest);
+                    .map_err(|_| anyhow::anyhow!("CORPUS comparison state poisoned"))? = Some(key);
             }
             Ok(())
         }
     })
 }
 
+/// The content key [`corpus_crosswalk_comparing`] should compare now, or
+/// `None`: there is an applied delivery and its content is not the one
+/// last compared (`last`).
+fn corpus_comparison_due(
+    last: Option<&str>,
+    applied: Option<&crate::corpus::AppliedDelivery>,
+) -> Option<String> {
+    applied
+        .map(crate::corpus::AppliedDelivery::content_key)
+        .filter(|key| last != Some(key.as_str()))
+}
+
 /// One CORPUS crosswalk tick: the rebuild check, then the freshness gauge.
-/// Both steps always run; either failing fails the tick. Returns the newest
-/// delivery the gauge read.
-async fn corpus_crosswalk_tick(
-    pool: &sqlx::PgPool,
-) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+/// Both steps always run; either failing fails the tick.
+async fn corpus_crosswalk_tick(pool: &sqlx::PgPool) -> anyhow::Result<()> {
     let rebuild = crate::corpus::crosswalk::rebuild_if_stale(pool).await;
     if let Err(err) = &rebuild {
         tracing::error!(error = ?err, "CORPUS crosswalk rebuild failed");
@@ -205,7 +225,7 @@ async fn corpus_crosswalk_tick(
         tracing::error!(error = ?err, "CORPUS freshness gauge read failed");
     }
     rebuild?;
-    gauge
+    gauge.map(|_| ())
 }
 
 /// The train-event outbox loop's interval in the ingest-writer (plan
@@ -278,6 +298,36 @@ pub fn periodic_sweeps(intervals: TrainLoopIntervals, index: &CrsLineIndex) -> [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The CORPUS comparison runs on the first applied delivery and on a
+    /// change of content, never again for the same content (an unchanged
+    /// redelivery keeps the applied delivery and so its key), and a
+    /// delivery without a content hash is keyed by its `delivered_at`.
+    #[test]
+    fn the_corpus_comparison_is_due_only_for_new_content() {
+        use crate::corpus::AppliedDelivery;
+        let at =
+            |h| chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 11, 7, h, 0, 0).unwrap();
+        let hashed = |c: char| AppliedDelivery {
+            delivered_at: at(1),
+            content_sha256: Some(c.to_string().repeat(64)),
+        };
+        assert_eq!(corpus_comparison_due(None, None), None);
+        let first = corpus_comparison_due(None, Some(&hashed('a'))).unwrap();
+        assert_eq!(
+            corpus_comparison_due(Some(&first), Some(&hashed('a'))),
+            None
+        );
+        let changed = corpus_comparison_due(Some(&first), Some(&hashed('b'))).unwrap();
+        assert_ne!(changed, first);
+        let legacy = |h| AppliedDelivery {
+            delivered_at: at(h),
+            content_sha256: None,
+        };
+        let key = corpus_comparison_due(Some(&changed), Some(&legacy(2))).unwrap();
+        assert_eq!(corpus_comparison_due(Some(&key), Some(&legacy(2))), None);
+        assert!(corpus_comparison_due(Some(&key), Some(&legacy(3))).is_some());
+    }
 
     #[test]
     fn each_loop_takes_its_own_lock_and_interval() {
