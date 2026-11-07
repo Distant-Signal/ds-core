@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.12.0 (2026-11-07)
+
+- Add recurrence patterns to regular journeys (#46)
+- Lock the checksums of the two recurrence pattern migrations (#47)
+
+**Migrations** (2): `20261107160000_recurrence_patterns.sql`, `20261107160100_recurrence_patterns_validate.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.11.0 (2026-11-07)
 
 - Make an identical CORPUS redelivery a no-op (#42)
