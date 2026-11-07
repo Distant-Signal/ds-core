@@ -194,8 +194,10 @@ pub fn derive_layers(layers: &CorpusLayers) -> (CorpusCrsTiploc, Crosswalk) {
     (inferred, crosswalk)
 }
 
-/// Every `corpus_locations` row with its `source_file`, as
-/// [`CorpusLayers`], for a rebuild or a comparison.
+/// Every `corpus_locations` row, split by its `source_file` into
+/// [`CorpusLayers`] as [`CorpusLayers::split`] does, for a rebuild or a
+/// comparison. Streamed: each row goes straight into its layer, so the
+/// read never holds a second copy of the whole table (DS-390).
 pub async fn load_corpus_layers<'e, E>(executor: E) -> Result<CorpusLayers>
 where
     E: sqlx::PgExecutor<'e>,
@@ -210,32 +212,37 @@ where
         Option<String>,
         Option<String>,
     );
-    let rows: Vec<Row> = sqlx::query_as(
+    let mut rows = sqlx::query_as::<_, Row>(
         "SELECT source_file, nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16 \
          FROM corpus_locations ORDER BY id",
     )
-    .fetch_all(executor)
-    .await?;
-    Ok(CorpusLayers::split(
-        rows.into_iter()
-            .map(
-                |(source_file, nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16)| {
-                    (
-                        source_file,
-                        CorpusLocation {
-                            nlc,
-                            stanox,
-                            tiploc,
-                            crs,
-                            uic,
-                            nlc_desc,
-                            nlc_desc16,
-                        },
-                    )
-                },
-            )
-            .collect(),
-    ))
+    .fetch(executor);
+    let (mut xml, mut other) = (Vec::new(), Vec::new());
+    while let Some(row) = std::future::poll_fn(|cx| rows.as_mut().poll_next(cx)).await {
+        let (source_file, nlc, stanox, tiploc, crs, uic, nlc_desc, nlc_desc16) = row?;
+        let location = CorpusLocation {
+            nlc,
+            stanox,
+            tiploc,
+            crs,
+            uic,
+            nlc_desc,
+            nlc_desc16,
+        };
+        if is_xml_snapshot_name(&source_file) {
+            xml.push(location);
+        } else {
+            other.push(location);
+        }
+    }
+    Ok(if xml.is_empty() {
+        CorpusLayers::single(other)
+    } else {
+        CorpusLayers {
+            primary: xml,
+            fallback: other,
+        }
+    })
 }
 
 /// `corpus_locations` as one flat row set: [`CorpusLayers::effective`] of
@@ -1024,7 +1031,7 @@ mod db_tests {
         )
         .await
         .unwrap();
-        assert_eq!(inserted, 3);
+        assert_eq!(inserted, crate::corpus::CorpusLoad::Applied { rows: 3 });
         let (tiplocs, stanoxes) = pairs(&pool).await;
         assert_eq!(
             tiplocs,

@@ -81,8 +81,10 @@ pub struct CorpusLocation {
 }
 
 /// Replaces every row of `corpus_locations` with `locations` and records the
-/// delivery in `corpus_deliveries`, all in one transaction. Returns the
-/// number of rows inserted.
+/// delivery in `corpus_deliveries`, all in one transaction. Returns what it
+/// did: a delivery whose content matches the last applied one
+/// ([`content_sha256`]) is [`CorpusLoad::Unchanged`] and writes nothing but
+/// that delivery's redelivery marker.
 ///
 /// `DELETE` rather than `TRUNCATE`: `TRUNCATE` takes an `ACCESS EXCLUSIVE`
 /// lock that would block every reader until commit, while a `DELETE` leaves
@@ -100,7 +102,7 @@ pub async fn replace_corpus_locations(
     delivered_at: DateTime<Utc>,
     source_file: &str,
     locations: &[CorpusLocation],
-) -> Result<u64> {
+) -> Result<CorpusLoad> {
     replace_corpus_locations_with_provenance(
         pool,
         delivered_at,
@@ -145,7 +147,7 @@ pub async fn replace_corpus_locations_with_provenance(
     source_file: &str,
     provenance: &DeliveredFileProvenance<'_>,
     locations: &[CorpusLocation],
-) -> Result<u64> {
+) -> Result<CorpusLoad> {
     replace(
         pool,
         delivered_at,
@@ -178,7 +180,7 @@ pub async fn replace_corpus_locations_keeping_json_fallback(
     source_file: &str,
     provenance: &DeliveredFileProvenance<'_>,
     locations: &[CorpusLocation],
-) -> Result<u64> {
+) -> Result<CorpusLoad> {
     anyhow::ensure!(
         crosswalk::is_xml_snapshot_name(source_file),
         "only an NLC XML snapshot is loaded over a frozen JSON fallback, not {source_file:?}"
@@ -202,6 +204,117 @@ enum Keep {
     JsonRows,
 }
 
+/// What a CORPUS load did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CorpusLoad {
+    /// The delivery replaced `corpus_locations` (and rebuilt the
+    /// crosswalk): `rows` inserted.
+    Applied { rows: u64 },
+    /// The delivery's content ([`content_sha256`]) matches the last applied
+    /// delivery's, so nothing was replaced or rebuilt: only that delivery's
+    /// `redelivered_at` and `redelivery_count` moved. A redelivery of the
+    /// same rows in a differently compressed file (DS-390).
+    Unchanged {
+        /// The applied delivery this one repeats.
+        applied_delivered_at: DateTime<Utc>,
+    },
+}
+
+/// Version tag of [`content_sha256`]'s encoding: a change to it makes every
+/// stored hash differ, so the next load applies (never a missed change).
+const CONTENT_HASH_VERSION: &str = "ds-corpus-content-v1";
+
+/// The SHA-256 (64 lowercase hex digits) of what a load applies:
+/// `source_file`, whether the JSON fallback is kept, and the normalised
+/// rows in order. Two files with different bytes (a new gzip header or
+/// mtime) but the same rows hash the same; any change to a row, the row
+/// order, the file name or the kind of load hashes differently. Every
+/// value is length-prefixed and absent values are tagged, so no two
+/// different inputs share an encoding.
+pub fn content_sha256(
+    source_file: &str,
+    keep_json_fallback: bool,
+    locations: &[CorpusLocation],
+) -> String {
+    use sha2::{Digest, Sha256};
+    fn put(hasher: &mut Sha256, value: Option<&str>) {
+        match value {
+            None => hasher.update([0]),
+            Some(value) => {
+                hasher.update([1]);
+                hasher.update((value.len() as u64).to_be_bytes());
+                hasher.update(value.as_bytes());
+            }
+        }
+    }
+    let mut hasher = Sha256::new();
+    put(&mut hasher, Some(CONTENT_HASH_VERSION));
+    hasher.update([u8::from(keep_json_fallback)]);
+    put(&mut hasher, Some(source_file));
+    hasher.update((locations.len() as u64).to_be_bytes());
+    for l in locations {
+        for value in [
+            Some(l.nlc.as_str()),
+            l.stanox.as_deref(),
+            l.tiploc.as_deref(),
+            l.crs.as_deref(),
+            l.uic.as_deref(),
+            l.nlc_desc.as_deref(),
+            l.nlc_desc16.as_deref(),
+        ] {
+            put(&mut hasher, value);
+        }
+    }
+    hasher
+        .finalize()
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, b| {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{b:02x}");
+            hex
+        })
+}
+
+/// The last applied CORPUS delivery: the `corpus_deliveries` row with the
+/// newest `loaded_at`, the one whose rows `corpus_locations` holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedDelivery {
+    pub delivered_at: DateTime<Utc>,
+    /// `None` for a delivery loaded before content hashes (migration
+    /// `20261107140000_corpus_deliveries_content_sha256.sql`) or by an
+    /// older `schedule-ingest`.
+    pub content_sha256: Option<String>,
+}
+
+impl AppliedDelivery {
+    /// What identifies this delivery's content: its content hash, else
+    /// (no hash) its `delivered_at`, so a hash-less delivery still counts
+    /// as new content.
+    pub fn content_key(&self) -> String {
+        self.content_sha256
+            .clone()
+            .unwrap_or_else(|| format!("delivered_at:{}", self.delivered_at.to_rfc3339()))
+    }
+}
+
+/// The last applied delivery ([`AppliedDelivery`]), or `None` before the
+/// first load. One read of a small table.
+pub async fn applied_corpus_delivery<'e, E>(executor: E) -> Result<Option<AppliedDelivery>>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let row: Option<(DateTime<Utc>, Option<String>)> = sqlx::query_as(
+        "SELECT delivered_at, content_sha256 FROM corpus_deliveries \
+         ORDER BY loaded_at DESC, delivered_at DESC LIMIT 1",
+    )
+    .fetch_optional(executor)
+    .await?;
+    Ok(row.map(|(delivered_at, content_sha256)| AppliedDelivery {
+        delivered_at,
+        content_sha256,
+    }))
+}
+
 async fn replace(
     pool: &PgPool,
     delivered_at: DateTime<Utc>,
@@ -209,11 +322,69 @@ async fn replace(
     provenance: &DeliveredFileProvenance<'_>,
     locations: &[CorpusLocation],
     keep: Keep,
-) -> Result<u64> {
+) -> Result<CorpusLoad> {
     anyhow::ensure!(
         !locations.is_empty(),
         "refusing to replace corpus_locations with an empty delivery"
     );
+    // Before the redelivery check, so an unchanged delivery is refused as
+    // the column's CHECK refuses a changed one.
+    if let Some(problem) = delivery_source_problem(provenance.delivery_source) {
+        anyhow::bail!(problem);
+    }
+    let content = content_sha256(source_file, keep == Keep::JsonRows, locations);
+    // Under the load lock, so the last applied delivery cannot change
+    // between this check and the write.
+    let mut tx = pool.begin().await?;
+    take_load_lock(&mut tx).await?;
+    if let Some(applied) = applied_corpus_delivery(&mut *tx).await?
+        && applied.content_sha256.as_deref() == Some(content.as_str())
+    {
+        sqlx::query(
+            "UPDATE corpus_deliveries SET \
+                 redelivered_at = GREATEST(redelivered_at, $2), \
+                 redelivery_count = redelivery_count + 1 \
+             WHERE delivered_at = $1",
+        )
+        .bind(applied.delivered_at)
+        .bind(delivered_at)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        tracing::info!(
+            delivered_at = %delivered_at,
+            source_file,
+            applied_delivered_at = %applied.delivered_at,
+            content_sha256 = %content,
+            "CORPUS delivery repeats the applied one's content; nothing replaced"
+        );
+        return Ok(CorpusLoad::Unchanged {
+            applied_delivered_at: applied.delivered_at,
+        });
+    }
+    apply(
+        tx,
+        delivered_at,
+        source_file,
+        provenance,
+        locations,
+        keep,
+        &content,
+    )
+    .await
+}
+
+/// [`replace`]'s write, in `tx` (which holds the load lock): the delete,
+/// the insert, the delivery row and the crosswalk.
+async fn apply(
+    mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+    delivered_at: DateTime<Utc>,
+    source_file: &str,
+    provenance: &DeliveredFileProvenance<'_>,
+    locations: &[CorpusLocation],
+    keep: Keep,
+    content: &str,
+) -> Result<CorpusLoad> {
     let row_count = i32::try_from(locations.len())?;
     let nlc: Vec<&str> = locations.iter().map(|l| l.nlc.as_str()).collect();
     let column = |f: fn(&CorpusLocation) -> &Option<String>| -> Vec<Option<&str>> {
@@ -226,8 +397,6 @@ async fn replace(
     let nlc_desc = column(|l| &l.nlc_desc);
     let nlc_desc16 = column(|l| &l.nlc_desc16);
 
-    let mut tx = pool.begin().await?;
-    take_load_lock(&mut tx).await?;
     match keep {
         Keep::Nothing => {
             sqlx::query("DELETE FROM corpus_locations")
@@ -266,15 +435,18 @@ async fn replace(
     sqlx::query(
         "INSERT INTO corpus_deliveries \
              (delivered_at, source_file, row_count, loaded_at, source_bytes, sha256, \
-              delivery_source) \
-         VALUES ($1, $2, $3, now(), $4, $5, $6) \
+              delivery_source, content_sha256) \
+         VALUES ($1, $2, $3, clock_timestamp(), $4, $5, $6, $7) \
          ON CONFLICT (delivered_at) DO UPDATE SET \
              source_file = EXCLUDED.source_file, \
              row_count = EXCLUDED.row_count, \
              loaded_at = EXCLUDED.loaded_at, \
              source_bytes = EXCLUDED.source_bytes, \
              sha256 = EXCLUDED.sha256, \
-             delivery_source = EXCLUDED.delivery_source",
+             delivery_source = EXCLUDED.delivery_source, \
+             content_sha256 = EXCLUDED.content_sha256, \
+             redelivered_at = NULL, \
+             redelivery_count = 0",
     )
     .bind(delivered_at)
     .bind(source_file)
@@ -282,6 +454,7 @@ async fn replace(
     .bind(provenance.bytes)
     .bind(provenance.sha256)
     .bind(provenance.delivery_source)
+    .bind(content)
     .execute(&mut *tx)
     .await?;
     let (_, crosswalk) = match keep {
@@ -290,7 +463,7 @@ async fn replace(
     };
     crosswalk::write(&mut tx, delivered_at, crosswalk).await?;
     tx.commit().await?;
-    Ok(inserted)
+    Ok(CorpusLoad::Applied { rows: inserted })
 }
 
 /// Takes the CORPUS load lock for the rest of `tx`: loads and crosswalk
@@ -303,13 +476,19 @@ pub(crate) async fn take_load_lock(tx: &mut sqlx::Transaction<'_, sqlx::Postgres
     Ok(())
 }
 
-/// The newest loaded delivery's `delivered_at`, or `None` before the first
-/// load -- the CORPUS freshness read.
+/// SQL: the newest CORPUS delivery received, applied or an unchanged
+/// redelivery ([`CorpusLoad::Unchanged`]): the CORPUS freshness. `GREATEST`
+/// ignores the NULL `redelivered_at` of a delivery never repeated.
+pub(crate) const LAST_DELIVERY_SQL: &str =
+    "SELECT GREATEST(MAX(delivered_at), MAX(redelivered_at)) FROM corpus_deliveries";
+
+/// The newest received delivery's mtime (`delivered_at`, or a later
+/// identical copy's `redelivered_at`), or `None` before the first load --
+/// the CORPUS freshness read. An unchanged redelivery still counts: the
+/// feed is alive and the stored CORPUS is current as of that copy.
 pub async fn last_corpus_delivery(pool: &PgPool) -> Result<Option<DateTime<Utc>>> {
     let (latest,): (Option<DateTime<Utc>>,) =
-        sqlx::query_as("SELECT MAX(delivered_at) FROM corpus_deliveries")
-            .fetch_one(pool)
-            .await?;
+        sqlx::query_as(LAST_DELIVERY_SQL).fetch_one(pool).await?;
     Ok(latest)
 }
 
@@ -419,6 +598,56 @@ mod tests {
         assert!(parse_fallback_flag(Some("1")).is_err());
         assert!(parse_fallback_flag(Some("yes")).is_err());
         assert!(!fallback_enabled());
+    }
+}
+
+#[cfg(test)]
+mod content_hash_tests {
+    use super::*;
+
+    fn row(nlc: &str, tiploc: Option<&str>) -> CorpusLocation {
+        CorpusLocation {
+            nlc: nlc.to_string(),
+            stanox: Some("87219".to_string()),
+            tiploc: tiploc.map(str::to_string),
+            crs: Some("CLJ".to_string()),
+            uic: None,
+            nlc_desc: Some("CLAPHAM JUNCTION LONDON".to_string()),
+            nlc_desc16: None,
+        }
+    }
+
+    #[test]
+    fn the_same_rows_hash_the_same_and_any_change_differs() {
+        let rows = [row("559500", Some("CLPHMJN")), row("000800", None)];
+        let hash = content_sha256("NLC20261106.xml.gz", true, &rows);
+        assert!(is_sha256_hex(&hash), "{hash}");
+        assert_eq!(
+            hash,
+            content_sha256("NLC20261106.xml.gz", true, &rows.clone())
+        );
+
+        let mut changed_value = rows.clone();
+        changed_value[1].nlc_desc16 = Some("CLAPHAM".to_string());
+        let mut blank_not_absent = rows.clone();
+        blank_not_absent[1].tiploc = Some(String::new());
+        // The same characters moved between two fields.
+        let mut shifted = rows.clone();
+        shifted[0].crs = Some("CLJ8".to_string());
+        shifted[0].stanox = Some("7219".to_string());
+        let reordered = [rows[1].clone(), rows[0].clone()];
+        let others = [
+            content_sha256("NLC20261107.xml.gz", true, &rows),
+            content_sha256("NLC20261106.xml.gz", false, &rows),
+            content_sha256("NLC20261106.xml.gz", true, &rows[..1]),
+            content_sha256("NLC20261106.xml.gz", true, &changed_value),
+            content_sha256("NLC20261106.xml.gz", true, &blank_not_absent),
+            content_sha256("NLC20261106.xml.gz", true, &shifted),
+            content_sha256("NLC20261106.xml.gz", true, &reordered),
+        ];
+        for (i, other) in others.iter().enumerate() {
+            assert_ne!(*other, hash, "change {i} hashed the same");
+        }
     }
 }
 
@@ -550,7 +779,7 @@ mod db_tests {
         )
         .await
         .unwrap();
-        assert_eq!(n, 3);
+        assert_eq!(n, CorpusLoad::Applied { rows: 3 });
 
         let n = replace_corpus_locations(
             &pool,
@@ -560,7 +789,7 @@ mod db_tests {
         )
         .await
         .unwrap();
-        assert_eq!(n, 1);
+        assert_eq!(n, CorpusLoad::Applied { rows: 1 });
 
         type Row = (String, Option<String>, Option<String>, DateTime<Utc>);
         let rows: Vec<Row> = sqlx::query_as(
@@ -667,24 +896,251 @@ mod db_tests {
             (Some(295_957), Some(sha.clone()), Some("bucket".to_string()))
         );
 
-        replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &rows)
+        // Different rows: a load that applies (the same rows would be an
+        // unchanged redelivery, which keeps the applied provenance).
+        let changed = [location("559500", Some("CLPHMJN"), None)];
+        replace_corpus_locations(&pool, at, "CORPUSExtract.json.gz", &changed)
             .await
             .unwrap();
         assert_eq!(read().await, (None, None, None));
 
-        let refused = replace_corpus_locations_with_provenance(
-            &pool,
-            at,
-            "CORPUSExtract.json.gz",
-            &DeliveredFileProvenance {
-                delivery_source: Some("ftp"),
-                ..DeliveredFileProvenance::default()
-            },
-            &rows,
+        for rows in [&rows[..], &changed[..]] {
+            let refused = replace_corpus_locations_with_provenance(
+                &pool,
+                at,
+                "CORPUSExtract.json.gz",
+                &DeliveredFileProvenance {
+                    delivery_source: Some("ftp"),
+                    ..DeliveredFileProvenance::default()
+                },
+                rows,
+            )
+            .await;
+            assert!(refused.is_err(), "an unknown source is refused");
+            assert_eq!(read().await, (None, None, None), "rolled back");
+        }
+    }
+
+    /// Counts `(corpus_locations rows, corpus_deliveries rows)` and the
+    /// `corpus_locations` ids, which a rewrite would change.
+    async fn stored(pool: &PgPool) -> (i64, Vec<i64>) {
+        let (deliveries,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM corpus_deliveries")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        let ids: Vec<(i64,)> = sqlx::query_as("SELECT id FROM corpus_locations ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        (deliveries, ids.into_iter().map(|(id,)| id).collect())
+    }
+
+    async fn redeliveries(pool: &PgPool) -> Vec<(DateTime<Utc>, Option<DateTime<Utc>>, i32)> {
+        sqlx::query_as(
+            "SELECT delivered_at, redelivered_at, redelivery_count FROM corpus_deliveries \
+             ORDER BY delivered_at",
         )
-        .await;
-        assert!(refused.is_err(), "the CHECK refuses an unknown source");
-        assert_eq!(read().await, (None, None, None), "rolled back");
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    /// DS-390: the same rows in a new file (another mtime and file
+    /// SHA-256, as a fresh gzip of the same content has) replace nothing:
+    /// no new delivery, the stored rows and crosswalk untouched, only the
+    /// applied delivery's redelivery marker moves, and freshness reads the
+    /// redelivery. A changed delivery after it applies in full.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn an_identical_redelivery_is_a_no_op_and_a_change_applies(pool: PgPool) {
+        let hour = |h| Utc.with_ymd_and_hms(2026, 11, 7, h, 12, 0).unwrap();
+        let rows = [
+            location("559500", Some("CLPHMJN"), Some("CLJ")),
+            location("000800", None, None),
+        ];
+        async fn load(
+            pool: &PgPool,
+            at: DateTime<Utc>,
+            sha: &str,
+            rows: &[CorpusLocation],
+        ) -> CorpusLoad {
+            let provenance = DeliveredFileProvenance {
+                bytes: Some(349_552),
+                sha256: Some(sha),
+                delivery_source: Some("sftp"),
+            };
+            replace_corpus_locations_with_provenance(
+                pool,
+                at,
+                "CORPUSExtract.json.gz",
+                &provenance,
+                rows,
+            )
+            .await
+            .unwrap()
+        }
+        let (sha_a, sha_b, sha_c) = ("aa".repeat(32), "bb".repeat(32), "cc".repeat(32));
+        assert_eq!(
+            load(&pool, hour(0), &sha_a, &rows).await,
+            CorpusLoad::Applied { rows: 2 }
+        );
+        let before = stored(&pool).await;
+        let build = || async {
+            let (at,): (DateTime<Utc>,) =
+                sqlx::query_as("SELECT delivered_at FROM corpus_crosswalk_build")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            at
+        };
+        assert_eq!(build().await, hour(0));
+
+        for h in 1..=3 {
+            assert_eq!(
+                load(&pool, hour(h), &sha_b, &rows).await,
+                CorpusLoad::Unchanged {
+                    applied_delivered_at: hour(0)
+                }
+            );
+        }
+        assert_eq!(stored(&pool).await, before, "nothing rewritten or added");
+        assert_eq!(build().await, hour(0), "the crosswalk was not rebuilt");
+        assert_eq!(redeliveries(&pool).await, vec![(hour(0), Some(hour(3)), 3)]);
+        let (sha,): (Option<String>,) = sqlx::query_as("SELECT sha256 FROM corpus_deliveries")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            sha.as_deref(),
+            Some(sha_a.as_str()),
+            "the applied file's provenance stays"
+        );
+        assert_eq!(last_corpus_delivery(&pool).await.unwrap(), Some(hour(3)));
+        assert_eq!(
+            crate::freshness::data_freshness(&pool).await.unwrap()[5],
+            Some(hour(3))
+        );
+        let applied = applied_corpus_delivery(&pool).await.unwrap().unwrap();
+        assert_eq!(applied.delivered_at, hour(0));
+        assert_eq!(
+            applied.content_sha256.as_deref(),
+            Some(content_sha256("CORPUSExtract.json.gz", false, &rows).as_str())
+        );
+
+        // One changed row: applied in full, as a new delivery.
+        let mut changed = rows.to_vec();
+        changed[1].nlc_desc = Some("RENAMED".to_string());
+        assert_eq!(
+            load(&pool, hour(4), &sha_c, &changed).await,
+            CorpusLoad::Applied { rows: 2 }
+        );
+        let (deliveries, ids) = stored(&pool).await;
+        assert_eq!(deliveries, 2);
+        assert!(
+            ids.iter().all(|id| !before.1.contains(id)),
+            "rows rewritten"
+        );
+        let (desc,): (Option<String>,) =
+            sqlx::query_as("SELECT nlc_desc FROM corpus_locations WHERE nlc = '000800'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(desc.as_deref(), Some("RENAMED"));
+        assert_eq!(build().await, hour(4));
+        assert_eq!(
+            applied_corpus_delivery(&pool)
+                .await
+                .unwrap()
+                .unwrap()
+                .delivered_at,
+            hour(4)
+        );
+        assert_ne!(
+            applied_corpus_delivery(&pool)
+                .await
+                .unwrap()
+                .unwrap()
+                .content_key(),
+            applied.content_key()
+        );
+
+        // Back to the first content: compared with the last APPLIED
+        // delivery (the changed one), so it applies again.
+        assert_eq!(
+            load(&pool, hour(5), &sha_a, &rows).await,
+            CorpusLoad::Applied { rows: 2 }
+        );
+        let (desc,): (Option<String>,) =
+            sqlx::query_as("SELECT nlc_desc FROM corpus_locations WHERE nlc = '000800'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(desc.as_deref(), Some("CLAPHAM JUNCTION LONDON"));
+        assert_eq!(last_corpus_delivery(&pool).await.unwrap(), Some(hour(5)));
+    }
+
+    /// A delivery with no content hash (loaded before the column, or by an
+    /// older schedule-ingest) is never matched: the same rows apply again.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_delivery_without_a_content_hash_never_matches(pool: PgPool) {
+        let first = Utc.with_ymd_and_hms(2026, 11, 6, 0, 0, 0).unwrap();
+        let second = Utc.with_ymd_and_hms(2026, 11, 7, 0, 0, 0).unwrap();
+        let rows = [location("559500", Some("CLPHMJN"), Some("CLJ"))];
+        replace_corpus_locations(&pool, first, "CORPUSExtract.json.gz", &rows)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE corpus_deliveries SET content_sha256 = NULL")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            replace_corpus_locations(&pool, second, "CORPUSExtract.json.gz", &rows)
+                .await
+                .unwrap(),
+            CorpusLoad::Applied { rows: 1 }
+        );
+        assert_eq!(stored(&pool).await.0, 2);
+    }
+
+    /// The XML path dedups too, and the frozen JSON fallback is kept
+    /// through an unchanged XML redelivery.
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn an_identical_xml_redelivery_keeps_both_layers(pool: PgPool) {
+        let json_at = Utc.with_ymd_and_hms(2026, 10, 1, 3, 0, 0).unwrap();
+        replace_corpus_locations(
+            &pool,
+            json_at,
+            "CORPUSExtract.json.gz",
+            &[location("000800", None, None)],
+        )
+        .await
+        .unwrap();
+        let xml = [location("559500", Some("CLPHMJN"), Some("CLJ"))];
+        let at = |h| Utc.with_ymd_and_hms(2026, 11, 7, h, 12, 0).unwrap();
+        let provenance = DeliveredFileProvenance::default();
+        let load = |h| {
+            replace_corpus_locations_keeping_json_fallback(
+                &pool,
+                at(h),
+                "NLC20261106.xml.gz",
+                &provenance,
+                &xml,
+            )
+        };
+        assert_eq!(load(0).await.unwrap(), CorpusLoad::Applied { rows: 1 });
+        let before = stored(&pool).await;
+        assert_eq!(before.1.len(), 2, "XML plus the JSON fallback");
+        assert_eq!(
+            load(1).await.unwrap(),
+            CorpusLoad::Unchanged {
+                applied_delivered_at: at(0)
+            }
+        );
+        assert_eq!(stored(&pool).await, before);
+        let layers = crosswalk::load_corpus_layers(&pool).await.unwrap();
+        assert_eq!((layers.primary.len(), layers.fallback.len()), (1, 1));
     }
 
     /// The comparing body runs on a database with no CORPUS yet (nothing

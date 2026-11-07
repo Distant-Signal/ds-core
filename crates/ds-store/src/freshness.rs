@@ -94,8 +94,8 @@ async fn last_ingest(pool: &PgPool, source: &str) -> Result<Option<chrono::DateT
 /// review 2026-09-27 F10/F11). Same values as the five `last_*_fetch`
 /// functions plus `data::corpus::last_corpus_delivery`:
 /// `(stations, tocs, incidents, tfl, schedule_feed, corpus)`. The CORPUS
-/// `MAX()` is an index-only read of `corpus_deliveries`' primary key (about
-/// a dozen rows a year).
+/// value is the newest delivery received, an unchanged redelivery included
+/// (`corpus::LAST_DELIVERY_SQL`), over `corpus_deliveries`' few dozen rows.
 pub async fn data_freshness(pool: &PgPool) -> Result<[Option<chrono::DateTime<chrono::Utc>>; 6]> {
     type Ts = Option<chrono::DateTime<chrono::Utc>>;
     let row: (Ts, Ts, Ts, Ts, Ts, Ts) = sqlx::query_as(
@@ -105,7 +105,7 @@ pub async fn data_freshness(pool: &PgPool) -> Result<[Option<chrono::DateTime<ch
             (SELECT fetched_at FROM ingest_freshness WHERE source = 'incidents'), \
             (SELECT fetched_at FROM ingest_freshness WHERE source = 'tfl'), \
             (SELECT MAX(delivered_at) FROM schedule_feed_ingests), \
-            (SELECT MAX(delivered_at) FROM corpus_deliveries)",
+            (SELECT GREATEST(MAX(delivered_at), MAX(redelivered_at)) FROM corpus_deliveries)",
     )
     .fetch_one(pool)
     .await?;
