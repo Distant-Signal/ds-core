@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.14.1 (2026-11-08)
+
+- Retry a failed incident chunk and text-changed publish (#55)
+
 ## v0.14.0 (2026-11-07)
 
 - Drop the template legs' old unique key and let the notifier read day overrides (#52)
