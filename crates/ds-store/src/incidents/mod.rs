@@ -239,8 +239,13 @@ fn record_unresolved_places(
 /// chunks that already committed -- acceptable here because the poller
 /// resends the full current feed state every cycle (see `poller-incidents`),
 /// so anything not persisted this round is retried wholesale next round.
-/// A chunk failure returns an error, so the caller never runs the
-/// inference over a partly written snapshot.
+/// A failed chunk is first retried on its own, on a short bounded backoff
+/// ([`CHUNK_RETRY_BACKOFF`]), so a transient failure does not leave the
+/// committed chunks' text changes to the enricher's hourly sweep. A chunk
+/// that still fails returns an error, so the caller never runs the
+/// inference over a partly written snapshot; the error carries
+/// [`PartialSnapshot`] (`err.downcast_ref::<PartialSnapshot>()`) with the
+/// committed chunks' text-changed ids.
 ///
 /// `line_matcher` is run over each incoming incident to fill
 /// `incidents.affected_lines` -- see that column's migration
@@ -263,10 +268,6 @@ fn record_unresolved_places(
 /// caller to publish, once every chunk has committed (which is when this
 /// returns) and before the inference: best effort (log, do not fail), because a publish failure
 /// must not fail the ingest. Redis stays out of this crate (spec §5.1).
-#[expect(
-    clippy::too_many_lines,
-    reason = "long but linear; splitting it would scatter its shared state across helpers"
-)]
 pub async fn apply_snapshot(
     pool: &PgPool,
     line_matcher: &common::matcher::LineMatcher,
@@ -301,241 +302,21 @@ pub async fn apply_snapshot(
 
     for (chunk_index, chunk) in incidents.chunks(UPSERT_CHUNK_SIZE).enumerate() {
         let chunk_offset = chunk_index * UPSERT_CHUNK_SIZE;
-        let mut tx = pool.begin().await?;
-
-        let chunk_ids: Vec<&str> = chunk.iter().map(|i| i.incident_id.as_str()).collect();
-        let existing_rows: Vec<ExistingIncident> = sqlx::query_as(
-            "SELECT incident_id, summary, description, validity_periods, is_cleared \
-             FROM incidents WHERE incident_id = ANY($1)",
-        )
-        .bind(&chunk_ids)
-        .fetch_all(&mut *tx)
-        .await?;
-        let existing_by_id: HashMap<&str, &ExistingIncident> = existing_rows
-            .iter()
-            .map(|row| (row.incident_id.as_str(), row))
-            .collect();
-
-        // F2: one upsert and at most one history insert per chunk, instead
-        // of one or two statements per incident. A repeated incident_id in
-        // the same chunk keeps its LAST copy (a multi-row upsert cannot touch
-        // a row twice); the old loop's final write was that copy too.
-        let rows: Vec<(&IncidentMessage, &Vec<String>, serde_json::Value)> = chunk
-            .iter()
-            .enumerate()
-            .map(|(offset_in_chunk, incident)| {
-                serde_json::to_value(&incident.validity).map(|validity| {
-                    (
-                        incident,
-                        &affected_lines[chunk_offset + offset_in_chunk],
-                        validity,
-                    )
-                })
+        let chunk_lines = &affected_lines[chunk_offset..chunk_offset + chunk.len()];
+        let applied = retry_chunk(&CHUNK_RETRY_BACKOFF, chunk_index, || {
+            apply_chunk(pool, chunk, chunk_lines, heartbeat)
+        })
+        .await
+        .map_err(|err| {
+            // The chunks before this one committed: their ids are still the
+            // caller's to publish, or they wait for the enricher's sweep.
+            err.context(PartialSnapshot {
+                committed_chunks: chunk_index,
+                text_changed_ids: text_changed_ids.clone(),
             })
-            .collect::<std::result::Result<_, _>>()?;
-        let rows = last_per_key(&rows, |(incident, _, _)| incident.incident_id.as_str());
-
-        let mut changed_rows = Vec::new();
-        for (incident, _, validity_json) in &rows {
-            let existing = existing_by_id.get(incident.incident_id.as_str()).copied();
-            if incident_changed(
-                existing,
-                &incident.summary,
-                &incident.description,
-                validity_json,
-                incident.is_cleared,
-            ) {
-                changed_rows.push((*incident, validity_json));
-            }
-            if text_changed(existing, &incident.summary, &incident.description)
-                || reopened(existing, incident.is_cleared)
-            {
-                text_changed_ids.push(incident.incident_id.clone());
-            }
-        }
-
-        let json_array = |values: &[String]| serde_json::Value::from(values.to_vec());
-        let ids: Vec<&str> = rows
-            .iter()
-            .map(|(i, _, _)| i.incident_id.as_str())
-            .collect();
-        let summaries: Vec<&str> = rows.iter().map(|(i, _, _)| i.summary.as_str()).collect();
-        let descriptions: Vec<&str> = rows
-            .iter()
-            .map(|(i, _, _)| i.description.as_str())
-            .collect();
-        let operators: Vec<serde_json::Value> = rows
-            .iter()
-            .map(|(i, _, _)| json_array(&i.operators))
-            .collect();
-        let stations: Vec<serde_json::Value> = rows
-            .iter()
-            .map(|(i, _, _)| json_array(&i.affected_stations))
-            .collect();
-        let priorities: Vec<i32> = rows.iter().map(|(i, _, _)| i.priority).collect();
-        let validities: Vec<&serde_json::Value> = rows.iter().map(|(_, _, v)| v).collect();
-        let planned: Vec<bool> = rows.iter().map(|(i, _, _)| i.is_planned).collect();
-        let cleared: Vec<bool> = rows.iter().map(|(i, _, _)| i.is_cleared).collect();
-        let lines: Vec<serde_json::Value> = rows.iter().map(|(_, l, _)| json_array(l)).collect();
-
-        sqlx::query(
-            r"
-            INSERT INTO incidents (
-                incident_id, summary, description, operators, affected_stations,
-                priority, validity_periods, is_planned, is_cleared, fetched_at,
-                first_seen_at, affected_lines, active_since
-            )
-            SELECT i.incident_id, i.summary, i.description,
-                   ARRAY(SELECT jsonb_array_elements_text(i.operators)),
-                   ARRAY(SELECT jsonb_array_elements_text(i.affected_stations)),
-                   i.priority, i.validity_periods, i.is_planned, i.is_cleared, NOW(), NOW(),
-                   ARRAY(SELECT jsonb_array_elements_text(i.affected_lines)), NOW()
-              FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[], $5::jsonb[],
-                          $6::int4[], $7::jsonb[], $8::bool[], $9::bool[], $10::jsonb[])
-                   AS i(incident_id, summary, description, operators, affected_stations,
-                        priority, validity_periods, is_planned, is_cleared, affected_lines)
-            ON CONFLICT (incident_id) DO UPDATE SET
-                summary           = EXCLUDED.summary,
-                description       = EXCLUDED.description,
-                operators         = EXCLUDED.operators,
-                affected_stations = EXCLUDED.affected_stations,
-                priority          = EXCLUDED.priority,
-                validity_periods  = EXCLUDED.validity_periods,
-                is_planned        = EXCLUDED.is_planned,
-                is_cleared        = EXCLUDED.is_cleared,
-                fetched_at        = NOW(),
-                affected_lines    = EXCLUDED.affected_lines,
-                source_missing_polls = 0,
-                source_removed_at = NULL,
-                -- The rail-day cutoff's anchor (2026-10-06,
-                -- `20261006130000_incidents_active_since.sql`): re-armed by
-                -- a reopen (cleared -> uncleared) or by new text while
-                -- uncleared. `incidents.*` here is the row as it was.
-                active_since      = CASE
-                    WHEN EXCLUDED.is_cleared THEN incidents.active_since
-                    WHEN incidents.is_cleared
-                      OR (incidents.summary, incidents.description)
-                         IS DISTINCT FROM (EXCLUDED.summary, EXCLUDED.description)
-                    THEN NOW()
-                    ELSE incidents.active_since
-                END
-            WHERE (incidents.summary, incidents.description, incidents.operators,
-                   incidents.affected_stations, incidents.priority,
-                   incidents.validity_periods, incidents.is_planned,
-                   incidents.is_cleared, incidents.affected_lines)
-                  IS DISTINCT FROM
-                  (EXCLUDED.summary, EXCLUDED.description, EXCLUDED.operators,
-                   EXCLUDED.affected_stations, EXCLUDED.priority,
-                   EXCLUDED.validity_periods, EXCLUDED.is_planned,
-                   EXCLUDED.is_cleared, EXCLUDED.affected_lines)
-            ",
-        )
-        .bind(&ids)
-        .bind(&summaries)
-        .bind(&descriptions)
-        .bind(&operators)
-        .bind(&stations)
-        .bind(&priorities)
-        .bind(&validities)
-        .bind(&planned)
-        .bind(&cleared)
-        .bind(&lines)
-        .execute(&mut *tx)
-        .await?;
-
-        if !changed_rows.is_empty() {
-            let h_ids: Vec<&str> = changed_rows
-                .iter()
-                .map(|(i, _)| i.incident_id.as_str())
-                .collect();
-            let h_summaries: Vec<&str> = changed_rows
-                .iter()
-                .map(|(i, _)| i.summary.as_str())
-                .collect();
-            let h_descriptions: Vec<&str> = changed_rows
-                .iter()
-                .map(|(i, _)| i.description.as_str())
-                .collect();
-            let h_operators: Vec<serde_json::Value> = changed_rows
-                .iter()
-                .map(|(i, _)| json_array(&i.operators))
-                .collect();
-            let h_stations: Vec<serde_json::Value> = changed_rows
-                .iter()
-                .map(|(i, _)| json_array(&i.affected_stations))
-                .collect();
-            let h_priorities: Vec<i32> = changed_rows.iter().map(|(i, _)| i.priority).collect();
-            let h_validities: Vec<&serde_json::Value> =
-                changed_rows.iter().map(|(_, v)| *v).collect();
-            let h_planned: Vec<bool> = changed_rows.iter().map(|(i, _)| i.is_planned).collect();
-            let h_cleared: Vec<bool> = changed_rows.iter().map(|(i, _)| i.is_cleared).collect();
-            sqlx::query(
-                r"
-                INSERT INTO incident_history (
-                    incident_id, summary, description, operators, affected_stations,
-                    priority, validity_periods, is_planned, is_cleared
-                )
-                SELECT h.incident_id, h.summary, h.description,
-                       ARRAY(SELECT jsonb_array_elements_text(h.operators)),
-                       ARRAY(SELECT jsonb_array_elements_text(h.affected_stations)),
-                       h.priority, h.validity_periods, h.is_planned, h.is_cleared
-                  FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[], $5::jsonb[],
-                              $6::int4[], $7::jsonb[], $8::bool[], $9::bool[])
-                       WITH ORDINALITY
-                       AS h(incident_id, summary, description, operators, affected_stations,
-                            priority, validity_periods, is_planned, is_cleared, ord)
-                 ORDER BY h.ord
-                ",
-            )
-            .bind(&h_ids)
-            .bind(&h_summaries)
-            .bind(&h_descriptions)
-            .bind(&h_operators)
-            .bind(&h_stations)
-            .bind(&h_priorities)
-            .bind(&h_validities)
-            .bind(&h_planned)
-            .bind(&h_cleared)
-            .execute(&mut *tx)
-            .await?;
-        }
+        })?;
         count += chunk.len() as u64;
-
-        // `fetched_at` is shown per incident ("Last updated from National
-        // Rail") so it must still advance for every incident in the feed,
-        // changed or not. The upsert above skips an unchanged row entirely;
-        // with the heartbeat on, this bumps ONLY `fetched_at` on those, in
-        // one statement. Updating just that unindexed column is a HOT update
-        // that reuses the row's TOASTed text/array values and touches none
-        // of the GIN indexes, instead of the full-row rewrite every incident
-        // got every cycle. Rows the upsert just wrote already hold this
-        // transaction's NOW(). Being listed also un-ends an incident
-        // (`source_missing_polls`, `source_removed_at`, see `removal`); two
-        // more unindexed columns keep this a HOT update.
-        //
-        // With the heartbeat off, only the rows coming back (or cleared:
-        // module docs) are touched; the others take the feed's time
-        // (`record_snapshot_times` below, read through `FETCHED_AT_SQL`).
-        let bump = match heartbeat {
-            RowHeartbeat::On => {
-                "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
-                        source_removed_at = NULL \
-                 WHERE incident_id = ANY($1) AND fetched_at <> NOW()"
-            }
-            RowHeartbeat::Off => {
-                "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
-                        source_removed_at = NULL \
-                 WHERE incident_id = ANY($1) AND fetched_at <> NOW() \
-                   AND (is_cleared OR source_missing_polls <> 0 \
-                        OR source_removed_at IS NOT NULL)"
-            }
-        };
-        sqlx::query(bump).bind(&chunk_ids).execute(&mut *tx).await?;
-        if !chunk.is_empty() {
-            record_ingest(&mut tx, "incidents", None).await?;
-        }
-
-        tx.commit().await?;
+        text_changed_ids.extend(applied);
     }
 
     // Every chunk committed: the snapshot is written, so its time becomes
@@ -548,6 +329,319 @@ pub async fn apply_snapshot(
         upserted: count,
         text_changed_ids,
     })
+}
+
+/// One chunk of [`apply_snapshot`], as its own transaction: returns the
+/// chunk's text-changed ids once it has committed. `affected_lines` is the
+/// chunk's own slice. Nothing is kept from an attempt that fails, so it can
+/// be retried whole ([`retry_chunk`]).
+#[expect(
+    clippy::too_many_lines,
+    reason = "long but linear: the chunk's reads, upsert, history and bump in one transaction"
+)]
+async fn apply_chunk(
+    pool: &PgPool,
+    chunk: &[IncidentMessage],
+    affected_lines: &[Vec<String>],
+    heartbeat: RowHeartbeat,
+) -> Result<Vec<String>> {
+    let mut text_changed_ids = Vec::new();
+    let mut tx = pool.begin().await?;
+
+    let chunk_ids: Vec<&str> = chunk.iter().map(|i| i.incident_id.as_str()).collect();
+    let existing_rows: Vec<ExistingIncident> = sqlx::query_as(
+        "SELECT incident_id, summary, description, validity_periods, is_cleared \
+         FROM incidents WHERE incident_id = ANY($1)",
+    )
+    .bind(&chunk_ids)
+    .fetch_all(&mut *tx)
+    .await?;
+    let existing_by_id: HashMap<&str, &ExistingIncident> = existing_rows
+        .iter()
+        .map(|row| (row.incident_id.as_str(), row))
+        .collect();
+
+    // F2: one upsert and at most one history insert per chunk, instead
+    // of one or two statements per incident. A repeated incident_id in
+    // the same chunk keeps its LAST copy (a multi-row upsert cannot touch
+    // a row twice); the old loop's final write was that copy too.
+    let rows: Vec<(&IncidentMessage, &Vec<String>, serde_json::Value)> = chunk
+        .iter()
+        .enumerate()
+        .map(|(offset_in_chunk, incident)| {
+            serde_json::to_value(&incident.validity)
+                .map(|validity| (incident, &affected_lines[offset_in_chunk], validity))
+        })
+        .collect::<std::result::Result<_, _>>()?;
+    let rows = last_per_key(&rows, |(incident, _, _)| incident.incident_id.as_str());
+
+    let mut changed_rows = Vec::new();
+    for (incident, _, validity_json) in &rows {
+        let existing = existing_by_id.get(incident.incident_id.as_str()).copied();
+        if incident_changed(
+            existing,
+            &incident.summary,
+            &incident.description,
+            validity_json,
+            incident.is_cleared,
+        ) {
+            changed_rows.push((*incident, validity_json));
+        }
+        if text_changed(existing, &incident.summary, &incident.description)
+            || reopened(existing, incident.is_cleared)
+        {
+            text_changed_ids.push(incident.incident_id.clone());
+        }
+    }
+
+    let json_array = |values: &[String]| serde_json::Value::from(values.to_vec());
+    let ids: Vec<&str> = rows
+        .iter()
+        .map(|(i, _, _)| i.incident_id.as_str())
+        .collect();
+    let summaries: Vec<&str> = rows.iter().map(|(i, _, _)| i.summary.as_str()).collect();
+    let descriptions: Vec<&str> = rows
+        .iter()
+        .map(|(i, _, _)| i.description.as_str())
+        .collect();
+    let operators: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|(i, _, _)| json_array(&i.operators))
+        .collect();
+    let stations: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|(i, _, _)| json_array(&i.affected_stations))
+        .collect();
+    let priorities: Vec<i32> = rows.iter().map(|(i, _, _)| i.priority).collect();
+    let validities: Vec<&serde_json::Value> = rows.iter().map(|(_, _, v)| v).collect();
+    let planned: Vec<bool> = rows.iter().map(|(i, _, _)| i.is_planned).collect();
+    let cleared: Vec<bool> = rows.iter().map(|(i, _, _)| i.is_cleared).collect();
+    let lines: Vec<serde_json::Value> = rows.iter().map(|(_, l, _)| json_array(l)).collect();
+
+    sqlx::query(
+        r"
+        INSERT INTO incidents (
+            incident_id, summary, description, operators, affected_stations,
+            priority, validity_periods, is_planned, is_cleared, fetched_at,
+            first_seen_at, affected_lines, active_since
+        )
+        SELECT i.incident_id, i.summary, i.description,
+               ARRAY(SELECT jsonb_array_elements_text(i.operators)),
+               ARRAY(SELECT jsonb_array_elements_text(i.affected_stations)),
+               i.priority, i.validity_periods, i.is_planned, i.is_cleared, NOW(), NOW(),
+               ARRAY(SELECT jsonb_array_elements_text(i.affected_lines)), NOW()
+          FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[], $5::jsonb[],
+                      $6::int4[], $7::jsonb[], $8::bool[], $9::bool[], $10::jsonb[])
+               AS i(incident_id, summary, description, operators, affected_stations,
+                    priority, validity_periods, is_planned, is_cleared, affected_lines)
+        ON CONFLICT (incident_id) DO UPDATE SET
+            summary           = EXCLUDED.summary,
+            description       = EXCLUDED.description,
+            operators         = EXCLUDED.operators,
+            affected_stations = EXCLUDED.affected_stations,
+            priority          = EXCLUDED.priority,
+            validity_periods  = EXCLUDED.validity_periods,
+            is_planned        = EXCLUDED.is_planned,
+            is_cleared        = EXCLUDED.is_cleared,
+            fetched_at        = NOW(),
+            affected_lines    = EXCLUDED.affected_lines,
+            source_missing_polls = 0,
+            source_removed_at = NULL,
+            -- The rail-day cutoff's anchor (2026-10-06,
+            -- `20261006130000_incidents_active_since.sql`): re-armed by
+            -- a reopen (cleared -> uncleared) or by new text while
+            -- uncleared. `incidents.*` here is the row as it was.
+            active_since      = CASE
+                WHEN EXCLUDED.is_cleared THEN incidents.active_since
+                WHEN incidents.is_cleared
+                  OR (incidents.summary, incidents.description)
+                     IS DISTINCT FROM (EXCLUDED.summary, EXCLUDED.description)
+                THEN NOW()
+                ELSE incidents.active_since
+            END
+        WHERE (incidents.summary, incidents.description, incidents.operators,
+               incidents.affected_stations, incidents.priority,
+               incidents.validity_periods, incidents.is_planned,
+               incidents.is_cleared, incidents.affected_lines)
+              IS DISTINCT FROM
+              (EXCLUDED.summary, EXCLUDED.description, EXCLUDED.operators,
+               EXCLUDED.affected_stations, EXCLUDED.priority,
+               EXCLUDED.validity_periods, EXCLUDED.is_planned,
+               EXCLUDED.is_cleared, EXCLUDED.affected_lines)
+        ",
+    )
+    .bind(&ids)
+    .bind(&summaries)
+    .bind(&descriptions)
+    .bind(&operators)
+    .bind(&stations)
+    .bind(&priorities)
+    .bind(&validities)
+    .bind(&planned)
+    .bind(&cleared)
+    .bind(&lines)
+    .execute(&mut *tx)
+    .await?;
+
+    if !changed_rows.is_empty() {
+        let h_ids: Vec<&str> = changed_rows
+            .iter()
+            .map(|(i, _)| i.incident_id.as_str())
+            .collect();
+        let h_summaries: Vec<&str> = changed_rows
+            .iter()
+            .map(|(i, _)| i.summary.as_str())
+            .collect();
+        let h_descriptions: Vec<&str> = changed_rows
+            .iter()
+            .map(|(i, _)| i.description.as_str())
+            .collect();
+        let h_operators: Vec<serde_json::Value> = changed_rows
+            .iter()
+            .map(|(i, _)| json_array(&i.operators))
+            .collect();
+        let h_stations: Vec<serde_json::Value> = changed_rows
+            .iter()
+            .map(|(i, _)| json_array(&i.affected_stations))
+            .collect();
+        let h_priorities: Vec<i32> = changed_rows.iter().map(|(i, _)| i.priority).collect();
+        let h_validities: Vec<&serde_json::Value> = changed_rows.iter().map(|(_, v)| *v).collect();
+        let h_planned: Vec<bool> = changed_rows.iter().map(|(i, _)| i.is_planned).collect();
+        let h_cleared: Vec<bool> = changed_rows.iter().map(|(i, _)| i.is_cleared).collect();
+        sqlx::query(
+            r"
+            INSERT INTO incident_history (
+                incident_id, summary, description, operators, affected_stations,
+                priority, validity_periods, is_planned, is_cleared
+            )
+            SELECT h.incident_id, h.summary, h.description,
+                   ARRAY(SELECT jsonb_array_elements_text(h.operators)),
+                   ARRAY(SELECT jsonb_array_elements_text(h.affected_stations)),
+                   h.priority, h.validity_periods, h.is_planned, h.is_cleared
+              FROM UNNEST($1::text[], $2::text[], $3::text[], $4::jsonb[], $5::jsonb[],
+                          $6::int4[], $7::jsonb[], $8::bool[], $9::bool[])
+                   WITH ORDINALITY
+                   AS h(incident_id, summary, description, operators, affected_stations,
+                        priority, validity_periods, is_planned, is_cleared, ord)
+             ORDER BY h.ord
+            ",
+        )
+        .bind(&h_ids)
+        .bind(&h_summaries)
+        .bind(&h_descriptions)
+        .bind(&h_operators)
+        .bind(&h_stations)
+        .bind(&h_priorities)
+        .bind(&h_validities)
+        .bind(&h_planned)
+        .bind(&h_cleared)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // `fetched_at` is shown per incident ("Last updated from National
+    // Rail") so it must still advance for every incident in the feed,
+    // changed or not. The upsert above skips an unchanged row entirely;
+    // with the heartbeat on, this bumps ONLY `fetched_at` on those, in
+    // one statement. Updating just that unindexed column is a HOT update
+    // that reuses the row's TOASTed text/array values and touches none
+    // of the GIN indexes, instead of the full-row rewrite every incident
+    // got every cycle. Rows the upsert just wrote already hold this
+    // transaction's NOW(). Being listed also un-ends an incident
+    // (`source_missing_polls`, `source_removed_at`, see `removal`); two
+    // more unindexed columns keep this a HOT update.
+    //
+    // With the heartbeat off, only the rows coming back (or cleared:
+    // module docs) are touched; the others take the feed's time
+    // (`record_snapshot_times` below, read through `FETCHED_AT_SQL`).
+    let bump = match heartbeat {
+        RowHeartbeat::On => {
+            "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
+                    source_removed_at = NULL \
+             WHERE incident_id = ANY($1) AND fetched_at <> NOW()"
+        }
+        RowHeartbeat::Off => {
+            "UPDATE incidents SET fetched_at = NOW(), source_missing_polls = 0, \
+                    source_removed_at = NULL \
+             WHERE incident_id = ANY($1) AND fetched_at <> NOW() \
+               AND (is_cleared OR source_missing_polls <> 0 \
+                    OR source_removed_at IS NOT NULL)"
+        }
+    };
+    sqlx::query(bump).bind(&chunk_ids).execute(&mut *tx).await?;
+    if !chunk.is_empty() {
+        record_ingest(&mut tx, "incidents", None).await?;
+    }
+
+    tx.commit().await?;
+    Ok(text_changed_ids)
+}
+
+/// The waits before each retry of a failed chunk: three attempts in about
+/// 1.25 s. A chunk fails on a transient error (a deadlock or serialization
+/// failure against another writer, a dropped connection); the chunks before
+/// it have committed, and their text changes would otherwise be published
+/// only by the enricher's hourly sweep, since the snapshot's own retry
+/// finds them already stored. Small, so a lasting failure (Postgres down, a
+/// rejected row) still fails the snapshot fast, for its caller's own retry.
+pub const CHUNK_RETRY_BACKOFF: [std::time::Duration; 2] = [
+    std::time::Duration::from_millis(250),
+    std::time::Duration::from_secs(1),
+];
+
+/// Runs `attempt` until it succeeds, waiting `backoff[i]` before retry
+/// `i + 1`; the last error once `backoff` is used up.
+async fn retry_chunk<T, F, Fut>(
+    backoff: &[std::time::Duration],
+    chunk_index: usize,
+    mut attempt: F,
+) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T>>,
+{
+    let mut waits = backoff.iter();
+    loop {
+        match attempt().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                let Some(wait) = waits.next() else {
+                    return Err(err);
+                };
+                tracing::warn!(
+                    error = ?err,
+                    chunk = chunk_index,
+                    retry_in_ms = wait.as_millis(),
+                    "an incident snapshot chunk failed; retrying it"
+                );
+                tokio::time::sleep(*wait).await;
+            }
+        }
+    }
+}
+
+/// Context on [`apply_snapshot`]'s error when a chunk still failed after
+/// its retries: the chunks before it committed, and these are their
+/// text-changed ids, for the caller to publish before it retries (the
+/// retry finds them stored, so reports them no more). The underlying error
+/// is still reachable with `downcast_ref`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartialSnapshot {
+    /// How many chunks committed.
+    pub committed_chunks: usize,
+    /// The committed chunks' text-changed ids.
+    pub text_changed_ids: Vec<String>,
+}
+
+impl std::fmt::Display for PartialSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "incident snapshot partly written: {} chunk(s) committed, {} text change(s) in them",
+            self.committed_chunks,
+            self.text_changed_ids.len()
+        )
+    }
 }
 
 /// `incident_feed_state`'s snapshot times, once per applied non-empty
@@ -664,6 +758,68 @@ mod parse_snapshot_tests {
             .expect_err("missing fields");
         assert!(message.contains("summary"), "{message}");
         assert!(parse_snapshot(json!("nope")).is_err(), "not an object");
+    }
+}
+
+/// [`retry_chunk`] and [`PartialSnapshot`], without a database.
+#[cfg(test)]
+mod chunk_retry_tests {
+    use std::cell::Cell;
+    use std::time::Duration;
+
+    use super::*;
+
+    const QUICK: [Duration; 2] = [Duration::from_millis(1), Duration::from_millis(1)];
+
+    #[tokio::test]
+    async fn a_chunk_that_fails_transiently_is_retried_until_it_commits() {
+        let attempts = Cell::new(0);
+        let result = retry_chunk(&QUICK, 3, || {
+            attempts.set(attempts.get() + 1);
+            let n = attempts.get();
+            async move {
+                if n < 3 {
+                    Err(anyhow::Error::from(sqlx::Error::PoolTimedOut))
+                } else {
+                    Ok(vec!["INC-1".to_owned()])
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), vec!["INC-1".to_owned()]);
+        assert_eq!(attempts.get(), 3);
+    }
+
+    #[tokio::test]
+    async fn the_retries_are_bounded() {
+        let attempts = Cell::new(0);
+        let result: Result<()> = retry_chunk(&QUICK, 0, || {
+            attempts.set(attempts.get() + 1);
+            async { Err(anyhow::anyhow!("still down")) }
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(attempts.get(), QUICK.len() + 1);
+    }
+
+    #[test]
+    fn the_production_backoff_is_small() {
+        let total: Duration = CHUNK_RETRY_BACKOFF.iter().sum();
+        assert!(total <= Duration::from_secs(2), "{total:?}");
+    }
+
+    /// A caller still classifies the database error under the context, and
+    /// finds the committed chunks' ids.
+    #[test]
+    fn the_partial_snapshot_rides_on_the_error() {
+        let err = anyhow::Error::from(sqlx::Error::PoolTimedOut).context(PartialSnapshot {
+            committed_chunks: 2,
+            text_changed_ids: vec!["INC-1".to_owned()],
+        });
+        assert!(err.downcast_ref::<sqlx::Error>().is_some());
+        let partial = err.downcast_ref::<PartialSnapshot>().unwrap();
+        assert_eq!(partial.committed_chunks, 2);
+        assert_eq!(partial.text_changed_ids, vec!["INC-1".to_owned()]);
     }
 }
 
