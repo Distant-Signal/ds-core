@@ -793,6 +793,7 @@ BEGIN
         ('notifier_forward_queue', 'trust_consumer', 'INSERT', ''),
         ('notifier_forward_queue', 'trust_consumer', 'SELECT', 'dedup_key'),
         ('notifier_forward_queue', 'notifier', 'SELECT', ''),
+        ('notifier_forward_queue', 'notifier', 'DELETE', ''),
         ('train_event_outbox', 'api', 'SELECT', ''),
         ('train_event_outbox', 'api', 'INSERT', 'tracked_train_id,dedup_key,event'),
         ('train_event_outbox', 'trust_consumer', 'SELECT', ''),
