@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.14.2 (2026-11-09)
+
+- Add webhook_destinations for outbound webhooks (#57)
+- Leave-by from the suggested plan for unpicked remind-me trains; notifier prunes the forward queue (#58)
+
+**Migrations** (1): `20261109120000_webhook_destinations.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
 ## v0.14.1 (2026-11-08)
 
 - Retry a failed incident chunk and text-changed publish (#55)
