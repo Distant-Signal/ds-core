@@ -268,6 +268,10 @@ tables:
   journey_template_day_overrides: {class: personal, grants: {api: SIUD, notifier: S}}
   # notifier: U on last_pushed_at only, stamped on each delivered push for
   # the Notifications page's device list (DS-153).
+  # Outbound webhooks (DS-415): created, edited and deleted by the api; the
+  # notifier reads them to deliver, and writes only the delivery-health
+  # columns (and enabled, to auto-disable a destination that keeps failing).
+  webhook_destinations: {class: personal, grants: {api: SIUD, notifier: [S, {privileges: U, columns: [enabled, consecutive_failures, disabled_reason, last_success_at, last_failure_at, last_error]}]}}
   push_subscriptions: {class: personal, grants: {api: SIUD, notifier: [SD, {privileges: U, columns: [last_pushed_at]}]}}
   tracked_train_tickets: {class: personal, grants: {api: SIUD}}
   unlisted_links: {class: personal, grants: {api: SIUD}}
@@ -587,6 +591,7 @@ sequences:
   notifier_forward_queue_id_seq: {table: notifier_forward_queue}
   personal_api_tokens_id_seq: {table: personal_api_tokens}
   push_subscriptions_id_seq: {table: push_subscriptions}
+  webhook_destinations_id_seq: {table: webhook_destinations}
   tracked_train_tickets_id_seq: {table: tracked_train_tickets}
   user_away_periods_id_seq: {table: user_away_periods}
   # Still named after the table's old name (tracked_trains).
