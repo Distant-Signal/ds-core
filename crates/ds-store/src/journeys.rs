@@ -11,6 +11,13 @@ use crate::trains::{LegEnd, leg_crs_sql};
 pub const BASIS_BOOKED: &str = "booked";
 /// See [`BASIS_BOOKED`].
 pub const BASIS_SUGGESTION: &str = "suggestion";
+/// See [`BASIS_BOOKED`]: a remind-me occurrence's usual train, not yet
+/// picked ([`leave_by_sql`]'s "unpicked train" rule).
+pub const BASIS_USUAL: &str = "usual";
+/// See [`BASIS_BOOKED`]: a remind-me occurrence's suggested train that is
+/// the usual operator's nearest one, not the usual train itself (a retimed
+/// train with a new UID); not yet picked.
+pub const BASIS_CLOSEST: &str = "closest";
 
 /// SQL for one journey's leave-by, a subquery to use as
 /// `LEFT JOIN LATERAL ({leave_by_sql("j")}) lb ON TRUE`, where `journey`
@@ -21,7 +28,7 @@ pub const BASIS_SUGGESTION: &str = "suggestion";
 /// |---|---|---|
 /// | `leave_by_at` | `timestamptz` | when to leave: `departure` minus `station_buffer_minutes` |
 /// | `departure` | `timestamptz` | the departure it is timed from |
-/// | `basis` | `text` | [`BASIS_BOOKED`] or [`BASIS_SUGGESTION`] |
+/// | `basis` | `text` | [`BASIS_BOOKED`], [`BASIS_SUGGESTION`], [`BASIS_USUAL`] or [`BASIS_CLOSEST`] |
 /// | `leg_id` | `bigint` | the `journey_legs` id of the first leg with a time |
 ///
 /// The rules (§5.1):
@@ -37,14 +44,33 @@ pub const BASIS_SUGGESTION: &str = "suggestion";
 ///   own origin, else the subscription's pinned departure.
 /// - The first leg with a time sets it (decision 15): a train leg's booked
 ///   departure, or an untracked leg's (Tube, bus, walk) planned departure.
-///   A train leg with no train yet has no time and is passed over.
+///   A train leg with no train yet has no time and is passed over,
+///   unless the usual-train rule below gives it one.
+/// - A train leg with no train yet (a remind-me occurrence nobody has
+///   picked a train for) takes the departure of the journey's
+///   `regular_plan` suggestion when the plan is `suggested`, not yet
+///   accepted and chose either the usual train (reason `usual`, basis
+///   [`BASIS_USUAL`]) or the usual operator's nearest train within the
+///   planner's window (reason `same_operator`, basis [`BASIS_CLOSEST`]: a
+///   retimed train with a new UID). A `best` suggestion, the target's own
+///   pick when the usual train doesn't run, has no leave-by: it may be far
+///   from the time the user is used to, and the pick reminder is how they
+///   hear of it. The time is read from the suggested train's timetable
+///   (`schedule_destination_departures`, as a bound train's is), so a
+///   retime the plan hasn't caught up with yet still moves it; the plan's
+///   stored departure is the fallback. A suggested train that is cancelled
+///   in `train_current_state` gives none. Accepting or tracking binds the
+///   leg (and moves the plan off `suggested`), so the time then comes from
+///   the train (basis [`BASIS_BOOKED`]) and the same leave-by is not
+///   repeated.
 /// - Lateness never moves it (decision 5): no live time is read.
 /// - The journey's first train is cancelled (`train_current_state`): with
 ///   an open break whose best suggestion is `covered`, it is that
 ///   suggestion's departure minus the buffer, basis [`BASIS_SUGGESTION`];
 ///   without one there is no leave-by.
 ///
-/// Reads `journeys` (`id`, `station_buffer_minutes`), `journey_legs`,
+/// Reads `journeys` (`id`, `station_buffer_minutes`, `regular_plan`,
+/// `regular_plan_status`), `journey_legs`,
 /// `train_subscriptions` (`id`, `trains_id`, `pin_origin_crs`,
 /// `pin_destination_crs`, `pin_scheduled_departure`), `trains`,
 /// `train_current_state`, `journey_revisions` (`id`, `journey_id`,
@@ -52,6 +78,7 @@ pub const BASIS_SUGGESTION: &str = "suggestion";
 /// `source_leg_id`, `kind`, `trains_id`, `booked_departure`,
 /// `planned_departure`), `journey_breaks` and
 /// `schedule_destination_departures` (db-grants.yaml).
+#[expect(clippy::too_many_lines, reason = "one SQL text, kept whole")]
 pub fn leave_by_sql(journey: &str) -> String {
     let origin = leg_crs_sql(LegEnd::Origin, "lb_jl", "lb_ts", "lb_tr");
     format!(
@@ -59,13 +86,39 @@ pub fn leave_by_sql(journey: &str) -> String {
                     - make_interval(mins => {journey}.station_buffer_minutes::INT) AS leave_by_at, \
                 CASE WHEN lb_ft.cancelled THEN lb_sg.departure ELSE lb_fl.departure END \
                     AS departure, \
-                CASE WHEN lb_ft.cancelled THEN '{BASIS_SUGGESTION}' ELSE '{BASIS_BOOKED}' END \
-                    AS basis, \
+                CASE WHEN lb_ft.cancelled THEN '{BASIS_SUGGESTION}' \
+                     WHEN lb_fl.fallback_reason = 'usual' THEN '{BASIS_USUAL}' \
+                     WHEN lb_fl.fallback_reason IS NOT NULL THEN '{BASIS_CLOSEST}' \
+                     ELSE '{BASIS_BOOKED}' END AS basis, \
                 lb_fl.leg_id \
          FROM ( \
-             SELECT lb_leg.leg_id, lb_leg.departure FROM ( \
+             SELECT lb_leg.leg_id, lb_leg.departure, lb_leg.fallback_reason FROM ( \
                  SELECT lb_jl.id AS leg_id, lb_jl.leg_order, \
-                        CASE WHEN lb_jl.kind = 'train' THEN COALESCE( \
+                        CASE WHEN lb_jl.kind = 'train' AND lb_ts.id IS NULL \
+                             THEN lb_pl.reason END AS fallback_reason, \
+                        CASE WHEN lb_jl.kind = 'train' AND lb_ts.id IS NULL THEN \
+                             CASE WHEN lb_pl.reason IS NULL THEN NULL \
+                                  WHEN EXISTS ( \
+                                      SELECT 1 FROM trains lb_ut \
+                                        JOIN train_current_state lb_uc ON lb_uc.trains_id = lb_ut.id \
+                                       WHERE lb_ut.train_uid = lb_pl.first_train ->> 'trainUid' \
+                                         AND lb_ut.service_date \
+                                                 = (lb_pl.first_train ->> 'serviceDate')::date \
+                                         AND lb_uc.status = 'cancelled') THEN NULL \
+                                  ELSE COALESCE( \
+                                      (SELECT ((lb_ud.service_date + lb_ud.day_offset) \
+                                               + COALESCE(lb_ud.public_departure, lb_ud.scheduled)) \
+                                              AT TIME ZONE 'Europe/London' \
+                                         FROM schedule_destination_departures lb_ud \
+                                        WHERE lb_pl.first_leg ->> 'kind' = 'train' \
+                                          AND lb_ud.train_uid = lb_pl.first_leg ->> 'trainUid' \
+                                          AND lb_ud.service_date \
+                                                  = (lb_pl.first_leg ->> 'serviceDate')::date \
+                                          AND lb_ud.origin_crs = UPPER(lb_pl.first_leg ->> 'originCrs') \
+                                        ORDER BY lb_ud.day_offset, lb_ud.scheduled \
+                                        LIMIT 1), \
+                                      lb_pl.departure) END \
+                             WHEN lb_jl.kind = 'train' THEN COALESCE( \
                                  (SELECT lb_rl.booked_departure \
                                     FROM journey_revision_legs lb_rl \
                                    WHERE lb_rl.revision_id = lb_rev.id \
@@ -97,12 +150,26 @@ pub fn leave_by_sql(journey: &str) -> String {
                         ON lb_ts.id = lb_jl.train_subscription_id AND lb_jl.kind = 'train' \
                  LEFT JOIN trains lb_tr ON lb_tr.id = lb_ts.trains_id \
                  LEFT JOIN LATERAL ( \
+                     SELECT lb_pj.regular_plan ->> 'reason' AS reason, \
+                            (lb_pj.regular_plan -> 'choice' ->> 'departure')::timestamptz \
+                                AS departure, \
+                            lb_pj.regular_plan -> 'choice' -> 'legs' -> 0 AS first_leg, \
+                            jsonb_path_query_first(lb_pj.regular_plan, \
+                                '$.choice.legs[*] ? (@.kind == \"train\")') AS first_train \
+                       FROM journeys lb_pj \
+                      WHERE lb_pj.id = {journey}.id \
+                        AND lb_pj.regular_plan_status = 'suggested' \
+                        AND lb_pj.regular_plan ->> 'acceptedIndex' IS NULL \
+                        AND lb_pj.regular_plan ->> 'reason' IN ('usual', 'same_operator') \
+                 ) lb_pl ON lb_jl.kind = 'train' AND lb_ts.id IS NULL \
+                 LEFT JOIN LATERAL ( \
                      SELECT lb_r.id FROM journey_revisions lb_r \
                       WHERE lb_r.journey_id = {journey}.id \
                       ORDER BY lb_r.revision_no DESC LIMIT 1 \
                  ) lb_rev ON TRUE \
                  WHERE lb_jl.journey_id = {journey}.id \
-                   AND (lb_jl.kind <> 'train' OR lb_ts.trains_id IS NOT NULL) \
+                   AND (lb_jl.kind <> 'train' OR lb_ts.trains_id IS NOT NULL \
+                        OR lb_ts.id IS NULL) \
              ) lb_leg \
              WHERE lb_leg.departure IS NOT NULL \
              ORDER BY lb_leg.leg_order \
@@ -397,6 +464,183 @@ mod db_tests {
         let (leg, _) = train_leg(&pool, j, 2, "Q10005", london(date(), 9, 0)).await;
         let lb = leave_by(&pool, j).await.unwrap();
         assert_eq!((lb.0, lb.3), (london(date(), 8, 50), leg));
+    }
+
+    async fn set_plan(
+        pool: &PgPool,
+        journey_id: i64,
+        (status, reason, accepted): (&str, &str, Option<u8>),
+        departure: DateTime<Utc>,
+        train_uid: &str,
+    ) {
+        let plan = serde_json::json!({
+            "reason": reason,
+            "choice": {
+                "departure": departure, "arrival": departure, "changeCount": 0,
+                "legs": [{"kind": "train", "trainUid": train_uid, "serviceDate": date(),
+                          "originCrs": "QWA", "departure": departure,
+                          "arrival": departure}],
+            },
+            "alternatives": [],
+            "sweepLegIds": [],
+            "acceptedIndex": accepted,
+        });
+        sqlx::query(
+            "UPDATE journeys SET regular_plan = $2, regular_plan_status = $3 WHERE id = $1",
+        )
+        .bind(journey_id)
+        .bind(plan)
+        .bind(status)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn an_unpicked_train_takes_the_suggested_usual_trains_departure(pool: PgPool) {
+        let j = journey(&pool, Some(15)).await;
+        let leg = unmatched_leg(&pool, j, 1).await;
+        let usual = london(date(), 7, 50);
+        // No plan yet: nothing.
+        assert_eq!(leave_by(&pool, j).await, None);
+        set_plan(&pool, j, ("suggested", "usual", None), usual, "Q20001").await;
+        assert_eq!(
+            leave_by(&pool, j).await,
+            Some((london(date(), 7, 35), usual, BASIS_USUAL.to_string(), leg))
+        );
+        // The same operator a few minutes off is the closest, not the usual.
+        set_plan(
+            &pool,
+            j,
+            ("suggested", "same_operator", None),
+            usual,
+            "Q20001",
+        )
+        .await;
+        assert_eq!(leave_by(&pool, j).await.unwrap().2, BASIS_CLOSEST);
+        // The sweep refreshed the suggestion to a moved train: it follows.
+        let moved = london(date(), 7, 40);
+        set_plan(&pool, j, ("suggested", "usual", None), moved, "Q20001").await;
+        assert_eq!(leave_by(&pool, j).await.unwrap().0, london(date(), 7, 25));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn only_a_suggested_usual_train_gives_a_usual_leave_by(pool: PgPool) {
+        let j = journey(&pool, Some(15)).await;
+        unmatched_leg(&pool, j, 1).await;
+        let at = london(date(), 7, 50);
+        // The day's best (the usual train doesn't run, and nothing is near
+        // it), pending, no service, committed or accepted: none.
+        set_plan(&pool, j, ("suggested", "best", None), at, "Q20002").await;
+        assert_eq!(leave_by(&pool, j).await, None);
+        for status in ["pending", "no_service", "committed"] {
+            set_plan(&pool, j, (status, "usual", None), at, "Q20002").await;
+            assert_eq!(leave_by(&pool, j).await, None, "{status}");
+        }
+        set_plan(&pool, j, ("suggested", "usual", Some(0)), at, "Q20002").await;
+        assert_eq!(leave_by(&pool, j).await, None);
+        // No buffer: none.
+        let unbuffered = journey(&pool, None).await;
+        unmatched_leg(&pool, unbuffered, 1).await;
+        set_plan(
+            &pool,
+            unbuffered,
+            ("suggested", "usual", None),
+            at,
+            "Q20002",
+        )
+        .await;
+        assert_eq!(leave_by(&pool, unbuffered).await, None);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_retimed_suggested_train_uses_its_timetabled_departure(pool: PgPool) {
+        let j = journey(&pool, Some(15)).await;
+        unmatched_leg(&pool, j, 1).await;
+        // The plan was made against the old 07:50; the timetable now says
+        // 07:53 (a retime inside the planner's window) before the sweep
+        // has re-planned.
+        set_plan(
+            &pool,
+            j,
+            ("suggested", "usual", None),
+            london(date(), 7, 50),
+            "Q20006",
+        )
+        .await;
+        assert_eq!(leave_by(&pool, j).await.unwrap().1, london(date(), 7, 50));
+        sqlx::query(
+            "INSERT INTO schedule_destination_departures (service_date, destination_crs, \
+                 scheduled, train_uid, origin_crs, public_departure) \
+             VALUES ($1, 'QWB', '07:52:30', 'Q20006', 'QWA', '07:53')",
+        )
+        .bind(date())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let lb = leave_by(&pool, j).await.unwrap();
+        assert_eq!(
+            (lb.0, lb.1, lb.2),
+            (
+                london(date(), 7, 38),
+                london(date(), 7, 53),
+                BASIS_USUAL.to_string()
+            )
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn a_cancelled_usual_train_has_no_usual_leave_by(pool: PgPool) {
+        let j = journey(&pool, Some(15)).await;
+        unmatched_leg(&pool, j, 1).await;
+        let at = london(date(), 7, 50);
+        set_plan(&pool, j, ("suggested", "usual", None), at, "Q20003").await;
+        assert!(leave_by(&pool, j).await.is_some());
+        let trains_id: i64 = sqlx::query_scalar(
+            "INSERT INTO trains (train_uid, service_date, origin_crs, destination_crs, \
+                                 scheduled_departure) \
+             VALUES ('Q20003', $1, 'QWA', 'QWB', $2) RETURNING id",
+        )
+        .bind(date())
+        .bind(at)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        cancel(&pool, trains_id).await;
+        assert_eq!(leave_by(&pool, j).await, None);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+    async fn tracking_a_train_replaces_the_usual_leave_by_with_the_booked_one(pool: PgPool) {
+        let j = journey(&pool, Some(15)).await;
+        let unmatched = unmatched_leg(&pool, j, 1).await;
+        set_plan(
+            &pool,
+            j,
+            ("suggested", "usual", None),
+            london(date(), 7, 50),
+            "Q20004",
+        )
+        .await;
+        assert_eq!(leave_by(&pool, j).await.unwrap().2, BASIS_USUAL);
+        // The owner tracks a different train: its own time, basis booked,
+        // even while the plan is still marked suggested.
+        sqlx::query("DELETE FROM journey_legs WHERE id = $1")
+            .bind(unmatched)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (leg, _) = train_leg(&pool, j, 1, "Q20005", london(date(), 8, 5)).await;
+        let lb = leave_by(&pool, j).await.unwrap();
+        assert_eq!(
+            (lb.0, lb.2, lb.3),
+            (london(date(), 7, 50), BASIS_BOOKED.to_string(), leg)
+        );
     }
 
     #[sqlx::test(migrations = "./migrations")]
