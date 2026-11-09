@@ -1,6 +1,6 @@
 //! The domain-free runtime every Distant Signal service shares: startup and
 //! retry, logging, metrics, service arguments, secrets, the Redis and
-//! Postgres connection settings, advisory-lock keys and the outbound
+//! Postgres connection settings, authenticated encryption for stored secrets, advisory-lock keys and the outbound
 //! `User-Agent`. Nothing here knows about rail; the domain types live in
 //! `common`, which depends on this crate (repo-split spec §5.8).
 
@@ -21,6 +21,7 @@ pub mod redis_conn;
 #[cfg(feature = "redis")]
 pub mod redis_group;
 pub mod secret;
+pub mod secret_box;
 pub mod service_args;
 pub mod startup;
 pub mod user_agent;

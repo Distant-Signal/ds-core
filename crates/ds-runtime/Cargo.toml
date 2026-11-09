@@ -13,6 +13,11 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.102"
+# `secret_box` (DS-415): AES-256-GCM for secrets kept in Postgres. Already in
+# ds-workers' tree (web-push), so no new audited crate there.
+aes-gcm = "0.11"
+base64 = "0.22"
+rand = "0.8"
 # `logging`'s JSON line timestamps.
 chrono = "0.4.44"
 clap = { version = "4.6.6", features = ["derive", "env"] }
