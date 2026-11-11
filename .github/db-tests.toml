@@ -43,21 +43,24 @@ uv run --no-sync scripts/db-tests.py run superuser --archive-file "${DB_TESTS_AR
 # The Postgres role split (the landing repository's
 # docs/postgres-app-role.md): scripts/test-postgres-roles.py makes a fresh
 # database and roles with access/postgres-roles.sql (the script the chart's
-# roles Job runs), then runs ds-store's suites with DATABASE_URL as the
-# DML-only app role and MIGRATION_DATABASE_URL as the schema owner.
-# `existing` converts a database migrated as the superuser; `new` creates the
+# roles Job runs), then runs ds-store's suites with DATABASE_URL and
+# MIGRATION_DATABASE_URL as the schema owner (the shared app role was dropped
+# in release E; each service's own role is the per-service pass below).
+# `existing` converts a database migrated as the superuser, and recreates the
+# retired app role as the old script left it to prove the setup script drops it
+# (and refuses while it has a session or owns an object); `new` creates the
 # roles first and migrates as the owner. --check-setup-job runs the setup
 # through the Job's entrypoint (access/postgres-roles-setup.sh) behind a
 # reader holding ACCESS SHARE on every table, with lock_timeout=2s.
 [[pass]]
-id = "app-role"
-name = "DB tests as the app role (existing and new cluster)"
+id = "role-split"
+name = "DB tests as the schema owner (existing and new cluster)"
 run = '''
-echo "== DB-backed tests as the non-superuser app role (existing cluster)"
-uv run --no-sync scripts/test-postgres-roles.py --mode existing --check-setup-job -- \
+echo "== DB-backed tests as the non-superuser owner role (existing cluster)"
+uv run --no-sync scripts/test-postgres-roles.py --mode existing --check-app-retirement --check-setup-job -- \
   uv run --no-sync scripts/db-tests.py run existing --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
 
-echo "== DB-backed tests as the non-superuser app role (new cluster)"
+echo "== DB-backed tests as the non-superuser owner role (new cluster)"
 uv run --no-sync scripts/test-postgres-roles.py --mode new -- \
   uv run --no-sync scripts/db-tests.py run new --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
 '''

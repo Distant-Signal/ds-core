@@ -48,8 +48,8 @@ jobs:
 
   # The DATABASE_URL/REDIS_URL-gated `#[ignore]`d tests, built once into an
   # archive and run as passes (.github/db-tests.toml): as the superuser
-  # (with the grants classification check), as the app role on an existing
-  # and a new cluster, and as the per-service roles whose grants ds-store's
+  # (with the grants classification check), as the schema owner on an
+  # existing and a new cluster, and as the per-service roles whose grants ds-store's
   # own suites exercise. The images are the chart's.
   rust-db-tests:
     uses: Distant-Signal/ci/.github/workflows/rust-db-tests.yml@4ffee4c03a4f18c5b45d065a04e389353e9d186a # main

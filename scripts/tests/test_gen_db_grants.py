@@ -38,17 +38,6 @@ def _raw() -> dict[str, Any]:
     return raw
 
 
-RELEASE_D = ("api", "aggregator", "enricher", "notifier")
-
-
-def _raw_observed(*kinds: str) -> dict[str, Any]:
-    """Return the committed YAML with `kinds` (default: release D's four) observed."""
-    raw = _raw()
-    for kind in kinds or RELEASE_D:
-        raw["roles"][kind]["status"] = "observed"
-    return raw
-
-
 class RepoFilesTest(unittest.TestCase):
     """The committed YAML and SQL."""
 
@@ -240,20 +229,26 @@ class RenderTest(unittest.TestCase):
             self.assertEqual(status, 1)
             self.assertIn("is stale", out.getvalue())
 
-    def test_observed_roles_get_no_table_grants(self) -> None:
-        """Phase 0b: observed roles get memberships, never GRANT rows.
+    def test_the_rendered_sql_has_no_app_role(self) -> None:
+        """Release E: no app variable, membership, revoke or `observed` status."""
+        sql = gen.render(gen.load())
+        self.assertNotIn("distant_signal_app", sql)
+        self.assertNotIn("ds_grants.app", sql)
+        self.assertNotIn("app_revokes", sql)
+        self.assertNotIn("'observed'", sql)
+        self.assertNotIn("-v app=", sql)
 
-        Narrow roles get their grants: 2a's schedule_reference, 2b's
-        stations exactly its two tables, and 3b's TRUST roles exactly theirs.
-        (Release D narrowed the four phase 0b roles; observed again here.)
+    def test_roles_get_their_own_grants(self) -> None:
+        """Narrow roles get their grants.
+
+        2a's schedule_reference, 2b's stations exactly its two tables, and 3b's
+        TRUST roles exactly theirs.
         """
-        sql = gen.render(gen.parse(_raw_observed()))
-        self.assertIn("('api', 'observed')", sql)
-        # Security review M1: no member may SET ROLE to app or a group.
-        self.assertEqual(sql.count("'GRANT %I TO %I WITH INHERIT TRUE, SET FALSE'"), 2)
+        sql = gen.render(gen.load())
+        # Security review M1: no member may SET ROLE to a group.
+        self.assertEqual(sql.count("'GRANT %I TO %I WITH INHERIT TRUE, SET FALSE'"), 1)
         self.assertNotIn("'GRANT %I TO %I'", sql)
-        for kind in ("api", "aggregator", "enricher", "notifier"):
-            self.assertNotIn(f"'{kind}', 'SELECT', ''", sql)
+        self.assertIn("('api', 'narrow')", sql)
         self.assertIn("('stanox_crs', 'schedule_reference', 'DELETE', '')", sql)
         self.assertIn("('schedule_reference', 'narrow')", sql)
         self.assertIn("('stations', 'narrow')", sql)
@@ -358,9 +353,8 @@ class RenderTest(unittest.TestCase):
     def test_the_enricher_targets_column_update_on_incidents(self) -> None:
         """Q3 prep: table SELECT plus UPDATE on the extraction columns only.
 
-        While the enricher is observed nothing renders for it; narrowed (5.5,
-        the committed YAML since release D) the same rows give exactly those
-        grants and no table-wide UPDATE.
+        Narrowed (5.5, the committed YAML since release D) the rows give exactly
+        those grants and no table-wide UPDATE.
         """
         extraction = [
             "extracted_at",
@@ -376,9 +370,6 @@ class RenderTest(unittest.TestCase):
             if g.role == "enricher"
         ]
         self.assertEqual(grants, [("S", ()), ("U", tuple(extraction))])
-        self.assertNotIn(
-            "'enricher', 'UPDATE'", gen.render(gen.parse(_raw_observed("enricher")))
-        )
 
         sql = gen.render(model)
         self.assertIn("('incidents', 'enricher', 'SELECT', '')", sql)
@@ -495,8 +486,8 @@ class RowPolicyParseTest(unittest.TestCase):
         self.assertIn("unknown role 'nobody'", str(ctx.exception))
 
 
-class AppRevokesTest(unittest.TestCase):
-    """`app_revokes`: what the app role loses (ingest phase 5, release B)."""
+class AppRoleRetiredTest(unittest.TestCase):
+    """The app role is gone (ingest phase 5, release E): its YAML is refused."""
 
     def assert_refused(self, raw: dict[str, Any], needle: str) -> None:
         """parse(raw) raises GrantsError mentioning needle."""
@@ -504,66 +495,21 @@ class AppRevokesTest(unittest.TestCase):
             gen.parse(raw)
         self.assertIn(needle, str(ctx.exception))
 
-    def test_release_b_takes_the_schedule_publish_staging_from_app(self) -> None:
-        """Only the api's /private publish routes used them through app."""
-        model = gen.load()
-        self.assertEqual(
-            set(model.app_revoke_tables),
-            {
-                "schedule_calling_points_full_publish_keys",
-                "schedule_destination_departures_publish_keys",
-            },
-        )
-        self.assertEqual(model.app_revoke_functions, ("analyze_publish_keys(text)",))
-        # schedule-reference keeps its own grants on them.
-        for table in model.app_revoke_tables:
-            grants = {g.role: g.privileges for g in model.tables[table].grants}
-            self.assertEqual(grants, {"schedule_reference": "SID"})
-        self.assertEqual(
-            model.functions["analyze_publish_keys(text)"], ("schedule_reference",)
-        )
+    def test_the_committed_yaml_has_no_app_revokes(self) -> None:
+        """Nothing is revoked from a role that no longer exists."""
+        self.assertNotIn("app_revokes", _raw())
 
-    def test_the_revokes_render_after_the_grants(self) -> None:
-        """Step 6 of the SQL, from app, for existing objects only."""
-        sql = gen.render(gen.load())
-        self.assertIn("('schedule_calling_points_full_publish_keys')", sql)
-        self.assertIn("('analyze_publish_keys(text)')", sql)
-        self.assertIn("REVOKE ALL ON public.%I FROM %I', r.tbl, app", sql)
-        self.assertIn("REVOKE EXECUTE ON FUNCTION %s FROM %I", sql)
-        self.assertLess(sql.index("$policies$;"), sql.index("$app_revokes$"))
-        self.assertLess(sql.index("$app_revokes$;"), sql.index("COMMIT;"))
+    def test_an_app_revokes_section_is_refused(self) -> None:
+        """It would render REVOKE statements for the dropped role."""
+        raw = _raw()
+        raw["app_revokes"] = {"tables": [], "functions": []}
+        self.assert_refused(raw, "app_revokes: retired with the app role")
 
-    def test_no_revokes_render_typed_empty_lists(self) -> None:
-        """Without the section nothing is revoked, and the SQL still parses."""
+    def test_an_observed_role_is_refused(self) -> None:
+        """`observed` meant membership of the app role."""
         raw = _raw()
-        del raw["app_revokes"]
-        model = gen.parse(raw)
-        self.assertEqual(model.app_revoke_tables, ())
-        self.assertEqual(model.app_revoke_functions, ())
-        sql = gen.render(model)
-        self.assertIn("(SELECT NULL::text WHERE false) AS v(tbl)", sql)
-        self.assertIn("(SELECT NULL::text WHERE false) AS v(sig)", sql)
-
-    def test_an_unlisted_table_or_function_is_refused(self) -> None:
-        """Each entry must be classified in its own section."""
-        raw = _raw()
-        raw["app_revokes"]["tables"] = ["nope"]
-        self.assert_refused(raw, "app_revokes.tables: 'nope'")
-        raw = _raw()
-        raw["app_revokes"]["functions"] = ["nope(text)"]
-        self.assert_refused(raw, "app_revokes.functions: 'nope(text)'")
-        raw = _raw()
-        raw["app_revokes"]["views"] = []
-        self.assert_refused(raw, "app_revokes: unknown key(s) ['views']")
-
-    def test_what_an_observed_role_is_granted_cannot_be_revoked(self) -> None:
-        """An observed role has nothing of its own: it would lose the grant."""
-        raw = _raw_observed()
-        raw["app_revokes"]["tables"] = ["sessions"]
-        self.assert_refused(raw, "granted to observed role(s) ['api']")
-        raw = _raw_observed()
-        raw["functions"]["analyze_publish_keys(text)"]["grants"].append("notifier")
-        self.assert_refused(raw, "granted to observed role(s) ['notifier']")
+        raw["roles"]["api"]["status"] = "observed"
+        self.assert_refused(raw, "roles.api.status: `observed` is retired")
 
 
 if __name__ == "__main__":
