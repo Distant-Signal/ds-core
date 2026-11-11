@@ -15,24 +15,21 @@ idempotent psql script, run as a superuser after postgres-roles.sql (the
 chart's role setup Job, when `postgresql.roles.perService.enabled`). It
 creates the group roles (`read_shared`, `schema_gate`) and every role whose
 status is not `planned`, with LOGIN, a CONNECTION LIMIT and a password from
-DS_PG_<ROLE>_PASSWORD; makes each `observed` role a member of the app role
-with no grants of its own (phase 0b); gives each `narrow` role exactly the
-grants in the YAML; gives the groups their grants; and creates the
+DS_PG_<ROLE>_PASSWORD; gives each `narrow` role exactly the grants in the
+YAML; gives the groups their grants; and creates the
 `row_policies` (a RESTRICTIVE policy `ds_grants_<role>` per table and
 created role, or for a `{writes: ...}` entry one per write command,
 `ds_grants_<role>_insert`, `_update` and `_delete`; stale `ds_grants_*`
 ones are dropped, and a listed one is (re)created only when missing or
-different, so a run that changes no policy takes no ACCESS EXCLUSIVE lock);
-and takes from the app role the table and function
-privileges in `app_revokes` (ingest phase 5, release B: what app held only
-for the api's `/private` routes). Tables that do not exist yet (a new
-cluster's initdb run) are skipped.
+different, so a run that changes no policy takes no ACCESS EXCLUSIVE lock).
+Tables that do not exist yet (a new cluster's initdb run) are skipped. The
+app role (distant_signal_app) is gone since release E: postgres-roles.sql
+drops it, and the YAML has no `observed` status and no `app_revokes`.
 
 `check` fails (exit 1, one line per problem) when:
   - the YAML is malformed: an unknown class, role, group or privilege, or
-    a row policy on an unlisted table, or an `app_revokes` entry that is
-    not listed or that an `observed` role is granted (it would lose it
-    with the app role);
+    a row policy on an unlisted table, an `observed` status or an
+    `app_revokes` section (both retired with the app role);
   - the connection limits of every role in the YAML (planned ones too) plus
     `other_roles` exceed max_connections minus superuser_reserved_connections;
   - postgres-grants.sql is not exactly what `render` writes;
@@ -76,7 +73,7 @@ CLASSES = frozenset(
 )
 # Classes the read_shared group can SELECT.
 READ_SHARED_CLASSES = frozenset({"shared-train", "ingest", "derived", "reference"})
-STATUSES = frozenset({"planned", "observed", "narrow"})
+STATUSES = frozenset({"planned", "narrow"})
 PRIVILEGES = {"S": "SELECT", "I": "INSERT", "U": "UPDATE", "D": "DELETE"}
 GROUPS = ("read_shared", "schema_gate")
 # A role key is also a psql variable name and an env var suffix.
@@ -153,10 +150,6 @@ class Model:
     row_policies: Mapping[str, Mapping[str, RowPolicy]] = dataclasses.field(
         default_factory=dict
     )
-    # What the app role loses (`app_revokes`): tables (every privilege) and
-    # function signatures (EXECUTE).
-    app_revoke_tables: tuple[str, ...] = ()
-    app_revoke_functions: tuple[str, ...] = ()
 
     def budget(self) -> int:
         """Return the connections available to non-superusers."""
@@ -258,6 +251,9 @@ def _roles(raw: dict[str, object], groups: Mapping[str, str]) -> dict[str, Role]
             raise GrantsError(msg)
         body = _mapping(spec, where)
         status = _str(body.get("status"), f"{where}.status")
+        if status == "observed":
+            msg = f"{where}.status: `observed` is retired with the app role (release E)"
+            raise GrantsError(msg)
         if status not in STATUSES:
             msg = f"{where}.status: {status!r} is not one of {sorted(STATUSES)}"
             raise GrantsError(msg)
@@ -329,61 +325,11 @@ def _row_policies(
     return policies
 
 
-def _revoke_list(body: Mapping[str, object], key: str) -> tuple[str, ...]:
-    """One `app_revokes` list: distinct non-empty names."""
-    value = body.get(key, [])
-    if not isinstance(value, list):
-        msg = f"app_revokes.{key}: expected a list"
+def _refuse_app_revokes(raw: Mapping[str, object]) -> None:
+    """`app_revokes` went with the app role (release E)."""
+    if "app_revokes" in raw:
+        msg = "app_revokes: retired with the app role (release E); remove it"
         raise GrantsError(msg)
-    where = f"app_revokes.{key}"
-    listed = tuple(_str(v, where) for v in cast("list[object]", value))
-    if len(set(listed)) != len(listed):
-        msg = f"{where}: listed twice"
-        raise GrantsError(msg)
-    return listed
-
-
-def _check_revocable(
-    where: str, name: str, grantees: Iterable[str] | None, observed: set[str]
-) -> None:
-    """`name` is listed (`grantees` not None) and no observed role holds it."""
-    if grantees is None:
-        msg = f"{where}: {name!r} is not listed in db-grants.yaml"
-        raise GrantsError(msg)
-    users = sorted(set(grantees) & observed)
-    if users:
-        msg = f"{where}: {name!r} is granted to observed role(s) {users}"
-        raise GrantsError(msg)
-
-
-def _app_revokes(
-    raw: object,
-    tables: Mapping[str, Table],
-    functions: Mapping[str, tuple[str, ...]],
-    roles: Mapping[str, Role],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Parse `app_revokes`: {tables: [...], functions: [...]}.
-
-    Each must be listed in its own section. An observed role uses the app
-    role's privileges and has none of its own, so a table or function an
-    observed role is granted cannot be revoked from app.
-    """
-    body = _mapping(raw, "app_revokes")
-    unknown_keys = sorted(set(body) - {"tables", "functions"})
-    if unknown_keys:
-        msg = f"app_revokes: unknown key(s) {unknown_keys} (tables, functions)"
-        raise GrantsError(msg)
-    observed = {r.key for r in roles.values() if r.status == "observed"}
-    revoke_tables = _revoke_list(body, "tables")
-    for table in revoke_tables:
-        grantees = [g.role for g in tables[table].grants] if table in tables else None
-        _check_revocable("app_revokes.tables", table, grantees, observed)
-    revoke_functions = _revoke_list(body, "functions")
-    for signature in revoke_functions:
-        _check_revocable(
-            "app_revokes.functions", signature, functions.get(signature), observed
-        )
-    return revoke_tables, revoke_functions
 
 
 def parse(raw_obj: object) -> Model:
@@ -433,9 +379,7 @@ def parse(raw_obj: object) -> Model:
             raise GrantsError(msg)
         functions[signature] = names
     row_policies = _row_policies(raw.get("row_policies"), tables, roles)
-    app_revoke_tables, app_revoke_functions = _app_revokes(
-        raw.get("app_revokes"), tables, functions, roles
-    )
+    _refuse_app_revokes(raw)
     clash = set(tables) & set(views)
     if clash:
         msg = f"listed as both a table and a view: {sorted(clash)}"
@@ -454,8 +398,6 @@ def parse(raw_obj: object) -> Model:
         sequences=sequences,
         functions=functions,
         row_policies=row_policies,
-        app_revoke_tables=app_revoke_tables,
-        app_revoke_functions=app_revoke_functions,
     )
 
 
@@ -486,7 +428,6 @@ def _psql_defaults(model: Model) -> list[str]:
     def default(var: str, value: str) -> None:
         lines.extend([f"\\if :{{?{var}}}", "\\else", f"\\set {var} {value}", "\\endif"])
 
-    default("app", "distant_signal_app")
     for key, name in model.groups.items():
         default(key, name)
     for role in model.created():
@@ -503,7 +444,7 @@ def _settings(model: Model) -> str:
     def setting(var: str) -> str:
         return f"    set_config('ds_grants.{var}', :'{var}', true)"
 
-    names = ["app", *model.groups]
+    names = [*model.groups]
     for role in model.created():
         names += [role.key, f"{role.key}_password", f"{role.key}_connection_limit"]
     return ",\n".join(setting(n) for n in names)
@@ -573,12 +514,6 @@ def render(model: Model) -> str:
         "SEQUENCE_ROWS": _values(sequence_rows, "seq, kind"),
         "FUNCTION_ROWS": _values(function_rows, "sig, kind"),
         "POLICY_ROWS": _values(policy_rows, "tbl, kind, cmd, cond"),
-        "APP_REVOKE_TABLE_ROWS": _values(
-            [(t,) for t in model.app_revoke_tables], "tbl"
-        ),
-        "APP_REVOKE_FUNCTION_ROWS": _values(
-            [(f,) for f in model.app_revoke_functions], "sig"
-        ),
     }
     text = SQL_TEMPLATE.read_text(encoding="utf-8")
     for name, value in parts.items():

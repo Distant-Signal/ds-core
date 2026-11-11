@@ -895,22 +895,25 @@ mod tests {
             .unwrap();
     }
 
-    /// With the role split (docs/postgres-app-role.md; CI's role-split run,
-    /// `scripts/test-postgres-roles.py`), proves the suite really ran as a
-    /// DML-only app role and the migrations as a separate owner: the
-    /// `DATABASE_URL` role is no superuser and may not create, alter or
-    /// truncate anything, while the `MIGRATION_DATABASE_URL` role owns schema
-    /// public and every table in it. Passes trivially (checks nothing) when
-    /// `DATABASE_URL` is a superuser, i.e. the ordinary single-role run.
+    /// With the role split (docs/postgres-app-role.md; CI's per-service run,
+    /// `scripts/test-postgres-roles.py --mode per-service`), proves the
+    /// suite really ran as a service's own DML-only role and the migrations
+    /// as a separate owner: the `DATABASE_URL` role is no superuser and may
+    /// not create, alter or truncate anything, while the
+    /// `MIGRATION_DATABASE_URL` role owns schema public and every table in
+    /// it. Passes trivially (checks nothing) when `DATABASE_URL` is a
+    /// superuser (the ordinary single-role run) or is the owner itself (the
+    /// role-split passes that run the suites as the owner, since the shared
+    /// app role was dropped in release E).
     #[tokio::test]
-    #[ignore = "requires a live database; run with `DATABASE_URL=<app> \
+    #[ignore = "requires a live database; run with `DATABASE_URL=<service role> \
                 MIGRATION_DATABASE_URL=<owner> cargo test -p ds-store migrate::tests -- --ignored \
                 --test-threads=1`"]
-    async fn the_app_role_has_dml_only_and_the_owner_owns_the_schema() {
+    async fn a_service_role_has_dml_only_and_the_owner_owns_the_schema() {
         let app_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let mut app = PgConnection::connect(&app_url)
             .await
-            .expect("connect as app");
+            .expect("connect as the service role");
         let app_is_superuser: bool =
             sqlx::query_scalar("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
                 .fetch_one(&mut app)
@@ -918,6 +921,21 @@ mod tests {
                 .unwrap();
         if app_is_superuser {
             eprintln!("DATABASE_URL is a superuser: not a role-split run, nothing to check");
+            return;
+        }
+        let owner_name: String = {
+            let mut owner = connect().await;
+            sqlx::query_scalar("SELECT current_user::text")
+                .fetch_one(&mut owner)
+                .await
+                .unwrap()
+        };
+        let app_name: String = sqlx::query_scalar("SELECT current_user::text")
+            .fetch_one(&mut app)
+            .await
+            .unwrap();
+        if owner_name == app_name {
+            eprintln!("DATABASE_URL is the owner: not a service-role run, nothing to check");
             return;
         }
 
@@ -934,7 +952,7 @@ mod tests {
             let err = sqlx::query(ddl)
                 .execute(&mut app)
                 .await
-                .expect_err(&format!("the app role must not be able to run: {ddl}"));
+                .expect_err(&format!("the service role must not be able to run: {ddl}"));
             assert_eq!(
                 err.as_database_error()
                     .and_then(sqlx::error::DatabaseError::code)
@@ -943,21 +961,6 @@ mod tests {
                 "{ddl}: expected insufficient_privilege, got {err}"
             );
         }
-        let owner_name: String = {
-            let mut owner = connect().await;
-            sqlx::query_scalar("SELECT current_user::text")
-                .fetch_one(&mut owner)
-                .await
-                .unwrap()
-        };
-        let app_name: String = sqlx::query_scalar("SELECT current_user::text")
-            .fetch_one(&mut app)
-            .await
-            .unwrap();
-        assert_ne!(
-            owner_name, app_name,
-            "MIGRATION_DATABASE_URL must be the owner role, not the app role"
-        );
         let (schema_owner, foreign_tables): (String, Vec<String>) = sqlx::query_as(
             "SELECT (SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'public'), \
                     COALESCE((SELECT array_agg(c.relname::text ORDER BY c.relname) \

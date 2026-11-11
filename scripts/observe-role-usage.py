@@ -6,7 +6,7 @@ r"""Report which tables each Postgres role really uses, against db-grants.yaml.
   uv run scripts/observe-role-usage.py --from-file STATEMENTS [--output ...]
 
 Phase 0b of the ingest architecture (spec §6.5): every service connects as
-its own role (still a member of the app role), and after about 7 days
+its own role (a member of the app role then), and after about 7 days
 pg_stat_statements holds each role's statements. This script reads them,
 READ-ONLY, extracts the tables each statement touches and with which verb,
 and writes a Markdown report per role with a diff against the role's

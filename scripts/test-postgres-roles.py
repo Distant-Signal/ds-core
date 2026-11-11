@@ -7,15 +7,16 @@ r"""Run a command against a fresh database with the Postgres role split.
 
 Proves that no runtime path needs a superuser (docs/postgres-app-role.md).
 Against the server in `DATABASE_URL` (a superuser, e.g. CI's `postgres`),
-it creates a uniquely named database and five uniquely named roles with the
+it creates a uniquely named database and four uniquely named roles with the
 chart's own setup script (access/postgres-roles.sql, copied into the chart),
 then runs COMMAND with
 
-  DATABASE_URL=<the app role>  MIGRATION_DATABASE_URL=<the owner role>
+  DATABASE_URL=<the owner role>  MIGRATION_DATABASE_URL=<the owner role>
 
-exactly as the chart wires the api and the workers once
-`postgresql.roles.enabled` is on. Afterwards it drops the database and the
-roles (unless --keep).
+(the owner is the only non-superuser role besides the per-service ones: the
+shared DML-only app role was dropped in release E; a service's own role is
+DATABASE_URL_<ROLE> in --mode per-service). Afterwards it drops the database
+and the roles (unless --keep).
 
 --mode new (the default) is a brand-new cluster: the setup script runs on
 the empty database first (the chart's initdb script), then the migrations
@@ -37,22 +38,28 @@ its own service's role:
 
 That mode reads db-grants.yaml, so it needs PyYAML (`uv run`).
 
---narrow api,aggregator,... (per-service mode only) runs as if those roles
-were already `status: narrow` in db-grants.yaml: no longer members of the
-app role, holding exactly their own grants. The run renders a scratch
-postgres-grants.sql with them narrow and uses it instead of the committed
-one. Ingest phase 5 release D (docs/ingest-phase5-runbook.md §5.5) narrows
-the api, aggregator, enricher and notifier; CI runs their runtime paths
-this way first, so a write outside their grants fails in CI, not in
-production. The run sets DS_TEST_NARROWED_ROLES to the list, so a test can
-check a refusal only where it applies
-(ds_store::test_support::role_is_narrowed).
+Every role is narrow (holds exactly its own grants): release D narrowed the
+last four and release E dropped the app role they used to inherit from.
 
---observe ROLE,... (per-service mode only) is the reverse: those roles run
-`status: observed` (members of the app role) whatever db-grants.yaml says,
-for a suite that still seeds its fixtures through its own role's pool
-once that role is narrow (release D), while --narrow runs its runtime
-paths.
+--narrow api,aggregator,... (per-service mode only) sets
+DS_TEST_NARROWED_ROLES to the list, so a test can check a refusal only where
+it applies (ds_store::test_support::role_is_narrowed). The roles are narrow
+either way; this only says which refusals the run should assert.
+
+--observe ROLE,... (per-service mode only) is for a suite that still seeds its
+fixtures through its own role's pool: after the setup runs it gives those
+roles table-wide DML on every table in schema public (SELECT only on
+_sqlx_migrations) and USAGE on every sequence, test-only, as the app role's
+members had before release E. A run with --narrow and no --observe asserts
+the grants as they are. The two lists cannot overlap.
+
+--check-app-retirement (existing and new modes) proves release E's drop of the
+shared app role (postgres-roles.sql step 4) on a cluster that still has it:
+it recreates the role as the old script left it (grants on every table,
+default privileges, a membership), then checks that the setup run refuses
+while a session is connected as it and while it owns an object, and that
+once neither holds, the next run drops it with every trace (grants, default
+privileges, memberships) and a further run changes nothing.
 
 --check-setup-job runs the setup scripts once more, before COMMAND, as the
 chart's setup Job does (files/postgres-roles-setup.sh, one try each), while
@@ -84,7 +91,6 @@ import pathlib
 import secrets
 import subprocess
 import sys
-import tempfile
 import time
 import types
 import urllib.parse
@@ -105,7 +111,7 @@ FIRST_POLICY = (
     "WHERE schemaname = 'public' AND policyname LIKE 'ds\\_grants\\_%' "
     "ORDER BY 1 LIMIT 1"
 )
-KINDS = ("owner", "app", "exporter", "dump", "backup")
+KINDS = ("owner", "exporter", "dump", "backup")
 
 
 def gen_db_grants() -> types.ModuleType:
@@ -129,30 +135,22 @@ def per_service_kinds() -> tuple[list[str], list[str]]:
     return list(model.groups), [role.key for role in model.created()]
 
 
-def render_with_statuses(statuses: Mapping[str, str]) -> str:
-    """Return postgres-grants.sql with each role in `statuses` given that status.
-
-    Each must be a created (not `planned`) role of db-grants.yaml, and each
-    status `narrow` or `observed`.
-    """
-    module = gen_db_grants()
-    model = module.load()
-    roles = dict(model.roles)
-    for key, status in statuses.items():
-        role = roles.get(key)
-        if role is None or role.status == "planned":
-            msg = f"{key!r} is not a created role in db-grants.yaml"
-            raise RuntimeError(msg)
-        if status not in {"narrow", "observed"}:
-            msg = f"{key}: status {status!r} is neither narrow nor observed"
-            raise RuntimeError(msg)
-        roles[key] = dataclasses.replace(role, status=status)
-    return cast("str", module.render(dataclasses.replace(model, roles=roles)))
+def check_role_keys(keys: Sequence[str], created: Sequence[str]) -> None:
+    """Refuse a key that is not a created role of db-grants.yaml."""
+    unknown = [k for k in keys if k not in created]
+    if unknown:
+        msg = f"{unknown} are not created roles of db-grants.yaml: {sorted(created)}"
+        raise RuntimeError(msg)
 
 
-def render_narrowed(narrow: Sequence[str]) -> str:
-    """Return postgres-grants.sql as if the `narrow` roles were `narrow`."""
-    return render_with_statuses(dict.fromkeys(narrow, "narrow"))
+def observed_dml_sql(role: str) -> str:
+    """Return the test-only grants `--observe` gives `role` (a quoted name)."""
+    return (
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public "
+        f"TO {role};"
+        f" REVOKE INSERT, UPDATE, DELETE ON public._sqlx_migrations FROM {role};"
+        f" GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {role}"
+    )
 
 
 def with_credentials(url: str, user: str, password: str, database: str) -> str:
@@ -331,6 +329,144 @@ def check_setup_job(
     print("== the steady-state setup run took no ACCESS EXCLUSIVE lock", flush=True)
 
 
+def scalar(url: str, query: str, **variables: str) -> str:
+    """Return the one value `query` selects, with psql variables (`:'name'`)."""
+    argv = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-d", url]
+    for name, value in variables.items():
+        argv += ["-v", f"{name}={value}"]
+    return subprocess.run(  # noqa: S603  # argv from this script
+        argv, input=query, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def wait_for_sessions(admin_url: str, legacy: str, *, present: bool) -> None:
+    """Wait (up to 10 s) until `legacy` has a session, or has none."""
+    query = "SELECT count(*) FROM pg_stat_activity WHERE usename = :'legacy'"
+    for _ in range(50):
+        if (scalar(admin_url, query, legacy=legacy) != "0") == present:
+            return
+        time.sleep(0.2)
+
+
+@dataclasses.dataclass(frozen=True)
+class LegacyApp:
+    """The retired app role a check recreates, and the roles it touches."""
+
+    name: str
+    owner: str
+    member: str
+
+
+def check_app_retirement(
+    admin_url: str,
+    setup_args: Sequence[str],
+    env: Mapping[str, str],
+    legacy: LegacyApp,
+) -> None:
+    """Prove postgres-roles.sql drops a legacy app role, and only when safe.
+
+    `legacy.name` is the role name setup_args passes as `app`; `legacy.owner`
+    is the schema owner and `legacy.member` another role to make a member of it.
+    """
+    job_env = setup_job_env(admin_url, env)
+    database = urllib.parse.urlsplit(admin_url).path.lstrip("/")
+    print("== recreate the app role as the old setup script left it", flush=True)
+    scalar(
+        admin_url,
+        "CREATE ROLE :\"legacy\" LOGIN PASSWORD 'legacy' CONNECTION LIMIT 5;\n"
+        'GRANT CONNECT ON DATABASE :"database" TO :"legacy";\n'
+        'GRANT USAGE ON SCHEMA public TO :"legacy";\n'
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public"
+        ' TO :"legacy";\n'
+        "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public"
+        ' TO :"legacy";\n'
+        'ALTER DEFAULT PRIVILEGES FOR ROLE :"owner" IN SCHEMA public'
+        ' GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"legacy";\n'
+        'GRANT :"legacy" TO :"member";\n',
+        legacy=legacy.name,
+        owner=legacy.owner,
+        member=legacy.member,
+        database=database,
+    )
+    # A live session blocks the drop.
+    session = subprocess.Popen(  # noqa: S603  # fixed argv
+        [  # noqa: S607  # psql from PATH
+            "psql",
+            "-X",
+            "-q",
+            "-d",
+            with_credentials(admin_url, legacy.name, "legacy", database),
+            "-c",
+            "SELECT pg_sleep(600)",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        wait_for_sessions(admin_url, legacy.name, present=True)
+        status, output = run_setup_job(setup_args, job_env)
+        if status == 0 or "session(s) are still connected" not in output:
+            msg = (
+                f"the setup run must refuse to drop {legacy.name} while it has "
+                f"a session (exit {status})"
+            )
+            raise RuntimeError(msg)
+    finally:
+        session.terminate()
+        session.wait(timeout=60)
+        # The backend is still in pg_sleep: it only notices the client is gone
+        # when it next writes.
+        scalar(
+            admin_url,
+            "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity"
+            " WHERE usename = :'legacy'",
+            legacy=legacy.name,
+        )
+    wait_for_sessions(admin_url, legacy.name, present=False)
+    # An owned object blocks it, whatever the database.
+    scalar(
+        admin_url,
+        "CREATE TABLE public.retire_probe (i int);\n"
+        'ALTER TABLE public.retire_probe OWNER TO :"legacy";\n',
+        legacy=legacy.name,
+    )
+    status, output = run_setup_job(setup_args, job_env)
+    if status == 0 or "it owns" not in output:
+        msg = (
+            f"the setup run must refuse to drop {legacy.name} while it owns "
+            f"an object (exit {status})"
+        )
+        raise RuntimeError(msg)
+    scalar(admin_url, "DROP TABLE public.retire_probe")
+    status, _ = run_setup_job(setup_args, job_env)
+    if status != 0:
+        msg = f"the setup run that drops {legacy.name} exited {status}"
+        raise RuntimeError(msg)
+    leftovers = scalar(
+        admin_url,
+        "SELECT (SELECT count(*) FROM pg_roles WHERE rolname = :'legacy')"
+        " || ',' || (SELECT count(*) FROM pg_default_acl"
+        " WHERE defaclacl::text LIKE '%' || :'legacy' || '%')"
+        " || ',' || (SELECT count(*) FROM pg_auth_members m"
+        " JOIN pg_roles r ON r.oid = m.roleid WHERE r.rolname = :'legacy')",
+        legacy=legacy.name,
+    )
+    if leftovers != "0,0,0":
+        msg = (
+            f"{legacy.name} left traces after the drop (role, default ACLs, "
+            f"memberships): {leftovers}"
+        )
+        raise RuntimeError(msg)
+    status, _ = run_setup_job(setup_args, job_env)
+    if status != 0:
+        msg = f"a setup run after the drop exited {status}"
+        raise RuntimeError(msg)
+    print(
+        f"== as expected, {legacy.name} was refused twice, then dropped cleanly",
+        flush=True,
+    )
+
+
 def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, teardown
     """Set up, run the command, tear down; return the command's exit code."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -341,21 +477,26 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         "--keep", action="store_true", help="keep the database and roles"
     )
     parser.add_argument(
-        "--check-setup-job",
-        action="store_true",
-        help="prove a steady-state setup run takes no ACCESS EXCLUSIVE lock",
-    )
-    parser.add_argument(
         "--narrow",
         default="",
         metavar="ROLE,...",
-        help="per-service: run as if these db-grants.yaml roles were narrow",
+        help="per-service: the roles whose refusals the run asserts",
     )
     parser.add_argument(
         "--observe",
         default="",
         metavar="ROLE,...",
-        help="per-service: run as if these db-grants.yaml roles were observed",
+        help="per-service: give these roles table-wide DML (test-only)",
+    )
+    parser.add_argument(
+        "--check-app-retirement",
+        action="store_true",
+        help="prove the setup script drops a legacy app role, and only when safe",
+    )
+    parser.add_argument(
+        "--check-setup-job",
+        action="store_true",
+        help="prove a steady-state setup run takes no ACCESS EXCLUSIVE lock",
     )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -364,12 +505,6 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
     )
     if not command:
         parser.error("no command given after --")
-    narrow = [k.strip() for k in cast("str", args.narrow).split(",") if k.strip()]
-    observe = [k.strip() for k in cast("str", args.observe).split(",") if k.strip()]
-    if (narrow or observe) and args.mode != "per-service":
-        parser.error("--narrow and --observe need --mode per-service")
-    if set(narrow) & set(observe):
-        parser.error("a role cannot be both --narrow and --observe")
 
     superuser_url = os.environ.get("DATABASE_URL", "")
     if not superuser_url:
@@ -380,6 +515,13 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
     if not superuser:
         parser.error("DATABASE_URL must name its user")
 
+    narrow = [k.strip() for k in cast("str", args.narrow).split(",") if k.strip()]
+    observe = [k.strip() for k in cast("str", args.observe).split(",") if k.strip()]
+    if (narrow or observe) and args.mode != "per-service":
+        parser.error("--narrow and --observe need --mode per-service")
+    if set(narrow) & set(observe):
+        parser.error("a role cannot be both --narrow and --observe")
+
     suffix = secrets.token_hex(4)
     database = f"ds_role_split_{suffix}"
     names = {kind: f"ds_rs_{kind}_{suffix}" for kind in KINDS}
@@ -388,12 +530,12 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
     services: list[str] = []
     if args.mode == "per-service":
         groups, services = per_service_kinds()
+        check_role_keys([*narrow, *observe], services)
     service_names = {kind: f"ds_rs_{kind}_{suffix}" for kind in [*groups, *services]}
     service_passwords = {kind: secrets.token_hex(16) for kind in services}
     owner_url = with_credentials(
         superuser_url, names["owner"], passwords["owner"], database
     )
-    app_url = with_credentials(superuser_url, names["app"], passwords["app"], database)
     admin_url = with_credentials(
         superuser_url,
         superuser,
@@ -407,27 +549,16 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
     setup_args = [
         f"--variable=old_owner={superuser}",
         *(f"--variable={kind}={name}" for kind, name in names.items()),
-        "--variable=app_connection_limit=60",
+        # The retired shared role (never created here, unless a check does).
+        f"--variable=app=ds_rs_app_{suffix}",
         "--variable=owner_connection_limit=10",
         # The test database itself, so dropping it drops every grant.
         f"--variable=backup_database={database}",
         f"--file={SETUP_SQL}",
     ]
-    grants_sql = GRANTS_SQL
-    scratch = tempfile.TemporaryDirectory(prefix="test-postgres-roles-")
-    if narrow or observe:
-        statuses = {
-            **dict.fromkeys(narrow, "narrow"),
-            **dict.fromkeys(observe, "observed"),
-        }
-        grants_sql = pathlib.Path(scratch.name) / "postgres-grants.sql"
-        grants_sql.write_text(render_with_statuses(statuses), encoding="utf-8")
-        rendered = ", ".join(f"{key} {status}" for key, status in statuses.items())
-        print(f"== postgres-grants.sql rendered with {rendered}")
     grants_args = [
-        f"--variable=app={names['app']}",
         *(f"--variable={kind}={name}" for kind, name in service_names.items()),
-        f"--file={grants_sql}",
+        f"--file={GRANTS_SQL}",
     ]
     migrate = ["sqlx", "migrate", "run", "--source", str(MIGRATIONS), "--database-url"]
 
@@ -444,10 +575,8 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             run([*migrate, owner_url])
             # The chart's setup Job runs again after the migrations (a
             # post-install hook, and pre-upgrade after the migrate Job); it
-            # takes back the app role's
-            # write access to _sqlx_migrations, which the owner's default
-            # privileges granted when the migrator created it, and (per
-            # service) grants the groups on the tables that now exist.
+            # (per service) grants the groups and roles on the tables that
+            # now exist.
             setup()
         else:
             run([*migrate, admin_url])
@@ -460,6 +589,22 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
                 else [setup_args],
                 setup_env,
             )
+        if args.check_app_retirement:
+            if args.mode == "per-service":
+                parser.error("--check-app-retirement needs --mode new or existing")
+            check_app_retirement(
+                admin_url,
+                setup_args,
+                setup_env,
+                LegacyApp(f"ds_rs_app_{suffix}", names["owner"], names["exporter"]),
+            )
+        if observe:
+            psql(
+                admin_url,
+                "-c",
+                "; ".join(observed_dml_sql(f'"{service_names[k]}"') for k in observe),
+            )
+            print(f"== table-wide DML for {', '.join(observe)} (--observe)")
         # Test-only: the migration-fixture tests (legacy_backfill's,
         # full_coverage_line_stats_history_migration) build throwaway
         # schemas as the owner. Production's owner role needs no CREATE on
@@ -470,11 +615,11 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             f'GRANT CREATE ON DATABASE "{database}" TO "{names["owner"]}"',
         )
         # Test-only, likewise: two DB tests build TEMP tables (ds-store's
-        # schema gate test, as the app or api role; ingest-writer's
-        # stream_apply, as the app or writer role). postgres-roles.sql
+        # schema gate test, as the owner or api role; ingest-writer's
+        # stream_apply, as the owner or writer role). postgres-roles.sql
         # revokes TEMPORARY from PUBLIC (security review L5); no service
         # uses temporary tables at runtime.
-        temp_roles = [names["app"]] + [
+        temp_roles = [names["owner"]] + [
             service_names[k] for k in ("api", "writer") if k in service_names
         ]
         psql(
@@ -484,7 +629,7 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
             + ", ".join(f'"{role}"' for role in temp_roles),
         )
         test_env = dict(os.environ)
-        test_env["DATABASE_URL"] = app_url
+        test_env["DATABASE_URL"] = owner_url
         test_env["MIGRATION_DATABASE_URL"] = owner_url
         for kind in services:
             test_env[f"DATABASE_URL_{kind.upper()}"] = with_credentials(
@@ -495,14 +640,14 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         test_env["DS_TEST_NARROWED_ROLES"] = ",".join(narrow)
         if services:
             print(f"== DATABASE_URL_<ROLE> for {', '.join(services)}", flush=True)
+        owner_name = names["owner"]
         print(
-            f"== DATABASE_URL={names['app']}, MIGRATION_DATABASE_URL={names['owner']}",
+            f"== DATABASE_URL={owner_name}, MIGRATION_DATABASE_URL={owner_name}",
             flush=True,
         )
         status = subprocess.run(command, check=False, env=test_env).returncode  # noqa: S603  # the caller's own command
         print(f"== command exited {status}")
     finally:
-        scratch.cleanup()
         if args.keep:
             kept = ", ".join([*names.values(), *service_names.values()])
             print(f"kept database {database} and roles {kept}")
@@ -512,8 +657,7 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
                 "-c",
                 f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)',
             )
-            # The service roles before the groups and the app role they
-            # belong to.
+            # The service roles before the groups they belong to.
             for name in [
                 *(service_names[k] for k in services),
                 *(service_names[k] for k in groups),

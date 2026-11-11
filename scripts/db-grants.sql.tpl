@@ -4,9 +4,10 @@
 --
 -- Per-service Postgres roles (docs/postgres-app-role.md, Stage 0b; ingest
 -- architecture spec §6). Idempotent. Run with psql as a SUPERUSER in the
--- application database, AFTER postgres-roles.sql (it needs the app role):
+-- application database, AFTER postgres-roles.sql (it retires the app role
+-- and creates the owner and the schema's other roles):
 --
---   psql -X -d distant_signal -v app=distant_signal_app \
+--   psql -X -d distant_signal \
 --     [-v <role>=<name>] [-v <role>_connection_limit=N] \
 --     -f postgres-grants.sql
 --
@@ -16,10 +17,8 @@
 -- In ONE transaction:
 --   1. the group roles (NOLOGIN) and every role whose status is not
 --      `planned` (LOGIN, NOSUPERUSER, ..., CONNECTION LIMIT, password);
---   2. memberships: `observed` roles join the app role (they inherit all of
---      its privileges and have none of their own, but may not SET ROLE to
---      it: WITH INHERIT TRUE, SET FALSE, Postgres 16+); `narrow` roles leave it;
---      each role joins its groups (also SET FALSE);
+--   2. memberships: each role joins its groups (WITH INHERIT TRUE, SET FALSE,
+--      Postgres 16+);
 --   3. CONNECT and USAGE on schema public for every created role;
 --   4. the groups' grants and each narrow role's grants, after revoking
 --      everything else they hold in schema public. Objects that do not
@@ -28,10 +27,7 @@
 --      is a RESTRICTIVE policy for its role (FOR ALL, or one per write
 --      command for a `{writes: ...}` entry), created or replaced only when
 --      missing or different, and a ds_grants_* policy no longer listed is
---      dropped (an unchanged policy takes no ACCESS EXCLUSIVE lock);
---   6. what the app role loses (db-grants.yaml `app_revokes`): every
---      privilege on those tables and EXECUTE on those functions, which
---      postgres-roles.sql's blanket grants gave it again just before.
+--      dropped (an unchanged policy takes no ACCESS EXCLUSIVE lock).
 
 \set ON_ERROR_STOP on
 
@@ -58,7 +54,6 @@ SELECT
 \echo '== postgres-grants.sql: 1. roles'
 DO $roles$
 DECLARE
-    app text := current_setting('ds_grants.app');
     r record;
     seen text[] := ARRAY[]::text[];
 BEGIN
@@ -66,15 +61,11 @@ BEGIN
         RAISE EXCEPTION 'postgres-grants.sql must run as a superuser, not %',
             current_user;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = app) THEN
-        RAISE EXCEPTION 'the app role % does not exist: run postgres-roles.sql first',
-            app;
-    END IF;
     FOR r IN
         SELECT v.kind, current_setting('ds_grants.' || v.kind) AS name
         FROM @@GROUP_ROWS@@
     LOOP
-        IF r.name = app OR r.name = current_user OR r.name = ANY (seen) THEN
+        IF r.name = current_user OR r.name = ANY (seen) THEN
             RAISE EXCEPTION 'the % group name % must be a new, separate role',
                 r.kind, r.name;
         END IF;
@@ -97,7 +88,7 @@ BEGIN
                    AS connection_limit
         FROM @@ROLE_ROWS@@
     LOOP
-        IF r.name = app OR r.name = current_user OR r.name = ANY (seen) THEN
+        IF r.name = current_user OR r.name = ANY (seen) THEN
             RAISE EXCEPTION 'the % role name % must be a new, separate role',
                 r.kind, r.name;
         END IF;
@@ -129,29 +120,12 @@ $roles$;
 \echo '== postgres-grants.sql: 2-3. memberships, CONNECT and USAGE'
 DO $members$
 DECLARE
-    app text := current_setting('ds_grants.app');
-    app_oid oid := (SELECT oid FROM pg_roles WHERE rolname = app);
     r record;
-    member_oid oid;
 BEGIN
     FOR r IN
-        SELECT v.kind, v.status, current_setting('ds_grants.' || v.kind) AS name
+        SELECT v.kind, current_setting('ds_grants.' || v.kind) AS name
         FROM @@ROLE_ROWS@@
     LOOP
-        member_oid := (SELECT oid FROM pg_roles WHERE rolname = r.name);
-        IF r.status = 'observed' THEN
-            -- INHERIT TRUE: it uses the app role's privileges. SET FALSE
-            -- (Postgres 16+): it cannot SET ROLE to the app role, which
-            -- would shed the RESTRICTIVE row policies written for it
-            -- (security review M1). Re-granting updates an existing
-            -- membership's options.
-            EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET FALSE',
-                           app, r.name);
-        ELSIF r.status = 'narrow' AND EXISTS (
-            SELECT 1 FROM pg_auth_members
-            WHERE roleid = app_oid AND member = member_oid) THEN
-            EXECUTE format('REVOKE %I FROM %I', app, r.name);
-        END IF;
         EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I',
                        current_database(), r.name);
         EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', r.name);
@@ -170,8 +144,7 @@ $members$;
 
 -- 4. Grants. Everything the groups and the created roles hold in schema
 -- public is revoked first, so a grant removed from db-grants.yaml goes
--- away on the next run. Observed roles end with nothing of their own: they
--- use the app role's privileges.
+-- away on the next run.
 \echo '== postgres-grants.sql: 4. grants'
 DO $grants$
 DECLARE
@@ -327,34 +300,6 @@ BEGIN
     END LOOP;
 END
 $policies$;
-
--- 6. The app role's revokes (ingest phase 5, release B). postgres-roles.sql
--- grants app DML on every table and EXECUTE on every routine on each run;
--- these held only for the api's /private routes, and app's members (the
--- observed roles) inherit the loss.
-\echo '== postgres-grants.sql: 6. app revokes'
-DO $app_revokes$
-DECLARE
-    app text := current_setting('ds_grants.app');
-    r record;
-BEGIN
-    FOR r IN
-        SELECT v.tbl
-        FROM @@APP_REVOKE_TABLE_ROWS@@
-        WHERE to_regclass(format('public.%I', v.tbl)) IS NOT NULL
-    LOOP
-        EXECUTE format('REVOKE ALL ON public.%I FROM %I', r.tbl, app);
-    END LOOP;
-    FOR r IN
-        SELECT v.sig
-        FROM @@APP_REVOKE_FUNCTION_ROWS@@
-        WHERE to_regprocedure('public.' || v.sig) IS NOT NULL
-    LOOP
-        EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM %I',
-                       to_regprocedure('public.' || r.sig), app);
-    END LOOP;
-END
-$app_revokes$;
 
 \echo '== postgres-grants.sql: commit'
 COMMIT;

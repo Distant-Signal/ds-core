@@ -73,57 +73,45 @@ def load_script() -> types.ModuleType:
     return module
 
 
-class RenderNarrowedTest(unittest.TestCase):
-    """The scratch postgres-grants.sql --narrow runs."""
+class NarrowObserveTest(unittest.TestCase):
+    """--narrow and --observe, now that every role is narrow (release E)."""
 
     @override
     def setUp(self) -> None:
         """Load the script."""
         self.script = load_script()
 
-    def test_the_named_roles_render_narrow_and_get_their_own_grants(self) -> None:
-        """A narrowed role leaves app and gets its db-grants.yaml rows."""
+    def test_the_committed_sql_narrows_every_role_and_has_no_app_role(self) -> None:
+        """Release D narrowed the four; release E dropped the app role."""
         committed = self.script.GRANTS_SQL.read_text(encoding="utf-8")
-        # Release D (2026-10-28): the committed SQL narrows all four.
         for kind in ("api", "aggregator", "enricher", "notifier"):
             self.assertIn(f"('{kind}', 'narrow')", committed)
-            self.assertNotIn(f"('{kind}', 'observed')", committed)
-        narrowed = self.script.render_with_statuses(
-            {"api": "narrow", "aggregator": "narrow", "notifier": "observed"}
-        )
-        self.assertIn("('api', 'narrow')", narrowed)
-        self.assertIn("('aggregator', 'narrow')", narrowed)
-        self.assertNotIn("('api', 'observed')", narrowed)
-        self.assertIn("('notifier', 'observed')", narrowed)
-        # Unnamed roles keep their db-grants.yaml status.
-        self.assertIn("('enricher', 'narrow')", narrowed)
+        self.assertNotIn("'observed'", committed)
+        self.assertNotIn("distant_signal_app", committed)
         # The grants DS-118 adds: the api's outbox insert, the aggregator's
         # UPDATE on trains.id for its archive's row lock.
         self.assertIn(
             "('train_event_outbox', 'api', 'INSERT', "
             "'tracked_train_id,dedup_key,event')",
-            narrowed,
+            committed,
         )
-        self.assertIn("('trains', 'aggregator', 'UPDATE', 'id')", narrowed)
-        self.assertNotIn("('train_current_state', 'api', 'UPDATE'", narrowed)
+        self.assertIn("('trains', 'aggregator', 'UPDATE', 'id')", committed)
+        self.assertNotIn("('train_current_state', 'api', 'UPDATE'", committed)
 
-    def test_observe_keeps_a_role_in_the_app_role(self) -> None:
-        """--observe renders a role observed, with no grants of its own."""
-        rendered = self.script.render_with_statuses({"writer": "observed"})
-        self.assertIn("('writer', 'observed')", rendered)
-        self.assertNotIn("('trains', 'writer', 'INSERT'", rendered)
-        # CI's Stage 0b command: release D's four, observed again.
-        rendered = self.script.render_with_statuses(
-            dict.fromkeys(("api", "aggregator", "enricher", "notifier"), "observed")
-        )
-        self.assertIn("('api', 'observed')", rendered)
-        self.assertNotIn("('train_event_outbox', 'api', 'INSERT'", rendered)
-        self.assertNotIn("('trains', 'aggregator', 'UPDATE'", rendered)
+    def test_observe_gives_table_wide_dml_but_not_the_migration_history(self) -> None:
+        """The test-only stand-in for the old app membership."""
+        sql = self.script.observed_dml_sql('"r"')
+        self.assertIn("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES", sql)
+        self.assertIn("REVOKE INSERT, UPDATE, DELETE ON public._sqlx_migrations", sql)
+        self.assertIn("GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES", sql)
+        self.assertNotIn("TRUNCATE", sql)
 
     def test_an_unknown_role_is_refused(self) -> None:
-        """A typo must not silently narrow nothing."""
+        """A typo must not silently assert (or observe) nothing."""
+        _, created = self.script.per_service_kinds()
+        self.script.check_role_keys(["api", "writer"], created)
         with self.assertRaises(RuntimeError):
-            self.script.render_narrowed(["apii"])
+            self.script.check_role_keys(["apii"], created)
 
 
 class CiInvocationTest(unittest.TestCase):
