@@ -329,6 +329,12 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(tables("trust_backlog", "DELETE"), [])
         self.assertEqual(tables("trust_consumer", "DELETE"), [])
         self.assertIn("\\getenv api_password DS_PG_API_PASSWORD", sql)
+        # delegated_deletions: the api records, lists and deletes rows and
+        # never updates one (the users FK cascade runs as the owner).
+        self.assertIn("delegated_deletions", tables("api", "SELECT"))
+        self.assertIn("delegated_deletions", tables("api", "INSERT"))
+        self.assertIn("delegated_deletions", tables("api", "DELETE"))
+        self.assertNotIn("delegated_deletions", tables("api", "UPDATE"))
 
     def test_a_narrow_role_gets_its_grants_and_sequences(self) -> None:
         """Once narrowed, the YAML's grants and the owning sequences render."""
