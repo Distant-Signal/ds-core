@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.3 (2026-11-11)
+
+- Release E of ingest phase 5: drop the distant_signal_app role (#60). The roles setup Job now retires it (`DROP OWNED BY`, then `DROP ROLE`), and refuses, failing the run and so the chart upgrade, while any session is connected as it or while it owns any object in any database. `observed/app_revokes` is gone from `db-grants.yaml` and `postgres-grants.sql`. `scripts/test-postgres-roles.py --check-app-retirement` proves the drop (CI's roles pass).
+
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+**Roles**: the roles setup (`access/postgres-roles*`) changed.
+
+**Migrations**: none.
+**Consumers**: bump your ds-core pin to v0.14.3. ds-deploy's chart must be on the release E chart (its vendored roles setup and grants from v0.14.3) before Ranma-Config removes `postgresql.roles.app`; removing the value earlier leaves the old chart without its app role.
+
 ## v0.14.2 (2026-11-09)
 
 - Add webhook_destinations for outbound webhooks (#57)
