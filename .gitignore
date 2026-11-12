@@ -38,7 +38,7 @@ __pycache__/
 .pytest_cache/
 
 # Build output and Node state anywhere in the tree (frontend/.gitignore has
-# its own copies); from the strict-config guide's baseline.
+# its own copies); the strict baseline.
 dist/
 coverage/
 *.tsbuildinfo

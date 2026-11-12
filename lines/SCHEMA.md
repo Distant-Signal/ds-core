@@ -186,7 +186,7 @@ then commit the result:
 uv run scripts/generate-pass-through.py --database-url postgres://...
 # Against production, read-only (each query runs in a READ ONLY transaction):
 HTTPS_PROXY=socks5://127.0.0.1:1055 uv run scripts/generate-pass-through.py \
-  --psql "kubectl --context mine-bringer-ts -n distant-signal exec -i \
+  --psql "kubectl --context <context> -n distant-signal exec -i \
   distant-signal-postgres-0 -- psql -U distant_signal -d distant_signal"
 ```
 
