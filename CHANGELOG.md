@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.14.4 (2026-11-12)
+
+- Replace internal hostnames and paths in docs (#65)
+- Add a rust-toolchain.toml (#64)
+- Narrow the api to SID on delegated_deletions (#63): the api role loses UPDATE on `delegated_deletions` and keeps SELECT, INSERT and DELETE. The api never updates a row, and the `users(id)` ON UPDATE CASCADE needs no grant. No migration.
+
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
+**Migrations**: none.
+**Consumers**: bump your ds-core pin to v0.14.4. ds-deploy must bump its vendored grants (`db-grants.yaml`, `postgres-grants.sql`) to v0.14.4 for the narrowing to apply. Rollback: a patch release restoring SELECT, INSERT, UPDATE and DELETE (SIUD) for the api on `delegated_deletions`; a release is never moved or deleted.
+
 ## v0.14.3 (2026-11-11)
 
 - Release E of ingest phase 5: drop the distant_signal_app role (#60). The roles setup Job now retires it (`DROP OWNED BY`, then `DROP ROLE`), and refuses, failing the run and so the chart upgrade, while any session is connected as it or while it owns any object in any database. `observed/app_revokes` is gone from `db-grants.yaml` and `postgres-grants.sql`. `scripts/test-postgres-roles.py --check-app-retirement` proves the drop (CI's roles pass).
