@@ -6,7 +6,7 @@
 //!
 //! **Why jitter.** Every container in a Pod, and every Pod on a rebooted
 //! node, starts at the same instant and hits the same not-yet-ready
-//! dependency (the 2026-09-26 node reboot: `sso.cursed.solutions` unresolvable,
+//! dependency (the 2026-09-26 node reboot: `sso.example.com` unresolvable,
 //! then 502s, for about a minute). Retrying on a fixed schedule makes them all
 //! retry in lockstep; spreading each wait over `[delay/2, delay]` ("equal
 //! jitter") breaks that up while keeping a guaranteed minimum wait.
