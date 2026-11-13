@@ -322,10 +322,15 @@ class RenderTest(unittest.TestCase):
                 "train_current_state",
                 "train_movement_events",
                 "train_reasons",
+                "train_service_labels",
                 "trains",
                 "trust_event_backlog",
             ],
         )
+        # train_service_labels (DS-513): internal, the label writer alone;
+        # no role that serves users holds any grant on it.
+        for role in ("api", "notifier", "aggregator", "writer", "trust_consumer"):
+            self.assertNotIn("train_service_labels", tables(role, "SELECT"))
         self.assertEqual(tables("trust_backlog", "DELETE"), [])
         self.assertEqual(tables("trust_consumer", "DELETE"), [])
         self.assertIn("\\getenv api_password DS_PG_API_PASSWORD", sql)
