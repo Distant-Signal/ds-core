@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.5 (2026-11-13)
+
+- Add train_service_labels and a delay context report (#67)
+- Lock the checksum of the train_service_labels migration
+
+**Migrations** (1): `20261113120000_train_service_labels.sql`
+**Grants**: `db-grants.yaml` changed (the roles Job applies it).
+
+**Consumers**: bump your ds-core pin to v0.14.5. Additive only: a new internal table `train_service_labels` and its grants; nothing is narrowed and no consumer is deployed yet. ds-deploy's vendored grants and `migrate.image` move to v0.14.5 when a consumer needs the table.
+
 ## v0.14.4 (2026-11-12)
 
 - Replace internal hostnames and paths in docs (#65)
