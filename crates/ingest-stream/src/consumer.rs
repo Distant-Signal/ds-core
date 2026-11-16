@@ -695,25 +695,31 @@ impl StreamConsumer {
             let fields = map_fields(consumer);
             let name = fields.get("name").and_then(|v| as_string(v));
             let pending = fields.get("pending").and_then(|v| as_u64(v));
-            // `inactive` (Redis 7.2+) is since the last successful read;
-            // `idle` since the last attempt. Use the larger signal of the two.
-            let idle = fields
-                .get("inactive")
-                .and_then(|v| as_i64(v))
-                .filter(|&ms| ms >= 0)
-                .and_then(|ms| u64::try_from(ms).ok())
-                .or_else(|| fields.get("idle").and_then(|v| as_u64(v)));
+            let idle = consumer_idle_ms(&fields);
             if let (Some(name), Some(0), Some(idle)) = (name, pending, idle)
                 && name != self.config.consumer
                 && idle > limit
             {
-                let _: i64 = redis::cmd("XGROUP")
+                // DELCONSUMER drops the consumer's pending entries; it had
+                // none when XINFO was read. A non-zero count means it read
+                // in between: those entries are gone from the PEL and are
+                // not redelivered, so say so loudly.
+                let dropped: i64 = redis::cmd("XGROUP")
                     .arg("DELCONSUMER")
                     .arg(&self.config.stream)
                     .arg(&self.config.group)
                     .arg(&name)
                     .query_async(&mut self.conn)
                     .await?;
+                if dropped > 0 {
+                    tracing::error!(
+                        stream = %self.config.stream,
+                        consumer = %name,
+                        dropped,
+                        "removed an idle ingest stream consumer that had just read entries; \
+                         they will not be redelivered"
+                    );
+                }
                 removed.push(name);
             }
         }
@@ -967,6 +973,31 @@ fn list(value: &Value) -> &[Value] {
     }
 }
 
+/// How long an `XINFO CONSUMERS` consumer has been idle, in milliseconds,
+/// for the idle-consumer sweep.
+///
+/// `idle` is the time since the consumer's last read *attempt* (a blocking
+/// `XREADGROUP` that returned nothing counts); `inactive` (Redis 7.2+,
+/// valkey) is since its last *successful* read and is `-1` before the
+/// first. A live consumer on a quiet stream polls every few seconds, so its
+/// `idle` stays small while its `inactive` grows for hours; deleting on
+/// `inactive` could remove it in the instant between our `XINFO` (pending
+/// 0) and its next read, and `DELCONSUMER` would then drop the entry it had
+/// just read from the PEL, so it is never redelivered. So the smaller of
+/// the two decides: a consumer counts as idle only if it has neither read
+/// nor tried to read for that long.
+fn consumer_idle_ms(fields: &std::collections::HashMap<String, &Value>) -> Option<u64> {
+    let idle = fields.get("idle").and_then(|v| as_u64(v));
+    let inactive = fields
+        .get("inactive")
+        .and_then(|v| as_i64(v))
+        .and_then(|ms| u64::try_from(ms).ok());
+    match (idle, inactive) {
+        (Some(idle), Some(inactive)) => Some(idle.min(inactive)),
+        (idle, inactive) => idle.or(inactive),
+    }
+}
+
 /// A flat `[k, v, k, v…]` array (or a RESP3 map) as a name → value map.
 fn map_fields(value: &Value) -> std::collections::HashMap<String, &Value> {
     let mut out = std::collections::HashMap::new();
@@ -1030,6 +1061,39 @@ mod tests {
         );
         assert_eq!(parse_read_reply(Value::Nil).unwrap(), []);
         assert!(parse_read_reply(Value::Int(3)).is_err());
+    }
+
+    /// A live consumer on a quiet stream: small `idle`, huge `inactive`.
+    /// The sweep must see it as recently active (review R1).
+    #[test]
+    fn consumer_idleness_is_the_smaller_of_idle_and_inactive() {
+        let info = |pairs: &[(&str, Value)]| {
+            Value::Array(
+                pairs
+                    .iter()
+                    .flat_map(|(k, v)| [bulk(k), v.clone()])
+                    .collect(),
+            )
+        };
+        let quiet = info(&[
+            ("name", bulk("pod-b")),
+            ("pending", Value::Int(0)),
+            ("idle", Value::Int(4_000)),
+            ("inactive", Value::Int(86_400_000)),
+        ]);
+        assert_eq!(consumer_idle_ms(&map_fields(&quiet)), Some(4_000));
+        // Never read anything yet: `inactive` is -1, `idle` decides.
+        let fresh = info(&[
+            ("idle", Value::Int(7_200_000)),
+            ("inactive", Value::Int(-1)),
+        ]);
+        assert_eq!(consumer_idle_ms(&map_fields(&fresh)), Some(7_200_000));
+        // Before Redis 7.2 there is no `inactive`.
+        let old = info(&[("idle", Value::Int(5))]);
+        assert_eq!(consumer_idle_ms(&map_fields(&old)), Some(5));
+        let both_old = info(&[("idle", Value::Int(9_000)), ("inactive", Value::Int(8_000))]);
+        assert_eq!(consumer_idle_ms(&map_fields(&both_old)), Some(8_000));
+        assert_eq!(consumer_idle_ms(&map_fields(&info(&[]))), None);
     }
 
     #[test]

@@ -451,6 +451,48 @@ async fn entries_a_crashed_consumer_left_pending_are_reclaimed_and_applied_first
     assert_eq!(removed, vec!["pod-old".to_owned()]);
 }
 
+/// Review R1: a consumer still polling a quiet stream (its last successful
+/// read long ago, its last read attempt just now) is not removed, so an
+/// entry it reads right after the sweep's `XINFO` cannot be dropped from
+/// the PEL by `DELCONSUMER`. Once it stops polling too, it is removed.
+#[tokio::test]
+#[ignore = "needs Redis (REDIS_URL)"]
+async fn a_consumer_polling_a_quiet_stream_is_not_removed() {
+    let mut scope = Scope::new();
+    let stream = scope.stream("quiet");
+    scope.create_group(&stream);
+    let mut conn = connect(&admin_url()).await;
+    ingest_stream::xadd_entry(&mut conn, &stream, 100, &entry("q1"))
+        .await
+        .unwrap();
+    // pod-b reads and acks q1 (its last successful read), then keeps
+    // polling the now-quiet stream.
+    let mut live = StreamConsumer::new(
+        connect(&admin_url()).await,
+        consumer_config(&stream, "pod-b"),
+    );
+    let handler = Scripted::default();
+    drain(&mut live, &handler, 10).await;
+    assert_eq!(handler.seen(), vec!["q1"]);
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    // An empty read: refreshes `idle`, not `inactive`.
+    scope.read_and_crash(&stream, "pod-b", 1);
+
+    let mut hygiene = consumer_config(&stream, "pod-a");
+    hygiene.delete_idle_consumers_after = Duration::from_millis(200);
+    let mut sweeper = StreamConsumer::new(connect(&admin_url()).await, hygiene);
+    assert_eq!(
+        sweeper.delete_idle_consumers().await.unwrap(),
+        Vec::<String>::new()
+    );
+
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(
+        sweeper.delete_idle_consumers().await.unwrap(),
+        vec!["pod-b".to_owned()]
+    );
+}
+
 #[tokio::test]
 #[ignore = "needs Redis (REDIS_URL)"]
 async fn poison_and_undecodable_entries_are_dead_lettered_then_acked() {
