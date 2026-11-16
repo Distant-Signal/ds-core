@@ -451,6 +451,64 @@ async fn entries_a_crashed_consumer_left_pending_are_reclaimed_and_applied_first
     assert_eq!(removed, vec!["pod-old".to_owned()]);
 }
 
+/// Review R2: the handler committed (its dedup key included) and answered
+/// `PartiallyRejected`, but the dead-letter `XADD` keeps failing. The entry
+/// stays pending, and once Redis takes the write again the rows are
+/// dead-lettered without running the handler a second time (which would
+/// answer `Duplicate` and lose them).
+#[tokio::test]
+#[ignore = "needs Redis (REDIS_URL)"]
+async fn rejected_rows_survive_a_failed_dead_letter_write() {
+    let mut scope = Scope::new();
+    let stream = scope.stream("rejected");
+    let dlq = ingest_stream::dead_letter_stream(&stream);
+    scope.create_group(&stream);
+    let mut conn = connect(&admin_url()).await;
+    ingest_stream::xadd_entry(&mut conn, &stream, 100, &entry("r1"))
+        .await
+        .unwrap();
+    // A string at the dead-letter key: every XADD to it fails WRONGTYPE.
+    let _: () = scope.cmd(&["SET", &dlq, "blocked"]);
+
+    let handler = Scripted::default();
+    handler.answer(
+        "r1",
+        vec![
+            Ok(Handled::PartiallyRejected {
+                reason: "check_violation".into(),
+                rejected: serde_json::value::to_raw_value(&serde_json::json!([{"key": "r1"}]))
+                    .unwrap(),
+            }),
+            // What the real handler would say if it ran again.
+            Ok(Handled::Duplicate),
+        ],
+    );
+    let mut consumer = StreamConsumer::new(
+        connect(&admin_url()).await,
+        consumer_config(&stream, "pod-a"),
+    );
+    let never = std::future::pending::<()>();
+    tokio::pin!(never);
+    assert_eq!(
+        consumer.step(&handler, never.as_mut()).await.unwrap(),
+        Step::PelDrained
+    );
+    let failed = consumer.step(&handler, never.as_mut()).await;
+    assert!(failed.is_err(), "{failed:?}");
+    assert_eq!(scope.pending(&stream), 1);
+
+    let _: i64 = scope.cmd(&["DEL", &dlq]);
+    drain(&mut consumer, &handler, 10).await;
+    assert_eq!(handler.seen(), vec!["r1"], "the handler ran once");
+    assert_eq!(scope.pending(&stream), 0);
+    let dead = scope.range(&dlq);
+    assert_eq!(dead.len(), 1);
+    assert_eq!(dead[0].1["reason"], "rejected_rows");
+    assert_eq!(dead[0].1["rejected_rows"], "true");
+    assert_eq!(dead[0].1["error"], "check_violation");
+    assert_eq!(dead[0].1["body"], r#"[{"key":"r1"}]"#);
+}
+
 /// Review R1: a consumer still polling a quiet stream (its last successful
 /// read long ago, its last read attempt just now) is not removed, so an
 /// entry it reads right after the sweep's `XINFO` cannot be dropped from

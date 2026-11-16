@@ -15,6 +15,12 @@
 //!   nothing pending and have been idle for `delete_idle_consumers_after`;
 //! - applies entries **one at a time in id order** through a [`Handler`]:
 //!   - `Ok(..)`: ACK (after the handler's own transaction committed);
+//!   - [`Handled::PartiallyRejected`]: the rejected rows go to the
+//!     dead-letter stream, then the entry is acked. The handler has already
+//!     committed (and recorded its dedup key), so a failed dead-letter
+//!     `XADD` is retried in place, and if it keeps failing the entry stays
+//!     pending and its next read retries only the dead-letter, not the
+//!     handler (which would answer `Duplicate` and lose the rows);
 //!   - [`HandlerError::Poison`] (and an envelope that does not decode): the
 //!     entry goes to the dead-letter stream with the reason, then is acked;
 //!   - [`HandlerError::Transient`] / [`HandlerError::UnsupportedSchema`]
@@ -229,7 +235,26 @@ pub struct StreamConsumer {
     /// The unsupported entry this consumer is stuck on and when it first
     /// saw it (the batch stops there, so there is at most one).
     unsupported_since: Option<(String, Instant)>,
+    /// A handler committed this entry but its rejected rows could not be
+    /// dead-lettered: the entry is left pending, and when it is read again
+    /// only the dead-letter is retried (the handler would answer
+    /// `Duplicate` and the rows would be lost; review R2).
+    unsent_rejected: Option<UnsentRejected>,
 }
+
+/// Rejected rows waiting for their dead-letter `XADD`.
+#[derive(Debug)]
+struct UnsentRejected {
+    id: String,
+    schema: String,
+    fields: Vec<(Vec<u8>, Vec<u8>)>,
+    reason: String,
+}
+
+/// How many times the dead-letter `XADD` of a committed entry's rejected
+/// rows is tried in place (with the consumer's backoff) before the entry is
+/// left pending for the next read.
+pub const REJECTED_DEAD_LETTER_ATTEMPTS: u32 = 3;
 
 impl StreamConsumer {
     pub fn new(conn: RedisConn, config: ConsumerConfig) -> Self {
@@ -247,6 +272,7 @@ impl StreamConsumer {
             next_gauges: now,
             streak,
             unsupported_since: None,
+            unsent_rejected: None,
         }
     }
 
@@ -403,6 +429,14 @@ impl StreamConsumer {
         raw: RawEntry,
     ) -> Result<Option<RetryReason>, RedisError> {
         let stream = self.config.stream.clone();
+        if let Some(unsent) = self.unsent_rejected.take_if(|u| u.id == raw.id) {
+            // Already applied; only its rejected rows are owed.
+            let schema = unsent.schema.clone();
+            self.dead_letter_rejected(unsent).await?;
+            self.ack(&raw.id).await?;
+            metrics::consumed(&stream, &schema, "rejected");
+            return Ok(None);
+        }
         let Some(fields) = raw.fields else {
             // Pending, but `MAXLEN` trimmed it away before it was applied.
             self.ack(&raw.id).await?;
@@ -429,8 +463,13 @@ impl StreamConsumer {
             Ok(Handled::Skipped) => "skipped",
             Ok(Handled::PartiallyRejected { reason, rejected }) => {
                 let fields = rejected_fields(&entry.envelope, rejected).unwrap_or(fields);
-                self.dead_letter(&entry.id, fields, "rejected_rows", &reason)
-                    .await?;
+                self.dead_letter_rejected(UnsentRejected {
+                    id: entry.id.clone(),
+                    schema: schema.clone(),
+                    fields,
+                    reason,
+                })
+                .await?;
                 "rejected"
             }
             Err(HandlerError::Poison(reason)) => {
@@ -566,6 +605,53 @@ impl StreamConsumer {
             "ingest entry dead-lettered"
         );
         Ok(())
+    }
+
+    /// Dead-letters the rejected rows of an entry whose handler already
+    /// committed, trying [`REJECTED_DEAD_LETTER_ATTEMPTS`] times with the
+    /// consumer's backoff. If every attempt fails the rows are kept in
+    /// memory and the error returned, so the entry stays pending and its
+    /// next read retries only the dead-letter, never the handler (whose
+    /// dedup key would make it answer `Duplicate`). Lost only if this
+    /// process exits first.
+    async fn dead_letter_rejected(&mut self, unsent: UnsentRejected) -> Result<(), RedisError> {
+        let mut attempt = 0;
+        loop {
+            match self
+                .dead_letter(
+                    &unsent.id,
+                    unsent.fields.clone(),
+                    "rejected_rows",
+                    &unsent.reason,
+                )
+                .await
+            {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    attempt += 1;
+                    if attempt >= REJECTED_DEAD_LETTER_ATTEMPTS {
+                        tracing::error!(
+                            stream = %self.config.stream,
+                            id = %unsent.id,
+                            error = %err,
+                            "could not dead-letter an applied entry's rejected rows; \
+                             left pending to retry"
+                        );
+                        self.unsent_rejected = Some(unsent);
+                        return Err(err);
+                    }
+                    let delay = self.config.backoff.delay(attempt - 1);
+                    tracing::warn!(
+                        stream = %self.config.stream,
+                        id = %unsent.id,
+                        error = %err,
+                        retry_in_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+                        "dead-lettering rejected rows failed; retrying"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
     }
 
     async fn delivery_count(&mut self, id: &str) -> Result<Option<u64>, RedisError> {
