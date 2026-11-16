@@ -9,13 +9,25 @@
 //! `NOGROUP` recovery (`movement_feed::redis_stream`, `enricher::stream`)
 //! does not see this, since nothing is missing.
 //!
-//! Each consumer remembers the highest id it was handed. After a failed
-//! command (a Redis restart breaks the connection, so the in-flight
-//! `XREADGROUP` fails), it calls [`restore_group_position`], which compares
-//! that id with the group's `last-delivered-id` (`XINFO GROUPS`) and, when
-//! the group is behind, moves it forward with `XGROUP SETID`. Not checked
-//! on a healthy connection, so an operator's deliberate `XGROUP SETID`
-//! rewind of a running consumer is left alone.
+//! Each consumer remembers how far it got. After a failed command (a Redis
+//! restart breaks the connection, so the in-flight `XREADGROUP` fails), it
+//! calls [`restore_group_position`], which compares that id with the
+//! group's `last-delivered-id` (`XINFO GROUPS`) and, when the group is
+//! behind, moves it forward with `XGROUP SETID`. Not checked on a healthy
+//! connection, so an operator's deliberate `XGROUP SETID` rewind of a
+//! running consumer is left alone.
+//!
+//! **Which id to remember** (2026-11 review R3). Not the highest id the
+//! consumer was *handed*: if it had read E1..E16 but processed and acked
+//! only up to E4 when Redis lost that read (AOF `everysec`), the reloaded
+//! PEL no longer holds E5..E16, and moving the group to E16 means they are
+//! never delivered again (a gap). Remember instead the highest id below
+//! which everything was processed and acked, which [`GroupCursor`] tracks:
+//! call [`GroupCursor::delivered`] for every id a read returns and
+//! [`GroupCursor::acked`] once it is `XACK`ed, and restore to
+//! [`GroupCursor::restore_target`] (or call [`restore_group_cursor`]).
+//! Entries between that and the newest handed out are then delivered
+//! again, which costs duplicates, never a gap.
 //!
 //! Not restored: the group's pending-entries list. Entries the consumer
 //! `ACKed` after the reloaded copy was written are pending again, and are
@@ -45,6 +57,11 @@ pub enum GroupPosition {
 
 /// Moves consumer group `group` of `stream` forward to `remembered` if its
 /// `last-delivered-id` is behind it. See the module docs.
+///
+/// `remembered` must be an id the consumer has processed and acked
+/// everything up to ([`GroupCursor::restore_target`]), not merely the
+/// highest id it was handed: entries above `remembered` that a reloaded
+/// Redis no longer has pending are otherwise never delivered again.
 pub async fn restore_group_position<C: ConnectionLike + Send>(
     conn: &mut C,
     stream: &str,
@@ -65,6 +82,120 @@ pub async fn restore_group_position<C: ConnectionLike + Send>(
         .query_async(conn)
         .await?;
     Ok(GroupPosition::Restored { was: at })
+}
+
+/// [`restore_group_position`] to `cursor`'s [`GroupCursor::restore_target`].
+/// With no target yet (nothing delivered or seeded) only reads the group:
+/// [`GroupPosition::Current`] or [`GroupPosition::Missing`].
+pub async fn restore_group_cursor<C: ConnectionLike + Send>(
+    conn: &mut C,
+    stream: &str,
+    group: &str,
+    cursor: &GroupCursor,
+) -> anyhow::Result<GroupPosition> {
+    match cursor.restore_target() {
+        Some(target) => restore_group_position(conn, stream, group, &target).await,
+        None => Ok(match group_last_delivered_id(conn, stream, group).await? {
+            Some(at) => GroupPosition::Current { at },
+            None => GroupPosition::Missing,
+        }),
+    }
+}
+
+/// How far a consumer has got through a stream, for
+/// [`restore_group_position`]: the ids it was handed and has not yet acked.
+/// [`GroupCursor::restore_target`] is the highest id at or below which
+/// everything it was handed is acked, so restoring there never skips an
+/// entry it read but did not finish. See the module docs (review R3).
+///
+/// Ids are compared numerically. Memory is the consumer's in-flight
+/// entries: one read batch, normally.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GroupCursor {
+    /// Delivered, not yet acked.
+    outstanding: std::collections::BTreeSet<StreamIdParts>,
+    /// The highest id delivered (or seeded).
+    highest: Option<StreamIdParts>,
+}
+
+type StreamIdParts = (u64, u64);
+
+impl GroupCursor {
+    /// An empty cursor: no target until something is delivered.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A cursor starting at the group's `last-delivered-id` read at
+    /// connect (`group_last_delivered_id`): everything up to it was
+    /// handled before this consumer started, as far as it can know.
+    pub fn seeded(last_delivered_id: &str) -> Self {
+        Self {
+            outstanding: std::collections::BTreeSet::new(),
+            highest: parse_id(last_delivered_id),
+        }
+    }
+
+    /// `id` was handed to this consumer (by `XREADGROUP`, its own PEL
+    /// included, or `XAUTOCLAIM`).
+    pub fn delivered(&mut self, id: &str) {
+        if let Some(parts) = parse_id(id) {
+            self.outstanding.insert(parts);
+            self.highest = self.highest.max(Some(parts));
+        }
+    }
+
+    /// `id` was processed and `XACK`ed (or otherwise finished: dead-lettered
+    /// and acked, found trimmed and acked).
+    pub fn acked(&mut self, id: &str) {
+        if let Some(parts) = parse_id(id) {
+            self.outstanding.remove(&parts);
+            self.highest = self.highest.max(Some(parts));
+        }
+    }
+
+    /// `id` is no longer this consumer's to finish (another consumer
+    /// claimed it): stops holding the target below it, without counting it
+    /// as acked. An entry that stays outstanding for good would pin the
+    /// target there, so restores would never move the group forward again.
+    pub fn released(&mut self, id: &str) {
+        if let Some(parts) = parse_id(id) {
+            self.outstanding.remove(&parts);
+        }
+    }
+
+    /// The id to restore the group to: just below the oldest entry handed
+    /// out and not yet acked, or the highest id seen when none is
+    /// outstanding. `None` before anything was delivered or seeded.
+    pub fn restore_target(&self) -> Option<String> {
+        let highest = self.highest?;
+        let target = match self.outstanding.first() {
+            Some(&oldest) => predecessor(oldest).min(highest),
+            None => highest,
+        };
+        Some(format!("{}-{}", target.0, target.1))
+    }
+
+    /// The highest id handed out (what consumers remembered before
+    /// [`GroupCursor`]; not a safe restore target, see the module docs).
+    pub fn highest_delivered(&self) -> Option<String> {
+        self.highest.map(|(ms, seq)| format!("{ms}-{seq}"))
+    }
+}
+
+/// A stream id as `(ms, seq)`; a bare `ms` is `ms-0`. `None` if unparsable.
+fn parse_id(id: &str) -> Option<StreamIdParts> {
+    let (ms, seq) = id.split_once('-').unwrap_or((id, "0"));
+    Some((ms.parse().ok()?, seq.parse().ok()?))
+}
+
+/// The greatest stream id below `id` (`0-0` stays `0-0`).
+fn predecessor((ms, seq): StreamIdParts) -> StreamIdParts {
+    match (ms, seq) {
+        (_, 1..) => (ms, seq - 1),
+        (1.., 0) => (ms - 1, u64::MAX),
+        (0, 0) => (0, 0),
+    }
 }
 
 /// `group`'s `last-delivered-id` from `XINFO GROUPS stream`, `None` when
@@ -324,6 +455,80 @@ mod tests {
                 .is_err(),
             "a refused SETID is an error"
         );
+    }
+
+    /// Review R3: read E1..E16, processed and acked to E4, then Redis
+    /// reloads a copy from before that read. The restore target is E4, so
+    /// E5..E16 are read again, not skipped.
+    #[tokio::test]
+    async fn the_cursor_restores_to_the_last_acked_entry_not_the_last_read() {
+        let mut cursor = GroupCursor::seeded("100-0");
+        assert_eq!(cursor.restore_target().as_deref(), Some("100-0"));
+        for seq in 1..=16 {
+            cursor.delivered(&format!("200-{seq}"));
+        }
+        for seq in 1..=4 {
+            cursor.acked(&format!("200-{seq}"));
+        }
+        assert_eq!(cursor.restore_target().as_deref(), Some("200-4"));
+        assert_eq!(cursor.highest_delivered().as_deref(), Some("200-16"));
+
+        let mut conn = FakeConn::new([
+            groups(vec![FakeConn::group_info("g", "100-0")]),
+            Ok(Value::Okay),
+        ]);
+        assert_eq!(
+            restore_group_cursor(&mut conn, "s", "g", &cursor)
+                .await
+                .unwrap(),
+            GroupPosition::Restored {
+                was: "100-0".to_string()
+            }
+        );
+        assert_eq!(conn.sent[1], ["XGROUP", "SETID", "s", "g", "200-4"]);
+
+        // An out-of-order ack does not move the target past an unacked one.
+        cursor.acked("200-9");
+        assert_eq!(cursor.restore_target().as_deref(), Some("200-4"));
+        for seq in 5..=16 {
+            cursor.acked(&format!("200-{seq}"));
+        }
+        assert_eq!(cursor.restore_target().as_deref(), Some("200-16"));
+    }
+
+    #[test]
+    fn the_cursor_steps_back_across_a_millisecond_and_handles_releases() {
+        let mut cursor = GroupCursor::new();
+        assert_eq!(cursor.restore_target(), None);
+        cursor.delivered("300-0");
+        cursor.delivered("300-1");
+        assert_eq!(
+            cursor.restore_target(),
+            Some(format!("299-{}", u64::MAX)),
+            "just below 300-0"
+        );
+        // Claimed away by another consumer: no longer holds the target.
+        cursor.released("300-0");
+        assert_eq!(cursor.restore_target().as_deref(), Some("300-0"));
+        cursor.acked("300-1");
+        assert_eq!(cursor.restore_target().as_deref(), Some("300-1"));
+        cursor.delivered("garbage");
+        assert_eq!(cursor.restore_target().as_deref(), Some("300-1"));
+        assert_eq!(predecessor((0, 0)), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn an_empty_cursor_only_reads_the_group() {
+        let mut conn = FakeConn::new([groups(vec![FakeConn::group_info("g", "5-0")])]);
+        assert_eq!(
+            restore_group_cursor(&mut conn, "s", "g", &GroupCursor::new())
+                .await
+                .unwrap(),
+            GroupPosition::Current {
+                at: "5-0".to_string()
+            }
+        );
+        assert_eq!(conn.sent.len(), 1);
     }
 
     #[tokio::test]
