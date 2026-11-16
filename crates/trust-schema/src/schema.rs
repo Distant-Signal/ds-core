@@ -210,9 +210,47 @@ pub struct ChangeOfOrigin {
     pub reason_code: Option<String>,
 }
 
+/// TRUST `0007`, Change of Identity: the train's reporting number (the
+/// headcode inside its 10-character TRUST `train_id`) changed.
+///
+/// `revised_train_id` (2026-11 review R4) is the field name Network Rail's
+/// public Train Movements documentation gives for the train's new TRUST
+/// id; this repository holds no captured `0007` that carries it (the only
+/// fixtures are minimal `{"train_id": ...}` bodies), so it is optional and
+/// a body without it parses as before. `train_id` stays the id the message
+/// is about (the one the train was known by), as every consumer reads it
+/// today.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChangeOfIdentity {
     pub train_id: String,
+    /// The train's TRUST id from now on. `None` when absent, `null`,
+    /// empty or not a string in the message: the field name is unconfirmed
+    /// by any captured message, so an unexpected shape must not make the
+    /// whole `0007` fail to parse.
+    #[serde(default, deserialize_with = "lenient_id")]
+    pub revised_train_id: Option<String>,
+}
+
+impl ChangeOfIdentity {
+    /// `(old, new)` TRUST ids when the message names a revised id that
+    /// differs from `train_id`: what a consumer re-keys a tracked train
+    /// from and to. `None` when there is nothing to follow.
+    pub fn identity_change(&self) -> Option<(&str, &str)> {
+        let revised = self.revised_train_id.as_deref()?;
+        (revised != self.train_id).then_some((self.train_id.as_str(), revised))
+    }
+}
+
+/// An optional string id that treats `""` (and whitespace) and any
+/// non-string value as absent, never as a parse failure.
+fn lenient_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value.as_str().and_then(|s| {
+        let trimmed = s.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    }))
 }
 
 /// TRUST message type `0005`, Train Reinstatement: sent when a previously
@@ -823,6 +861,50 @@ mod tests {
         assert!(matches!(&messages[0], TrustMessage::Cancellation(_)));
         assert!(matches!(&messages[1], TrustMessage::ChangeOfOrigin(_)));
         assert!(matches!(&messages[2], TrustMessage::ChangeOfIdentity(_)));
+    }
+
+    /// Review R4. Shaped after Network Rail's public Train Movements
+    /// documentation for `0007` (header and body field names from there),
+    /// NOT a captured message: this repository has no live `0007` sample
+    /// carrying `revised_train_id`.
+    #[test]
+    fn a_change_of_identity_carries_the_revised_train_id() {
+        let raw = r#"{
+            "header":{"msg_type":"0007","source_dev_id":"","user_id":"",
+                "original_data_source":"TOPS","msg_queue_timestamp":"1756400061000",
+                "source_system_id":"TRUST"},
+            "body":{"current_train_id":"","event_timestamp":"1756400060000",
+                "revised_train_id":"722N72MW27","train_file_address":null,
+                "train_id":"722N71MW27","train_service_code":"22345000"}
+        }"#;
+        let messages = parse_batch(raw).unwrap();
+        let [TrustMessage::ChangeOfIdentity(change)] = messages.as_slice() else {
+            panic!("{messages:?}");
+        };
+        assert_eq!(change.train_id, "722N71MW27");
+        assert_eq!(change.revised_train_id.as_deref(), Some("722N72MW27"));
+        assert_eq!(change.identity_change(), Some(("722N71MW27", "722N72MW27")));
+    }
+
+    #[test]
+    fn a_change_of_identity_without_a_usable_revised_id_still_parses() {
+        for body in [
+            r#"{"train_id":"722N71MW27"}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":null}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":""}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":"  "}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":7}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":{"id":"722N72MW27"}}"#,
+            r#"{"train_id":"722N71MW27","revised_train_id":"722N71MW27"}"#,
+        ] {
+            let raw = format!(r#"{{"header":{{"msg_type":"0007"}},"body":{body}}}"#);
+            let messages = parse_batch(&raw).unwrap();
+            let [TrustMessage::ChangeOfIdentity(change)] = messages.as_slice() else {
+                panic!("{body}: {messages:?}");
+            };
+            assert_eq!(change.train_id, "722N71MW27");
+            assert_eq!(change.identity_change(), None, "{body}");
+        }
     }
 
     #[test]
