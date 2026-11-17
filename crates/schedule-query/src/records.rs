@@ -179,7 +179,15 @@ impl TryFrom<char> for StpIndicator {
 ///   2026-08-31 is independently confirmed a Monday in the same section
 ///   ("2026-08-31 is a Monday, and turned out to be the UK August Bank
 ///   Holiday") -- so bit index 0 set alone means "Monday only".
-/// - `28` Bank Holiday Running (not decoded)
+/// - `28` Bank Holiday Running (not decoded). `X` (does not run on
+///   England and Wales bank holidays) or `G` (not on Glasgow ones) would
+///   need a regional bank-holiday calendar this crate does not have, and
+///   the timetable expresses bank-holiday changes as STP records: the real
+///   2026-08-31 Bank Holiday cross-check above is a `C` override, and
+///   replacement schedules are `N` (see [`StpIndicator::New`]). STP
+///   resolution (`C` < `N` < `O` < `P`) is therefore correct only while
+///   that holds; `parse`'s `the_bank_holiday_running_column_is_ignored`
+///   pins the column's being ignored (2026-11 review, W6).
 /// - `29` Train Status (CIF column 30) -- see [`BasicSchedule::train_status`]
 /// - `30..32` Train Category (e.g. `"XX"`, `"OO"`, `"BS"`, `"BR"`) -- see
 ///   [`BasicSchedule::train_category`]
