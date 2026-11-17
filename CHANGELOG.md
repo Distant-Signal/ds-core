@@ -1,10 +1,44 @@
 # Changelog
 
+## v0.17.0 (2026-11-17)
+
+Opaque public ids for journey legs, tracked trains and push devices, stage 1 (DS-534, round 2 after journeys). A minor, as v0.16.0 was for its id wave: nine additive migrations and one additive grant; nothing is removed or changed in place, no Rust API changes and no migration is a contract migration. The grant has an ordering requirement (below).
+
+- Add opaque public_id to journey_legs, train_subscriptions and push_subscriptions (#89): the api serves these tables' global counters (`journey_legs.id`, `train_subscriptions.id`, `push_subscriptions.id`) in the shared journey view, push topics, webhook bodies, URLs and device lists. Each table gets `public_id`, the prefix (`l_`, `t_`, `d_`) plus the 32 hex digits of `gen_random_uuid()` (34 characters, not derived from `id`, so a path segment is a legacy id exactly when it is all digits and each kind has its own prefix), in the journeys pattern: the column is added nullable, its default is set after it exists (no table rewrite), existing rows are backfilled in one statement, and a `CHECK (public_id IS NOT NULL AND public_id ~ '^<prefix>_[0-9a-f]{32}$')` is added `NOT VALID` under a 5 s `lock_timeout`, a unique index is built concurrently, and the CHECK is validated. `SET NOT NULL` is left out, as for journeys (it counts as destructive DDL; the validated CHECK says the same). The current api, writer and notifier never name the column, so their inserts take the default and the migrations are safe to apply ahead of any consumer. The `train_subscriptions` `ADD COLUMN` takes a brief ACCESS EXCLUSIVE lock on a table the writer and consumers update constantly, bounded by the 5 s `lock_timeout` (the migrate Job retries). A DB test checks that an insert naming no `public_id` gets a well-formed one per table.
+- Shorten the chrono and chrono-tz advisory ignores to 2027-02-17 (#88): deny.toml only; nothing a consumer compiles against.
+- Fix the date of the chrono advisory ignores in the v0.16.1 entry below: they run until 2027-02-17, as `deny.toml` says (the entry said 2027-05-17, which is RUSTSEC-2023-0071's date). Documentation only.
+
+**Migrations** (9), in order, all additive and expand-only; they must ship together:
+1. `20261118100000_journey_legs_public_id.sql`
+2. `20261118100100_journey_legs_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+3. `20261118100200_journey_legs_public_id_validate.sql`
+4. `20261118110000_train_subscriptions_public_id.sql`
+5. `20261118110100_train_subscriptions_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+6. `20261118110200_train_subscriptions_public_id_validate.sql`
+7. `20261118120000_push_subscriptions_public_id.sql`
+8. `20261118120100_push_subscriptions_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+9. `20261118120200_push_subscriptions_public_id_validate.sql`
+
+Each table has two transactional files and one `-- no-transaction` index file (three no-transaction files in all), each alone in its file. There are no `-- contract:` migrations. Production's latest applied migration is `20261117120300` once v0.16.0's migrations are applied; the migrate hook applies every pending migration in order.
+
+**Grants**: `db-grants.yaml` and `postgres-grants.sql` changed by one additive grant (the roles Job applies it). The `notifier` role's column-level SELECT on `train_subscriptions` gains `public_id` (it was `id, user_id, trains_id, notifications_enabled, pin_origin_crs, pin_scheduled_departure, pin_destination_crs, pin_origin_ref`), so it can build push URLs and tags from the opaque id. Nothing else changes: the notifier already holds table-level SELECT, INSERT and UPDATE on `journey_legs` and SELECT and DELETE on `push_subscriptions`, the api holds SIUD on all three tables, and the writer, trust-backlog, trust-consumer and aggregator column lists on `train_subscriptions` and the writer's on `journey_legs` do not need the new column. A default needs no privilege on its column, so the notifier's existing column-level INSERT on `train_subscriptions` keeps working.
+
+**Order** (this release's grant is read by the schema gate): `ds_store::schema::wait_for_schema` bakes each role's required privileges in at build time from the core the image links, so a notifier built on v0.17.0 requires SELECT on `train_subscriptions.public_id` and sits in the gate, exiting on its next restart, until the new grants are applied. ds-deploy must therefore move `core-version`, the vendored `db-grants.yaml` and `postgres-grants.sql` and `migrate.image` to v0.17.0 BEFORE (or in the same chart build as) any notifier image built on v0.17.0 is deployed, with a `grant-floors.toml` entry (`service = "notifier"`, `core = "v0.17.0"`, reason `train_subscriptions.public_id column grant`) checked by Distant-Signal/ci's `release-order.py check --grant-floors`. Images built on earlier cores are unaffected by an extra grant, and none of them names the new columns.
+
+**Consumers** (the follow-ups, in the order of the design's PR plan, DS-534):
+1. ds-deploy: `core-version`, vendored grants and `migrate.image` to v0.17.0, and the grant floor above. The migrate hook adds the nine migrations' columns, indexes and constraints.
+2. ds-api: bump `core-version` to v0.17.0 and add the dual-accept `PublicRef` extractors and the additive `publicId` response fields (stage 1); it deploys after step 1.
+3. distant-signal (frontend): move calls to public ids and bump the api pin once the api build exists.
+4. ds-workers: bump `core-version` to v0.17.0; push URLs, tags and the hashed `Topic` header built from the public ids; its notifier image deploys only after step 1.
+5. ds-deploy: pin the images from steps 2 to 4. ds-ingest and ds-pollers have no ordering requirement for this release.
+
+Rollback: an image rollback is enough; the columns, indexes, constraints and the grant are additive and stay.
+
 ## v0.16.1 (2026-11-17)
 
 Narrower notifier grants and stream-consumer Redis ACL (DS-534, security assessment L16). A patch: no migration, no Rust API change, nothing a consumer compiles against. It is a grants and ACL release, so the order consumers and ds-deploy take it in matters (below).
 
-- Narrow the notifier's table grants and the stream consumers' Redis ACL (#83); also ignores the chrono and chrono-tz unmaintained advisories (RUSTSEC-2026-0543 and RUSTSEC-2026-0555, published today, "all versions affected") in deny.toml until 2027-05-17 so the blocking advisories job passes.
+- Narrow the notifier's table grants and the stream consumers' Redis ACL (#83); also ignores the chrono and chrono-tz unmaintained advisories (RUSTSEC-2026-0543 and RUSTSEC-2026-0555, published today, "all versions affected") in deny.toml until 2027-02-17 so the blocking advisories job passes.
 
 **Migrations**: none.
 
