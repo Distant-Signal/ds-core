@@ -2,7 +2,9 @@ name: Release
 
 # Publishes the ds-core release `vX.Y.Z` (repo split spec §5.1), run on the
 # tag's own ref: tag.yml dispatches it after tagging, and a tag pushed by
-# hand starts it too. It publishes
+# hand starts it too, but only when the tagged commit is reachable from
+# main (the `plan` job refuses it otherwise, before anything is built). It
+# publishes
 #
 #   - images/ds-migrate, built from the tagged commit, tagged vX.Y.Z (and
 #     image.yml's sha-<short sha>), signed and attested;
@@ -46,6 +48,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history of every branch: the next step needs main's.
+          fetch-depth: 0
+
+      # Consumers automerge a release, so a `v*` tag pushed on any other
+      # branch (or a fork's commit) must never build. tag.yml tags main's own
+      # commit, which passes; a hand-pushed tag has to be on main too.
+      # Nothing is built or signed before this step succeeds: every other
+      # job needs `plan`.
+      - name: The tagged commit is on main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          commit="$(git rev-parse "${REF}^{commit}")"
+          git merge-base --is-ancestor "${commit}" origin/main || {
+            echo "::error::${commit} (${REF}) is not reachable from origin/main: releases are cut from main only"
+            exit 1
+          }
 
       - name: The tag is the workspace version
         id: plan

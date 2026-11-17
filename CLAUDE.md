@@ -72,7 +72,9 @@ uv run scripts/release.py prepare --bump patch   # a release PR (README.md, "Rel
 - **Releases**: every migration, grant or ACL change ships in a release
   (`CHANGELOG.md`). Consumers move by bumping their tag. Releases and
   `v*` tags are immutable: never delete or move one; fix a bad release
-  forward with a patch release.
+  forward with a patch release. `release.yml` refuses a tag whose commit
+  isn't reachable from `origin/main` (its `plan` job, before any build), so
+  only tag.yml's tags of main, or hand-pushed tags on main commits, release.
 - **Commits** carry a `Task: <card>` trailer (e.g. `Task: DS-123`) naming the
   worklog card.
 - **Commit identity**: every commit is authored
