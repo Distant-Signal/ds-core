@@ -599,15 +599,12 @@ impl ExternalAccountTokenSource {
         let (federated, federated_lifetime) = self.sts_exchange(&subject).await?;
         let (token, lifetime) = match &self.config.service_account_impersonation_url {
             None => (federated, federated_lifetime),
-            Some(url) => {
-                let t1 = self.clock.now();
-                let (token, lifetime) = self.impersonate(url, &federated).await?;
-                // Measure from this request's start, not STS's.
-                (
-                    token,
-                    lifetime.saturating_sub(t1.saturating_duration_since(t0)),
-                )
-            }
+            // `impersonate` turns the absolute `expireTime` into a lifetime
+            // measured after its response arrived; anchoring that at `t0`
+            // already puts the deadlines early by the requests' latency, so
+            // nothing more is subtracted (review R5: it used to be
+            // subtracted twice).
+            Some(url) => self.impersonate(url, &federated).await?,
         };
         let (refresh_at, expires_at) = deadlines(t0, lifetime, self.settings.refresh_skew);
         record_remaining(expires_at.saturating_duration_since(self.clock.now()));
@@ -862,6 +859,49 @@ mod tests {
         // Cached: no second exchange (the mocks' expect(1) checks on drop).
         assert_eq!(source.access_token().await.unwrap().expose(), "ya29.reader");
         assert!(!format!("{source:?}").contains("ya29"));
+    }
+
+    /// Review R5: a slow STS exchange shortens the impersonated token's
+    /// cached lifetime by its latency once, not twice. `expireTime` is
+    /// fixed 3600 s ahead before the exchange; STS takes 3 s, so measured
+    /// from the refresh's start the token expires 3596-3597 s on (rounding
+    /// to whole seconds). The old double subtraction made that at most
+    /// 3594 s.
+    #[tokio::test]
+    async fn a_slow_exchange_shortens_the_impersonated_lifetime_once() {
+        let server = MockServer::start().await;
+        let file = token_file(K8S_TOKEN);
+        Mock::given(method("POST"))
+            .and(path("/v1/token"))
+            .respond_with(sts_ok("federated", 3600).set_delay(Duration::from_secs(3)))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(IMPERSONATE))
+            .respond_with(impersonation_ok("ya29.reader", Duration::from_secs(3600)))
+            .mount(&server)
+            .await;
+        let config =
+            ExternalAccountConfig::from_json(&config_json(&server, file.path(), true)).unwrap();
+        let clock = Clock::default();
+        let settings = TokenSourceSettings {
+            exchange_timeout: Duration::from_secs(10),
+            ..TokenSourceSettings::default()
+        };
+        let source =
+            ExternalAccountTokenSource::with_clock(config, settings, clock.clone()).unwrap();
+        let before = clock.now();
+        assert_eq!(source.access_token().await.unwrap().expose(), "ya29.reader");
+        let expires_in = source
+            .lock_cached()
+            .as_ref()
+            .unwrap()
+            .expires_at
+            .duration_since(before);
+        assert!(
+            expires_in > Duration::from_secs(3595) && expires_in <= Duration::from_secs(3598),
+            "{expires_in:?}"
+        );
     }
 
     #[tokio::test]

@@ -15,6 +15,12 @@
 //!   nothing pending and have been idle for `delete_idle_consumers_after`;
 //! - applies entries **one at a time in id order** through a [`Handler`]:
 //!   - `Ok(..)`: ACK (after the handler's own transaction committed);
+//!   - [`Handled::PartiallyRejected`]: the rejected rows go to the
+//!     dead-letter stream, then the entry is acked. The handler has already
+//!     committed (and recorded its dedup key), so a failed dead-letter
+//!     `XADD` is retried in place, and if it keeps failing the entry stays
+//!     pending and its next read retries only the dead-letter, not the
+//!     handler (which would answer `Duplicate` and lose the rows);
 //!   - [`HandlerError::Poison`] (and an envelope that does not decode): the
 //!     entry goes to the dead-letter stream with the reason, then is acked;
 //!   - [`HandlerError::Transient`] / [`HandlerError::UnsupportedSchema`]
@@ -229,7 +235,26 @@ pub struct StreamConsumer {
     /// The unsupported entry this consumer is stuck on and when it first
     /// saw it (the batch stops there, so there is at most one).
     unsupported_since: Option<(String, Instant)>,
+    /// A handler committed this entry but its rejected rows could not be
+    /// dead-lettered: the entry is left pending, and when it is read again
+    /// only the dead-letter is retried (the handler would answer
+    /// `Duplicate` and the rows would be lost; review R2).
+    unsent_rejected: Option<UnsentRejected>,
 }
+
+/// Rejected rows waiting for their dead-letter `XADD`.
+#[derive(Debug)]
+struct UnsentRejected {
+    id: String,
+    schema: String,
+    fields: Vec<(Vec<u8>, Vec<u8>)>,
+    reason: String,
+}
+
+/// How many times the dead-letter `XADD` of a committed entry's rejected
+/// rows is tried in place (with the consumer's backoff) before the entry is
+/// left pending for the next read.
+pub const REJECTED_DEAD_LETTER_ATTEMPTS: u32 = 3;
 
 impl StreamConsumer {
     pub fn new(conn: RedisConn, config: ConsumerConfig) -> Self {
@@ -247,6 +272,7 @@ impl StreamConsumer {
             next_gauges: now,
             streak,
             unsupported_since: None,
+            unsent_rejected: None,
         }
     }
 
@@ -403,6 +429,14 @@ impl StreamConsumer {
         raw: RawEntry,
     ) -> Result<Option<RetryReason>, RedisError> {
         let stream = self.config.stream.clone();
+        if let Some(unsent) = self.unsent_rejected.take_if(|u| u.id == raw.id) {
+            // Already applied; only its rejected rows are owed.
+            let schema = unsent.schema.clone();
+            self.dead_letter_rejected(unsent).await?;
+            self.ack(&raw.id).await?;
+            metrics::consumed(&stream, &schema, "rejected");
+            return Ok(None);
+        }
         let Some(fields) = raw.fields else {
             // Pending, but `MAXLEN` trimmed it away before it was applied.
             self.ack(&raw.id).await?;
@@ -429,8 +463,13 @@ impl StreamConsumer {
             Ok(Handled::Skipped) => "skipped",
             Ok(Handled::PartiallyRejected { reason, rejected }) => {
                 let fields = rejected_fields(&entry.envelope, rejected).unwrap_or(fields);
-                self.dead_letter(&entry.id, fields, "rejected_rows", &reason)
-                    .await?;
+                self.dead_letter_rejected(UnsentRejected {
+                    id: entry.id.clone(),
+                    schema: schema.clone(),
+                    fields,
+                    reason,
+                })
+                .await?;
                 "rejected"
             }
             Err(HandlerError::Poison(reason)) => {
@@ -568,6 +607,53 @@ impl StreamConsumer {
         Ok(())
     }
 
+    /// Dead-letters the rejected rows of an entry whose handler already
+    /// committed, trying [`REJECTED_DEAD_LETTER_ATTEMPTS`] times with the
+    /// consumer's backoff. If every attempt fails the rows are kept in
+    /// memory and the error returned, so the entry stays pending and its
+    /// next read retries only the dead-letter, never the handler (whose
+    /// dedup key would make it answer `Duplicate`). Lost only if this
+    /// process exits first.
+    async fn dead_letter_rejected(&mut self, unsent: UnsentRejected) -> Result<(), RedisError> {
+        let mut attempt = 0;
+        loop {
+            match self
+                .dead_letter(
+                    &unsent.id,
+                    unsent.fields.clone(),
+                    "rejected_rows",
+                    &unsent.reason,
+                )
+                .await
+            {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    attempt += 1;
+                    if attempt >= REJECTED_DEAD_LETTER_ATTEMPTS {
+                        tracing::error!(
+                            stream = %self.config.stream,
+                            id = %unsent.id,
+                            error = %err,
+                            "could not dead-letter an applied entry's rejected rows; \
+                             left pending to retry"
+                        );
+                        self.unsent_rejected = Some(unsent);
+                        return Err(err);
+                    }
+                    let delay = self.config.backoff.delay(attempt - 1);
+                    tracing::warn!(
+                        stream = %self.config.stream,
+                        id = %unsent.id,
+                        error = %err,
+                        retry_in_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+                        "dead-lettering rejected rows failed; retrying"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
+    }
+
     async fn delivery_count(&mut self, id: &str) -> Result<Option<u64>, RedisError> {
         let reply: Value = redis::cmd("XPENDING")
             .arg(&self.config.stream)
@@ -695,25 +781,31 @@ impl StreamConsumer {
             let fields = map_fields(consumer);
             let name = fields.get("name").and_then(|v| as_string(v));
             let pending = fields.get("pending").and_then(|v| as_u64(v));
-            // `inactive` (Redis 7.2+) is since the last successful read;
-            // `idle` since the last attempt. Use the larger signal of the two.
-            let idle = fields
-                .get("inactive")
-                .and_then(|v| as_i64(v))
-                .filter(|&ms| ms >= 0)
-                .and_then(|ms| u64::try_from(ms).ok())
-                .or_else(|| fields.get("idle").and_then(|v| as_u64(v)));
+            let idle = consumer_idle_ms(&fields);
             if let (Some(name), Some(0), Some(idle)) = (name, pending, idle)
                 && name != self.config.consumer
                 && idle > limit
             {
-                let _: i64 = redis::cmd("XGROUP")
+                // DELCONSUMER drops the consumer's pending entries; it had
+                // none when XINFO was read. A non-zero count means it read
+                // in between: those entries are gone from the PEL and are
+                // not redelivered, so say so loudly.
+                let dropped: i64 = redis::cmd("XGROUP")
                     .arg("DELCONSUMER")
                     .arg(&self.config.stream)
                     .arg(&self.config.group)
                     .arg(&name)
                     .query_async(&mut self.conn)
                     .await?;
+                if dropped > 0 {
+                    tracing::error!(
+                        stream = %self.config.stream,
+                        consumer = %name,
+                        dropped,
+                        "removed an idle ingest stream consumer that had just read entries; \
+                         they will not be redelivered"
+                    );
+                }
                 removed.push(name);
             }
         }
@@ -967,6 +1059,31 @@ fn list(value: &Value) -> &[Value] {
     }
 }
 
+/// How long an `XINFO CONSUMERS` consumer has been idle, in milliseconds,
+/// for the idle-consumer sweep.
+///
+/// `idle` is the time since the consumer's last read *attempt* (a blocking
+/// `XREADGROUP` that returned nothing counts); `inactive` (Redis 7.2+,
+/// valkey) is since its last *successful* read and is `-1` before the
+/// first. A live consumer on a quiet stream polls every few seconds, so its
+/// `idle` stays small while its `inactive` grows for hours; deleting on
+/// `inactive` could remove it in the instant between our `XINFO` (pending
+/// 0) and its next read, and `DELCONSUMER` would then drop the entry it had
+/// just read from the PEL, so it is never redelivered. So the smaller of
+/// the two decides: a consumer counts as idle only if it has neither read
+/// nor tried to read for that long.
+fn consumer_idle_ms(fields: &std::collections::HashMap<String, &Value>) -> Option<u64> {
+    let idle = fields.get("idle").and_then(|v| as_u64(v));
+    let inactive = fields
+        .get("inactive")
+        .and_then(|v| as_i64(v))
+        .and_then(|ms| u64::try_from(ms).ok());
+    match (idle, inactive) {
+        (Some(idle), Some(inactive)) => Some(idle.min(inactive)),
+        (idle, inactive) => idle.or(inactive),
+    }
+}
+
 /// A flat `[k, v, k, v…]` array (or a RESP3 map) as a name → value map.
 fn map_fields(value: &Value) -> std::collections::HashMap<String, &Value> {
     let mut out = std::collections::HashMap::new();
@@ -1030,6 +1147,39 @@ mod tests {
         );
         assert_eq!(parse_read_reply(Value::Nil).unwrap(), []);
         assert!(parse_read_reply(Value::Int(3)).is_err());
+    }
+
+    /// A live consumer on a quiet stream: small `idle`, huge `inactive`.
+    /// The sweep must see it as recently active (review R1).
+    #[test]
+    fn consumer_idleness_is_the_smaller_of_idle_and_inactive() {
+        let info = |pairs: &[(&str, Value)]| {
+            Value::Array(
+                pairs
+                    .iter()
+                    .flat_map(|(k, v)| [bulk(k), v.clone()])
+                    .collect(),
+            )
+        };
+        let quiet = info(&[
+            ("name", bulk("pod-b")),
+            ("pending", Value::Int(0)),
+            ("idle", Value::Int(4_000)),
+            ("inactive", Value::Int(86_400_000)),
+        ]);
+        assert_eq!(consumer_idle_ms(&map_fields(&quiet)), Some(4_000));
+        // Never read anything yet: `inactive` is -1, `idle` decides.
+        let fresh = info(&[
+            ("idle", Value::Int(7_200_000)),
+            ("inactive", Value::Int(-1)),
+        ]);
+        assert_eq!(consumer_idle_ms(&map_fields(&fresh)), Some(7_200_000));
+        // Before Redis 7.2 there is no `inactive`.
+        let old = info(&[("idle", Value::Int(5))]);
+        assert_eq!(consumer_idle_ms(&map_fields(&old)), Some(5));
+        let both_old = info(&[("idle", Value::Int(9_000)), ("inactive", Value::Int(8_000))]);
+        assert_eq!(consumer_idle_ms(&map_fields(&both_old)), Some(8_000));
+        assert_eq!(consumer_idle_ms(&map_fields(&info(&[]))), None);
     }
 
     #[test]
