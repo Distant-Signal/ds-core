@@ -499,6 +499,47 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Every foreign key has an index its referential actions can use: one
+    /// whose leading columns are exactly the key's, either total or partial
+    /// on `<a key column> IS NOT NULL` (a lookup by value implies it).
+    /// Without one, each delete or key change in the parent scans the whole
+    /// child table (review K3: the notification state tables, whose only
+    /// index was a primary key led by `user_id`).
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn every_foreign_key_has_a_usable_index() {
+        let mut conn = connect().await;
+        let unindexed: Vec<String> = sqlx::query_scalar(
+            "SELECT format('%s (%s) -> %s', c.conrelid::regclass, \
+                    (SELECT string_agg(a.attname, ', ' ORDER BY k.ord) \
+                     FROM unnest(c.conkey) WITH ORDINALITY k(attnum, ord) \
+                     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum), \
+                    c.confrelid::regclass) \
+             FROM pg_constraint c \
+             WHERE c.contype = 'f' \
+               AND c.connamespace = ANY (current_schemas(false)::regnamespace[]) \
+               AND NOT EXISTS ( \
+                 SELECT 1 FROM pg_index i \
+                 WHERE i.indrelid = c.conrelid AND i.indisvalid \
+                   AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] @> c.conkey \
+                   AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] <@ c.conkey \
+                   AND (i.indpred IS NULL OR EXISTS ( \
+                     SELECT 1 FROM unnest(c.conkey) k(attnum) \
+                     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum \
+                     WHERE pg_get_expr(i.indpred, i.indrelid) \
+                           = format('(%I IS NOT NULL)', a.attname)))) \
+             ORDER BY 1",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        assert!(
+            unindexed.is_empty(),
+            "foreign keys with no index led by their columns: {unindexed:?}"
+        );
+    }
+
     /// One `journey_templates` row's target columns: origin, destination,
     /// kind, time, day offset, plan options, usual itinerary.
     type TargetRow = (
