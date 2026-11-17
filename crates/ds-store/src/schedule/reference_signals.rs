@@ -9,7 +9,10 @@
 //! - [`RunLock`]: a session advisory lock held for a whole run (or, as a
 //!   Deployment, a whole cycle), so two runs never publish at once: a
 //!   doubled Job, a manual run, or the Deployment and the `CronJob` both
-//!   alive while the mode switches.
+//!   alive while the mode switches. The server frees it when its
+//!   connection goes (a killed backend, a failover, a dropped keepalive)
+//!   without the run noticing, so a run calls [`RunLock::ensure_held`]
+//!   between products or dates and stops once it is lost.
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -120,9 +123,25 @@ pub const RUN_LOCK_KEY: i64 = ds_runtime::advisory_locks::SCHEDULE_REFERENCE_RUN
 /// session lock when its connection goes). Its own connection, opened with
 /// the pool's options, so the publish keeps the whole pool; the chart
 /// counts it in the role's connection limit.
+///
+/// Nothing tells the run when the server frees the lock under it (its
+/// backend terminated, a failover, a keepalive drop): another run can then
+/// take it and publish alongside. So a run calls [`Self::ensure_held`]
+/// (or [`Self::still_held`]) between units of work and stops when it fails.
 #[derive(Debug)]
 pub struct RunLock {
     conn: PgConnection,
+}
+
+/// How long [`RunLock::still_held`] waits for its answer: a connection that
+/// hangs (a half-open TCP session) counts as lost.
+pub const STILL_HELD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// `pg_locks`' view of [`RUN_LOCK_KEY`]: a bigint advisory key is
+/// (classid, objid) = (high, low) 32 bits, objsubid 1.
+fn run_lock_halves() -> (i64, i64) {
+    const LOW_32: i64 = 0xffff_ffff;
+    ((RUN_LOCK_KEY >> 32) & LOW_32, RUN_LOCK_KEY & LOW_32)
 }
 
 impl RunLock {
@@ -151,6 +170,53 @@ impl RunLock {
                 tracing::debug!(error = ?err, "closing the unused run-lock connection failed");
             }
             Ok(None)
+        }
+    }
+
+    /// Whether this session still holds the lock: one cheap query on the
+    /// lock's own connection, `false` when it fails or takes longer than
+    /// [`STILL_HELD_TIMEOUT`] (the connection, and so the lock, is gone).
+    pub async fn still_held(&mut self) -> bool {
+        let (classid, objid) = run_lock_halves();
+        let query = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM pg_locks \
+             WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted \
+               AND classid::bigint = $1 AND objid::bigint = $2 AND objsubid = 1)",
+        )
+        .bind(classid)
+        .bind(objid)
+        .fetch_one(&mut self.conn);
+        match tokio::time::timeout(STILL_HELD_TIMEOUT, query).await {
+            Ok(Ok(held)) => held,
+            Ok(Err(err)) => {
+                tracing::warn!(error = ?err, "checking the schedule-reference run lock failed");
+                false
+            }
+            Err(_) => {
+                tracing::warn!(
+                    timeout = ?STILL_HELD_TIMEOUT,
+                    "checking the schedule-reference run lock timed out"
+                );
+                false
+            }
+        }
+    }
+
+    /// [`Self::still_held`], as an error once the lock is lost, for a run to
+    /// stop on (`?`) between products or dates rather than publish beside
+    /// another run that has since taken it.
+    ///
+    /// # Errors
+    ///
+    /// The lock is no longer held.
+    pub async fn ensure_held(&mut self) -> Result<()> {
+        if self.still_held().await {
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "lost the schedule-reference run lock (its connection went); stopping \
+                 this run so it can't publish alongside another"
+            )
         }
     }
 
@@ -241,6 +307,64 @@ mod tests {
             .expect("a dropped run's lock is freed")
             .release()
             .await;
+    }
+
+    /// A held lock reports so; once its backend is terminated (as a
+    /// failover or a dropped connection would), it reports lost and
+    /// another run can take it.
+    #[tokio::test]
+    #[ignore = "requires a live database (DATABASE_URL)"]
+    async fn a_run_notices_when_its_lock_is_lost() {
+        let pool = pool().await;
+        let application_name = format!("ds-store-run-lock-lost-{}", std::process::id());
+        let mut lock = RunLock::try_acquire(&pool, &application_name)
+            .await
+            .unwrap()
+            .expect("free at first");
+        assert!(lock.still_held().await);
+        lock.ensure_held().await.expect("held");
+
+        let terminated: bool = sqlx::query_scalar(
+            "SELECT bool_and(pg_terminate_backend(pid)) FROM pg_stat_activity \
+             WHERE application_name = $1",
+        )
+        .bind(&application_name)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(terminated, "the lock's backend must be terminated");
+        assert!(
+            !lock.still_held().await,
+            "a terminated session holds nothing"
+        );
+        let err = lock.ensure_held().await.expect_err("lost");
+        assert!(
+            err.to_string()
+                .contains("lost the schedule-reference run lock")
+        );
+
+        let mut other = None;
+        for _ in 0..50 {
+            other = RunLock::try_acquire(&pool, "ds-store-run-lock-lost-b")
+                .await
+                .unwrap();
+            if other.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        other
+            .expect("another run takes the freed lock")
+            .release()
+            .await;
+        lock.release().await;
+    }
+
+    #[test]
+    fn the_lock_key_splits_as_pg_locks_shows_it() {
+        let (classid, objid) = run_lock_halves();
+        assert_eq!((classid << 32) | objid, RUN_LOCK_KEY);
+        assert!((0..=0xffff_ffff).contains(&classid) && (0..=0xffff_ffff).contains(&objid));
     }
 
     /// A signal row is overwritten per (kind, product), and the settled
