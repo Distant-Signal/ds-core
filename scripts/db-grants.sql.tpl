@@ -18,7 +18,11 @@
 --   1. the group roles (NOLOGIN) and every role whose status is not
 --      `planned` (LOGIN, NOSUPERUSER, ..., CONNECTION LIMIT, password);
 --   2. memberships: each role joins its groups (WITH INHERIT TRUE, SET FALSE,
---      Postgres 16+);
+--      Postgres 16+), and leaves any group it is no longer listed in. A
+--      distant_signal_* role no longer listed at all (removed, or back to
+--      `planned`) leaves the groups too and, unless it owns objects in the
+--      database, loses everything it holds in schema public. Its login is
+--      left alone (dropping it is a manual step);
 --   3. CONNECT and USAGE on schema public for every created role;
 --   4. the groups' grants and each narrow role's grants, after revoking
 --      everything else they hold in schema public. Objects that do not
@@ -138,6 +142,42 @@ BEGIN
         -- SET FALSE here too: a group's grants are only ever inherited.
         EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET FALSE',
                        r.grp, r.member);
+    END LOOP;
+    -- Memberships no longer listed (review K5): without this, a role taken
+    -- out of `groups: [read_shared]` kept SELECT on every shared table.
+    -- Only the roles this file manages are touched: the listed ones, and
+    -- distant_signal_* roles (the default names) that are no longer listed.
+    FOR r IN
+        SELECT m.rolname AS member, g.rolname AS grp,
+               m.rolname NOT IN (SELECT current_setting('ds_grants.' || v.kind)
+                                 FROM @@ROLE_ROWS@@) AS unlisted,
+               (m.rolsuper
+                OR EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner = m.oid)
+                OR EXISTS (SELECT 1 FROM pg_namespace n WHERE n.nspowner = m.oid)
+                OR EXISTS (SELECT 1 FROM pg_proc p WHERE p.proowner = m.oid)) AS owns
+        FROM pg_auth_members am
+        JOIN pg_roles g ON g.oid = am.roleid
+        JOIN pg_roles m ON m.oid = am.member
+        WHERE g.rolname IN (SELECT current_setting('ds_grants.' || v.kind)
+                            FROM @@GROUP_ROWS@@)
+          AND (m.rolname IN (SELECT current_setting('ds_grants.' || v.kind)
+                             FROM @@ROLE_ROWS@@)
+               OR m.rolname LIKE 'distant\_signal\_%')
+          AND (m.rolname, g.rolname) NOT IN (
+                SELECT current_setting('ds_grants.' || v.kind),
+                       current_setting('ds_grants.' || v.grp)
+                FROM @@MEMBER_ROWS@@)
+        ORDER BY 1, 2
+    LOOP
+        RAISE NOTICE 'revoking % from % (no longer listed)', r.grp, r.member;
+        EXECUTE format('REVOKE %I FROM %I', r.grp, r.member);
+        IF r.unlisted AND NOT r.owns THEN
+            RAISE NOTICE 'revoking everything % holds in schema public (no longer listed)',
+                r.member;
+            EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r.member);
+            EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r.member);
+            EXECUTE format('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM %I', r.member);
+        END IF;
     END LOOP;
 END
 $members$;

@@ -100,7 +100,20 @@ pub const MIGRATION_DATABASE_URL_ENV: &str = "MIGRATION_DATABASE_URL";
 /// stays in `ds-core` when they leave it (repo split spec §9, phase 4):
 /// `#[sqlx::test(migrator = "ds_store::migrate::MIGRATOR")]`, and
 /// [`migration_sql`] for one migration's text.
-pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+///
+/// **Applied migrations this build does not embed are ignored**
+/// (`ignore_missing`), as the schema gate (`crate::schema`) accepts a
+/// database migrated past the build: migrations are expand-only, so a
+/// database ahead of the build still serves it. Without this, every build
+/// on core N-1 fails its start with sqlx's `VersionMissing` once release N's
+/// migrate hook applied a new migration: an api pod restarting mid-rollout
+/// with `api.migrateOnStartup`, or a `helm rollback` whose pre-upgrade hook
+/// runs the older `ds-migrate`. The checksum of every migration both sides
+/// know is still checked (`VersionMismatch` on an edited file).
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate::Migrator {
+    ignore_missing: true,
+    ..sqlx::migrate!()
+};
 
 /// The SQL of the embedded migration `version` (its file name's numeric
 /// prefix), for tests that replay or inspect one migration.
@@ -484,6 +497,47 @@ mod tests {
             Some("users_discord_id_key")
         );
         tx.rollback().await.unwrap();
+    }
+
+    /// Every foreign key has an index its referential actions can use: one
+    /// whose leading columns are exactly the key's, either total or partial
+    /// on `<a key column> IS NOT NULL` (a lookup by value implies it).
+    /// Without one, each delete or key change in the parent scans the whole
+    /// child table (review K3: the notification state tables, whose only
+    /// index was a primary key led by `user_id`).
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn every_foreign_key_has_a_usable_index() {
+        let mut conn = connect().await;
+        let unindexed: Vec<String> = sqlx::query_scalar(
+            "SELECT format('%s (%s) -> %s', c.conrelid::regclass, \
+                    (SELECT string_agg(a.attname, ', ' ORDER BY k.ord) \
+                     FROM unnest(c.conkey) WITH ORDINALITY k(attnum, ord) \
+                     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum), \
+                    c.confrelid::regclass) \
+             FROM pg_constraint c \
+             WHERE c.contype = 'f' \
+               AND c.connamespace = ANY (current_schemas(false)::regnamespace[]) \
+               AND NOT EXISTS ( \
+                 SELECT 1 FROM pg_index i \
+                 WHERE i.indrelid = c.conrelid AND i.indisvalid \
+                   AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] @> c.conkey \
+                   AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] <@ c.conkey \
+                   AND (i.indpred IS NULL OR EXISTS ( \
+                     SELECT 1 FROM unnest(c.conkey) k(attnum) \
+                     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum \
+                     WHERE pg_get_expr(i.indpred, i.indrelid) \
+                           = format('(%I IS NOT NULL)', a.attname)))) \
+             ORDER BY 1",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        assert!(
+            unindexed.is_empty(),
+            "foreign keys with no index led by their columns: {unindexed:?}"
+        );
     }
 
     /// One `journey_templates` row's target columns: origin, destination,
@@ -893,6 +947,73 @@ mod tests {
             .execute(&mut conn)
             .await
             .unwrap();
+    }
+
+    /// A database migrated past this build (an applied migration it doesn't
+    /// embed, as after release N's migrate hook) still migrates: an older
+    /// api pod or `ds-migrate` must not crash-loop on `VersionMissing`.
+    /// The checksums of the migrations both know are still compared.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn run_accepts_a_database_migrated_past_the_build() {
+        const FUTURE: i64 = 99_991_231_235_959;
+        let url = owner_database_url();
+        let base: PgConnectOptions = url.parse().unwrap();
+        run(base.clone(), MigrationSettings::default())
+            .await
+            .expect("migrations apply");
+        let mut conn = connect().await;
+        sqlx::query(
+            "INSERT INTO _sqlx_migrations \
+                 (version, description, success, checksum, execution_time) \
+             VALUES ($1, 'from a newer core', true, '\\x00', 0)",
+        )
+        .bind(FUTURE)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+        let ahead = run(base.clone(), MigrationSettings::default()).await;
+
+        // A known migration whose recorded checksum differs still fails.
+        let newest = MIGRATOR.migrations.last().unwrap().version;
+        let checksum: Vec<u8> =
+            sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = $1")
+                .bind(newest)
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = '\\x00' WHERE version = $1")
+            .bind(newest)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        let edited = run(base, MigrationSettings::default()).await;
+
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = $2 WHERE version = $1")
+            .bind(newest)
+            .bind(checksum)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = $1")
+            .bind(FUTURE)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        ahead.expect("a database ahead of the build must still migrate");
+        let err = format!("{:#}", edited.expect_err("a checksum mismatch must fail"));
+        assert!(
+            err.contains("was previously applied but has been modified"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_migrator_ignores_migrations_it_does_not_embed() {
+        assert!(MIGRATOR.ignore_missing);
+        assert!(MIGRATOR.locking);
+        assert!(!MIGRATOR.migrations.is_empty());
     }
 
     /// With the role split (docs/postgres-app-role.md; CI's per-service run,

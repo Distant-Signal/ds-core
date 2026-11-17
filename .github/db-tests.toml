@@ -71,6 +71,8 @@ uv run --no-sync scripts/test-postgres-roles.py --mode new -- \
 # protocol and its run signals), and release D's narrowed api role. Each
 # service's own suites run in its own repository, against this
 # repository's grants at its pinned core version.
+# --check-revokes proves postgres-grants.sql takes back a group membership
+# or role db-grants.yaml no longer lists.
 [[pass]]
 id = "per-service"
 name = "DB tests as each service's role (Stage 0b, release D)"
@@ -80,6 +82,6 @@ uv run --no-sync scripts/test-postgres-roles.py --mode per-service --check-setup
   uv run --no-sync scripts/db-tests.py run per-service --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
 
 echo "== Release D's narrowed api role"
-uv run --no-sync scripts/test-postgres-roles.py --mode per-service --narrow api,aggregator,enricher,notifier -- \
+uv run --no-sync scripts/test-postgres-roles.py --mode per-service --check-revokes --narrow api,aggregator,enricher,notifier -- \
   uv run --no-sync scripts/db-tests.py run narrow --archive-file "${DB_TESTS_ARCHIVE}" --extract-to "${GITHUB_WORKSPACE}"
 '''

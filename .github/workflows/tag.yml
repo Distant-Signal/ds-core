@@ -86,13 +86,16 @@ jobs:
           persist-credentials: false
 
       # Only a versioned contract migration (`-- contract: ... safe after
-      # core vA.B.C`) has a floor to check. Without one there is nothing to
-      # hold the tag for. With one, the chart's values must pin every image
-      # by digest, which ds-deploy's main does (spec §5.4).
+      # core vA.B.C`) has a floor to check. Every contract header must name
+      # one (check-migration-order.py; a few historical ones are exempt), so
+      # a destructive release is never tagged unchecked. Without one there
+      # is nothing to hold the tag for. With one, the chart's values must
+      # pin every image by digest, which ds-deploy's main does (spec §5.4).
       - name: Contract migrations against the deployed chart
         if: steps.plan.outputs.tag == 'true'
         run: |
           set -euo pipefail
+          uv run --no-sync scripts/check-migration-order.py --contract-headers
           if ! grep -l -E '^--[[:space:]]*contract:.*safe after core' crates/ds-store/migrations/*.sql; then
             echo "no versioned contract migration: no floor to check against the chart"
             exit 0

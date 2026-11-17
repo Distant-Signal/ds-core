@@ -71,6 +71,14 @@ would queue behind every long reader and block everything queued behind it
 bites: with one row policy dropped, that run must fail with a lock timeout
 (55P03), and the next run, without the reader, puts the policy back.
 
+--check-revokes (per-service mode only) proves postgres-grants.sql takes
+back what db-grants.yaml no longer lists (review K5): it makes a role that
+is not in read_shared a member of it by hand, and makes a
+distant_signal_* login role no longer listed a member of both groups with
+SELECT on a table, then runs postgres-grants.sql once more and checks that
+the memberships are gone, and the unlisted role's grant too. The unlisted
+role is dropped afterwards.
+
 Needs psql (15+, for \getenv) and sqlx-cli on PATH. COMMAND is anything;
 CI runs one pass of scripts/db-tests.py from its prebuilt test archive:
 
@@ -329,6 +337,59 @@ def check_setup_job(
     print("== the steady-state setup run took no ACCESS EXCLUSIVE lock", flush=True)
 
 
+def check_revokes(
+    admin_url: str,
+    grants_args: Sequence[str],
+    env: Mapping[str, str],
+    names: Mapping[str, str],
+    member_key: str,
+) -> None:
+    """Prove a membership or role no longer listed loses its access.
+
+    names: each group's and created role's name, by key. member_key: a
+    created role that the YAML puts in schema_gate but not in read_shared.
+    """
+    member = names[member_key]
+    stale = f"distant_signal_k5_{secrets.token_hex(4)}"
+    read_shared, schema_gate = names["read_shared"], names["schema_gate"]
+    psql(
+        admin_url,
+        "-c",
+        f'GRANT "{read_shared}" TO "{member}"; '
+        f'CREATE ROLE "{stale}" LOGIN; '
+        f'GRANT "{read_shared}", "{schema_gate}" TO "{stale}"; '
+        f'GRANT SELECT ON public.stations TO "{stale}"',
+    )
+    try:
+        psql(admin_url, *grants_args, env=env)
+        memberships = scalar(
+            admin_url,
+            "SELECT string_agg(m.rolname || ' in ' || g.rolname, ', ' "
+            "ORDER BY m.rolname, g.rolname) FROM pg_auth_members am "
+            "JOIN pg_roles g ON g.oid = am.roleid JOIN pg_roles m ON m.oid = am.member "
+            "WHERE m.rolname IN (:'member', :'stale')",
+            member=member,
+            stale=stale,
+        )
+        if memberships != f"{member} in {schema_gate}":
+            msg = (
+                f"after postgres-grants.sql, {member} must be in {schema_gate} "
+                f"only and {stale} in no group, not: {memberships}"
+            )
+            raise RuntimeError(msg)
+        held = scalar(
+            admin_url,
+            "SELECT has_table_privilege(:'stale', 'public.stations', 'SELECT')",
+            stale=stale,
+        )
+        if held != "f":
+            msg = f"{stale}, no longer listed, kept SELECT on stations"
+            raise RuntimeError(msg)
+    finally:
+        psql(admin_url, "-c", f'DROP OWNED BY "{stale}"; DROP ROLE IF EXISTS "{stale}"')
+    print("== memberships and roles no longer listed lost their access", flush=True)
+
+
 def scalar(url: str, query: str, **variables: str) -> str:
     """Return the one value `query` selects, with psql variables (`:'name'`)."""
     argv = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-d", url]
@@ -498,6 +559,11 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
         action="store_true",
         help="prove a steady-state setup run takes no ACCESS EXCLUSIVE lock",
     )
+    parser.add_argument(
+        "--check-revokes",
+        action="store_true",
+        help="per-service: prove grants no longer listed are taken back",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command: list[str] = (
@@ -517,8 +583,8 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
 
     narrow = [k.strip() for k in cast("str", args.narrow).split(",") if k.strip()]
     observe = [k.strip() for k in cast("str", args.observe).split(",") if k.strip()]
-    if (narrow or observe) and args.mode != "per-service":
-        parser.error("--narrow and --observe need --mode per-service")
+    if (narrow or observe or args.check_revokes) and args.mode != "per-service":
+        parser.error("--narrow, --observe and --check-revokes need --mode per-service")
     if set(narrow) & set(observe):
         parser.error("a role cannot be both --narrow and --observe")
 
@@ -589,6 +655,12 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915  # one linear setup, run, tea
                 else [setup_args],
                 setup_env,
             )
+        if args.check_revokes:
+            model = gen_db_grants().load()
+            outsider = next(
+                r.key for r in model.created() if "read_shared" not in r.groups
+            )
+            check_revokes(admin_url, grants_args, setup_env, service_names, outsider)
         if args.check_app_retirement:
             if args.mode == "per-service":
                 parser.error("--check-app-retirement needs --mode new or existing")
