@@ -40,6 +40,7 @@ pub mod transit;
 pub mod trust_timestamp;
 #[cfg(feature = "ts")]
 pub mod ts_values;
+pub mod zone;
 
 pub use full_coverage_window::{
     FullCoverageWindowCounts, FullCoverageWindowKind, FullCoverageWindowStatsRow,

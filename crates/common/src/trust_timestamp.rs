@@ -77,7 +77,9 @@
 //! [`reinterpret_as_london_local`] itself, so it cannot independently
 //! disagree with `actual` about which candidate to use.
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
+
+use crate::zone::{LocalTime, london_resolve};
 
 /// How far ahead of the reporting message's receipt time an event
 /// timestamp (`actual_timestamp`, or `parse_trust_epoch_millis`'s own
@@ -128,13 +130,13 @@ fn parse_raw_millis(raw: &str) -> Option<DateTime<Utc>> {
 /// it to a true UTC instant -- exactly the `NaiveDateTime` round-trip
 /// `rail_day.rs`'s own `next_rail_day_boundary` already performs in the
 /// opposite direction, via the same
-/// `chrono_tz::Europe::London::from_local_datetime` this module reuses.
+/// `common::zone::london_resolve` this module reuses.
 /// Performs NO plausibility check of its own -- callers combine this with
 /// [`is_plausible_actual_timestamp`] as needed.
 ///
 /// ## DST edge cases
 ///
-/// `chrono_tz::Europe::London::from_local_datetime` forces two to be
+/// `common::zone::london_resolve` forces two to be
 /// handled explicitly, since the reinterpreted naive wall-clock reading
 /// might land on the one UK night a year where local time is ambiguous or
 /// missing:
@@ -165,20 +167,18 @@ fn reinterpret_as_london_local(
     received_at: DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
     let naive_local = raw_utc.naive_utc();
-    match chrono_tz::Europe::London.from_local_datetime(&naive_local) {
-        chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
-        chrono::LocalResult::Ambiguous(earliest, latest) => {
-            let earliest_utc = earliest.with_timezone(&Utc);
-            let latest_utc = latest.with_timezone(&Utc);
-            let earliest_diff = (earliest_utc - received_at).abs();
-            let latest_diff = (latest_utc - received_at).abs();
+    match london_resolve(naive_local) {
+        LocalTime::Single(at) => Some(at),
+        LocalTime::Ambiguous { earliest, latest } => {
+            let earliest_diff = (earliest - received_at).abs();
+            let latest_diff = (latest - received_at).abs();
             Some(if earliest_diff <= latest_diff {
-                earliest_utc
+                earliest
             } else {
-                latest_utc
+                latest
             })
         }
-        chrono::LocalResult::None => None,
+        LocalTime::Gap => None,
     }
 }
 

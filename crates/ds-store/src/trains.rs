@@ -13,7 +13,7 @@ pub mod types;
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 
 /// Finds or creates the `trains` row for `(train_uid, service_date)`,
@@ -512,11 +512,7 @@ pub async fn destination_crs_for_trains_batch(
 /// a bare CIF/schedule date+time with no better information available,
 /// same posture this function has always taken.
 pub fn london_to_utc(naive: chrono::NaiveDateTime) -> Option<DateTime<Utc>> {
-    match chrono_tz::Europe::London.from_local_datetime(&naive) {
-        chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
-        chrono::LocalResult::Ambiguous(earliest, _) => Some(earliest.with_timezone(&Utc)),
-        chrono::LocalResult::None => None,
-    }
+    common::zone::london_to_utc_earliest(naive)
 }
 
 #[cfg(test)]

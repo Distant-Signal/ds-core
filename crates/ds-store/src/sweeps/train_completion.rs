@@ -149,8 +149,7 @@ pub async fn complete_tracked_trains_on_known_destination_arrival(
 /// finished at `now`: today's London date minus
 /// [`STALE_EN_ROUTE_AFTER_DAYS`].
 pub fn last_stale_service_date(now: DateTime<Utc>) -> NaiveDate {
-    now.with_timezone(&chrono_tz::Europe::London).date_naive()
-        - Duration::days(STALE_EN_ROUTE_AFTER_DAYS)
+    common::zone::london_date(now) - Duration::days(STALE_EN_ROUTE_AFTER_DAYS)
 }
 
 /// The safety net: marks `completed` every `en_route` train whose

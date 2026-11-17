@@ -16,8 +16,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Days, NaiveDate, TimeZone, Utc};
-use chrono_tz::Europe::London;
+use chrono::{DateTime, Days, NaiveDate, Utc};
+use common::zone::{london_local, london_to_utc_earliest};
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -1160,16 +1160,10 @@ pub async fn get_stop(pool: &PgPool, network: &str, stop: &str) -> Result<Option
 
 /// `date`'s local midnight plus `secs`, as RFC 3339 London time.
 fn london_time(date: NaiveDate, secs: i32) -> String {
-    let midnight = London
-        .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap_or_default())
-        .earliest()
-        .map_or_else(
-            || date.and_hms_opt(0, 0, 0).unwrap_or_default().and_utc(),
-            |t| t.with_timezone(&Utc),
-        );
-    (midnight + chrono::TimeDelta::seconds(i64::from(secs)))
-        .with_timezone(&London)
-        .to_rfc3339()
+    let midnight_local = date.and_hms_opt(0, 0, 0).unwrap_or_default();
+    let midnight =
+        london_to_utc_earliest(midnight_local).unwrap_or_else(|| midnight_local.and_utc());
+    london_local(midnight + chrono::TimeDelta::seconds(i64::from(secs))).to_rfc3339()
 }
 
 /// `HH:MM` of `secs` after midnight (wrapping past 24:00).

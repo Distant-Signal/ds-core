@@ -202,7 +202,7 @@ pub fn leave_by_sql(journey: &str) -> String {
 #[cfg(test)]
 mod db_tests {
     use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
-    use chrono_tz::Europe::London;
+    use common::zone::london_to_utc_earliest;
     use sqlx::PgPool;
 
     use super::*;
@@ -218,11 +218,7 @@ mod db_tests {
     const USER: &str = "leave-by-test-user";
 
     fn london(date: NaiveDate, h: u32, m: u32) -> DateTime<Utc> {
-        London
-            .from_local_datetime(&date.and_hms_opt(h, m, 0).unwrap())
-            .earliest()
-            .unwrap()
-            .with_timezone(&Utc)
+        london_to_utc_earliest(date.and_hms_opt(h, m, 0).unwrap()).unwrap()
     }
 
     fn date() -> NaiveDate {

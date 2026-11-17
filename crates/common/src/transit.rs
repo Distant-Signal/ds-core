@@ -101,7 +101,7 @@ pub fn situations_freshness_source(network: &NetworkId) -> String {
 /// The service date `at` falls on: its London date. Every network compiled
 /// in is in Great Britain (`Europe/London`, spec §6.2).
 pub fn service_date(at: DateTime<Utc>) -> NaiveDate {
-    at.with_timezone(&chrono_tz::Europe::London).date_naive()
+    crate::zone::london_date(at)
 }
 
 /// An id that does not follow the grammar.

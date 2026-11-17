@@ -71,7 +71,7 @@ mod db_tests {
         let now = Utc::now();
         // Departs QYA in about an hour, terminates at QYB 30 minutes later
         // (dated by the departure's local day).
-        let departs = (now + Duration::hours(1)).with_timezone(&chrono_tz::Europe::London);
+        let departs = common::zone::london_local(now + Duration::hours(1));
         let today = departs.date_naive();
         let local = departs.time();
         let user = "TEST-TRACKED-STOP-ARRIVAL-TARGETS";

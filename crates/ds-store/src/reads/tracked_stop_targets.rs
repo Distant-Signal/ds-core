@@ -59,7 +59,7 @@ mod db_tests {
         let now = Utc::now();
         // Departs QZA in about an hour (dated by that local day, so the
         // test also holds late in the evening), terminates at QZB.
-        let departs = (now + Duration::hours(1)).with_timezone(&chrono_tz::Europe::London);
+        let departs = common::zone::london_local(now + Duration::hours(1));
         let today = departs.date_naive();
         let local = departs.time();
         let user = "TEST-TRACKED-STOP-TARGETS";
