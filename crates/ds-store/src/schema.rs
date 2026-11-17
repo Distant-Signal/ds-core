@@ -410,6 +410,25 @@ mod tests {
         assert!(has(DbRole::Notifier, "journey_templates", "UPDATE"));
         assert!(!has(DbRole::Notifier, "journey_templates", "DELETE"));
         assert!(!has(DbRole::Notifier, "users", "SELECT"));
+        // The notifier is not in read_shared either (DS-534): the tables its
+        // pushes name stations from are granted one by one, and the feed
+        // tables it never reads are not.
+        for table in [
+            "stations",
+            "island_of_ireland_stations",
+            "island_of_ireland_live_stations",
+        ] {
+            assert!(has(DbRole::Notifier, table, "SELECT"), "{table}");
+        }
+        for table in [
+            "line_status",
+            "incidents",
+            "transit_stops",
+            "schedule_line_population",
+            "tfl_stops",
+        ] {
+            assert!(!has(DbRole::Notifier, table, "SELECT"), "{table}");
+        }
         // The enricher is not in read_shared: only its own tables. On
         // incidents (Q3 of docs/ingest-phase5-runbook.md): table SELECT,
         // UPDATE on its extraction columns only.

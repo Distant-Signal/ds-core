@@ -251,8 +251,9 @@ fn rand_u32() -> u32 {
 
 /// The movement-events consumers' sequence (`RedisStreamMovementFeed`,
 /// crates/movement-feed/src/redis_stream.rs): group create, the startup
-/// checks, read, ack, claim, pending, replay by XRANGE, and the dead-letter
-/// write.
+/// checks, read, ack, auto-claim, pending, replay by XRANGE, and the
+/// dead-letter write. No XCLAIM and no XGROUP CREATECONSUMER (DS-534): the
+/// code sends neither, and XREADGROUP makes its consumer by itself.
 fn movement_consumer(h: &mut Harness, user: &str) {
     let mut c = h.connect(user);
     let stream = h.key("movement-events");
@@ -299,7 +300,6 @@ fn movement_consumer(h: &mut Harness, user: &str) {
             "COUNT",
             "10",
         ],
-        vec!["XCLAIM", &stream, user, "c1", "1000", "0-1"],
         vec!["XPENDING", &stream, user],
         vec!["XPENDING", &stream, user, "-", "+", "10", "c1"],
         vec!["XRANGE", &stream, "-", "+", "COUNT", "10"],
@@ -314,6 +314,9 @@ fn movement_consumer(h: &mut Harness, user: &str) {
         vec!["XTRIM", stream.as_str(), "MAXLEN", "0"],
         vec!["XTRIM", dlq.as_str(), "MAXLEN", "0"],
         vec!["XGROUP", "DESTROY", stream.as_str(), user],
+        vec!["XGROUP", "DELCONSUMER", stream.as_str(), user, "c1"],
+        vec!["XGROUP", "CREATECONSUMER", stream.as_str(), user, "c2"],
+        vec!["XCLAIM", stream.as_str(), user, "c2", "0", "0-1"],
         vec!["DEL", stream.as_str()],
         vec!["FLUSHALL"],
         vec!["CONFIG", "SET", "maxmemory", "1"],
@@ -693,7 +696,6 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
                 "COUNT",
                 "100",
             ],
-            vec!["XCLAIM", &s, "ingest-writer", "w1", "1000", "0-1"],
             vec!["XPENDING", &s, "ingest-writer"],
             vec!["XINFO", "STREAM", &s],
             vec!["XINFO", "GROUPS", &s],
@@ -718,6 +720,9 @@ fn every_user_can_run_its_clients_commands_and_nothing_else() {
             vec!["XRANGE", s.as_str(), "-", "+"],
             vec!["XDEL", d.as_str(), "0-1"],
             vec!["XGROUP", "DESTROY", s.as_str(), "ingest-writer"],
+            // Nothing in ingest-stream sends XCLAIM (XAUTOCLAIM does the
+            // takeover), DS-534.
+            vec!["XCLAIM", s.as_str(), "ingest-writer", "w1", "0", "0-1"],
             vec!["XGROUP", "CREATE", d.as_str(), "g", "0"],
             vec!["XADD", stream.as_str(), "*", "v", "1"],
             vec![
