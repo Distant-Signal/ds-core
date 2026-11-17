@@ -16,9 +16,9 @@ SET LOCAL lock_timeout = '5s';
 -- Additive: a nullable column, a default for new rows (a volatile default
 -- on ADD COLUMN would rewrite the table, so the default is set after the
 -- column exists, which is metadata only), then the backfill. The
--- not-null and format CHECK goes on NOT VALID and is validated, with SET
--- NOT NULL, in 20261117100200_journeys_public_id_validate.sql, once the
--- unique index (20261117100100) exists. A previous api (which never
+-- not-null and format CHECK goes on NOT VALID and is validated in
+-- 20261117100200_journeys_public_id_validate.sql, once the unique index
+-- (20261117100100) exists. A previous api (which never
 -- names the column) keeps inserting: the default fills it.
 --
 -- The backfill runs here in one statement: production holds a handful of
