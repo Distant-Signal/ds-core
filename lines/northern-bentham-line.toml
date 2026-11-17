@@ -99,10 +99,11 @@ delay_threshold_minutes = 10
 [[stations]]
 crs = "SKI"
 role = "junction"
-segment = "northern-bentham-line"
-# Skipton -- station-overlap only with `northern-airedale.toml`'s own
-# terminus here; that file's own comment deliberately declines to extend
-# its coverage or a shared segment this far. See the top-of-file comment.
+segment = "northern-airedale-skipton-approach"
+# Skipton -- a junction, so (UPDATED 2026-11, lines/SCHEMA.md's junction
+# rule) on the `northern-airedale-skipton-approach` segment that
+# `northern-airedale.toml` and `northern-settle-carlisle.toml` already
+# share here; no other station of this file uses it.
 
 [[stations]]
 crs = "GGV"
@@ -162,17 +163,21 @@ segment = "northern-bentham-line"
 [[stations]]
 crs = "CNF"
 role = "junction"
-segment = "northern-bentham-line"
-# Carnforth -- station/short track overlap only with West Coast Main Line-
-# touching files; see the top-of-file comment.
+segment = "northern-lancaster-carnforth"
+# Carnforth -- junction with the Furness line. UPDATED 2026-11: Carnforth
+# and Lancaster sit on the narrow `northern-lancaster-carnforth` segment
+# shared with `northern-furness.toml` (both lines' trains run Lancaster-
+# Carnforth), per lines/SCHEMA.md's junction rule; previously both were on
+# this file's exclusive segment and on Furness's.
 
 [[stations]]
 crs = "LAN"
 tiploc = "LANCSTR"
 role = "junction"
-segment = "northern-bentham-line"
-# Lancaster -- the real current Lancaster/Morecambe split point; station
-# overlap only with `wcml.toml`, `northern-furness.toml` and
+segment = "northern-lancaster-carnforth"
+# Lancaster -- the real current Lancaster/Morecambe split point; shared
+# with `northern-furness.toml` on `northern-lancaster-carnforth` (see
+# Carnforth above), station overlap only with `wcml.toml` and
 # `tpe-anglo-scottish.toml`'s own separate Lancaster entries.
 
 [[stations]]

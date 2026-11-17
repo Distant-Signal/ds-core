@@ -71,6 +71,7 @@ mod corpus_db;
 mod rdm_toc;
 mod reference;
 mod regenerate;
+mod segment_sharing;
 
 use std::path::PathBuf;
 
@@ -130,6 +131,13 @@ struct Args {
     /// response (the feed `poller-tocs` ingests).
     #[arg(long, value_name = "TOC_LIST_XML")]
     regenerate_toc_codes_from_rdm_xml: Option<PathBuf>,
+
+    /// Instead of validating, rewrite `<lines-dir>/segment-sharing-baseline.txt`
+    /// with every current segment-sharing violation (see
+    /// `segment_sharing.rs`): after fixing some, or for a reviewed,
+    /// deliberate new one.
+    #[arg(long)]
+    write_segment_baseline: bool,
 }
 
 #[tokio::main]
@@ -201,6 +209,18 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if args.write_segment_baseline {
+        let lines = checks::load_all(&args.lines_dir)?;
+        let count = segment_sharing::write_baseline(&args.lines_dir, &lines)?;
+        println!(
+            "wrote {count} violation(s) to {}",
+            args.lines_dir
+                .join(segment_sharing::BASELINE_FILE)
+                .display()
+        );
+        return Ok(());
+    }
+
     let reference = if args.live {
         eprintln!(
             "running the live tier -- fetching railwaycodes.org.uk CRS pages (and the RDM TOC feed, if configured)..."
@@ -240,6 +260,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut findings = checks::validate_identity(&lines);
     findings.extend(checks::validate_lines(&lines, &reference));
+    findings.extend(segment_sharing::validate(&args.lines_dir, &lines));
     findings.extend(checks::validate_pass_through(
         &args.lines_dir,
         &lines,

@@ -126,6 +126,15 @@ SPL = "STP"
 # shared-vs-exclusive semantics predictable across the whole Thameslink
 # family rather than special-casing the one branch that happens to touch
 # every core station).
+#
+# UPDATED 2026-11 (segment-sharing review): superseded. Keeping each
+# branch on its own name at the core left `thameslink-core` with a single
+# user, so the five core stations were "exclusive" to two lines at once.
+# The core stations now sit on the shared `thameslink-core` segment in
+# every Thameslink file that lists them, the junction stations included
+# (lines/SCHEMA.md: a junction belongs to the shared segment); a branch
+# that lists only STP or BFR uses `thameslink-core` there alone, which
+# marks nothing else shared (the segment is shared already).
 
 # --- Luton to St Pancras (reused from thameslink-bedford.toml) ---
 
@@ -209,7 +218,7 @@ segment = "thameslink-rainham"
 crs = "STP"
 tiploc = "STPX"
 role = "junction"
-segment = "thameslink-rainham"
+segment = "thameslink-core"
 # St Pancras International. Station overlap only with thameslink-core.toml,
 # thameslink-bedford.toml and thameslink-cambridge.toml -- see the sourcing
 # note above.
@@ -218,7 +227,7 @@ segment = "thameslink-rainham"
 crs = "ZFD"
 tiploc = "FRNDNLT"
 role = "major"
-segment = "thameslink-rainham"
+segment = "thameslink-core"
 # Farringdon. Also thameslink-cambridge.toml's own FPK-area overlap station
 # ZFD itself is exclusive to thameslink-core.toml among the other branch
 # files -- station overlap only with thameslink-core.toml here.
@@ -227,22 +236,22 @@ segment = "thameslink-rainham"
 crs = "CTK"
 tiploc = "CTMSLNK"
 role = "minor"
-segment = "thameslink-rainham"
+segment = "thameslink-core"
 # City Thameslink.
 
 [[stations]]
 crs = "BFR"
 tiploc = "BLFR"
 role = "major"
-segment = "thameslink-rainham"
-# Blackfriars. Also thameslink-southern.toml's own core-boundary junction
-# (its own `thameslink-southern-trunk` segment) -- station overlap only.
+segment = "thameslink-core"
+# Blackfriars. Also thameslink-southern.toml's core-boundary junction, on
+# `thameslink-core` there too.
 
 [[stations]]
 crs = "LBG"
 tiploc = "LNDNBDC"
 role = "junction"
-segment = "thameslink-rainham"
+segment = "thameslink-core"
 # London Bridge. Also thameslink-core.toml's, thameslink-southern.toml's
 # and southeastern-north-kent.toml's own station (that file's own terminus
 # for its Charing Cross/Cannon Street approach) -- station overlap only.

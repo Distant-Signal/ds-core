@@ -114,7 +114,12 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # listing every TOC that genuinely timetables services on a shared
 # line, VT is included here on that basis.
 #
-# Llandudno Junction segment-sharing decision (the call this file was
+# Llandudno Junction segment-sharing decision. SUPERSEDED 2026-11:
+# `tfw-conwy-valley.toml` now puts LLJ on this file's own
+# `tfw-north-wales-coast` segment (lines/SCHEMA.md: a junction belongs to
+# the shared segment), so an incident at Llandudno Junction matches the
+# Conwy Valley line as SharedSegment. The original ruling, kept for
+# history (the call this file was
 # asked to make -- see `tfw-conwy-valley.toml`'s comment, which
 # deliberately left this open for this file to decide): station-overlap
 # only, NOT a shared segment. LLJ below uses this file's own segment
@@ -154,7 +159,7 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # `wcml-north-wales.toml` has no entry at any of those CRS codes and so
 # cannot itself match such an incident at all. See
 # `chester_station_overlap_matches_both_lines_as_exclusive`/
-# `llj_station_overlap_matches_both_lines_as_exclusive` (both updated,
+# `llj_station_matches_all_three_lines_as_shared` (both updated,
 # where both files genuinely have a matching station) and
 # `north_wales_coast_own_stretch_incident_is_shared_segment_but_single_match`/
 # `tfw_north_wales_coast_new_station_incident_resolves_exclusive_segment`

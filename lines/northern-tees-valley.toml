@@ -147,11 +147,12 @@ segment = "northern-tees-valley"
 [[stations]]
 crs = "DAR"
 role = "junction"
-segment = "northern-tees-valley"
-# Darlington -- also a `cross-country.toml`/`tpe-north.toml` station on
-# the ECML's own `xc-north-east`/`tpe-north` segments (a different route
-# crossing this one) -- station-overlap only, matching those files' own
-# treatment of Darlington. Real terminus for the half-hourly Saltburn
+segment = "darlington-junction"
+# Darlington -- also a `lner-ecml.toml`/`cross-country.toml`/
+# `tpe-north.toml` station on the ECML (a different route crossing this
+# one). UPDATED 2026-11: a junction, so (lines/SCHEMA.md) all four files
+# put it on the narrow shared `darlington-junction` segment; it was on
+# each file's exclusive segment, so "exclusive" to four lines. Real terminus for the half-hourly Saltburn
 # workings that don't extend to Bishop Auckland.
 
 [[stations]]

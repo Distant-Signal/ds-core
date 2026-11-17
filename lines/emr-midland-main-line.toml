@@ -90,7 +90,7 @@ excluded_keywords = ["Cross Country"]
 # since those two genuinely run the identical calling pattern - unaffected
 # by this ruling). See the regression tests in `crates/aggregator/src/
 # matcher.rs` for LTN, LUT and BDM (STP was already covered by
-# `stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments`).
+# `stp_station_overlap_matches_thameslink_lines_as_shared_and_highspeed_as_exclusive`).
 [[stations]]
 crs = "STP"
 tiploc = "STPX"  # reused from thameslink-core.toml - same physical station, already verified in this repo

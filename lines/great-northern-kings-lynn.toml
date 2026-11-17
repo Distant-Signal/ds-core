@@ -137,10 +137,20 @@ operators = ["GN"]  # Great Northern (GTR brand). Confirmed against the gap
 # question (the junction where GN's own exclusive territory diverges from
 # LNER's ECML fast lines): LNER's own expresses never run over the Cambridge
 # Line/Fen Line at all, so everything from Letchworth Garden City onward
-# (this file's `gn-cambridge-kings-lynn-branch` segment, below) is
-# genuinely GN-exclusive track - unlike the direct Peterborough branch,
-# which remains physically shared with LNER's ECML fast lines the whole way
-# (see the LNER HAND-OFF section above).
+# is genuinely GN-exclusive track as far as LNER is concerned - unlike the
+# direct Peterborough branch, which remains physically shared with LNER's
+# ECML fast lines the whole way (see the LNER HAND-OFF section above).
+#
+# UPDATED 2026-11 (segment-sharing review): Thameslink's Cambridge service
+# (thameslink-cambridge.toml) runs Letchworth-Cambridge too, so that
+# stretch (LET-CBG, Meldreth, Shepreth and Foxton included: Thameslink
+# passes them) is the shared `gn-hitchin-cambridge` segment in both files;
+# `gn-cambridge-kings-lynn-branch` starts after Cambridge. The junction
+# stations FPK and AAP sit on narrow shared segments
+# (`gn-finsbury-park-junction`, `gn-alexandra-palace-junction`) with the
+# other Great Northern and Thameslink files that list them, and
+# thameslink-cambridge.toml reuses `gn-welwyn-hitchin-trunk` at KBW, SVG
+# and HIT (lines/SCHEMA.md: a junction belongs to the shared segment).
 #
 # ============================================================================
 # STATION OVERLAP WITH xc-stansted.toml (Peterborough, Cambridge, Ely)
@@ -191,15 +201,16 @@ segment = "gn-ecml-slow-lines"
 [[stations]]
 crs = "FPK"
 role = "junction"
-segment = "gn-ecml-slow-lines"
+segment = "gn-finsbury-park-junction"
 # Finsbury Park. Also where Great Northern's own Moorgate/Northern City Line
-# suburban services (Task 5.11, not yet written) rejoin the surface ECML -
-# see the LNER HAND-OFF section above.
+# suburban services (great-northern-suburban.toml) rejoin the surface ECML,
+# and where Thameslink's Cambridge/Peterborough trains do - see the LNER
+# HAND-OFF section above. Narrow shared junction segment (UPDATED 2026-11).
 
 [[stations]]
 crs = "AAP"
 role = "junction"
-segment = "gn-ecml-slow-lines"
+segment = "gn-alexandra-palace-junction"
 # Alexandra Palace. CRS code AAP, not the more obvious-looking ALX - verify
 # against railwaycodes.org.uk if reusing this file's codes elsewhere. The
 # Hertford Loop Line diverges here (toward Cuffley/Hertford North); that
@@ -310,49 +321,49 @@ segment = "gn-peterborough-branch"
 [[stations]]
 crs = "LET"
 role = "major"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Letchworth Garden City.
 
 [[stations]]
 crs = "BDK"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Baldock.
 
 [[stations]]
 crs = "AWM"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Ashwell & Morden.
 
 [[stations]]
 crs = "RYS"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Royston.
 
 [[stations]]
 crs = "MEL"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Meldreth.
 
 [[stations]]
 crs = "STH"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Shepreth.
 
 [[stations]]
 crs = "FXN"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Foxton.
 
 [[stations]]
 crs = "CMS"
 role = "minor"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Cambridge South. Opened 28 June 2026 - confirmed as a genuinely current,
 # open station as of this file's research date (2026-08-30), not a future
 # planned one.
@@ -360,7 +371,7 @@ segment = "gn-cambridge-kings-lynn-branch"
 [[stations]]
 crs = "CBG"
 role = "major"
-segment = "gn-cambridge-kings-lynn-branch"
+segment = "gn-hitchin-cambridge"
 # Cambridge. Also `xc-stansted.toml`'s own terminus (approached from the
 # north-east via Ely/March, a physically distinct route) - station overlap
 # only, not a shared segment, per the STATION OVERLAP section above and the

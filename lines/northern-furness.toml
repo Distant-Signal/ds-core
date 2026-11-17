@@ -59,12 +59,15 @@ delay_threshold_minutes = 10
 crs = "LAN"
 tiploc = "LANCSTR"
 role = "junction"
-segment = "northern-furness-branch"
+segment = "northern-lancaster-carnforth"
+# Lancaster and Carnforth: the narrow `northern-lancaster-carnforth`
+# segment shared with `northern-bentham-line.toml`, whose trains run this
+# stretch too (UPDATED 2026-11, lines/SCHEMA.md's junction rule).
 
 [[stations]]
 crs = "CNF"
 role = "junction"
-segment = "northern-furness-branch"
+segment = "northern-lancaster-carnforth"
 
 [[stations]]
 crs = "SVR"

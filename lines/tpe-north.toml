@@ -193,7 +193,9 @@ segment = "tpe-north"
 [[stations]]
 crs = "DAR"
 role = "minor"
-segment = "tpe-north"
+segment = "darlington-junction"
+# Darlington: narrow junction segment shared with the other lines calling
+# here (UPDATED 2026-11; see northern-tees-valley.toml's Darlington entry).
 
 [[stations]]
 crs = "DHM"
