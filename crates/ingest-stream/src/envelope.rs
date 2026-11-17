@@ -58,6 +58,15 @@ pub const MAX_ACCEPTED_BODY: usize = 1024 * 1024;
 /// is a few MB of JSON at most; a zip bomb stops here.
 pub const MAX_DECODED_BODY: usize = 16 * 1024 * 1024;
 
+/// The longest `key` or `producer` the decoder accepts, in bytes (the
+/// writer's own bound, mirrored here so an oversize one is poison before any
+/// handler, log line or label sees it).
+pub const MAX_IDENT_LEN: usize = 2048;
+
+/// The longest `schema` text (`name/version`) the decoder accepts, in bytes.
+/// Real schema names are a few dozen bytes.
+pub const MAX_SCHEMA_LEN: usize = 128;
+
 /// The wire field names, in the order [`Envelope::encode`] writes them.
 pub mod field {
     pub const VERSION: &str = "v";
@@ -289,12 +298,19 @@ impl Envelope {
         if v != ENVELOPE_VERSION {
             return Err(DecodeError::UnsupportedVersion(v));
         }
-        let schema: SchemaId = text(field::SCHEMA)?
+        let schema_text = text(field::SCHEMA)?;
+        if schema_text.len() > MAX_SCHEMA_LEN {
+            return Err(DecodeError::BadField(field::SCHEMA));
+        }
+        let schema: SchemaId = schema_text
             .parse()
             .map_err(|_| DecodeError::BadField(field::SCHEMA))?;
         let producer = text(field::PRODUCER)?.to_owned();
+        if producer.len() > MAX_IDENT_LEN {
+            return Err(DecodeError::BadField(field::PRODUCER));
+        }
         let key = text(field::KEY)?.to_owned();
-        if key.is_empty() {
+        if key.is_empty() || key.len() > MAX_IDENT_LEN {
             return Err(DecodeError::BadField(field::KEY));
         }
         let produced_at = parse_produced_at(text(field::PRODUCED_AT)?)
@@ -778,6 +794,29 @@ mod tests {
         let mut extra = fields.clone();
         extra.push(("trace_id".into(), b"abc".to_vec()));
         assert!(Envelope::decode(&extra).is_ok());
+    }
+
+    #[test]
+    fn decode_bounds_the_key_producer_and_schema_lengths() {
+        let entry = envelope(&serde_json::json!({"a": 1})).encode().unwrap();
+        let fields = owned(&entry);
+        let with = |name: &str, value: Vec<u8>| -> Vec<(String, Vec<u8>)> {
+            fields
+                .iter()
+                .map(|(k, v)| (k.clone(), if k == name { value.clone() } else { v.clone() }))
+                .collect()
+        };
+        for (name, limit) in [("key", MAX_IDENT_LEN), ("producer", MAX_IDENT_LEN)] {
+            let at_limit = Envelope::decode(&with(name, vec![b'k'; limit]));
+            assert!(at_limit.is_ok(), "{name} at its limit");
+            let err = Envelope::decode(&with(name, vec![b'k'; limit + 1])).unwrap_err();
+            assert!(err.is_poison(), "{name}");
+            assert_eq!(err.reason(), "undecodable", "{name}");
+        }
+        // A syntactically valid but absurdly long schema name.
+        let long = format!("{}/1", "a".repeat(MAX_SCHEMA_LEN));
+        let err = Envelope::decode(&with("schema", long.into_bytes())).unwrap_err();
+        assert_eq!(err, DecodeError::BadField("schema"));
     }
 
     #[test]
