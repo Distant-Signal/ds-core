@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.17.2 (2026-11-17)
+
+Drops chrono-tz from ds-core (DS-534, RUSTSEC-2026-0555). A patch: an internal dependency swap behind an unchanged API, no migration, no grant or ACL change. chrono stays.
+
+- Run `common::zone` on jiff and drop chrono-tz (#94): the public API is identical (chrono types in and out, the opaque `Zone`, `Zone::LONDON` and `Zone::DUBLIN`, every function and signature; `Zone` keeps `Copy`, `Eq`, `Hash`, `Debug` and `Display`, and `Debug` now prints `Zone("Europe/London")`). Behaviour is preserved: `Zone::parse` is still exact-case and accepts and refuses the same names (`GB`, `US/Eastern`, `Europe/Kiev`, `Europe/Kyiv`, `UTC` and `Etc/UTC` are accepted; `europe/london`, `utc`, `Z`, offsets, abbreviations, empty and padded input are refused; `Factory`, which only jiff's database has, is refused too), and the clock-change policy is the same, written out with jiff's ambiguity API instead of its default: the earliest reading of a repeated time, none for a skipped time, and for `to_utc_gap_shifted` the earliest reading of the time an hour later. The zone data is now jiff's bundled database (`jiff` 0.2.39 with `tzdb-bundle-always`, `jiff-tzdb` 0.1.9, tzdb 2026e; chrono-tz 0.10.4 had 2025b), with the host's zoneinfo switched off, so behaviour no longer depends on the machine or image. A later tzdb is a `cargo update -p jiff-tzdb` (or a Renovate bump) and a new core release. New `crates/common/tests/zone_python_zoneinfo.rs` checks London, Dublin, New York, Kolkata and Lord Howe against Python's `zoneinfo` for every minute around each 2025 and 2026 clock change and around changes in 1971, 2037, 2038, 2099 and 2100. One difference: chrono-tz stopped listing transitions after 2099, so summer time from 2100 on is now (correctly) applied; instants beyond year 9999 are read at the end of jiff's range.
+- deny.toml: removed the RUSTSEC-2026-0555 (chrono-tz) ignore, as Cargo.lock no longer has chrono-tz. The chrono ignore (RUSTSEC-2026-0543) stays.
+
+**Consumers**: no code changes are needed. Bump `core-version` to v0.17.2: chrono-tz is no longer in ds-core's tree, jiff (with jiff-tzdb) enters yours, so expect that Cargo.lock difference. chrono-tz leaves a consumer's own lock only once it has converted all of its direct chrono-tz uses to `common::zone`: ds-workers and ds-ingest are converted; ds-api (about 45 files) still has direct uses and must convert them first; ds-pollers has none. When `cargo tree -i chrono-tz` is empty in a repository, remove its own `chrono-tz` entries in Cargo.toml and its deny.toml ignore for RUSTSEC-2026-0555, and only then.
+
+**Migrations**: none.
+
+**Grants**: none. `db-grants.yaml`, `postgres-grants.sql` and the Redis ACL are unchanged.
+
 ## v0.17.1 (2026-11-17)
 
 Groundwork for dropping chrono-tz (DS-534, RUSTSEC-2026-0555). A patch: one additive Rust module, no behaviour change, no migration, no grant or ACL change.
