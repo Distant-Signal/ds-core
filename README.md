@@ -42,6 +42,10 @@ and starts `release.yml` on the tag, which publishes the image and the
 assets. Every migration is at least a patch release, so the schema version
 is the core version.
 
+A tag whose commit is not reachable from `main` fails `release.yml`'s
+`plan` job before anything is built, so a tag pushed on another branch
+releases nothing.
+
 Releases are immutable: release.yml publishes a release only once every
 asset is attached, after which neither the assets nor the tag can change
 (the repository's immutable-releases setting and its `refs/tags/v*`
