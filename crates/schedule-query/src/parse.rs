@@ -674,6 +674,28 @@ mod tests {
         );
     }
 
+    /// W6 (2026-11 review): byte 28, Bank Holiday Running (`X`: not on
+    /// England and Wales bank holidays; `G`: not on Glasgow ones), is not
+    /// decoded, so it must not change anything the parse produces. The
+    /// resolution relies on bank-holiday changes arriving as STP records
+    /// (`C`/`N`/`O`; the real 2026-08-31 `C11052` cancellation, see
+    /// `crate::records::BasicSchedule`), not through this column.
+    /// SYNTHETIC: the real C00573 line with byte 28 set.
+    #[test]
+    fn the_bank_holiday_running_column_is_ignored() {
+        let plain = parse_schedule_records(BS_C00573_PERMANENT);
+        assert_eq!(&BS_C00573_PERMANENT[28..29], " ");
+        for flag in ["X", "G"] {
+            let line = format!(
+                "{}{flag}{}",
+                &BS_C00573_PERMANENT[..28],
+                &BS_C00573_PERMANENT[29..]
+            );
+            assert_eq!(line.len(), BS_C00573_PERMANENT.len());
+            assert_eq!(parse_schedule_records(&line), plain, "{flag}");
+        }
+    }
+
     #[test]
     fn decodes_the_train_identity_headcode_from_real_bs_lines() {
         // Bytes 32..36 of each real line: `...PXX1S003101...` -> "1S00",

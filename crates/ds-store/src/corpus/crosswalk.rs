@@ -163,22 +163,47 @@ impl CorpusLayers {
 }
 
 /// The crosswalk of `layers`: the primary layer's, then every TIPLOC and
-/// STANOX the fallback layer's own crosswalk has and the primary's lacks.
-/// Each layer is derived on its own, so the fallback contributes exactly
-/// the pairs it gave when it was loaded alone, and never changes a key the
-/// primary layer resolves. The inference report is the primary layer's.
+/// STANOX the fallback layer's own crosswalk has and the primary layer
+/// never mentions. Each layer is derived on its own, so the fallback
+/// contributes exactly the pairs it gave when it was loaded alone, and
+/// never changes a key the primary layer resolves. The inference report is
+/// the primary layer's.
+///
+/// **A key the primary layer has but left out stays out (2026-11 review,
+/// W4).** The primary layer leaves a key unresolved on purpose: a STANOX
+/// two stations share, a TIPLOC with several candidate CRS, an ambiguous
+/// name match. The older fallback rows may hold only one side of such a
+/// key (one of the two stations), so their own crosswalk resolves it, and
+/// filling it in would map TRUST events there to that one station. So a
+/// fallback key is used only when no primary row carries it and the
+/// primary report does not list it as ambiguous.
 pub fn derive_layers(layers: &CorpusLayers) -> (CorpusCrsTiploc, Crosswalk) {
     let (inferred, mut crosswalk) = derive(&corpus_rows(&layers.primary));
     if layers.fallback.is_empty() {
         return (inferred, crosswalk);
     }
     let (_, fallback) = derive(&corpus_rows(&layers.fallback));
-    let tiplocs: HashSet<String> = crosswalk.tiplocs.iter().map(|t| t.tiploc.clone()).collect();
-    let stanoxes: HashSet<String> = crosswalk
+    let mut tiplocs: HashSet<String> = crosswalk.tiplocs.iter().map(|t| t.tiploc.clone()).collect();
+    let mut stanoxes: HashSet<String> = crosswalk
         .stanoxes
         .iter()
         .map(|s| s.stanox.clone())
         .collect();
+    for row in &layers.primary {
+        if let Some(tiploc) = row.tiploc.as_deref().map(str::trim)
+            && !tiploc.is_empty()
+        {
+            tiplocs.insert(tiploc.to_owned());
+        }
+        if let Some(stanox) = corpus_inference::stanox_key(row.stanox.as_deref()) {
+            stanoxes.insert(stanox);
+        }
+    }
+    for (key, group) in &inferred.report.ambiguous {
+        // A TIPLOC whose rows carry several STANOX is keyed `a+b`.
+        stanoxes.extend(key.split('+').map(str::to_owned));
+        tiplocs.extend(group.tiplocs.iter().cloned());
+    }
     crosswalk.tiplocs.extend(
         fallback
             .tiplocs
@@ -1236,5 +1261,70 @@ mod layer_tests {
             .find(|t| t.tiploc == "JSONTPL")
             .unwrap();
         assert!(crosswalk.tiplocs.contains(json_only));
+    }
+
+    /// W4 (2026-11 review): the XML leaves a STANOX out because two
+    /// stations share it; the older JSON holds only one of them and would
+    /// resolve it. The STANOX must stay out. A JSON-only STANOX the XML
+    /// never mentions is still filled in.
+    #[test]
+    fn a_key_the_xml_leaves_out_on_purpose_is_not_filled_from_the_json() {
+        let xml = vec![
+            loc("500100", "50050", "ASTATN", "AAA", "A STATION"),
+            loc("500200", "50050", "BSTATN", "BBB", "B STATION"),
+        ];
+        let json = vec![
+            loc("500100", "50050", "ASTATN", "AAA", "A STATION"),
+            loc("600100", "60060", "CSTATN", "CCC", "C STATION"),
+        ];
+        let (_, primary_alone) = derive(&corpus_rows(&xml));
+        assert!(
+            primary_alone.stanoxes.iter().all(|s| s.stanox != "50050"),
+            "the XML alone leaves the shared STANOX out"
+        );
+        let (_, json_alone) = derive(&corpus_rows(&json));
+        assert!(
+            json_alone.stanoxes.iter().any(|s| s.stanox == "50050"),
+            "the JSON alone resolves it (the fixture's premise)"
+        );
+
+        let (_, crosswalk) = derive_layers(&CorpusLayers {
+            primary: xml,
+            fallback: json,
+        });
+        let stanoxes: Vec<(&str, &str)> = crosswalk
+            .stanoxes
+            .iter()
+            .map(|s| (s.stanox.as_str(), s.crs.as_str()))
+            .collect();
+        assert_eq!(stanoxes, [("60060", "CCC")]);
+        let tiplocs: Vec<(&str, &str)> = crosswalk
+            .tiplocs
+            .iter()
+            .map(|t| (t.tiploc.as_str(), t.crs.as_str()))
+            .collect();
+        assert_eq!(
+            tiplocs,
+            [("ASTATN", "AAA"), ("BSTATN", "BBB"), ("CSTATN", "CCC")]
+        );
+    }
+
+    /// A TIPLOC the XML carries but does not resolve (here: two CRS on
+    /// it) is not filled in from the JSON either.
+    #[test]
+    fn a_tiploc_the_xml_leaves_unresolved_is_not_filled_from_the_json() {
+        let xml = vec![
+            loc("700100", "70070", "TWOCRS", "DDD", "D STATION"),
+            loc("700200", "70070", "TWOCRS", "EEE", "E STATION"),
+        ];
+        let json = vec![loc("700100", "70070", "TWOCRS", "DDD", "D STATION")];
+        let (_, primary_alone) = derive(&corpus_rows(&xml));
+        assert!(primary_alone.tiplocs.iter().all(|t| t.tiploc != "TWOCRS"));
+        let (_, crosswalk) = derive_layers(&CorpusLayers {
+            primary: xml,
+            fallback: json,
+        });
+        assert!(crosswalk.tiplocs.iter().all(|t| t.tiploc != "TWOCRS"));
+        assert!(crosswalk.stanoxes.iter().all(|s| s.stanox != "70070"));
     }
 }
