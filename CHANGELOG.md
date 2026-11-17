@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.15.1 (2026-11-17)
+
+Review follow-ups (DS-534). A patch: no consumer constructs `ConsumerConfig` as a struct literal, so its new pub fields break nobody.
+
+- Harden Darwin ordering guards, the ingest-stream transient delivery cap, metric label cardinality and decoder length bounds (#76): a Darwin upsert now escapes a stored future-stamped row and clamps the row `ts` to now plus 2 minutes (`FUTURE_SKEW`); `ConsumerConfig` gained pub fields `max_transient_deliveries` (default `Some(50)`) and `transient_stuck_deadline` (default 24h); `Handler::knows_schema` (default false) limits the metric schema labels until a schema is accepted; the decoder rejects a key or producer over 2048 bytes and a schema over 128 bytes as poison.
+
+**Migrations**: none.
+**Grants**: none (`db-grants.yaml` is unchanged).
+
+**Consumers**: bump your ds-core pin to v0.15.1 (ds-ingest, ds-workers, ds-api, ds-pollers). ds-deploy's vendored grants and `migrate.image` do not move: there is no migration or grant change. Behaviour changes that arrive with the bump:
+- Darwin writers (ds-ingest's ingest-writer, ds-api's schedule-ingest) see future-stamped rows replaced and row `ts` clamped to now plus 2 minutes.
+- Stream consumers get the transient delivery cap (50 deliveries, 24h stuck deadline) by default; struct-literal construction of `ConsumerConfig` would break, and none exists in the consumer repositories.
+- Follow-ups: ds-ingest can delete `heal_future_rows` and should override `knows_schema` in `WriterHandler`.
+
 ## v0.15.0 (2026-11-17)
 
 Review fixes (DS-534). Minor because `ChangeOfIdentity` gained a pub field, a breaking Rust API change on 0.x.
