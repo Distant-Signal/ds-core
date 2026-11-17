@@ -13,6 +13,10 @@
 //! - every `claim_interval` runs `XAUTOCLAIM … <claim_min_idle> 0-0 JUSTID`
 //!   for entries a dead pod left pending, and removes consumers that have
 //!   nothing pending and have been idle for `delete_idle_consumers_after`;
+//! - labels metrics with an entry's `schema` only once a handler has
+//!   accepted (`Ok`) that schema; before that, and for anything that decoded
+//!   but was never accepted, the label is [`UNKNOWN_SCHEMA`], so a hostile
+//!   envelope cannot mint metric series;
 //! - applies entries **one at a time in id order** through a [`Handler`]:
 //!   - `Ok(..)`: ACK (after the handler's own transaction committed);
 //!   - [`Handled::PartiallyRejected`]: the rejected rows go to the
@@ -33,12 +37,25 @@
 //!     dead-lettered with reason [`UNSUPPORTED_EXPIRED`] and acked, so one
 //!     entry from a producer newer than the writer cannot block its stream
 //!     forever (security review L6);
+//!   - and an entry that keeps failing [`HandlerError::Transient`] is
+//!     dead-lettered with reason [`TRANSIENT_EXHAUSTED`] once it has both
+//!     been delivered [`ConsumerConfig::max_transient_deliveries`] times
+//!     (Redis's delivery count, or this consumer's own attempts if larger)
+//!     and been failing for [`ConsumerConfig::transient_stuck_deadline`]
+//!     (security review follow-up). Both must hold: a database outage
+//!     retries one entry every 60 s at most, so a 7-hour outage is hundreds
+//!     of deliveries but well inside the 24 h default deadline, and nothing
+//!     is lost to it. The cost of the time floor is that a genuinely
+//!     poisonous entry that fails transiently holds its stream for a day
+//!     (loudly: `transient_error` counts and error logs) before it moves
+//!     to the dead-letter stream, where it is kept, not dropped;
 //! - exports the [`crate::metrics`] consumer series, sampling lag, pending,
 //!   oldest pending age, dead-letter length and oldest age, and memory every
 //!   `gauge_interval`;
 //! - stops between entries on shutdown: a running handler is never
 //!   cancelled.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
@@ -92,7 +109,35 @@ pub struct ConsumerConfig {
     /// instead of blocking its stream for good. `None`: never (1 h by
     /// default, [`DEFAULT_UNSUPPORTED_DEADLINE`]).
     pub unsupported_deadline: Option<Duration>,
+    /// An entry whose handler keeps failing transiently is dead-lettered
+    /// ([`TRANSIENT_EXHAUSTED`]) once it has been delivered this many times
+    /// *and* has been failing for [`Self::transient_stuck_deadline`]
+    /// (default 50, [`DEFAULT_MAX_TRANSIENT_DELIVERIES`]). `None`: never.
+    pub max_transient_deliveries: Option<u64>,
+    /// The time floor of the transient cap (default 24 h,
+    /// [`DEFAULT_TRANSIENT_STUCK_DEADLINE`]): measured from this consumer's
+    /// first transient failure of the entry, so a restart restarts it (the
+    /// safe direction: a gap is never opened early).
+    pub transient_stuck_deadline: Duration,
 }
+
+/// [`ConsumerConfig::max_transient_deliveries`]'s default.
+pub const DEFAULT_MAX_TRANSIENT_DELIVERIES: u64 = 50;
+
+/// [`ConsumerConfig::transient_stuck_deadline`]'s default: well past any
+/// outage worth riding out, short enough that one bad entry cannot hold a
+/// stream for good.
+pub const DEFAULT_TRANSIENT_STUCK_DEADLINE: Duration = Duration::from_secs(24 * 3600);
+
+/// The dead-letter `reason` of an entry dropped by
+/// [`ConsumerConfig::max_transient_deliveries`].
+pub const TRANSIENT_EXHAUSTED: &str = "transient_exhausted";
+
+/// The metric `schema` label of an entry no handler has accepted.
+pub const UNKNOWN_SCHEMA: &str = "unknown";
+
+/// At most this many distinct schemas are ever used as a metric label.
+const MAX_LABELLED_SCHEMAS: usize = 64;
 
 /// [`ConsumerConfig::unsupported_deadline`]'s default: long enough to roll
 /// the writer forward after a producer, short enough that a stream is not
@@ -127,6 +172,8 @@ impl ConsumerConfig {
             gauge_interval: Duration::from_secs(30),
             backoff: CONSUMER_BACKOFF,
             unsupported_deadline: Some(DEFAULT_UNSUPPORTED_DEADLINE),
+            max_transient_deliveries: Some(DEFAULT_MAX_TRANSIENT_DELIVERIES),
+            transient_stuck_deadline: DEFAULT_TRANSIENT_STUCK_DEADLINE,
         }
     }
 }
@@ -183,6 +230,17 @@ pub trait Handler: Send + Sync {
         &self,
         entry: &StreamEntry,
     ) -> impl Future<Output = Result<Handled, HandlerError>> + Send;
+
+    /// Whether `schema` is one this handler serves (a bounded set, such as
+    /// the writer's registry). A known schema labels its entries' metrics
+    /// from the first one; any other schema only after this handler has
+    /// accepted an entry of it (`Ok`), and until then is
+    /// [`UNKNOWN_SCHEMA`], so a producer-chosen string cannot mint series.
+    /// The default knows none; override it to label an entry's first
+    /// failures too.
+    fn knows_schema(&self, _schema: &crate::envelope::SchemaId) -> bool {
+        false
+    }
 }
 
 /// What one [`StreamConsumer::step`] did.
@@ -235,11 +293,23 @@ pub struct StreamConsumer {
     /// The unsupported entry this consumer is stuck on and when it first
     /// saw it (the batch stops there, so there is at most one).
     unsupported_since: Option<(String, Instant)>,
+    /// The entry this consumer keeps failing transiently, when it first
+    /// failed and how many times this process has tried it.
+    transient_since: Option<TransientRun>,
+    /// Schemas a handler has accepted: the only ones used as metric labels.
+    labelled_schemas: HashSet<String>,
     /// A handler committed this entry but its rejected rows could not be
     /// dead-lettered: the entry is left pending, and when it is read again
     /// only the dead-letter is retried (the handler would answer
     /// `Duplicate` and the rows would be lost; review R2).
     unsent_rejected: Option<UnsentRejected>,
+}
+
+#[derive(Debug)]
+struct TransientRun {
+    id: String,
+    since: Instant,
+    attempts: u64,
 }
 
 /// Rejected rows waiting for their dead-letter `XADD`.
@@ -272,6 +342,8 @@ impl StreamConsumer {
             next_gauges: now,
             streak,
             unsupported_since: None,
+            transient_since: None,
+            labelled_schemas: HashSet::new(),
             unsent_rejected: None,
         }
     }
@@ -446,9 +518,10 @@ impl StreamConsumer {
         };
         let envelope = match Envelope::decode(&fields) {
             Ok(envelope) => envelope,
-            Err(err) => return self.undecodable(&raw.id, &fields, &err).await,
+            Err(err) => return self.undecodable(handler, &raw.id, &fields, &err).await,
         };
-        let schema = envelope.schema.to_string();
+        let claimed_schema = envelope.schema.to_string();
+        let known = handler.knows_schema(&envelope.schema);
         let entry = StreamEntry {
             stream: stream.clone(),
             id: raw.id,
@@ -456,6 +529,15 @@ impl StreamConsumer {
         };
         let started = Instant::now();
         let result = handler.handle(&entry).await;
+        if result.is_ok() {
+            self.admit_schema(&claimed_schema);
+        }
+        if !matches!(result, Err(HandlerError::Transient(_))) {
+            self.transient_since = None;
+        }
+        // Only a schema a handler has accepted is a label; the rest is the
+        // producer's say-so.
+        let schema = self.schema_label(&claimed_schema, known);
         metrics::handler_seconds(&stream, &schema, started.elapsed().as_secs_f64());
         let outcome = match result {
             Ok(Handled::Applied) => "applied",
@@ -478,9 +560,26 @@ impl StreamConsumer {
                 "dead_lettered"
             }
             Err(HandlerError::Transient(reason)) => {
-                metrics::consumed(&stream, &schema, "transient_error");
-                tracing::warn!(%stream, id = %entry.id, %schema, %reason, "ingest entry failed transiently; left pending");
-                return Ok(Some(RetryReason::Transient));
+                let Some((deliveries, stuck)) = self.transient_exhausted(&entry.id).await else {
+                    metrics::consumed(&stream, &schema, "transient_error");
+                    tracing::warn!(%stream, id = %entry.id, %schema, %reason, "ingest entry failed transiently; left pending");
+                    return Ok(Some(RetryReason::Transient));
+                };
+                tracing::error!(
+                    %stream,
+                    id = %entry.id,
+                    %schema,
+                    deliveries,
+                    stuck_secs = stuck.as_secs(),
+                    "ingest entry kept failing transiently past its delivery cap; dead-lettering"
+                );
+                let error = format!(
+                    "{reason} (after {deliveries} deliveries over {} s)",
+                    stuck.as_secs()
+                );
+                self.dead_letter(&entry.id, fields, TRANSIENT_EXHAUSTED, &error)
+                    .await?;
+                "dead_lettered"
             }
             Err(HandlerError::UnsupportedSchema(reason)) => {
                 if !self.unsupported_expired(&entry.id) {
@@ -503,8 +602,9 @@ impl StreamConsumer {
         Ok(None)
     }
 
-    async fn undecodable(
+    async fn undecodable<H: Handler>(
         &mut self,
+        handler: &H,
         id: &str,
         fields: &[(Vec<u8>, Vec<u8>)],
         err: &DecodeError,
@@ -515,7 +615,10 @@ impl StreamConsumer {
             .find(|(k, _)| k == field::SCHEMA.as_bytes())
             .and_then(|(_, v)| std::str::from_utf8(v).ok())
             .and_then(|s| s.parse::<crate::envelope::SchemaId>().ok())
-            .map_or_else(|| "unknown".to_owned(), |s| s.to_string());
+            .map_or_else(
+                || UNKNOWN_SCHEMA.to_owned(),
+                |s| self.schema_label(&s.to_string(), handler.knows_schema(&s)),
+            );
         let reason = if err.is_poison() {
             err.reason()
         } else if self.unsupported_expired(id) {
@@ -530,6 +633,55 @@ impl StreamConsumer {
         self.ack(id).await?;
         metrics::consumed(&stream, &schema, "dead_lettered");
         Ok(None)
+    }
+
+    /// Remembers that a handler accepted `schema`, so it may label metrics.
+    /// Bounded: past [`MAX_LABELLED_SCHEMAS`] distinct schemas, new ones stay
+    /// unlabelled.
+    fn admit_schema(&mut self, schema: &str) {
+        if self.labelled_schemas.len() < MAX_LABELLED_SCHEMAS {
+            self.labelled_schemas.insert(schema.to_owned());
+        }
+    }
+
+    /// `schema` if the handler `known` it or has accepted it, else
+    /// [`UNKNOWN_SCHEMA`].
+    fn schema_label(&self, schema: &str, known: bool) -> String {
+        if known || self.labelled_schemas.contains(schema) {
+            schema.to_owned()
+        } else {
+            UNKNOWN_SCHEMA.to_owned()
+        }
+    }
+
+    /// Records one more transient failure of `id` and says whether it has
+    /// used up [`ConsumerConfig::max_transient_deliveries`] over at least
+    /// [`ConsumerConfig::transient_stuck_deadline`]: `Some((deliveries, time
+    /// stuck))`. When the delivery count cannot be read the entry stays
+    /// pending (a gap is never risked on a guess).
+    async fn transient_exhausted(&mut self, id: &str) -> Option<(u64, Duration)> {
+        let run = match &mut self.transient_since {
+            Some(run) if run.id == id => {
+                run.attempts += 1;
+                run
+            }
+            slot => slot.insert(TransientRun {
+                id: id.to_owned(),
+                since: Instant::now(),
+                attempts: 1,
+            }),
+        };
+        let (stuck, attempts) = (run.since.elapsed(), run.attempts);
+        let max = self.config.max_transient_deliveries?;
+        if stuck < self.config.transient_stuck_deadline {
+            return None;
+        }
+        // Redis counts deliveries across restarts and other pods; this
+        // process's own attempts back it up if a Redis version does not
+        // count PEL re-reads.
+        let delivered = self.delivery_count(id).await.ok().flatten()?;
+        let deliveries = delivered.max(attempts);
+        (deliveries >= max).then_some((deliveries, stuck))
     }
 
     /// Whether the unsupported entry `id` has waited past

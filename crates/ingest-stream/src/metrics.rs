@@ -29,7 +29,9 @@ pub const PRODUCE_DROP_REASONS: [&str; 2] = ["superseded", "oversize"];
 // Consumer (writer) side.
 
 /// Counter `{stream, schema, outcome}`. Outcomes: [`CONSUME_OUTCOMES`].
-/// `schema` is `unknown` for an entry whose envelope did not decode.
+/// `schema` is `unknown` for an entry whose envelope did not decode and for
+/// any schema no handler has accepted (never the raw producer-supplied text,
+/// which is unbounded).
 pub const CONSUMED_TOTAL: &str = "ingest_stream_consumed_total";
 /// Histogram `{stream, schema}`: handler wall time, seconds.
 pub const HANDLER_SECONDS: &str = "ingest_stream_handler_seconds";
@@ -80,7 +82,9 @@ pub const ROW_WRITES_TOTAL: &str = "ingest_stream_row_writes_total";
 /// - `transient_error` and `unsupported_schema` stay pending and are
 ///   retried (an unsupported entry past the consumer's
 ///   `unsupported_deadline` is then `dead_lettered`, reason
-///   `unsupported_expired`).
+///   `unsupported_expired`). An entry that keeps failing transiently past
+///   `max_transient_deliveries` and `transient_stuck_deadline` is also
+///   `dead_lettered`, reason `transient_exhausted`.
 pub const CONSUME_OUTCOMES: [&str; 8] = [
     "applied",
     "duplicate",
@@ -225,6 +229,7 @@ pub fn register_consumer(stream: &str) {
         "oversize",
         "rejected_rows",
         crate::consumer::UNSUPPORTED_EXPIRED,
+        crate::consumer::TRANSIENT_EXHAUSTED,
     ] {
         metrics::counter!(
             metric_name(DEAD_LETTERED_TOTAL),

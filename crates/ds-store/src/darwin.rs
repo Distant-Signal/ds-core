@@ -11,11 +11,17 @@
 //! group the message did not carry (platform, arrival, departure, pass)
 //! keeps its stored value; the relay already merged its own batch that way
 //! ([`common::darwin::Batch::merge`]), so each key appears once here.
+//!
+//! **Future stamps.** A `ts` more than [`FUTURE_SKEW`] past the clock would
+//! win every comparison and pin its record. [`apply`] lowers such a row's
+//! `ts` to the ceiling, and every guard also lets an update through when the
+//! stored `ts` is already past it (`d.<ts> > now() + interval '2 min'`), so
+//! a row pinned before the clamp existed heals on its next genuine message.
 
 use std::collections::HashMap;
 
 use anyhow::Result;
-use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
 use common::darwin::{Batch, Event, Platform};
 use sqlx::{PgConnection, PgPool};
 
@@ -38,6 +44,8 @@ impl Applied {
 /// Writes `batch` in the caller's transaction, services first (a call or
 /// association needs none, but a deactivation updates a known service).
 pub async fn apply(conn: &mut PgConnection, batch: &Batch) -> Result<Applied> {
+    let clamped = clamp_future(batch, Utc::now());
+    let batch = clamped.as_ref().unwrap_or(batch);
     let services = upsert_services(conn, batch).await?;
     let calls =
         upsert_schedule_calls(conn, batch).await? + upsert_status_calls(conn, batch).await?;
@@ -49,6 +57,39 @@ pub async fn apply(conn: &mut PgConnection, batch: &Batch) -> Result<Applied> {
         associations,
         deactivated,
     })
+}
+
+/// How far past the database clock a row's `ts` may sit before [`apply`]
+/// treats it as a stamping fault: the clamp ceiling and the guards' escape
+/// arm (`d.<ts> > now() + interval '2 min'`) use the same two minutes.
+pub const FUTURE_SKEW: Duration = Duration::minutes(2);
+
+/// `batch` with every row `ts` past `now + FUTURE_SKEW` lowered to that
+/// ceiling, or `None` when no row needs it (the common case: no copy).
+/// A future-stamped row would otherwise pin its record, since every guard
+/// refuses anything older than the stored `ts`.
+fn clamp_future(batch: &Batch, now: DateTime<Utc>) -> Option<Batch> {
+    let ceiling = now + FUTURE_SKEW;
+    let late = batch.services.iter().map(|r| r.ts).any(|t| t > ceiling)
+        || batch
+            .schedule_calls
+            .iter()
+            .map(|r| r.ts)
+            .any(|t| t > ceiling)
+        || batch.status_calls.iter().map(|r| r.ts).any(|t| t > ceiling)
+        || batch.associations.iter().map(|r| r.ts).any(|t| t > ceiling)
+        || batch.deactivated.iter().map(|r| r.ts).any(|t| t > ceiling);
+    if !late {
+        return None;
+    }
+    let mut out = batch.clone();
+    let lower = |t: &mut DateTime<Utc>| *t = (*t).min(ceiling);
+    out.services.iter_mut().for_each(|r| lower(&mut r.ts));
+    out.schedule_calls.iter_mut().for_each(|r| lower(&mut r.ts));
+    out.status_calls.iter_mut().for_each(|r| lower(&mut r.ts));
+    out.associations.iter_mut().for_each(|r| lower(&mut r.ts));
+    out.deactivated.iter_mut().for_each(|r| lower(&mut r.ts));
+    Some(out)
 }
 
 // `allow`, not `expect`: the lint fires on some toolchains only (workspace
@@ -94,8 +135,8 @@ async fn upsert_services(conn: &mut PgConnection, batch: &Batch) -> Result<u64> 
                               $6::text[], $7::bool[], $8::bool[], $9::text[], \
                               $10::timestamptz[], $11::timestamptz[]) \
          ON CONFLICT (rid) DO UPDATE SET \
-             uid = CASE WHEN EXCLUDED.message_ts >= d.message_ts THEN EXCLUDED.uid ELSE d.uid END, \
-             ssd = CASE WHEN EXCLUDED.message_ts >= d.message_ts THEN EXCLUDED.ssd ELSE d.ssd END, \
+             uid = CASE WHEN newer THEN EXCLUDED.uid ELSE d.uid END, \
+             ssd = CASE WHEN newer THEN EXCLUDED.ssd ELSE d.ssd END, \
              toc = CASE WHEN fresh THEN EXCLUDED.toc ELSE d.toc END, \
              train_id = CASE WHEN fresh THEN EXCLUDED.train_id ELSE d.train_id END, \
              rsid = CASE WHEN fresh THEN EXCLUDED.rsid ELSE d.rsid END, \
@@ -103,15 +144,19 @@ async fn upsert_services(conn: &mut PgConnection, batch: &Batch) -> Result<u64> 
              is_deleted = CASE WHEN fresh THEN EXCLUDED.is_deleted ELSE d.is_deleted END, \
              cancel_reason = CASE WHEN fresh THEN EXCLUDED.cancel_reason ELSE d.cancel_reason END, \
              schedule_ts = CASE WHEN fresh THEN EXCLUDED.schedule_ts ELSE d.schedule_ts END, \
-             message_ts = GREATEST(d.message_ts, EXCLUDED.message_ts), \
+             message_ts = CASE WHEN d.message_ts > now() + interval '2 min' \
+                 THEN EXCLUDED.message_ts ELSE GREATEST(d.message_ts, EXCLUDED.message_ts) END, \
              updated_at = now() \
-         WHERE EXCLUDED.message_ts >= d.message_ts \
-            OR (EXCLUDED.schedule_ts IS NOT NULL \
-                AND (d.schedule_ts IS NULL OR EXCLUDED.schedule_ts >= d.schedule_ts))"
+         WHERE newer OR fresh"
+        .replace(
+            "newer",
+            "(EXCLUDED.message_ts >= d.message_ts OR d.message_ts > now() + interval '2 min')",
+        )
         .replace(
             "fresh",
             "(EXCLUDED.schedule_ts IS NOT NULL \
-                  AND (d.schedule_ts IS NULL OR EXCLUDED.schedule_ts >= d.schedule_ts))",
+                  AND (d.schedule_ts IS NULL OR EXCLUDED.schedule_ts >= d.schedule_ts \
+                       OR d.schedule_ts > now() + interval '2 min'))",
         );
     let result = sqlx::query(&sql)
         .bind(&rid)
@@ -168,7 +213,8 @@ async fn upsert_schedule_calls(conn: &mut PgConnection, batch: &Batch) -> Result
              is_cancelled = EXCLUDED.is_cancelled, \
              schedule_ts = EXCLUDED.schedule_ts, \
              updated_at = now() \
-         WHERE d.schedule_ts IS NULL OR d.schedule_ts <= EXCLUDED.schedule_ts",
+         WHERE d.schedule_ts IS NULL OR d.schedule_ts <= EXCLUDED.schedule_ts \
+            OR d.schedule_ts > now() + interval '2 min'",
     )
     .bind(&rid)
     .bind(&tiploc)
@@ -297,7 +343,8 @@ async fn upsert_status_calls(conn: &mut PgConnection, batch: &Batch) -> Result<u
              is_suppressed = EXCLUDED.is_suppressed, \
              ts_ts = EXCLUDED.ts_ts, \
              updated_at = now() \
-         WHERE d.ts_ts IS NULL OR d.ts_ts <= EXCLUDED.ts_ts",
+         WHERE d.ts_ts IS NULL OR d.ts_ts <= EXCLUDED.ts_ts \
+            OR d.ts_ts > now() + interval '2 min'",
     )
     .bind(&rid)
     .bind(&tiploc)
@@ -373,7 +420,8 @@ async fn upsert_associations(conn: &mut PgConnection, batch: &Batch) -> Result<u
              main_ssd = COALESCE(EXCLUDED.main_ssd, d.main_ssd), \
              message_ts = EXCLUDED.message_ts, \
              updated_at = now() \
-         WHERE d.message_ts <= EXCLUDED.message_ts",
+         WHERE d.message_ts <= EXCLUDED.message_ts \
+            OR d.message_ts > now() + interval '2 min'",
     )
     .bind(&main)
     .bind(&assoc)
@@ -404,7 +452,8 @@ async fn deactivate(conn: &mut PgConnection, batch: &Batch) -> Result<u64> {
     let ts: Vec<DateTime<Utc>> = batch.deactivated.iter().map(|d| d.ts).collect();
     let result = sqlx::query(
         "UPDATE darwin_services d SET deactivated = TRUE, \
-             message_ts = GREATEST(d.message_ts, u.ts), updated_at = now() \
+             message_ts = CASE WHEN d.message_ts > now() + interval '2 min' \
+                 THEN u.ts ELSE GREATEST(d.message_ts, u.ts) END, updated_at = now() \
          FROM UNNEST($1::text[], $2::timestamptz[]) AS u(rid, ts) \
          WHERE d.rid = u.rid AND NOT d.deactivated",
     )
@@ -515,7 +564,7 @@ pub async fn calls_for_trains(
 
 #[cfg(test)]
 mod db_tests {
-    use chrono::Duration;
+    use chrono::SubsecRound;
     use common::darwin::{
         Association, CallKey, Deactivated, ScheduleCall, ScheduleFields, Service, StatusCall,
     };
@@ -534,7 +583,7 @@ mod db_tests {
     }
 
     fn ts(seconds: i64) -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2099-07-10T08:00:00Z")
+        DateTime::parse_from_rfc3339("2026-07-10T08:00:00Z")
             .expect("valid instant")
             .with_timezone(&Utc)
             + Duration::seconds(seconds)
@@ -944,6 +993,261 @@ mod db_tests {
                 .await
                 .expect("count");
         assert_eq!(links, 0);
+        cleanup(&pool).await;
+    }
+
+    fn far_future() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2099-07-10T08:00:00Z")
+            .expect("valid instant")
+            .with_timezone(&Utc)
+    }
+
+    /// Plants rows stamped 2099 directly (what an unclamped writer could
+    /// leave behind): a service, a call (schedule and TS) and an association.
+    async fn plant_future_rows(pool: &PgPool) {
+        let far = far_future();
+        sqlx::query(
+            "INSERT INTO darwin_services (rid, uid, ssd, toc, schedule_ts, message_ts) \
+             VALUES ($1, 'OLD', $2, 'XX', $3, $3)",
+        )
+        .bind(RID)
+        .bind(ssd())
+        .bind(far)
+        .execute(pool)
+        .await
+        .expect("plant service");
+        sqlx::query(
+            "INSERT INTO darwin_calls (rid, tiploc, wta, wtd, wtp, ssd, ptd, planned_platform, \
+             schedule_ts, ts_ts) VALUES ($1, 'YORK', '', '10:12', '', $2, '10:12', '9', $3, $3)",
+        )
+        .bind(RID)
+        .bind(ssd())
+        .bind(far)
+        .execute(pool)
+        .await
+        .expect("plant call");
+        sqlx::query(
+            "INSERT INTO darwin_associations (main_rid, assoc_rid, tiploc, category, \
+             is_cancelled, is_deleted, message_ts) VALUES ($1, $2, 'YORK', 'NP', TRUE, FALSE, $3)",
+        )
+        .bind(RID)
+        .bind(PREV_RID)
+        .bind(far)
+        .execute(pool)
+        .await
+        .expect("plant association");
+    }
+
+    /// Follow-up to the 2026-11 security review: one future-stamped row must
+    /// not pin its record; the next genuine message overwrites it, and a
+    /// replay of that message is then idempotent.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_stored_future_stamp_is_overwritten_by_a_genuine_update() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        plant_future_rows(&pool).await;
+
+        let now = (Utc::now() - Duration::seconds(30)).trunc_subsecs(6); // Postgres keeps microseconds
+        let mut svc = service(RID, UID, 0, true);
+        svc.ts = now;
+        let mut sched = schedule_call(0, "YORK", "10:12", "3");
+        sched.ts = now;
+        let mut st = status(0, Some(("5", true)), Some("10:15"));
+        st.ts = now;
+        let assoc = Association {
+            main_rid: RID.to_string(),
+            assoc_rid: PREV_RID.to_string(),
+            tiploc: "YORK".to_string(),
+            category: "NP".to_string(),
+            cancelled: false,
+            deleted: false,
+            main_wta: None,
+            main_wtd: None,
+            main_wtp: None,
+            assoc_wta: None,
+            assoc_wtd: None,
+            assoc_wtp: None,
+            main_ssd: None,
+            ts: now,
+        };
+        let batch = Batch {
+            services: vec![svc],
+            schedule_calls: vec![sched],
+            status_calls: vec![st],
+            associations: vec![assoc],
+            ..Batch::default()
+        };
+        let applied = apply_batch(&pool, &batch).await;
+        assert_eq!(applied.services, 1);
+        assert_eq!(applied.associations, 1);
+        assert_eq!(applied.calls, 2);
+
+        let read = || async {
+            let service: (String, Option<String>, DateTime<Utc>, Option<DateTime<Utc>>) =
+                sqlx::query_as(
+                    "SELECT uid, toc, message_ts, schedule_ts FROM darwin_services WHERE rid = $1",
+                )
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("service");
+            let call: (Option<String>, Option<DateTime<Utc>>) =
+                sqlx::query_as("SELECT platform, ts_ts FROM darwin_calls WHERE rid = $1")
+                    .bind(RID)
+                    .fetch_one(&pool)
+                    .await
+                    .expect("call");
+            let cancelled: bool = sqlx::query_scalar(
+                "SELECT is_cancelled FROM darwin_associations WHERE main_rid = $1",
+            )
+            .bind(RID)
+            .fetch_one(&pool)
+            .await
+            .expect("association");
+            (service, call, cancelled)
+        };
+        let healed = read().await;
+        assert_eq!(
+            healed.0,
+            (UID.to_string(), Some("NT".to_string()), now, Some(now))
+        );
+        assert_eq!(healed.1, (Some("5".to_string()), Some(now)));
+        assert!(!healed.2);
+
+        // Replay: the stored ts is genuine now, the same batch changes
+        // nothing observable.
+        apply_batch(&pool, &batch).await;
+        assert_eq!(read().await, healed);
+
+        // Normal ordering still holds: an older message is refused.
+        let mut older = status(0, Some(("9", false)), None);
+        older.ts = now - Duration::seconds(10);
+        let applied = apply_batch(
+            &pool,
+            &Batch {
+                status_calls: vec![older],
+                ..Batch::default()
+            },
+        )
+        .await;
+        assert_eq!(applied.calls, 0);
+        assert_eq!(read().await, healed);
+        cleanup(&pool).await;
+    }
+
+    /// `apply` lowers a future `ts` to the ceiling, so an unclamped row
+    /// cannot pin its record: a genuine message just past the ceiling wins.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_future_stamped_batch_is_clamped_and_cannot_pin() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        let mut svc = service(RID, UID, 0, true);
+        svc.ts = far_future();
+        let mut st = status(0, Some(("5", true)), None);
+        st.ts = far_future();
+        apply_batch(
+            &pool,
+            &Batch {
+                services: vec![svc],
+                status_calls: vec![st],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let stored: DateTime<Utc> =
+            sqlx::query_scalar("SELECT message_ts FROM darwin_services WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("ts");
+        assert!(stored <= Utc::now() + FUTURE_SKEW);
+        assert!(stored > Utc::now());
+
+        let mut genuine = status(0, Some(("7", true)), None);
+        genuine.ts = Utc::now() + FUTURE_SKEW;
+        apply_batch(
+            &pool,
+            &Batch {
+                status_calls: vec![genuine],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let platform: Option<String> =
+            sqlx::query_scalar("SELECT platform FROM darwin_calls WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("platform");
+        assert_eq!(platform.as_deref(), Some("7"));
+        cleanup(&pool).await;
+    }
+
+    #[test]
+    fn clamp_future_lowers_only_rows_past_the_ceiling() {
+        let now = ts(0);
+        let mut ok = service(RID, UID, 0, false);
+        ok.ts = now + Duration::seconds(30);
+        let mut bad = service(PREV_RID, PREV_UID, 0, false);
+        bad.ts = far_future();
+        let batch = Batch {
+            services: vec![ok.clone(), bad],
+            ..Batch::default()
+        };
+        let clamped = clamp_future(&batch, now).expect("a row is past the ceiling");
+        assert_eq!(clamped.services[0], ok);
+        assert_eq!(clamped.services[1].ts, now + FUTURE_SKEW);
+        let fine = Batch {
+            services: vec![ok],
+            ..Batch::default()
+        };
+        assert!(clamp_future(&fine, now).is_none());
+
+        // Deactivations are clamped too.
+        let late = Batch {
+            deactivated: vec![Deactivated {
+                rid: RID.to_string(),
+                ts: far_future(),
+            }],
+            ..Batch::default()
+        };
+        let clamped = clamp_future(&late, now).expect("a deactivation is past the ceiling");
+        assert_eq!(clamped.deactivated[0].ts, now + FUTURE_SKEW);
+    }
+
+    /// A deactivation of a future-stamped service brings its `ts` back to the
+    /// deactivation's, so the record is not pinned afterwards.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_deactivation_replaces_a_stored_future_stamp() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        plant_future_rows(&pool).await;
+        let now = (Utc::now() - Duration::seconds(30)).trunc_subsecs(6);
+        apply_batch(
+            &pool,
+            &Batch {
+                deactivated: vec![Deactivated {
+                    rid: RID.to_string(),
+                    ts: now,
+                }],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let (deactivated, message_ts): (bool, DateTime<Utc>) =
+            sqlx::query_as("SELECT deactivated, message_ts FROM darwin_services WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("service");
+        assert!(deactivated);
+        assert_eq!(message_ts, now);
         cleanup(&pool).await;
     }
 }

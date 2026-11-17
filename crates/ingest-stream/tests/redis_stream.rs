@@ -30,7 +30,7 @@ use ds_runtime::backoff::Backoff;
 use ds_runtime::redis_auth::{redis_url_with_credentials, redis_url_with_password};
 use ds_runtime::redis_conn::RedisConn;
 use ds_runtime::secret::Secret;
-use ingest_stream::consumer::UNSUPPORTED_EXPIRED;
+use ingest_stream::consumer::{TRANSIENT_EXHAUSTED, UNSUPPORTED_EXPIRED};
 use ingest_stream::{
     ConsumerConfig, EncodedEntry, Envelope, Handled, Handler, HandlerError, NotWritten,
     ProducePolicy, Producer, ProducerConfig, RetryReason, SchemaId, Step, StreamConsumer,
@@ -240,6 +240,9 @@ fn consumer_config(stream: &str, consumer: &str) -> ConsumerConfig {
 struct Scripted {
     seen: Mutex<Vec<String>>,
     script: Mutex<HashMap<String, VecDeque<Result<Handled, HandlerError>>>>,
+    /// Does not claim to know any schema up front (the trait default): a
+    /// schema labels metrics only after the handler accepted one of it.
+    strict: bool,
 }
 
 impl Scripted {
@@ -256,6 +259,10 @@ impl Scripted {
 }
 
 impl Handler for Scripted {
+    fn knows_schema(&self, schema: &SchemaId) -> bool {
+        !self.strict && schema.name() == "test-rows"
+    }
+
     fn handle(
         &self,
         entry: &StreamEntry,
@@ -818,6 +825,147 @@ async fn unsupported_entries_past_the_deadline_are_dead_lettered() {
             assert_eq!(scope.xlen(&old_dlq), 0);
         }
     }
+}
+
+/// Security review follow-up: an entry that keeps failing transiently is
+/// dead-lettered only once it has used up both the delivery cap and the time
+/// floor, so an outage (many deliveries, little time) loses nothing.
+#[tokio::test]
+#[ignore = "needs Redis (REDIS_URL)"]
+async fn a_transient_entry_is_dead_lettered_only_past_the_delivery_cap_and_time_floor() {
+    let mut scope = Scope::new();
+    let stream = scope.stream("transient-cap");
+    let dlq = ingest_stream::dead_letter_stream(&stream);
+    let mut conn = connect(&admin_url()).await;
+    let mut config = consumer_config(&stream, "pod-a");
+    config.max_transient_deliveries = Some(3);
+    config.transient_stuck_deadline = Duration::from_millis(400);
+    let mut consumer = StreamConsumer::new(connect(&admin_url()).await, config);
+    consumer.ensure_group().await.unwrap();
+    for key in ["flaky", "behind"] {
+        ingest_stream::xadd_entry(&mut conn, &stream, 100, &entry(key))
+            .await
+            .unwrap();
+    }
+    let handler = Scripted::default();
+    handler.answer(
+        "flaky",
+        (0..1000)
+            .map(|_| Err(HandlerError::Transient("statement timeout".into())))
+            .collect(),
+    );
+    let transient = Step::Retry {
+        processed: 0,
+        reason: RetryReason::Transient,
+    };
+    // Many deliveries inside the time floor (an outage): nothing is lost.
+    for _ in 0..8 {
+        drain_until(&mut consumer, &handler, &transient).await;
+    }
+    assert_eq!(scope.pending(&stream), 2);
+    assert_eq!(scope.xlen(&dlq), 0);
+    assert_eq!(
+        handler
+            .seen()
+            .iter()
+            .filter(|k| k.as_str() == "behind")
+            .count(),
+        0
+    );
+
+    // Past the floor, with the delivery cap long used up: dead-lettered,
+    // acked, and the entry behind it applies.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    drain(&mut consumer, &handler, 10).await;
+    assert_eq!(scope.pending(&stream), 0);
+    assert_eq!(handler.seen().last().map(String::as_str), Some("behind"));
+    let dead = scope.range(&dlq);
+    assert_eq!(dead.len(), 1, "{dead:?}");
+    assert_eq!(dead[0].1["key"], "flaky");
+    assert_eq!(dead[0].1["reason"], TRANSIENT_EXHAUSTED);
+    assert!(dead[0].1["error"].starts_with("statement timeout"));
+    assert!(dead[0].1["deliveries"].parse::<u64>().unwrap() >= 3);
+    assert_eq!(
+        metric(&format!(
+            "distant_signal_ingest_stream_dead_lettered_total{{stream=\"{stream}\",reason=\"{TRANSIENT_EXHAUSTED}\"}}"
+        )),
+        1
+    );
+
+    // The cap is configurable off: the same failures stay pending for good.
+    let off_stream = scope.stream("transient-cap-off");
+    let off_dlq = ingest_stream::dead_letter_stream(&off_stream);
+    let mut config = consumer_config(&off_stream, "pod-b");
+    config.max_transient_deliveries = None;
+    config.transient_stuck_deadline = Duration::ZERO;
+    let mut off = StreamConsumer::new(connect(&admin_url()).await, config);
+    off.ensure_group().await.unwrap();
+    ingest_stream::xadd_entry(&mut conn, &off_stream, 100, &entry("flaky"))
+        .await
+        .unwrap();
+    let handler = Scripted::default();
+    handler.answer(
+        "flaky",
+        (0..1000)
+            .map(|_| Err(HandlerError::Transient("statement timeout".into())))
+            .collect(),
+    );
+    for _ in 0..5 {
+        drain_until(&mut off, &handler, &transient).await;
+    }
+    assert_eq!(scope.pending(&off_stream), 1);
+    assert_eq!(scope.xlen(&off_dlq), 0);
+}
+
+/// Security review follow-up: the envelope's `schema` is the producer's
+/// say-so. Until a handler accepts it, it is not a metric label.
+#[tokio::test]
+#[ignore = "needs Redis (REDIS_URL)"]
+async fn an_unaccepted_schema_never_becomes_a_metric_label() {
+    let mut scope = Scope::new();
+    let stream = scope.stream("schema-label");
+    let mut conn = connect(&admin_url()).await;
+    let mut consumer = StreamConsumer::new(
+        connect(&admin_url()).await,
+        consumer_config(&stream, "pod-a"),
+    );
+    consumer.ensure_group().await.unwrap();
+    let evil = format!("evil-{}/7", rand_u32());
+    let mut bogus = entry("bogus");
+    for (name, value) in &mut bogus.fields {
+        if *name == "schema" {
+            *value = evil.clone().into_bytes();
+        }
+    }
+    for e in [bogus, entry("good")] {
+        ingest_stream::xadd_entry(&mut conn, &stream, 100, &e)
+            .await
+            .unwrap();
+    }
+    let handler = Scripted {
+        strict: true,
+        ..Scripted::default()
+    };
+    handler.answer(
+        "bogus",
+        vec![Err(HandlerError::Poison("unknown schema name".into()))],
+    );
+    drain(&mut consumer, &handler, 10).await;
+    assert_eq!(scope.pending(&stream), 0);
+    let label = format!("stream=\"{stream}\"");
+    assert_eq!(
+        metric(&format!(
+            "distant_signal_ingest_stream_consumed_total{{{label},schema=\"unknown\",outcome=\"dead_lettered\"}}"
+        )),
+        1
+    );
+    assert_eq!(
+        metric(&format!(
+            "distant_signal_ingest_stream_consumed_total{{{label},schema=\"test-rows/1\",outcome=\"applied\"}}"
+        )),
+        1
+    );
+    assert!(!metrics_handle().render().contains(&evil));
 }
 
 /// Steps until `want` comes back (at most 10 steps).
