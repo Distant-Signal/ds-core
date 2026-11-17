@@ -25,14 +25,14 @@ ignore = [
     # sqlx-macros-core; we run Postgres and no RSA operation is reachable).
     # Re-read at the date: bump rsa when its dependents allow, else renew.
     { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 only via sqlx-mysql, which this repo never uses; patched only in rsa 0.10" }, # expires 2027-05-17
-    # chrono and chrono-tz: marked unmaintained on 2026-11-17 (RUSTSEC-2026-0543
-    # and -0555; "all versions are affected", so there is no patched release).
-    # An unmaintained notice, not a vulnerability: the workspace uses both for
-    # dates and London time throughout. Moving to jiff or time is a change to
-    # every crate and every consumer's public types, so it is not part of a
-    # grants release. Re-read at the date: migrate, else renew.
+    # chrono: marked unmaintained on 2026-11-17 (RUSTSEC-2026-0543; "all
+    # versions are affected", so there is no patched release). An unmaintained
+    # notice, not a vulnerability: the workspace uses it for dates throughout.
+    # Moving to jiff or time is a change to every crate and every consumer's
+    # public types, so it is not part of a grants release. (chrono-tz,
+    # RUSTSEC-2026-0555, is gone from this workspace: `common::zone` runs on
+    # jiff.) Re-read at the date: migrate, else renew.
     { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained (no patched version); replacing it touches every consumer's types" }, # expires 2027-02-17
-    { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained (no patched version); goes with chrono" }, # expires 2027-02-17
 ]
 
 [licenses]
