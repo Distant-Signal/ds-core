@@ -25,14 +25,18 @@ covers the same ground for migrations recorded in its .lock file, including
 changes made outside a PR.
 
 Destructive DDL needs a contract header (ingest spec section 9.6, "expand
-before code, contract after code"; plan task 1B.5):
-  -- contract: <what> (code stopped using it in <commit>)
-in the file's leading comment block (after `-- no-transaction`, if any).
+before code, contract after code"; plan task 1B.5), one line in the file's
+leading comment block (after `-- no-transaction`, if any):
+  -- contract: <what> (code stopped using it in <commit>; safe after core vA.B.C)
 Such a migration must ship at least one release after every binary that
-used the object. The header may also name the first core version without
-that use, `(code stopped using it in <commit>; safe after core vA.B.C)`
-(repo split spec §5.1): Distant-Signal/ci's scripts/release-order.py then
-refuses a chart that pins an image built against an older core. Destructive means:
+used the object. vA.B.C, which must end the line, is the first core version
+no image built against still uses it (repo split spec §5.1): tag.yml runs
+Distant-Signal/ci's scripts/release-order.py, which refuses the tag while
+the deployed chart pins an image built against an older core. A contract
+header without that floor is a finding (it would let a destructive release
+be tagged with no floor check), except on the migrations in
+UNVERSIONED_CONTRACTS: applied in production before the floor was required,
+they cannot gain one (sqlx checksums them). Destructive means:
   - DROP TABLE / VIEW / MATERIALIZED VIEW / FUNCTION / PROCEDURE / TYPE /
     SEQUENCE / SCHEMA, and ALTER TABLE ... DROP [COLUMN];
   - any RENAME (ALTER TABLE/VIEW/INDEX/TYPE/... RENAME [COLUMN|TO|VALUE]);
@@ -51,6 +55,10 @@ migration newer than CONTRACT_CHECK_CUTOFF, the newest migration when the
 check was introduced (2026-10-07). Older ones are grandfathered: they are
 applied in production, and adding a header would change their sqlx
 checksums, which crates/ds-store/tests/migration_checksums.rs locks.
+
+With --contract-headers instead of BASE, it only checks that every contract
+header in the working tree's migrations carries its floor (tag.yml runs this
+before it looks for floors to check).
 
 BASE is a commit, e.g. `$(git merge-base origin/main HEAD)` for a branch, or
 the pre-push commit for a push. Run it before merging a worktree branch
@@ -73,6 +81,7 @@ import subprocess
 import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 MIGRATIONS = "crates/ds-store/migrations"
 # Where the migrations lived before plan task 1B.1 moved them (a pure
@@ -86,6 +95,29 @@ VERSION = re.compile(r".*/([0-9]+)_[^/]*\.sql")
 # only scanned when added since BASE; see the module docstring.
 CONTRACT_CHECK_CUTOFF = 20261007210000
 CONTRACT_HEADER = re.compile(r"--\s*contract:\s*\S.*")
+# A contract header with its floor, in the shape Distant-Signal/ci's
+# release-order.py reads (`safe after core\s+(\S+?)[).;,]*$`).
+VERSIONED_CONTRACT_HEADER = re.compile(
+    r"--\s*contract:\s*\S.*\bsafe after core v[0-9]+\.[0-9]+\.[0-9]+[).;,]*"
+)
+# Contract migrations merged before the floor was required (review K2,
+# 2026-11-16), by file name, with the floor each would carry. They are
+# applied in production and their checksums are locked, so the header
+# cannot change; the floors are a record, not checked. How they were chosen:
+# the first three dropped what monorepo code stopped using before the repo
+# split (9cb89d89 2026-10-08, b944ddb0 2026-08-21, e44f98f3 2026-10-21), so
+# no image built against any ds-core release (v0.1.0, 2026-11-03, is the
+# first) uses it; the fourth was shipped in v0.14.0, the first core
+# ds-workers moved to after eac006cb (it was on v0.13.0 before and at it).
+UNVERSIONED_CONTRACTS = {
+    "20261009170100_ingest_dedup_stream_key_primary_key.sql": "v0.1.0",
+    "20261021090000_drop_incident_flat_extraction_columns.sql": "v0.1.0",
+    "20261026090000_drop_users_email.sql": "v0.1.0",
+    "20261107180000_journey_template_legs_drop_order_key.sql": "v0.14.0",
+}
+HEADER_SHAPE = (
+    "`-- contract: <what> (code stopped using it in <commit>; safe after core vA.B.C)`"
+)
 # DROP <keyword> → the finding's name for it.
 DROPPABLE = {
     "TABLE": "DROP TABLE",
@@ -413,31 +445,69 @@ def destructive_statements(
     ]
 
 
-def has_contract_header(sql: str) -> bool:
-    """Whether SQL's leading comment block holds a `-- contract: ...` line."""
-    for raw in sql.splitlines():
+def contract_header(sql: str) -> tuple[int, str] | None:
+    """Return (line number, line) of SQL's leading `-- contract: ...` line."""
+    for number, raw in enumerate(sql.splitlines(), start=1):
         line = raw.strip()
         if not line:
             continue
         if not line.startswith("--"):
-            return False
+            return None
         if CONTRACT_HEADER.fullmatch(line):
-            return True
-    return False
+            return number, line
+    return None
+
+
+def has_contract_header(sql: str) -> bool:
+    """Whether SQL's leading comment block holds a `-- contract: ...` line."""
+    return contract_header(sql) is not None
+
+
+def header_findings(path: str, sql: str) -> list[str]:
+    """Return an ::error line if SQL's contract header lacks its floor."""
+    header = contract_header(sql)
+    if header is None or VERSIONED_CONTRACT_HEADER.fullmatch(header[1]):
+        return []
+    if path.rsplit("/", 1)[-1] in UNVERSIONED_CONTRACTS:
+        return []
+    line = header[0]
+    return [
+        (
+            f"::error file={path},line={line}::{path}:{line}: the contract header "
+            "names no floor. End it with `safe after core vA.B.C`, the first core "
+            f"version no image built against still uses the object: {HEADER_SHAPE}. "
+            "Without it tag.yml checks no floor against the deployed chart."
+        )
+    ]
 
 
 def contract_findings(path: str, sql: str) -> list[str]:
-    """Return ::error lines for destructive DDL in SQL without the header."""
+    """Return ::error lines for a floorless header, or DDL with no header."""
     if has_contract_header(sql):
-        return []
+        return header_findings(path, sql)
     return [
         f"::error file={path},line={line}::{path}:{line}: {what} is destructive "
-        "DDL. Add a `-- contract: <what> (code stopped using it in <commit>)` "
-        "header to the file's leading comments, and ship it at least one "
-        "release after every binary that used the object (ingest spec "
-        "section 9.6)."
+        f"DDL. Add a {HEADER_SHAPE} header to the file's leading comments, and "
+        "ship it at least one release after every binary that used the object "
+        "(ingest spec section 9.6)."
         for line, what in destructive_statements(sql)
     ]
+
+
+def check_header_floors() -> int:
+    """Print a finding for each working-tree contract header with no floor."""
+    paths = sorted(Path(MIGRATIONS).glob("*.sql"))
+    findings = [
+        finding
+        for path in paths
+        for finding in header_findings(path.as_posix(), path.read_text("utf-8"))
+    ]
+    for finding in findings:
+        print(finding)
+    if findings:
+        return 1
+    print(f"every contract header in {len(paths)} migration(s) names its floor")
+    return 0
 
 
 def migration_tree(commit: str, directory: str) -> dict[str, str]:
@@ -560,8 +630,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Check that migrations since BASE are new and newer than "
         "BASE's, and that destructive DDL carries a contract header."
     )
-    parser.add_argument("base", metavar="BASE", help="the commit to compare HEAD with")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument(
+        "base", metavar="BASE", nargs="?", help="the commit to compare HEAD with"
+    )
+    target.add_argument(
+        "--contract-headers",
+        action="store_true",
+        help="only check that every contract header names its floor",
+    )
     args = parser.parse_args(argv)
+    if args.contract_headers:
+        return check_header_floors()
     try:
         return check(args.base)
     except GitError as error:

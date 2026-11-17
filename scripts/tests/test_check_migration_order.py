@@ -11,6 +11,7 @@ migrations in fixtures/migration-contract/{fails,passes}.
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -34,7 +35,14 @@ NO_CONTRACT_FINDINGS = (
     "(added since BASE, or newer than 20261007210000)"
 )
 DROP = "DROP TABLE old_things;\n"
-HEADER = "-- contract: drop old_things (code stopped using it in 0123abc)\n"
+HEADER = (
+    "-- contract: drop old_things (code stopped using it in 0123abc; "
+    "safe after core v0.2.0)\n"
+)
+# The header before the floor was required (review K2).
+FLOORLESS_HEADER = "-- contract: drop old_things (code stopped using it in 0123abc)\n"
+# Distant-Signal/ci's scripts/release-order.py reads the floor with this.
+RELEASE_ORDER_SAFE_AFTER = re.compile(r"safe after core\s+(\S+?)[).;,]*$")
 
 
 def _load() -> ModuleType:
@@ -310,7 +318,7 @@ class CheckMigrationOrderTest(unittest.TestCase):
         self.assertIn(
             f"::error file={added},line=3::{added}:3: DROP TABLE old_things is "
             "destructive DDL. Add a `-- contract: <what> (code stopped using it in "
-            "<commit>)` header",
+            "<commit>; safe after core vA.B.C)` header",
             out,
         )
         self.assertNotIn("no destructive DDL", out)
@@ -323,6 +331,57 @@ class CheckMigrationOrderTest(unittest.TestCase):
         status, out = self.check(base)
         self.assertEqual(status, 0)
         self.assertIn(NO_CONTRACT_FINDINGS.format(1), out)
+
+    def test_added_contract_header_without_floor_fails(self) -> None:
+        """A contract header must name its `safe after core` floor."""
+        base = self.base_with(OLD, NEWEST)
+        added = f"{MIGRATIONS}/20260927120300_drop.sql"
+        self.write(added, f"{FLOORLESS_HEADER}{DROP}")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 1)
+        self.assertIn(
+            f"::error file={added},line=1::{added}:1: the contract header names no "
+            "floor.",
+            out,
+        )
+
+    def test_historical_floorless_contract_passes(self) -> None:
+        """A migration in UNVERSIONED_CONTRACTS keeps its floorless header."""
+        name = next(iter(cmo.UNVERSIONED_CONTRACTS))
+        self.write(f"{MIGRATIONS}/{name}", f"{FLOORLESS_HEADER}{DROP}")
+        base = self.base_with(OLD)
+        self.write("README")
+        self.commit()
+        status, out = self.check(base)
+        self.assertEqual(status, 0, out)
+
+    def run_headers(self) -> tuple[int, str]:
+        """Run the script with --contract-headers from the repo root."""
+        result = subprocess.run(  # noqa: S603  # this repo's script
+            [sys.executable, str(SCRIPT), "--contract-headers"],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=self.repo,
+            env=GIT_ENV,
+        )
+        return result.returncode, result.stdout
+
+    def test_contract_headers_mode(self) -> None:
+        """--contract-headers reads the working tree and needs no BASE."""
+        self.write(OLD)
+        self.write(f"{MIGRATIONS}/20260927120300_drop.sql", f"{HEADER}{DROP}")
+        status, out = self.run_headers()
+        self.assertEqual(
+            (status, out),
+            (0, "every contract header in 2 migration(s) names its floor\n"),
+        )
+        floorless = f"{MIGRATIONS}/20260927120400_drop.sql"
+        self.write(floorless, f"{FLOORLESS_HEADER}{DROP}")
+        status, out = self.run_headers()
+        self.assertEqual(status, 1)
+        self.assertIn(f"::error file={floorless},line=1::", out)
 
     def test_grandfathered_destructive_migration_passes(self) -> None:
         """An unchanged base migration at or below the cutoff is not scanned."""
@@ -448,6 +507,36 @@ class DestructiveDdlTest(unittest.TestCase):
     def test_empty_contract_header_does_not_count(self) -> None:
         """`-- contract:` needs text after it."""
         self.assertFalse(cmo.has_contract_header("-- contract:\nDROP TABLE t;\n"))
+
+    def test_floor_matches_release_order(self) -> None:
+        """Every floor the checker accepts is one release-order.py can read."""
+        for floor in ("v0.2.0)", "v1.12.3)", "v0.2.0"):
+            with self.subTest(floor=floor):
+                line = f"-- contract: x (stopped in abc; safe after core {floor}"
+                self.assertTrue(cmo.VERSIONED_CONTRACT_HEADER.fullmatch(line))
+                match = RELEASE_ORDER_SAFE_AFTER.search(line)
+                self.assertRegex(
+                    match.group(1) if match else "", r"^v[0-9]+\.[0-9]+\.[0-9]+$"
+                )
+        for line in (
+            "-- contract: x (code stopped using it in abc)",
+            "-- contract: x (safe after core 0.2.0)",
+            "-- contract: x (safe after core v0.2)",
+            "-- contract: x (safe after core v0.2.0; more words)",
+        ):
+            with self.subTest(line=line):
+                self.assertIsNone(cmo.VERSIONED_CONTRACT_HEADER.fullmatch(line))
+
+    def test_unversioned_contracts_are_the_historical_floorless_ones(self) -> None:
+        """The allowlist names exactly the repo's floorless contract migrations."""
+        floorless = set()
+        for path in REPO_MIGRATIONS.glob("*.sql"):
+            header = cmo.contract_header(path.read_text(encoding="utf-8"))
+            if header and not cmo.VERSIONED_CONTRACT_HEADER.fullmatch(header[1]):
+                floorless.add(path.name)
+        self.assertEqual(floorless, set(cmo.UNVERSIONED_CONTRACTS))
+        for floor in cmo.UNVERSIONED_CONTRACTS.values():
+            self.assertRegex(floor, r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 
     def test_cutoff_is_an_existing_migration(self) -> None:
         """The cutoff names a real migration, and no later one is destructive."""
