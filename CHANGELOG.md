@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.16.1 (2026-11-17)
+
+Narrower notifier grants and stream-consumer Redis ACL (DS-534, security assessment L16). A patch: no migration, no Rust API change, nothing a consumer compiles against. It is a grants and ACL release, so the order consumers and ds-deploy take it in matters (below).
+
+- Narrow the notifier's table grants and the stream consumers' Redis ACL (#83); also ignores the chrono and chrono-tz unmaintained advisories (RUSTSEC-2026-0543 and RUSTSEC-2026-0555, published today, "all versions affected") in deny.toml until 2027-05-17 so the blocking advisories job passes.
+
+**Migrations**: none.
+
+**Grants**: `db-grants.yaml` and `postgres-grants.sql` changed (the roles Job applies them; step 2 revokes the membership the file no longer lists). Only the `notifier` role (`distant_signal_notifier`) changes:
+- It leaves the `read_shared` group; its groups are now `schema_gate` only. That removes SELECT on the 46 tables it held only through the group and no statement of the notifier (or of the ds-core functions it calls) touches: `trust_event_backlog`, `tracked_stop_boards`, `tracked_stop_arrival_boards`, `station_full_coverage_samples`, `full_coverage_line_stats`, `full_coverage_line_window_stats`, `island_of_ireland_lines`, `island_of_ireland_station_samples`, `island_of_ireland_trains`, `island_of_ireland_train_calls`, all 11 `transit_*` tables, `line_status`, `incidents`, `incident_history`, `incident_feed_state`, `ingest_freshness`, the four `line_status_*_stats` tables, `full_coverage_window_verdicts`, `corpus_crosswalk_build`, `corpus_stanox_crs`, `tocs`, `tfl_stops`, `tfl_stop_crs`, `tfl_line_routes`, `fixed_links`, `corpus_locations`, `corpus_deliveries`, `schedule_network_departures`, `schedule_line_population`, `line_train_summaries`, `tiploc_locations`, `schedule_reference_publishes` and `schedule_feed_ingests`.
+- It gains table-level SELECT on `stations`, `island_of_ireland_stations` and `island_of_ireland_live_stations` (it read them through the group; its pushes name stations from them).
+- Every other explicit notifier grant (table and column level, DML, sequences) is unchanged. No other role changes: the api, aggregator and writer stay in `read_shared`.
+- `ds_store::schema::wait_for_schema` bakes each role's required privileges in at build time from the core the image links. A notifier built against v0.16.0 or earlier requires SELECT on every `read_shared` table, so once these grants are applied it would sit in `wait_for_schema` and exit when it next restarts (running pods keep working until then).
+
+**Redis ACL**: `access/redis-users.acl.tpl` changed. `+xclaim` is removed from `trust-consumer`, `trust-backlog-consumer`, `full-coverage-consumer` and `ingest-writer`, and `+xgroup|createconsumer` from the three movement-events consumers. No service sends either (idle entries are taken over with XAUTOCLAIM; XREADGROUP creates its consumer); every other user is unchanged. It takes effect on the one Redis restart the chart's ACL ConfigMap change already causes. An ACL cannot separate the three movement consumers' groups on the shared `movement-events` stream (a comment in the template says so; a stream per group is a ds-ingest change).
+
+**Consumers and ordering** (the grant floor is v0.16.1):
+1. ds-workers bumps `core-version` to v0.16.1 and builds a new notifier image from it. The image already built from ds-workers main 065e800, `build.44047133373-065e800`, has the checked SQL (`check-notifier-grants.py`, ds-workers #43, passes against this release's `db-grants.yaml`) but is built against v0.16.0, so its baked-in gate still wants the `read_shared` tables: it is NOT enough. The notifier image that deploys ahead of these grants must carry a `core-version` label of v0.16.1 or later.
+2. ds-deploy pins that notifier image (it may ship deploys that pin 065e800 or other v0.16.0 images, as long as `core-version`, the vendored grants and `migrate.image` stay at v0.16.0).
+3. Only then does ds-deploy move `core-version`, the vendored `db-grants.yaml`, `postgres-grants.sql`, `redis-users.acl.tpl` and `migrate.image` to v0.16.1 (`scripts/sync-core.py`), with a `grant-floors.toml` entry (`service = "notifier"`, `core = "v0.16.1"`) checked by Distant-Signal/ci's `release-order.py check --grant-floors`, so a chart that pins an older notifier is refused. The other consumers' bumps (ds-api, ds-ingest, ds-pollers) have no ordering requirement.
+
+Rollback: revert and cut a patch release; re-applying the previous `postgres-grants.sql` re-adds the membership (the roles Job is idempotent) and the ACL revert re-adds the commands on one restart. Nothing is dropped or migrated.
+
 ## v0.16.0 (2026-11-17)
 
 Opaque ids, a break-cleared marker and the secret box's row-bound format, stage 1 (DS-534). A minor: eight additive migrations and a new public API in `ds-runtime`; nothing is removed or changed in place, and no migration is a contract migration.
