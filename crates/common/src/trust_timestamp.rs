@@ -1053,3 +1053,135 @@ mod tests {
         assert_eq!(plausible_delay_minutes(actual, planned), None);
     }
 }
+
+/// Pins the Europe/London reinterpretation around both clock changes of 2025
+/// and 2026: the skipped hour (raw value kept), the repeated hour (the
+/// candidate nearer the receipt time, the earlier one on an exact tie) and
+/// the plausibility fallback. Expected values come from the IANA rules via an
+/// unrelated implementation.
+#[cfg(test)]
+mod dst_pinning_tests {
+    use super::*;
+
+    /// `(raw epoch millis, received_at, expected instant, was_corrected)`.
+    /// The raw millis' UTC wall-clock reading is the London local time that is
+    /// reinterpreted.
+    #[rustfmt::skip]
+    const CASES: &[(&str, &str, &str, bool)] = &[
+        ("1743296340000", "2025-03-30T00:00:00Z", "2025-03-30T00:59:00Z", false),
+        ("1743296340000", "2025-03-30T01:00:00Z", "2025-03-30T00:59:00Z", false),
+        ("1743296400000", "2025-03-30T00:01:00Z", "2025-03-30T01:00:00Z", false),
+        ("1743296400000", "2025-03-30T01:01:00Z", "2025-03-30T01:00:00Z", false),
+        ("1743298200000", "2025-03-30T00:31:00Z", "2025-03-30T01:30:00Z", false),
+        ("1743298200000", "2025-03-30T01:31:00Z", "2025-03-30T01:30:00Z", false),
+        ("1743299940000", "2025-03-30T01:00:00Z", "2025-03-30T01:59:00Z", false),
+        ("1743299940000", "2025-03-30T02:00:00Z", "2025-03-30T01:59:00Z", false),
+        ("1743300000000", "2025-03-30T01:01:00Z", "2025-03-30T01:00:00Z", true),
+        ("1743300000000", "2025-03-30T02:01:00Z", "2025-03-30T01:00:00Z", true),
+        ("1743301800000", "2025-03-30T01:31:00Z", "2025-03-30T01:30:00Z", true),
+        ("1743301800000", "2025-03-30T02:31:00Z", "2025-03-30T01:30:00Z", true),
+        ("1743303600000", "2025-03-30T02:01:00Z", "2025-03-30T02:00:00Z", true),
+        ("1743303600000", "2025-03-30T03:01:00Z", "2025-03-30T02:00:00Z", true),
+        ("1761438600000", "2025-10-25T23:31:00Z", "2025-10-25T23:30:00Z", true),
+        ("1761438600000", "2025-10-26T00:31:00Z", "2025-10-25T23:30:00Z", true),
+        ("1761440340000", "2025-10-26T00:00:00Z", "2025-10-25T23:59:00Z", true),
+        ("1761440340000", "2025-10-26T01:00:00Z", "2025-10-25T23:59:00Z", true),
+        ("1761440400000", "2025-10-26T00:01:00Z", "2025-10-26T00:00:00Z", true),
+        ("1761440400000", "2025-10-26T01:01:00Z", "2025-10-26T01:00:00Z", false),
+        ("1761440400000", "2025-10-26T00:30:00Z", "2025-10-26T00:00:00Z", true),
+        ("1761440400000", "2025-10-26T01:01:00Z", "2025-10-26T01:00:00Z", false),
+        ("1761442200000", "2025-10-26T00:31:00Z", "2025-10-26T00:30:00Z", true),
+        ("1761442200000", "2025-10-26T01:31:00Z", "2025-10-26T01:30:00Z", false),
+        ("1761442200000", "2025-10-26T01:00:00Z", "2025-10-26T00:30:00Z", true),
+        ("1761442200000", "2025-10-26T01:31:00Z", "2025-10-26T01:30:00Z", false),
+        ("1761443940000", "2025-10-26T01:00:00Z", "2025-10-26T00:59:00Z", true),
+        ("1761443940000", "2025-10-26T02:00:00Z", "2025-10-26T01:59:00Z", false),
+        ("1761443940000", "2025-10-26T01:29:00Z", "2025-10-26T00:59:00Z", true),
+        ("1761443940000", "2025-10-26T02:00:00Z", "2025-10-26T01:59:00Z", false),
+        ("1761444000000", "2025-10-26T01:01:00Z", "2025-10-26T02:00:00Z", false),
+        ("1761444000000", "2025-10-26T02:01:00Z", "2025-10-26T02:00:00Z", false),
+        ("1761445800000", "2025-10-26T01:31:00Z", "2025-10-26T02:30:00Z", false),
+        ("1761445800000", "2025-10-26T02:31:00Z", "2025-10-26T02:30:00Z", false),
+        ("1774745940000", "2026-03-29T00:00:00Z", "2026-03-29T00:59:00Z", false),
+        ("1774745940000", "2026-03-29T01:00:00Z", "2026-03-29T00:59:00Z", false),
+        ("1774746000000", "2026-03-29T00:01:00Z", "2026-03-29T01:00:00Z", false),
+        ("1774746000000", "2026-03-29T01:01:00Z", "2026-03-29T01:00:00Z", false),
+        ("1774747800000", "2026-03-29T00:31:00Z", "2026-03-29T01:30:00Z", false),
+        ("1774747800000", "2026-03-29T01:31:00Z", "2026-03-29T01:30:00Z", false),
+        ("1774749540000", "2026-03-29T01:00:00Z", "2026-03-29T01:59:00Z", false),
+        ("1774749540000", "2026-03-29T02:00:00Z", "2026-03-29T01:59:00Z", false),
+        ("1774749600000", "2026-03-29T01:01:00Z", "2026-03-29T01:00:00Z", true),
+        ("1774749600000", "2026-03-29T02:01:00Z", "2026-03-29T01:00:00Z", true),
+        ("1774751400000", "2026-03-29T01:31:00Z", "2026-03-29T01:30:00Z", true),
+        ("1774751400000", "2026-03-29T02:31:00Z", "2026-03-29T01:30:00Z", true),
+        ("1774753200000", "2026-03-29T02:01:00Z", "2026-03-29T02:00:00Z", true),
+        ("1774753200000", "2026-03-29T03:01:00Z", "2026-03-29T02:00:00Z", true),
+        ("1792888200000", "2026-10-24T23:31:00Z", "2026-10-24T23:30:00Z", true),
+        ("1792888200000", "2026-10-25T00:31:00Z", "2026-10-24T23:30:00Z", true),
+        ("1792889940000", "2026-10-25T00:00:00Z", "2026-10-24T23:59:00Z", true),
+        ("1792889940000", "2026-10-25T01:00:00Z", "2026-10-24T23:59:00Z", true),
+        ("1792890000000", "2026-10-25T00:01:00Z", "2026-10-25T00:00:00Z", true),
+        ("1792890000000", "2026-10-25T01:01:00Z", "2026-10-25T01:00:00Z", false),
+        ("1792890000000", "2026-10-25T00:30:00Z", "2026-10-25T00:00:00Z", true),
+        ("1792890000000", "2026-10-25T01:01:00Z", "2026-10-25T01:00:00Z", false),
+        ("1792891800000", "2026-10-25T00:31:00Z", "2026-10-25T00:30:00Z", true),
+        ("1792891800000", "2026-10-25T01:31:00Z", "2026-10-25T01:30:00Z", false),
+        ("1792891800000", "2026-10-25T01:00:00Z", "2026-10-25T00:30:00Z", true),
+        ("1792891800000", "2026-10-25T01:31:00Z", "2026-10-25T01:30:00Z", false),
+        ("1792893540000", "2026-10-25T01:00:00Z", "2026-10-25T00:59:00Z", true),
+        ("1792893540000", "2026-10-25T02:00:00Z", "2026-10-25T01:59:00Z", false),
+        ("1792893540000", "2026-10-25T01:29:00Z", "2026-10-25T00:59:00Z", true),
+        ("1792893540000", "2026-10-25T02:00:00Z", "2026-10-25T01:59:00Z", false),
+        ("1792893600000", "2026-10-25T01:01:00Z", "2026-10-25T02:00:00Z", false),
+        ("1792893600000", "2026-10-25T02:01:00Z", "2026-10-25T02:00:00Z", false),
+        ("1792895400000", "2026-10-25T01:31:00Z", "2026-10-25T02:30:00Z", false),
+        ("1792895400000", "2026-10-25T02:31:00Z", "2026-10-25T02:30:00Z", false),
+    ];
+
+    #[test]
+    fn single_field_parse_matches_the_table() {
+        for &(raw, received_at, expected, _) in CASES {
+            let received_at: DateTime<Utc> = received_at.parse().unwrap();
+            let expected: DateTime<Utc> = expected.parse().unwrap();
+            assert_eq!(
+                parse_trust_epoch_millis(raw, received_at),
+                Some(expected),
+                "raw {raw} received {received_at}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_pair_reports_the_same_instant_and_decision() {
+        for &(raw, received_at, expected, was_corrected) in CASES {
+            let received_at: DateTime<Utc> = received_at.parse().unwrap();
+            let expected: DateTime<Utc> = expected.parse().unwrap();
+            let pair = parse_trust_epoch_millis_pair(None, Some(raw), received_at, true);
+            assert_eq!(
+                pair.actual,
+                Some(expected),
+                "raw {raw} received {received_at}"
+            );
+            assert_eq!(
+                pair.was_corrected,
+                Some(was_corrected),
+                "raw {raw} received {received_at}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_planned_field_follows_the_actual_fields_side_of_the_repeated_hour() {
+        // 2026-10-25 01:30 local happens twice (00:30Z BST, 01:30Z GMT). The
+        // actual field is received next to the GMT reading; a planned field
+        // 10 minutes earlier on the same wall clock must stay on the GMT side
+        // even though it is itself nearer the BST reading.
+        let actual = "1792891800000"; // 2026-10-25T01:30:00Z as millis
+        let planned = "1792891200000"; // 2026-10-25T01:20:00Z as millis
+        let received_at: DateTime<Utc> = "2026-10-25T01:31:00Z".parse().unwrap();
+        let pair = parse_trust_epoch_millis_pair(Some(planned), Some(actual), received_at, true);
+        assert_eq!(pair.actual, Some("2026-10-25T01:30:00Z".parse().unwrap()));
+        assert_eq!(pair.planned, Some("2026-10-25T01:20:00Z".parse().unwrap()));
+        assert_eq!(pair.was_corrected, Some(false));
+    }
+}
