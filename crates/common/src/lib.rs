@@ -1235,10 +1235,15 @@ impl LineDefinition {
 }
 
 /// Gives each line its legs from the generated pass-through file. A leg
-/// whose ends are no longer both on the line (its stations changed since
-/// the file was generated) is dropped, as is a line id the catalogue does
-/// not have; both are logged, and `line-catalogue-validator` reports them
-/// in CI. The file is regenerated with `scripts/generate-pass-through.py`.
+/// whose ends are no longer two consecutive stations of the line (its
+/// stations changed since the file was generated: an end removed, or a
+/// station inserted between them) is dropped, as is a line id the catalogue
+/// does not have; both are logged, and `line-catalogue-validator` reports
+/// them in CI. A non-consecutive leg is dropped rather than kept for
+/// [`LineDefinition::holds_place`] alone: [`LineDefinition::route_runs`]
+/// already ignores it, so keeping it would let its via stations count as
+/// on the line with no track to put them on. The file is regenerated with
+/// `scripts/generate-pass-through.py`.
 fn attach_pass_through(lines: &mut [LineDefinition], file: &pass_through::PassThrough) {
     let known: HashSet<String> = lines.iter().map(|l| l.id.clone()).collect();
     for unknown in file.lines.keys().filter(|id| !known.contains(*id)) {
@@ -1252,16 +1257,18 @@ fn attach_pass_through(lines: &mut [LineDefinition], file: &pass_through::PassTh
         let Some(legs) = file.lines.get(&line.id) else {
             continue;
         };
-        let (fresh, stale): (Vec<_>, Vec<_>) = legs
-            .iter()
-            .cloned()
-            .partition(|leg| line.has_station(&leg.from) && line.has_station(&leg.to));
+        let (fresh, stale): (Vec<_>, Vec<_>) = legs.iter().cloned().partition(|leg| {
+            line.stations
+                .windows(2)
+                .any(|pair| pair[0].crs == leg.from && pair[1].crs == leg.to)
+        });
         if !stale.is_empty() {
             tracing::warn!(
                 line_id = %line.id,
                 stale = stale.len(),
-                "lines/generated/pass-through.toml has legs whose ends are no longer this \
-                 line's stations -- ignored; regenerate it with scripts/generate-pass-through.py"
+                "lines/generated/pass-through.toml has legs whose ends are no longer two \
+                 consecutive stations of this line -- ignored; regenerate it with \
+                 scripts/generate-pass-through.py"
             );
         }
         line.pass_through = fresh
@@ -3207,10 +3214,15 @@ mod pass_through_attach_tests {
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(lines.len(), 1, "the generated file is not a line");
         let line = &lines[0];
-        // LBG-GTW is kept (both ends are stations); ECR-GTW's only station
-        // is a stop, so that leg is dropped.
-        assert_eq!(line.pass_through.len(), 2);
+        // LBG-GTW is dropped: both ends are stations, but not consecutive
+        // ones (ECR sits between them), so it is stale. ECR-GTW's only
+        // station is a stop, so that leg is dropped too.
+        assert_eq!(line.pass_through.len(), 1);
         assert_eq!(line.route_runs(), [["LBG", "NXG", "NWD", "ECR", "GTW"]]);
+        assert!(
+            !line.holds_place("ZZZ"),
+            "a stale leg's via is not on the line"
+        );
         assert!(line.holds_place("NWD"));
         assert!(line.holds_place("ECR"));
         // A stop, never: not a station, and the evidence is the line's own
@@ -3248,6 +3260,21 @@ mod pass_through_attach_tests {
         let lines = LineDefinition::from_dir(&dir).expect("loads");
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(lines[0].pass_through, []);
+    }
+
+    #[test]
+    fn from_dir_drops_legs_left_non_consecutive_by_an_inserted_station() {
+        // Generated when the line ran LBG-GTW; ECR was inserted since. The
+        // stale leg's via stations must not count as on the line, which
+        // route_runs already ignores.
+        let dir = catalogue_dir(Some(
+            "source_dates = [\"2026-10-07\"]\n[lines.bml]\nLBG-GTW = [\"NXG\", \"PUR\"]\n",
+        ));
+        let lines = LineDefinition::from_dir(&dir).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(lines[0].pass_through, []);
+        assert!(!lines[0].holds_place("PUR"));
+        assert_eq!(lines[0].stations_for_place("PUR"), [] as [String; 0]);
     }
 
     #[test]
