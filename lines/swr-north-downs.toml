@@ -71,7 +71,7 @@ operators = ["GW", "SW", "SN"]
 # STATION OVERLAP - Reading and Guildford
 # ============================================================================
 # Reading (RDG) is already in several files (gwr-main-line, gwr-cotswold,
-# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line,
+# gwr-thames-valley, elizabeth-line, xc-south-coast, wcml,
 # etc.) as a multi-line hub; those files already apply the
 # "station overlap, own segment name" precedent for RDG (see
 # gwr-thames-valley.toml's own note). This file follows the identical
@@ -143,7 +143,7 @@ crs = "RDG"
 role = "terminus"
 segment = "north-downs-reading-guildford"
 # Reading. Station overlap with several other files (gwr-main-line,
-# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line
+# gwr-thames-valley, elizabeth-line, xc-south-coast, wcml
 # among them) - own segment name here, see STATION OVERLAP note above.
 
 [[stations]]

@@ -92,6 +92,14 @@ operators = ["GN"]  # Great Northern (GTR brand), same ATOC code as
 # scoped `ExclusiveSegment`, never `SharedSegment` - see the regression
 # tests below.
 #
+# UPDATED 2026-11 (segment-sharing review): the junction stations FPK and
+# AAP now sit on narrow shared segments (`gn-finsbury-park-junction`, with
+# great-northern-kings-lynn.toml and thameslink-cambridge.toml;
+# `gn-alexandra-palace-junction`, with great-northern-kings-lynn.toml), per
+# lines/SCHEMA.md's junction rule, so an incident at either matches this
+# line as SharedSegment. The other stations listed above keep this file's
+# own names, so the calling-pattern reasoning still holds for them.
+#
 # This makes `great-northern-suburban` a genuinely standalone line for the
 # purposes of `SegmentRegistry.is_shared()`: it shares no segment *name*
 # with any other already-curated file, so per COMMON.md's own exception no
@@ -198,7 +206,7 @@ segment = "gn-moorgate-tunnel"
 [[stations]]
 crs = "FPK"
 role = "junction"
-segment = "gn-moorgate-trunk"
+segment = "gn-finsbury-park-junction"
 # Finsbury Park. Physical joining point with the East Coast Main Line - see
 # the SHARED-TRUNK RESEARCH FINDING section above. Also a station on
 # `great-northern-kings-lynn.toml`'s `gn-ecml-slow-lines` segment - station
@@ -221,7 +229,7 @@ segment = "gn-moorgate-trunk"
 [[stations]]
 crs = "AAP"
 role = "junction"
-segment = "gn-moorgate-trunk"
+segment = "gn-alexandra-palace-junction"
 # Alexandra Palace. The real divergence point between this file's two
 # branches: the Hertford Loop Line leaves the East Coast Main Line at Wood
 # Green South Junction, just north of this station, per the "Hertford Loop

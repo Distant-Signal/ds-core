@@ -236,6 +236,45 @@ pub(crate) fn validate_lines(lines: &[LoadedLine], reference: &ReferenceData) ->
     findings
 }
 
+/// Catalogue-wide identity rules (lines/SCHEMA.md): every line id is
+/// unique, and each file is named `<id>.toml`. Errors.
+///
+/// A duplicate id would collapse without a word: `LineMatcher::new`,
+/// `SegmentRegistry` and the services' catalogue maps all key lines by id,
+/// so the later file would replace the earlier one.
+pub(crate) fn validate_identity(lines: &[LoadedLine]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let id = &line.definition.id;
+        let line_no = key_line_number(&line.raw, "id");
+        if let Some(first) = lines[..idx].iter().find(|other| &other.definition.id == id) {
+            findings.push(Finding {
+                path: line.path.clone(),
+                line_no,
+                severity: Severity::Error,
+                message: format!(
+                    "duplicate line id \"{id}\" (also {}) -- line ids must be unique; the \
+                     catalogue keys lines by id, so one would replace the other",
+                    first.path.display()
+                ),
+            });
+        }
+        let stem = line.path.file_stem().and_then(|s| s.to_str());
+        if stem != Some(id.as_str()) {
+            findings.push(Finding {
+                path: line.path.clone(),
+                line_no,
+                severity: Severity::Error,
+                message: format!(
+                    "line id \"{id}\" does not match the file name -- lines/SCHEMA.md: each \
+                     file is named <id>.toml (rename the file, never the published id)"
+                ),
+            });
+        }
+    }
+    findings
+}
+
 /// Checks the generated `lines/generated/pass-through.toml`
 /// (`scripts/generate-pass-through.py`, `common::pass_through`) against the
 /// catalogue and the reference data, without touching a database.
@@ -836,6 +875,43 @@ operators = ["XC"]
         let findings = pass_through_findings(Some(&body));
         assert_eq!(findings.len(), 2, "{findings:?}");
         assert!(findings.iter().all(|f| f.severity == Severity::Warning));
+    }
+
+    #[test]
+    fn duplicate_ids_and_mismatched_file_names_are_hard_errors() {
+        let dir = tempfile_dir();
+        write_line_file(&dir, "a", &line_body("a", "XC", "", ""));
+        write_line_file(&dir, "b", &line_body("a", "XC", "", ""));
+        write_line_file(&dir, "c", &line_body("c", "XC", "", ""));
+        let lines = load_all(&dir).unwrap();
+        let findings = validate_identity(&lines);
+        std::fs::remove_dir_all(&dir).ok();
+        let messages: Vec<String> = findings.iter().map(ToString::to_string).collect();
+        assert_eq!(findings.len(), 2, "{messages:#?}");
+        assert!(findings.iter().all(|f| f.severity == Severity::Error));
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("duplicate line id \"a\"")),
+            "{messages:#?}"
+        );
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("b.toml") && m.contains("does not match the file name")),
+            "{messages:#?}"
+        );
+    }
+
+    #[test]
+    fn the_real_catalogue_has_unique_ids_matching_file_names() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lines");
+        let lines = load_all(&dir).unwrap();
+        let findings: Vec<String> = validate_identity(&lines)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert!(findings.is_empty(), "{findings:#?}");
     }
 
     /// A per-test tempdir under the crate's own `target/` -- avoids a new

@@ -20,7 +20,7 @@ operators = [
 #     from Carstairs" running Carstairs - Haymarket - Edinburgh Waverley.
 #   - Wikipedia's "Avanti West Coast" article: its own calling-pattern list
 #     for the Euston-Glasgow/Edinburgh services names every intermediate
-#     stop south of Carlisle (already covered by `west-coast-main-line.toml`)
+#     stop south of Carlisle (already covered by `wcml.toml`)
 #     then "Carlisle, Motherwell (2 tpd)" for the Glasgow service, with the
 #     Edinburgh service following the same pattern but terminating at
 #     Haymarket/Edinburgh Waverley instead of continuing via Motherwell.
@@ -36,10 +36,10 @@ operators = [
 # (2026-09-21): CAR, LOC, CRS (Carstairs -- yes, its CRS code is literally
 # the three letters "CRS", not a typo for this repo's own worktree/tool
 # naming), MTH, GLC, HYM, EDB. All match the codes already in use elsewhere
-# in this catalogue for the same stations (`west-coast-main-line.toml`'s
+# in this catalogue for the same stations (`wcml.toml`'s
 # CAR, `tpe-anglo-scottish.toml`'s LOC/CRS/MTH/GLC/HYM/EDB) -- no
 # discrepancies found. TIPLOCs are set only where an already-verified in-repo
-# entry has one (CAR from `west-coast-main-line.toml`, CRS from
+# entry has one (CAR from `wcml.toml`, CRS from
 # `tpe-anglo-scottish.toml`); LOC/MTH/GLC/HYM/EDB carry no TIPLOC in this
 # catalogue today either, so none is invented here -- matches
 # `tpe-anglo-scottish.toml`'s own identical gaps for these same stations.
@@ -55,7 +55,7 @@ destination_crs_filter = ["GLC", "EDB", "EUS"]
 sample_stations = ["CAR", "MTH", "GLC", "HYM", "EDB"]
 
 # No match_keywords: "West Coast Main Line"/"WCML" are already
-# `west-coast-main-line.toml`'s own keywords, and `crates/common/src/
+# `wcml.toml`'s own keywords, and `crates/common/src/
 # matcher.rs`'s Tier 2 keyword match is a whole-line hit independent of
 # which station an incident actually names (confirmed by reading
 # `match_one`). Adding the same phrases here would make every WCML incident
@@ -67,7 +67,7 @@ sample_stations = ["CAR", "MTH", "GLC", "HYM", "EDB"]
 # own "No match_keywords" comments) -- station and operator evidence
 # carries this file instead, same as those two siblings.
 
-# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`
+# Long-distance inter-city thresholds, matching `wcml.toml`
 # and `tpe-anglo-scottish.toml`'s treatment of the same corridor.
 [severity_overrides]
 minor_delays_pct = 0.30
@@ -76,12 +76,12 @@ delay_threshold_minutes = 10
 # Carlisle to Glasgow Central and (from Carstairs) to Edinburgh Waverley,
 # ordered south to north then split into the two branches.
 #
-# CAR reuses `west-coast-main-line.toml`'s own `wcml-north` segment name
+# CAR reuses `wcml.toml`'s own `wcml-north` segment name
 # verbatim -- this is a genuine continuation of the same Avanti service
 # split across two files purely for this catalogue's file-per-line
 # organisation, the same trunk-sharing pattern `wcml-manchester.toml`/
 # `wcml-birmingham.toml` already use for their own EUS-STA stretch against
-# `west-coast-main-line.toml`. Per the shared-trunk rule of thumb in
+# `wcml.toml`. Per the shared-trunk rule of thumb in
 # `lines/SCHEMA.md`, CAR (the junction) stays on the shared `wcml-north`
 # segment; this file's own exclusive segment starts at the next station,
 # Lockerbie.
@@ -110,7 +110,7 @@ segment = "wcml-scotland-trunk"
 # No segment is shared with `tpe-anglo-scottish.toml` here or on either
 # branch below, deliberately: that file's own header comment already
 # establishes this Preston-Carlisle-and-onward stretch as
-# station-overlap-only against `west-coast-main-line.toml` ("no segment
+# station-overlap-only against `wcml.toml` ("no segment
 # name is shared... because that line's segments are far coarser than the
 # shared section, and an incident on the shared stretch matches both lines
 # by station anyway") -- the same reasoning applies here: different
@@ -161,7 +161,7 @@ segment = "wcml-scotland-edinburgh"
 # - Avanti's daily Euston-Blackpool North service: confirmed real (Wikipedia's
 #   "Avanti West Coast" article lists it, 1 train per day, Monday-Friday,
 #   calling at Crewe, Warrington Bank Quay, Wigan North Western, Preston --
-#   all already-modelled `west-coast-main-line.toml` stations except the
+#   all already-modelled `wcml.toml` stations except the
 #   Blackpool leg itself). Not added here: this file is scoped to the
 #   Anglo-Scottish arm north of Carlisle per this task's brief, and
 #   Blackpool North is a physically different branch (leaving the WCML at

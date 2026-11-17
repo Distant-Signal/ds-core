@@ -89,6 +89,21 @@ operators = ["TL"]
 # identical situation as (a). Per the same precedent, SVG, KBW and HIT are
 # kept on this file's own segment, not `gn-welwyn-hitchin-trunk`.
 #
+# UPDATED 2026-11 (segment-sharing review): (a), (b) and (d) are
+# superseded. The same track under two names made Stevenage, Hitchin and
+# the Cambridge Line stations "exclusive" to two lines at once, so an
+# incident there never said it affects the other. A calling-pattern
+# difference does not stop a track incident affecting trains that pass
+# (lines/SCHEMA.md's `swr-trunk-waterloo` is shared by lines that skip
+# its intermediate stations). Now:
+# - FPK sits on the narrow `gn-finsbury-park-junction`, shared with both
+#   Great Northern files (the fast/slow distinction in (a) stays: no
+#   other station of `gn-ecml-slow-lines` is claimed);
+# - KBW, SVG and HIT reuse `gn-welwyn-hitchin-trunk`;
+# - LET, BDK, AWM, RYS, CMS and CBG reuse `gn-hitchin-cambridge`, which
+#   `great-northern-kings-lynn.toml` now uses for Letchworth-Cambridge
+#   (its `gn-cambridge-kings-lynn-branch` starts after Cambridge).
+#
 # ============================================================================
 # KNEBWORTH ADDITION - AM-peak-only, confirmed via real booked timings
 # ============================================================================
@@ -128,9 +143,9 @@ operators = ["TL"]
 # Shepreth and Foxton entirely - see MEL/STH/FXN EXCLUSION below. That's a
 # genuine calling-pattern mismatch with `gn-cambridge-kings-lynn-branch`'s
 # own complete station list, the same (a)/(b) situation, not the clean (c)
-# match - so this branch gets its own segment name, `thameslink-cambridge-
-# branch`, not a reuse of GN's name. Stations this file shares with that
-# segment (LET, BDK, AWM, RYS, CMS, CBG) are station overlap only.
+# match - so this branch got its own segment name, `thameslink-cambridge-
+# branch`, not a reuse of GN's name (superseded 2026-11: see the UPDATED
+# note under (b); both files now use `gn-hitchin-cambridge` here).
 #
 # ============================================================================
 # STP - CORE JUNCTION
@@ -146,6 +161,15 @@ operators = ["TL"]
 # Cricklewood/Bedford), nor `southeastern-highspeed.toml`'s own `hs1-domestic`
 # segment (purpose-built HS1 infrastructure, unrelated). STP is station
 # overlap only between all four files.
+#
+# UPDATED 2026-11 (segment-sharing review): superseded. Keeping each
+# branch on its own name at the core left `thameslink-core` with a single
+# user, so the five core stations were "exclusive" to two lines at once.
+# The core stations now sit on the shared `thameslink-core` segment in
+# every Thameslink file that lists them, the junction stations included
+# (lines/SCHEMA.md: a junction belongs to the shared segment); a branch
+# that lists only STP or BFR uses `thameslink-core` there alone, which
+# marks nothing else shared (the segment is shared already).
 #
 # ============================================================================
 # WGC EXCLUSION - PEAK-ONLY THAMESLINK SERVICE AT WELWYN GARDEN CITY IS A
@@ -224,14 +248,14 @@ SPL = "STP"
 crs = "STP"
 tiploc = "STPX"
 role = "junction"
-segment = "thameslink-cambridge-peterborough-trunk"
+segment = "thameslink-core"
 # St Pancras International. Trains continue into the core tunnel southward
 # for other Thameslink branches; northward here via the Canal Tunnels.
 
 [[stations]]
 crs = "FPK"
 role = "junction"
-segment = "thameslink-cambridge-peterborough-trunk"
+segment = "gn-finsbury-park-junction"
 # Finsbury Park. Where the Canal Tunnels' connection to the ECML surfaces.
 # Station overlap only with great-northern-kings-lynn.toml and
 # great-northern-suburban.toml - see OVERLAP (a) above.
@@ -239,7 +263,7 @@ segment = "thameslink-cambridge-peterborough-trunk"
 [[stations]]
 crs = "KBW"
 role = "minor"
-segment = "thameslink-cambridge-peterborough-trunk"
+segment = "gn-welwyn-hitchin-trunk"
 # Knebworth. AM-peak-only (8 Peterborough-Horsham workings/day, 05:23-08:53
 # ex-Peterborough) - see KNEBWORTH ADDITION above. Station overlap only with
 # great-northern-kings-lynn.toml's `gn-welwyn-hitchin-trunk` segment (an
@@ -248,14 +272,14 @@ segment = "thameslink-cambridge-peterborough-trunk"
 [[stations]]
 crs = "SVG"
 role = "junction"
-segment = "thameslink-cambridge-peterborough-trunk"
+segment = "gn-welwyn-hitchin-trunk"
 # Stevenage. Station overlap only with great-northern-kings-lynn.toml -
 # see OVERLAP (b) above.
 
 [[stations]]
 crs = "HIT"
 role = "junction"
-segment = "thameslink-cambridge-peterborough-trunk"
+segment = "gn-welwyn-hitchin-trunk"
 # Hitchin. Station overlap only with great-northern-kings-lynn.toml - see
 # OVERLAP (b) above. This line's own branch point: Peterborough direct
 # continues on the ECML; the Cambridge Line diverges via the Hitchin
@@ -311,31 +335,31 @@ segment = "gn-peterborough-branch"
 [[stations]]
 crs = "LET"
 role = "major"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Letchworth Garden City.
 
 [[stations]]
 crs = "BDK"
 role = "minor"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Baldock.
 
 [[stations]]
 crs = "AWM"
 role = "minor"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Ashwell & Morden.
 
 [[stations]]
 crs = "RYS"
 role = "minor"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Royston.
 
 [[stations]]
 crs = "CMS"
 role = "minor"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Cambridge South. Opened 28 June 2026; confirmed served by Thameslink via
 # its own Wikipedia infobox/services section ("Thameslink provides two
 # trains per hour to Brighton via London St Pancras and two trains per hour
@@ -344,7 +368,7 @@ segment = "thameslink-cambridge-branch"
 [[stations]]
 crs = "CBG"
 role = "terminus"
-segment = "thameslink-cambridge-branch"
+segment = "gn-hitchin-cambridge"
 # Cambridge. This line's own terminus. Also great-northern-kings-lynn.toml's
 # own station (continues on to Cambridge North/King's Lynn - see KING'S
 # LYNN EXTENSION above) and xc-stansted.toml's own terminus (approached from

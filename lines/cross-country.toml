@@ -158,7 +158,9 @@ segment = "xc-north-east"
 [[stations]]
 crs = "DAR"
 role = "minor"
-segment = "xc-north-east"
+segment = "darlington-junction"
+# Darlington: narrow junction segment shared with the other lines calling
+# here (UPDATED 2026-11; see northern-tees-valley.toml's Darlington entry).
 
 [[stations]]
 crs = "YRK"
@@ -242,7 +244,7 @@ segment = "xc-midlands"
 # Tamworth (Low Level platforms). CrossCountry runs 2 tph to Nottingham via
 # Derby calling here -- confirmed by this audit's CIF-schedule cross-check.
 # Same CRS "TAM" already used elsewhere in this catalogue for the High
-# Level (WCML) platforms at this station (e.g. `west-coast-main-line.toml`'s
+# Level (WCML) platforms at this station (e.g. `wcml.toml`'s
 # own TAM entry, tiploc "TMWTHLL") -- legitimate CRS/station overlap between
 # two physically distinct platform groups at one station, not a duplicate
 # or mistake.

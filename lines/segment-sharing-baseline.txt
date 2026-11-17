@@ -1,0 +1,573 @@
+# Segment-sharing violations the catalogue already has, one key per line.
+# line-catalogue-validator fails on any violation not listed here, and on a
+# listed one that no longer occurs. See crates/line-catalogue-validator/src/
+# segment_sharing.rs and lines/SCHEMA.md (Segments). Rewrite with
+# `cargo run -p line-catalogue-validator -- --write-segment-baseline`.
+exclusive-on-several-lines ABD lner-ecml scotrail-aberdeen-inverness
+exclusive-on-several-lines ABW elizabeth-line southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines ACG chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines AFK southeastern-canterbury-west southeastern-highspeed southeastern-maidstone-east southeastern-main-line southern-marshlink
+exclusive-on-several-lines ALF emr-regional northern-erewash-valley
+exclusive-on-several-lines ALM cross-country lner-ecml tpe-borders
+exclusive-on-several-lines ANL scotrail-maryhill scotrail-north-clyde
+exclusive-on-several-lines APF gwr-thames-valley xc-south-coast
+exclusive-on-several-lines ASG emr-crewe-derby lnwr-stafford-crewe
+exclusive-on-several-lines ATB emr-crewe-derby emr-midland-main-line xc-cardiff
+exclusive-on-several-lines ATL emr-regional greater-anglia-breckland-line
+exclusive-on-several-lines AUD greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines AVF gwr-heart-of-wessex gwr-wessex-main
+exclusive-on-several-lines BAN chiltern-main-line xc-south-coast
+exclusive-on-several-lines BBG scotrail-central-belt scotrail-glasgow-aberdeen
+exclusive-on-several-lines BBN northern-clitheroe northern-east-lancashire
+exclusive-on-several-lines BBS chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines BCF chiltern-main-line chiltern-oxford
+exclusive-on-several-lines BCZ thameslink-bedford thameslink-rainham
+exclusive-on-several-lines BDI grand-central-bradford northern-calder-valley
+exclusive-on-several-lines BDM lnwr-marston-vale-line thameslink-bedford
+exclusive-on-several-lines BEE emr-crewe-derby emr-derwent-valley emr-midland-main-line xc-cardiff
+exclusive-on-several-lines BEV hull-trains northern-hull-scarborough
+exclusive-on-several-lines BGN gwr-south-wales tfw-maesteg tfw-vale-of-glamorgan
+exclusive-on-several-lines BHI lnwr-birmingham-crewe wcml-birmingham
+exclusive-on-several-lines BHM lnwr-birmingham-crewe wcml-birmingham wmr-camp-hill-line wmr-cross-city wmr-malvern-line
+exclusive-on-several-lines BID merseyrail-wirral tfw-borderlands
+exclusive-on-several-lines BKG c2c overground-suffragette
+exclusive-on-several-lines BKW lnwr-birmingham-crewe wcml-birmingham
+exclusive-on-several-lines BLY lnwr-birmingham-crewe lnwr-marston-vale-line
+exclusive-on-several-lines BMH swr-south-west-main xc-south-coast
+exclusive-on-several-lines BMO chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines BMV wmr-cross-city wmr-malvern-line
+exclusive-on-several-lines BNM elizabeth-line gwr-thames-valley
+exclusive-on-several-lines BOA gwr-heart-of-wessex gwr-wessex-main
+exclusive-on-several-lines BON northern-blackpool northern-clitheroe tpe-anglo-scottish
+exclusive-on-several-lines BPW gwr-bristol-gloucester gwr-south-wales
+exclusive-on-several-lines BRI gwr-bristol-gloucester gwr-heart-of-wessex gwr-main-line gwr-severn-beach gwr-wessex-main
+exclusive-on-several-lines BSH lnwr-euston-tring overground-lioness
+exclusive-on-several-lines BSW chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines BTB emr-derwent-valley tpe-south
+exclusive-on-several-lines BTH gwr-heart-of-wessex gwr-main-line gwr-wessex-main
+exclusive-on-several-lines BTN southern-coastway-east southern-coastway-west
+exclusive-on-several-lines BUH hull-trains lner-hull northern-leeds-selby tpe-north-hull
+exclusive-on-several-lines BWD northern-liverpool-warrington-manchester tpe-south
+exclusive-on-several-lines BWK cross-country lner-ecml tpe-borders
+exclusive-on-several-lines CAR northern-cumbrian-coast northern-settle-carlisle northern-tyne-valley scotrail-glasgow-south-western tpe-anglo-scottish
+exclusive-on-several-lines CBG greater-anglia-breckland-line greater-anglia-ipswich-cambridge greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines CBW southeastern-canterbury-west southeastern-highspeed
+exclusive-on-several-lines CDF gwr-south-wales tfw-ebbw-vale tfw-vale-of-glamorgan xc-cardiff
+exclusive-on-several-lines CDS southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines CGM hull-trains northern-hull-scarborough
+exclusive-on-several-lines CHD cross-country northern-erewash-valley
+exclusive-on-several-lines CHO gwr-thames-valley xc-south-coast
+exclusive-on-several-lines CLE emr-barton-line emr-derwent-valley tpe-south
+exclusive-on-several-lines CLJ overground-windrush southern-brighton-main-line southern-oxted-uckfield
+exclusive-on-several-lines CMB great-northern-kings-lynn greater-anglia-breckland-line
+exclusive-on-several-lines CMS greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines CNL lnwr-birmingham-crewe wcml-birmingham
+exclusive-on-several-lines COL greater-anglia-main-line greater-anglia-sunshine-coast
+exclusive-on-several-lines COV lnwr-birmingham-crewe wcml-birmingham wmr-nuneaton-coventry xc-south-coast
+exclusive-on-several-lines CPM gwr-main-line gwr-transwilts
+exclusive-on-several-lines CRE emr-crewe-derby lnwr-birmingham-crewe lnwr-stafford-crewe tfw-marches
+exclusive-on-several-lines CRI thameslink-bedford thameslink-rainham
+exclusive-on-several-lines CRO scotrail-central-belt scotrail-glasgow-aberdeen
+exclusive-on-several-lines CRS tpe-anglo-scottish wcml-scotland
+exclusive-on-several-lines CRW southern-arun-valley thameslink-southern
+exclusive-on-several-lines CSY wcml-birmingham xc-manchester
+exclusive-on-several-lines CTN southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines CTR merseyrail-wirral northern-mid-cheshire tfw-shrewsbury-chester
+exclusive-on-several-lines CUM gwr-thames-valley xc-south-coast
+exclusive-on-several-lines CWL gwr-cotswold wmr-malvern-line
+exclusive-on-several-lines CYP overground-windrush southern-metro-crystal-palace
+exclusive-on-several-lines DDG chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines DDP wcml-birmingham xc-manchester
+exclusive-on-several-lines DEP southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines DEW northern northern-huddersfield tpe-north-scarborough tpe-north-teesside
+exclusive-on-several-lines DFD southeastern-bexleyheath southeastern-dartford-loop southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines DGC chiltern-main-line chiltern-oxford
+exclusive-on-several-lines DHM cross-country lner-ecml tpe-north
+exclusive-on-several-lines DHN northern-huddersfield tpe-north-wakefield
+exclusive-on-several-lines DID gwr-thames-valley xc-south-coast
+exclusive-on-several-lines DMK overground-windrush thameslink-southern
+exclusive-on-several-lines DNM chiltern-main-line chiltern-oxford
+exclusive-on-several-lines DOC gwr-cornish-main-line gwr-tamar-valley
+exclusive-on-several-lines DON cross-country emr-lincoln-peterborough hull-trains northern-wakefield-line tpe-south
+exclusive-on-several-lines DPT gwr-cornish-main-line gwr-tamar-valley
+exclusive-on-several-lines DTW wmr-malvern-line wmr-snow-hill
+exclusive-on-several-lines DUN cross-country lner-ecml tpe-borders
+exclusive-on-several-lines DVP southeastern-chatham southeastern-highspeed southeastern-main-line
+exclusive-on-several-lines EAG grand-central northern-tees-valley tpe-north-teesside
+exclusive-on-several-lines ECR southern-oxted-uckfield southern-west-london
+exclusive-on-several-lines EDB cross-country lner-ecml lumo scotrail-borders-railway scotrail-north-berwick tpe-anglo-scottish tpe-borders wcml-scotland
+exclusive-on-several-lines EDG northern-liverpool-st-helens-wigan northern-liverpool-warrington-manchester
+exclusive-on-several-lines ELD southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines ELS thameslink-bedford thameslink-rainham
+exclusive-on-several-lines ELY emr-regional great-northern-kings-lynn greater-anglia-breckland-line xc-stansted
+exclusive-on-several-lines ESL swr-romsey-salisbury xc-south-coast
+exclusive-on-several-lines ESM greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines EUS lnwr-birmingham-crewe lnwr-euston-tring overground-lioness
+exclusive-on-several-lines EYN southeastern-maidstone-east thameslink-southern
+exclusive-on-several-lines FFD gwr-heart-of-wessex gwr-wessex-main
+exclusive-on-several-lines FGT southern-arun-valley thameslink-southern
+exclusive-on-several-lines FKC southeastern-highspeed southeastern-main-line
+exclusive-on-several-lines FKK lumo scotrail-central-belt
+exclusive-on-several-lines FKW southeastern-highspeed southeastern-main-line
+exclusive-on-several-lines FOD southern-arun-valley southern-coastway-west
+exclusive-on-several-lines FTN southern-coastway-west swr-netley-line swr-portsmouth-direct
+exclusive-on-several-lines GBL emr-lincoln-peterborough northern-sheffield-lincoln
+exclusive-on-several-lines GER chiltern-main-line chiltern-oxford
+exclusive-on-several-lines GLC scotrail-argyle scotrail-cathcart-circle scotrail-inverclyde scotrail-paisley-canal scotrail-shotts tpe-anglo-scottish wcml-scotland
+exclusive-on-several-lines GLQ lumo scotrail-central-belt scotrail-cumbernauld scotrail-glasgow-aberdeen scotrail-maryhill
+exclusive-on-several-lines GLT scotrail-fife-circle scotrail-levenmouth
+exclusive-on-several-lines GMB emr-barton-line emr-derwent-valley tpe-south
+exclusive-on-several-lines GMD emr-barton-line emr-derwent-valley
+exclusive-on-several-lines GMV gwr-cotswold wmr-malvern-line
+exclusive-on-several-lines GNH southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines GNW southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines GOR gwr-thames-valley xc-south-coast
+exclusive-on-several-lines GPO overground-mildmay overground-suffragette
+exclusive-on-several-lines GRA emr-poacher emr-regional hull-trains
+exclusive-on-several-lines GRC greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines GRP southeastern-bromley-north southeastern-main-line
+exclusive-on-several-lines HAB emr-barton-line emr-derwent-valley tpe-south
+exclusive-on-several-lines HAT great-northern-kings-lynn great-northern-suburban
+exclusive-on-several-lines HAV southern-coastway-west swr-portsmouth-direct
+exclusive-on-several-lines HBL merseyrail-northern northern-wigan-kirkby
+exclusive-on-several-lines HDM chiltern-main-line chiltern-oxford
+exclusive-on-several-lines HEN thameslink-bedford thameslink-rainham
+exclusive-on-several-lines HFD gwr-cotswold tfw-marches wmr-malvern-line
+exclusive-on-several-lines HFX grand-central-bradford northern-calder-valley
+exclusive-on-several-lines HGR southeastern-dartford-loop southeastern-main-line
+exclusive-on-several-lines HGS southeastern-hastings-line southern-coastway-east southern-marshlink
+exclusive-on-several-lines HGT lner-leeds northern-harrogate-line
+exclusive-on-several-lines HIA lnwr-birmingham-crewe wcml-birmingham
+exclusive-on-several-lines HLS southern-coastway-west swr-netley-line swr-portsmouth-direct
+exclusive-on-several-lines HNX merseyrail-northern northern-liverpool-warrington-manchester
+exclusive-on-several-lines HOR southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines HOW hull-trains lner-hull northern-leeds-selby
+exclusive-on-several-lines HPD thameslink-bedford thameslink-rainham
+exclusive-on-several-lines HPL grand-central northern-durham-coast
+exclusive-on-several-lines HRH southern-arun-valley thameslink-southern
+exclusive-on-several-lines HRS lner-leeds northern-harrogate-line
+exclusive-on-several-lines HRW lnwr-euston-tring overground-lioness southern-west-london
+exclusive-on-several-lines HTN chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines HUD northern northern-huddersfield northern-penistone tpe-north tpe-north-hull tpe-north-scarborough tpe-north-teesside tpe-north-wakefield
+exclusive-on-several-lines HUL hull-trains lner-hull northern-hull-scarborough northern-leeds-selby tpe-north-hull
+exclusive-on-several-lines HUY northern northern-liverpool-st-helens-wigan
+exclusive-on-several-lines HWV elizabeth-heathrow heathrow-express
+exclusive-on-several-lines HWY chiltern-main-line chiltern-oxford
+exclusive-on-several-lines HXX elizabeth-heathrow heathrow-express
+exclusive-on-several-lines HYM lner-ecml lumo tpe-anglo-scottish wcml-scotland
+exclusive-on-several-lines IFI southern-arun-valley thameslink-southern
+exclusive-on-several-lines ILN emr-regional northern-erewash-valley
+exclusive-on-several-lines IPS greater-anglia-east-suffolk greater-anglia-felixstowe-branch greater-anglia-ipswich-cambridge greater-anglia-main-line
+exclusive-on-several-lines IRL northern-liverpool-warrington-manchester tpe-south
+exclusive-on-several-lines IVR elizabeth-line gwr-thames-valley
+exclusive-on-several-lines KDG emr-crewe-derby lnwr-stafford-crewe
+exclusive-on-several-lines KEY gwr-cornish-main-line gwr-tamar-valley
+exclusive-on-several-lines KGS chiltern-main-line xc-south-coast
+exclusive-on-several-lines KGX great-northern-kings-lynn hull-trains lumo
+exclusive-on-several-lines KIR merseyrail-northern northern-wigan-kirkby
+exclusive-on-several-lines KKM northern-blackpool northern-blackpool-south
+exclusive-on-several-lines KNN wmr-camp-hill-line wmr-cross-city
+exclusive-on-several-lines KNW wmr-nuneaton-coventry xc-south-coast
+exclusive-on-several-lines KTN thameslink-bedford thameslink-rainham
+exclusive-on-several-lines KYN gwr-heart-of-wessex gwr-main-line gwr-wessex-main
+exclusive-on-several-lines LBG southern-metro-crystal-palace southern-oxted-uckfield
+exclusive-on-several-lines LCN emr-lincoln-peterborough lner-lincoln northern-sheffield-lincoln
+exclusive-on-several-lines LDS cross-country lner-leeds northern-calder-valley northern-harrogate-line northern-huddersfield northern-wharfedale tpe-north tpe-north-hull tpe-north-scarborough tpe-north-teesside
+exclusive-on-several-lines LED gwr-cotswold wmr-malvern-line
+exclusive-on-several-lines LEI emr-midland-main-line xc-stansted
+exclusive-on-several-lines LEU lner-ecml scotrail-edinburgh-aberdeen
+exclusive-on-several-lines LGE emr-crewe-derby emr-derwent-valley emr-midland-main-line xc-cardiff
+exclusive-on-several-lines LIN scotrail-central-belt scotrail-stirling-dunblane
+exclusive-on-several-lines LIV emr-regional merseyrail-wirral northern northern-liverpool-st-helens-wigan northern-liverpool-warrington-manchester tpe-anglo-scottish tpe-north tpe-north-hull tpe-south wcml-liverpool
+exclusive-on-several-lines LMR grand-central-bradford northern-calder-valley
+exclusive-on-several-lines LMS chiltern-main-line wmr-nuneaton-coventry wmr-snow-hill xc-south-coast
+exclusive-on-several-lines LNY elizabeth-line gwr-thames-valley
+exclusive-on-several-lines LNZ scotrail-central-belt scotrail-glasgow-aberdeen
+exclusive-on-several-lines LOC tpe-anglo-scottish wcml-scotland
+exclusive-on-several-lines LPW chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines LPY emr-regional merseyrail-northern northern-liverpool-warrington-manchester tpe-south wcml-liverpool
+exclusive-on-several-lines LSK gwr-cornish-main-line gwr-looe-valley
+exclusive-on-several-lines LST greater-anglia-main-line overground-weaver
+exclusive-on-several-lines LTN thameslink-bedford thameslink-rainham
+exclusive-on-several-lines LTV lnwr-birmingham-crewe wmr-cross-city
+exclusive-on-several-lines LUT thameslink-bedford thameslink-rainham
+exclusive-on-several-lines LVC merseyrail-northern merseyrail-wirral
+exclusive-on-several-lines LVN southern-arun-valley thameslink-southern
+exclusive-on-several-lines LWS southern-coastway-east southern-seaford-branch
+exclusive-on-several-lines LWT greater-anglia-east-suffolk greater-anglia-wherry-lines
+exclusive-on-several-lines MAC wcml-manchester xc-manchester
+exclusive-on-several-lines MAI elizabeth-line gwr-marlow-branch gwr-thames-valley
+exclusive-on-several-lines MAN emr-regional northern-buxton-line northern-hope-valley northern-liverpool-warrington-manchester northern-mid-cheshire tpe-anglo-scottish tpe-north-scarborough tpe-north-teesside tpe-north-wakefield tpe-south wcml-manchester xc-manchester
+exclusive-on-several-lines MBR northern-esk-valley tpe-north-teesside
+exclusive-on-several-lines MCH emr-regional xc-stansted
+exclusive-on-several-lines MCO emr-regional northern-liverpool-warrington-manchester tpe-anglo-scottish tpe-north-teesside tpe-south
+exclusive-on-several-lines MCV northern-calder-valley tpe-north tpe-north-hull tpe-north-scarborough tpe-north-teesside
+exclusive-on-several-lines MHM southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines MHS northern-wakefield-line tpe-south
+exclusive-on-several-lines MIA tpe-anglo-scottish tpe-north-scarborough tpe-north-teesside
+exclusive-on-several-lines MIL thameslink-bedford thameslink-rainham
+exclusive-on-several-lines MIR grand-central-bradford northern-huddersfield tpe-north-wakefield
+exclusive-on-several-lines MKT greater-anglia-gainsborough-line greater-anglia-main-line
+exclusive-on-several-lines MLT northern-yorkshire-coast tpe-north-scarborough
+exclusive-on-several-lines MNG greater-anglia-main-line greater-anglia-mayflower-line
+exclusive-on-several-lines MPT cross-country lner-ecml lumo tpe-borders
+exclusive-on-several-lines MRF merseyrail-northern merseyrail-wirral
+exclusive-on-several-lines MSR southeastern-canterbury-west southeastern-chatham
+exclusive-on-several-lines MTH scotrail-argyle tpe-anglo-scottish wcml-scotland
+exclusive-on-several-lines MVL gwr-cotswold wmr-malvern-line
+exclusive-on-several-lines MZH southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines NBY gwr-thames-valley gwr-west-of-england
+exclusive-on-several-lines NCE emr-barton-line emr-derwent-valley
+exclusive-on-several-lines NCL cross-country lner-ecml lumo northern-durham-coast northern-northumberland-line northern-tyne-valley tpe-borders tpe-north
+exclusive-on-several-lines NFL southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines NLT chiltern-main-line chiltern-oxford
+exclusive-on-several-lines NLW northern tpe-north
+exclusive-on-several-lines NOR northern-hallam-line tpe-north-wakefield
+exclusive-on-several-lines NOT emr-midland-main-line emr-poacher emr-regional emr-robin-hood northern-erewash-valley xc-cardiff
+exclusive-on-several-lines NRB southern-metro-sutton southern-west-london
+exclusive-on-several-lines NRW emr-regional greater-anglia-bittern-line greater-anglia-breckland-line greater-anglia-main-line greater-anglia-wherry-lines
+exclusive-on-several-lines NTR grand-central lner-ecml tpe-north-teesside
+exclusive-on-several-lines NUN lnwr-birmingham-crewe wmr-nuneaton-coventry xc-stansted
+exclusive-on-several-lines NWD overground-windrush southern-metro-crystal-palace
+exclusive-on-several-lines NWE greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines NWP gwr-south-wales tfw-ebbw-vale tfw-marches xc-cardiff
+exclusive-on-several-lines OLF gwr-heart-of-wessex gwr-main-line gwr-wessex-main
+exclusive-on-several-lines OLT chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines OMS merseyrail-northern northern-ormskirk
+exclusive-on-several-lines ORE southern-coastway-east southern-marshlink
+exclusive-on-several-lines OTF southeastern-maidstone-east thameslink-southern
+exclusive-on-several-lines OXF chiltern-oxford gwr-cotswold gwr-thames-valley xc-south-coast
+exclusive-on-several-lines OXN northern-lakes tpe-anglo-scottish
+exclusive-on-several-lines PAD gwr-thames-valley heathrow-express
+exclusive-on-several-lines PAN gwr-thames-valley xc-south-coast
+exclusive-on-several-lines PAR gwr-atlantic-coast gwr-cornish-main-line
+exclusive-on-several-lines PBO emr-lincoln-peterborough emr-regional xc-stansted
+exclusive-on-several-lines PBR great-northern-kings-lynn great-northern-suburban
+exclusive-on-several-lines PDW southeastern-main-line southeastern-medway-valley
+exclusive-on-several-lines PFM grand-central-bradford northern-pontefract-line
+exclusive-on-several-lines PLU southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines PMH southern-coastway-west swr-netley-line swr-portsmouth-direct
+exclusive-on-several-lines PMR overground-windrush southern-metro-crystal-palace thameslink-southern
+exclusive-on-several-lines PMS southern-coastway-west swr-netley-line swr-portsmouth-direct
+exclusive-on-several-lines PMT scotrail-central-belt scotrail-stirling-dunblane
+exclusive-on-several-lines PRE northern-blackpool northern-blackpool-south northern-east-lancashire northern-ormskirk tpe-anglo-scottish
+exclusive-on-several-lines PRR chiltern-aylesbury chiltern-main-line chiltern-oxford
+exclusive-on-several-lines PTH scotrail-glasgow-aberdeen scotrail-highland-main-line
+exclusive-on-several-lines PUR southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines QRP overground-windrush southern-metro-crystal-palace
+exclusive-on-several-lines RAD gwr-thames-valley xc-south-coast
+exclusive-on-several-lines RCC northern-tees-valley tpe-north-teesside
+exclusive-on-several-lines RDG elizabeth-line gwr-thames-valley xc-south-coast
+exclusive-on-several-lines RDH southern-brighton-main-line swr-north-downs thameslink-southern
+exclusive-on-several-lines RDT thameslink-bedford thameslink-rainham
+exclusive-on-several-lines RDW gwr-thames-valley xc-south-coast
+exclusive-on-several-lines RET hull-trains northern-sheffield-lincoln
+exclusive-on-several-lines RGL lnwr-birmingham-crewe wmr-chase-line
+exclusive-on-several-lines RMF elizabeth-shenfield greater-anglia-main-line overground-liberty
+exclusive-on-several-lines RML northern-hope-valley northern-rose-hill
+exclusive-on-several-lines RSN lner-ecml tpe-borders
+exclusive-on-several-lines SAC thameslink-bedford thameslink-rainham
+exclusive-on-several-lines SAD wcml-birmingham xc-manchester
+exclusive-on-several-lines SAF southern-brighton-main-line thameslink-southern
+exclusive-on-several-lines SAV chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines SBJ wmr-snow-hill wmr-stourbridge-town
+exclusive-on-several-lines SBY hull-trains lner-hull northern-leeds-selby tpe-north-hull
+exclusive-on-several-lines SCG southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines SDH chiltern-main-line chiltern-oxford
+exclusive-on-several-lines SDN swr-netley-line xc-south-coast
+exclusive-on-several-lines SDR chiltern-main-line chiltern-oxford
+exclusive-on-several-lines SEA grand-central northern-durham-coast
+exclusive-on-several-lines SED greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines SEH southeastern-maidstone-east thameslink-southern
+exclusive-on-several-lines SER gwr-cornish-main-line gwr-st-ives-bay
+exclusive-on-several-lines SEV southeastern-main-line thameslink-southern
+exclusive-on-several-lines SGB wcml-birmingham wmr-snow-hill xc-manchester
+exclusive-on-several-lines SGR southeastern-bexleyheath southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines SHF cross-country northern-hope-valley northern-sheffield-lincoln northern-wakefield-line tpe-south
+exclusive-on-several-lines SHR tfw-cambrian tfw-shrewsbury-chester
+exclusive-on-several-lines SJP gwr-avocet-line swr-west-of-england
+exclusive-on-several-lines SLB northern-tees-valley tpe-north-teesside
+exclusive-on-several-lines SLD northern-blackpool northern-clitheroe
+exclusive-on-several-lines SLO elizabeth-line gwr-thames-valley gwr-windsor-branch
+exclusive-on-several-lines SLQ southeastern-hastings-line southern-coastway-east
+exclusive-on-several-lines SLR emr-lincoln-peterborough emr-poacher
+exclusive-on-several-lines SMA chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines SMK greater-anglia-ipswich-cambridge greater-anglia-main-line
+exclusive-on-several-lines SMR wcml-birmingham xc-manchester
+exclusive-on-several-lines SNF elizabeth-shenfield greater-anglia-main-line greater-anglia-southend-victoria
+exclusive-on-several-lines SNH northern-liverpool-st-helens-wigan tpe-anglo-scottish
+exclusive-on-several-lines SOA swr-south-west-main xc-south-coast
+exclusive-on-several-lines SOL chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines SOO southeastern-medway-valley thameslink-rainham
+exclusive-on-several-lines SOP merseyrail-northern northern-manchester-southport
+exclusive-on-several-lines SOT emr-crewe-derby lnwr-stafford-crewe wcml-manchester xc-manchester
+exclusive-on-several-lines SOU swr-netley-line swr-south-west-main xc-south-coast
+exclusive-on-several-lines SPT emr-regional northern-buxton-line northern-hope-valley northern-mid-cheshire tpe-south wcml-manchester xc-manchester
+exclusive-on-several-lines SRA elizabeth-shenfield greater-anglia-main-line overground-mildmay
+exclusive-on-several-lines SRC southern-metro-sutton southern-west-london
+exclusive-on-several-lines SRG chiltern-main-line chiltern-oxford
+exclusive-on-several-lines SRS southern-metro-sutton southern-west-london
+exclusive-on-several-lines SRU chiltern-main-line chiltern-oxford
+exclusive-on-several-lines SSD greater-anglia-stansted-express xc-stansted
+exclusive-on-several-lines STA lnwr-birmingham-crewe lnwr-stafford-crewe xc-manchester
+exclusive-on-several-lines STJ gwr-south-wales xc-cardiff
+exclusive-on-several-lines STY chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines SUD chiltern-main-line chiltern-oxford
+exclusive-on-several-lines SUN grand-central northern-durham-coast
+exclusive-on-several-lines SVG great-northern-suburban hull-trains lumo
+exclusive-on-several-lines SWM southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines SXY emr-lincoln-peterborough northern-sheffield-lincoln
+exclusive-on-several-lines SYB northern tpe-north-hull tpe-north-wakefield
+exclusive-on-several-lines TAP elizabeth-line gwr-thames-valley
+exclusive-on-several-lines THI grand-central tpe-north-teesside
+exclusive-on-several-lines THL lnwr-birmingham-crewe wcml-birmingham
+exclusive-on-several-lines THP southeastern-canterbury-west southeastern-chatham southeastern-highspeed
+exclusive-on-several-lines TIP wcml-birmingham xc-manchester
+exclusive-on-several-lines TLH gwr-thames-valley xc-south-coast
+exclusive-on-several-lines TON southeastern-hastings-line southeastern-main-line
+exclusive-on-several-lines TRO gwr-heart-of-wessex gwr-transwilts gwr-wessex-main
+exclusive-on-several-lines TRU gwr-cornish-main-line gwr-maritime-line
+exclusive-on-several-lines TTF emr-regional greater-anglia-breckland-line
+exclusive-on-several-lines TTH southern-metro-sutton southern-west-london
+exclusive-on-several-lines TUH southern-metro-crystal-palace thameslink-southern
+exclusive-on-several-lines TWY elizabeth-line gwr-henley-branch gwr-thames-valley
+exclusive-on-several-lines TYS chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines UNI wmr-cross-city wmr-malvern-line
+exclusive-on-several-lines UPM c2c overground-liberty
+exclusive-on-several-lines URM northern-liverpool-warrington-manchester tpe-south
+exclusive-on-several-lines VIC southern-brighton-main-line southern-oxted-uckfield
+exclusive-on-several-lines WAC emr-regional northern-liverpool-warrington-manchester tpe-south
+exclusive-on-several-lines WAW northern-liverpool-warrington-manchester tpe-south
+exclusive-on-several-lines WCB southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines WCX chiltern-main-line chiltern-oxford
+exclusive-on-several-lines WCY overground-windrush southern-metro-crystal-palace southern-metro-sutton
+exclusive-on-several-lines WDT elizabeth-line gwr-thames-valley
+exclusive-on-several-lines WEY gwr-heart-of-wessex swr-south-west-main
+exclusive-on-several-lines WFI greater-anglia-east-suffolk greater-anglia-felixstowe-branch
+exclusive-on-several-lines WFJ lnwr-abbey-line lnwr-birmingham-crewe lnwr-euston-tring overground-lioness southern-west-london
+exclusive-on-several-lines WGC great-northern-kings-lynn great-northern-suburban
+exclusive-on-several-lines WGN northern-liverpool-st-helens-wigan tpe-anglo-scottish
+exclusive-on-several-lines WHP thameslink-bedford thameslink-rainham
+exclusive-on-several-lines WIC greater-anglia-crouch-valley greater-anglia-southend-victoria
+exclusive-on-several-lines WID emr-regional northern-liverpool-warrington-manchester
+exclusive-on-several-lines WIJ overground-lioness overground-mildmay
+exclusive-on-several-lines WIN swr-south-west-main xc-south-coast
+exclusive-on-several-lines WKF cross-country lner-leeds
+exclusive-on-several-lines WKK grand-central-bradford northern-hallam-line northern-pontefract-line tpe-north-wakefield
+exclusive-on-several-lines WLF greater-anglia-west-anglia xc-stansted
+exclusive-on-several-lines WMB overground-lioness southern-west-london
+exclusive-on-several-lines WMC chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines WMD emr-regional greater-anglia-breckland-line
+exclusive-on-several-lines WMR chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines WOF gwr-cotswold wmr-malvern-line wmr-snow-hill
+exclusive-on-several-lines WOS gwr-cotswold wmr-malvern-line wmr-snow-hill
+exclusive-on-several-lines WRK emr-robin-hood northern-sheffield-lincoln
+exclusive-on-several-lines WRP chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines WRU chiltern-main-line chiltern-oxford
+exclusive-on-several-lines WRW chiltern-main-line wmr-snow-hill
+exclusive-on-several-lines WRX tfw-borderlands tfw-shrewsbury-chester
+exclusive-on-several-lines WTM greater-anglia-braintree-branch greater-anglia-main-line
+exclusive-on-several-lines WVH wcml-birmingham xc-manchester
+exclusive-on-several-lines WWA southeastern-north-kent thameslink-rainham
+exclusive-on-several-lines YRK cross-country grand-central lner-ecml northern-harrogate-line northern-leeds-york tpe-north tpe-north-scarborough tpe-north-teesside tpe-north-wakefield
+junction-on-exclusive-segment c2c BKG
+junction-on-exclusive-segment c2c UPM
+junction-on-exclusive-segment chiltern-aylesbury PRR
+junction-on-exclusive-segment chiltern-main-line HTN
+junction-on-exclusive-segment chiltern-main-line LMS
+junction-on-exclusive-segment cross-country NCL
+junction-on-exclusive-segment cross-country YRK
+junction-on-exclusive-segment emr-barton-line HAB
+junction-on-exclusive-segment emr-lincoln-peterborough LCN
+junction-on-exclusive-segment emr-poacher GRA
+junction-on-exclusive-segment emr-poacher NOT
+junction-on-exclusive-segment emr-regional MAN
+junction-on-exclusive-segment emr-regional SPT
+junction-on-exclusive-segment emr-robin-hood NOT
+junction-on-exclusive-segment great-northern-kings-lynn ELY
+junction-on-exclusive-segment great-northern-kings-lynn WGC
+junction-on-exclusive-segment greater-anglia-bittern-line NRW
+junction-on-exclusive-segment greater-anglia-braintree-branch WTM
+junction-on-exclusive-segment greater-anglia-breckland-line ELY
+junction-on-exclusive-segment greater-anglia-breckland-line NRW
+junction-on-exclusive-segment greater-anglia-crouch-valley WIC
+junction-on-exclusive-segment greater-anglia-east-suffolk IPS
+junction-on-exclusive-segment greater-anglia-east-suffolk WFI
+junction-on-exclusive-segment greater-anglia-felixstowe-branch IPS
+junction-on-exclusive-segment greater-anglia-felixstowe-branch WFI
+junction-on-exclusive-segment greater-anglia-gainsborough-line MKT
+junction-on-exclusive-segment greater-anglia-ipswich-cambridge IPS
+junction-on-exclusive-segment greater-anglia-ipswich-cambridge SMK
+junction-on-exclusive-segment greater-anglia-main-line COL
+junction-on-exclusive-segment greater-anglia-main-line IPS
+junction-on-exclusive-segment greater-anglia-main-line MKT
+junction-on-exclusive-segment greater-anglia-main-line MNG
+junction-on-exclusive-segment greater-anglia-main-line RMF
+junction-on-exclusive-segment greater-anglia-main-line SMK
+junction-on-exclusive-segment greater-anglia-main-line SNF
+junction-on-exclusive-segment greater-anglia-main-line WTM
+junction-on-exclusive-segment greater-anglia-mayflower-line MNG
+junction-on-exclusive-segment greater-anglia-southend-victoria SNF
+junction-on-exclusive-segment greater-anglia-southend-victoria WIC
+junction-on-exclusive-segment greater-anglia-sunshine-coast COL
+junction-on-exclusive-segment greater-anglia-wherry-lines NRW
+junction-on-exclusive-segment gwr-atlantic-coast PAR
+junction-on-exclusive-segment gwr-bristol-gloucester BPW
+junction-on-exclusive-segment gwr-cornish-main-line SER
+junction-on-exclusive-segment gwr-cotswold OXF
+junction-on-exclusive-segment gwr-cotswold WOF
+junction-on-exclusive-segment gwr-greenford-branch WEA
+junction-on-exclusive-segment gwr-henley-branch TWY
+junction-on-exclusive-segment gwr-looe-valley LSK
+junction-on-exclusive-segment gwr-maritime-line TRU
+junction-on-exclusive-segment gwr-marlow-branch MAI
+junction-on-exclusive-segment gwr-south-wales STJ
+junction-on-exclusive-segment gwr-st-ives-bay SER
+junction-on-exclusive-segment gwr-tamar-valley PLY
+junction-on-exclusive-segment gwr-thames-valley DID
+junction-on-exclusive-segment gwr-thames-valley RDG
+junction-on-exclusive-segment gwr-transwilts CPM
+junction-on-exclusive-segment gwr-windsor-branch SLO
+junction-on-exclusive-segment hull-trains HUL
+junction-on-exclusive-segment lner-ecml HYM
+junction-on-exclusive-segment lner-leeds LDS
+junction-on-exclusive-segment lner-leeds SHY
+junction-on-exclusive-segment lnwr-birmingham-crewe MKC
+junction-on-exclusive-segment lnwr-birmingham-crewe RUG
+junction-on-exclusive-segment lnwr-birmingham-crewe STA
+junction-on-exclusive-segment lumo EDB
+junction-on-exclusive-segment northern NLW
+junction-on-exclusive-segment northern SYB
+junction-on-exclusive-segment northern-blackpool PRE
+junction-on-exclusive-segment northern-blackpool SLD
+junction-on-exclusive-segment northern-blackpool-south KKM
+junction-on-exclusive-segment northern-blackpool-south PRE
+junction-on-exclusive-segment northern-buxton-line SPT
+junction-on-exclusive-segment northern-calder-valley BDI
+junction-on-exclusive-segment northern-calder-valley HFX
+junction-on-exclusive-segment northern-clitheroe BON
+junction-on-exclusive-segment northern-clitheroe SLD
+junction-on-exclusive-segment northern-durham-coast NCL
+junction-on-exclusive-segment northern-east-lancashire BBN
+junction-on-exclusive-segment northern-hope-valley SPT
+junction-on-exclusive-segment northern-lakes OXN
+junction-on-exclusive-segment northern-leeds-selby SBY
+junction-on-exclusive-segment northern-mid-cheshire SPT
+junction-on-exclusive-segment northern-pontefract-line PFM
+junction-on-exclusive-segment northern-rose-hill RML
+junction-on-exclusive-segment northern-sheffield-lincoln RET
+junction-on-exclusive-segment northern-sheffield-lincoln WRK
+junction-on-exclusive-segment northern-tyne-valley CAR
+junction-on-exclusive-segment overground-lioness WIJ
+junction-on-exclusive-segment overground-mildmay GPO
+junction-on-exclusive-segment overground-mildmay WIJ
+junction-on-exclusive-segment overground-suffragette GPO
+junction-on-exclusive-segment scotrail-argyle MTH
+junction-on-exclusive-segment scotrail-fife-circle GLT
+junction-on-exclusive-segment scotrail-glasgow-aberdeen CRO
+junction-on-exclusive-segment scotrail-inverclyde PYG
+junction-on-exclusive-segment scotrail-levenmouth GLT
+junction-on-exclusive-segment scotrail-stirling-dunblane PMT
+junction-on-exclusive-segment southeastern-bexleyheath SGR
+junction-on-exclusive-segment southeastern-bromley-north GRP
+junction-on-exclusive-segment southeastern-canterbury-west AFK
+junction-on-exclusive-segment southeastern-canterbury-west MSR
+junction-on-exclusive-segment southeastern-chatham MSR
+junction-on-exclusive-segment southeastern-dartford-loop HGR
+junction-on-exclusive-segment southeastern-hastings-line TON
+junction-on-exclusive-segment southeastern-highspeed AFK
+junction-on-exclusive-segment southeastern-maidstone-east OTF
+junction-on-exclusive-segment southeastern-main-line AFK
+junction-on-exclusive-segment southeastern-main-line GRP
+junction-on-exclusive-segment southeastern-main-line HGR
+junction-on-exclusive-segment southeastern-main-line TON
+junction-on-exclusive-segment southeastern-medway-valley SOO
+junction-on-exclusive-segment southeastern-north-kent CTN
+junction-on-exclusive-segment southeastern-north-kent DFD
+junction-on-exclusive-segment southeastern-north-kent SGR
+junction-on-exclusive-segment southern-arun-valley FOD
+junction-on-exclusive-segment southern-arun-valley TBD
+junction-on-exclusive-segment southern-brighton-main-line CLJ
+junction-on-exclusive-segment southern-brighton-main-line PUR
+junction-on-exclusive-segment southern-coastway-east LWS
+junction-on-exclusive-segment southern-coastway-west FOD
+junction-on-exclusive-segment southern-coastway-west HAV
+junction-on-exclusive-segment southern-metro-crystal-palace CYP
+junction-on-exclusive-segment southern-metro-sutton WCY
+junction-on-exclusive-segment southern-oxted-uckfield ECR
+junction-on-exclusive-segment southern-seaford-branch LWS
+junction-on-exclusive-segment swr-netley-line SDN
+junction-on-exclusive-segment swr-west-of-england SAL
+junction-on-exclusive-segment tfw-borderlands BID
+junction-on-exclusive-segment tfw-borderlands SHT
+junction-on-exclusive-segment tfw-borderlands WRX
+junction-on-exclusive-segment tfw-cambrian SHR
+junction-on-exclusive-segment tfw-marches CRE
+junction-on-exclusive-segment tfw-marches NWP
+junction-on-exclusive-segment tfw-shrewsbury-chester CTR
+junction-on-exclusive-segment tfw-shrewsbury-chester SHR
+junction-on-exclusive-segment tfw-shrewsbury-chester WRX
+junction-on-exclusive-segment thameslink-bedford SAC
+junction-on-exclusive-segment thameslink-rainham CTN
+junction-on-exclusive-segment thameslink-rainham DFD
+junction-on-exclusive-segment thameslink-rainham SAC
+junction-on-exclusive-segment thameslink-rainham SGR
+junction-on-exclusive-segment thameslink-rainham SOO
+junction-on-exclusive-segment thameslink-southern OTF
+junction-on-exclusive-segment thameslink-southern PUR
+junction-on-exclusive-segment thameslink-southern RDH
+junction-on-exclusive-segment tpe-anglo-scottish CAR
+junction-on-exclusive-segment tpe-anglo-scottish CRS
+junction-on-exclusive-segment tpe-north LDS
+junction-on-exclusive-segment tpe-north YRK
+junction-on-exclusive-segment tpe-north-hull LDS
+junction-on-exclusive-segment tpe-north-hull SBY
+junction-on-exclusive-segment tpe-north-scarborough LDS
+junction-on-exclusive-segment tpe-north-scarborough YRK
+junction-on-exclusive-segment tpe-north-teesside LDS
+junction-on-exclusive-segment tpe-north-teesside YRK
+junction-on-exclusive-segment tpe-north-wakefield HUD
+junction-on-exclusive-segment tpe-south DON
+junction-on-exclusive-segment wcml-birmingham BHM
+junction-on-exclusive-segment wcml-scotland CRS
+junction-on-exclusive-segment wmr-nuneaton-coventry COV
+junction-on-exclusive-segment wmr-snow-hill HTN
+junction-on-exclusive-segment wmr-snow-hill TYS
+junction-on-exclusive-segment xc-cardiff STJ
+junction-on-exclusive-segment xc-manchester STA
+junction-on-exclusive-segment xc-south-coast DID
+junction-on-exclusive-segment xc-south-coast RDG
+junction-on-exclusive-segment xc-stansted ELY
+junction-on-exclusive-segment xc-stansted NUN
+junction-on-exclusive-segment xc-stansted PBO
+junction-on-exclusive-segment xc-stansted SST
+single-user-shared-segment chiltern-birmingham-approach
+single-user-shared-segment chiltern-oxford-approach
+single-user-shared-segment gn-moorgate-trunk
+single-user-shared-segment lnwr-euston-trunk
+single-user-shared-segment merseyrail-wirral-north-trunk
+single-user-shared-segment merseyrail-wirral-south-trunk
+single-user-shared-segment northern-glossop-hadfield-trunk
+single-user-shared-segment overground-weaver-edmonton-trunk
+single-user-shared-segment overground-weaver-trunk
+single-user-shared-segment overground-windrush-new-cross-gate-trunk
+single-user-shared-segment oxted-london-bridge-approach
+single-user-shared-segment oxted-trunk
+single-user-shared-segment oxted-victoria-approach
+single-user-shared-segment scotrail-far-north-trunk
+single-user-shared-segment scotrail-glasgow-aberdeen-approach
+single-user-shared-segment scotrail-inverclyde-approach
+single-user-shared-segment scotrail-largs-ardrossan-trunk
+single-user-shared-segment scotrail-north-clyde-west-approach
+single-user-shared-segment southern-metro-beckenham-approach
+single-user-shared-segment southern-metro-crystal-palace-trunk
+single-user-shared-segment southern-metro-crystal-palace-victoria-approach
+single-user-shared-segment tfw-cambrian-trunk
+single-user-shared-segment tfw-valley-merthyr-aberdare-junction
+single-user-shared-segment tfw-west-wales-trunk
+single-user-shared-segment thameslink-southern-trunk
+single-user-shared-segment wcml-scotland-trunk
+single-user-shared-segment wherry-trunk-brundall
+single-user-shared-segment wherry-trunk-reedham
+single-user-shared-segment wmr-cross-city-trunk
+single-user-shared-segment wmr-snow-hill-trunk

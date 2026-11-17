@@ -80,7 +80,7 @@ sample_stations = ["SOT", "WML", "MAN"]
 # out of scope for this plan (it's aggregator logic, not line data) --
 # flagged here as a known follow-up, not fixed.
 #
-# EUS through STA reuse `west-coast-main-line.toml`'s own `wcml-london`/
+# EUS through STA reuse `wcml.toml`'s own `wcml-london`/
 # `wcml-midlands` segment tags verbatim (same trunk-sharing pattern
 # `wcml-birmingham.toml` and `swr-alton.toml` already set). STA (Stafford)
 # is the real-world fork point for the Stoke-on-Trent branch -- per the
@@ -106,7 +106,7 @@ role = "minor"
 segment = "wcml-london"
 # Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
 # cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
-# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# `wcml.toml`'s own HML entry for the full sourcing note.
 # Kept identical across all five WCML files that carry this shared-trunk
 # row.
 
@@ -174,7 +174,7 @@ role = "minor"
 segment = "wcml-manchester-stoke"
 
 # Continuing the shared spine north from Stafford to Crewe -- reuses
-# `west-coast-main-line.toml`'s own `wcml-northwest` segment tag verbatim,
+# `wcml.toml`'s own `wcml-northwest` segment tag verbatim,
 # same as that file's CRE entry (role "junction", same rationale as STA
 # above). This is the real diverging point for Branch 2.
 [[stations]]

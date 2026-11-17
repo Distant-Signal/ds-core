@@ -5,7 +5,7 @@ category = "regional"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per
-  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # `wcml.toml`'s own `operators` comment (Task 1.0's
   # resolution) and reused verbatim by `wmr-snow-hill.toml`/
   # `lnwr-birmingham-crewe.toml`. This specific route is West Midlands
   # Railway-branded, not London Northwestern -- confirmed by every source

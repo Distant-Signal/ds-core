@@ -323,7 +323,16 @@ mod tests {
         assert!(registry.is_shared("swr-brockenhurst-junction"));
         let mut users = registry.lines_for_segment("swr-brockenhurst-junction");
         users.sort();
-        assert_eq!(users, vec!["swr-lymington-branch", "swr-south-west-main"]);
+        // CrossCountry's south-coast route calls here too (2026-11
+        // segment-sharing review: it was on its exclusive `xc-south-coast`).
+        assert_eq!(
+            users,
+            vec![
+                "swr-lymington-branch",
+                "swr-south-west-main",
+                "xc-south-coast"
+            ]
+        );
         assert!(!registry.is_shared("swr-swml-south"));
         assert_eq!(
             registry.segment_at("swr-south-west-main", "WEY"),

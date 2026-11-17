@@ -155,9 +155,10 @@ delay_threshold_minutes = 4
 crs = "BFR"
 tiploc = "BLFR"
 role = "junction"
-segment = "thameslink-southern-trunk"
-# Blackfriars. Station overlap only with thameslink-core.toml's own
-# `thameslink-core` segment - see CORE BOUNDARY above.
+segment = "thameslink-core"
+# Blackfriars. On the shared `thameslink-core` segment (UPDATED 2026-11,
+# see thameslink-core.toml's other users); Elephant & Castle below keeps
+# this file's own `thameslink-southern-trunk`.
 
 [[stations]]
 crs = "EPH"

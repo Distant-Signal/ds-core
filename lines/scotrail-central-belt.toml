@@ -16,7 +16,7 @@ operators = ["SR"]
 # Category: "main-line", not "commuter", despite the dense quarter-hourly
 # peak frequency on the core -- ScotRail's own service-level commitment
 # names this "Route 2a", the flagship link between Scotland's two largest
-# cities, structurally closer to how `west-coast-main-line.toml` and
+# cities, structurally closer to how `wcml.toml` and
 # `cross-country.toml` are categorised than to `thameslink-core.toml`'s
 # metro-frequency treatment.
 
@@ -193,7 +193,7 @@ segment = "scotrail-central-belt-edinburgh-throat"
 #
 # Glasgow Central - Edinburgh Waverley via Shotts, electrified April 2019.
 # Diverges from the West Coast Main Line at Uddingston and rejoins it at
-# Midcalder Junction (`west-coast-main-line.toml` does not currently model
+# Midcalder Junction (`wcml.toml` does not currently model
 # any station this far north -- its northernmost station is Carlisle
 # (CAR), with Glasgow Central noted only in a comment, not as a station --
 # so there is no live schema-level overlap to reconcile today, but a

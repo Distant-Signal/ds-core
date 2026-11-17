@@ -131,7 +131,7 @@ sample_stations = ["CTR", "HHD"]
 # Avanti's own through service genuinely runs over that stretch of track
 # too, even where it doesn't stop. See
 # `chester_station_overlap_matches_both_lines_as_exclusive`/
-# `llj_station_overlap_matches_both_lines_as_exclusive` (both updated,
+# `llj_station_matches_all_three_lines_as_shared` (both updated,
 # where both files genuinely have a matching station) and
 # `north_wales_coast_own_stretch_incident_is_shared_segment_but_single_match`/
 # `tfw_north_wales_coast_new_station_incident_resolves_exclusive_segment`
@@ -160,7 +160,7 @@ sample_stations = ["CTR", "HHD"]
 # ---------------------------------------------------------------------
 
 # London Euston to Holyhead via Crewe and Chester, ordered south-east to
-# north-west. EUS through CRE reuse `west-coast-main-line.toml`'s own
+# north-west. EUS through CRE reuse `wcml.toml`'s own
 # `wcml-london`/`wcml-midlands`/`wcml-northwest` segment tags verbatim
 # (same trunk-sharing pattern `wcml-birmingham.toml`, `wcml-manchester.toml`,
 # and `wcml-liverpool.toml` already set). Crewe is the real diverging
@@ -204,7 +204,7 @@ role = "minor"
 segment = "wcml-london"
 # Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
 # cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
-# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# `wcml.toml`'s own HML entry for the full sourcing note.
 # Kept identical across all five WCML files that carry this shared-trunk
 # row.
 

@@ -72,8 +72,8 @@ delay_threshold_minutes = 10
 #     (MIC), Shawford (SHW), Eastleigh (ESL), Southampton Airport Parkway
 #     (SOA), Swaythling (SWG), St Denys (SDN), Millbrook (MBK), Redbridge
 #     (RDB), Totton (TTN), Ashurst New Forest (ANF), Beaulieu Road (BEU),
-#     Brockenhurst (BCU, also the Lymington branch junction -- that branch
-#     itself is not modelled in this catalogue yet), Sway (SWY), New Milton
+#     Brockenhurst (BCU, also the Lymington branch junction; now on the
+#     shared `swr-brockenhurst-junction`, see its entry), Sway (SWY), New Milton
 #     (NWM), Hinton Admiral (HNA), Christchurch (CHR), Pokesdown (POK). None
 #     of these are claimed on `swr-south-west-main.toml`'s own
 #     `swr-swml-south` segment (that file independently uses the same
@@ -319,13 +319,14 @@ segment = "xc-south-coast"
 [[stations]]
 crs = "BCU"
 role = "junction"
-segment = "xc-south-coast"
+segment = "swr-brockenhurst-junction"
 # Brockenhurst: strictly between Beaulieu Road and Sway; also the Lymington
-# branch junction. UPDATE (SWR suburban-gap batch): the branch is now
-# modelled in `lines/swr-lymington-branch.toml`, which reuses
-# swr-south-west-main.toml's own `swr-swml-south` segment for this exact
-# station - a different physical/operator approach from this file's own,
-# so still station overlap only here, not a shared segment.
+# branch junction. On the narrow shared `swr-brockenhurst-junction` segment
+# that `swr-south-west-main.toml` and `swr-lymington-branch.toml` use here
+# (lines/SCHEMA.md: a junction belongs to the shared segment), as this file
+# does at Basingstoke with `swr-basingstoke-junction`. Before 2026-11 it
+# was on this file's exclusive `xc-south-coast`, so an incident at
+# Brockenhurst matched this line as exclusive to it.
 
 [[stations]]
 crs = "SWY"

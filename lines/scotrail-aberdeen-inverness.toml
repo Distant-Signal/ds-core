@@ -23,7 +23,7 @@ operators = ["SR"]
 # a half-hourly service operates between Inverurie and Aberdeen." This
 # matches this catalogue's precedent for a longer-distance regional trunk
 # with mixed single/double track -- `scotrail-highland-main-line.toml`'s
-# equivalent treatment -- rather than `west-coast-main-line.toml`/
+# equivalent treatment -- rather than `wcml.toml`/
 # `cross-country.toml`'s dense "main-line" treatment.
 #
 # Operators: only `SR` is listed, matching the task brief's explicit

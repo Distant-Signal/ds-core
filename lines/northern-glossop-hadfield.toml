@@ -81,7 +81,7 @@ operators = ["NT"]
 # including Dinting, then two single-station exclusive branch segments
 # (`northern-glossop-hadfield-hadfield`, `northern-glossop-hadfield-glossop`)
 # -- the same "trunk splits into two exclusive branches, no reconvergence"
-# shape `west-coast-main-line.toml`'s own `wcml-manchester.toml` already uses
+# shape `wcml.toml`'s own `wcml-manchester.toml` already uses
 # for its Stoke-on-Trent/Wilmslow branches (albeit reconverging there, not
 # diverging as here).
 #

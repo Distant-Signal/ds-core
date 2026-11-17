@@ -22,7 +22,7 @@ operators = ["SR"]
 # operators note below). This matches this catalogue's precedent for a
 # single-track, sparsely-served rural trunk -- `northern-furness.toml`
 # and `scotrail-ayrshire.toml`'s Stranraer extension -- rather than
-# `west-coast-main-line.toml`/`cross-country.toml`'s dense, largely
+# `wcml.toml`/`cross-country.toml`'s dense, largely
 # double-track "main-line" treatment, despite this being a genuinely
 # long, named intercity corridor.
 
@@ -31,7 +31,7 @@ operators = ["SR"]
 # route. Per Wikipedia's infobox, "London North Eastern Railway" (a
 # handful of daily Inverness-London Azuma workings) and the Caledonian
 # Sleeper also traverse this route end to end, the same way
-# `west-coast-main-line.toml` lists `CS` (Caledonian Sleeper) as a minor
+# `wcml.toml` lists `CS` (Caledonian Sleeper) as a minor
 # additional operator alongside its dominant West Coast TOCs. Unlike that
 # file, LNER/CS are NOT added here: every other file in this ScotRail
 # batch (`scotrail-central-belt.toml`, `scotrail-ayrshire.toml`,

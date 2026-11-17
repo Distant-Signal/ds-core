@@ -96,7 +96,7 @@ SPL = "STP"
 #
 # Regression tests for LTN, LUT and BDM are in
 # `crates/aggregator/src/matcher.rs` (STP was already covered by
-# `stp_station_overlap_matches_thameslink_core_bedford_and_highspeed_as_independent_exclusive_segments`).
+# `stp_station_overlap_matches_thameslink_lines_as_shared_and_highspeed_as_exclusive`).
 #
 # STP is ALSO thameslink-core.toml's own terminus (its own `thameslink-core`
 # segment) and southeastern-highspeed.toml's own terminus (its own
@@ -112,6 +112,15 @@ SPL = "STP"
 # all three files (thameslink-core, thameslink-bedford,
 # southeastern-highspeed), each keeping its own segment name, matching this
 # batch's LBG/AFK precedent.
+#
+# UPDATED 2026-11 (segment-sharing review): superseded. Keeping each
+# branch on its own name at the core left `thameslink-core` with a single
+# user, so the five core stations were "exclusive" to two lines at once.
+# The core stations now sit on the shared `thameslink-core` segment in
+# every Thameslink file that lists them, the junction stations included
+# (lines/SCHEMA.md: a junction belongs to the shared segment); a branch
+# that lists only STP or BFR uses `thameslink-core` there alone, which
+# marks nothing else shared (the segment is shared already).
 #
 # Ordered north to south, from Bedford down to the St Pancras junction with
 # the Thameslink core.
@@ -201,7 +210,7 @@ segment = "mml-bedford-st-pancras"
 crs = "STP"
 tiploc = "STPX"
 role = "junction"
-segment = "mml-bedford-st-pancras"
+segment = "thameslink-core"
 # Station overlap only with thameslink-core.toml and
 # southeastern-highspeed.toml here - see SEGMENT NAMING comment above.
 # Trains continue south into the Thameslink core tunnel towards

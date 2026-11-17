@@ -49,7 +49,7 @@ sample_stations = ["PRE", "CSO", "RUF", "OMS"]
 destination_crs_filter = ["OMS"]
 # OMS is this line's own unambiguous destination among the many other
 # services also departing the much busier Preston station (shared with
-# `west-coast-main-line.toml`, `northern-blackpool.toml` and
+# `wcml.toml`, `northern-blackpool.toml` and
 # `tpe-anglo-scottish.toml` -- station overlap only in all three cases; this
 # branch diverges from the WCML slow lines at Farington Curve Junction, a
 # non-passenger junction not listed as a station in any of those files, so

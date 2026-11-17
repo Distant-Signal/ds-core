@@ -5,7 +5,7 @@ category = "commuter"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per
-  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # `wcml.toml`'s own `operators` comment (Task 1.0's
   # resolution, cross-checked there against Network Rail's own References
   # and Symbols doc) and reused verbatim by `lnwr-birmingham-crewe.toml`.
   # Not re-verified a third time here; same fact, same source trail.
@@ -100,7 +100,7 @@ operators = [
 # different, still-uncovered stopping pattern.
 #
 # CRS codes: EUS/WFJ/TRI reused verbatim (CRS+tiploc) from
-# `west-coast-main-line.toml`, already twice-verified there. Harrow &
+# `wcml.toml`, already twice-verified there. Harrow &
 # Wealdstone (HRW) and Bushey (BSH) reused verbatim (CRS, no tiploc
 # confirmed) from `overground-lioness.toml`, which curates the same two
 # stations for the physically distinct Watford DC/Lioness line sharing the
@@ -137,7 +137,7 @@ sample_stations = ["EUS", "HRW", "HML", "TRI"]
 # route name for this specific short working (it has no separate brand;
 # it's simply described by its own origin/destination pair in the sources
 # above), and a bare "Tring" would be a weak, ambiguous match that would
-# also false-positive against `west-coast-main-line.toml`,
+# also false-positive against `wcml.toml`,
 # `wcml-birmingham.toml`, `wcml-manchester.toml`, `wcml-liverpool.toml` and
 # `wcml-north-wales.toml` -- all five of which already list Tring as a
 # station of their own (see the segment-sharing note below) without
@@ -159,13 +159,13 @@ sample_stations = ["EUS", "HRW", "HML", "TRI"]
 #
 # Segment-sharing decisions (grep-checked against every `lines/*.toml`
 # file's `crs =` lines before writing this):
-#   - EUS and WFJ are also modelled by `west-coast-main-line.toml`,
+#   - EUS and WFJ are also modelled by `wcml.toml`,
 #     `wcml-birmingham.toml`, `wcml-manchester.toml`, `wcml-liverpool.toml`
 #     and `wcml-north-wales.toml` (all five sharing that file's own
 #     `wcml-london` segment) and by `lnwr-birmingham-crewe.toml` (its own
 #     `lnwr-euston-trunk` segment). None of those segment names are reused
 #     here. Per `lnwr-birmingham-crewe.toml`'s own precedent for Rugby
-#     (overlapping `west-coast-main-line.toml`'s `wcml-midlands` by station
+#     (overlapping `wcml.toml`'s `wcml-midlands` by station
 #     only) and `xc-south-coast.toml`'s convention more generally: station
 #     overlap alone, without a sourced fact that this line's own trains are
 #     the same physical workings as those files' intercity/semi-fast

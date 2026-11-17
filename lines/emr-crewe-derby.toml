@@ -65,7 +65,7 @@ operators = ["EM"]  # East Midlands Railway
 #      same treatment Collingham/Swinderby avoid via the reuse in point 3.
 #      A genuine, documented, open question for a future revision.
 #
-# CRS codes: CRE reused verbatim from `west-coast-main-line.toml`/
+# CRS codes: CRE reused verbatim from `wcml.toml`/
 # `lnwr-birmingham-crewe.toml` (already-verified fact; this file's own
 # approach to Crewe, via Alsager/Stoke, is a physically distinct route from
 # LNWR's Stafford/Trent-Valley approach -- station-overlap only, see the
@@ -109,7 +109,7 @@ tiploc = "CREWE"
 role = "terminus"
 segment = "emr-crewe-derby-west"
 # Reuses the CRS+TIPLOC already established for this physical station in
-# `west-coast-main-line.toml`/`lnwr-birmingham-crewe.toml`. This line's own
+# `wcml.toml`/`lnwr-birmingham-crewe.toml`. This line's own
 # approach is via Alsager/Stoke-on-Trent, physically distinct from LNWR's
 # Stafford/Trent Valley Line approach -- station-overlap only, no segment
 # shared.

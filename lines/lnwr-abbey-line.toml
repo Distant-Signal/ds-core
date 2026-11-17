@@ -39,7 +39,7 @@ operators = ["LM"]
 # ============================================================================
 # STATION OVERLAP AT WATFORD JUNCTION - the WCML family
 # ============================================================================
-# WFJ is already in west-coast-main-line.toml (`wcml-london`) and
+# WFJ is already in wcml.toml (`wcml-london`) and
 # lnwr-birmingham-crewe.toml (`lnwr-euston-trunk`), the latter also operator
 # "LM". Even though the operator matches, this task found no evidence the
 # Abbey Line's own single-track branch shares running lines with the
@@ -95,7 +95,7 @@ destination_crs_filter = ["SAA", "WFJ"]
 # SCOPE BOUNDARIES - not modelled here
 # ============================================================================
 # - Any Watford Junction WCML/DC-line service: covered by
-#   west-coast-main-line.toml and lnwr-birmingham-crewe.toml, on physically
+#   wcml.toml and lnwr-birmingham-crewe.toml, on physically
 #   different track - see STATION OVERLAP note above.
 # - The unbuilt Bricket Wood passing loop / 30-minute-frequency proposal:
 #   not current infrastructure, not modelled.
@@ -107,7 +107,7 @@ destination_crs_filter = ["SAA", "WFJ"]
 crs = "WFJ"
 role = "terminus"
 segment = "lnwr-abbey-line"
-# Watford Junction. Station overlap with west-coast-main-line.toml and
+# Watford Junction. Station overlap with wcml.toml and
 # lnwr-birmingham-crewe.toml - see STATION OVERLAP note above.
 
 [[stations]]

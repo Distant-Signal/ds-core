@@ -31,14 +31,11 @@ match_keywords = ["Conwy Valley Line", "Llandudno branch line"]
 # deleted rather than kept alongside this one (see the git history for its
 # removal). CRS/TIPLOC sourcing for DGY and LLD is carried over unchanged
 # from that file: cross-checked against https://ds.cursed.solutions/api/stations,
-# matching each station's own Wikipedia infobox. LLJ's own CRS/TIPLOC and
-# its `tfw-conwy-valley-llandudno-junction` segment tag are left unchanged
-# below (that segment name is no longer genuinely shared with any other
-# file now that `tfw-llandudno-branch.toml` is gone, but it is left as-is
-# rather than folded back into the plain `tfw-conwy-valley` name, since
-# touching an untouched, correctly-tagged station isn't this correction's
-# job -- a future editor is free to simplify it once satisfied nothing else
-# will ever need to reuse it).
+# matching each station's own Wikipedia infobox. LLJ's own CRS/TIPLOC are
+# left unchanged below. Its old `tfw-conwy-valley-llandudno-junction`
+# segment tag, shared with no other file once `tfw-llandudno-branch.toml`
+# was gone, was replaced in 2026-11 by `tfw-north-wales-coast` (see the LLJ
+# entry below).
 
 # --- Full-coverage pilot (2026-09-21) ---
 #
@@ -186,11 +183,18 @@ delay_threshold_minutes = 10
 # `tfw-llandudno-branch.toml` (a later Wales/East Anglia batch addition)
 # DOES genuinely share track here (TfW's own Conwy Valley service
 # continues through this station to Llandudno -- see that file's own LLJ
-# note), so LLJ below uses a dedicated, narrow segment name,
+# note), so LLJ below used a dedicated, narrow segment name,
 # `tfw-conwy-valley-llandudno-junction`, reused verbatim by that file --
 # reconciled during integration merge to avoid over-broadening this file's
 # whole-route `tfw-conwy-valley` segment (which covers ten other stations
 # `tfw-llandudno-branch.toml` never reaches) into a false shared claim.
+#
+# UPDATED 2026-11: with `tfw-llandudno-branch.toml` gone that segment had
+# one user, so Llandudno Junction was "exclusive" to this line although
+# the North Wales Coast lines share it. Per lines/SCHEMA.md (a junction
+# belongs to the shared segment) LLJ is now on `tfw-north-wales-coast`,
+# shared with `tfw-north-wales-coast.toml` and `wcml-north-wales.toml`:
+# an incident at Llandudno Junction matches this line as SharedSegment.
 # Every other station below keeps the whole-route `tfw-conwy-valley` name
 # (matching `northern-furness.toml`'s treatment of its own through-junction
 # stations, LAN and CNF, which are tagged with that file's one whole-line
@@ -215,7 +219,7 @@ segment = "tfw-conwy-valley"
 crs = "LLJ"
 tiploc = "LANDUDJ"
 role = "junction"
-segment = "tfw-conwy-valley-llandudno-junction"
+segment = "tfw-north-wales-coast"
 
 [[stations]]
 crs = "GCW"

@@ -5,7 +5,7 @@ category = "commuter"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per the
-  # resolution already recorded in `west-coast-main-line.toml`'s own
+  # resolution already recorded in `wcml.toml`'s own
   # `operators` comment (Task 1.0) and reused verbatim by `wmr-snow-hill.toml`
   # (Task 1.5): "LN" was checked and found to be a phantom/unused code, "LM"
   # is the one real code for both brands. Not re-verified again from
@@ -99,13 +99,13 @@ delay_threshold_minutes = 5
 # code below, per the Global Constraints): this line has real
 # station-level overlap with three already-curated files, none of which
 # get a shared segment name here, following the precedent
-# `xc-manchester.toml` already set against `west-coast-main-line.toml`
+# `xc-manchester.toml` already set against `wcml.toml`
 # ("no segment is shared... because that line's segments are far coarser
 # than the shared section, and an incident on the shared stretch matches
 # both lines by station anyway"):
 #   - Lichfield Trent Valley (LTV): also served by the WCML's Trent Valley
 #     Line (low-level platforms, this line uses the high-level platform) --
-#     `west-coast-main-line.toml`/`wcml-manchester.toml`/
+#     `wcml.toml`/`wcml-manchester.toml`/
 #     `wcml-liverpool.toml`/`wcml-north-wales.toml` all tag it
 #     `wcml-midlands`.
 #   - University (UNI): also served by CrossCountry's Birmingham-Bristol

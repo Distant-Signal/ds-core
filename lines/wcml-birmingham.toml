@@ -28,7 +28,7 @@ sample_stations = ["COV", "BHM", "WVH"]
 
 # London Euston to Birmingham New Street via Rugby and Coventry, ordered
 # south-east to north-west. Shares the Euston-area and Milton
-# Keynes/Rugby-area trunk with `west-coast-main-line.toml` (stations EUS
+# Keynes/Rugby-area trunk with `wcml.toml` (stations EUS
 # through RUG below reuse that file's own `wcml-london`/`wcml-midlands`
 # segment tags verbatim, mirroring the trunk-sharing pattern
 # `swr-alton.toml` sets against `swr-south-west-main.toml`). Rugby is the
@@ -133,7 +133,7 @@ role = "minor"
 segment = "wcml-london"
 # Hemel Hempstead. CRS/TIPLOC corrected by this audit's CIF-schedule
 # cross-check -- the previous "HMP"/"HAMPTON" entry was a bogus pair; see
-# `west-coast-main-line.toml`'s own HML entry for the full sourcing note.
+# `wcml.toml`'s own HML entry for the full sourcing note.
 # Kept identical across all five WCML files that carry this shared-trunk
 # row.
 

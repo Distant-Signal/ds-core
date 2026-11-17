@@ -2,7 +2,8 @@
 
 Each file under `lines/` defines one National Rail "line" — the user-facing
 unit a status will be reported against. Files are TOML, one line per file,
-named `<id>.toml`.
+named `<id>.toml`; ids are unique (both enforced by
+`line-catalogue-validator`).
 
 ## Fields
 
@@ -15,8 +16,8 @@ named `<id>.toml`.
 | `operators` | list[string] | yes | ATOC codes of TOCs whose services define this line. |
 | `stations` | list[Station] | yes | Ordered list of CRS codes from one end to the other. |
 | `sample_stations` | list[string] | no | CRS codes to poll for LDBWS sampling. Each must be one of this line's own `[[stations]]` (enforced by `line-catalogue-validator`). |
-| `match_keywords` | list[string] | no | Free-text keywords for matching Knowledgebase incidents. |
-| `excluded_keywords` | list[string] | no | Vetoes a Knowledgebase incident match. |
+| `match_keywords` | list[string] | no | Free-text keywords for matching Knowledgebase incidents. Case-insensitive, whole words: "LNER" matches "LNER's" but not "vulnerable", "Northern line" not "Northern lines". A keyword edge that is punctuation needs no word boundary there. |
+| `excluded_keywords` | list[string] | no | Vetoes a Knowledgebase incident match when the summary names one, with the same whole-word rule. |
 | `severity_overrides` | dict | no | Per-line threshold overrides. |
 | `full_coverage_enabled` | bool | no | Opts the line into full-coverage (TRUST-vs-schedule) statistics. Defaults to `false`; the chart's `aggregator.fullCoverageEnabledDefault`/`api.fullCoverageEnabledDefault` (both `true` by default) enable it for every line regardless. |
 | `destination_crs_filter` | list[string] | no | When inferring from LDBWS, only count services whose `destination_crs` is in this list. Use this to disambiguate at shared trunk stations. Entries are service destinations, so they may lie beyond this line's own stations, but each must be a real CRS (enforced by `line-catalogue-validator`). |
@@ -86,7 +87,33 @@ Basingstoke (BSK) follows the same rule: the South West Main Line, the
 West of England line and CrossCountry's south-coast route all run through
 it, so it carries the narrow shared segment `swr-basingstoke-junction` in
 all three files, and each line's exclusive segment starts at the next
-station.
+station. CrossCountry calls at Brockenhurst too, on
+`swr-brockenhurst-junction`.
+
+The same track gets the same segment name in every file that runs over it,
+even where one line's trains pass stations the other calls at
+(`swr-trunk-waterloo` is shared by lines that skip most of its stations):
+an incident on that track affects both. Two routes that only meet at a
+station share a narrow junction segment there, nothing more.
+
+### Checked by the validator
+
+`line-catalogue-validator` reports three shapes that break this, each
+keyed in `lines/segment-sharing-baseline.txt`:
+
+- `exclusive-on-several-lines`: a station on a single-user segment in two
+  or more files, so "exclusive" to each of them;
+- `junction-on-exclusive-segment`: a `role = "junction"` station another
+  line also lists, on a single-user segment;
+- `single-user-shared-segment`: a segment with `junction`, `trunk` or
+  `approach` in its name that only one line uses.
+
+The baseline holds the violations the catalogue had when the check
+landed (2026-11); some are deliberate (two physically separate routes that
+share a station building). A violation not in the baseline fails the
+build, and so does a baselined one that no longer occurs, so fixing one
+means deleting its line. After review, a deliberate new one is added with
+`cargo run -p line-catalogue-validator -- --write-segment-baseline`.
 
 ## Train membership (which trains are a line's own)
 
@@ -126,7 +153,7 @@ line with one train per hour needs different thresholds from the WCML.
 
 ## Worked example
 
-See `west-coast-main-line.toml` and `thameslink-core.toml` in this directory.
+See `wcml.toml` and `thameslink-core.toml` in this directory.
 
 ## Curation rules
 

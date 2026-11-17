@@ -5,7 +5,7 @@ category = "commuter"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per Task
-  # 1.0's resolution (`west-coast-main-line.toml`'s own `operators`
+  # 1.0's resolution (`wcml.toml`'s own `operators`
   # comment) and `lnwr-euston-commuter.toml`'s (Task 1.7) independent
   # re-check of the same conclusion against railwaycodes.org.uk. Not
   # re-verified a third time here; same fact, same source trail.
@@ -101,7 +101,7 @@ operators = [
 #      is omitted for all nine rather than guessed (same reasoning as
 #      LBZ/BLY/WOL/NMP in `lnwr-euston-commuter.toml`). CRS+tiploc for
 #      MKC/RUG/NUN/TAM/LTV/STA/CRE are reused verbatim from
-#      `west-coast-main-line.toml` (already-curated facts); EUS/WFJ/LBZ/BLY
+#      `wcml.toml` (already-curated facts); EUS/WFJ/LBZ/BLY
 #      are reused verbatim from `lnwr-euston-commuter.toml`; BHM's CRS+tiploc
 #      is reused verbatim from `xc-manchester.toml`.
 #
@@ -141,7 +141,7 @@ operators = [
 #
 # Rugby is the genuine physical reconvergence point between the Northampton
 # Loop (Birmingham branch) and the direct Trent Valley route (Crewe branch)
-# -- source 3 above. It is NOT shared with `west-coast-main-line.toml`'s own
+# -- source 3 above. It is NOT shared with `wcml.toml`'s own
 # `wcml-midlands` segment that also covers Rugby: per this task's brief and
 # `xc-manchester.toml`'s established precedent, station overlap with WCML's
 # coarser segmentation doesn't force segment-sharing on its own, and an
@@ -227,7 +227,7 @@ operators = [
 #      Alsager) is a separate, longer diversionary alignment shown as its
 #      own branch (pink) on the official LNR map, distinct from the direct/
 #      fast Trent Valley alignment this file's Crewe branch already models
-#      (confirmed also by `west-coast-main-line.toml`, which models STA and
+#      (confirmed also by `wcml.toml`, which models STA and
 #      CRE as directly adjacent on `wcml-northwest`/`wcml-midlands` with no
 #      intermediate station). Neither is a minor-infill gap in this file's
 #      existing route; both are out of scope for this FILL-IN task. UPDATE
