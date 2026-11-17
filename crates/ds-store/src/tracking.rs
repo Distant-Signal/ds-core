@@ -307,22 +307,33 @@ pub async fn upsert_train_movement_on(
     .rows_affected()
         > 0;
 
-    // **Duplicates do not rewrite the current state (2026-11 review, W1).**
-    // A duplicate is the same TRUST movement (same dedup key, same
-    // `event_time`) delivered again: a redelivery, the backlog's copy or
-    // another subscriber's fan-out copy. Each copy's derived state depends
-    // on what its writer knew (the backlog derives without the
-    // destination), so letting the last copy win at an equal `event_time`
-    // made the status flap: the terminus ARRIVAL set `completed`, then a
-    // lagging copy of the same ARRIVAL wrote `en_route` back. The first
-    // copy's state stands; the one exception is a copy that can only
-    // advance it to `completed` (the copy that knew the destination
-    // landing second), which is the same "never regress, may finish" rule
-    // `trust_schema::journey::apply_movement` folds by.
-    if !inserted && event.status != "completed" {
-        tx.commit().await?;
-        return Ok(false);
-    }
+    // **When a duplicate may rewrite the current state (2026-11 review, W1).**
+    // A duplicate shares a stored movement's dedup key. Usually it is the
+    // same TRUST movement delivered again (a redelivery, the backlog's copy
+    // or another subscriber's fan-out copy), and each copy's derived state
+    // depends on what its writer knew (the backlog derives without the
+    // destination): letting the last copy win at an equal `event_time` made
+    // the status flap (the terminus ARRIVAL set `completed`, then a lagging
+    // copy of the same ARRIVAL wrote `en_route` back). But the dedup key
+    // leaves out the actual timestamp, so a different real event can share
+    // it too: a corrected movement (same planned time, new actual time) or
+    // a movement with no planned time passing the same STANOX again. So a
+    // duplicate (`$10` false) applies only when the stored status is not
+    // `completed` (a duplicate never undoes it) and one of:
+    //
+    // 1. its `event_time` is strictly newer than the stored one: a later
+    //    real event, not a copy of the one that set the state;
+    // 2. it finishes the train (`completed`, the copy that knew the
+    //    destination landing second): the "never regress, may finish" rule
+    //    `trust_schema::journey::apply_movement` folds by;
+    // 3. its `event_time` is the stored one and it carries strictly more of
+    //    the forward-looking fields: every one of `next_calling_point` and
+    //    `eta_next` the stored state has, plus at least one it lacks (the
+    //    fuller copy landing after the less complete one).
+    //
+    // An exact replay (same `event_time`, same or less information) changes
+    // nothing. A duplicate with no `event_time` at all can only apply
+    // through 2 or 3: it cannot be told apart from a replay.
 
     sqlx::query(
         "INSERT INTO train_current_state \
@@ -342,7 +353,18 @@ pub async fn upsert_train_movement_on(
          WHERE (EXCLUDED.event_time IS NULL \
             OR EXCLUDED.event_time >= train_current_state.event_time \
             OR train_current_state.event_time IS NULL) \
-           AND ($10 OR train_current_state.status IS DISTINCT FROM 'completed') \
+           AND ($10 OR (train_current_state.status IS DISTINCT FROM 'completed' \
+                AND (EXCLUDED.event_time > train_current_state.event_time \
+                  OR EXCLUDED.status = 'completed' \
+                  OR (EXCLUDED.event_time IS NOT DISTINCT FROM train_current_state.event_time \
+                      AND (train_current_state.next_calling_point IS NULL \
+                           OR EXCLUDED.next_calling_point IS NOT NULL) \
+                      AND (train_current_state.eta_next IS NULL \
+                           OR EXCLUDED.eta_next IS NOT NULL) \
+                      AND ((train_current_state.next_calling_point IS NULL \
+                            AND EXCLUDED.next_calling_point IS NOT NULL) \
+                        OR (train_current_state.eta_next IS NULL \
+                            AND EXCLUDED.eta_next IS NOT NULL)))))) \
            AND (train_current_state.status, train_current_state.last_reported_location, \
                 train_current_state.last_event_type, train_current_state.delay_minutes, \
                 train_current_state.next_calling_point, train_current_state.eta_next, \
@@ -2234,6 +2256,310 @@ mod db_tests {
                 .await
                 .ok();
         }
+    }
+
+    // --- W1 follow-up: a duplicate dedup key is not always a replay ---
+
+    /// A DEPARTURE at WAT under one dedup key, with the given actual time,
+    /// status, delay and forward-looking fields.
+    fn w1_departure(
+        dedup_key: &str,
+        actual: &str,
+        status: &str,
+        delay: i32,
+        next_calling_point: Option<&str>,
+        eta_next: Option<&str>,
+    ) -> TrainMovementEventMessage {
+        TrainMovementEventMessage {
+            tracked_train_id: 0,
+            resolved_train_uid: None,
+            resolved_train_id: None,
+            identity_date: None,
+            dedup_key: dedup_key.to_string(),
+            msg_type: "0003".to_string(),
+            event_type: Some("DEPARTURE".to_string()),
+            loc_stanox: Some("87212".to_string()),
+            loc_crs: Some("WAT".to_string()),
+            planned_timestamp: at("2026-09-06T10:00:00Z"),
+            gbtt_timestamp: None,
+            actual_timestamp: at(actual),
+            variation_status: None,
+            raw_body: serde_json::json!({}),
+            status: status.to_string(),
+            last_reported_location: Some("WAT".to_string()),
+            last_event_type: Some("DEPARTURE".to_string()),
+            delay_minutes: Some(delay),
+            next_calling_point: next_calling_point.map(str::to_string),
+            eta_next: eta_next.and_then(at),
+            eta_source: eta_next.map(|_| "trust-propagated".to_string()),
+            platform: None,
+        }
+    }
+
+    /// `(status, delay_minutes, next_calling_point, eta_next, event_time, xmin)`.
+    type W1State = (
+        String,
+        Option<i32>,
+        Option<String>,
+        Option<DateTime<Utc>>,
+        Option<DateTime<Utc>>,
+        String,
+    );
+
+    async fn w1_state(pool: &PgPool, trains_id: i64) -> W1State {
+        sqlx::query_as(
+            "SELECT status, delay_minutes, next_calling_point, eta_next, event_time, xmin::text \
+             FROM train_current_state WHERE trains_id = $1",
+        )
+        .bind(trains_id)
+        .fetch_one(pool)
+        .await
+        .expect("read current state")
+    }
+
+    async fn w1_train(pool: &PgPool, uid: &str) -> i64 {
+        crate::trains::find_or_create_train(pool, uid, "2026-09-06".parse().unwrap())
+            .await
+            .expect("find_or_create_train")
+    }
+
+    async fn w1_cleanup(pool: &PgPool, ids: &[i64]) {
+        for &id in ids {
+            sqlx::query("DELETE FROM trains WHERE id = $1")
+                .bind(id)
+                .execute(pool)
+                .await
+                .ok();
+        }
+    }
+
+    /// The dedup key leaves out the actual time, so a corrected movement
+    /// (same planned time, later actual time) is a duplicate that is a new
+    /// real event: it must update the current state. In the other order
+    /// (the correction stored first, the original landing late) the older
+    /// time must not roll the state back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_duplicate_with_a_newer_event_time_updates_current_state \
+                -- --ignored --test-threads=1`"]
+    async fn a_duplicate_with_a_newer_event_time_updates_current_state() {
+        let pool = connect().await;
+        let original = w1_departure("w1n", "2026-09-06T10:01:00Z", "en_route", 1, None, None);
+        let corrected = w1_departure("w1n", "2026-09-06T10:04:00Z", "en_route", 4, None, None);
+
+        // Original first, then the correction.
+        let forward = w1_train(&pool, "W1-NEWER-A").await;
+        assert!(
+            upsert_train_movement(&pool, forward, &original)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !upsert_train_movement(&pool, forward, &corrected)
+                .await
+                .unwrap(),
+            "the correction shares the dedup key, so it reports a duplicate"
+        );
+        let (_, delay, _, _, event_time, _) = w1_state(&pool, forward).await;
+        assert_eq!(delay, Some(4), "the newer duplicate must apply");
+        assert_eq!(event_time, at("2026-09-06T10:04:00Z"));
+
+        // Correction first, then the original arriving late.
+        let backward = w1_train(&pool, "W1-NEWER-B").await;
+        assert!(
+            upsert_train_movement(&pool, backward, &corrected)
+                .await
+                .unwrap()
+        );
+        let before = w1_state(&pool, backward).await;
+        assert!(
+            !upsert_train_movement(&pool, backward, &original)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            w1_state(&pool, backward).await,
+            before,
+            "an older duplicate must not roll the state back"
+        );
+
+        w1_cleanup(&pool, &[forward, backward]).await;
+    }
+
+    /// An exact replay (same event time, same or less information) must not
+    /// touch the row at all: neither a byte-identical copy nor a copy that
+    /// lacks the next calling point the stored state has.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                an_equal_time_replay_does_not_rewrite_current_state \
+                -- --ignored --test-threads=1`"]
+    async fn an_equal_time_replay_does_not_rewrite_current_state() {
+        let pool = connect().await;
+        let trains_id = w1_train(&pool, "W1-REPLAY").await;
+        let full = w1_departure(
+            "w1r",
+            "2026-09-06T10:01:00Z",
+            "en_route",
+            1,
+            Some("CLJ"),
+            Some("2026-09-06T10:08:00Z"),
+        );
+        assert!(
+            upsert_train_movement(&pool, trains_id, &full)
+                .await
+                .unwrap()
+        );
+        let before = w1_state(&pool, trains_id).await;
+
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &full)
+                .await
+                .unwrap()
+        );
+        assert_eq!(w1_state(&pool, trains_id).await, before, "identical replay");
+
+        // A less complete copy with other derived fields: still a replay.
+        let sparse = w1_departure("w1r", "2026-09-06T10:01:00Z", "en_route", 3, None, None);
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &sparse)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            w1_state(&pool, trains_id).await,
+            before,
+            "less complete copy"
+        );
+
+        // Swapping one forward-looking field for another is not strictly
+        // more information either.
+        let only_ncp = w1_train(&pool, "W1-REPLAY-SWAP").await;
+        let ncp_copy = w1_departure(
+            "w1s",
+            "2026-09-06T10:01:00Z",
+            "en_route",
+            1,
+            Some("CLJ"),
+            None,
+        );
+        assert!(
+            upsert_train_movement(&pool, only_ncp, &ncp_copy)
+                .await
+                .unwrap()
+        );
+        let swap_before = w1_state(&pool, only_ncp).await;
+        let swapped = w1_departure(
+            "w1s",
+            "2026-09-06T10:01:00Z",
+            "en_route",
+            3,
+            None,
+            Some("2026-09-06T10:09:00Z"),
+        );
+        assert!(
+            !upsert_train_movement(&pool, only_ncp, &swapped)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            w1_state(&pool, only_ncp).await,
+            swap_before,
+            "swapped fields"
+        );
+
+        w1_cleanup(&pool, &[trains_id, only_ncp]).await;
+    }
+
+    /// The less complete copy of a movement (no next calling point or ETA)
+    /// landing first must not keep the fuller copy's forward-looking fields
+    /// out until the next movement; the fuller copy fills them. The other
+    /// order is covered by `an_equal_time_replay_does_not_rewrite_current_state`.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_fuller_duplicate_fills_the_next_calling_point \
+                -- --ignored --test-threads=1`"]
+    async fn a_fuller_duplicate_fills_the_next_calling_point() {
+        let pool = connect().await;
+        let trains_id = w1_train(&pool, "W1-FULLER").await;
+        let sparse = w1_departure("w1f", "2026-09-06T10:01:00Z", "en_route", 1, None, None);
+        let full = w1_departure(
+            "w1f",
+            "2026-09-06T10:01:00Z",
+            "en_route",
+            1,
+            Some("CLJ"),
+            Some("2026-09-06T10:08:00Z"),
+        );
+
+        assert!(
+            upsert_train_movement(&pool, trains_id, &sparse)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &full)
+                .await
+                .unwrap()
+        );
+        let (status, _, next_calling_point, eta_next, event_time, filled) =
+            w1_state(&pool, trains_id).await;
+        assert_eq!(status, "en_route");
+        assert_eq!(next_calling_point.as_deref(), Some("CLJ"));
+        assert_eq!(eta_next, at("2026-09-06T10:08:00Z"));
+        assert_eq!(event_time, at("2026-09-06T10:01:00Z"));
+
+        // The sparse copy again: the filled fields stay.
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &sparse)
+                .await
+                .unwrap()
+        );
+        assert_eq!(w1_state(&pool, trains_id).await.5, filled);
+
+        w1_cleanup(&pool, &[trains_id]).await;
+    }
+
+    /// No duplicate undoes a stored `completed`: not a newer one, not a
+    /// fuller one.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_duplicate_never_undoes_a_completed_train \
+                -- --ignored --test-threads=1`"]
+    async fn a_duplicate_never_undoes_a_completed_train() {
+        let pool = connect().await;
+        let trains_id = w1_train(&pool, "W1-COMPLETED").await;
+        let finished = w1_departure("w1c", "2026-09-06T10:01:00Z", "completed", 1, None, None);
+        assert!(
+            upsert_train_movement(&pool, trains_id, &finished)
+                .await
+                .unwrap()
+        );
+        let before = w1_state(&pool, trains_id).await;
+
+        let newer = w1_departure("w1c", "2026-09-06T10:05:00Z", "en_route", 5, None, None);
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &newer)
+                .await
+                .unwrap()
+        );
+        assert_eq!(w1_state(&pool, trains_id).await, before, "newer duplicate");
+
+        let fuller = w1_departure(
+            "w1c",
+            "2026-09-06T10:01:00Z",
+            "en_route",
+            1,
+            Some("CLJ"),
+            Some("2026-09-06T10:08:00Z"),
+        );
+        assert!(
+            !upsert_train_movement(&pool, trains_id, &fuller)
+                .await
+                .unwrap()
+        );
+        assert_eq!(w1_state(&pool, trains_id).await, before, "fuller duplicate");
+
+        w1_cleanup(&pool, &[trains_id]).await;
     }
 
     /// DB2-3: the same state delivered again (one message per subscriber
