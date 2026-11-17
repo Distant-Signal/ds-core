@@ -307,6 +307,23 @@ pub async fn upsert_train_movement_on(
     .rows_affected()
         > 0;
 
+    // **Duplicates do not rewrite the current state (2026-11 review, W1).**
+    // A duplicate is the same TRUST movement (same dedup key, same
+    // `event_time`) delivered again: a redelivery, the backlog's copy or
+    // another subscriber's fan-out copy. Each copy's derived state depends
+    // on what its writer knew (the backlog derives without the
+    // destination), so letting the last copy win at an equal `event_time`
+    // made the status flap: the terminus ARRIVAL set `completed`, then a
+    // lagging copy of the same ARRIVAL wrote `en_route` back. The first
+    // copy's state stands; the one exception is a copy that can only
+    // advance it to `completed` (the copy that knew the destination
+    // landing second), which is the same "never regress, may finish" rule
+    // `trust_schema::journey::apply_movement` folds by.
+    if !inserted && event.status != "completed" {
+        tx.commit().await?;
+        return Ok(false);
+    }
+
     sqlx::query(
         "INSERT INTO train_current_state \
             (trains_id, status, last_reported_location, last_event_type, \
@@ -325,6 +342,7 @@ pub async fn upsert_train_movement_on(
          WHERE (EXCLUDED.event_time IS NULL \
             OR EXCLUDED.event_time >= train_current_state.event_time \
             OR train_current_state.event_time IS NULL) \
+           AND ($10 OR train_current_state.status IS DISTINCT FROM 'completed') \
            AND (train_current_state.status, train_current_state.last_reported_location, \
                 train_current_state.last_event_type, train_current_state.delay_minutes, \
                 train_current_state.next_calling_point, train_current_state.eta_next, \
@@ -344,6 +362,7 @@ pub async fn upsert_train_movement_on(
     .bind(event.eta_next)
     .bind(&event.eta_source)
     .bind(event_time)
+    .bind(inserted)
     .execute(&mut *tx)
     .await?;
 
@@ -2086,17 +2105,17 @@ mod db_tests {
         upsert_train_movement(&pool, trains_id, &event)
             .await
             .expect("first upsert_train_movement call");
-        // A redelivered Kafka message: same dedup_key, but the current-state
-        // fields have moved on (a later, real-world snapshot of the same
-        // train) -- proving the event-row dedup and the current-state
-        // upsert are independent concerns, exactly as upsert_train_event's
-        // own doc comment already established for the legacy path.
+        // A redelivered copy of the same movement whose derived fields
+        // differ (another writer derived it with different knowledge). It is
+        // the same real-world event, so it must not rewrite the current
+        // state the first copy set (2026-11 review, W1).
         event.status = "en_route".to_string();
         event.delay_minutes = Some(5);
         event.last_reported_location = Some("CLJ".to_string());
-        upsert_train_movement(&pool, trains_id, &event)
+        let fresh = upsert_train_movement(&pool, trains_id, &event)
             .await
             .expect("second, redelivered upsert_train_movement call");
+        assert!(!fresh, "the redelivery must report a duplicate");
 
         let rows: Vec<(i64,)> = sqlx::query_as(
             "SELECT id FROM train_movement_events WHERE trains_id = $1 AND dedup_key = $2",
@@ -2121,16 +2140,100 @@ mod db_tests {
         .expect("read back current-state row");
         assert_eq!(
             delay_minutes,
-            Some(5),
-            "current-state upsert must still apply the second call's fresher values"
+            Some(0),
+            "a duplicate must not rewrite the first copy's current state"
         );
-        assert_eq!(last_reported_location, Some("CLJ".to_string()));
+        assert_eq!(last_reported_location, Some("WAT".to_string()));
 
         sqlx::query("DELETE FROM trains WHERE id = $1")
             .bind(trains_id)
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// W1 (2026-11 review): the terminus ARRIVAL sets `completed`; a lagging
+    /// copy of the same ARRIVAL (same dedup key and time, derived without
+    /// the destination) must not write `en_route` back. In the other order
+    /// the copy that knew the destination still finishes the train.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                a_duplicate_movement_never_flaps_a_completed_train \
+                -- --ignored --test-threads=1`"]
+    async fn a_duplicate_movement_never_flaps_a_completed_train() {
+        let pool = connect().await;
+        let service_date: NaiveDate = "2026-09-06".parse().unwrap();
+        let at: DateTime<Utc> = "2026-09-06T21:00:00Z".parse().unwrap();
+        let arrival = |dedup_key: &str, status: &str| TrainMovementEventMessage {
+            tracked_train_id: 0,
+            resolved_train_uid: None,
+            resolved_train_id: None,
+            identity_date: None,
+            dedup_key: dedup_key.to_string(),
+            msg_type: "0003".to_string(),
+            event_type: Some("ARRIVAL".to_string()),
+            loc_stanox: Some("72410".to_string()),
+            loc_crs: Some("EUS".to_string()),
+            planned_timestamp: None,
+            gbtt_timestamp: None,
+            actual_timestamp: Some(at),
+            variation_status: None,
+            raw_body: serde_json::json!({}),
+            status: status.to_string(),
+            last_reported_location: Some("EUS".to_string()),
+            last_event_type: Some("ARRIVAL".to_string()),
+            delay_minutes: Some(1),
+            next_calling_point: None,
+            eta_next: None,
+            eta_source: None,
+            platform: None,
+        };
+        let status = |pool: PgPool, trains_id: i64| async move {
+            let (status,): (String,) =
+                sqlx::query_as("SELECT status FROM train_current_state WHERE trains_id = $1")
+                    .bind(trains_id)
+                    .fetch_one(&pool)
+                    .await
+                    .expect("read status");
+            status
+        };
+
+        // Completed first, then the destination-less copy.
+        let first = crate::trains::find_or_create_train(&pool, "W1-FLAP-A", service_date)
+            .await
+            .expect("find_or_create_train");
+        assert!(
+            upsert_train_movement(&pool, first, &arrival("w1-a", "completed"))
+                .await
+                .unwrap()
+        );
+        assert!(
+            !upsert_train_movement(&pool, first, &arrival("w1-a", "en_route"))
+                .await
+                .unwrap()
+        );
+        assert_eq!(status(pool.clone(), first).await, "completed");
+
+        // The destination-less copy first, then the one that knew it.
+        let second = crate::trains::find_or_create_train(&pool, "W1-FLAP-B", service_date)
+            .await
+            .expect("find_or_create_train");
+        upsert_train_movement(&pool, second, &arrival("w1-b", "en_route"))
+            .await
+            .unwrap();
+        assert_eq!(status(pool.clone(), second).await, "en_route");
+        upsert_train_movement(&pool, second, &arrival("w1-b", "completed"))
+            .await
+            .unwrap();
+        assert_eq!(status(pool.clone(), second).await, "completed");
+
+        for id in [first, second] {
+            sqlx::query("DELETE FROM trains WHERE id = $1")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .ok();
+        }
     }
 
     /// DB2-3: the same state delivered again (one message per subscriber
