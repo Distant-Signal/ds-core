@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.16.0 (2026-11-17)
+
+Opaque ids, a break-cleared marker and the secret box's row-bound format, stage 1 (DS-534). A minor: eight additive migrations and a new public API in `ds-runtime`; nothing is removed or changed in place, and no migration is a contract migration.
+
+- Add journeys.public_id, an opaque journey id (DS-534, stage 1) (#78): `public_id` is `j_` plus the 32 hex digits of `gen_random_uuid()` (34 characters, not derived from `id`), so a path segment is a legacy id exactly when it is all digits. The column is added nullable, its default is set after it exists (no table rewrite), existing rows are backfilled, and a `CHECK (public_id IS NOT NULL AND public_id ~ '^j_[0-9a-f]{32}$')` is added `NOT VALID` and then validated; `SET NOT NULL` is left out because the migration checks treat it as a contract migration, and it can follow later. The current api never names the column, so its inserts take the default and the migration is safe to apply ahead of the api.
+- Add journey_breaks.cleared_at, a recovered-since-dismissal marker (#80): a nullable `timestamptz` with no default (a catalogue-only change), so existing rows stay NULL and behaviour is unchanged until the api reads it. The api stamps it on a dismissed break when it next finds the plan working again, and only a cleared dismissal stops holding a new break back for the same cause and leg.
+- Add an opaque public_id to group_members (#79): a random id per (group, user) membership so the api can stop showing co-members each other's `users.id`. It is a stored random id (`replace(gen_random_uuid()::text, '-', '')`, no server secret to rotate), nullable with the default set before the backfill, a unique index built concurrently, then `CHECK (public_id IS NOT NULL) NOT VALID` and its validation. Existing api inserts do not name the column and keep working.
+- Bind the secret box AAD to the row: v2 format, dual-read (DS-534 stage 1) (#81): additive API in `ds-runtime`: `Context::new(Column, row id)`, `KeyRing::open_in` (opens v1, ignoring the context, and v2), `KeyRing::seal_in`, `KeyRing::seal_as` and `KeyRing::with_write_format`. A v2 value's AAD is `distant-signal secret-box v2` plus the length-prefixed table, column and type-tagged row id; the version is the stored nonce's length (12 bytes is v1, 13 bytes, `0x02` plus the nonce, is v2). `DEFAULT_WRITE_FORMAT` is `Format::Legacy`, so nothing writes v2 yet: `seal` still writes v1 and `open` opens v1 only. New counter `distant_signal_secret_box_legacy_opens_total{purpose}` (`purpose` is `<table>.<column>`, registered at 0 for every known column by `KeyRing::parse`; `unscoped` for `open`). The plan for stages 1 to 4 is in docs/secret-box-aad.md.
+- Date the cargo-deny ignores and bump the rust-ci pin (#85): every `[advisories] ignore` in deny.toml carries a reason and an expiry (RUSTSEC-2023-0071 expires 2027-05-17; the stale RUSTSEC-2026-0192 ignore is removed), and the `rust-ci.yml` pin moves to a Distant-Signal/ci commit with blocking cargo-deny advisories and an ignore-expiry check.
+- Workflow and Renovate changes that were already on main at v0.15.1's tag and are not in its entry: `release.yml`'s `plan` job fails a tag whose commit is not reachable from `origin/main`, before anything is built (#77, first exercised by v0.15.1); renovate.json5 extends a pinned commit of Distant-Signal/ci's preset rather than its default branch (#82).
+
+**Migrations** (8), in order, all additive and expand-only; they must ship together:
+1. `20261117100000_journeys_public_id.sql`
+2. `20261117100100_journeys_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+3. `20261117100200_journeys_public_id_validate.sql`
+4. `20261117110000_journey_breaks_cleared_at.sql`
+5. `20261117120000_group_members_public_id.sql`
+6. `20261117120100_group_members_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+7. `20261117120200_group_members_public_id_check.sql`
+8. `20261117120300_group_members_public_id_check_validate.sql`
+
+There are no `-- contract:` migrations. Production's latest applied migration is `20261116091100` once v0.15.0's index migrations are applied; the migrate hook applies every pending migration in order.
+**Grants**: none (`db-grants.yaml` is unchanged; `journeys`, `journey_breaks` and `group_members` are granted by table, so the new columns need no grant change).
+
+**Consumers**: bump `core-version` to v0.16.0 in ds-api, ds-workers, ds-ingest and ds-pollers. ds-deploy's `core-version`, vendored files and `migrate.image` must move to v0.16.0 before any consumer image built against this release is deployed: the migrate hook adds `journeys.public_id`, `group_members.public_id` and `journey_breaks.cleared_at`, and an image that reads them fails against a database without them. These depend on this release: ds-api #69 (cleared marker), #73 (opaque member ids) and #75 (opaque journey ids), ds-workers #41 (push links by opaque id), and the frontend PRs #295 and #296. The secret box stage 1a is additive and writes stay v1; its follow-up is stage 1b in ds-api (INSERT then UPDATE for the webhook secret, using `seal_in`) and ds-workers (`open_in`), before the write format can move to v2 (a nonce-check migration and a later release). Watch `distant_signal_secret_box_legacy_opens_total` for the v1 opens. Workflow notes: release.yml's tag-on-main check and the blocking-advisories ci pin need nothing from consumers.
+
 ## v0.15.1 (2026-11-17)
 
 Review follow-ups (DS-534). A patch: no consumer constructs `ConsumerConfig` as a struct literal, so its new pub fields break nobody.
