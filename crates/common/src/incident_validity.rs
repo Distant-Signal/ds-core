@@ -77,8 +77,8 @@ pub fn ended_at(periods: &[ValidityPeriod], now: DateTime<Utc>) -> Option<DateTi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::zone::{LocalTime, london_resolve};
     use chrono::{Duration, NaiveDate, TimeZone};
-    use chrono_tz::Europe::London;
 
     fn window(from: DateTime<Utc>, to: Option<DateTime<Utc>>) -> ValidityPeriod {
         ValidityPeriod {
@@ -95,13 +95,17 @@ mod tests {
             .unwrap()
             .and_hms_opt(h, min, 0)
             .unwrap();
-        let local = London.from_local_datetime(&naive);
-        let chosen = if later {
-            local.latest().unwrap()
-        } else {
-            local.earliest().unwrap()
-        };
-        chosen.with_timezone(&Utc)
+        match london_resolve(naive) {
+            LocalTime::Single(at) => at,
+            LocalTime::Ambiguous { earliest, latest } => {
+                if later {
+                    latest
+                } else {
+                    earliest
+                }
+            }
+            LocalTime::Gap => panic!("{naive} does not exist in London"),
+        }
     }
 
     fn now() -> DateTime<Utc> {

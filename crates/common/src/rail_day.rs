@@ -7,7 +7,9 @@
 //! DST-transition-safe logic -- pure code motion, no behavior change; see
 //! docs/superpowers/plans/2026-09-04-option-b-live-consumer-plan.md Task 2.
 
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveTime, Utc};
+
+use crate::zone::{LocalTime, london_naive, london_resolve, london_to_utc_gap_shifted};
 
 /// The next rail-day boundary (02:00 Europe/London) strictly after
 /// `at`. If `at`'s local time is already past 02:00, that's the current
@@ -20,18 +22,18 @@ use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
     reason = "a constant or range-checked time is always valid"
 )]
 pub fn next_rail_day_boundary(at: DateTime<Utc>) -> DateTime<Utc> {
-    let local = at.with_timezone(&chrono_tz::Europe::London);
+    let local = london_naive(at);
     let boundary_time = NaiveTime::from_hms_opt(2, 0, 0).expect("2:00:00 is a valid time");
 
     let boundary_date = if local.time() < boundary_time {
-        local.date_naive()
+        local.date()
     } else {
-        local.date_naive() + Duration::days(1)
+        local.date() + Duration::days(1)
     };
     let boundary_naive = boundary_date.and_time(boundary_time);
 
-    match chrono_tz::Europe::London.from_local_datetime(&boundary_naive) {
-        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
+    match london_resolve(boundary_naive) {
+        LocalTime::Single(dt) => dt,
         other => panic!(
             "unexpected {other:?} resolving rail-day boundary {boundary_naive} in Europe/London; \
              02:00 local should never be ambiguous or missing"
@@ -62,12 +64,12 @@ pub fn next_rail_day_boundary(at: DateTime<Utc>) -> DateTime<Utc> {
     reason = "a constant or range-checked time is always valid"
 )]
 pub fn current_rail_day(at: DateTime<Utc>) -> chrono::NaiveDate {
-    let local = at.with_timezone(&chrono_tz::Europe::London);
+    let local = london_naive(at);
     let cutoff = NaiveTime::from_hms_opt(2, 0, 0).expect("2:00:00 is a valid time");
     if local.time() < cutoff {
-        local.date_naive() - Duration::days(1)
+        local.date() - Duration::days(1)
     } else {
-        local.date_naive()
+        local.date()
     }
 }
 
@@ -78,14 +80,7 @@ pub fn current_rail_day(at: DateTime<Utc>) -> chrono::NaiveDate {
 /// show BST), so no booked time is ever lost.
 pub fn london_to_utc(date: chrono::NaiveDate, time: NaiveTime) -> DateTime<Utc> {
     let naive = date.and_time(time);
-    match chrono_tz::Europe::London.from_local_datetime(&naive) {
-        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
-        chrono::LocalResult::Ambiguous(earliest, _) => earliest.with_timezone(&Utc),
-        chrono::LocalResult::None => chrono_tz::Europe::London
-            .from_local_datetime(&(naive + Duration::hours(1)))
-            .earliest()
-            .map_or_else(|| naive.and_utc(), |dt| dt.with_timezone(&Utc)),
-    }
+    london_to_utc_gap_shifted(naive).unwrap_or_else(|| naive.and_utc())
 }
 
 #[cfg(test)]

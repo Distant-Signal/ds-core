@@ -910,7 +910,7 @@ mod db_tests {
         .await;
         // T2: no inference at all; its CIF origin departs 30 minutes from
         // now (London time).
-        let local = departs_at.with_timezone(&chrono_tz::Europe::London);
+        let local = common::zone::london_local(departs_at);
         let origin_date = local.date_naive();
         let day_offset = i16::try_from((origin_date - date).num_days()).expect("small");
         sqlx::query(
