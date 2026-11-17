@@ -64,10 +64,17 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
           commit="$(git rev-parse "${REF}^{commit}")"
-          git merge-base --is-ancestor "${commit}" origin/main || {
+          # Exit 1 is "not an ancestor"; anything else is a git failure, which
+          # must not read as a verdict on the tag.
+          status=0
+          git merge-base --is-ancestor "${commit}" origin/main || status=$?
+          if [[ "${status}" -eq 1 ]]; then
             echo "::error::${commit} (${REF}) is not reachable from origin/main: releases are cut from main only"
             exit 1
-          }
+          elif [[ "${status}" -ne 0 ]]; then
+            echo "::error::git merge-base failed (exit ${status}) checking ${commit} against origin/main"
+            exit 1
+          fi
 
       - name: The tag is the workspace version
         id: plan
