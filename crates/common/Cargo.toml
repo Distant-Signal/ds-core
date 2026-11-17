@@ -9,12 +9,16 @@ license.workspace = true
 [dependencies]
 anyhow = "1.0.102"
 chrono = { version = "0.4.44", features = ["serde"] }
-chrono-tz = "0.10"
 # The domain-free runtime (backoff, logging, metrics, service args, ...),
 # split out of this crate (repo-split spec §5.8). Its features follow this
 # crate's: `ds-store` turns the defaults off here and so there.
 ds-runtime = { path = "../ds-runtime", default-features = false }
 glob = "0.3.3"
+# `common::zone` only. Bundled zone data (`jiff-tzdb`) and nothing from the
+# host: `tzdb-zoneinfo`, `tzdb-concatenated` and `tz-system` stay off, so
+# tests, CI and pods read the same database. Moving the database on is a
+# `cargo update -p jiff-tzdb`.
+jiff = { version = "0.2.39", default-features = false, features = ["std", "tzdb-bundle-always"] }
 metrics = "0.24"
 # Only with the `postgres` feature: `common::public_delay::db` (hence
 # `chrono` and `derive`). Same version and features the workspace already uses.

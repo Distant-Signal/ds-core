@@ -2,8 +2,14 @@
 //!
 //! Every other crate asks this module for "the London date of this instant",
 //! "this London wall-clock time as an instant" and so on, using only `chrono`
-//! types and the opaque [`Zone`]. The library behind it (`chrono-tz` today)
-//! can then be replaced without touching a caller.
+//! types and the opaque [`Zone`]. The library behind it (`jiff`, with its
+//! bundled copy of the IANA database) can then be replaced without touching
+//! a caller.
+//!
+//! The zone data is the database `jiff` bundles (`jiff-tzdb`, the
+//! `tzdb-bundle-always` feature, with the host's `/usr/share/zoneinfo`
+//! switched off), so behaviour never depends on the machine or the container
+//! image.
 //!
 //! Three rules for wall-clock times that a clock change makes ambiguous or
 //! impossible are named here, because callers used to spell them out by hand:
@@ -16,18 +22,61 @@
 //!   if the time does not exist": a skipped time is read as the instant the
 //!   clock would show it an hour on (the clock is already on summer time), so
 //!   a booked time is never lost.
+//!
+//! `jiff` only answers "what is the offset at this instant" and "which
+//! offsets can this wall-clock time have". Every instant and local value that
+//! leaves this module is computed with `chrono` from that offset, so the
+//! precision, leap-second and range behaviour callers see is `chrono`'s.
+//! `jiff`'s timestamps end in the year 9999: an instant beyond that is read
+//! at the nearest end of its range, and a wall-clock time beyond it has no
+//! reading ([`LocalTime::Gap`]).
 
+use std::collections::BTreeMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use chrono::{
-    DateTime, Duration, FixedOffset, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset,
-    TimeZone, Utc,
+    DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Offset,
+    Timelike, Utc,
 };
+use jiff::Timestamp;
+use jiff::civil;
+use jiff::tz::{AmbiguousOffset, TimeZone};
 
 /// An IANA time zone. Opaque: build one with [`Zone::LONDON`],
 /// [`Zone::DUBLIN`] or [`Zone::parse`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Zone(chrono_tz::Tz);
+#[derive(Clone, Copy)]
+pub struct Zone(Repr);
+
+/// `Europe/London` and `Europe/Dublin` are variants so that their constants
+/// need no lookup; every other zone is looked up once by [`Zone::parse`] and
+/// kept for the life of the process (at most one entry per database name).
+#[derive(Clone, Copy)]
+enum Repr {
+    London,
+    Dublin,
+    Other(&'static Entry),
+}
+
+struct Entry {
+    name: &'static str,
+    tz: TimeZone,
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "the bundled database always has this zone; a test pins it"
+)]
+fn bundled(name: &str) -> TimeZone {
+    TimeZone::get(name).expect("the bundled time zone database has this zone")
+}
+
+static LONDON_TZ: LazyLock<TimeZone> = LazyLock::new(|| bundled("Europe/London"));
+static DUBLIN_TZ: LazyLock<TimeZone> = LazyLock::new(|| bundled("Europe/Dublin"));
+
+/// The zones [`Zone::parse`] has built, by name.
+static PARSED: Mutex<BTreeMap<&'static str, &'static Entry>> = Mutex::new(BTreeMap::new());
 
 /// What a local wall-clock reading means in a [`Zone`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,59 +92,131 @@ pub enum LocalTime {
     Gap,
 }
 
+/// `at` as a `jiff` instant, to the whole second (clock changes fall on whole
+/// seconds), read at the nearest end of `jiff`'s range if it is outside it.
+fn timestamp(at: DateTime<Utc>) -> Timestamp {
+    let seconds = at.timestamp();
+    Timestamp::from_second(seconds).unwrap_or(if seconds < 0 {
+        Timestamp::MIN
+    } else {
+        Timestamp::MAX
+    })
+}
+
+/// `local` as a `jiff` civil time, to the whole second (an offset never
+/// changes inside a second; a leap second is read as `:59`), or `None`
+/// outside `jiff`'s range.
+fn civil_time(local: NaiveDateTime) -> Option<civil::DateTime> {
+    civil::DateTime::new(
+        i16::try_from(local.year()).ok()?,
+        i8::try_from(local.month()).ok()?,
+        i8::try_from(local.day()).ok()?,
+        i8::try_from(local.hour()).ok()?,
+        i8::try_from(local.minute()).ok()?,
+        i8::try_from(local.second().min(59)).ok()?,
+        0,
+    )
+    .ok()
+}
+
 impl Zone {
     /// `Europe/London`.
-    pub const LONDON: Self = Self(chrono_tz::Europe::London);
+    pub const LONDON: Self = Self(Repr::London);
     /// `Europe/Dublin`.
-    pub const DUBLIN: Self = Self(chrono_tz::Europe::Dublin);
+    pub const DUBLIN: Self = Self(Repr::Dublin);
 
     /// The zone with this IANA name, or `None`. Names are matched exactly
-    /// (case-sensitive), as the preference check always did.
+    /// (case-sensitive), as the preference check always did: the database
+    /// lookup ignores case, so the name it found must be the one given.
+    /// Link names (`GB`, `US/Eastern`, `Europe/Kiev`, `UTC`, `Etc/UTC`) are
+    /// accepted as themselves.
     pub fn parse(name: &str) -> Option<Self> {
-        name.parse::<chrono_tz::Tz>().ok().map(Self)
+        match name {
+            "Europe/London" => return Some(Self::LONDON),
+            "Europe/Dublin" => return Some(Self::DUBLIN),
+            // In the database but not a place: never accepted.
+            "Factory" => return None,
+            _ => {}
+        }
+        let mut parsed = PARSED.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(entry) = parsed.get(name) {
+            return Some(Self(Repr::Other(entry)));
+        }
+        let tz = TimeZone::get(name).ok()?;
+        if tz.iana_name() != Some(name) {
+            return None;
+        }
+        let name: &'static str = Box::leak(name.to_owned().into_boxed_str());
+        let entry: &'static Entry = Box::leak(Box::new(Entry { name, tz }));
+        parsed.insert(name, entry);
+        Some(Self(Repr::Other(entry)))
     }
 
     /// The IANA name, as [`Zone::parse`] accepts it.
     pub fn name(self) -> &'static str {
-        self.0.name()
+        match self.0 {
+            Repr::London => "Europe/London",
+            Repr::Dublin => "Europe/Dublin",
+            Repr::Other(entry) => entry.name,
+        }
+    }
+
+    fn tz(self) -> &'static TimeZone {
+        match self.0 {
+            Repr::London => &LONDON_TZ,
+            Repr::Dublin => &DUBLIN_TZ,
+            Repr::Other(entry) => &entry.tz,
+        }
     }
 
     /// `at` as a local date and time with the zone's offset at that instant.
     /// Arithmetic on the result keeps that offset (it is a fixed offset), so
     /// convert back to UTC before adding durations across a clock change.
     pub fn local(self, at: DateTime<Utc>) -> DateTime<FixedOffset> {
-        at.with_timezone(&self.0).fixed_offset()
+        at.with_timezone(&self.offset_at(at))
     }
 
     /// The zone's offset from UTC at `at`.
     pub fn offset_at(self, at: DateTime<Utc>) -> FixedOffset {
-        at.with_timezone(&self.0).offset().fix()
+        let seconds = self.tz().to_offset(timestamp(at)).seconds();
+        FixedOffset::east_opt(seconds).unwrap_or_else(|| Utc.fix())
     }
 
     /// The local date and time at `at`.
     pub fn naive_local(self, at: DateTime<Utc>) -> NaiveDateTime {
-        at.with_timezone(&self.0).naive_local()
+        self.local(at).naive_local()
     }
 
     /// The local calendar date at `at`.
     pub fn date(self, at: DateTime<Utc>) -> NaiveDate {
-        at.with_timezone(&self.0).date_naive()
+        self.local(at).date_naive()
     }
 
     /// The local time of day at `at`.
     pub fn time(self, at: DateTime<Utc>) -> NaiveTime {
-        at.with_timezone(&self.0).time()
+        self.local(at).time()
     }
 
     /// What `local` means in this zone ([`LocalTime`]).
     pub fn resolve(self, local: NaiveDateTime) -> LocalTime {
-        match self.0.from_local_datetime(&local) {
-            LocalResult::Single(at) => LocalTime::Single(at.with_timezone(&Utc)),
-            LocalResult::Ambiguous(earliest, latest) => LocalTime::Ambiguous {
-                earliest: earliest.with_timezone(&Utc),
-                latest: latest.with_timezone(&Utc),
+        let Some(civil) = civil_time(local) else {
+            return LocalTime::Gap;
+        };
+        let at = |offset: jiff::tz::Offset| {
+            local
+                .and_utc()
+                .checked_sub_signed(Duration::seconds(i64::from(offset.seconds())))
+        };
+        match self.tz().to_ambiguous_timestamp(civil).offset() {
+            AmbiguousOffset::Unambiguous { offset } => {
+                at(offset).map_or(LocalTime::Gap, LocalTime::Single)
+            }
+            // `before` is the offset of the first reading, `after` the second's.
+            AmbiguousOffset::Fold { before, after } => match (at(before), at(after)) {
+                (Some(earliest), Some(latest)) => LocalTime::Ambiguous { earliest, latest },
+                _ => LocalTime::Gap,
             },
-            LocalResult::None => LocalTime::Gap,
+            AmbiguousOffset::Gap { .. } => LocalTime::Gap,
         }
     }
 
@@ -117,6 +238,26 @@ impl Zone {
                 .checked_add_signed(Duration::hours(1))
                 .and_then(|later| self.to_utc_earliest(later))
         })
+    }
+}
+
+impl PartialEq for Zone {
+    fn eq(&self, other: &Self) -> bool {
+        self.name() == other.name()
+    }
+}
+
+impl Eq for Zone {}
+
+impl Hash for Zone {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name().hash(state);
+    }
+}
+
+impl fmt::Debug for Zone {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Zone").field(&self.name()).finish()
     }
 }
 
@@ -611,6 +752,80 @@ mod tests {
         assert_eq!(Zone::parse("Europe/London"), Some(Zone::LONDON));
         assert_eq!(Zone::parse("Europe/Dublin"), Some(Zone::DUBLIN));
         assert_eq!(Zone::LONDON.to_string(), "Europe/London");
+    }
+
+    /// The database lookup ignores case and has a few names that are not
+    /// places; parsing accepts none of them unless it is the exact name.
+    #[test]
+    fn parse_refuses_what_the_lookup_alone_would_accept() {
+        for name in [
+            "utc",
+            "Utc",
+            "etc/utc",
+            "ETC/UTC",
+            "gb",
+            "us/eastern",
+            "europe/kyiv",
+            "Etc/Unknown",
+            "etc/unknown",
+            "Factory",
+            "UTC+1",
+            "UTC+01:00",
+            "GMT+1",
+            "Europe/London\n",
+            "Europe/London\0",
+            "../Europe/London",
+            "Europe//London",
+            "Europe",
+            "EST5EDT ",
+        ] {
+            assert_eq!(Zone::parse(name), None, "parse {name:?}");
+        }
+        for name in [
+            "EST5EDT",
+            "Etc/GMT+5",
+            "Australia/Lord_Howe",
+            "Eire",
+            "Zulu",
+        ] {
+            assert_eq!(
+                Zone::parse(name).map(Zone::name),
+                Some(name),
+                "parse {name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn zones_are_copy_eq_hash_debug_and_display() {
+        use std::collections::HashSet;
+
+        let new_york = Zone::parse("America/New_York").unwrap();
+        let again = Zone::parse("America/New_York").unwrap();
+        let copy = new_york;
+        assert_eq!(new_york, copy);
+        assert_eq!(new_york, again);
+        assert_ne!(new_york, Zone::LONDON);
+        assert_ne!(Zone::LONDON, Zone::DUBLIN);
+        assert_ne!(Zone::parse("GB").unwrap(), Zone::LONDON);
+        let set: HashSet<Zone> = [new_york, again, copy, Zone::LONDON, Zone::LONDON]
+            .into_iter()
+            .collect();
+        assert_eq!(set.len(), 2);
+        assert_eq!(new_york.to_string(), "America/New_York");
+        assert_eq!(format!("{:?}", Zone::LONDON), r#"Zone("Europe/London")"#);
+    }
+
+    /// An instant or wall-clock time outside `jiff`'s range is read at its
+    /// edge, not a panic.
+    #[test]
+    fn times_beyond_the_library_range_do_not_panic() {
+        let far_future = NaiveDateTime::MAX.and_utc();
+        let far_past = NaiveDateTime::MIN.and_utc();
+        assert_eq!(Zone::LONDON.offset_at(far_future).local_minus_utc(), 0);
+        let _ = Zone::LONDON.offset_at(far_past);
+        assert_eq!(Zone::LONDON.resolve(NaiveDateTime::MAX), LocalTime::Gap);
+        assert_eq!(Zone::LONDON.to_utc_gap_shifted(NaiveDateTime::MIN), None);
     }
 
     #[test]
