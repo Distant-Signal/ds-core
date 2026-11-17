@@ -1206,5 +1206,48 @@ mod db_tests {
             ..Batch::default()
         };
         assert!(clamp_future(&fine, now).is_none());
+
+        // Deactivations are clamped too.
+        let late = Batch {
+            deactivated: vec![Deactivated {
+                rid: RID.to_string(),
+                ts: far_future(),
+            }],
+            ..Batch::default()
+        };
+        let clamped = clamp_future(&late, now).expect("a deactivation is past the ceiling");
+        assert_eq!(clamped.deactivated[0].ts, now + FUTURE_SKEW);
+    }
+
+    /// A deactivation of a future-stamped service brings its `ts` back to the
+    /// deactivation's, so the record is not pinned afterwards.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_deactivation_replaces_a_stored_future_stamp() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        plant_future_rows(&pool).await;
+        let now = (Utc::now() - Duration::seconds(30)).trunc_subsecs(6);
+        apply_batch(
+            &pool,
+            &Batch {
+                deactivated: vec![Deactivated {
+                    rid: RID.to_string(),
+                    ts: now,
+                }],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let (deactivated, message_ts): (bool, DateTime<Utc>) =
+            sqlx::query_as("SELECT deactivated, message_ts FROM darwin_services WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("service");
+        assert!(deactivated);
+        assert_eq!(message_ts, now);
+        cleanup(&pool).await;
     }
 }
