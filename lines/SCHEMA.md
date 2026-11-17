@@ -2,7 +2,8 @@
 
 Each file under `lines/` defines one National Rail "line" — the user-facing
 unit a status will be reported against. Files are TOML, one line per file,
-named `<id>.toml`.
+named `<id>.toml`; ids are unique (both enforced by
+`line-catalogue-validator`).
 
 ## Fields
 
@@ -126,7 +127,7 @@ line with one train per hour needs different thresholds from the WCML.
 
 ## Worked example
 
-See `west-coast-main-line.toml` and `thameslink-core.toml` in this directory.
+See `wcml.toml` and `thameslink-core.toml` in this directory.
 
 ## Curation rules
 

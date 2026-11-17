@@ -6,7 +6,7 @@ operators = ["GW"]
 # Great Western Railway, FirstGroup-operated. Code confirmed against Network
 # Rail's National Rail Timetable "References and Symbols" PDF and
 # nationalrail.co.uk's operator page (cross-checked, per Global Constraints
-# after `west-coast-main-line.toml`'s prior AW/VT mix-up). GWR is scheduled
+# after `wcml.toml`'s prior AW/VT mix-up). GWR is scheduled
 # to transfer to public ownership on 13 Dec 2026; per this catalogue's
 # precedent with other nationalised operators (LNER "GR", SWR "SW"), the
 # ATOC code itself is not expected to change on transfer, only the owner —

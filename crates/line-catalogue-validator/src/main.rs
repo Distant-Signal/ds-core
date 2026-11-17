@@ -238,7 +238,8 @@ async fn main() -> anyhow::Result<()> {
         args.lines_dir.display()
     );
 
-    let mut findings = checks::validate_lines(&lines, &reference);
+    let mut findings = checks::validate_identity(&lines);
+    findings.extend(checks::validate_lines(&lines, &reference));
     findings.extend(checks::validate_pass_through(
         &args.lines_dir,
         &lines,

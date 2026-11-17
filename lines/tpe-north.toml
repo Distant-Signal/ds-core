@@ -144,7 +144,7 @@ sample_stations = ["LIV", "MCV", "LDS", "YRK", "NCL"]
 # sibling TP-operator files that would all cross-match on it. Station and
 # operator evidence carries this file instead.
 
-# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`,
+# Long-distance inter-city thresholds, matching `wcml.toml`,
 # `xc-manchester.toml` and this batch's `tpe-anglo-scottish.toml`/
 # `tpe-south.toml` treatment of comparable hourly inter-city-style services.
 [severity_overrides]

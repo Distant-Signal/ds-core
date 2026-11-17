@@ -409,7 +409,7 @@ crs = "MTH"
 role = "junction"
 segment = "scotrail-argyle-east"
 # Motherwell: junction with the West Coast Main Line, which
-# `west-coast-main-line.toml` does not currently model this far north
+# `wcml.toml` does not currently model this far north
 # (its northernmost modelled station is Carlisle) -- no live schema-level
 # overlap to reconcile today. Also the fork point for this file's own
 # Hamilton Circle and Lanark branch segments (Wikipedia's own Motherwell

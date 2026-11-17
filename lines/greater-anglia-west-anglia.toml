@@ -19,7 +19,7 @@ operators = ["LE"]
 # dense outer-suburban/metro-adjacent territory (Tottenham Hale is
 # literally branded "the Tottenham Hale branch of the Lea Valley Lines"),
 # closer in character to `elizabeth-shenfield.toml`/`thameslink-core.toml`
-# than to `xc-south-coast.toml`/`west-coast-main-line.toml`.
+# than to `xc-south-coast.toml`/`wcml.toml`.
 
 sample_stations = ["LST", "BXB", "BIS", "CBG"]
 match_keywords = ["West Anglia Main Line", "WAML"]

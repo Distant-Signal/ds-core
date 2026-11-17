@@ -159,7 +159,7 @@ delay_threshold_minutes = 4
 #
 # Newton (NTN) is also physically a junction with the Argyle Line's own
 # Hamilton branch and the West Coast Main Line, per the sourcing above.
-# Neither `scotrail-argyle.toml` nor `west-coast-main-line.toml` currently
+# Neither `scotrail-argyle.toml` nor `wcml.toml` currently
 # lists Newton as a `[[stations]]` entry (grepped before adding), so there
 # is no live cross-file overlap to reconcile today -- documented here as a
 # real, sourced fact for whoever eventually models that side.

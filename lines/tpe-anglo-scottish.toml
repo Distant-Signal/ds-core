@@ -28,7 +28,7 @@ operators = [
 #
 # Preston-Carlisle (and onward towards Glasgow) is run over the same WCML
 # metals as Avanti West Coast. Station-overlap-only with `wcml`, deliberately:
-# no segment name is shared with `west-coast-main-line.toml` because that
+# no segment name is shared with `wcml.toml` because that
 # line's segments are far coarser than the shared section, and an incident
 # on the shared stretch matches both lines by station anyway — same
 # precedent already documented in `xc-manchester.toml`. There's also
@@ -62,7 +62,7 @@ sample_stations = ["LIV", "MAN", "PRE", "CAR", "GLC", "EDB"]
 # match_keywords' purpose as a route-disambiguating signal.
 match_keywords = ["Anglo-Scottish"]
 
-# Long-distance inter-city thresholds, matching `west-coast-main-line.toml`
+# Long-distance inter-city thresholds, matching `wcml.toml`
 # and `xc-manchester.toml`'s treatment of comparable services.
 [severity_overrides]
 minor_delays_pct = 0.30
@@ -129,7 +129,7 @@ role = "minor"
 segment = "tpe-anglo-scottish-nw"
 
 # From here on: PRE/LAN/OXN/PNR/CAR tiplocs reused verbatim from the
-# already-curated `west-coast-main-line.toml` (PRSTON/LANCSTR/OXENHLM/
+# already-curated `wcml.toml` (PRSTON/LANCSTR/OXENHLM/
 # PENRITH/CARLILE) rather than re-derived, per this batch's convention of
 # preferring already-verified in-repo facts.
 [[stations]]

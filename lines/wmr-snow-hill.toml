@@ -5,7 +5,7 @@ category = "regional"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per the
-  # resolution already recorded in `west-coast-main-line.toml`'s own
+  # resolution already recorded in `wcml.toml`'s own
   # `operators` comment (Task 1.0): "LN" was checked and found to be a
   # phantom/unused code, "LM" is the one real code for both brands. Not
   # re-verified again from scratch here; inherited from that fix.
@@ -103,7 +103,7 @@ match_keywords = ["Snow Hill lines"]
 # No segment name here collides with any existing file (`grep`-checked
 # against `lines/*.toml`): Birmingham Snow Hill and Moor Street are
 # distinct stations from Birmingham New Street, which is what
-# `west-coast-main-line.toml`, `wcml-birmingham.toml` and the `xc-*` files
+# `wcml.toml`, `wcml-birmingham.toml` and the `xc-*` files
 # use for their own Birmingham-area segments -- no station-level overlap
 # either, so no segment-sharing decision is needed here, unlike
 # `wcml-birmingham.toml`/`swr-alton.toml`'s trunk-sharing pattern.

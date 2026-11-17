@@ -16,7 +16,7 @@ match_keywords = ["Midland Main Line", "MML"]
 # CrossCountry's Aberdeen/Edinburgh - Penzance spine runs over these same
 # metals between Derby and Sheffield (see the `emr-mml-north` comment below);
 # vetoing keeps XC-service incidents on that shared stretch from being
-# misattributed to EMR. Mirrors `west-coast-main-line.toml`'s identical
+# misattributed to EMR. Mirrors `wcml.toml`'s identical
 # exclusion for the same reason (XC also shares WCML metals Crewe-Wolverhampton).
 excluded_keywords = ["Cross Country"]
 
@@ -222,7 +222,7 @@ segment = "emr-mml-north"
 # country.toml` and `northern-hope-valley.toml` already include these same
 # stations under their own segment names, so both lines independently
 # match a station-level incident here without needing a shared name
-# (mirrors `west-coast-main-line.toml`/`xc-manchester.toml`'s identical
+# (mirrors `wcml.toml`/`xc-manchester.toml`'s identical
 # choice not to share a segment name for the Crewe-Wolverhampton stretch
 # they both run over, and `northern-hope-valley.toml`'s explicit "only the
 # station is common" reasoning for its own Sheffield overlap).

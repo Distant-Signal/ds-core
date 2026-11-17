@@ -241,7 +241,7 @@ segment = "tfw-marches-crewe"
 # the `destination_crs_filter` note above on why real through-services
 # actually continue further, up the West Coast Main Line towards Manchester
 # Piccadilly), and a genuine major multi-route junction -- confirmed
-# already appearing in `west-coast-main-line.toml`, `wcml-manchester.toml`,
+# already appearing in `wcml.toml`, `wcml-manchester.toml`,
 # `wcml-liverpool.toml`, `wcml-north-wales.toml` and
 # `lnwr-birmingham-crewe.toml`, all under that shared `wcml-northwest`
 # trunk segment name (or, for the Birmingham line, its own name). This file

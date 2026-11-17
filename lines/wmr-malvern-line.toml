@@ -10,7 +10,7 @@ category = "regional"
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per
-  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # `wcml.toml`'s own `operators` comment (Task 1.0's
   # resolution), reused verbatim by every other WMT-family file in this
   # catalogue. Not re-verified again from scratch here.
 ]

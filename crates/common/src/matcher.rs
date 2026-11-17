@@ -960,7 +960,7 @@ mod tests {
         // Regression guard: this file's operators list once had "AW"
         // (Transport for Wales' code) where "VT" (Avanti West Coast's
         // real code, inherited from Virgin Trains) belonged. See
-        // lines/west-coast-main-line.toml's `operators` comment for the
+        // lines/wcml.toml's `operators` comment for the
         // sourcing behind this fix.
         let lines = load_line("wcml");
         let wcml = lines.get("wcml").expect("wcml line should exist");
@@ -1545,7 +1545,7 @@ mod tests {
     // same exception class as c2c/Merseyrail.
     //
     // Uses Bushey (BSH) rather than Watford Junction (WFJ): WFJ also
-    // appears on `west-coast-main-line.toml` (a real station-level overlap
+    // appears on `wcml.toml` (a real station-level overlap
     // the brief didn't call out), which would make an incident there match
     // both lines and defeat the point of this exclusive-segment test.
     //
@@ -4811,7 +4811,7 @@ mod tests {
     #[test]
     fn wcml_birmingham_shared_trunk_incident_propagates_to_wcml_spine() {
         // Rugby is the diverging junction: `wcml-birmingham.toml` reuses
-        // `west-coast-main-line.toml`'s own `wcml-midlands` segment tag there
+        // `wcml.toml`'s own `wcml-midlands` segment tag there
         // (see that file's comment), so an incident at Rugby should be a
         // SharedSegment match for both lines, not exclusive to either.
         //

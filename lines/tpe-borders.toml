@@ -31,7 +31,7 @@ operators = [
 # on the East Coast Main Line between Edinburgh and Berwick-upon-Tweed") —
 # the same station-overlap-only relationship `tpe-anglo-scottish.toml` and
 # `tpe-south.toml` already document for their own shared-infrastructure
-# stretches with `west-coast-main-line.toml`/CrossCountry. No ECML/LNER
+# stretches with `wcml.toml`/CrossCountry. No ECML/LNER
 # line file exists yet in this catalogue to overlap with, so there's
 # nothing to reconcile today, but this is flagged here for whenever one is
 # added.
@@ -40,7 +40,7 @@ operators = [
 # anything else currently in `lines/` — nothing else in the catalogue
 # reaches the Northumberland coast or the Scottish Borders (per this
 # batch's own gap-analysis note that nothing else reaches Scotland except
-# `west-coast-main-line.toml`'s Carlisle terminus, which is nowhere near
+# `wcml.toml`'s Carlisle terminus, which is nowhere near
 # this route). Checked Alnmouth specifically, since preliminary research
 # found a claim it's "served by CrossCountry, Northern, LNER and
 # TransPennine Express" (confirmed true live, via Alnmouth's own Wikipedia

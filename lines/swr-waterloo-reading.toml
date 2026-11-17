@@ -360,7 +360,7 @@ crs = "RDG"
 role = "terminus"
 segment = "north-downs-reading-guildford"
 # Reading. Station overlap with several other files (gwr-main-line,
-# gwr-thames-valley, elizabeth-line, xc-south-coast, west-coast-main-line,
+# gwr-thames-valley, elizabeth-line, xc-south-coast, wcml,
 # swr-north-downs.toml among them) - this line's own approach shares only
 # swr-north-downs.toml's own segment (the genuine Wokingham-side approach),
 # matching that file's own precedent for this station.

@@ -5,12 +5,12 @@ category = "regional"
 # "regional" per this catalogue's precedent for an hourly, secondary,
 # diversionary-alignment stopping service (`emr-crewe-derby.toml`,
 # `northern-esk-valley.toml`) -- not the fast/frequent WCML-trunk character
-# `west-coast-main-line.toml`/`lnwr-birmingham-crewe.toml`'s own direct
+# `wcml.toml`/`lnwr-birmingham-crewe.toml`'s own direct
 # Trent Valley Line service models.
 operators = [
   "LM",  # West Midlands Trains, single ATOC code covering both the West
   # Midlands Railway and London Northwestern Railway brands -- per
-  # `west-coast-main-line.toml`'s own `operators` comment (Task 1.0's
+  # `wcml.toml`'s own `operators` comment (Task 1.0's
   # resolution), reused verbatim by every other WMT-family file in this
   # catalogue. Not re-verified again from scratch here.
 ]
@@ -34,7 +34,7 @@ operators = [
 # order -- two independent sources agreeing.
 #
 # CRS codes: STA reused verbatim from `lnwr-birmingham-crewe.toml`/
-# `west-coast-main-line.toml` (already-verified fact; a well-established
+# `wcml.toml` (already-verified fact; a well-established
 # multi-line junction in this catalogue). SOT, KDG, ASG and CRE reused
 # verbatim from `emr-crewe-derby.toml` (already-verified facts; this
 # line's own Stafford-facing approach is a physically distinct route from
@@ -84,14 +84,14 @@ delay_threshold_minutes = 10
 # still matches `emr-crewe-derby.toml` independently via StationHit
 # regardless of segment name. Stafford (STA) is separately a well-
 # established multi-line junction elsewhere in this catalogue
-# (`west-coast-main-line.toml` and others) -- station-overlap only there
+# (`wcml.toml` and others) -- station-overlap only there
 # too. ---
 [[stations]]
 crs = "STA"
-tiploc = "STAFFRD"  # reused from lnwr-birmingham-crewe.toml/west-coast-main-line.toml
+tiploc = "STAFFRD"  # reused from lnwr-birmingham-crewe.toml/wcml.toml
 role = "terminus"
 segment = "lnwr-stafford-crewe"
-# Stafford: also a `west-coast-main-line.toml`/`lnwr-birmingham-
+# Stafford: also a `wcml.toml`/`lnwr-birmingham-
 # crewe.toml`/`wcml-manchester.toml`/`xc-manchester.toml`/`wcml-
 # liverpool.toml`/`wcml-north-wales.toml` station -- station-overlap only.
 
@@ -137,7 +137,7 @@ crs = "CRE"
 tiploc = "CREWE"
 role = "terminus"
 segment = "lnwr-stafford-crewe"
-# Crewe: also a `west-coast-main-line.toml`/`lnwr-birmingham-crewe.toml`/
+# Crewe: also a `wcml.toml`/`lnwr-birmingham-crewe.toml`/
 # `emr-crewe-derby.toml`/`wcml-liverpool.toml`/`wcml-north-wales.toml`/
 # `wcml-manchester.toml` station -- station-overlap only.
 

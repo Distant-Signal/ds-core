@@ -56,7 +56,7 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # Category: confirmed "main-line" (not "regional") via the line's own
 # Wikipedia article, which describes it as "a major railway line" of
 # 105.5 miles, predominantly double track, matching the treatment
-# `west-coast-main-line.toml` gets for the same reason.
+# `wcml.toml` gets for the same reason.
 #
 # Station-catalogue completeness fill-in (Task 4.5,
 # `docs/superpowers/plans/2026-09-01-station-catalogue-completeness.md`):
@@ -110,7 +110,7 @@ match_keywords = ["North Wales Coast Line", "North Wales Main Line"]
 # West Coast's own official website, whose global "Where we go"
 # navigation lists both Chester and Bangor as served destinations (not
 # just Holyhead as an endpoint reached by transiting). All three were
-# fetched live. Per `west-coast-main-line.toml`'s own precedent of
+# fetched live. Per `wcml.toml`'s own precedent of
 # listing every TOC that genuinely timetables services on a shared
 # line, VT is included here on that basis.
 #

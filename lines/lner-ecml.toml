@@ -78,7 +78,7 @@ segment = "ecml-london"
 # LNER's own services listed in this file run on, and none of this file's
 # other stations are exclusively on the slow lines (this spine skips
 # straight from King's Cross to Stevenage, a fast-line stop). Following
-# the `xc-manchester.toml`/west-coast-main-line.toml precedent of not
+# the `xc-manchester.toml`/wcml.toml precedent of not
 # forcing a shared segment name across genuinely different tracks just
 # because of station-level overlap: no segment here is shared for this. If
 # a future `lines/great-northern-*.toml` wants a name for its own

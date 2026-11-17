@@ -28,7 +28,7 @@ match_keywords = ["Lioness line"]
 # Harrow & Wealdstone.
 #
 # Also note: Watford Junction (WFJ) already appears in this catalogue on
-# `lines/west-coast-main-line.toml` — this is a station-level overlap the
+# `lines/wcml.toml` — this is a station-level overlap the
 # task 3.0 research pass didn't flag; noted here for the same reason as
 # the Willesden Junction/Romford overlaps above (station-level only, no
 # segment shared, matching the `xc-south-coast.toml`/Reading precedent).

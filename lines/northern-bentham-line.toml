@@ -54,12 +54,12 @@ operators = ["NT"]
 # Carnforth to Lancaster is genuine shared running with the southern end of
 # the West Coast Main Line ("Trains now continue via Carnforth," joining
 # WCML metals into Lancaster), and Lancaster itself is also a station on
-# `west-coast-main-line.toml`, `northern-furness.toml` and `tpe-anglo-
+# `wcml.toml`, `northern-furness.toml` and `tpe-anglo-
 # scottish.toml`. Following the precedent already set by
 # `northern-furness.toml` -- which itself touches this exact Carnforth/
 # Lancaster stretch of WCML track but tags both stations with its own
 # exclusive `northern-furness-branch` segment rather than reusing
-# `west-coast-main-line.toml`'s `wcml-northwest` segment -- this file does
+# `wcml.toml`'s `wcml-northwest` segment -- this file does
 # the same: CNF and LAN get their own exclusive segment, station/track
 # overlap only, no segment shared with any of those three other files.
 #
@@ -172,7 +172,7 @@ tiploc = "LANCSTR"
 role = "junction"
 segment = "northern-bentham-line"
 # Lancaster -- the real current Lancaster/Morecambe split point; station
-# overlap only with `west-coast-main-line.toml`, `northern-furness.toml` and
+# overlap only with `wcml.toml`, `northern-furness.toml` and
 # `tpe-anglo-scottish.toml`'s own separate Lancaster entries.
 
 [[stations]]

@@ -39,7 +39,7 @@ operators = [
 # TfW's frequency, so this file is filed as `wmr-shrewsbury-local.toml`
 # with `id`/`name` unprefixed by either brand (matching this catalogue's
 # existing convention for genuinely multi-operator lines, e.g.
-# `chiltern-main-line.toml`/`west-coast-main-line.toml` not carrying a
+# `chiltern-main-line.toml`/`wcml.toml` not carrying a
 # single-operator prefix either).
 #
 # ROUTE RESEARCH (Wikipedia's "Wolverhampton-Shrewsbury line" article, raw

@@ -54,7 +54,7 @@ operators = ["NT"]
 # `northern.toml`. SNH (St Helens Central) and WGN (Wigan North Western)
 # are also on `tpe-anglo-scottish.toml` (its own Liverpool-Manchester
 # Airport route via a different calling pattern); WGN is also on
-# `west-coast-main-line.toml`. All station-overlap only, matching this
+# `wcml.toml`. All station-overlap only, matching this
 # catalogue's `xc-manchester.toml` precedent. No existing file in this
 # catalogue currently claims Edge Hill, Wavertree Technology Park, Broad
 # Green, Roby, Prescot, Eccleston Park, Thatto Heath, Garswood or Bryn
@@ -165,7 +165,7 @@ segment = "northern-liverpool-st-helens-wigan"
 crs = "WGN"
 role = "terminus"
 segment = "northern-liverpool-st-helens-wigan"
-# Wigan North Western -- also on `west-coast-main-line.toml`/
+# Wigan North Western -- also on `wcml.toml`/
 # `tpe-anglo-scottish.toml`; station-overlap only. Not the same station as
 # Wigan Wallgate (`northern-wigan-kirkby.toml`'s own terminus) -- see the
 # top-of-file comment.
