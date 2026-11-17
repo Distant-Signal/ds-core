@@ -6,6 +6,7 @@ uv run python -m unittest discover -s scripts/tests
 import copy
 import importlib.util
 import io
+import re
 import sys
 import tempfile
 import unittest
@@ -73,6 +74,19 @@ class RepoFilesTest(unittest.TestCase):
                 "ldbws_ro": "narrow",
             },
         )
+
+    def test_other_roles_limits_are_postgres_roles_sql_defaults(self) -> None:
+        """The budget counts the limits postgres-roles.sql really sets (K6)."""
+        roles_sql = (SCRIPT.parent.parent / "access" / "postgres-roles.sql").read_text(
+            encoding="utf-8"
+        )
+        defaults = {
+            match.group(1): int(match.group(2))
+            for match in re.finditer(
+                r"^\\set (\w+)_connection_limit (\d+)$", roles_sql, re.MULTILINE
+            )
+        }
+        self.assertEqual(dict(gen.load().other_limits), defaults)
 
 
 class ParseTest(unittest.TestCase):
