@@ -762,7 +762,7 @@ fn match_one<'a>(
     let keyword_hits: Vec<String> = line
         .match_keywords
         .iter()
-        .filter(|kw| haystack.contains(&kw.to_lowercase()))
+        .filter(|kw| contains_keyword(haystack, kw))
         .cloned()
         .collect();
 
@@ -854,7 +854,51 @@ fn match_one<'a>(
 fn is_excluded(line: &LineDefinition, summary: &str) -> bool {
     line.excluded_keywords
         .iter()
-        .any(|kw| summary.contains(&kw.to_lowercase()))
+        .any(|kw| contains_keyword(summary, kw))
+}
+
+/// Whether `haystack` (already lowercased) names `keyword` as whole words.
+///
+/// A raw substring test let "LNER" match "vulnerable" and the `northern`
+/// umbrella's "Northern line" veto fire on "Northern lines". An occurrence
+/// counts only when the characters either side of it are not alphanumeric
+/// (Unicode-aware) or are the ends of the text. The boundary is only
+/// required where the keyword's own edge is alphanumeric, so a keyword
+/// ending in punctuation ("Grand Central, Birmingham", a trailing ".")
+/// still matches at the punctuation. Case-insensitive: the keyword is
+/// lowercased here, the haystack by the caller.
+fn contains_keyword(haystack: &str, keyword: &str) -> bool {
+    let needle = keyword.to_lowercase();
+    if needle.is_empty() {
+        return false;
+    }
+    let starts_word = needle.chars().next().is_some_and(char::is_alphanumeric);
+    let ends_word = needle
+        .chars()
+        .next_back()
+        .is_some_and(char::is_alphanumeric);
+    // Every occurrence, overlapping ones included, so a rejected
+    // occurrence never hides an accepted one that starts inside it.
+    let mut from = 0;
+    while let Some(found) = haystack[from..].find(needle.as_str()) {
+        let at = from + found;
+        let before_ok = !starts_word
+            || haystack[..at]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !c.is_alphanumeric());
+        let after_ok = !ends_word
+            || haystack[at + needle.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_alphanumeric());
+        if before_ok && after_ok {
+            return true;
+        }
+        // Step one character, not one byte: `at` is a char boundary.
+        from = at + haystack[at..].chars().next().map_or(1, char::len_utf8);
+    }
+    false
 }
 
 #[cfg(test)]
@@ -13315,5 +13359,138 @@ mod tests {
             &["XC"],
         );
         assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn keywords_match_whole_words_only() {
+        // Raw substrings: "LNER" in "vulnerable", "Northern line" in
+        // "Northern lines".
+        assert!(!contains_keyword("help for vulnerable customers", "LNER"));
+        assert!(contains_keyword("lner services are delayed", "LNER"));
+        assert!(contains_keyword("delays to lner's services", "LNER"));
+        assert!(contains_keyword("<p>lner</p>", "LNER"));
+        assert!(!contains_keyword(
+            "disruption on northern lines",
+            "Northern line"
+        ));
+        assert!(contains_keyword(
+            "disruption on the northern line.",
+            "Northern line"
+        ));
+        // A rejected occurrence does not hide a later accepted one.
+        assert!(contains_keyword("vulnerable passengers on lner", "LNER"));
+        // Multi-word and hyphenated keywords; case-insensitive.
+        assert!(contains_keyword(
+            "the settle-carlisle line is shut",
+            "Settle-Carlisle line"
+        ));
+        assert!(!contains_keyword(
+            "the settle-carlisle liner",
+            "Settle-Carlisle line"
+        ));
+        // Edges in punctuation need no boundary there.
+        assert!(contains_keyword(
+            "grand central, birmingham closed",
+            "Grand Central, Birmingham"
+        ));
+        assert!(contains_keyword("works.next week", "works."));
+        assert!(contains_keyword("bus (replacement)", "(replacement)"));
+        // Unicode letters are word characters; other symbols are not.
+        assert!(!contains_keyword("caféLNER", "LNER"));
+        assert!(!contains_keyword("lneré", "LNER"));
+        assert!(contains_keyword("arrêt — lner — retard", "LNER"));
+        assert!(contains_keyword("llandudno–lner", "LNER"));
+        assert!(contains_keyword("ysbyty gwynedd: rheilffordd lner", "LNER"));
+        assert!(!contains_keyword("anything", ""));
+    }
+
+    #[test]
+    fn vulnerable_does_not_match_the_lner_keyword() {
+        // A notice naming no catalogue place, mentioning vulnerable
+        // customers: "LNER" in "vulnerable" used to add lner-ecml.
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "M1-A",
+            "Disruption between Edinburgh and Glasgow",
+            "Staff are available to help vulnerable customers.",
+            &["ZN"],
+            &[],
+        );
+        let found: Vec<String> = lines_affected_by(&inc, &lines, &registry)
+            .into_iter()
+            .map(|m| m.line.id.clone())
+            .collect();
+        assert!(!found.iter().any(|id| id == "lner-ecml"), "{found:?}");
+    }
+
+    #[test]
+    fn vulnerable_does_not_suppress_the_lner_operator_wide_fallback() {
+        // An LNER notice naming no place: the spurious keyword hit on
+        // lner-ecml used to drop the operator-only fallback of the other
+        // LNER lines.
+        let lines = load_all_lines();
+        let registry = SegmentRegistry::new(&lines);
+        // "LNER" in the summary is a real keyword hit on lner-ecml.
+        let inc = incident(
+            "M1-B",
+            "Disruption to LNER services",
+            "Assistance is available for vulnerable customers.",
+            &["GR"],
+            &[],
+        );
+        let found: Vec<(String, MatchScope)> = lines_affected_by(&inc, &lines, &registry)
+            .into_iter()
+            .map(|m| (m.line.id.clone(), m.scope))
+            .collect();
+        assert!(
+            found
+                .iter()
+                .any(|(id, s)| id == "lner-ecml" && *s == MatchScope::KeywordOnly),
+            "{found:?}"
+        );
+        // The brand only inside "vulnerable": every LNER line stays.
+        let inc = incident(
+            "M1-C",
+            "Disruption to services",
+            "Assistance is available for vulnerable customers.",
+            &["GR"],
+            &[],
+        );
+        let mut found: Vec<(String, MatchScope)> = lines_affected_by(&inc, &lines, &registry)
+            .into_iter()
+            .map(|m| (m.line.id.clone(), m.scope))
+            .collect();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        let expected: Vec<(String, MatchScope)> =
+            ["lner-ecml", "lner-hull", "lner-leeds", "lner-lincoln"]
+                .into_iter()
+                .map(|id| (id.to_string(), MatchScope::OperatorOnly))
+                .collect();
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn northern_lines_does_not_veto_the_northern_umbrella() {
+        let lines = load_line("northern");
+        let northern = lines.get("northern").expect("northern line should exist");
+        assert!(!is_excluded(
+            northern,
+            "delays to northern lines around leeds"
+        ));
+        assert!(is_excluded(northern, "delays on the northern line"));
+        let registry = SegmentRegistry::new(&lines);
+        let inc = incident(
+            "M1-D",
+            "Disruption to Northern lines at Leeds",
+            "",
+            &["NT"],
+            &["LDS"],
+        );
+        let found: Vec<String> = lines_affected_by(&inc, &lines, &registry)
+            .into_iter()
+            .map(|m| m.line.id.clone())
+            .collect();
+        assert_eq!(found, ["northern"]);
     }
 }

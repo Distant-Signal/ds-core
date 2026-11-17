@@ -11,7 +11,7 @@ trunk_for = ["thameslink-bedford", "thameslink-cambridge", "thameslink-rainham",
 sample_stations = ["STP", "ZFD", "LBG"]
 # A bare "Thameslink" would collide with every branch file in this catalogue
 # ("Thameslink Bedford", "Thameslink Cambridge", "Thameslink Sevenoaks", ...
-# — match_one does substring containment), matching the exact collision
+# — match_one matches whole words, and "Thameslink" is one in each), matching the exact collision
 # `thameslink-cambridge.toml`/`thameslink-southern.toml` already document
 # avoiding. "Thameslink core" alone is specific enough and unique in this
 # catalogue (checked: no other file's match_keywords contains it).

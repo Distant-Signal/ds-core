@@ -89,7 +89,7 @@ destination_crs_filter = ["PEN", "BYI", "BGN"]
 # Bridgend's station articles ("Vale Line - main route" / "Vale line -
 # Barry Island branch" / "Vale line" at Bridgend) -- but that string is a
 # literal substring of `tfw-ebbw-vale.toml`'s own "Ebbw Vale Line" keyword,
-# and this catalogue's matcher does substring containment, so it caused a
+# and the matcher finds a keyword phrase anywhere in the text, so it caused a
 # false-positive match against every Ebbw Vale Line incident. Dropped;
 # "Vale of Glamorgan Line" alone is unambiguous and was already confirmed
 # (per the note above) not to collide with any other file's own

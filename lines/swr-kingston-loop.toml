@@ -203,7 +203,7 @@ operators = ["SW"]  # South Western Railway, same ATOC code as the three
 # "Kingston" is deliberately NOT included: it would also match Kingston upon
 # Hull and Kingston Park (Tyne and Wear Metro) content.
 #
-# ONE keyword only. Matching is a plain lowercased substring test
+# ONE keyword only. Matching is a lowercased whole-word phrase test
 # (`is_excluded`/`match_one` in crates/aggregator/src/matcher.rs), so a
 # second entry of "Kingston Loop Line" could never add a match that
 # "Kingston loop" does not already make - it is a strict substring of it.
