@@ -227,7 +227,9 @@ impl Batch {
     /// Appends `other` (later messages) and merges each kind to one row per
     /// key, in timestamp order (a tie goes to the later message):
     ///
-    /// - a service keeps its newest schedule fields, and the newest `ts`;
+    /// - a service: the newest schedule message whole (fields and `ts`),
+    ///   or the newest TS-only message when it has no schedule
+    ///   (see `merge_services`);
     /// - a schedule call and an association: the newest wins whole;
     /// - a TS call: each group from the newest message that carried it
     ///   ([`StatusCall::absorb`]);
@@ -282,6 +284,14 @@ fn newest_by<T, K: std::hash::Hash + Eq + Clone>(
     out
 }
 
+/// One service per RID. A merged service with schedule fields keeps that
+/// schedule message's own `ts` (2026-11 review, W3): the writer stores a
+/// service's `ts` as its `schedule_ts` whenever it has schedule fields, so
+/// stamping a schedule at t1 with a later TS message's t2 made the store
+/// refuse a genuine schedule between t1 and t2. A TS-only message adds
+/// nothing else a service row keeps (its UID and SSD are the RID's own), so
+/// it is dropped from the merge when a schedule is present; its locations
+/// still carry its `ts` in [`Batch::status_calls`].
 fn merge_services(rows: Vec<Service>) -> Vec<Service> {
     let mut index: HashMap<String, usize> = HashMap::new();
     let mut out: Vec<Service> = Vec::with_capacity(rows.len());
@@ -293,14 +303,15 @@ fn merge_services(rows: Vec<Service>) -> Vec<Service> {
         };
         let kept = &mut out[at];
         let newer = row.ts >= kept.ts;
-        // Schedule fields: the newer message's, when it has them.
-        if row.schedule.is_some() && (newer || kept.schedule.is_none()) {
-            kept.schedule = row.schedule;
-        }
-        if newer {
-            kept.uid = row.uid;
-            kept.ssd = row.ssd;
-            kept.ts = row.ts;
+        let replace = match (kept.schedule.is_some(), row.schedule.is_some()) {
+            // A schedule over a schedule, or TS over TS: the newer whole.
+            (true, true) | (false, false) => newer,
+            // A schedule keeps its fields and its own ts over a TS message.
+            (true, false) => false,
+            (false, true) => true,
+        };
+        if replace {
+            *kept = row;
         }
     }
     out
@@ -442,10 +453,68 @@ mod tests {
             ..Batch::default()
         });
         assert_eq!(batch.services.len(), 1);
-        assert_eq!(batch.services[0].schedule, Some(fields));
-        assert_eq!(batch.services[0].ts, ts(20));
+        assert_eq!(batch.services[0].schedule, Some(fields.clone()));
+        // The schedule's own ts, not the later TS message's (W3).
+        assert_eq!(batch.services[0].ts, ts(10));
         assert_eq!(batch.newest_ts(), Some(ts(30)));
         assert_eq!(batch.len(), 2);
+
+        // The other order: an older schedule merged after a newer TS-only
+        // row still carries its own ts.
+        let ts_only = |at: i64| Service {
+            rid: "R2".to_string(),
+            uid: "P00002".to_string(),
+            ssd: date(),
+            schedule: None,
+            ts: ts(at),
+        };
+        let mut batch = Batch {
+            services: vec![ts_only(20)],
+            ..Batch::default()
+        };
+        batch.merge(Batch {
+            services: vec![Service {
+                schedule: Some(fields.clone()),
+                ts: ts(10),
+                ..ts_only(0)
+            }],
+            ..Batch::default()
+        });
+        assert_eq!(batch.services[0].schedule, Some(fields.clone()));
+        assert_eq!(batch.services[0].ts, ts(10));
+
+        // Two TS-only rows: the newer; two schedules: the newer whole.
+        let mut batch = Batch {
+            services: vec![ts_only(20)],
+            ..Batch::default()
+        };
+        batch.merge(Batch {
+            services: vec![ts_only(25)],
+            ..Batch::default()
+        });
+        assert_eq!(batch.services[0].ts, ts(25));
+        let older = ScheduleFields {
+            toc: Some("XC".to_string()),
+            ..fields.clone()
+        };
+        let mut batch = Batch {
+            services: vec![Service {
+                schedule: Some(fields.clone()),
+                ts: ts(40),
+                ..ts_only(0)
+            }],
+            ..Batch::default()
+        };
+        batch.merge(Batch {
+            services: vec![Service {
+                schedule: Some(older),
+                ts: ts(35),
+                ..ts_only(0)
+            }],
+            ..Batch::default()
+        });
+        assert_eq!(batch.services[0].schedule, Some(fields));
+        assert_eq!(batch.services[0].ts, ts(40));
     }
 
     #[test]

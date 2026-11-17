@@ -80,6 +80,8 @@ async fn upsert_services(conn: &mut PgConnection, batch: &Batch) -> Result<u64> 
         is_passenger.push(schedule.and_then(|s| s.is_passenger));
         deleted.push(schedule.is_some_and(|s| s.deleted));
         cancel_reason.push(schedule.and_then(|s| s.cancel_reason.clone()));
+        // A service with schedule fields carries that schedule message's
+        // own ts (`Batch::merge` never stamps it with a later TS message's).
         schedule_ts.push(schedule.map(|_| service.ts));
         message_ts.push(service.ts);
     }
