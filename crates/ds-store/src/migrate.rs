@@ -924,6 +924,77 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Opaque public ids (20261118100000 to 20261118120200): a row inserted
+    /// without naming `public_id` gets a well-formed one from the default,
+    /// each table with its own prefix, and the three CHECKs are validated.
+    /// In a transaction that is rolled back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn public_ids_default_to_a_prefixed_random_id() {
+        let mut conn = connect().await;
+        for (table, constraint) in [
+            ("journey_legs", "journey_legs_public_id_format"),
+            (
+                "train_subscriptions",
+                "train_subscriptions_public_id_format",
+            ),
+            ("push_subscriptions", "push_subscriptions_public_id_format"),
+        ] {
+            let (validated,): (bool,) = sqlx::query_as(
+                "SELECT convalidated FROM pg_constraint \
+                 WHERE conrelid = ('public.' || $1)::regclass AND conname = $2",
+            )
+            .bind(table)
+            .bind(constraint)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+            assert!(validated, "{constraint}");
+        }
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let (journey,): (i64,) =
+            sqlx::query_as("INSERT INTO journeys (user_id) VALUES ('u-regular') RETURNING id")
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        let (leg,): (String,) = sqlx::query_as(
+            "INSERT INTO journey_legs (journey_id, leg_order, service_date) \
+             VALUES ($1, 1, CURRENT_DATE) RETURNING public_id",
+        )
+        .bind(journey)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (tracking,): (String,) = sqlx::query_as(
+            "INSERT INTO train_subscriptions (user_id, service_date) \
+             VALUES ('u-regular', CURRENT_DATE) RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (device,): (String,) = sqlx::query_as(
+            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) \
+             VALUES ('u-regular', 'https://push.invalid/public-id', 'k', 'a') \
+             RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        for (id, prefix) in [(&leg, 'l'), (&tracking, 't'), (&device, 'd')] {
+            assert_eq!(id.len(), 34, "{id}");
+            assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
+            assert!(
+                id[2..]
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                "{id}"
+            );
+        }
+        tx.rollback().await.unwrap();
+    }
+
     /// The whole startup path against an already-migrated database: takes the
     /// lock, heals, finds nothing pending, releases the lock.
     #[tokio::test]
