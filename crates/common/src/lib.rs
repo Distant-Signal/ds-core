@@ -1161,9 +1161,10 @@ impl LineDefinition {
 
     /// Signal Box Audit, Finding #6 (common/matcher.rs): both
     /// `crate::matcher::match_one`'s keyword tier and its `is_excluded`
-    /// veto check a keyword via `haystack.contains(&kw.to_lowercase())`.
-    /// `str::contains("")` is always `true` -- an empty string is a
-    /// substring of every haystack -- so a stray empty string in
+    /// veto checked a keyword via `haystack.contains(&kw.to_lowercase())`
+    /// (now `matcher::contains_keyword`, whole words, which also rejects an
+    /// empty keyword). `str::contains("")` is always `true` -- an empty
+    /// string is a substring of every haystack -- so a stray empty string in
     /// `match_keywords` (or `excluded_keywords`) turns that tier into an
     /// unconditional match (or veto) for every single incident this line is
     /// ever checked against. A trailing comma in a catalogue TOML array
