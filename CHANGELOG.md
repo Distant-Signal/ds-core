@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.17.1 (2026-11-17)
+
+Groundwork for dropping chrono-tz (DS-534, RUSTSEC-2026-0555). A patch: one additive Rust module, no behaviour change, no migration, no grant or ACL change.
+
+- Move every chrono-tz use in ds-core behind common::zone (#92): `common::zone` is now the only ds-core module that names chrono-tz, and its public API uses only chrono types and an opaque `Zone`. `rail_day`, `trust_timestamp`, `transit`, `incident_validity` (tests) and the ds-store reads, sweeps and tests call it instead of chrono-tz; their public signatures are unchanged. The DST and London pinning tests from #90 (tests only, already in v0.17.0) cover those functions and pass unchanged, and `zone` has its own tables for London, Dublin and a user-supplied zone around the 2025 and 2026 clock changes. The `chrono-tz` entry in ds-store's Cargo.toml is now unused and is left for the replacement step.
+
+**Consumers**: `common::zone` is new and additive. Its API: the opaque `Zone` (consts `Zone::LONDON` and `Zone::DUBLIN`; `Zone::parse`, `name`, `local`, `offset_at`, `naive_local`, `date`, `time`, `resolve`, returning `LocalTime::{Single, Ambiguous { earliest, latest }, Gap}`, `to_utc_earliest` and `to_utc_gap_shifted`) and the free functions `london_local`, `london_date`, `london_time`, `london_naive`, `london_resolve`, `london_to_utc_earliest`, `london_to_utc_gap_shifted`, `dublin_local` and `dublin_to_utc_earliest`. `Zone::parse` is case-sensitive, exactly as chrono-tz's name parsing is today (case variants are rejected). Consumers bump `core-version` to v0.17.1, then convert their direct chrono-tz uses to `common::zone`, as a later mechanical PR per repository; the pinning tests from #90 and each consumer's own tests are the safety net. Nothing forces the bump: v0.17.0 keeps working.
+
+**Migrations**: none.
+
+**Grants**: none. `db-grants.yaml`, `postgres-grants.sql` and the Redis ACL are unchanged.
+
 ## v0.17.0 (2026-11-17)
 
 Opaque public ids for journey legs, tracked trains and push devices, stage 1 (DS-534, round 2 after journeys). A minor, as v0.16.0 was for its id wave: nine additive migrations and one additive grant; nothing is removed or changed in place, no Rust API changes and no migration is a contract migration. The grant has an ordering requirement (below).
