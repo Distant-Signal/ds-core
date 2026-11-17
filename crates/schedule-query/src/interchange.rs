@@ -261,7 +261,7 @@ pub fn fixed_link_between_where<'a>(
     allow: impl Fn(&FixedLink) -> bool,
 ) -> Option<&'a FixedLink> {
     let clock = hhmm_bytes(clock_minutes(time_min));
-    let day = day_index(date);
+    let day = day_index_at(date, time_min);
     fixed_links_between(data, from_crs, to_crs)
         .filter(|link| allow(link) && applies(link, day, clock))
         .min_by(|a, b| lookup_key(a).cmp(&lookup_key(b)))
@@ -359,6 +359,14 @@ fn day_index(date: NaiveDate) -> usize {
     date.weekday().num_days_from_monday() as usize
 }
 
+/// [`day_index`] of the calendar day `time_min` falls on: `date` plus
+/// `time_min / 1440` days. A search's minutes run on past 1440 for a
+/// service day's post-midnight calls, so 00:30 after a Saturday's service
+/// date is minute 1470 and falls on Sunday (2026-11 review, W5).
+fn day_index_at(date: NaiveDate, time_min: u32) -> usize {
+    (day_index(date) + (time_min / 1440) as usize) % 7
+}
+
 fn clock_minutes(time_min: u32) -> u32 {
     time_min % 1440
 }
@@ -413,9 +421,12 @@ pub struct LinkWindow {
 }
 
 impl LinkWindow {
+    /// The window at `time_min` minutes after the start of `date` (the
+    /// service date; minutes past 1440 fall on the following days, as in
+    /// [`fixed_links_from_where`]).
     pub fn new(date: NaiveDate, time_min: u32) -> Self {
         Self {
-            day: day_index(date),
+            day: day_index_at(date, time_min),
             clock: hhmm_bytes(clock_minutes(time_min)),
         }
     }
@@ -432,9 +443,11 @@ impl LinkWindow {
 /// connection's own `arrival_min` convention, see [`crate::connections::Connection`]);
 /// it is reduced to a same-day clock position before comparison, since a
 /// fixed link's validity window is defined against the clock, not a
-/// running total.
+/// running total, and the day mask is read for the calendar day the
+/// minute falls on, `date` plus `time_min / 1440` days: a Saturday
+/// service's 00:30 arrival (minute 1470) walks on a Sunday.
 ///
-/// A row applies only when its day mask matches `date`'s day of week AND
+/// A row applies only when its day mask matches that day of week AND
 /// `time_min`'s clock time falls inside its `valid_from`/`valid_to` window
 /// (both bounds inclusive). Where several rows exist for the same
 /// destination CRS and both are valid, only the shortest is returned --
@@ -481,7 +494,7 @@ pub fn fixed_links_from_where<'a>(
     allow: impl Fn(&FixedLink) -> bool,
 ) -> Vec<&'a FixedLink> {
     let clock = hhmm_bytes(clock_minutes(time_min));
-    let day = day_index(date);
+    let day = day_index_at(date, time_min);
 
     let Some(candidates) = data.fixed_links_from_crs.get(from_crs) else {
         return Vec::new();
@@ -697,6 +710,54 @@ mod tests {
         // 1440 + 8*60 = day-2 08:00 -- must still match a same-clock-time window.
         let links = fixed_links_from(&data, "EUS", monday(), 1440 + 8 * 60);
         assert_eq!(links.len(), 1);
+    }
+
+    /// W5 (2026-11 review): past midnight the day mask is the next
+    /// calendar day's, both for a Saturday service arriving on Sunday and
+    /// for a Sunday service arriving on Monday.
+    #[test]
+    fn past_midnight_the_day_mask_is_the_next_days() {
+        let saturday = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        let sunday = NaiveDate::from_ymd_opt(2026, 9, 6).unwrap();
+        let mut data = empty_data();
+        data.fixed_links_from_crs.insert(
+            "EUS".to_string(),
+            vec![
+                // Mon-Sat only (the real EUS-VXH Tube row's mask).
+                link("VXH", 22, "0000", "2359", "1111110"),
+                // Monday only.
+                link("KGX", 5, "0000", "2359", "1000000"),
+            ],
+        );
+        let to = |date: NaiveDate, minute: u32| -> Vec<&str> {
+            let links: Vec<&str> = fixed_links_from(&data, "EUS", date, minute)
+                .iter()
+                .map(|l| l.to_crs.as_str())
+                .collect();
+            let ordered = links_in_lookup_order(&data, "EUS");
+            let window = LinkWindow::new(date, minute);
+            let windowed: Vec<&str> = ordered
+                .iter()
+                .filter(|l| window.applies(l))
+                .map(|l| l.to_crs.as_str())
+                .collect();
+            assert_eq!(links, windowed, "{date} {minute}");
+            links
+        };
+        // Saturday 23:50: Mon-Sat applies.
+        assert_eq!(to(saturday, 23 * 60 + 50), ["VXH"]);
+        // Saturday's service, 00:30 Sunday: no Mon-Sat link.
+        assert_eq!(to(saturday, 1440 + 30), [] as [&str; 0]);
+        // Sunday's service, 00:30 Monday: both links.
+        assert_eq!(to(sunday, 1440 + 30), ["KGX", "VXH"]);
+        // Sunday 23:50 itself: neither.
+        assert_eq!(to(sunday, 23 * 60 + 50), [] as [&str; 0]);
+        // Two days on (a long overnight search) wraps the week.
+        assert_eq!(to(saturday, 2 * 1440 + 30), ["KGX", "VXH"]);
+        assert_eq!(
+            fixed_link_between(&data, "EUS", "VXH", saturday, 1440 + 30),
+            None
+        );
     }
 
     #[test]
