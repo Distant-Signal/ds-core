@@ -31,8 +31,8 @@ ignore = [
     # dates and London time throughout. Moving to jiff or time is a change to
     # every crate and every consumer's public types, so it is not part of a
     # grants release. Re-read at the date: migrate, else renew.
-    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained (no patched version); replacing it touches every consumer's types" }, # expires 2027-05-17
-    { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained (no patched version); goes with chrono" }, # expires 2027-05-17
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained (no patched version); replacing it touches every consumer's types" }, # expires 2027-02-17
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained (no patched version); goes with chrono" }, # expires 2027-02-17
 ]
 
 [licenses]
