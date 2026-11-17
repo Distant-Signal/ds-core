@@ -11,7 +11,10 @@
   // Postgres major holds, cargo 0.x minors on their own, the custom managers
   // for annotated `# renovate:` versions and digest-pinned images in
   // workflow inputs, and the Distant-Signal/ci pins in the workflows.
-  "extends": ["github>Distant-Signal/ci//renovate/default.json5"],
+  // Pinned to a Distant-Signal/ci commit: a preset change reaches this
+  // repository only through a PR that moves the sha. Bump it as
+  // Distant-Signal/ci's README ("Renovate preset") describes.
+  "extends": ["github>Distant-Signal/ci//renovate/default.json5#3315550e579c716eaf23501c06f76f90bb12c36b"],
 
   "customManagers": [
     {
