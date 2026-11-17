@@ -460,6 +460,19 @@ struct CallRow {
 /// The Push Port locations of each `(train_uid, service_date)` in `trains`
 /// that Darwin knows, in no particular order. When Darwin holds several
 /// live RIDs for one train (rare), the most recently updated one's.
+///
+/// **Only the newest schedule's locations (2026-11 review, W2).** A
+/// re-sent schedule (a re-timed or diverted train) can drop or re-key
+/// locations; their old rows stay stored, and would read as phantom or
+/// duplicate stops with stale platforms. Every location of a RID's newest
+/// known schedule carries that schedule's `ts` as `schedule_ts` (the upsert
+/// refuses an older message per row, so it cannot lower it), so a row last
+/// touched by anything older than that, schedule or TS, is not in it and is
+/// left out. A row a TS message touched at or after that schedule is kept,
+/// so an out-of-order TS for a newer schedule not received yet still shows.
+/// The rows are filtered rather than deleted: the writer has no `DELETE` on
+/// `darwin_calls` (`db-grants.yaml`), and the aggregator's retention prunes
+/// them with the rest of their service date.
 pub async fn calls_for_trains(
     pool: &PgPool,
     trains: &[(String, NaiveDate)],
@@ -476,12 +489,18 @@ pub async fn calls_for_trains(
              FROM k JOIN darwin_services d ON d.uid = k.uid AND d.ssd = k.ssd \
              WHERE NOT d.is_deleted \
              ORDER BY d.uid, d.ssd, d.message_ts DESC \
+         ), \
+         c AS ( \
+             SELECT c.*, max(c.schedule_ts) OVER (PARTITION BY c.rid) AS newest_schedule_ts \
+             FROM s JOIN darwin_calls c ON c.rid = s.rid \
          ) \
          SELECT s.uid, s.ssd, c.tiploc, c.wta, c.wtd, c.wtp, c.planned_platform, \
                 c.is_cancelled, c.platform, c.platform_confirmed, c.platform_suppressed, \
                 c.platform_cis_suppressed, c.platform_basis, c.arrival_et, c.departure_et, \
                 c.updated_at \
-         FROM s JOIN darwin_calls c ON c.rid = s.rid",
+         FROM s JOIN c ON c.rid = s.rid \
+         WHERE c.newest_schedule_ts IS NULL \
+            OR GREATEST(c.schedule_ts, c.ts_ts) >= c.newest_schedule_ts",
     )
     .bind(&uids)
     .bind(&dates)
@@ -672,6 +691,159 @@ mod db_tests {
                 .expect("service");
         assert!(deactivated);
 
+        cleanup(&pool).await;
+    }
+
+    fn schedule_call(at: i64, tiploc: &str, wtd: &str, platform: &str) -> ScheduleCall {
+        ScheduleCall {
+            key: key(RID, tiploc, wtd),
+            ssd: ssd(),
+            pta: None,
+            ptd: Some(wtd.to_string()),
+            planned_platform: Some(platform.to_string()),
+            cancelled: false,
+            ts: ts(at),
+        }
+    }
+
+    /// W2 (2026-11 review): a re-sent schedule that drops a location
+    /// (diverted) or re-keys it (re-timed) must not leave the old rows
+    /// readable as phantom or duplicate stops; an older replay of the first
+    /// schedule must not bring them back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_resent_schedule_hides_the_locations_it_dropped() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        let first = Batch {
+            services: vec![service(RID, UID, 0, true)],
+            schedule_calls: vec![
+                schedule_call(0, "YORK", "10:12", "3"),
+                schedule_call(0, "LEEDS", "10:40", "8"),
+            ],
+            ..Batch::default()
+        };
+        apply_batch(&pool, &first).await;
+        // A TS message for LEEDS before the re-send.
+        let mut leeds = status(5, Some(("9", true)), Some("10:42"));
+        leeds.key = key(RID, "LEEDS", "10:40");
+        apply_batch(
+            &pool,
+            &Batch {
+                status_calls: vec![leeds],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let tiplocs = |calls: &HashMap<(String, NaiveDate), Vec<DarwinCall>>| {
+            let mut out: Vec<(String, String)> = calls[&(UID.to_string(), ssd())]
+                .iter()
+                .map(|c| (c.tiploc.clone(), c.wtd.clone()))
+                .collect();
+            out.sort();
+            out
+        };
+        let wanted = [(UID.to_string(), ssd())];
+        let read = || calls_for_trains(&pool, &wanted);
+        assert_eq!(
+            tiplocs(&read().await.expect("read")),
+            [
+                ("LEEDS".to_string(), "10:40".to_string()),
+                ("YORK".to_string(), "10:12".to_string())
+            ]
+        );
+
+        // Re-timed at YORK and diverted away from LEEDS via DONCASTER.
+        let resent = Batch {
+            services: vec![service(RID, UID, 10, true)],
+            schedule_calls: vec![
+                schedule_call(10, "YORK", "10:15", "3"),
+                schedule_call(10, "DONC", "10:50", "1"),
+            ],
+            ..Batch::default()
+        };
+        apply_batch(&pool, &resent).await;
+        let expected = [
+            ("DONC".to_string(), "10:50".to_string()),
+            ("YORK".to_string(), "10:15".to_string()),
+        ];
+        assert_eq!(tiplocs(&read().await.expect("read")), expected);
+
+        // An older replay of the first schedule changes nothing readable.
+        let mut replay = first.clone();
+        for call in &mut replay.schedule_calls {
+            call.ts = ts(3);
+        }
+        apply_batch(&pool, &replay).await;
+        assert_eq!(tiplocs(&read().await.expect("read")), expected);
+
+        // A TS message newer than the re-send for a location it lacks (a
+        // newer schedule not received yet) is still shown.
+        let mut ahead = status(20, Some(("4", false)), Some("11:05"));
+        ahead.key = key(RID, "SHEF", "11:05");
+        apply_batch(
+            &pool,
+            &Batch {
+                status_calls: vec![ahead],
+                ..Batch::default()
+            },
+        )
+        .await;
+        assert!(
+            tiplocs(&read().await.expect("read"))
+                .iter()
+                .any(|(tiploc, _)| tiploc == "SHEF")
+        );
+        cleanup(&pool).await;
+    }
+
+    /// W3 (2026-11 review): a batch merging a schedule at t1 with a TS
+    /// message at t2 stores the schedule's own t1, so a genuine schedule
+    /// between t1 and t2 still applies.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with DATABASE_URL=... cargo test -p ds-store \
+                darwin -- --ignored --test-threads=1"]
+    async fn a_merged_batch_keeps_the_schedules_own_ts() {
+        let pool = crate::test_support::connect().await;
+        cleanup(&pool).await;
+        let mut batch = Batch {
+            services: vec![service(RID, UID, 10, true)],
+            ..Batch::default()
+        };
+        batch.merge(Batch {
+            services: vec![service(RID, UID, 30, false)],
+            ..Batch::default()
+        });
+        apply_batch(&pool, &batch).await;
+        let schedule_ts: Option<DateTime<Utc>> =
+            sqlx::query_scalar("SELECT schedule_ts FROM darwin_services WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("service");
+        assert_eq!(schedule_ts, Some(ts(10)));
+
+        let mut newer = service(RID, UID, 20, true);
+        if let Some(fields) = newer.schedule.as_mut() {
+            fields.toc = Some("XC".to_string());
+        }
+        apply_batch(
+            &pool,
+            &Batch {
+                services: vec![newer],
+                ..Batch::default()
+            },
+        )
+        .await;
+        let (toc, schedule_ts): (Option<String>, Option<DateTime<Utc>>) =
+            sqlx::query_as("SELECT toc, schedule_ts FROM darwin_services WHERE rid = $1")
+                .bind(RID)
+                .fetch_one(&pool)
+                .await
+                .expect("service");
+        assert_eq!(toc.as_deref(), Some("XC"));
+        assert_eq!(schedule_ts, Some(ts(20)));
         cleanup(&pool).await;
     }
 
