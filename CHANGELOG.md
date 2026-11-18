@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.17.3 (2026-11-18)
+
+Opaque public ids for group members, journey breaks and regular journeys, stage 1 (DS-534, wave 2 after v0.17.0). A patch: nine additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
+
+- Prefix group member ids with `m_` and guard every `public_id` column (#96): `group_members.public_id` (added bare in #79) becomes `m_` plus 32 lowercase hex digits, with a format CHECK (added `NOT VALID`, then validated), like the other tables. A new schema-wide DB test (`every_public_id_column_has_a_prefix_a_check_an_index_and_a_default`) fails when any `public_id` column lacks its own prefix, validated CHECK, unique index or prefixed default.
+- Add opaque `public_id` to `journey_breaks` (`b_`) and `journey_templates` (`r_`, a regular journey) (#97): in the journeys pattern, the column is added nullable, its default (`'<p>_' || replace(gen_random_uuid()::text, '-', '')`) is set after it exists (no table rewrite), existing rows are backfilled in one statement, a `CHECK (public_id IS NOT NULL AND public_id ~ '^<p>_[0-9a-f]{32}$')` is added `NOT VALID` under a 5 s `lock_timeout`, a unique index is built concurrently, and the CHECK is validated. `SET NOT NULL` is left out, as before. The current api, writer and notifier never name the column, so their inserts take the default and the migrations are safe to apply ahead of any consumer. A DB test migrates a database to the v0.17.2 schema, inserts rows, applies the rest and checks the backfill and the default.
+
+**Consumers**: the new columns are `journey_breaks.public_id` and `journey_templates.public_id`; `group_members.public_id` now carries `m_`. Existing ids that were handed out bare for group members are rewritten by `20261118130000`, so nothing may cache or store a group member `public_id` across it.
+
+**Migrations** (9), in order, all additive and expand-only; they must ship together:
+1. `20261118130000_group_members_public_id_prefix.sql`
+2. `20261118130100_group_members_public_id_format.sql`
+3. `20261118130200_group_members_public_id_format_validate.sql`
+4. `20261118140000_journey_breaks_public_id.sql`
+5. `20261118140100_journey_breaks_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+6. `20261118140200_journey_breaks_public_id_validate.sql`
+7. `20261118150000_journey_templates_public_id.sql`
+8. `20261118150100_journey_templates_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`)
+9. `20261118150200_journey_templates_public_id_validate.sql`
+
+**Grants**: none. `journey_breaks` and `journey_templates` have table-level grants for the api and notifier, which cover the new column. `db-grants.yaml`, `postgres-grants.sql` and the Redis ACL are unchanged.
+
 ## v0.17.2 (2026-11-17)
 
 Drops chrono-tz from ds-core (DS-534, RUSTSEC-2026-0555). A patch: an internal dependency swap behind an unchanged API, no migration, no grant or ACL change. chrono stays.
