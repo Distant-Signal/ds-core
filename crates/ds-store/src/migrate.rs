@@ -924,9 +924,9 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-    /// Opaque public ids (20261118100000 to 20261118120200): a row inserted
+    /// Opaque public ids (20261118100000 to 20261118130200): a row inserted
     /// without naming `public_id` gets a well-formed one from the default,
-    /// each table with its own prefix, and the three CHECKs are validated.
+    /// each table with its own prefix, and the four CHECKs are validated.
     /// In a transaction that is rolled back.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
@@ -940,6 +940,7 @@ mod tests {
                 "train_subscriptions_public_id_format",
             ),
             ("push_subscriptions", "push_subscriptions_public_id_format"),
+            ("group_members", "group_members_public_id_format"),
         ] {
             let (validated,): (bool,) = sqlx::query_as(
                 "SELECT convalidated FROM pg_constraint \
@@ -982,7 +983,25 @@ mod tests {
         .fetch_one(&mut *tx)
         .await
         .unwrap();
-        for (id, prefix) in [(&leg, 'l'), (&tracking, 't'), (&device, 'd')] {
+        sqlx::query(
+            "INSERT INTO groups (id, name, created_by) VALUES ('g-public-id', 'g', 'u-regular')",
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        let (member,): (String,) = sqlx::query_as(
+            "INSERT INTO group_members (group_id, user_id, role) \
+             VALUES ('g-public-id', 'u-regular', 'owner') RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        for (id, prefix) in [
+            (&leg, 'l'),
+            (&tracking, 't'),
+            (&device, 'd'),
+            (&member, 'm'),
+        ] {
             assert_eq!(id.len(), 34, "{id}");
             assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
             assert!(
@@ -993,6 +1012,114 @@ mod tests {
             );
         }
         tx.rollback().await.unwrap();
+    }
+
+    /// The `public_id` columns this schema is allowed to have, with the
+    /// prefix each one's ids carry. A new table that gets one must add
+    /// itself here (and follow the journeys pattern: a validated
+    /// `CHECK (public_id IS NOT NULL AND public_id ~ '^<prefix>_[0-9a-f]{32}$')`,
+    /// a unique index and a `'<prefix>_' || replace(gen_random_uuid()::text,
+    /// '-', '')` default), with a prefix no other table uses.
+    const PUBLIC_ID_TABLES: [(&str, &str); 5] = [
+        ("group_members", "m"),
+        ("journey_legs", "l"),
+        ("journeys", "j"),
+        ("push_subscriptions", "d"),
+        ("train_subscriptions", "t"),
+    ];
+
+    /// Schema-wide guard (DS-534): every column named `public_id` in the
+    /// public schema is listed in [`PUBLIC_ID_TABLES`], has a validated
+    /// CHECK on the `<prefix>_` and 32 hex digits shape, a valid unique
+    /// index of its own and a default that yields the prefix, and no two
+    /// tables share a prefix. `group_members.public_id` once shipped bare
+    /// with no format CHECK; this is what stops that recurring.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn every_public_id_column_has_a_prefix_a_check_an_index_and_a_default() {
+        let mut conn = connect().await;
+        let columns: Vec<(String, i16)> = sqlx::query_as(
+            "SELECT c.relname::text, a.attnum \
+             FROM pg_attribute a \
+             JOIN pg_class c ON c.oid = a.attrelid \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE n.nspname = 'public' AND a.attname = 'public_id' \
+               AND NOT a.attisdropped AND c.relkind IN ('r', 'p') \
+             ORDER BY c.relname COLLATE \"C\"",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+
+        let found: Vec<&str> = columns.iter().map(|(table, _)| table.as_str()).collect();
+        let allowed: Vec<&str> = PUBLIC_ID_TABLES.iter().map(|(table, _)| *table).collect();
+        assert_eq!(
+            found, allowed,
+            "the public schema's `public_id` columns differ from PUBLIC_ID_TABLES in \
+             crates/ds-store/src/migrate.rs: a new table with a `public_id` column must add \
+             itself there with its own prefix (and the validated CHECK, unique index and \
+             prefixed default the others have); a removed one must leave"
+        );
+
+        let mut prefixes = std::collections::BTreeSet::new();
+        for ((table, attnum), (_, prefix)) in columns.iter().zip(PUBLIC_ID_TABLES) {
+            assert!(
+                prefixes.insert(prefix),
+                "{table}: the prefix {prefix}_ is used by another table too"
+            );
+            let shape = format!("'^{prefix}_[0-9a-f]{{32}}$'");
+
+            let checks: Vec<(String, bool)> = sqlx::query_as(
+                "SELECT pg_get_constraintdef(oid), convalidated FROM pg_constraint \
+                 WHERE conrelid = ('public.' || $1)::regclass AND contype = 'c' \
+                   AND conkey = ARRAY[$2::int2] \
+                   AND position('[0-9a-f]{32}' in pg_get_constraintdef(oid)) > 0",
+            )
+            .bind(table)
+            .bind(attnum)
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+            assert!(
+                checks
+                    .iter()
+                    .any(|(def, validated)| *validated && def.contains(&shape)),
+                "{table}.public_id needs a validated CHECK matching {shape}, found {checks:?}"
+            );
+
+            let (indexes,): (i64,) = sqlx::query_as(
+                "SELECT count(*) FROM pg_index i \
+                 WHERE i.indrelid = ('public.' || $1)::regclass \
+                   AND i.indisunique AND i.indisvalid AND i.indnatts = 1 \
+                   AND i.indpred IS NULL AND i.indkey[0] = $2::int2",
+            )
+            .bind(table)
+            .bind(attnum)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+            assert_eq!(
+                indexes, 1,
+                "{table}.public_id needs a valid unique index on the column alone"
+            );
+
+            let default: Option<String> = sqlx::query_scalar(
+                "SELECT pg_get_expr(d.adbin, d.adrelid) FROM pg_attrdef d \
+                 WHERE d.adrelid = ('public.' || $1)::regclass AND d.adnum = $2",
+            )
+            .bind(table)
+            .bind(attnum)
+            .fetch_optional(&mut conn)
+            .await
+            .unwrap();
+            let default = default.unwrap_or_default();
+            assert!(
+                default.contains(&format!("'{prefix}_'")) && default.contains("gen_random_uuid"),
+                "{table}.public_id's default must be '{prefix}_' || replace(gen_random_uuid()\
+                 ::text, '-', ''), found {default:?}"
+            );
+        }
     }
 
     /// The whole startup path against an already-migrated database: takes the
