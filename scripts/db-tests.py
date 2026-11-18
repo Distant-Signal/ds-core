@@ -68,6 +68,7 @@ SQLX_TEST_SKIPS = (
     "freshness::db_tests",
     "journeys::db_tests",
     "line_timetable::db_tests",
+    "migrate::tests::sqlx_tests",
     "auth::sliding_session_tests",
     "reads::db_tests",
     "recurrence::db_tests",
@@ -182,7 +183,11 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
     # test-postgres-roles.py --mode new: the migrations and the publish
     # protocol on a cluster whose roles came first.
     "new": (
-        Step(packages=("ds-store",), filters=("migrate::tests", "schedule_publish")),
+        Step(
+            packages=("ds-store",),
+            filters=("migrate::tests", "schedule_publish"),
+            skips=("migrate::tests::sqlx_tests",),
+        ),
     ),
     # test-postgres-roles.py --mode per-service (Stage 0b): ds-store's
     # suites as the service roles whose grants they exercise. Each

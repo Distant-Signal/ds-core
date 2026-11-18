@@ -924,9 +924,9 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-    /// Opaque public ids (20261118100000 to 20261118130200): a row inserted
+    /// Opaque public ids (20261118100000 to 20261118150200): a row inserted
     /// without naming `public_id` gets a well-formed one from the default,
-    /// each table with its own prefix, and the four CHECKs are validated.
+    /// each table with its own prefix, and the six CHECKs are validated.
     /// In a transaction that is rolled back.
     #[tokio::test]
     #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
@@ -941,6 +941,8 @@ mod tests {
             ),
             ("push_subscriptions", "push_subscriptions_public_id_format"),
             ("group_members", "group_members_public_id_format"),
+            ("journey_breaks", "journey_breaks_public_id_format"),
+            ("journey_templates", "journey_templates_public_id_format"),
         ] {
             let (validated,): (bool,) = sqlx::query_as(
                 "SELECT convalidated FROM pg_constraint \
@@ -996,11 +998,29 @@ mod tests {
         .fetch_one(&mut *tx)
         .await
         .unwrap();
+        let (template,): (String,) = sqlx::query_as(
+            "INSERT INTO journey_templates (user_id, days_of_week) \
+             VALUES ('u-regular', 31) RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (journey_break,): (String,) = sqlx::query_as(
+            "INSERT INTO journey_breaks (journey_id, user_id, cause, fault, severity, \
+                                         break_position, fingerprint) \
+             VALUES ($1, 'u-regular', 'cancelled', 'operator', 3, 1, 'f') RETURNING public_id",
+        )
+        .bind(journey)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
         for (id, prefix) in [
             (&leg, 'l'),
             (&tracking, 't'),
             (&device, 'd'),
             (&member, 'm'),
+            (&template, 'r'),
+            (&journey_break, 'b'),
         ] {
             assert_eq!(id.len(), 34, "{id}");
             assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
@@ -1014,15 +1034,121 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// `#[sqlx::test]` tests create a database each, which needs CREATEDB:
+    /// scripts/db-tests.py's `SQLX_TEST_SKIPS` leaves this module to the
+    /// superuser pass.
+    mod sqlx_tests {
+        /// Wave 2 (20261118140000 to 20261118150200): rows that exist when the
+        /// migrations run, as they do in production, are backfilled with a
+        /// prefixed id each (distinct, well formed), the CHECK validates over
+        /// them, and a row inserted afterwards gets the default. Applies the
+        /// migrations up to 20261118130200 (wave 1 and the member prefix), inserts
+        /// the rows, then applies the rest.
+        #[sqlx::test(migrations = false)]
+        #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+        async fn wave_two_public_ids_backfill_existing_rows(pool: sqlx::PgPool) {
+            const BEFORE: i64 = 20_261_118_130_200;
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+            let mut migrator = sqlx::migrate::Migrator::new(dir.as_path()).await.unwrap();
+            let all = migrator.migrations.to_vec();
+            assert!(
+                all.iter().any(|m| m.version == 20_261_118_150_200),
+                "the wave 2 migrations exist"
+            );
+            migrator.migrations = all
+                .iter()
+                .filter(|m| m.version <= BEFORE)
+                .cloned()
+                .collect::<Vec<_>>()
+                .into();
+            migrator.run(&pool).await.unwrap();
+
+            sqlx::query("INSERT INTO users (id) VALUES ('u-wave-two')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let (journey,): (i64,) =
+                sqlx::query_as("INSERT INTO journeys (user_id) VALUES ('u-wave-two') RETURNING id")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            for _ in 0..3 {
+                sqlx::query(
+                    "INSERT INTO journey_templates (user_id, days_of_week) VALUES ('u-wave-two', 31)",
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            // At most one break is open per journey: one is open, the others
+            // are resolved.
+            for status in ["open", "dismissed", "recovered"] {
+                sqlx::query(
+                    "INSERT INTO journey_breaks (journey_id, user_id, cause, fault, severity, \
+                                                 break_position, fingerprint, status) \
+                     VALUES ($1, 'u-wave-two', 'cancelled', 'operator', 3, 1, 'f', $2)",
+                )
+                .bind(journey)
+                .bind(status)
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+
+            migrator.migrations = all.into();
+            migrator.run(&pool).await.unwrap();
+
+            for (table, prefix) in [("journey_templates", 'r'), ("journey_breaks", 'b')] {
+                let ids: Vec<String> =
+                    sqlx::query_scalar(&format!("SELECT public_id FROM {table} ORDER BY id"))
+                        .fetch_all(&pool)
+                        .await
+                        .unwrap();
+                assert_eq!(ids.len(), 3, "{table}");
+                let distinct: std::collections::BTreeSet<&String> = ids.iter().collect();
+                assert_eq!(distinct.len(), 3, "{table}: backfilled ids are distinct");
+                for id in &ids {
+                    assert_eq!(id.len(), 34, "{id}");
+                    assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
+                    assert!(
+                        id[2..]
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                        "{id}"
+                    );
+                }
+            }
+
+            // The default fills a row inserted after the migrations.
+            let (fresh,): (String,) = sqlx::query_as(
+                "INSERT INTO journey_templates (user_id, days_of_week) \
+                 VALUES ('u-wave-two', 31) RETURNING public_id",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert!(fresh.starts_with("r_") && fresh.len() == 34, "{fresh}");
+            let (matching,): (i64,) =
+                sqlx::query_as("SELECT count(*) FROM journey_templates WHERE public_id = $1")
+                    .bind(&fresh)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(matching, 1);
+        }
+    }
+
     /// The `public_id` columns this schema is allowed to have, with the
     /// prefix each one's ids carry. A new table that gets one must add
     /// itself here (and follow the journeys pattern: a validated
     /// `CHECK (public_id IS NOT NULL AND public_id ~ '^<prefix>_[0-9a-f]{32}$')`,
     /// a unique index and a `'<prefix>_' || replace(gen_random_uuid()::text,
     /// '-', '')` default), with a prefix no other table uses.
-    const PUBLIC_ID_TABLES: [(&str, &str); 5] = [
+    const PUBLIC_ID_TABLES: [(&str, &str); 7] = [
         ("group_members", "m"),
+        ("journey_breaks", "b"),
         ("journey_legs", "l"),
+        ("journey_templates", "r"),
         ("journeys", "j"),
         ("push_subscriptions", "d"),
         ("train_subscriptions", "t"),
