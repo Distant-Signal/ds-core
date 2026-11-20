@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.17.4 (2026-11-20)
+
+Opaque public ids for the last four owner-only tables (DS-534, wave 3 after v0.17.3). A patch: twelve additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
+
+- Add opaque `public_id` to `delegated_deletions` (`x_`, one id for both a recently deleted journey and a connected app deletion), `personal_api_tokens` (`k_`, distinct from the `dsp_` token secret), `webhook_destinations` (`w_`; the numeric id stays the primary key because it is the sealed secret's AAD, so nothing is re-sealed) and `user_away_periods` (`a_`) (#99): in the journeys pattern, the column is added nullable, its default (`'<p>_' || replace(gen_random_uuid()::text, '-', '')`) is set after it exists (no table rewrite), existing rows are backfilled in one statement, a `CHECK (public_id IS NOT NULL AND public_id ~ '^<p>_[0-9a-f]{32}$')` named `<table>_public_id_format` is added `NOT VALID` under a 5 s `lock_timeout`, a unique index `<table>_public_id` is built concurrently, and the CHECK is validated. `SET NOT NULL` is left out, as before. The current api and notifier never name the column, so their inserts take the default and the migrations are safe to apply ahead of any consumer. The schema-wide guard test now lists 11 tables, and a DB test migrates to the v0.17.3 schema, inserts rows, applies the rest and checks the backfill and the default.
+
+**Consumers**: the new columns are `delegated_deletions.public_id`, `personal_api_tokens.public_id`, `webhook_destinations.public_id` and `user_away_periods.public_id`. Prefixes now taken: `j_ l_ t_ d_ m_ b_ r_ x_ k_ w_ a_`.
+
+**Migrations** (12), in order, all additive and expand-only; they must ship together: for each of `delegated_deletions` (`20261120100000`), `personal_api_tokens` (`20261120110000`), `webhook_destinations` (`20261120120000`) and `user_away_periods` (`20261120130000`), `<ts>_<table>_public_id.sql`, `<ts+100>_<table>_public_id_index.sql` (`-- no-transaction`, `CREATE UNIQUE INDEX CONCURRENTLY`) and `<ts+200>_<table>_public_id_validate.sql`.
+
+**Grants**: none. The api has table-level grants on all four tables, which cover the new columns; the notifier's column lists on `personal_api_tokens` and `webhook_destinations` never need them. `db-grants.yaml`, `postgres-grants.sql` and the Redis ACL are unchanged.
+
 ## v0.17.3 (2026-11-18)
 
 Opaque public ids for group members, journey breaks and regular journeys, stage 1 (DS-534, wave 2 after v0.17.0). A patch: nine additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
