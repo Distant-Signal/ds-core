@@ -1034,6 +1034,92 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Opaque public ids, wave 3 (20261120100000 to 20261120130200): a row
+    /// inserted without naming `public_id` gets a well-formed one from the
+    /// default, each table with its own prefix, and the four CHECKs are
+    /// validated. In a transaction that is rolled back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn wave_three_public_ids_default_to_a_prefixed_random_id() {
+        let mut conn = connect().await;
+        for (table, constraint) in [
+            (
+                "delegated_deletions",
+                "delegated_deletions_public_id_format",
+            ),
+            (
+                "personal_api_tokens",
+                "personal_api_tokens_public_id_format",
+            ),
+            (
+                "webhook_destinations",
+                "webhook_destinations_public_id_format",
+            ),
+            ("user_away_periods", "user_away_periods_public_id_format"),
+        ] {
+            let (validated,): (bool,) = sqlx::query_as(
+                "SELECT convalidated FROM pg_constraint \
+                 WHERE conrelid = ('public.' || $1)::regclass AND conname = $2",
+            )
+            .bind(table)
+            .bind(constraint)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+            assert!(validated, "{constraint}");
+        }
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let (deletion,): (String,) = sqlx::query_as(
+            "INSERT INTO delegated_deletions (user_id, client, journey_id, summary) \
+             VALUES ('u-regular', 'web', 1, '{}') RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (token,): (String,) = sqlx::query_as(
+            "INSERT INTO personal_api_tokens (user_id, name, token_hash, hint, scopes, \
+                                              expires_at) \
+             VALUES ('u-regular', 'n', sha256('public-id-test'::bytea), 'abcd', \
+                     ARRAY['journeys:read'], now() + interval '1 day') RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (webhook,): (String,) = sqlx::query_as(
+            "INSERT INTO webhook_destinations (user_id, kind, name, url) \
+             VALUES ('u-regular', 'generic', 'w', 'https://hook.invalid/public-id') \
+             RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (away,): (String,) = sqlx::query_as(
+            "INSERT INTO user_away_periods (user_id, starts_on, ends_on) \
+             VALUES ('u-regular', CURRENT_DATE, CURRENT_DATE) RETURNING public_id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        for (id, prefix) in [
+            (&deletion, 'x'),
+            (&token, 'k'),
+            (&webhook, 'w'),
+            (&away, 'a'),
+        ] {
+            assert_eq!(id.len(), 34, "{id}");
+            assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
+            assert!(
+                id[2..]
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                "{id}"
+            );
+        }
+        tx.rollback().await.unwrap();
+    }
+
     /// `#[sqlx::test]` tests create a database each, which needs CREATEDB:
     /// scripts/db-tests.py's `SQLX_TEST_SKIPS` leaves this module to the
     /// superuser pass.
@@ -1136,6 +1222,158 @@ mod tests {
                     .unwrap();
             assert_eq!(matching, 1);
         }
+
+        /// Wave 3 (20261120100000 to 20261120130200): rows that exist when
+        /// the migrations run (`delegated_deletions`, `personal_api_tokens`,
+        /// `webhook_destinations`, `user_away_periods`) are backfilled with
+        /// a distinct, well-formed, prefixed id each, the CHECKs validate
+        /// over them, and a row inserted afterwards gets the default.
+        /// Applies the migrations up to 20261118150200 (waves 1 and 2),
+        /// inserts the rows, then applies the rest.
+        #[sqlx::test(migrations = false)]
+        #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+        async fn wave_three_public_ids_backfill_existing_rows(pool: sqlx::PgPool) {
+            const BEFORE: i64 = 20_261_118_150_200;
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+            let mut migrator = sqlx::migrate::Migrator::new(dir.as_path()).await.unwrap();
+            let all = migrator.migrations.to_vec();
+            assert!(
+                all.iter().any(|m| m.version == 20_261_120_130_200),
+                "the wave 3 migrations exist"
+            );
+            migrator.migrations = all
+                .iter()
+                .filter(|m| m.version <= BEFORE)
+                .cloned()
+                .collect::<Vec<_>>()
+                .into();
+            migrator.run(&pool).await.unwrap();
+
+            sqlx::query("INSERT INTO users (id) VALUES ('u-wave-three')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            for n in 0_i32..3 {
+                sqlx::query(
+                    "INSERT INTO delegated_deletions (user_id, client, journey_id, summary) \
+                     VALUES ('u-wave-three', 'web', $1, '{}')",
+                )
+                .bind(i64::from(n))
+                .execute(&pool)
+                .await
+                .unwrap();
+                sqlx::query(
+                    "INSERT INTO personal_api_tokens (user_id, name, token_hash, hint, \
+                                                      scopes, expires_at) \
+                     VALUES ('u-wave-three', 'n', sha256(convert_to($1::text, 'UTF8')), \
+                             'abcd', ARRAY['journeys:read'], now() + interval '1 day')",
+                )
+                .bind(n.to_string())
+                .execute(&pool)
+                .await
+                .unwrap();
+                sqlx::query(
+                    "INSERT INTO webhook_destinations (user_id, kind, name, url) \
+                     VALUES ('u-wave-three', 'generic', 'w', 'https://hook.invalid/' || $1::text)",
+                )
+                .bind(n.to_string())
+                .execute(&pool)
+                .await
+                .unwrap();
+                sqlx::query(
+                    "INSERT INTO user_away_periods (user_id, starts_on, ends_on) \
+                     VALUES ('u-wave-three', CURRENT_DATE + $1::int, CURRENT_DATE + $1::int)",
+                )
+                .bind(n)
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+
+            migrator.migrations = all.into();
+            migrator.run(&pool).await.unwrap();
+
+            for (table, prefix) in [
+                ("delegated_deletions", 'x'),
+                ("personal_api_tokens", 'k'),
+                ("webhook_destinations", 'w'),
+                ("user_away_periods", 'a'),
+            ] {
+                let ids: Vec<String> =
+                    sqlx::query_scalar(&format!("SELECT public_id FROM {table} ORDER BY id"))
+                        .fetch_all(&pool)
+                        .await
+                        .unwrap();
+                assert_eq!(ids.len(), 3, "{table}");
+                let distinct: std::collections::BTreeSet<&String> = ids.iter().collect();
+                assert_eq!(distinct.len(), 3, "{table}: backfilled ids are distinct");
+                for id in &ids {
+                    assert_eq!(id.len(), 34, "{id}");
+                    assert!(id.starts_with(prefix) && id[1..].starts_with('_'), "{id}");
+                    assert!(
+                        id[2..]
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                        "{id}"
+                    );
+                }
+            }
+
+            // The default fills a row inserted after the migrations.
+            let fresh: [(String, char); 4] = [
+                (
+                    sqlx::query_scalar(
+                        "INSERT INTO delegated_deletions (user_id, client, journey_id, summary) \
+                         VALUES ('u-wave-three', 'web', 9, '{}') RETURNING public_id",
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
+                    'x',
+                ),
+                (
+                    sqlx::query_scalar(
+                        "INSERT INTO personal_api_tokens (user_id, name, token_hash, hint, \
+                                                          scopes, expires_at) \
+                         VALUES ('u-wave-three', 'n', sha256('later'::bytea), 'abcd', \
+                                 ARRAY['journeys:read'], now() + interval '1 day') \
+                         RETURNING public_id",
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
+                    'k',
+                ),
+                (
+                    sqlx::query_scalar(
+                        "INSERT INTO webhook_destinations (user_id, kind, name, url) \
+                         VALUES ('u-wave-three', 'generic', 'w', 'https://hook.invalid/later') \
+                         RETURNING public_id",
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
+                    'w',
+                ),
+                (
+                    sqlx::query_scalar(
+                        "INSERT INTO user_away_periods (user_id, starts_on, ends_on) \
+                         VALUES ('u-wave-three', CURRENT_DATE + 30, CURRENT_DATE + 30) \
+                         RETURNING public_id",
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
+                    'a',
+                ),
+            ];
+            for (id, prefix) in &fresh {
+                assert!(
+                    id.starts_with(*prefix) && id[1..].starts_with('_') && id.len() == 34,
+                    "{id}"
+                );
+            }
+        }
     }
 
     /// The `public_id` columns this schema is allowed to have, with the
@@ -1144,14 +1382,18 @@ mod tests {
     /// `CHECK (public_id IS NOT NULL AND public_id ~ '^<prefix>_[0-9a-f]{32}$')`,
     /// a unique index and a `'<prefix>_' || replace(gen_random_uuid()::text,
     /// '-', '')` default), with a prefix no other table uses.
-    const PUBLIC_ID_TABLES: [(&str, &str); 7] = [
+    const PUBLIC_ID_TABLES: [(&str, &str); 11] = [
+        ("delegated_deletions", "x"),
         ("group_members", "m"),
         ("journey_breaks", "b"),
         ("journey_legs", "l"),
         ("journey_templates", "r"),
         ("journeys", "j"),
+        ("personal_api_tokens", "k"),
         ("push_subscriptions", "d"),
         ("train_subscriptions", "t"),
+        ("user_away_periods", "a"),
+        ("webhook_destinations", "w"),
     ];
 
     /// Schema-wide guard (DS-534): every column named `public_id` in the
