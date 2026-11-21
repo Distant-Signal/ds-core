@@ -924,6 +924,94 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
+    /// Leg snapshots (20261121100000): the three columns exist, are nullable
+    /// with no default, a new leg has NULL in them, and the check is
+    /// validated, accepts NULL and a JSON object, and rejects any other JSON
+    /// value. In a transaction that is rolled back.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+                migrate::tests -- --ignored --test-threads=1`"]
+    async fn leg_final_snapshot_is_nullable_and_checked() {
+        let mut conn = connect().await;
+        let columns: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT column_name::text, data_type::text, is_nullable::text, column_default::text \
+             FROM information_schema.columns \
+             WHERE table_schema = 'public' AND table_name = 'journey_legs' \
+               AND column_name IN ('final_snapshot', 'final_snapshot_at', 'final_train_uid') \
+             ORDER BY column_name",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        let expected = [
+            ("final_snapshot", "jsonb"),
+            ("final_snapshot_at", "timestamp with time zone"),
+            ("final_train_uid", "text"),
+        ];
+        assert_eq!(columns.len(), expected.len(), "{columns:?}");
+        for ((name, data_type, nullable, default), (want_name, want_type)) in
+            columns.iter().zip(expected)
+        {
+            assert_eq!((name.as_str(), data_type.as_str()), (want_name, want_type));
+            assert_eq!(nullable, "YES", "{name}");
+            assert_eq!(default, &None, "{name}");
+        }
+        let (validated,): (bool,) = sqlx::query_as(
+            "SELECT convalidated FROM pg_constraint \
+             WHERE conrelid = 'public.journey_legs'::regclass \
+               AND conname = 'journey_legs_final_snapshot_check'",
+        )
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+        assert!(validated);
+        let mut tx = conn.begin().await.unwrap();
+        add_regular_user(&mut tx).await;
+        let (leg,): (i64,) = sqlx::query_as(
+            "WITH j AS (INSERT INTO journeys (user_id) VALUES ('u-regular') RETURNING id) \
+             INSERT INTO journey_legs (journey_id, leg_order, service_date) \
+             SELECT id, 1, CURRENT_DATE FROM j RETURNING id",
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let (uid, snapshot, at): (Option<String>, Option<String>, Option<bool>) = sqlx::query_as(
+            "SELECT final_train_uid, final_snapshot::text, final_snapshot_at IS NOT NULL \
+                 FROM journey_legs WHERE id = $1",
+        )
+        .bind(leg)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        assert_eq!((uid, snapshot, at), (None, None, Some(false)));
+        let set = "UPDATE journey_legs SET final_train_uid = 'C12345', \
+                   final_snapshot = $2::jsonb, final_snapshot_at = now() WHERE id = $1";
+        for value in [None, Some("{}"), Some(r#"{"stops":[{"crs":"RDG"}]}"#)] {
+            sqlx::query(set)
+                .bind(leg)
+                .bind(value)
+                .execute(&mut *tx)
+                .await
+                .unwrap_or_else(|e| panic!("{value:?}: {e}"));
+        }
+        for value in ["[]", "[{}]", "1", r#""text""#, "true", "null"] {
+            let mut savepoint = tx.begin().await.unwrap();
+            let error = sqlx::query(set)
+                .bind(leg)
+                .bind(value)
+                .execute(&mut *savepoint)
+                .await
+                .expect_err("rejected");
+            assert_eq!(
+                constraint_of(&error),
+                Some("journey_legs_final_snapshot_check"),
+                "{value}"
+            );
+            savepoint.rollback().await.unwrap();
+        }
+        tx.rollback().await.unwrap();
+    }
+
     /// Opaque public ids (20261118100000 to 20261118150200): a row inserted
     /// without naming `public_id` gets a well-formed one from the default,
     /// each table with its own prefix, and the six CHECKs are validated.
@@ -1373,6 +1461,82 @@ mod tests {
                     "{id}"
                 );
             }
+        }
+
+        /// Leg snapshots (20261121100000 to 20261121100100): legs that exist
+        /// when the migrations run, a leg with a recorded outcome and one
+        /// without, keep every value they had and get NULL in the three new
+        /// columns. Applies the migrations up to 20261120130200, inserts the
+        /// legs, then applies the rest.
+        #[sqlx::test(migrations = false)]
+        #[ignore = "needs DATABASE_URL (a role that can create databases)"]
+        async fn leg_snapshot_columns_leave_existing_legs_untouched(pool: sqlx::PgPool) {
+            const BEFORE: i64 = 20_261_120_130_200;
+            type LegRow = (i32, Option<i32>, Option<bool>, bool, bool);
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+            let mut migrator = sqlx::migrate::Migrator::new(dir.as_path()).await.unwrap();
+            let all = migrator.migrations.to_vec();
+            assert!(
+                all.iter().any(|m| m.version == 20_261_121_100_100),
+                "the leg snapshot migrations exist"
+            );
+            migrator.migrations = all
+                .iter()
+                .filter(|m| m.version <= BEFORE)
+                .cloned()
+                .collect::<Vec<_>>()
+                .into();
+            migrator.run(&pool).await.unwrap();
+
+            sqlx::query("INSERT INTO users (id) VALUES ('u-leg-snapshot')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let (journey,): (i64,) = sqlx::query_as(
+                "INSERT INTO journeys (user_id) VALUES ('u-leg-snapshot') RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            for (order, recorded) in [(1_i32, true), (2, false)] {
+                sqlx::query(
+                    "INSERT INTO journey_legs (journey_id, leg_order, origin_crs, \
+                                               destination_crs, service_date, \
+                                               final_arrival_delay_minutes, \
+                                               final_train_cancelled, final_recorded_at) \
+                     VALUES ($1, $2, 'PAD', 'RDG', DATE '2026-10-01', \
+                             CASE WHEN $3 THEN 17 END, CASE WHEN $3 THEN false END, \
+                             CASE WHEN $3 THEN now() END)",
+                )
+                .bind(journey)
+                .bind(order)
+                .bind(recorded)
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+
+            migrator.migrations = all.into();
+            migrator.run(&pool).await.unwrap();
+
+            let legs: Vec<LegRow> = sqlx::query_as(
+                "SELECT leg_order, final_arrival_delay_minutes, final_train_cancelled, \
+                        final_recorded_at IS NOT NULL, \
+                        final_train_uid IS NULL AND final_snapshot IS NULL \
+                            AND final_snapshot_at IS NULL \
+                 FROM journey_legs WHERE journey_id = $1 ORDER BY leg_order",
+            )
+            .bind(journey)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                legs,
+                vec![
+                    (1, Some(17), Some(false), true, true),
+                    (2, None, None, false, true),
+                ]
+            );
         }
     }
 
