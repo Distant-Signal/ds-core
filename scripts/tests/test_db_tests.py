@@ -233,7 +233,7 @@ class RunTests(unittest.TestCase):
         self.assertIn("--extract-to", extract)
         self.assertEqual(
             [c["database_url"] for c in calls[1:]],
-            ["postgres://api"],
+            ["postgres://api", "postgres://aggregator"],
         )
         self.assertEqual({c["narrowed"] for c in calls}, {"api,aggregator"})
         for call in calls[1:]:
