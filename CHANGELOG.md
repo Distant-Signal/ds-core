@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.17.5 (2026-11-21)
+
+A train leg's train and timetable survive `trains` retention (DS-534). A patch: two additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
+
+- Add `final_train_uid`, `final_snapshot` and `final_snapshot_at` to `journey_legs` (#102): ds-workers' retention deletes a train's `trains` row about 30 days after its service date (`train_subscriptions.trains_id` goes NULL), after which a matched leg kept no train uid and no timetable anywhere. The api snapshots them onto the leg while the train still exists and renders from the snapshot afterwards. Three nullable columns with no default (no rewrite), and `journey_legs_final_snapshot_check` (`final_snapshot IS NULL OR jsonb_typeof(final_snapshot) = 'object'`) added `NOT VALID` under a 5 s `lock_timeout`, then validated. No backfill, no index, no `SET NOT NULL`: the api's hourly leg outcome sweep fills them for every leg whose subscription is resolved and whose `trains` row still exists. A superuser-pass DB test checks the columns, their nullability and the CHECK, and a sqlx test migrates to the v0.17.4 schema, inserts legs, applies the rest and checks they keep their values and get NULL.
+- Bump the rust-ci pin (#101): CI only.
+
+**Consumers**: the new columns are `journey_legs.final_train_uid` (text), `journey_legs.final_snapshot` (jsonb, an object when set) and `journey_legs.final_snapshot_at` (timestamptz, NULL until the sweep has written the two others). Old code never names them, so the migrations are safe to apply ahead of any consumer.
+
+**Migrations** (2), in order, both additive and expand-only; they must ship together: `20261121100000_journey_legs_final_snapshot.sql` and `20261121100100_journey_legs_final_snapshot_validate.sql`.
+
+**Grants**: none. `journey_legs` is api SIUD and notifier SIU table-wide, which cover the new columns; the writer's column-limited grant does not need them. `db-grants.yaml`, `postgres-grants.sql` and the Redis ACL are unchanged.
+
 ## v0.17.4 (2026-11-20)
 
 Opaque public ids for the last four owner-only tables (DS-534, wave 3 after v0.17.3). A patch: twelve additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
