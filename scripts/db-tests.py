@@ -220,6 +220,13 @@ PASSES: Mapping[str, tuple[Step, ...]] = {
             ),
             exact=True,
         ),
+        # The aggregator's prune guard reads journey_legs' two columns and
+        # nothing else of it (DS-638).
+        per_service(
+            "ds-store",
+            "aggregator",
+            test_target="aggregator_prune_guard",
+        ),
     ),
 }
 

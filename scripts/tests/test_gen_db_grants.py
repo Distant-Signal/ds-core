@@ -319,9 +319,21 @@ class RenderTest(unittest.TestCase):
                 "resolution_status,unresolved_from",
             ),
             ("schedule_feed_ingests", "schedule_ingest", "SELECT", "delivered_at"),
+            # DS-638: the aggregator's prune guard joins the two tables.
+            ("train_subscriptions", "aggregator", "SELECT", "id,trains_id"),
+            (
+                "journey_legs",
+                "aggregator",
+                "SELECT",
+                "train_subscription_id,final_snapshot_at",
+            ),
         ):
             self.assertIn(f"('{table}', '{kind}', '{privilege}', '{columns}')", sql)
         self.assertNotIn("train_movement_events", tables("trust_backlog", "UPDATE"))
+        # The aggregator reads two journey_legs columns and writes none.
+        for privilege in ("INSERT", "UPDATE", "DELETE"):
+            self.assertNotIn("journey_legs", tables("aggregator", privilege))
+        self.assertNotIn("final_snapshot,", sql)
         self.assertNotIn("train_subscriptions", tables("trust_backlog", "UPDATE"))
         # The writer (M1, L3): narrow, without the unused grants.
         self.assertIn("('writer', 'narrow')", sql)
