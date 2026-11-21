@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.17.6 (2026-11-21)
+
+The aggregator's prune guard may read what it needs of a leg (DS-638). A patch: a grants change and nothing else; no migration, no Rust API change, no ACL change.
+
+- Grant the aggregator the prune guard's `journey_legs` columns (#104): ds-workers' retention must not delete a `trains` row that a leg still needs (a leg with `final_snapshot_at IS NULL`, see v0.17.5). The aggregator gets SELECT on `journey_legs (train_subscription_id, final_snapshot_at)` and its SELECT on `train_subscriptions` goes from `(trains_id)` to `(id, trains_id)`, which covers every column the guard's join and WHERE name. No `final_snapshot` or `final_train_uid`, and no write privilege on `journey_legs`. A narrow-pass DB test runs the guard as the aggregator role and checks it is refused the other columns and every write.
+
+**Consumers**: none to move; ds-workers' aggregator guard needs this release's grants applied first.
+
+**Migrations**: none.
+
+**Grants**: `db-grants.yaml` and `postgres-grants.sql` changed (above). The grants are not in the ds-migrate image; the chart's roles setup Job applies the vendored `postgres-grants.sql`. The Redis ACL is unchanged.
+
 ## v0.17.5 (2026-11-21)
 
 A train leg's train and timetable survive `trains` retention (DS-534). A patch: two additive migrations and nothing else; no Rust API change, no contract migration, no grant or ACL change.
