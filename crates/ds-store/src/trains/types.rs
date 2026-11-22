@@ -588,6 +588,10 @@ pub struct PlatformEvidence {
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a wire type: each flag is its own field on the wire"
+)]
 pub struct JourneyStop {
     pub crs: Option<String>,
     /// The stop's display name: the station's name for a station, else the
