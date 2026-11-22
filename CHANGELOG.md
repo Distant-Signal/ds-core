@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.18.0 (2026-11-22)
+
+A minor release: `JourneyStop` gains two fields, which breaks any struct literal of it (DS-638). No migration, grant or ACL change.
+
+- Add `actual_arrival_is_actual` and `actual_departure_is_actual` to `JourneyStop` (#106): `false` on a freshly built stop; the api's movement overlay sets each `true` exactly when it sets the matching `actual_*` from a TRUST movement report, so a client can tell a recorded actual from an estimate without inferring it from a non-null time. Serialised as `actualArrivalIsActual` and `actualDepartureIsActual`, always present. The same PR lifts `url` to 2.5.9 (RUSTSEC-2026-0592).
+
+**Consumers**: a crate that builds a `JourneyStop` literal adds the two fields (`false`). ds-api sets them in `overlay_movement_events`.
+
+**Migrations**: none.
+
+**Grants**: none. The Redis ACL is unchanged.
+
 ## v0.17.6 (2026-11-21)
 
 The aggregator's prune guard may read what it needs of a leg (DS-638). A patch: a grants change and nothing else; no migration, no Rust API change, no ACL change.
