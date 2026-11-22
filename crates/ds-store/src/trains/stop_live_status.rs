@@ -142,6 +142,8 @@ mod tests {
             kind: None,
             actual_arrival: None,
             actual_departure: None,
+            actual_arrival_is_actual: false,
+            actual_departure_is_actual: false,
             estimated_arrival: None,
             estimated_departure: None,
             estimate_source: None,
