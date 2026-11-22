@@ -612,6 +612,14 @@ pub struct JourneyStop {
     pub kind: Option<schedule_query::CallingPointKind>,
     pub actual_arrival: Option<DateTime<Utc>>,
     pub actual_departure: Option<DateTime<Utc>>,
+    /// `true` exactly when `actual_arrival` was set from a TRUST movement
+    /// report (a PASS's time included); `false` when it is `None`. Always
+    /// present: `false` means "no recorded actual", never "on time" and
+    /// never "estimated" (`estimated_arrival` is the estimate). `false` on a
+    /// freshly-built stop, until the movement overlay sets it (DS-638).
+    pub actual_arrival_is_actual: bool,
+    /// As `actual_arrival_is_actual`, for `actual_departure`.
+    pub actual_departure_is_actual: bool,
     /// The working time to the minute (`timetable.working_minute_arrival`)
     /// plus the train's current overall delay, filled in by
     /// `apply_delay_estimates` (below) ONLY while `actual_arrival` is still
@@ -802,6 +810,8 @@ impl JourneyStop {
             kind: Some(cp.kind),
             actual_arrival: None,
             actual_departure: None,
+            actual_arrival_is_actual: false,
+            actual_departure_is_actual: false,
             estimated_arrival: None,
             estimated_departure: None,
             estimate_source: None,
