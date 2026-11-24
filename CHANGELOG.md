@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.18.1 (2026-11-24)
+
+A patch: one additive Rust function and nothing else; no migration, grant or ACL change (DS-638).
+
+- Hold a journey-bound Irish train's history past the tracked cutoff (#108): `prune_train_history_with_journey_hold` keeps the `island_of_ireland_trains` and `island_of_ireland_train_calls` rows of a tracked `ie:` train while a journey leg is bound to it (`trains` -> `train_subscriptions` -> `journey_legs.train_subscription_id`), until a hard bound (`journey_hold_cutoff`), the way the aggregator holds a GB `trains` row. Untracked trains still go at the first cutoff. `prune_train_history` keeps its signature and holds nothing.
+
+**Consumers**: ds-ingest's ingest-writer calls the new function with `IOI_TRAINS_SNAPSHOT_GUARD_MAX_DAYS` (default 600). Nothing else needs to move.
+
+**Migrations**: none.
+
+**Grants**: none. The writer already holds SELECT on `journey_legs (train_subscription_id)` and `train_subscriptions (id, trains_id)`. The Redis ACL is unchanged.
+
 ## v0.18.0 (2026-11-22)
 
 A minor release: `JourneyStop` gains two fields, which breaks any struct literal of it (DS-638). No migration, grant or ACL change.
