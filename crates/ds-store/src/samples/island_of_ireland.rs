@@ -919,7 +919,7 @@ async fn write_history_trains(conn: &mut PgConnection, rows: &[HistoryRow<'_>]) 
     Ok(done_trains.rows_affected())
 }
 
-/// The most rows [`prune_train_history`] deletes from each table per call.
+/// The most rows [`prune_train_history_with_journey_hold`] deletes from each table per call.
 /// Run once per `ioi-station-samples/1` apply (every 5 minutes), that is
 /// 576,000 rows a day against an intake of under 20,000 (design §4.3).
 pub const TRAIN_HISTORY_PRUNE_BATCH: i64 = 2_000;
@@ -936,27 +936,64 @@ const HISTORY_ROW_TRACKED_SQL: &str = r"
               AND tr.service_date = h.train_date)
 ";
 
-/// Deletes up to `batch` rows from each history table, in the caller's
-/// transaction, in two tiers (design §4.3): a tracked train's rows once
-/// their `train_date` is before `tracked_cutoff`, and every other train's
-/// once it is before `cutoff`. A `tracked_cutoff` later than `cutoff` is
-/// treated as `cutoff` (a tracked train never goes sooner). One index probe
-/// when nothing is due, plus one `trains` lookup per tracked train kept
-/// past `cutoff`. Returns the rows deleted.
+/// Whether a history row (`h`) belongs to a train a journey leg is bound
+/// to: the tracked train's `trains` row has a subscription that a
+/// `journey_legs` row points at (`train_subscription_id`), the same hold
+/// the aggregator puts on the `trains` row (its
+/// `TRAINS_SNAPSHOT_GUARD_MAX_DAYS`). Reads only ids; no personal data.
+const HISTORY_ROW_JOURNEY_BOUND_SQL: &str = r"
+    EXISTS (SELECT 1 FROM trains tr
+            JOIN train_subscriptions ts ON ts.trains_id = tr.id
+            JOIN journey_legs jl ON jl.train_subscription_id = ts.id
+            WHERE h.network = 'republic-of-ireland'
+              AND tr.train_uid = 'ie:' || h.train_code
+              AND tr.service_date = h.train_date)
+";
+
+/// [`prune_train_history_with_journey_hold`] with no journey hold: a
+/// tracked train goes at `tracked_cutoff` whatever is bound to it.
 pub async fn prune_train_history(
     conn: &mut PgConnection,
     cutoff: chrono::NaiveDate,
     tracked_cutoff: chrono::NaiveDate,
     batch: i64,
 ) -> Result<u64> {
+    prune_train_history_with_journey_hold(conn, cutoff, tracked_cutoff, tracked_cutoff, batch).await
+}
+
+/// Deletes up to `batch` rows from each history table, in the caller's
+/// transaction, in three tiers (design §4.3): every untracked train's rows
+/// once their `train_date` is before `cutoff`; a tracked train's once it is
+/// before `tracked_cutoff`; and, for a train a journey leg is bound to, only
+/// once it is before `journey_hold_cutoff`, the hard bound on the hold (the
+/// leg's journey keeps its train for as long as the leg exists, like the
+/// aggregator's hold on the `trains` row). A `tracked_cutoff` later than
+/// `cutoff` is treated as `cutoff`, and a `journey_hold_cutoff` later than
+/// `tracked_cutoff` as `tracked_cutoff` (so passing `tracked_cutoff` turns
+/// the hold off). One index probe when nothing is due, plus one `trains`
+/// lookup per tracked train kept past `cutoff`. Returns the rows deleted.
+pub async fn prune_train_history_with_journey_hold(
+    conn: &mut PgConnection,
+    cutoff: chrono::NaiveDate,
+    tracked_cutoff: chrono::NaiveDate,
+    journey_hold_cutoff: chrono::NaiveDate,
+    batch: i64,
+) -> Result<u64> {
     let tracked_cutoff = tracked_cutoff.min(cutoff);
+    let journey_hold_cutoff = journey_hold_cutoff.min(tracked_cutoff);
+    // Past the hard bound ($4) a row goes whatever is bound; between the
+    // tracked cutoff ($2) and the bound only a row with no leg goes; an
+    // untracked row goes at $1 (the outer test). A journey-bound train is
+    // always tracked, so the bound test never reads past a tracked one.
     let calls = sqlx::query(&format!(
         r"
         DELETE FROM island_of_ireland_train_calls AS c
         USING (SELECT network, train_code, train_date, station_code
                FROM island_of_ireland_train_calls AS h
                WHERE train_date < $1
-                 AND (train_date < $2 OR NOT {HISTORY_ROW_TRACKED_SQL})
+                 AND (train_date < $4
+                      OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
+                      OR NOT {HISTORY_ROW_TRACKED_SQL})
                LIMIT $3) AS d
         WHERE (c.network, c.train_code, c.train_date, c.station_code)
             = (d.network, d.train_code, d.train_date, d.station_code)
@@ -965,6 +1002,7 @@ pub async fn prune_train_history(
     .bind(cutoff)
     .bind(tracked_cutoff)
     .bind(batch)
+    .bind(journey_hold_cutoff)
     .execute(&mut *conn)
     .await?;
     let trains = sqlx::query(&format!(
@@ -973,7 +1011,9 @@ pub async fn prune_train_history(
         USING (SELECT network, train_code, train_date
                FROM island_of_ireland_trains AS h
                WHERE train_date < $1
-                 AND (train_date < $2 OR NOT {HISTORY_ROW_TRACKED_SQL})
+                 AND (train_date < $4
+                      OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
+                      OR NOT {HISTORY_ROW_TRACKED_SQL})
                LIMIT $3) AS d
         WHERE (t.network, t.train_code, t.train_date) = (d.network, d.train_code, d.train_date)
         ",
@@ -981,6 +1021,7 @@ pub async fn prune_train_history(
     .bind(cutoff)
     .bind(tracked_cutoff)
     .bind(batch)
+    .bind(journey_hold_cutoff)
     .execute(&mut *conn)
     .await?;
     Ok(calls.rows_affected() + trains.rows_affected())

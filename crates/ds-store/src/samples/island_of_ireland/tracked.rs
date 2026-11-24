@@ -252,7 +252,9 @@ async fn upsert_states(conn: &mut PgConnection, derived: &[DerivedState]) -> Res
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use crate::samples::island_of_ireland::{prune_train_history, record_train_history};
+    use crate::samples::island_of_ireland::{
+        prune_train_history, prune_train_history_with_journey_hold, record_train_history,
+    };
     use crate::test_support::{cleanup_user, connect, seed_user};
     use common::island_of_ireland::IslandOfIrelandDeparture;
     use sqlx::PgPool;
@@ -327,6 +329,11 @@ mod db_tests {
         ] {
             sqlx::query(sql).execute(pool).await.unwrap();
         }
+        sqlx::query("DELETE FROM journeys WHERE user_id = $1")
+            .bind(USER)
+            .execute(pool)
+            .await
+            .unwrap();
         cleanup_user(pool, USER).await;
     }
 
@@ -626,6 +633,161 @@ mod db_tests {
             2
         );
         assert_eq!(left().await, Vec::<String>::new());
+
+        drop(conn);
+        clean(&pool).await;
+    }
+
+    /// Records ZT21 (tracked, bound to a journey leg), ZT22 (tracked, no
+    /// leg) and ZT23 (untracked), all on `day(1)`; returns the journey's id.
+    async fn seed_bound_and_unbound(pool: &PgPool, conn: &mut PgConnection) -> i64 {
+        let boards = [board(
+            "ZTAAA",
+            0,
+            vec![
+                departure("ZT21", day(1), "En Route", 0, None),
+                departure("ZT22", day(1), "En Route", 0, None),
+                departure("ZT23", day(1), "En Route", 0, None),
+            ],
+        )];
+        record_train_history(conn, &boards).await.unwrap();
+        let mut subscriptions = Vec::new();
+        for uid in ["ie:ZT21", "ie:ZT22"] {
+            let train = crate::trains::find_or_create_train(pool, uid, day(1))
+                .await
+                .unwrap();
+            let (id,): (i64,) = sqlx::query_as(
+                "INSERT INTO train_subscriptions \
+                     (user_id, service_date, trains_id, resolution_status, pin_origin_ref) \
+                 VALUES ($1, $2, $3, 'resolved', 'ie:ZTAAA') RETURNING id",
+            )
+            .bind(USER)
+            .bind(day(1))
+            .bind(train)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            subscriptions.push(id);
+        }
+        let (journey,): (i64,) =
+            sqlx::query_as("INSERT INTO journeys (user_id) VALUES ($1) RETURNING id")
+                .bind(USER)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        sqlx::query(
+            "INSERT INTO journey_legs (journey_id, leg_order, service_date, train_subscription_id) \
+             VALUES ($1, 1, $2, $3)",
+        )
+        .bind(journey)
+        .bind(day(1))
+        .bind(subscriptions[0])
+        .execute(pool)
+        .await
+        .unwrap();
+        journey
+    }
+
+    async fn left(pool: &PgPool) -> Vec<String> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT train_code FROM island_of_ireland_trains WHERE train_code LIKE 'ZT%' \
+             UNION ALL SELECT train_code FROM island_of_ireland_train_calls \
+             WHERE train_code LIKE 'ZT%' ORDER BY 1",
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    /// A tracked train a journey leg is bound to keeps its history past the
+    /// tracked cutoff, an unbound tracked train and an untracked one do not,
+    /// and the hold ends when the leg goes.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn the_prune_holds_a_journey_bound_train_until_its_leg_goes() {
+        let pool = connect().await;
+        clean(&pool).await;
+        seed_user(&pool, USER).await;
+        let mut conn = pool.acquire().await.unwrap();
+        let journey = seed_bound_and_unbound(&pool, &mut conn).await;
+
+        // Everything is past the untracked and tracked cutoffs; the hold's
+        // hard bound (day 1) is not past day 1. ZT22 and ZT23 go.
+        assert_eq!(
+            prune_train_history_with_journey_hold(&mut conn, day(5), day(3), day(1), 100)
+                .await
+                .unwrap(),
+            4
+        );
+        assert_eq!(left(&pool).await, ["ZT21", "ZT21"]);
+        // Still held on a later pass.
+        assert_eq!(
+            prune_train_history_with_journey_hold(&mut conn, day(6), day(4), day(1), 100)
+                .await
+                .unwrap(),
+            0
+        );
+
+        // The leg goes (the journey retention): the next pass releases it.
+        sqlx::query("DELETE FROM journeys WHERE id = $1")
+            .bind(journey)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            prune_train_history_with_journey_hold(&mut conn, day(6), day(4), day(1), 100)
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(left(&pool).await, Vec::<String>::new());
+
+        drop(conn);
+        clean(&pool).await;
+    }
+
+    /// The hard bound forces the prune of a bound train, and a hold that is
+    /// not asked for (`prune_train_history`, or a bound no earlier than the
+    /// tracked cutoff) leaves the two-tier rule as it was.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn the_journey_holds_hard_bound_forces_the_prune() {
+        let pool = connect().await;
+        clean(&pool).await;
+        seed_user(&pool, USER).await;
+        let mut conn = pool.acquire().await.unwrap();
+        seed_bound_and_unbound(&pool, &mut conn).await;
+
+        // Bound still before the row's date: held.
+        assert_eq!(
+            prune_train_history_with_journey_hold(&mut conn, day(5), day(3), day(1), 100)
+                .await
+                .unwrap(),
+            4
+        );
+        assert_eq!(left(&pool).await, ["ZT21", "ZT21"]);
+        // Bound after the row's date: forced, though the leg exists.
+        assert_eq!(
+            prune_train_history_with_journey_hold(&mut conn, day(5), day(3), day(2), 100)
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(left(&pool).await, Vec::<String>::new());
+
+        // The plain function holds nothing: a bound train goes at the
+        // tracked cutoff.
+        clean(&pool).await;
+        seed_user(&pool, USER).await;
+        seed_bound_and_unbound(&pool, &mut conn).await;
+        assert_eq!(
+            prune_train_history(&mut conn, day(5), day(3), 100)
+                .await
+                .unwrap(),
+            6
+        );
 
         drop(conn);
         clean(&pool).await;
