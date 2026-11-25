@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.18.2 (2026-11-25)
+
+A patch: stage 2 migrations of the secret box AAD rollout (DS-615, docs/secret-box-aad.md); no Rust API, grant or ACL change.
+
+- Let webhook_destinations hold a v2 secret nonce (#110): `webhook_destinations_secret_nonce_check` becomes `octet_length(secret_nonce) IN (12, 13)` (a v2 sealed value stores `0x02` plus the 12-byte nonce), added `NOT VALID` and validated by the second migration. Relaxing only: existing 12-byte rows and v1 writers are unaffected. `DEFAULT_WRITE_FORMAT` is still `Format::Legacy`, so nothing writes a 13-byte nonce yet.
+
+**Consumers**: none need to move for this release. The write-format flip is a later release and must be deployed only after this migration is applied and every reader (ds-api, the notifier) runs code that opens v2.
+
+**Migrations** (2): `20261125100000_webhook_secret_nonce_v2.sql`, `20261125100100_webhook_secret_nonce_v2_validate.sql`
+
+**Grants**: none. The Redis ACL is unchanged.
+
 ## v0.18.1 (2026-11-24)
 
 A patch: one additive Rust function and nothing else; no migration, grant or ACL change (DS-638).
