@@ -97,7 +97,9 @@ the api and the notifier, not tags), and the migration below is applied.
        ADD CONSTRAINT webhook_destinations_secret_nonce_check
            CHECK (secret_nonce IS NULL OR octet_length(secret_nonce) IN (12, 13)) NOT VALID;
    ```
-   followed in a later migration by `VALIDATE CONSTRAINT`. The constraint name
+   followed in a later migration by `VALIDATE CONSTRAINT` (shipped as
+   `20261125100000_webhook_secret_nonce_v2.sql` and
+   `20261125100100_webhook_secret_nonce_v2_validate.sql`, DS-615). The constraint name
    is the Postgres default for the inline column check; confirm it on a
    migrated database first. Existing rows (12 bytes) satisfy it, so `NOT VALID`
    only avoids the scan under lock.
