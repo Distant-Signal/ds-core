@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.18.3 (2026-11-25)
+
+A patch: one grants change and one additive Rust function (DS-658, DS-638); no migration, no ACL change, nothing breaking.
+
+- Grant the aggregator the loss alarm's subscription columns (#112): its SELECT on `train_subscriptions` grows from `(id, trains_id)` to `(id, trains_id, service_date, resolution_status)`, for the `bound_legs_without_train` gauges (matched legs whose subscription lost its train). Columns only, no write, nothing of the user or the pins.
+- Report forced Irish prunes (#112): `prune_train_history_reporting_forced` returns `TrainHistoryPruned { calls, trains, forced_calls, forced_trains }`, the rows deleted per history table and, of those, the ones a journey leg was still bound to (the hard bound, or a prune with the hold off). `prune_train_history_with_journey_hold` and `prune_train_history` keep their signatures and return the rows deleted.
+
+**Consumers**: ds-workers' aggregator needs this release's grants applied (the chart's roles Job) before it runs the new gauge queries. ds-ingest's ingest-writer may switch to `prune_train_history_reporting_forced` to log and count the forced rows.
+
+**Migrations**: none.
+
+**Grants**: `db-grants.yaml` and `postgres-grants.sql` changed (above); the roles setup Job applies them. The Redis ACL is unchanged.
+
 ## v0.18.2 (2026-11-25)
 
 A patch: stage 2 migrations of the secret box AAD rollout (DS-615, docs/secret-box-aad.md); no Rust API, grant or ACL change.
