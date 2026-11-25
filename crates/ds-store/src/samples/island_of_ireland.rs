@@ -961,6 +961,58 @@ pub async fn prune_train_history(
     prune_train_history_with_journey_hold(conn, cutoff, tracked_cutoff, tracked_cutoff, batch).await
 }
 
+/// What one [`prune_train_history_reporting_forced`] call deleted, per
+/// history table. `forced_*` are the deleted rows that belonged to a train a
+/// journey leg was still bound to (a subset of `calls` and `trains`): the
+/// hard bound, or a prune with the hold turned off, took a train's history
+/// from a leg that still pointed at it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrainHistoryPruned {
+    /// Rows deleted from `island_of_ireland_train_calls`.
+    pub calls: u64,
+    /// Rows deleted from `island_of_ireland_trains`.
+    pub trains: u64,
+    /// Of `calls`, the rows of a train a journey leg was still bound to.
+    pub forced_calls: u64,
+    /// Of `trains`, the rows of a train a journey leg was still bound to.
+    pub forced_trains: u64,
+}
+
+impl TrainHistoryPruned {
+    /// Every row deleted, from both tables.
+    #[must_use]
+    pub const fn total(&self) -> u64 {
+        self.calls + self.trains
+    }
+
+    /// Every deleted row that a journey leg was still bound to.
+    #[must_use]
+    pub const fn forced(&self) -> u64 {
+        self.forced_calls + self.forced_trains
+    }
+}
+
+/// [`prune_train_history_reporting_forced`], returning only the rows
+/// deleted (the v0.18.1 signature). Use that function to see how many of them
+/// a journey leg was still bound to.
+pub async fn prune_train_history_with_journey_hold(
+    conn: &mut PgConnection,
+    cutoff: chrono::NaiveDate,
+    tracked_cutoff: chrono::NaiveDate,
+    journey_hold_cutoff: chrono::NaiveDate,
+    batch: i64,
+) -> Result<u64> {
+    Ok(prune_train_history_reporting_forced(
+        conn,
+        cutoff,
+        tracked_cutoff,
+        journey_hold_cutoff,
+        batch,
+    )
+    .await?
+    .total())
+}
+
 /// Deletes up to `batch` rows from each history table, in the caller's
 /// transaction, in three tiers (design §4.3): every untracked train's rows
 /// once their `train_date` is before `cutoff`; a tracked train's once it is
@@ -971,60 +1023,80 @@ pub async fn prune_train_history(
 /// `cutoff` is treated as `cutoff`, and a `journey_hold_cutoff` later than
 /// `tracked_cutoff` as `tracked_cutoff` (so passing `tracked_cutoff` turns
 /// the hold off). One index probe when nothing is due, plus one `trains`
-/// lookup per tracked train kept past `cutoff`. Returns the rows deleted.
-pub async fn prune_train_history_with_journey_hold(
+/// lookup per tracked train kept past `cutoff`. Returns the rows deleted per
+/// table and, of those, the ones a leg was still bound to (the forced
+/// count: 0 for an ordinary prune; non-zero only when the hard bound, or a
+/// prune with the hold off, deletes a bound train's history).
+pub async fn prune_train_history_reporting_forced(
     conn: &mut PgConnection,
     cutoff: chrono::NaiveDate,
     tracked_cutoff: chrono::NaiveDate,
     journey_hold_cutoff: chrono::NaiveDate,
     batch: i64,
-) -> Result<u64> {
+) -> Result<TrainHistoryPruned> {
     let tracked_cutoff = tracked_cutoff.min(cutoff);
     let journey_hold_cutoff = journey_hold_cutoff.min(tracked_cutoff);
     // Past the hard bound ($4) a row goes whatever is bound; between the
     // tracked cutoff ($2) and the bound only a row with no leg goes; an
     // untracked row goes at $1 (the outer test). A journey-bound train is
-    // always tracked, so the bound test never reads past a tracked one.
-    let calls = sqlx::query(&format!(
+    // always tracked, so the bound test never reads past a tracked one. The
+    // `bound` column is read for the (at most `batch`) rows chosen, so the
+    // forced count costs one more id-only probe per deleted row.
+    let (calls, forced_calls): (i64, i64) = sqlx::query_as(&format!(
         r"
-        DELETE FROM island_of_ireland_train_calls AS c
-        USING (SELECT network, train_code, train_date, station_code
-               FROM island_of_ireland_train_calls AS h
-               WHERE train_date < $1
-                 AND (train_date < $4
-                      OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
-                      OR NOT {HISTORY_ROW_TRACKED_SQL})
-               LIMIT $3) AS d
-        WHERE (c.network, c.train_code, c.train_date, c.station_code)
-            = (d.network, d.train_code, d.train_date, d.station_code)
+        WITH deleted AS (
+            DELETE FROM island_of_ireland_train_calls AS c
+            USING (SELECT network, train_code, train_date, station_code,
+                          {HISTORY_ROW_JOURNEY_BOUND_SQL} AS bound
+                   FROM island_of_ireland_train_calls AS h
+                   WHERE train_date < $1
+                     AND (train_date < $4
+                          OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
+                          OR NOT {HISTORY_ROW_TRACKED_SQL})
+                   LIMIT $3) AS d
+            WHERE (c.network, c.train_code, c.train_date, c.station_code)
+                = (d.network, d.train_code, d.train_date, d.station_code)
+            RETURNING d.bound
+        )
+        SELECT COUNT(*), COUNT(*) FILTER (WHERE bound) FROM deleted
         ",
     ))
     .bind(cutoff)
     .bind(tracked_cutoff)
     .bind(batch)
     .bind(journey_hold_cutoff)
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
-    let trains = sqlx::query(&format!(
+    let (trains, forced_trains): (i64, i64) = sqlx::query_as(&format!(
         r"
-        DELETE FROM island_of_ireland_trains AS t
-        USING (SELECT network, train_code, train_date
-               FROM island_of_ireland_trains AS h
-               WHERE train_date < $1
-                 AND (train_date < $4
-                      OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
-                      OR NOT {HISTORY_ROW_TRACKED_SQL})
-               LIMIT $3) AS d
-        WHERE (t.network, t.train_code, t.train_date) = (d.network, d.train_code, d.train_date)
+        WITH deleted AS (
+            DELETE FROM island_of_ireland_trains AS t
+            USING (SELECT network, train_code, train_date,
+                          {HISTORY_ROW_JOURNEY_BOUND_SQL} AS bound
+                   FROM island_of_ireland_trains AS h
+                   WHERE train_date < $1
+                     AND (train_date < $4
+                          OR (train_date < $2 AND NOT {HISTORY_ROW_JOURNEY_BOUND_SQL})
+                          OR NOT {HISTORY_ROW_TRACKED_SQL})
+                   LIMIT $3) AS d
+            WHERE (t.network, t.train_code, t.train_date) = (d.network, d.train_code, d.train_date)
+            RETURNING d.bound
+        )
+        SELECT COUNT(*), COUNT(*) FILTER (WHERE bound) FROM deleted
         ",
     ))
     .bind(cutoff)
     .bind(tracked_cutoff)
     .bind(batch)
     .bind(journey_hold_cutoff)
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
-    Ok(calls.rows_affected() + trains.rows_affected())
+    Ok(TrainHistoryPruned {
+        calls: calls.unsigned_abs(),
+        trains: trains.unsigned_abs(),
+        forced_calls: forced_calls.unsigned_abs(),
+        forced_trains: forced_trains.unsigned_abs(),
+    })
 }
 
 pub async fn last_station_samples_fetch(

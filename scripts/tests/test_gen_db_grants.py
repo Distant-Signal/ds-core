@@ -319,8 +319,14 @@ class RenderTest(unittest.TestCase):
                 "resolution_status,unresolved_from",
             ),
             ("schedule_feed_ingests", "schedule_ingest", "SELECT", "delivered_at"),
-            # DS-638: the aggregator's prune guard joins the two tables.
-            ("train_subscriptions", "aggregator", "SELECT", "id,trains_id"),
+            # DS-638, DS-658: the aggregator's prune guard and
+            # bound-legs gauges join the two tables.
+            (
+                "train_subscriptions",
+                "aggregator",
+                "SELECT",
+                "id,trains_id,service_date,resolution_status",
+            ),
             (
                 "journey_legs",
                 "aggregator",

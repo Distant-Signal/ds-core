@@ -253,7 +253,8 @@ async fn upsert_states(conn: &mut PgConnection, derived: &[DerivedState]) -> Res
 mod db_tests {
     use super::*;
     use crate::samples::island_of_ireland::{
-        prune_train_history, prune_train_history_with_journey_hold, record_train_history,
+        TrainHistoryPruned, prune_train_history, prune_train_history_reporting_forced,
+        prune_train_history_with_journey_hold, record_train_history,
     };
     use crate::test_support::{cleanup_user, connect, seed_user};
     use common::island_of_ireland::IslandOfIrelandDeparture;
@@ -787,6 +788,64 @@ mod db_tests {
                 .await
                 .unwrap(),
             6
+        );
+
+        drop(conn);
+        clean(&pool).await;
+    }
+
+    /// The forced count: 0 for an ordinary prune (a bound train is held, an
+    /// unbound one goes), and the bound train's rows per table once the hard
+    /// bound deletes them while the leg exists.
+    #[tokio::test]
+    #[ignore = "requires a live database; run with `cargo test -p ds-store \
+                island_of_ireland -- --ignored --test-threads=1`"]
+    async fn the_forced_count_is_the_bound_rows_the_hard_bound_deleted() {
+        let pool = connect().await;
+        clean(&pool).await;
+        seed_user(&pool, USER).await;
+        let mut conn = pool.acquire().await.unwrap();
+        seed_bound_and_unbound(&pool, &mut conn).await;
+
+        // Ordinary: the unbound trains go, the bound one is held; nothing forced.
+        let pruned = prune_train_history_reporting_forced(&mut conn, day(5), day(3), day(1), 100)
+            .await
+            .unwrap();
+        assert_eq!(
+            pruned,
+            TrainHistoryPruned {
+                calls: 2,
+                trains: 2,
+                forced_calls: 0,
+                forced_trains: 0
+            }
+        );
+        assert_eq!(pruned.forced(), 0);
+        assert_eq!(left(&pool).await, ["ZT21", "ZT21"]);
+
+        // The hard bound passes while the leg still exists: both of the bound
+        // train's rows are forced, one per table.
+        let pruned = prune_train_history_reporting_forced(&mut conn, day(5), day(3), day(2), 100)
+            .await
+            .unwrap();
+        assert_eq!(
+            pruned,
+            TrainHistoryPruned {
+                calls: 1,
+                trains: 1,
+                forced_calls: 1,
+                forced_trains: 1
+            }
+        );
+        assert_eq!(pruned.total(), 2);
+        assert_eq!(left(&pool).await, Vec::<String>::new());
+
+        // Nothing left: all zero.
+        assert_eq!(
+            prune_train_history_reporting_forced(&mut conn, day(5), day(3), day(2), 100)
+                .await
+                .unwrap(),
+            TrainHistoryPruned::default()
         );
 
         drop(conn);
