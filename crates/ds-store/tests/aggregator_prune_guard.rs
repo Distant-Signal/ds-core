@@ -12,6 +12,10 @@
 //! when it is set, as CI's per-service passes provide, else `DATABASE_URL`.
 //! The refusals are checked only when `DS_TEST_NARROWED_ROLES` lists
 //! `aggregator` (`scripts/test-postgres-roles.py --narrow`).
+//!
+//! The same role also runs the loss alarm's two `bound_legs_without_train`
+//! gauge queries (DS-658), which read the subscription's `service_date` and
+//! `resolution_status` and nothing else of it.
 
 #![expect(
     clippy::expect_used,
@@ -33,6 +37,18 @@ const GUARD: &str = "SELECT t.train_uid FROM trains t \
                        JOIN journey_legs jl ON jl.train_subscription_id = ts.id \
                        WHERE ts.trains_id = t.id AND jl.final_snapshot_at IS NULL) \
      ORDER BY t.train_uid";
+
+/// The loss alarm's gauges as ds-workers' aggregator runs them: the legs
+/// whose subscription is matched but has lost its train, from `$1` on, split
+/// by whether the leg was snapshotted (`final_snapshot_at`).
+const BOUND_LEGS_WITHOUT_TRAIN: &str = "SELECT \
+       COUNT(*) FILTER (WHERE jl.final_snapshot_at IS NULL), \
+       COUNT(*) FILTER (WHERE jl.final_snapshot_at IS NOT NULL) \
+     FROM train_subscriptions ts \
+     JOIN journey_legs jl ON jl.train_subscription_id = ts.id \
+     WHERE ts.trains_id IS NULL \
+       AND ts.resolution_status IN ('resolved', 'schedule_matched') \
+       AND ts.service_date >= $1";
 
 async fn pool(var: &str) -> Option<PgPool> {
     let url = std::env::var(var).ok().filter(|url| !url.is_empty())?;
@@ -170,6 +186,108 @@ async fn the_aggregator_runs_the_prune_guard_and_reads_nothing_else_of_legs() {
         )
         .await;
         denied(&role, "SELECT user_id FROM train_subscriptions").await;
+    }
+
+    cleanup(&owner).await;
+}
+
+/// Seeds a leg on a matched subscription with no train, snapshotted or not.
+async fn seed_trainless_leg(owner: &PgPool, status: &str, snapshotted: bool) {
+    let (subscription,): (i64,) = sqlx::query_as(
+        "INSERT INTO train_subscriptions (user_id, service_date, resolution_status) \
+         VALUES ($1, '2026-11-23', $2) RETURNING id",
+    )
+    .bind(USER)
+    .bind(status)
+    .fetch_one(owner)
+    .await
+    .expect("seed subscription");
+    let (journey,): (i64,) =
+        sqlx::query_as("INSERT INTO journeys (user_id) VALUES ($1) RETURNING id")
+            .bind(USER)
+            .fetch_one(owner)
+            .await
+            .expect("seed journey");
+    sqlx::query(
+        "INSERT INTO journey_legs \
+            (journey_id, leg_order, service_date, train_subscription_id, \
+             final_train_uid, final_snapshot, final_snapshot_at) \
+         VALUES ($1, 1, '2026-11-23', $2, \
+                 $3, CASE WHEN $4 THEN '{}'::jsonb END, CASE WHEN $4 THEN now() END)",
+    )
+    .bind(journey)
+    .bind(subscription)
+    .bind(snapshotted.then_some("C99641"))
+    .bind(snapshotted)
+    .execute(owner)
+    .await
+    .expect("seed leg");
+}
+
+async fn gauges(role: &PgPool, since: &str) -> (i64, i64) {
+    sqlx::query_as(BOUND_LEGS_WITHOUT_TRAIN)
+        .bind(chrono::NaiveDate::parse_from_str(since, "%Y-%m-%d").expect("date"))
+        .fetch_one(role)
+        .await
+        .expect("the aggregator runs the bound-legs gauge")
+}
+
+#[tokio::test]
+#[ignore = "requires a live database; run with `DATABASE_URL=... cargo test -p ds-store \
+            --test aggregator_prune_guard -- --ignored --test-threads=1`"]
+async fn the_aggregator_runs_the_bound_legs_gauges_and_reads_no_more_of_subscriptions() {
+    let role = pool("DATABASE_URL")
+        .await
+        .expect("DATABASE_URL must be set to run this test");
+    let owner = pool("MIGRATION_DATABASE_URL")
+        .await
+        .unwrap_or_else(|| role.clone());
+    cleanup(&owner).await;
+    sqlx::query("INSERT INTO users (id, name) VALUES ($1, $1)")
+        .bind(USER)
+        .execute(&owner)
+        .await
+        .expect("seed user");
+    let (unsnapshotted, snapshotted) = gauges(&role, "2026-11-22").await;
+
+    seed_trainless_leg(&owner, "resolved", false).await;
+    seed_trainless_leg(&owner, "schedule_matched", false).await;
+    seed_trainless_leg(&owner, "resolved", true).await;
+    // Not matched: not counted.
+    seed_trainless_leg(&owner, "unresolved", false).await;
+
+    let (u, s) = gauges(&role, "2026-11-22").await;
+    assert_eq!(
+        (u - unsnapshotted, s - snapshotted),
+        (2, 1),
+        "matched trainless legs count by snapshot state; an unmatched one does not"
+    );
+    let (u, s) = gauges(&role, "2026-11-24").await;
+    assert!(
+        (u, s) <= (unsnapshotted, snapshotted),
+        "legs from before the date floor are not counted"
+    );
+
+    if std::env::var("DS_TEST_NARROWED_ROLES")
+        .is_ok_and(|roles| roles.split(',').any(|role| role.trim() == "aggregator"))
+    {
+        for column in [
+            "user_id",
+            "public_id",
+            "notifications_enabled",
+            "pin_origin_crs",
+            "unresolved_from",
+            "tracked_at",
+        ] {
+            denied(&role, &format!("SELECT {column} FROM train_subscriptions")).await;
+        }
+        denied(&role, "SELECT * FROM train_subscriptions").await;
+        denied(
+            &role,
+            "UPDATE train_subscriptions SET resolution_status = 'resolved' WHERE false",
+        )
+        .await;
+        denied(&role, "DELETE FROM train_subscriptions WHERE false").await;
     }
 
     cleanup(&owner).await;
