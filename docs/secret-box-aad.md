@@ -7,8 +7,16 @@ a sealed value from one row or column into another and it would still open.
 This document is the staged rollout that binds each value to its table,
 column and row id, and the checklist for each stage.
 
-The rollout has four stages. Stage 1 is this release. Stages 2 to 4 are
-written out here so each can be filed as its own deploy.
+The rollout has four stages. Stages 2 to 4 are written out here so each can
+be filed as its own deploy.
+
+| Stage | What | Status |
+|---|---|---|
+| 1 | dual-read code (`open_in`, `seal_in`, the metric); writes stay v1 | done (v0.18.0; 1b readers deployed) |
+| 2, migrations | nonce check allows 12 or 13 bytes | done (v0.18.2, applied in production) |
+| 2, write flip | `DEFAULT_WRITE_FORMAT = Format::V2` | v0.18.4; takes effect when ds-api bumps to it and deploys |
+| 3 | backfill legacy rows to v2 | not started (ds-api `backfill_secret_box`, run after the flip is deployed) |
+| 4 | drop the legacy fallback | not started |
 
 ## The format
 
@@ -32,10 +40,12 @@ API (all additive; `KeyRing::seal` and `open` are unchanged):
 - `KeyRing::open_in(&Sealed, &Context)`: opens v1 (ignoring the context) and v2.
 - `KeyRing::seal_in(plaintext, &Context)`: writes the ring's write format.
 - `KeyRing::with_write_format(Format)` and `DEFAULT_WRITE_FORMAT`: the switch.
-  **Stage 1 ships `Format::Legacy`**, so nothing writes v2 yet.
+  **Stage 2 (v0.18.4) flips this to `Format::V2`**: every `seal_in` caller
+  supplies a `Context`, so none can write v2 without its row id. Stage 1
+  shipped `Format::Legacy`.
 - `KeyRing::seal_as(plaintext, &Context, Format)`: an explicit format, for the
   backfill and tests.
-- `KeyRing::seal` always writes v1; `KeyRing::open` opens v1 only and counts as
+- `KeyRing::seal` takes no row, so it always writes v1; `KeyRing::open` opens v1 only and counts as
   `purpose="unscoped"`.
 
 Metric: `distant_signal_secret_box_legacy_opens_total{purpose}` (the project

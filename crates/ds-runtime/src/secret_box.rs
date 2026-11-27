@@ -29,9 +29,10 @@
 //!
 //! [`KeyRing::open_in`] opens both. [`KeyRing::seal_in`] writes the ring's
 //! write format, which is [`DEFAULT_WRITE_FORMAT`] unless
-//! [`KeyRing::with_write_format`] says otherwise. **In this release the
-//! default is [`Format::Legacy`]**: a binary still on the previous release
-//! cannot open v2, so writes switch only after every reader runs this code.
+//! [`KeyRing::with_write_format`] says otherwise. **The default is
+//! [`Format::V2`]** (stage 2): a binary from before the dual-read release
+//! cannot open v2, so a consumer moves to this release only after every
+//! reader opens v2.
 //! [`KeyRing::seal`] and [`KeyRing::open`] keep their old signatures and
 //! behaviour (`seal` always writes v1; `open` opens v1 only).
 
@@ -65,9 +66,12 @@ pub enum Format {
 }
 
 /// The format [`KeyRing::seal_in`] writes unless told otherwise. Stage 1 of
-/// DS-534 ships `Legacy` so that a rolling deploy never has an old reader
-/// meet a v2 value; stage 2 flips it (docs/secret-box-aad.md).
-pub const DEFAULT_WRITE_FORMAT: Format = Format::Legacy;
+/// DS-534 shipped `Legacy` so that a rolling deploy never has an old reader
+/// meet a v2 value; stage 2 flipped it to `V2` once every reader opened v2
+/// and the nonce check allowed 13 bytes (docs/secret-box-aad.md). Every
+/// `seal_in` caller supplies a [`Context`], so none can write v2 without its
+/// row id; [`KeyRing::seal`] takes no row and stays v1.
+pub const DEFAULT_WRITE_FORMAT: Format = Format::V2;
 
 /// A sealed column: the table and the column holding the ciphertext. Part of
 /// a v2 value's AAD, and the `purpose` label of the legacy-open counter.
@@ -613,15 +617,31 @@ mod tests {
     }
 
     #[test]
-    fn the_default_write_format_is_legacy_so_old_readers_still_open_it() {
-        assert_eq!(DEFAULT_WRITE_FORMAT, Format::Legacy);
+    fn the_default_write_format_is_v2_bound_to_the_row() {
+        assert_eq!(DEFAULT_WRITE_FORMAT, Format::V2);
         let ring = ring(&format!("k1:{}", key(1)));
-        assert_eq!(ring.write_format(), Format::Legacy);
+        assert_eq!(ring.write_format(), Format::V2);
+        let sealed = ring.seal_in("token", &ctx(7)).unwrap();
+        assert_eq!(sealed.nonce.len(), 13);
+        assert_eq!(sealed.nonce[0], 2);
+        assert_eq!(ring.open_in(&sealed, &ctx(7)).unwrap(), "token");
+        assert_eq!(ring.open_in(&sealed, &ctx(8)), Err(OpenError::Failed));
+        // `open` has no row, so it never opens a v2 value.
+        assert_eq!(ring.open(&sealed), Err(OpenError::Failed));
+    }
+
+    #[test]
+    fn a_legacy_write_format_and_seal_still_write_v1_that_opens_by_either_call() {
+        let ring = ring(&format!("k1:{}", key(1))).with_write_format(Format::Legacy);
         let sealed = ring.seal_in("token", &ctx(7)).unwrap();
         assert_eq!(sealed.nonce.len(), 12);
-        // What the previous release's `open` does with it.
         assert_eq!(ring.open(&sealed).unwrap(), "token");
-        assert_eq!(ring.seal("token").unwrap().nonce.len(), 12);
+        assert_eq!(ring.open_in(&sealed, &ctx(9)).unwrap(), "token");
+        // `seal` is v1 even under the v2 default.
+        let default_ring = KeyRing::parse(&format!("k1:{}", key(1))).unwrap();
+        let legacy = default_ring.seal("token").unwrap();
+        assert_eq!(legacy.nonce.len(), 12);
+        assert_eq!(default_ring.open_in(&legacy, &ctx(1)).unwrap(), "token");
     }
 
     #[test]
