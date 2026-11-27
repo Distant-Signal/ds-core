@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.18.4 (2026-11-27)
+
+A patch: the secret box write-format flip (DS-615 stage 2, DS-638); a behaviour change in `ds-runtime` with no migration, grants or ACL change, and no breaking Rust API.
+
+- Write secret box values in the v2 format by default (#114): `DEFAULT_WRITE_FORMAT` is now `Format::V2`, so `KeyRing::seal_in` stores a 13-byte nonce (`0x02` plus the 12-byte nonce) with the AAD bound to table, column and row id. Every `seal_in` caller supplies a `Context`; `KeyRing::seal` takes no row and still writes v1. `open` (v1 only) and `open_in` (both) are unchanged. `KeyRing::with_write_format(Format::Legacy)` restores v1 writes.
+
+**Consumers**: a consumer that bumps to this release writes v2 from then on. Bump only once every reader opens v2 (ds-api and the notifier already call `open_in`) and v0.18.2's migrations are applied (they are in production). ds-api bumps and deploys, then runs its `backfill_secret_box` dry run and real run. The notifier only reads and needs no bump for this.
+
+**Migrations**: none.
+
+**Grants**: none. The Redis ACL is unchanged.
+
 ## v0.18.3 (2026-11-25)
 
 A patch: one grants change and one additive Rust function (DS-658, DS-638); no migration, no ACL change, nothing breaking.
